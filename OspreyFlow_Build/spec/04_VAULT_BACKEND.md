@@ -314,6 +314,13 @@ the most events and the largest total of a declared amount in any span of D days
 within the window, and the first event ever up to the window's end; an event to itself counted once;
 an event the principal may not see adds nothing and is never a first, and a node reached only through
 hidden events is absent — the access step in the query, as every read's.
+`account_activity` (ADR-133 decision 2, stage (c)): for named accounts at either end of an event,
+the events and the total of a declared amount within the window (ends included) and in the D days
+before its start, the first event in the window and the last before it however long before; an
+event at the window's start is in the window; an event to itself counted once; an event the principal
+may not see is not counted, totalled, first or last, and an account reached only through hidden
+events is absent. What the AML templates "a dormant account reactivated" and "a sudden rise in
+velocity" compare an account with.
 
 **RecognisePort suite** (ADR-098) — a person, an organisation and a place found with their spans;
 spans count characters, not bytes; an empty text has no entities and the recogniser names itself; a

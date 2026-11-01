@@ -22,7 +22,7 @@ import json
 import math
 import struct
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 from adapters.analytics_duckdb.access_filter import AccessFilter, SqlPredicate
@@ -30,6 +30,8 @@ from adapters.analytics_duckdb.alert_facts import alert_predicate, series_expres
 from ontology.handling import HandlingScheme
 from ports.analytics import TrendLimitExceeded
 from schemas.analytics import (
+    ActivityRequest,
+    ActivityResult,
     AlertFact,
     AlertTrendRequest,
     BaselineRequest,
@@ -54,6 +56,7 @@ from schemas.analytics import (
     HistogramBucket,
     HistogramBucketing,
     HistogramRequest,
+    NodeActivity,
     NodeFrequency,
     Sighting,
     SightingRequest,
@@ -801,6 +804,61 @@ class AnalyticsClickHouseAdapter:
                 for node, first in firsts
             }
         )
+
+    # --- account_activity (ADR-133 decision 2, stage (c)) -------------------------------------
+
+    async def account_activity(
+        self, req: ActivityRequest, principal: Principal
+    ) -> ActivityResult:
+        window = req.filter.window
+        assert window is not None and window.valid_from is not None and window.valid_to is not None
+        unbounded = self._predicate(req.filter.model_copy(update={"window": None}), principal)
+        subjects = req.filter.node_ids
+        marks = ",".join("?" for _ in subjects)
+        amount = (
+            "CAST(NULL AS Nullable(Float64))"
+            if req.amount_property is None
+            else f"toFloat64OrNull({_field_expression(req.amount_property)})"
+        )
+        touched = (
+            f"SELECT source_id AS node, occurred_at, {amount} AS amount FROM events "
+            f"WHERE {unbounded.where} AND occurred_at <= ? AND source_id IN ({marks}) "
+            "UNION ALL "
+            f"SELECT target_id AS node, occurred_at, {amount} AS amount FROM events "
+            f"WHERE {unbounded.where} AND occurred_at <= ? AND target_id IN ({marks}) "
+            "AND target_id != source_id"
+        )
+        start = window.valid_from
+        baseline_start = start - timedelta(days=req.baseline_days)
+        recent, before = "occurred_at >= ?", "occurred_at < ? AND occurred_at >= ?"
+        rows = await self._ch.rows(
+            f"SELECT node, countIf({recent}), sumIf(amount, {recent} AND amount IS NOT NULL), "
+            f"countIf({recent} AND amount IS NOT NULL), "
+            f"countIf({before}), sumIf(amount, {before} AND amount IS NOT NULL), "
+            f"countIf({before} AND amount IS NOT NULL), "
+            "minIf(occurred_at, occurred_at >= ?), maxIf(occurred_at, occurred_at < ?), "
+            "countIf(occurred_at < ?) "
+            f"FROM ({touched}) GROUP BY node",
+            [start, start, start,
+             start, baseline_start, start, baseline_start, start, baseline_start,
+             start, start, start,
+             *unbounded.params, window.valid_to, *subjects,
+             *unbounded.params, window.valid_to, *subjects],
+        )  # fmt: skip
+        nodes: dict[str, NodeActivity] = {}
+        for row in rows:
+            node, n_recent, t_recent, a_recent, n_base, t_base, a_base, first, last, n_before = row
+            # ClickHouse's sumIf of nothing is 0, and minIf/maxIf of nothing a zero date: read
+            # through the counts, so an absent total or time is `None` as the contract says.
+            nodes[str(node)] = NodeActivity(
+                recent_count=int(n_recent),
+                recent_total=float(t_recent) if int(a_recent) else None,
+                baseline_count=int(n_base),
+                baseline_total=float(t_base) if int(a_base) else None,
+                first_in_window=_time(first) if int(n_recent) else None,
+                last_before_window=_time(last) if int(n_before) else None,
+            )
+        return ActivityResult(nodes=nodes)
 
     # --- writes -------------------------------------------------------------
 

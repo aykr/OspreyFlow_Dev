@@ -2431,3 +2431,121 @@ def test_a_frequency_names_its_subjects_and_at_most_a_thousand(factory: Analytic
         FrequencyRequest(filter=_filter(node_ids=[f"n{i}" for i in range(1001)]), span_days=7)
     with pytest.raises(ValueError):
         FrequencyRequest(filter=_filter(node_ids=["a"]), span_days=367)
+
+
+# --- account_activity (ADR-133 decision 2, stage (c)): a dormant account, a rise in velocity --------
+#
+# The AML templates "a dormant account reactivated" and "a sudden rise in velocity" compare an
+# account with its own past: its movements in a recent window against the days before it, and its
+# last movement before the window. Counted as the rule's author, the access step in the query
+# (rule 3); each hidden plant differs from a visible event only in the respect under test.
+
+from datetime import timedelta  # noqa: E402
+
+from schemas.analytics import ActivityRequest  # noqa: E402
+
+ACT_WINDOW = Interval(valid_from=datetime(2026, 4, 1, tzinfo=UTC), valid_to=datetime(2026, 4, 8, tzinfo=UTC))
+
+
+def _at(day: int, hour: int = 9) -> datetime:
+    return datetime(2026, 4, 1, hour, tzinfo=UTC) + timedelta(days=day)
+
+
+def _moved(at: datetime, amount: float | None = None, source: str = "acct-a", target: str = "acct-b",
+           **kwargs: object) -> EventRecord:  # fmt: skip
+    properties = {} if amount is None else {"amount": amount}
+    return _event(occurred_at=at, edge_type="TRANSACTED", source_id=source, target_id=target,
+                  properties=properties, **kwargs)  # type: ignore[arg-type]  # fmt: skip
+
+
+def _activity(baseline_days: int = 28, *, nodes: list[str] | None = None, amount: str | None = None,
+              edge_types: list[str] | None = None) -> ActivityRequest:  # fmt: skip
+    return ActivityRequest(
+        filter=_filter(node_ids=nodes or ["acct-a"], window=ACT_WINDOW, edge_types=edge_types or ["TRANSACTED"]),
+        baseline_days=baseline_days, amount_property=amount,
+    )  # fmt: skip
+
+
+async def test_activity_counts_the_window_and_the_days_before_it(factory: AnalyticsAdapterFactory) -> None:
+    events = [_moved(_at(0), 100), _moved(_at(3), 200), _moved(_at(7, 0), 300),   # in the window, its end included
+              _moved(_at(-1), 1_000), _moved(_at(-28), 2_000),                     # the 28 days before
+              _moved(_at(-29), 4_000), _moved(_at(8), 8_000)]                      # outside both  # fmt: skip
+    async with factory.context(events) as adapter:
+        counted = await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+        plain = await adapter.account_activity(_activity(28), OFFICIAL)
+    a = counted.nodes["acct-a"]
+    assert (a.recent_count, a.recent_total) == (3, 600.0)
+    assert (a.baseline_count, a.baseline_total) == (2, 3_000.0)
+    assert plain.nodes["acct-a"].recent_total is None and plain.nodes["acct-a"].baseline_count == 2
+
+
+async def test_activity_says_the_first_movement_in_the_window_and_the_last_before_it(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    long_ago = datetime(2025, 9, 1, tzinfo=UTC)
+    events = [_moved(long_ago), _moved(_at(2)), _moved(_at(5)), _moved(_at(9))]
+    async with factory.context(events) as adapter:
+        result = await adapter.account_activity(_activity(28), OFFICIAL)
+    a = result.nodes["acct-a"]
+    assert a.first_in_window == _at(2)
+    assert a.last_before_window == long_ago  # however long ago: a dormant account's last movement
+    assert a.baseline_count == 0  # long before the 28 days
+
+
+async def test_a_movement_at_the_windows_start_is_in_the_window_not_before_it(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    start = ACT_WINDOW.valid_from
+    assert start is not None
+    events = [_moved(start), _moved(datetime(2026, 3, 30, tzinfo=UTC))]
+    async with factory.context(events) as adapter:
+        a = (await adapter.account_activity(_activity(28), OFFICIAL)).nodes["acct-a"]
+    assert (a.recent_count, a.first_in_window) == (1, start)
+    assert (a.baseline_count, a.last_before_window) == (1, datetime(2026, 3, 30, tzinfo=UTC))
+
+
+async def test_activity_counts_an_account_at_either_end_and_each_event_once(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = [_moved(_at(0)), _moved(_at(1), source="acct-b", target="acct-a"),
+              _moved(_at(2), source="acct-a", target="acct-a")]  # fmt: skip
+    async with factory.context(events) as adapter:
+        result = await adapter.account_activity(_activity(28, nodes=["acct-a", "acct-b", "acct-none"]), OFFICIAL)
+    assert result.nodes["acct-a"].recent_count == 3  # out, in, and to itself once
+    assert result.nodes["acct-b"].recent_count == 2
+    assert "acct-none" not in result.nodes  # nothing visible: absent, not zero
+
+
+async def test_an_event_the_rules_author_may_not_see_is_not_activity(factory: AnalyticsAdapterFactory) -> None:
+    hidden = [_moved(_at(1), 50_000, classification="SECRET"),
+              _moved(_at(-3), 50_000, handling_code="R", owning_unit="unit-2", originator="unit-2"),
+              _moved(_at(-90), classification="SECRET"),
+              _moved(_at(1), source="acct-hidden", target="acct-z", classification="SECRET")]  # fmt: skip
+    events = [_moved(_at(0), 100), _moved(datetime(2025, 6, 1, tzinfo=UTC), 100), *hidden]
+    async with factory.context(events) as adapter:
+        official = await adapter.account_activity(_activity(28, amount="amount", nodes=["acct-a", "acct-hidden"]), OFFICIAL)
+        cleared = await adapter.account_activity(_activity(28, amount="amount"), CLEARED)
+    a = official.nodes["acct-a"]
+    assert (a.recent_count, a.recent_total, a.baseline_count) == (1, 100.0, 0)
+    assert a.last_before_window == datetime(2025, 6, 1, tzinfo=UTC)  # the hidden one at day -90 is no later movement
+    assert "acct-hidden" not in official.nodes
+    assert cleared.nodes["acct-a"].recent_count == 2 and cleared.nodes["acct-a"].last_before_window == _at(-90)
+
+
+async def test_activity_counts_only_this_case_and_the_link_types_named(factory: AnalyticsAdapterFactory) -> None:
+    events = [_moved(_at(0)), _moved(_at(1), investigation_scope="case-2"),
+              _event(occurred_at=_at(1), edge_type="COMMUNICATED_WITH", source_id="acct-a", target_id="acct-b")]  # fmt: skip
+    async with factory.context(events) as adapter:
+        result = await adapter.account_activity(_activity(28), OFFICIAL)
+    assert result.nodes["acct-a"].recent_count == 1
+
+
+def test_an_activity_read_names_its_accounts_and_a_whole_window(factory: AnalyticsAdapterFactory) -> None:
+    with pytest.raises(ValueError, match="name at least one"):
+        ActivityRequest(filter=_filter(window=ACT_WINDOW), baseline_days=28)
+    with pytest.raises(ValueError, match="at most 1,000"):
+        ActivityRequest(filter=_filter(node_ids=[f"n{i}" for i in range(1001)], window=ACT_WINDOW), baseline_days=28)
+    with pytest.raises(ValueError, match="window with both ends"):
+        ActivityRequest(filter=_filter(node_ids=["a"]), baseline_days=28)
+    with pytest.raises(ValueError):
+        ActivityRequest(filter=_filter(node_ids=["a"], window=ACT_WINDOW), baseline_days=367)

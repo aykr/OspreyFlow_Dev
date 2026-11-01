@@ -14,6 +14,8 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from schemas.analytics import (
+    ActivityRequest,
+    ActivityResult,
     AlertFact,
     AlertTrendRequest,
     BaselineRequest,
@@ -117,6 +119,19 @@ class AnalyticsPort(Protocol):
         to itself counts once. Access control is in the query (rule 3): an event the principal may
         not see adds nothing to a count or a total and is never a first, so the answer equals the
         one over a store without it, and a node reached only through hidden events is absent."""
+        ...
+
+    async def account_activity(
+        self, req: ActivityRequest, principal: Principal
+    ) -> ActivityResult:
+        """An account against its own past (ADR-133 decision 2, stage (c)): for each of
+        `req.filter.node_ids`, at either end of an event, its events and the total of
+        `req.amount_property` within `req.filter.window` (ends included) and in the
+        `req.baseline_days` days before the window's start, its first event in the window and its
+        last before it. An event to itself counts once. Access control is in the query (rule 3): an
+        event the principal may not see is not counted, totalled, first or last, so the answer
+        equals the one over a store without it, and a node reached only through hidden events is
+        absent."""
         ...
 
     # --- writes --------------------------------------------------------------
