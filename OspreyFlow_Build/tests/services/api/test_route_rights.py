@@ -87,6 +87,7 @@ ROUTE_RIGHTS = {
     "patterns_load_route": "investigate",
     "create_hotlist_route": "keep_watches",
     "list_hotlists_route": "keep_watches",
+    "set_hotlist_audience_route": "keep_watches",  # ADR-133 ruling 3
     "save_judgement_route": "record_assessment",
     "list_judgements_route": "investigate",
     "change_link_route": "edit_graph",
@@ -224,6 +225,8 @@ ROUTE_RIGHTS = {
     "release_alert": "triage_alerts",
     "dispose_alert": "triage_alerts",
     "alert_canvas": "triage_alerts",
+    "assign_alert": "triage_alerts",  # ADR-133 stage (a)
+    "read_alert_assignees": "triage_alerts",
     "list_typology_rules": "read_alert_queue",
     "deploy_typology_rule": "deploy_rules",
     "retire_typology_rule": "deploy_rules",

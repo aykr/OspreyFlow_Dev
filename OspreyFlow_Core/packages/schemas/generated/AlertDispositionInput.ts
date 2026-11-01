@@ -3,6 +3,10 @@
 export type Disposition = "true_positive" | "false_positive";
 export type Reason = string;
 
+/**
+ * Closing an alert (ADR-133 decision 7: "closing needs a reason"). A reason of only spaces is
+ * no reason: it is refused as an empty one is.
+ */
 export interface AlertDispositionInput {
   disposition: Disposition;
   reason: Reason;

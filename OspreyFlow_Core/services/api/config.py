@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 from schemas.deployment import ModelsConfig
@@ -121,6 +121,26 @@ def _on_or_off(name: str, raw: str | None) -> bool:
     if value not in ("on", "off"):
         raise ValueError(f"{name} must be 'on' or 'off', not {raw!r}")
     return value == "on"
+
+
+@dataclass(frozen=True)
+class MonitoringSettings:
+    """`osprey.yaml`'s `monitoring` section as the Conduit reads it (`06_DECISIONS.md` ADR-133
+    ruling 3), from the rendered `deployment.env`. Fails closed, as ADR-038's disclosure policy
+    does: only exactly `team` widens a new hotlist's audience, and only exactly `true` (or nothing
+    set, the schema's default) lets an owner choose."""
+
+    hotlist_audience: Literal["only_me", "team"] = "only_me"
+    hotlist_audience_editable: bool = True
+
+    @classmethod
+    def from_env(cls) -> MonitoringSettings:
+        audience = os.environ.get("OSPREY_HOTLIST_AUDIENCE")
+        editable = os.environ.get("OSPREY_HOTLIST_AUDIENCE_EDITABLE")
+        return cls(
+            hotlist_audience="team" if audience == "team" else "only_me",
+            hotlist_audience_editable=True if editable is None else editable == "true",
+        )
 
 
 @dataclass(frozen=True)

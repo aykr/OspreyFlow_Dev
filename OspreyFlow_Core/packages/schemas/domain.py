@@ -721,6 +721,16 @@ class Alert(BaseModel):
     disposition_reason: str | None = None
     decided_by: str | None = None
     decided_at: datetime | None = None
+    #: ADR-133 stage (a): how urgent the alert is. `None` on a row written before severity existed,
+    #: or by a producer that sets none; the queue then reads its kind's default
+    #: (`services/api/alerts.py::DEFAULT_SEVERITY`), so no stored row has to be rewritten.
+    severity: AlertSeverity | None = None
+    #: ADR-133 stage (a): the team a hotlist or monitor alert goes to: its owner's organisational
+    #: unit (`Principal.org_unit`) when it was raised, written by the producer. `None` reaches the
+    #: owner alone: every row from before, and every `notify` stub (ADR-038: it carries nothing a
+    #: second person may read). A typology alert's team is the case's members, not a unit, and it
+    #: carries `None` here.
+    team: str | None = None
 
 
 #: ADR-126 decision 1: the domain packs a case can carry, defined once here. `ontology.packs`
@@ -768,6 +778,11 @@ class Hotlist(BaseModel):
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
+    #: ADR-133 decision 5 and ruling 3: who its alerts reach in the shared queue. `only_me` (its
+    #: owner alone, as every hotlist before ADR-133) or `team` (also its owner's organisational
+    #: unit). A new hotlist takes the deployment's `monitoring.hotlist_audience`; every hotlist
+    #: made before keeps `only_me` until its owner changes it.
+    audience: HotlistAudience = "only_me"
 
 
 class Monitor(BaseModel):
@@ -819,6 +834,16 @@ RuleTrigger = Literal["pre_commit", "post_commit"]
 RuleStatus = Literal["active", "retired"]
 AlertStatus = Literal["open", "claimed", "closed"]
 AlertDisposition = Literal["true_positive", "false_positive"]
+#: ADR-133 stage (a): an alert's severity, and the three kinds the one queue holds — told apart by
+#: `Alert.rule_id`'s prefix (`typology:`, `hotlist:`, `monitor:`); a scheduled run's notice is none
+#: of these and is never queued.
+AlertSeverity = Literal["low", "medium", "high"]
+AlertKind = Literal["typology", "hotlist", "monitor"]
+#: ADR-133 ruling 3: whom a hotlist's alerts reach — its owner alone, or its owner's team too.
+HotlistAudience = Literal["only_me", "team"]
+#: Who may see a queued alert, in words the Glass shows: the case's members (a typology alert), the
+#: owner's team (a hotlist with audience `team`, or a monitor), or its owner alone.
+AlertAudience = Literal["case", "team", "owner"]
 
 
 class StructuringParams(BaseModel):
@@ -1113,6 +1138,13 @@ class QueuedAlert(BaseModel):
 
     alert: Alert
     summary: str
+    #: ADR-133 stage (a): which kind of alert, how urgent (the stored severity, else its kind's
+    #: default), and who may see it (`audience`, with the owner's unit as `team` when shared with a
+    #: team). Defaults keep a typology alert's row as it read before.
+    kind: AlertKind = "typology"
+    severity: AlertSeverity = "medium"
+    audience: AlertAudience = "case"
+    team: str | None = None
 
 
 class ExplainedTransaction(BaseModel):
@@ -1138,11 +1170,45 @@ class AlertExplanation(BaseModel):
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
     transactions: list[ExplainedTransaction] = Field(default_factory=list)
+    #: ADR-133 stage (a), as on `QueuedAlert`.
+    kind: AlertKind = "typology"
+    severity: AlertSeverity = "medium"
+    audience: AlertAudience = "case"
+    team: str | None = None
 
 
 class AlertDispositionInput(BaseModel):
+    """Closing an alert (ADR-133 decision 7: "closing needs a reason"). A reason of only spaces is
+    no reason: it is refused as an empty one is."""
+
     disposition: AlertDisposition
     reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _a_reason_in_words(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("closing an alert needs a reason")
+        return value.strip()
+
+
+class AlertAssignInput(BaseModel):
+    """ADR-133 stage (a): giving an open or claimed alert to one member of the case."""
+
+    assignee: str = Field(min_length=1, max_length=200)
+
+
+class AlertAssignee(BaseModel):
+    """One member an alert may be given to: an Editor or Author of the case, by name."""
+
+    id: str
+    name: str | None = None
+
+
+class HotlistAudienceInput(BaseModel):
+    """ADR-133 ruling 3: the owner's choice of who a hotlist's alerts reach."""
+
+    audience: HotlistAudience
 
 
 class KycDocument(BaseModel):
@@ -1400,6 +1466,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ReportFigures,
     ReportLimitExceeded,
     QueuedAlert,
+    AlertAssignInput,
+    AlertAssignee,
+    HotlistAudienceInput,
     KycDocument,
     RiskFactor,
     KycStatus,

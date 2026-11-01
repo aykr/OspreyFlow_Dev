@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from ontology.handling import sources_within_case
 from ports.graph import GraphPort
-from schemas.domain import Alert, AlertMode, Hotlist, Monitor, Node, Principal
+from schemas.domain import Alert, AlertMode, Hotlist, HotlistAudience, Monitor, Node, Principal
 
 from .alerts import evidence_available
 from .evidence_brief import display_name
@@ -48,10 +48,19 @@ class CreateHotlistRequest(BaseModel):
 
     identifier: str
     review_date: date
+    #: ADR-133 ruling 3: the owner's choice of whom its alerts reach; when left out, the
+    #: deployment's `monitoring.hotlist_audience`. A choice other than that default is refused
+    #: when the deployment does not let owners choose (`hotlist_audience_editable: false`).
+    audience: HotlistAudience | None = None
 
 
 class HotlistList(BaseModel):
+    """The owner's hotlists, and the deployment's audience setting, so the Glass offers the choice
+    only where it may be made (ADR-133 ruling 3)."""
+
     hotlists: list[Hotlist]
+    audience_default: HotlistAudience = "only_me"
+    audience_editable: bool = True
 
 
 class CreateMonitorRequest(BaseModel):

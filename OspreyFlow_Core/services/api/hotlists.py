@@ -18,14 +18,14 @@ import asyncpg
 
 from conduit_common.identity import new_id
 from knowledge_adapters import REGISTRY, NormalisationError
-from schemas.domain import Hotlist, Principal, WatchStatus
+from schemas.domain import Hotlist, HotlistAudience, Principal, WatchStatus
 
 from .dataset_scope import made_in, reach_clause
 
 #: `ADD COLUMN IF NOT EXISTS` — `alerts.py`'s own `_BOOTSTRAP_SQL` docstring has the full reasoning:
 #: this codebase has no migration tooling, and `CREATE TABLE IF NOT EXISTS` alone is a no-op
 #: against the persistent database Stage 6b's own bootstrap already ran on.
-_BOOTSTRAP_SQL = """
+BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS hotlists (
     id TEXT PRIMARY KEY,
     identifier TEXT NOT NULL,
@@ -43,13 +43,16 @@ ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 -- canonicalised and false for a text no adapter would accept, kept as written.
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS identifier_typed TEXT;
 ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS identifier_canonical BOOLEAN;
+-- ADR-133 ruling 3: whom its alerts reach in the shared queue. Every hotlist made before keeps
+-- `only_me` (the column's default fills them), until its owner changes it.
+ALTER TABLE hotlists ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'only_me';
 """
 
 _log = logging.getLogger(__name__)
 
 _COLUMNS = (
     "id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, status, "
-    "created_at, dataset_id"
+    "created_at, dataset_id, audience"
 )
 
 #: A digit string of this length fits `imei` and `imsi` alike, with different canonical forms.
@@ -132,6 +135,7 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
         status=row["status"],
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
+        audience=row["audience"],
     )
 
 
@@ -155,7 +159,7 @@ class HotlistStore:
         # own actual load.
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
-            await conn.execute(_BOOTSTRAP_SQL)
+            await conn.execute(BOOTSTRAP_SQL)
             not_canonical = await _canonicalise_existing(conn)
         return cls(pool, not_canonical)
 
@@ -163,8 +167,16 @@ class HotlistStore:
         await self._pool.close()
 
     async def create(
-        self, principal: Principal, *, identifier: str, review_date: date
+        self,
+        principal: Principal,
+        *,
+        identifier: str,
+        review_date: date,
+        audience: HotlistAudience = "only_me",
     ) -> Hotlist:
+        """`audience` is the route's to choose: the deployment's default, or the owner's choice
+        where the deployment lets them make one (ADR-133 ruling 3). The store's own default is the
+        narrower one."""
         canonical, canonicalised = canonical_identifier(identifier)
         hotlist = Hotlist(
             id=new_id(),
@@ -175,12 +187,14 @@ class HotlistStore:
             review_date=review_date,
             created_at=datetime.now(UTC),
             dataset_id=made_in(principal),
+            audience=audience,
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO hotlists "
                 "(id, identifier, identifier_typed, identifier_canonical, owner_id, review_date, "
-                "status, created_at, dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                "status, created_at, dataset_id, audience) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
                 hotlist.id,
                 hotlist.identifier,
                 hotlist.identifier_typed,
@@ -190,8 +204,29 @@ class HotlistStore:
                 hotlist.status,
                 hotlist.created_at,
                 hotlist.dataset_id,
+                hotlist.audience,
             )
         return hotlist
+
+    async def set_audience(
+        self, hotlist_id: str, principal: Principal, audience: HotlistAudience
+    ) -> Hotlist:
+        """The owner's change of whom the hotlist's alerts reach (ADR-133 ruling 3), owner-scoped in
+        the statement itself: another's hotlist is not found, exactly as one that does not exist.
+        Whether the deployment allows the change at all is the route's check."""
+        reach, extra = reach_clause(principal, 4)
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"UPDATE hotlists SET audience = $3 WHERE id = $1 AND owner_id = $2{reach} "
+                f"RETURNING {_COLUMNS}",
+                hotlist_id,
+                principal.id,
+                audience,
+                *extra,
+            )
+        if row is None:
+            raise HotlistNotFoundError(hotlist_id)
+        return _row_to_hotlist(row)
 
     async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist:
         reach, extra = reach_clause(principal, 3)

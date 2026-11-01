@@ -668,6 +668,30 @@ class ReportingConfig(BaseModel):
     superset_memory: str = Field(default="2g", description="Default: 2g. Superset's memory limit.")
 
 
+class MonitoringConfig(BaseModel):
+    """Monitoring and alerts (`06_DECISIONS.md` ADR-133 ruling 3): whom a new hotlist's alerts reach
+    in the shared alert queue, and whether its owner may change that. A hotlist made before the
+    setting existed keeps `only_me` whatever is set here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hotlist_audience: Literal["only_me", "team"] = Field(
+        default="only_me",
+        description=(
+            "Default: only_me. Whom a new hotlist's alerts reach: its owner alone (only_me), or "
+            "also the owner's team, the people of the owner's organisational unit (team). Applies "
+            "to hotlists made after it is set, never to an existing one."
+        ),
+    )
+    hotlist_audience_editable: bool = Field(
+        default=True,
+        description=(
+            "Default: true. Whether a hotlist's owner may choose its audience, when making it or "
+            "later. When false, every new hotlist takes hotlist_audience and a change is refused."
+        ),
+    )
+
+
 class WelcomeConfig(BaseModel):
     """The welcome page before sign-in (ADR-115 decision 8): its About section, and the footer's
     links — the deploying organisation's own documents, each shown only when its address is
@@ -884,6 +908,7 @@ class OspreyConfig(BaseModel):
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     map: MapConfig | None = Field(default=None, description="Default: none declared")
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
+    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)

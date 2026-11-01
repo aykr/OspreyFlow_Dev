@@ -817,6 +817,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `reporting.sync_memory` | str | `256m` | Report sync's memory limit. |
 | `reporting.superset` | bool | false | Run Superset |
 | `reporting.superset_memory` | str | `2g` | Superset's memory limit. |
+| `monitoring` | section | — | Monitoring and alerts: whom a new hotlist's alerts reach, and who changes it. |
+| `monitoring.hotlist_audience` | `only_me` \| `team` | `only_me` | Whom a new hotlist's alerts reach: its owner alone (only_me), or also the owner's team, the people of the owner's organisational unit (team). Applies to hotlists made after it is set, never to an existing one. |
+| `monitoring.hotlist_audience_editable` | bool | true | Whether a hotlist's owner may choose its audience, when making it or later. When false, every new hotlist takes hotlist_audience and a change is refused. |
 | `mail` | section or none | none | A mail server, for invitations and password resets by email. |
 | `mail.host` | str | required | The mail server's name |
 | `mail.port` | int | `587` | The mail server's port. |

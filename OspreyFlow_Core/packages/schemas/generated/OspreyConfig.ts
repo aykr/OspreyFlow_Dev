@@ -277,6 +277,14 @@ export type Superset = boolean;
  */
 export type SupersetMemory = string;
 /**
+ * Default: only_me. Whom a new hotlist's alerts reach: its owner alone (only_me), or also the owner's team, the people of the owner's organisational unit (team). Applies to hotlists made after it is set, never to an existing one.
+ */
+export type HotlistAudience = "only_me" | "team";
+/**
+ * Default: true. Whether a hotlist's owner may choose its audience, when making it or later. When false, every new hotlist takes hotlist_audience and a change is refused.
+ */
+export type HotlistAudienceEditable = boolean;
+/**
  * The mail server's name
  */
 export type Host = string;
@@ -417,6 +425,7 @@ export interface OspreyConfig {
    */
   map?: MapConfig | null;
   reporting?: ReportingConfig;
+  monitoring?: MonitoringConfig;
   /**
    * Default: none — one-time codes
    */
@@ -622,6 +631,15 @@ export interface ReportingConfig {
   sync_memory?: SyncMemory;
   superset?: Superset;
   superset_memory?: SupersetMemory;
+}
+/**
+ * Monitoring and alerts (`06_DECISIONS.md` ADR-133 ruling 3): whom a new hotlist's alerts reach
+ * in the shared alert queue, and whether its owner may change that. A hotlist made before the
+ * setting existed keeps `only_me` whatever is set here.
+ */
+export interface MonitoringConfig {
+  hotlist_audience?: HotlistAudience;
+  hotlist_audience_editable?: HotlistAudienceEditable;
 }
 /**
  * The mail server the identity provider sends invitations and sign-in resets through

@@ -153,8 +153,12 @@ from schemas.analytics import (
 from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.domain import (
     Alert,
+    AlertAssignee,
+    AlertAssignInput,
     AlertDispositionInput,
     AlertExplanation,
+    AlertKind,
+    AlertSeverity,
     Assumption,
     Connections,
     ConnectionsRequest,
@@ -166,6 +170,7 @@ from schemas.domain import (
     HeldRow,
     HeldRowDecision,
     Hotlist,
+    HotlistAudienceInput,
     IntelligenceGap,
     Interval,
     Judgement,
@@ -318,7 +323,7 @@ from .compute_routes import (
     ComputeMetricRequest,
     run_compute_metric_job,
 )
-from .config import ApiConfig, DeploymentModels
+from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .dataset_scope import (
     UnknownDatasetError,
     made_in,
@@ -779,6 +784,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     app.state.config = config
+    # ADR-133 ruling 3: `osprey.yaml`'s `monitoring` section, read once.
+    app.state.monitoring = MonitoringSettings.from_env()
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
@@ -1109,6 +1116,11 @@ def get_hotlists_store(request: Request) -> HotlistStore:
     return request.app.state.hotlists_store  # type: ignore[no-any-return]
 
 
+def get_monitoring_settings(request: Request) -> MonitoringSettings:
+    """ADR-133 ruling 3. A test app with no lifespan reads the schema's defaults."""
+    return getattr(request.app.state, "monitoring", None) or MonitoringSettings()
+
+
 def get_monitors_store(request: Request) -> MonitorStore:
     return request.app.state.monitors_store  # type: ignore[no-any-return]
 
@@ -1249,6 +1261,7 @@ SitesDep = Annotated[SiteStore, Depends(get_sites)]
 PatternsStoreDep = Annotated[PatternStore, Depends(get_patterns_store)]
 ConfigDep = Annotated[ApiConfig, Depends(get_config)]
 HotlistsStoreDep = Annotated[HotlistStore, Depends(get_hotlists_store)]
+MonitoringSettingsDep = Annotated[MonitoringSettings, Depends(get_monitoring_settings)]
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
@@ -4471,10 +4484,16 @@ async def create_hotlist_route(
     body: CreateHotlistRequest,
     principal: PrincipalDep,
     hotlists_store: HotlistsStoreDep,
+    monitoring: MonitoringSettingsDep,
     audit: AuditDep,
 ) -> Hotlist:
+    """ADR-133 ruling 3: a new hotlist takes the deployment's audience, or its owner's choice where
+    the deployment allows one."""
+    audience = body.audience or monitoring.hotlist_audience
+    if audience != monitoring.hotlist_audience and not monitoring.hotlist_audience_editable:
+        raise HotlistAudienceFixed(monitoring.hotlist_audience)
     hotlist = await hotlists_store.create(
-        principal, identifier=body.identifier, review_date=body.review_date
+        principal, identifier=body.identifier, review_date=body.review_date, audience=audience
     )
     await audit.record(
         principal=principal,
@@ -4490,9 +4509,72 @@ async def create_hotlist_route(
     dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
 )
 async def list_hotlists_route(
-    investigation: InvestigationViewerDep, principal: PrincipalDep, hotlists_store: HotlistsStoreDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    hotlists_store: HotlistsStoreDep,
+    monitoring: MonitoringSettingsDep,
 ) -> HotlistList:
-    return HotlistList(hotlists=await hotlists_store.list_authorized(principal))
+    return HotlistList(
+        hotlists=await hotlists_store.list_authorized(principal),
+        audience_default=monitoring.hotlist_audience,
+        audience_editable=monitoring.hotlist_audience_editable,
+    )
+
+
+_AUDIENCE_WORDS = {"only_me": "only its owner", "team": "its owner's team"}
+
+
+class HotlistAudienceFixed(Exception):
+    """The deployment does not let a hotlist's owner choose its audience (ADR-133 ruling 3)."""
+
+    def __init__(self, audience: str) -> None:
+        super().__init__(audience)
+        self.audience = audience
+
+
+@app.exception_handler(HotlistAudienceFixed)
+async def _audience_fixed_handler(request: Request, exc: HotlistAudienceFixed) -> JSONResponse:
+    """ADR-133 ruling 3: with editing off, the choice is refused in words."""
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "hotlist_audience_fixed",
+            "detail": (
+                "This deployment sends every hotlist's alerts to "
+                f"{_AUDIENCE_WORDS[exc.audience]}; the audience cannot be changed here. An "
+                "administrator sets it (monitoring.hotlist_audience_editable)."
+            ),
+        },
+    )
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/hotlists/{hotlist_id}/audience",
+    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+)
+async def set_hotlist_audience_route(
+    hotlist_id: str,
+    body: HotlistAudienceInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    hotlists_store: HotlistsStoreDep,
+    monitoring: MonitoringSettingsDep,
+    audit: AuditDep,
+) -> Hotlist:
+    """ADR-133 ruling 3: the owner chooses whom their hotlist's alerts reach — only them, or their
+    team too. Another's hotlist is not found (the store's owner check, in the statement). Refused in
+    words when the deployment does not let owners choose."""
+    if not monitoring.hotlist_audience_editable:
+        raise HotlistAudienceFixed(monitoring.hotlist_audience)
+    hotlist = await hotlists_store.set_audience(hotlist_id, principal, body.audience)
+    await audit.record(
+        principal=principal,
+        action="hotlist_audience_changed",
+        investigation_id=investigation.id,
+        resolved_query={"hotlist_id": hotlist.id, "audience": hotlist.audience},
+        result_cardinality=1,
+    )
+    return hotlist
 
 
 @app.post(
@@ -8342,24 +8424,56 @@ async def read_alert_queue(
     status_filter: Annotated[
         Literal["open", "claimed", "closed", "active", "all"], Query(alias="status")
     ] = "active",
+    kind: Annotated[list[AlertKind] | None, Query()] = None,
+    severity: Annotated[list[AlertSeverity] | None, Query()] = None,
 ) -> list[QueuedAlert]:
-    """The case's rule-raised alerts, the case team's (ruling 3). `active` is open and claimed.
-    An alert any of whose entities the reader cannot see is left out, and not counted (rule 3)."""
+    """The one alert queue (ADR-133 decision 5 and stage (a)): the case's typology alerts (the case
+    team's, ADR-109 ruling 3) and the hotlist and monitor alerts the reader owns or that are shared
+    with their team, each with its kind, severity and audience. `active` is open and claimed; `kind`
+    and `severity` may each be given more than once. Who sees which alert is decided in the query;
+    an alert any of whose entities the reader cannot see is then left out, and not counted (rule 3).
+    """
     statuses = {
         "active": ["open", "claimed"],
         "all": None,
     }.get(status_filter, [status_filter])
-    rows = await alert_queue.queue(
-        alerts_store, graph, investigation.id, principal, statuses=statuses
-    )
+    rows = await alert_queue.monitoring_queue(
+        alerts_store, graph, investigation.id, principal, statuses=statuses, kinds=kind,
+        severities=severity,
+    )  # fmt: skip
     await audit.record(
         principal=principal,
         action="read_alert_queue",
         investigation_id=investigation.id,
-        resolved_query={"status": status_filter},
+        resolved_query={"status": status_filter, "kind": kind, "severity": severity},
         result_cardinality=len(rows),
     )
     return rows
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-assignees",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
+async def read_alert_assignees(
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    principal_names: PrincipalNamesDep,
+) -> list[AlertAssignee]:
+    """ADR-133 stage (a): whom an alert may be given to — the case's Editors and Authors by grant,
+    by name. Read at Editor, by those who triage; a Viewer is not shown the case's member list."""
+    ids = await _alert_assignee_ids(investigations, investigation.id, principal)
+    names = await principal_names.display_names(sorted(ids))
+    return [AlertAssignee(id=i, name=names.get(i)) for i in sorted(ids)]
+
+
+async def _alert_assignee_ids(
+    investigations: InvestigationStore, investigation_id: str, principal: Principal
+) -> set[str]:
+    grants = await investigations.list_grants(investigation_id)
+    ids = {i for i, level in grants.items() if level.rank >= AccessLevel.EDITOR.rank}
+    return ids | {principal.id}
 
 
 @app.get(
@@ -8466,6 +8580,40 @@ async def dispose_alert(
     )
     await _triage_audit(audit, principal, investigation.id, "alert_disposed", alert)
     return alert
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/assign",
+    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+)
+async def assign_alert(
+    alert_id: str,
+    body: AlertAssignInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+) -> Alert:
+    """ADR-133 stage (a): give an open or claimed alert to an Editor or Author of the case. Only a
+    case (typology) alert is given to someone else; one shared with a team is claimed."""
+    allowed = await _alert_assignee_ids(investigations, investigation.id, principal)
+    alert = await alert_queue.assign(
+        alerts_store, graph, investigation.id, alert_id, principal, assignee=body.assignee,
+        allowed=allowed,
+    )  # fmt: skip
+    await _triage_audit(audit, principal, investigation.id, "alert_assigned", alert)
+    return alert
+
+
+@app.exception_handler(alert_queue.AssignmentRefused)
+async def _assignment_refused_handler(
+    request: Request, exc: alert_queue.AssignmentRefused
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422, content={"error": "assignment_refused", "detail": str(exc)}
+    )
 
 
 @app.post(

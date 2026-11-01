@@ -99,6 +99,7 @@ SECTIONS = {
     "map.providers.licence": "The basemap's licence.",
     "map.providers.cache": "Keeping fetched tiles a while (online providers only).",
     "reporting": "Dashboards for the business: report sync and Superset.",
+    "monitoring": "Monitoring and alerts: whom a new hotlist's alerts reach, and who changes it.",
     "mail": "A mail server, for invitations and password resets by email.",
     "welcome": "The welcome page before sign-in: its About section and footer links.",
     "appearance": "How every page looks: the deployment's brand, and what a GOV.UK header names.",
