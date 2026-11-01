@@ -21041,3 +21041,28 @@ not". Found while building ADR-135: the real Enron case and the synthetic demo d
 - **Showing it:**
   - the engine choice disables an engine the case's data may not reach, and says why;
   - the contract mark appears in `ospreyflow models` and Admin → System and is never a secret.
+
+### ADR-133, Amendment 1 (1 November 2026) — stage (a) as built: team, severity, assignment
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026, open to the owner's
+review (`BUILD_ORDER_2026-11.md`, open questions). Each item is how stage (a) reads a point the decision
+left open.
+
+1. **"Team" is the owner's organisational unit** (`Principal.org_unit`), written on a hotlist or monitor
+   alert when it is raised. An older alert has no team and reaches its owner alone.
+2. **A monitor's alerts go to its owner's team**, as the decision's queue test requires, although
+   decision 1 calls a monitor "just me" scope. An existing monitor's alerts stay with their owner.
+3. **Severity defaults**, read in the query, so no stored row changes:
+   - high: a hotlist match, a KYC screening match;
+   - low: shared contact details;
+   - medium: any other typology, and monitors.
+4. **Assignment.** Only a case (typology) alert may be given to someone: a case Editor or Author. A
+   shared hotlist or monitor alert is claimed, not given, since the case's member list cannot show who
+   else may read it.
+5. **Closing reasons** stay as today (true or false positive, plus words) until the owner names the
+   closed list decision 7 asks for.
+6. **Visibility is decided in the query** (`alerts.py`'s `queue_scope`), together with the dataset
+   reach. The check that the reader may see what an alert names is one batched read, all or nothing
+   per alert. The Reports figures still count typology alerts only, until ADR-134.
+7. **The Watches rail entry stays** beside the Monitoring place's Watches tab, until the owner decides
+   whether "one place" (decision 5) removes it.
