@@ -25,6 +25,17 @@ prompt, the same refusal and the same words. The model is told only how many the
 Conduit puts the real ids in after validation, and the pattern it returns carries them as the
 builder's pinned nodes.
 
+**Where it is answered (the owner's answer of 1 November 2026; ADR-135 Amendment 1).** The
+question is about the case, so it is sent under the case's handling and from the case's datasets,
+through the same two gates as Ask the case: a hosted engine is asked only when the handling code is
+sendable (`models.sendable_handling_codes`) **and** every dataset of the case allows that engine
+(ADR-136); otherwise the local engine answers and the proposal says so (`engine: "local"`). The
+case's handling is the one its material shares *as the analyst sees it* (`questions.
+shared_handling` over the visible working set): one handling code, or none, and none stays local. A
+node the analyst may not see plays no part, so where the question goes reveals nothing about it
+(rule 3). The datasets are the whole case's (`DatasetStore.ids_of_case`), as Ask the case sends
+them, never only those of what is visible: the question may be about anything in the case.
+
 **What the analyst gets.** The pattern, a one-line explanation and the count from
 `preview_pattern`, the preview route's own function (`PatternProposal`). The run is the existing
 run route (rules 3 and 4). A proposed pattern is not a fact, and nothing here writes (rule 5).
@@ -35,7 +46,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -44,6 +55,8 @@ from ports.graph import GraphPort
 from ports.model import ModelPort
 from schemas.domain import (
     PATTERN_WHERE_MAX,
+    Handling,
+    Node,
     OntologySchema,
     PatternEdge,
     PatternNode,
@@ -54,6 +67,7 @@ from schemas.domain import (
 from schemas.model import ExtractionRequest
 
 from .patterns import preview_pattern
+from .questions import shared_handling
 from .working_set.service import WorkingSetService
 
 #: A search question is a sentence, not a document: the extraction model reads it with the
@@ -495,12 +509,13 @@ class PatternProposer:
         placeholders: int = 0,
         document_id: str = "ask-to-search",
         engine: str | None = None,
+        handling: Handling | None = None,
+        datasets: Sequence[str] | None = None,
     ) -> Proposal:
+        """`handling` and `datasets` are the case's (`PatternAskService.ask`): with neither, as the
+        golden set calls it, the routing keeps the question on the local engine (`model_routing.py`:
+        no handling is not sendable, and no datasets is `none`)."""
         vocabulary = vocabulary_of(ontology)
-        # Handling is not given: the text holds the ontology and the analyst's own words, no
-        # record, and a client's provider is never sent material with no handling
-        # (`model_routing.py`). Nor datasets (ADR-136): not known is `none`, so it stays local
-        # on that count too.
         result = await self._model.extract(
             ExtractionRequest(
                 document_id=document_id,
@@ -510,8 +525,9 @@ class PatternProposer:
                 ),
                 json_schema=proposal_schema(vocabulary, placeholders),
                 model=self._default_model,
-                handling=None,
+                handling=handling,
                 engine=engine,
+                datasets=None if datasets is None else list(datasets),
             )
         )
         pattern, explanation = parse_proposal(result.data, vocabulary, ontology, placeholders)
@@ -536,6 +552,12 @@ def resolve_references(pattern: PatternQuery, selection: Sequence[str]) -> Patte
     return pattern.model_copy(update={"nodes": nodes})
 
 
+class CaseDatasets(Protocol):
+    """Where a case's datasets are read (`datasets.DatasetStore` is one)."""
+
+    async def ids_of_case(self, investigation_id: str) -> list[str]: ...
+
+
 class PatternAskService:
     def __init__(
         self,
@@ -544,20 +566,24 @@ class PatternAskService:
         model: ModelPort,
         *,
         default_model: str,
+        datasets: CaseDatasets | None = None,
     ) -> None:
         self._working_set = working_set
         self._graph = graph
         self._proposer = PatternProposer(model, default_model=default_model)
+        #: ADR-136: the case's datasets, sent with the question. With none, nothing is known, and
+        #: the routing treats that as `none`: the question stays local.
+        self._datasets = datasets
 
-    async def _selection_the_analyst_may_use(
-        self, investigation_id: str, selected: Sequence[str], principal: Principal
+    @staticmethod
+    def _selection_the_analyst_may_use(
+        visible: Sequence[Node], selected: Sequence[str]
     ) -> list[str]:
-        """The selected ids in this case's view as `principal` may see it, in the order sent and
-        without repeats. An id they may not see and an id that does not exist are both left out,
-        so nothing downstream, the numbering and the prompt included, can tell them apart."""
+        """The selected ids in this case's view as the analyst may see it (`visible`), in the order
+        sent and without repeats. An id they may not see and an id that does not exist are both left
+        out, so nothing downstream, the numbering and the prompt included, can tell them apart."""
         if not selected:
             return []
-        visible, _ = await self._working_set.visible_membership(investigation_id, principal)
         seen = {n.id for n in visible}
         usable: list[str] = []
         for node_id in selected:
@@ -572,8 +598,14 @@ class PatternAskService:
         principal: Principal,
         ontology: OntologySchema,
     ) -> PatternProposal:
-        selection = await self._selection_the_analyst_may_use(
-            investigation_id, request.selected_node_ids, principal
+        visible, _ = await self._working_set.visible_membership(investigation_id, principal)
+        selection = self._selection_the_analyst_may_use(visible, request.selected_node_ids)
+        # ADR-135 Amendment 1: the case's handling as the analyst sees it, and every dataset of the
+        # case, so the engine choice applies under the same gates as Ask the case.
+        case_datasets = (
+            await self._datasets.ids_of_case(investigation_id)
+            if self._datasets is not None
+            else None
         )
         proposal = await self._proposer.propose(
             request.question,
@@ -581,6 +613,8 @@ class PatternAskService:
             placeholders=len(selection),
             document_id=f"ask-to-search:{investigation_id}",
             engine=request.engine,
+            handling=shared_handling([n.handling for n in visible]) if visible else None,
+            datasets=case_datasets,
         )
         pattern = resolve_references(proposal.pattern, selection)
         try:

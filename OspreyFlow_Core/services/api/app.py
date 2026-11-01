@@ -945,10 +945,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         datasets=datasets_store,
         investigations=investigations,
     )
-    # ADR-129 decision 2: ask to search, a question turned into a pattern that nothing runs.
+    # ADR-129 decision 2: ask to search, a question turned into a pattern that nothing runs. ADR-135
+    # Amendment 1: it carries the case's handling and datasets, so the engine choice applies.
     app.state.pattern_ask = PatternAskService(
-        app.state.working_set, graph, model, default_model=models.extraction
-    )
+        app.state.working_set, graph, model, default_model=models.extraction,
+        datasets=datasets_store,
+    )  # fmt: skip
     app.state.suppression_marks = suppression_marks
     app.state.gaps_store = gaps_store
     app.state.assumptions_store = assumptions_store

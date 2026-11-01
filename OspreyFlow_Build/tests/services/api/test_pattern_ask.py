@@ -176,8 +176,9 @@ async def _ask(
 
 
 async def test_the_engine_named_reaches_the_routing_and_the_proposal_names_what_answered() -> None:
-    """ADR-135 decision 4. The question is sent with no handling, so it is never sent to a provider
-    (`model_routing.py`): naming Gemini runs locally, and the proposal says so."""
+    """ADR-135 decision 4. The engine named reaches the routing. The case's handling goes with the
+    question (Amendment 1), but this service knows no datasets, which is `none` (ADR-136): naming
+    Gemini runs locally, and the proposal says so. `test_ask_to_search_egress.py` has the rest."""
     from services.api.model_routing import Engine, ModelRoutes, RoutedModel
 
     service, model, _ = await _case(_two_visited(), count=1)
@@ -445,7 +446,10 @@ async def test_the_model_sees_no_id() -> None:
     sent = request.model_dump_json()
     for secret in (DANA, CALLUM, HIDDEN, MADE_UP):
         assert secret not in sent
-    assert request.handling is None
+    # ADR-135 Amendment 1: the case's handling as the reader sees it goes with the question; with
+    # no datasets known here, the routing keeps it local (`test_ask_to_search_egress.py`).
+    assert request.handling is not None and request.handling.handling_code == "P"
+    assert request.datasets is None
     assert request.model == "local-model"
     assert "Who shares a visitor with the principal?" in request.text
     # What it is told instead: how many placeholders there are, and nothing about what they are.
