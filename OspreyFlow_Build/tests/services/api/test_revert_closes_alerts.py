@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from services.api import alert_queue
+from services.api.alerts import QueueRow, default_severity
 from services.ingest.load_revert import RevertDeps, revert
 
 from schemas.domain import Alert, AlertMode, Principal
@@ -53,6 +54,11 @@ class Graph:
     async def get_node(self, node_id: str, principal: Principal) -> Any:
         live = node_id in self.nodes and node_id not in self.reverted
         return SimpleNamespace(id=node_id, type="Person", properties={}) if live else None
+
+    async def get_nodes(self, node_ids: Any, principal: Principal) -> list[Any]:
+        """The real port's batched read (ADR-134's one-read queue): only the live nodes come back."""
+        found = [await self.get_node(n, principal) for n in node_ids]
+        return [n for n in found if n is not None]
 
     async def begin_transaction(self) -> str:
         return "tx"
@@ -91,6 +97,25 @@ class Store:
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]
+
+    async def list_queue(
+        self,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        kinds: Any = None,
+        severities: Any = None,
+        statuses: Any = None,
+    ) -> list[QueueRow]:
+        """`AlertStore.list_queue` (ADR-133 stage (a)), the shape `alert_queue.queue` reads since
+        ADR-134: each case alert as a typology row at its default severity, with the status filter
+        applied as the real query applies it."""
+        return [
+            QueueRow(a, "typology", default_severity("typology", a.typology), "case")
+            for a in self.alerts.values()
+            if a.investigation_id == investigation_id
+            and (statuses is None or a.status in statuses)
+        ]
 
     async def alerts_citing_events(self) -> dict[str, list[str]]:
         return {}
