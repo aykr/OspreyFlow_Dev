@@ -21165,3 +21165,42 @@ review (`BUILD_ORDER_2026-11.md`, open questions).
 6. **Format details that could not be checked against publisher documentation** are marked in the
    code: the UN and EU XML element names, OFAC `SDN_Type` values other than individual, and an OFSI
    "Last Updated" first line.
+
+### ADR-133, Amendment 4 (1 November 2026) — stage (d) as built: schedules, checks on load, a second person
+
+Status: recorded during the owner's autonomous-build instruction of 1 November 2026. The owner answered
+the open questions on stages (a) to (c) the same day (`BUILD_ORDER_2026-11.md`, "Owner's answers"); the
+answers that change what stages (a) to (d) built are step 7b's.
+
+**As built:**
+1. **"Engineers do not author analyst rules":** writing a sentence rule also needs `keep_watches`
+   (L8). Data engineers keep L3 for the seven typology rules, as ADR-112 grants (**the owner, 1
+   November: keep L3**).
+2. **Checks on load:** a pipeline that chooses nothing applies every case rule, as before.
+   Whole-deployment and "just me" rules always apply and cannot be detached. A pipeline may make a
+   deployment rule hold, but never loosen one whose author set it to hold. Hold is offered only for
+   rules that run before commit.
+3. **Verify's would-be alerts** judge each rule as its author, over only the sample rows the verifier
+   may read in full, and name only entities shown to the verifier. Its gate has an alert store,
+   quarantine, signature set and audit that refuse every call, so Verify cannot write. Flow, AML and
+   event-frequency checks, and those needing stored links, are not judged and say why.
+4. **Approval:** the approver holds `deploy_rules`, `administer_system` and Author level in a case
+   where the rule is listed, and is not the proposer (403 `own_change`). A rejected deploy is retired.
+   A changed rule then runs as whoever wrote the change. Case-rule changes apply at once. Every
+   version is kept in `typology_rule_versions`, with who proposed and who decided.
+5. **Closing a high-severity alert** needs a second person only when another person can see it; an
+   alert only its owner can see is closed by its owner alone.
+6. **Schedules:** daily or weekly at an hour, Europe/London. Each slot is claimed once and run as the
+   rule's author, looked up again each time, never as the system. A run reads the last day or week,
+   plus the frequency span. Three refusals in a row stop the schedule. An identity-provider outage is
+   a failure, not a refusal, so it never stops one. Whole-deployment rules cannot be scheduled.
+7. **Live whole-deployment rules become pending** when the store bootstraps, closing Amendment 2's
+   gap (no approver until stage (d)).
+8. **A list's refresh schedule** (Amendment 3 item 4) runs as whoever set it, and is refused in words if
+   they no longer hold `load_screening_lists`. Validation is done in the route, so the refusal is in
+   words.
+
+**Tests:** 50 backend cases on a throwaway Postgres, 9 planted violations in the code's own shape (each
+shown red), vitest, keyboard (`monitoring-stage-d.spec.ts`, `checks-on-load.spec.ts`) and 6 axe states.
+Merged into `main` at `1666e1a` together with `fix-sweep-regressions`. The ArcadeDB, Valkey and
+ClickHouse suites are not run here.
