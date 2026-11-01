@@ -1,8 +1,9 @@
 // The rule templates (`06_DECISIONS.md` ADR-133 decision 2, stage (a)): the seven typologies a case
 // rule can run, each offered as a named template with its defaults, grouped by the work it serves.
-// Using one fills the rule form; the Author still names it and deploys it. No new typology here —
-// the new AML templates are stage (c). Each template's defaults are the form's own (`PARAMETERS`),
-// so a template and the form cannot disagree.
+// Using one fills the rule form; the Author still names it and deploys it. Stage (c) added the four
+// new AML templates (a high-risk jurisdiction, large cash, a dormant account reactivated, a sudden
+// rise in velocity). Each template's defaults are the form's own (`PARAMETERS`), so a template and
+// the form cannot disagree.
 //
 // `severity` says how urgent the template's alerts are: today a rule's alerts take their typology's
 // default, which the Conduit applies (`services/api/alerts.py::TYPOLOGY_SEVERITY` and
@@ -19,7 +20,11 @@ export type TemplateTypology =
   | "kyc_screening"
   | "shared_attributes"
   | "document_verification"
-  | "pattern";
+  | "pattern"
+  | "high_risk_jurisdiction"
+  | "large_cash"
+  | "dormant_reactivated"
+  | "velocity_rise";
 
 export interface RuleTemplate {
   typology: TemplateTypology;
@@ -49,6 +54,36 @@ export const TEMPLATES: readonly RuleTemplate[] = [
     name: "Circular flow",
     group: "AML transaction monitoring",
     description: "Money back where it started in 4 movements or fewer, within 30 days.",
+    severity: "medium",
+  },
+  {
+    typology: "high_risk_jurisdiction",
+    name: "High-risk jurisdiction",
+    group: "AML transaction monitoring",
+    description:
+      "A payment to or from an account held in a jurisdiction on your list (the account's IBAN country code).",
+    severity: "medium",
+  },
+  {
+    typology: "large_cash",
+    name: "Large cash",
+    group: "AML transaction monitoring",
+    description: "Cash paid in or drawn out of 10,000 or more in one movement.",
+    severity: "medium",
+  },
+  {
+    typology: "dormant_reactivated",
+    name: "Dormant account reactivated",
+    group: "AML transaction monitoring",
+    description: "An account moving money again after 180 days or more without a movement.",
+    severity: "medium",
+  },
+  {
+    typology: "velocity_rise",
+    name: "Sudden rise in velocity",
+    group: "AML transaction monitoring",
+    description:
+      "An account's last 7 days at 3 times or more its own daily rate over the 90 days before, with 5 or more movements.",
     severity: "medium",
   },
   {

@@ -15,6 +15,10 @@ import type {
   RuleSentence,
   QueuedAlert,
   RuleAuditPage,
+  ScreeningLists,
+  ScreeningListStatus,
+  ScreeningListUpdate,
+  ScreeningSubscriptionInput,
   TypologyRule,
   TypologyRuleInput,
 } from "../../../../packages/schemas/generated";
@@ -81,6 +85,14 @@ async function failure(response: Response, what: string): Promise<Error> {
   }
   if (body.error === "release_refused" && typeof body.detail === "string") {
     return new Error(`${body.detail[0]?.toUpperCase() ?? ""}${body.detail.slice(1)}.`);
+  }
+  // ADR-133 stage (c): a screening list refused or not found, in the server's own words.
+  const said = body.detail as { message?: unknown; right?: unknown } | undefined;
+  if (said && typeof said === "object" && typeof said.message === "string") {
+    return new Error(`${said.message[0]?.toUpperCase() ?? ""}${said.message.slice(1)}.`);
+  }
+  if (response.status === 403 && said?.right === "load_screening_lists") {
+    return new Error(`${what} needs the right to load screening lists.`);
   }
   if (response.status === 403) return new Error(`${what} needs a higher level in this case.`);
   if (response.status === 404) return new Error(`${what}: not found, or not yours to see.`);
@@ -187,3 +199,32 @@ export const previewRule = (a: AlertsApi, sentence: RuleSentence) =>
 
 export const deploySentence = (a: AlertsApi, name: string, sentence: RuleSentence) =>
   call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, "rules/sentence"), a.bearerToken, "Deploying the rule", { method: "POST", body: { name, sentence } });
+
+// --- screening lists as managed sources (ADR-133 decision 4, stage (c)) ---------------------------
+
+export interface ListsApi {
+  apiBaseUrl: string;
+  bearerToken: string;
+}
+
+/** The Lists screen: whoever may load lists reads the refreshes too; anyone else the lists alone. */
+export const listScreeningLists = (a: ListsApi, manage: boolean) =>
+  call<ScreeningLists>(
+    `${a.apiBaseUrl}/v1/${manage ? "admin/" : ""}screening-lists`,
+    a.bearerToken,
+    "Reading the screening lists",
+  );
+
+export const subscribeScreeningList = (a: ListsApi, body: ScreeningSubscriptionInput) =>
+  call<ScreeningListStatus>(`${a.apiBaseUrl}/v1/admin/screening-lists`, a.bearerToken, "Subscribing to the list", {
+    method: "POST",
+    body,
+  });
+
+export const refreshScreeningList = (a: ListsApi, listName: string) =>
+  call<ScreeningListUpdate>(
+    `${a.apiBaseUrl}/v1/admin/screening-lists/${encodeURIComponent(listName)}/refresh`,
+    a.bearerToken,
+    "Refreshing the list",
+    { method: "POST" },
+  );

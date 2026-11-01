@@ -23,6 +23,8 @@ createRoot(document.getElementById("root")!).render(
     investigationId="inv-1"
     accountId="analyst-1"
     isAdministrator={false}
+    // ADR-133 stage (c): `?lists=manage` renders the Lists tab for whoever may load screening lists.
+    canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={(_outcome, nodeIds) => {
       window.__ALERTS__!.canvasNodeIds = nodeIds;
     }}

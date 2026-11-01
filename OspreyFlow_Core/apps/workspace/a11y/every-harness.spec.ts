@@ -37,7 +37,14 @@ const EXTRA_STATES: Record<string, string[]> = {
   "matrix-harness.html": ["select=p2,p4", "many=1"],
   // ADR-133 stage (b): the Rules tab with a rule written as a sentence, its drawn pattern and its
   // preview shown.
-  "monitoring-harness.html": ["tab=rules&sentence=preview"],
+  // ADR-133 stage (c): the Lists tab, as a reader and as whoever may load lists after a refresh
+  // (its refreshes, a failure in words, the subscribe form), and an AML template filling the form.
+  "monitoring-harness.html": [
+    "tab=rules&sentence=preview",
+    "tab=lists",
+    "tab=lists&lists=manage&refreshed=1",
+    "tab=rules&template=high_risk_jurisdiction",
+  ],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

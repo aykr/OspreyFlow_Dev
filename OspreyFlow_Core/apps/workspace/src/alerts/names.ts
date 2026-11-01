@@ -25,6 +25,11 @@ export const TYPOLOGY_LABELS: Record<string, string> = {
   document_verification: "Unverified customer",
   pattern: "Drawn pattern",
   sentence: "Sentence rule",
+  // ADR-133 stage (c): the new AML templates.
+  high_risk_jurisdiction: "High-risk jurisdiction",
+  large_cash: "Large cash",
+  dormant_reactivated: "Dormant account reactivated",
+  velocity_rise: "Sudden rise in velocity",
 };
 
 export function typologyLabel(typology: string | null | undefined): string {
