@@ -77,4 +77,17 @@ resumed session starts here.
 
 ## Open questions found during the run
 
-(none yet)
+1. **Gemini on the everyday deployment would also send the real Enron case (found 1 November).**
+   - The Enron seed stamps its data with handling code `P` (`scripts/seed_enron.py:63`), the same
+     code as the synthetic demo data.
+   - Egress is decided by handling code alone, so `sendable_handling_codes: [P]` on the everyday
+     deployment would make the real email sendable to Google (rule 9).
+   - **What the run does:**
+     - the everyday deployment stays local-only;
+     - the Gemini key goes into the GOV.UK deployment instead, once its case list has been checked
+       (when it is next running) to hold no Enron data;
+     - the C8 captures run there.
+   - **For the owner:** should real data get a handling code of its own (for example, the Enron seed
+     stamps a distinct code that is never sendable), or should egress be decided per case or per
+     dataset as well as by handling code? Either is a decision (an ADR), not a fix the run makes on
+     its own.
