@@ -23,28 +23,33 @@ repository's `origin`) stays where it is.
 | Target | `Solirius/ospreyflow`, public, **empty** (created 1 Nov 2026 07:35) | No Pages yet |
 | Places that name the old address | `harness/render.py` `RELEASES_URL`; `marketing_site/deploy/README.md` and its exported `index.html` (`repoUrl`); the two publish scripts; `OspreyFlow_presentations/.../PID_DEMO_SETUP_GUIDE.md` (clone command); ADR-114 Amendments 21, 27, 28 (history, left as written) | |
 
-## Stage 1 — rulings needed before anything changes
+## Stage 1 — the owner's rulings (answered 1 November 2026)
 
-1. **"Solirius" in the product (blocks the move).** ADR-034 §B5's authorship pattern
-   (`tools/packaging_gate.py` `AUTHORSHIP_PATTERN`, `ayan\.?kar|ayankarsolirius|solirius`) refuses
-   "solirius" anywhere in the product, its bundle and the export, and `harness/render.py` must name the
-   new address. Proposed: an amendment allowing it **only as the repository's own addresses**
-   (`github.com/Solirius/ospreyflow`, `solirius.github.io/ospreyflow`, `ghcr.io/solirius/`), the pattern
-   unchanged everywhere else. Tests: the gate passes a file naming those addresses and still refuses
-   "Solirius" in any other text, each shown red first.
-2. **The method.** As asked: push to `Solirius/ospreyflow`, publish a new release there, then delete
-   `aykr/OspreyFlow`. (A GitHub *transfer* would keep redirects for old clones and links, but the target
-   name is already taken by the empty repository, and the request is a delete.)
-3. **The old releases.** Their signatures name `aykr/OspreyFlow`'s workflow, so a copy in the new
-   repository would fail every install's signature check. Proposed: do not copy them. The first release
-   in the new repository is **v0.4.2**, the same product signed by `Solirius/ospreyflow`'s workflow.
-4. **The old images and chart** under `ghcr.io/aykr/`. Deleting the repository does not delete them.
-   Delete them too, or keep them so an old install can still pull what it pins?
-5. **A custom domain** for the site (for example `ospreyflow.solirius.com`), or `solirius.github.io/ospreyflow`?
+1. **"Solirius" is no longer refused.** "Remove the clause that prevents the use of the word Solirius.
+   I want to embrace the theme that 'OspreyFlow is an open source intelligence mapping,
+   anti-money-laundering and fraud detection platform, developed by Solirius Reply and released under
+   the Apache License 2.0.'" `solirius` comes out of `AUTHORSHIP_PATTERN` (ADR-034 §B5, by amendment).
+   The personal identifiers (`ayan.?kar`, `ayankarsolirius`) stay refused. ADR-114 Amendment 28's
+   reason for the separate `gh-pages` branch (the site names the company) no longer applies, but the
+   branch stays as the way the site is published.
+   - Tests: the gate passes "Solirius Reply" and still refuses each personal identifier, each shown red
+     first.
+   - The statement goes where the product describes itself: the README's opening, the install page,
+     the marketing site, and the welcome page's About section.
+   - **Still to ask the owner:** should `NOTICE`'s "Copyright 2026 The OspreyFlow Authors" become
+     Solirius Reply? That is a legal choice, not a wording one. And should the GOV.UK footer's "Built
+     with OspreyFlow, open source." (ADR-132 Amendment 4) name Solirius Reply?
+2. **The method:** push to `Solirius/ospreyflow`, release there, then delete `aykr/OspreyFlow`.
+3. **The old releases are not copied.** The first release in the new repository is v0.4.2. The owner
+   will ask every existing user to wipe their install and clone again from the new repository, so no
+   in-place move of old installs is planned.
+4. **The old images and chart under `ghcr.io/aykr/` are deleted with the repository** (Stage 5).
+5. **The site's address is `https://solirius.github.io/ospreyflow/`**, with no custom domain.
 
 ## Stage 2 — changes in the developer repository (one branch, tests first)
 
-1. The packaging-gate amendment from ruling 1, with its red-then-green tests.
+1. The packaging-gate amendment from ruling 1, with its red-then-green tests, and the statement in
+   the README, the install page, the marketing site and About.
 2. `harness/render.py` `RELEASES_URL` → `https://github.com/Solirius/ospreyflow/releases`.
 3. `marketing_site/deploy/README.md` and the site's `repoUrl` → the new repository; export the site again.
 4. An ADR-114 amendment recording the move (the product repository, the images' registry, the site's
@@ -63,7 +68,7 @@ repository's `origin`) stays where it is.
 4. Tag and push `v0.4.2`. `release.yml` builds, scans and pushes the images and chart to
    `ghcr.io/solirius/`, and publishes the release with its signatures. Make the packages public.
 5. The site: push the `gh-pages` branch (from `marketing_site/publish_pages.sh`, now aimed at the new
-   repository) and turn on Pages from `gh-pages`. Add the custom domain if ruling 5 named one.
+   repository) and turn on Pages from `gh-pages`, at `https://solirius.github.io/ospreyflow/`.
 
 ## Stage 4 — check the new home before deleting anything
 
@@ -72,7 +77,7 @@ repository's `origin`) stays where it is.
 - `ospreyflow update` on that install finds the release and accepts its signature. A release signed by
   any other workflow is still refused (the existing `signatures` tests, plus one live check).
 - The site answers at its new address, with the video and the GitHub link pointing to the new repository.
-- Nothing in the new repository or its release names "Solirius" outside ruling 1's addresses.
+- Nothing in the new repository or its release carries a personal identifier.
 
 ## Stage 5 — delete `aykr/OspreyFlow` (the owner's go-ahead on the day, not this plan's)
 
@@ -82,11 +87,13 @@ repository's `origin`) stays where it is.
 2. Keep a copy first: `git clone --mirror https://github.com/aykr/OspreyFlow.git`, and every release's
    assets downloaded, into `OspreyFlow_Data/archive/aykr-OspreyFlow-<date>/` (outside git).
 3. `gh auth refresh -s delete_repo`, then `gh repo delete aykr/OspreyFlow --yes`.
-4. If ruling 4 said so, delete the `ghcr.io/aykr/` images and chart.
+4. Delete the `ghcr.io/aykr/` images and chart (ruling 4): `api`, `ingest`, `workspace`, `worker`,
+   `report-sync`, `superset`, `ner` and `charts/ospreyflow`. Leave `noggin`, which belongs to no repository.
 5. Check: the old address gives 404, and the new site, release and install still work.
 
 ## Who is affected
 
-An install made from `aykr/OspreyFlow` stops finding updates once that repository is deleted. It moves by
-pointing its checkout's origin at the new repository and updating to v0.4.2. The owner's two local
+An install made from `aykr/OspreyFlow` stops finding updates once that repository is deleted, and can no
+longer pull its images once they are deleted. The owner will ask each user to wipe their install and
+clone again from `Solirius/ospreyflow` (ruling 3), so send that message before Stage 5. The owner's two local
 deployments run from the developer repository and are not affected.
