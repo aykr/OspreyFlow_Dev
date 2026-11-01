@@ -151,6 +151,9 @@ def test_a_list_is_subscribed_refreshed_and_shown(world: tuple[_World, TestClien
     made = client.post("/v1/admin/screening-lists", json=LIST)
     assert made.status_code == 201, made.text
     assert made.json()["licence"].startswith("CC BY-NC 4.0")
+    # The owner's answer of 1 November 2026: marked "licence not confirmed", with the reason.
+    assert made.json()["licence_confirmed"] is False
+    assert "commercial use" in made.json()["licence_note"]
     refreshed = client.post("/v1/admin/screening-lists/Synthetic list/refresh")
     assert refreshed.status_code == 200, refreshed.text
     assert (refreshed.json()["outcome"], refreshed.json()["added"]) == ("updated", 10)
@@ -319,3 +322,36 @@ def test_a_second_units_rescreening_is_invisible_in_the_admin_list(
     assert "Unit B" not in seen["unit-a"][2] and "Unit A" not in seen["unit-b"][2]
     for unit, (_, _, words) in seen.items():
         assert "4 customers" not in words and "2 alerts" not in words, (unit, words)
+
+
+def test_each_list_says_whether_its_licence_is_confirmed(world: tuple[_World, TestClient]) -> None:
+    """The owner's answer of 1 November 2026 (ADR-133 Amendment 3): UN and OpenSanctions are marked
+    "licence not confirmed" with the reason in words, on the reader's route as on the manager's;
+    the other connectors carry no such mark."""
+    w, client = world
+    for name, source in (("Synthetic list", "opensanctions"), ("Synthetic list UN", "un_consolidated"),
+                         ("Synthetic list OFAC", "ofac_sdn")):  # fmt: skip
+        made = client.post("/v1/admin/screening-lists",
+                           json={"list_name": name, "source": source, "location": "lists/x"})  # fmt: skip
+        assert made.status_code == 201, made.text
+    w.as_ = ANALYST
+    shown = {x["source"]: x for x in client.get("/v1/screening-lists").json()["lists"]}
+    assert shown["un_consolidated"]["licence_confirmed"] is False
+    assert "non-commercial use only" in shown["un_consolidated"]["licence_note"]
+    assert shown["opensanctions"]["licence_confirmed"] is False
+    assert shown["ofac_sdn"]["licence_confirmed"] is True and shown["ofac_sdn"]["licence_note"] is None
+
+
+def test_the_glass_says_the_same_licence_reasons_as_the_conduit() -> None:
+    """The subscribe form says why a connector's licence is not confirmed before any list exists, so
+    the Glass holds the reasons too (`ListsPanel.tsx`'s `LICENCE_NOT_CONFIRMED`). Pure: a drift
+    check between the two, opening no connection."""
+    from services.api.screening_refresh import LICENCE_NOT_CONFIRMED
+    from tools.layout import CORE
+
+    panel = (CORE / "apps" / "workspace" / "src" / "alerts" / "ListsPanel.tsx").read_text(encoding="utf-8")
+    block = panel[panel.index("export const LICENCE_NOT_CONFIRMED"):]
+    block = block[: block.index("};")]
+    assert sorted(LICENCE_NOT_CONFIRMED) == ["opensanctions", "un_consolidated"]
+    for source, reason in LICENCE_NOT_CONFIRMED.items():
+        assert f'{source}:\n    "{reason}",' in block, source

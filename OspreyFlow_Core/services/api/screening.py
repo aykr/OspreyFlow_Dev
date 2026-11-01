@@ -556,7 +556,7 @@ _LIST_SELECT = (
 def _status(row: asyncpg.Record) -> ScreeningListStatus:
     from .rule_schedule import cron_of, schedule_words
     from .scheduler import DEFAULT_TIMEZONE, next_slot
-    from .screening_refresh import LICENCES
+    from .screening_refresh import LICENCE_NOT_CONFIRMED, LICENCES
 
     schedule = (
         ListSchedule(
@@ -568,6 +568,8 @@ def _status(row: asyncpg.Record) -> ScreeningListStatus:
     return ScreeningListStatus(
         list_name=row["list_name"], source=row["source"], location=row["location"],
         dataset=row["dataset"], synthetic=row["synthetic"], licence=LICENCES[row["source"]],
+        licence_confirmed=row["source"] not in LICENCE_NOT_CONFIRMED,
+        licence_note=LICENCE_NOT_CONFIRMED.get(row["source"]),
         version=row["version"], entries=row["entry_count"], updated_at=row["updated_at"],
         attempted_at=row["attempted_at"], failure=row["failure"], schedule=schedule,
         schedule_words=schedule_words(schedule) if schedule else None,

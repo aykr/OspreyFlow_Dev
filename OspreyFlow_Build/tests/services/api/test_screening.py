@@ -56,10 +56,10 @@ def test_the_committed_list_is_synthetic() -> None:
     assert entries and all(e.synthetic for e in entries) and name.startswith("Synthetic")
 
 
-def _exceptions(tmp_path: Path, uses: list[str]) -> Path:
+def _exceptions(tmp_path: Path, uses: list[str], dataset: str = "opensanctions") -> Path:
     path = tmp_path / "real_data_exceptions.yaml"
     path.write_text(yaml.safe_dump({"exceptions": [{
-        "dataset": "opensanctions", "approved_uses": uses, "added_by": "owner",
+        "dataset": dataset, "approved_uses": uses, "added_by": "owner",
         "added_date": "2026-10-10", "device": "owner-mac", "justification": "local demo",
         "decision_record": "ADR-035 §C3",
     }]}))  # fmt: skip
@@ -78,8 +78,22 @@ def test_a_real_list_is_refused_without_the_owners_exception(tmp_path: Path) -> 
 
 
 def test_a_real_list_loads_with_the_owners_exception_for_that_use(tmp_path: Path) -> None:
-    config = _exceptions(tmp_path, ["local_development"])
-    _, entries = parse_list(REAL, use="local_development", config_path=config)
+    config = _exceptions(tmp_path, ["local_development"], dataset="ofac_sdn")
+    real = {**REAL, "list_name": "OFAC SDN", "dataset": "ofac_sdn"}
+    _, entries = parse_list(real, use="local_development", config_path=config)
     assert [e.synthetic for e in entries] == [False]
     with pytest.raises(ListRefused):
-        parse_list(REAL, use="owner_run_demonstration", config_path=config)
+        parse_list(real, use="owner_run_demonstration", config_path=config)
+
+
+def test_a_real_list_whose_licence_is_not_confirmed_is_refused_even_with_the_exception(
+    tmp_path: Path,
+) -> None:
+    """The owner's answer of 1 November 2026: UN and OpenSanctions are synthetic-only until their
+    licences are confirmed, through this loader as through a subscription's refresh."""
+    config = _exceptions(tmp_path, ["local_development"])
+    with pytest.raises(ListRefused, match="licence is not confirmed"):
+        parse_list(REAL, use="local_development", config_path=config)
+    config = _exceptions(tmp_path, ["local_development"], dataset="un_consolidated")
+    with pytest.raises(ListRefused, match="non-commercial use only"):
+        parse_list({**REAL, "dataset": "un_consolidated"}, use="local_development", config_path=config)

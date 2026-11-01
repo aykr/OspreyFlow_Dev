@@ -60,6 +60,7 @@ CASE, DATASET = "case-ledger", "ds-ledger"
 OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify")
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="verify", roles=["administrator"])
 CORE_LISTS = SYNTHETIC_MANIFEST.parent
+GOLDEN_LISTS = Path(__file__).resolve().parents[2] / "knowledge_adapters" / "golden" / "screening_lists"
 
 
 def _handling(classification: str = "OFFICIAL") -> Handling:
@@ -344,15 +345,55 @@ async def test_a_real_list_without_an_exceptions_entry_is_refused_and_nothing_lo
     assert status is not None and status.version is None and status.entries == 0
     assert status.failure == update.words
     assert not [e for e in await store.entries("Person") if e.list_name == "Synthetic list"]
-    # With the device's own entry, the same file loads, as real data.
+    # With the device's own entry, a real list of a connector whose licence is confirmed loads, as
+    # real data. (OpenSanctions' is not: `test_a_real_list_whose_licence_is_not_confirmed_...`.)
+    _admit(exceptions, "ofac_sdn")
+    for name in ("SDN.CSV", "ALT.CSV", "ADD.CSV"):
+        shutil.copy(GOLDEN_LISTS / f"ofac_sdn.{name}", root / "lists" / name)
+    await store.subscribe(
+        ScreeningSubscriptionInput(list_name="Synthetic list OFAC", source="ofac_sdn",
+                                   location="lists/SDN.CSV", dataset="ofac_sdn"),
+        ADMIN.id, synthetic=False,
+    )  # fmt: skip
+    admitted = await refresh("Synthetic list OFAC", store=store, root=root,
+                             rescreen=_rescreener(_Graph(LEDGER), _Queue(), []),
+                             exceptions_path=exceptions)  # fmt: skip
+    status = await store.subscription("Synthetic list OFAC")
+    assert admitted.outcome == "updated", admitted.words
+    assert status is not None and status.synthetic is False
+
+
+def _admit(exceptions: Path, dataset: str) -> None:
     exceptions.write_text(
-        "exceptions:\n  - dataset: opensanctions\n    approved_uses: [local_development]\n"
+        f"exceptions:\n  - dataset: {dataset}\n    approved_uses: [local_development]\n"
         "    added_by: owner\n    added_date: '2026-11-01'\n    device: test-device\n"
         "    justification: a test of the gate\n    decision_record: ADR-133\n"
     )
-    admitted = await _refresh(store, root, _rescreener(_Graph(LEDGER), _Queue(), []), exceptions_path=exceptions)
+
+
+async def test_a_real_list_whose_licence_is_not_confirmed_is_refused_even_with_an_exceptions_entry(
+    store: ScreeningListStore, root: Path, tmp_path: Path
+) -> None:
+    """The owner's answer of 1 November 2026 (ADR-133 Amendment 3's licence findings): UN and
+    OpenSanctions are synthetic-only until their licences are confirmed. A real OpenSanctions file
+    the device's exceptions admit is still refused, in words that say why, and nothing loads."""
+    real_shaped = root / "lists" / "entities.ftm.json"
+    real_shaped.write_text((CORE_LISTS / "synthetic_opensanctions_v1.ftm.json").read_text() + "\n")
+    exceptions = tmp_path / "real_data_exceptions.yaml"
+    _admit(exceptions, "opensanctions")
+    await _subscribe(store, "lists/entities.ftm.json", dataset="opensanctions")
+    update = await _refresh(store, root, _rescreener(_Graph(LEDGER), _Queue(), [_rule()]),
+                            exceptions_path=exceptions)  # fmt: skip
+    assert update.outcome == "refused", update.words
+    assert "licence is not confirmed" in update.words and "commercial" in update.words
+    assert "only OspreyFlow's synthetic" in update.words
     status = await store.subscription("Synthetic list")
-    assert admitted.outcome == "updated" and status is not None and status.synthetic is False
+    assert status is not None and status.entries == 0
+    # Its own synthetic list still loads.
+    await _subscribe(store, "lists/synthetic_opensanctions_v1.ftm.json")
+    synthetic = await _refresh(store, root, _rescreener(_Graph(LEDGER), _Queue(), []),
+                               exceptions_path=exceptions)  # fmt: skip
+    assert synthetic.outcome == "updated"
 
 
 async def test_a_file_that_is_not_one_of_the_repositorys_synthetic_files_is_real(

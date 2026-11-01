@@ -51,6 +51,11 @@ class ScreeningListStatus(BaseModel):
     dataset: str | None = None
     synthetic: bool
     licence: str
+    #: The owner's answer of 1 November 2026: false for a connector whose licence for a customer's
+    #: screening is not confirmed (UN, OpenSanctions), which reads synthetic lists only; the
+    #: reason in words beside it.
+    licence_confirmed: bool = True
+    licence_note: str | None = None
     version: str | None = None
     entries: int = 0
     updated_at: datetime | None = None

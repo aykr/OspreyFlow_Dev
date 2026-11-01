@@ -69,6 +69,22 @@ LICENCES: dict[str, str] = {
     "opensanctions": "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
 }
 
+#: The owner's answer of 1 November 2026 (ADR-133 Amendment 3's licence findings): the connectors
+#: whose licence for a customer's screening is not confirmed, each with the reason in words. Until
+#: it is, they read OspreyFlow's synthetic lists only; a real file is refused, whatever this
+#: device's exceptions admit. `apps/workspace/src/alerts/ListsPanel.tsx` says the same words, held
+#: in step by `test_the_glass_says_the_same_licence_reasons_as_the_conduit`.
+LICENCE_NOT_CONFIRMED: dict[str, str] = {
+    "un_consolidated": (
+        "no open licence was found for the UN consolidated list, and the UN's general terms allow "
+        "personal, non-commercial use only; its terms are to be confirmed with the UN"
+    ),
+    "opensanctions": (
+        "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs "
+        "OpenSanctions' own data licence"
+    ),
+}
+
 SYNTHETIC_MANIFEST = (
     Path(__file__).resolve().parents[2]
     / "packages"
@@ -131,6 +147,14 @@ def admit(
         raise ListRefused(
             f"“{status.dataset}” is real data and is not in this device's "
             f"real_data_exceptions.yaml for {use.replace('_', ' ')}; nothing was loaded (rule 9)"
+        )
+    # A real list this device admits is still refused while its connector's licence is not
+    # confirmed (the owner's answer of 1 November 2026).
+    unconfirmed = LICENCE_NOT_CONFIRMED.get(status.source)
+    if unconfirmed is not None:
+        raise ListRefused(
+            f"this list's licence is not confirmed: {unconfirmed}. Until it is, only OspreyFlow's "
+            "synthetic list may be read through this connector; nothing was loaded"
         )
     return False
 
@@ -452,6 +476,7 @@ async def refresh(
 
 __all__ = [
     "LICENCES",
+    "LICENCE_NOT_CONFIRMED",
     "ListNotSubscribed",
     "ListRefused",
     "RescreenReport",

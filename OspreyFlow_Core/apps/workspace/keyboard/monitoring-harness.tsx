@@ -171,6 +171,9 @@ if (STAGE_D) {
 const LISTS = [
   { list_name: "Synthetic sanctions list", source: "opensanctions", location: "lists/synthetic_opensanctions_v2.ftm.json",
     dataset: null, synthetic: true, licence: "CC BY-NC 4.0: non-commercial use only, unless licensed by OpenSanctions",
+    // The owner's answer of 1 November 2026: marked "licence not confirmed", with the reason.
+    licence_confirmed: false,
+    licence_note: "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
     version: "sha256:3906852638793da1", entries: 10, updated_at: hoursAgo(1), attempted_at: hoursAgo(1), failure: null },
   { list_name: "Synthetic OFAC-format list", source: "ofac_sdn", location: "lists/SDN.CSV", dataset: null, synthetic: true,
     licence: "US Government work, in the public domain (17 U.S.C. §105)", version: "sha256:9c41d07be2a4f1e0", entries: 3,

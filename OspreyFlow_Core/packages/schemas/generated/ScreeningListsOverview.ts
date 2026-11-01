@@ -6,6 +6,8 @@ export type Location = string;
 export type Dataset = string | null;
 export type Synthetic = boolean;
 export type Licence = string;
+export type LicenceConfirmed = boolean;
+export type LicenceNote = string | null;
 export type Version = string | null;
 export type Entries = number;
 export type UpdatedAt = string | null;
@@ -42,6 +44,8 @@ export interface ScreeningListStatus {
   dataset?: Dataset;
   synthetic: Synthetic;
   licence: Licence;
+  licence_confirmed?: LicenceConfirmed;
+  licence_note?: LicenceNote;
   version?: Version;
   entries?: Entries;
   updated_at?: UpdatedAt;
