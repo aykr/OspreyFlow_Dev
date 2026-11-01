@@ -233,6 +233,8 @@ ROUTE_RIGHTS = {
     "reject_held_rows": "decide_held_rows",
     "issue_ws_ticket": None,
     "my_rights_route": None,
+    # ADR-135 decision 5: the engines an analyst may choose; any signed-in person, never a key.
+    "model_engines_route": None,
     "list_people_route": "manage_people",
     "set_person_roles_route": "manage_people",
     # ADR-114 Amendment 5 (B4b)

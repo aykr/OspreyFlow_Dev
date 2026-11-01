@@ -82,13 +82,18 @@ def test_the_conduit_is_told_the_routes_and_codes_and_the_gateway_the_key_by_ref
 ) -> None:
     rendered = render(_config(tmp_path, WITH_PROVIDER), resolver=_fake_resolver)
     env = rendered.artefacts["deployment.env"]
-    assert "OSPREY_PROVIDER_EXTRACTION_MODEL=openai/gpt-4o-mini" in env
-    assert "OSPREY_PROVIDER_VISION_MODEL=openai/gpt-4o" in env
+    # ADR-135: the routes are told as the engines and each role's default (the single provider's
+    # roles default to it, as before).
+    assert '"roles":{"extraction":"openai/gpt-4o-mini","vision":"openai/gpt-4o"}' in env
+    assert 'OSPREY_MODEL_DEFAULTS={"extraction":"openai","vision":"openai"}' in env
     assert "OSPREY_SENDABLE_HANDLING_CODES=P" in env
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
     gateway = compose["services"]["litellm"]["environment"]
-    assert gateway["OSPREY_MODEL_PROVIDER_KEY"].startswith("${OSPREY_MODEL_PROVIDER_KEY:?")
-    assert "OSPREY_MODEL_PROVIDER_KEY" not in compose["services"]["api"].get("environment", {})
+    # ADR-135: empty when the key is removed (`ospreyflow models remove-key`), rather than Compose
+    # refusing every command; an install without the key is still stopped, by `apply`.
+    assert gateway["OSPREY_MODEL_PROVIDER_KEY"] == "${OSPREY_MODEL_PROVIDER_KEY:-}"
+    # The Conduit reads the whole env file; its own environment blanks the key above it.
+    assert compose["services"]["api"]["environment"]["OSPREY_MODEL_PROVIDER_KEY"] == ""
 
 
 def test_no_generated_file_ever_holds_the_key(
@@ -117,7 +122,7 @@ def test_apply_writes_the_key_only_from_the_environment_and_refuses_without_it(
 def test_a_local_only_deployment_renders_no_provider(tmp_path: Path) -> None:
     config = _config(tmp_path, ModelsConfig())
     rendered = render(config, resolver=_fake_resolver)
-    assert "OSPREY_PROVIDER_" not in rendered.artefacts["deployment.env"]
+    assert "OSPREY_MODEL_ENGINES" not in rendered.artefacts["deployment.env"]
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
     assert "OSPREY_MODEL_PROVIDER_KEY" not in compose["services"]["litellm"]["environment"]
     assert "os.environ/" not in render_litellm_config(config)

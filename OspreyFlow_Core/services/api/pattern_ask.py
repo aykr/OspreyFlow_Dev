@@ -113,6 +113,9 @@ class AskToSearchRequest(BaseModel):
 
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
     selected_node_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTION)
+    #: ADR-135 decision 4: the engine the analyst chose (`local` or an enabled provider's name,
+    #: from `GET /v1/models/engines`); none is the role's default. The route still decides.
+    engine: str | None = Field(default=None, min_length=1, max_length=64)
 
     @field_validator("question")
     @classmethod
@@ -130,6 +133,9 @@ class PatternProposal(BaseModel):
     explanation: str
     estimated_count: int
     is_floor: bool
+    #: ADR-135 decision 4: which engine (`local` or a provider's name) and model proposed it.
+    engine: str | None = None
+    model: str | None = None
 
 
 class CouldNotExpressBody(BaseModel):
@@ -358,6 +364,8 @@ class Proposal:
     pattern: PatternQuery
     explanation: str
     model: str
+    #: ADR-135: the engine that proposed it; `None` from a model port called without the routing.
+    engine: str | None = None
 
 
 def describe_pattern(pattern: PatternQuery) -> str:
@@ -486,6 +494,7 @@ class PatternProposer:
         *,
         placeholders: int = 0,
         document_id: str = "ask-to-search",
+        engine: str | None = None,
     ) -> Proposal:
         vocabulary = vocabulary_of(ontology)
         # Handling is not given: the text holds the ontology and the analyst's own words, no
@@ -501,10 +510,13 @@ class PatternProposer:
                 json_schema=proposal_schema(vocabulary, placeholders),
                 model=self._default_model,
                 handling=None,
+                engine=engine,
             )
         )
         pattern, explanation = parse_proposal(result.data, vocabulary, ontology, placeholders)
-        return Proposal(pattern=pattern, explanation=explanation, model=result.model)
+        return Proposal(
+            pattern=pattern, explanation=explanation, model=result.model, engine=result.engine
+        )
 
 
 def resolve_references(pattern: PatternQuery, selection: Sequence[str]) -> PatternQuery:
@@ -567,6 +579,7 @@ class PatternAskService:
             ontology,
             placeholders=len(selection),
             document_id=f"ask-to-search:{investigation_id}",
+            engine=request.engine,
         )
         pattern = resolve_references(proposal.pattern, selection)
         try:
@@ -580,6 +593,8 @@ class PatternAskService:
             explanation=proposal.explanation,
             estimated_count=preview.estimated_count,
             is_floor=preview.is_floor,
+            engine=proposal.engine,
+            model=proposal.model,
         )
 
 

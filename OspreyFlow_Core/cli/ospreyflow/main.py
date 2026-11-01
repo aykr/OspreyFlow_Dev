@@ -10,6 +10,7 @@ injectable, which is how the tests drive it without Docker.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -26,6 +27,7 @@ from typing import Any, Protocol
 import yaml
 
 from . import demo
+from . import models as engine_keys
 from .answers import MODES, Answers, AnswersRefused, load_answers, osprey_config
 from .cloud import build_enterprise, build_small
 from .doctor import Check, Probes, SystemProbes, format_check, run_doctor
@@ -50,11 +52,13 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "update", "uninstall", "repair-sign-in", "switch",
+    "update", "uninstall", "repair-sign-in", "switch", "models",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
 Ask = Callable[[str, str], str]
+#: A prompt whose answer is not shown as it is typed (a model provider's key, ADR-135).
+AskSecret = Callable[[str], str]
 
 
 class PageProcess(Protocol):
@@ -103,7 +107,9 @@ class _Context:
         open_url: Callable[[str], object],
         start_server: StartServer = _start_server,
         free_port: Callable[[], int] = _free_port,
+        ask_secret: AskSecret = getpass.getpass,
     ) -> None:
+        self.ask_secret = ask_secret
         self.start_server = start_server
         self.free_port = free_port
         self.product = product
@@ -227,6 +233,20 @@ def _parser() -> argparse.ArgumentParser:
     verbs.add_parser(
         "update", help="check for or move to a newer release (arguments go to harness.update)"
     )
+
+    # ADR-135 decision 3: the model engines, and each provider's key, on a running deployment.
+    models = verbs.add_parser(
+        "models",
+        help="list the model engines, each role's default and whether each key is present; set or "
+        "remove a provider's key",
+    )
+    key_actions = models.add_subparsers(dest="action", metavar="ACTION")
+    set_key = key_actions.add_parser(
+        "key", help="set or rotate a provider's key (from OSPREY_MODEL_KEY_<NAME>, else asked for)"
+    )
+    set_key.add_argument("name", help="the provider, as osprey.yaml names it (gemini, openai, …)")
+    remove = key_actions.add_parser("remove-key", help="remove a provider's key")
+    remove.add_argument("name")
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
     uninstall.add_argument("--keep-data", action="store_true")
@@ -667,6 +687,34 @@ def _uninstall(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _models(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-135 decision 3. A key goes to `deployment.env` alone and is never printed; then only the
+    services whose environment it changes are started again (`cli/ospreyflow/models.py`)."""
+    directory = ctx.deployed()
+    env_file = directory / "deployment.env"
+    models = engine_keys.read_models(ctx.product, directory)
+    if args.action is None:
+        print("\n".join(engine_keys.list_engines(models, env_file)))
+        return 0
+    if args.action == "key":
+        label = engine_keys.set_key(models, args.name, env_file, ctx.env, ctx.ask_secret)
+        said = f"The key for {label} is set, in {env_file}."
+    else:
+        label, removed = engine_keys.remove_key(models, args.name, env_file)
+        if not removed:
+            print(f"{label} has no key here; nothing was changed.")
+            return 0
+        said = (
+            f"The key for {label} is removed; {label} is not offered to analysts until one is set."
+        )
+    ctx.step(
+        "start the model gateway and the Conduit again",
+        [*compose(directory), "up", "-d", "--no-deps", "--wait", *engine_keys.RESTARTED],
+    )
+    print(said)
+    return 0
+
+
 def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     verb = args.verb
     if verb == "install":
@@ -698,6 +746,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _uninstall(args, ctx)
     if verb == "repair-sign-in":
         return _repair_sign_in(args, ctx)
+    if verb == "models":
+        return _models(args, ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
 
 
@@ -710,6 +760,7 @@ def main(
     recorded_home: Callable[[], Path | None] = read_recorded_home,
     capture: Capture | None = None,
     ask: Ask = _ask,
+    ask_secret: AskSecret = getpass.getpass,
     open_url: Callable[[str], object] = webbrowser.open,
     start: Path | None = None,
     start_server: StartServer = _start_server,
@@ -751,6 +802,7 @@ def main(
             open_url,
             start_server,
             free_port,
+            ask_secret,
         )
         if args.verb == "update":
             # ADR-114 Amendment 8: the checkout's own `harness.update`, told which deployment.

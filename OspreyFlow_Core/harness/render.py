@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import os
 import subprocess
 import sys
@@ -268,23 +269,76 @@ def render_litellm_config(config: OspreyConfig) -> str:
 
 
 def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
-    """ADR-114 Amendment 6, point 4: the client's provider's models, each routed through the
-    gateway as `provider/model`, its key read by LiteLLM from the gateway's own environment
-    (`os.environ/OSPREY_MODEL_PROVIDER_KEY`) — never written into this file."""
-    provider = config.models.provider
-    if provider is None:
-        return []
+    """ADR-114 Amendment 6 point 4, ADR-135 decision 2: each enabled provider's models, routed
+    through the gateway as `provider/model`, each reading its own provider's key from the gateway's
+    own environment (`os.environ/OSPREY_MODEL_KEY_<NAME>`, or `OSPREY_MODEL_PROVIDER_KEY` for the
+    single `models.provider`) — never written into this file."""
     entries: list[dict[str, object]] = []
-    for model in dict.fromkeys(provider.roles.values()):
-        name = f"{provider.name}/{model}"
-        params: dict[str, object] = {
-            "model": name,
-            "api_key": "os.environ/OSPREY_MODEL_PROVIDER_KEY",
-        }
-        if provider.api_base:
-            params["api_base"] = provider.api_base
-        entries.append({"model_name": name, "litellm_params": params})
+    for provider in config.models.enabled_providers:
+        key = config.models.key_variable(provider.name)
+        for model in dict.fromkeys(provider.roles.values()):
+            name = f"{provider.name}/{model}"
+            params: dict[str, object] = {"model": name, "api_key": f"os.environ/{key}"}
+            if provider.api_base:
+                params["api_base"] = provider.api_base
+            entries.append({"model_name": name, "litellm_params": params})
     return entries
+
+
+def model_key_variables(config: OspreyConfig) -> dict[str, str]:
+    """Each enabled provider's name and the `deployment.env` variable its key is kept in."""
+    return {p.name: config.models.key_variable(p.name) for p in config.models.enabled_providers}
+
+
+def model_engines_env(config: OspreyConfig) -> list[str]:
+    """ADR-135: what the Conduit is told of the engines, as `deployment.env` lines — each enabled
+    provider's name, label and model per role, each role's default engine, and the sendable codes.
+    Never a key, and not whether one is present: that is resolved by Compose from the env file when
+    the Conduit starts (`OSPREY_MODEL_KEY_PRESENT_<NAME>`, `_keys_for_the_gateway_alone`), so
+    setting or removing a key needs no render."""
+    models = config.models
+    if not models.enabled_providers:
+        return []
+    engines = [
+        {
+            "name": p.name,
+            "label": p.label,
+            "roles": {role: f"{p.name}/{model}" for role, model in p.roles.items()},
+        }
+        for p in models.enabled_providers
+    ]
+    compact = {"separators": (",", ":"), "ensure_ascii": True}
+    return [
+        "OSPREY_MODEL_ENGINES=" + json.dumps(engines, **compact),  # type: ignore[arg-type]
+        "OSPREY_MODEL_DEFAULTS=" + json.dumps(models.role_defaults, **compact),  # type: ignore[arg-type]
+        "OSPREY_SENDABLE_HANDLING_CODES=" + ",".join(models.sendable_handling_codes),
+    ]
+
+
+def _keys_for_the_gateway_alone(config: OspreyConfig, services: dict[str, Any]) -> None:
+    """ADR-135 decision 2: a provider's key is read by the LiteLLM gateway alone. The keys live in
+    `deployment.env`, which every owned service reads whole (`env_file`), so each such service's own
+    environment — which Compose, and the chart's `env` over `envFrom`, put above the file — blanks
+    every key. The Conduit is told instead whether each key is present, by Compose from the same
+    file (`${KEY:+yes}`: "yes" or empty), so it offers analysts only an engine that has one."""
+    keys = model_key_variables(config)
+    if not keys:
+        return
+    for name, service in services.items():
+        if name == "litellm":
+            service["environment"] = {
+                **dict(service.get("environment") or {}),
+                **{key: f"${{{key}:-}}" for key in keys.values()},
+            }
+            continue
+        if "env_file" not in service:
+            continue
+        environment = dict(service.get("environment") or {})
+        environment.update({key: "" for key in keys.values()})
+        if name == "api":
+            for provider, key in keys.items():
+                environment[f"OSPREY_MODEL_KEY_PRESENT_{provider.upper()}"] = f"${{{key}:+yes}}"
+        service["environment"] = environment
 
 
 def _local_model_table(config: OspreyConfig, extraction: str) -> str:
@@ -957,12 +1011,6 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 "KC_PROXY_HEADERS": "xforwarded",
                 "KC_HTTP_ENABLED": "true",
             }
-        if entry.service == "litellm" and config.models.provider is not None:
-            # ADR-114 Amendment 6: the gateway alone reads the client's provider key.
-            service["environment"] = {
-                **_SERVICE_EXTRAS["litellm"]["environment"],  # type: ignore[dict-item]
-                "OSPREY_MODEL_PROVIDER_KEY": "${OSPREY_MODEL_PROVIDER_KEY:?set in the env file}",
-            }
         if entry.service == "ollama":
             # ADR-114 Amendment 7: the server that reads case content has no route out; the
             # weights are fetched by `ollama-models` below, into the volume it reads.
@@ -1001,6 +1049,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
     # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
     api = next(entry for entry in images if entry.service == "api")
     services.update(reporting_services(config, api_image=api.image, building=api.building))
+    _keys_for_the_gateway_alone(config, services)
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
     if config.external.postgres is not None:
@@ -1069,8 +1118,8 @@ def egress_needs(config: OspreyConfig) -> set[str]:
         needs |= {"api", "ingest"}  # staging, site images, the tile cache, media: the cloud's S3
     if external.media is not None:
         needs.add("api")  # media on Blob
-    if config.models.provider is not None:
-        needs.add("litellm")  # the client's own model provider
+    if config.models.enabled_providers:
+        needs.add("litellm")  # the client's own model providers (ADR-135)
     if config.mail is not None or config.governance.organisation_sign_in:
         needs.add("keycloak")  # mail for invitations; an organisation's sign-in
     if any(
@@ -1232,15 +1281,9 @@ def _render_env(config: OspreyConfig) -> str:
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
-    # ADR-114 Amendment 6: each role the client's provider takes, and what may be sent to it. The
-    # key is not here: only the gateway reads it, from the secrets apply writes.
-    if config.models.provider is not None:
-        provider = config.models.provider
-        for role, model in provider.roles.items():
-            lines.append(f"OSPREY_PROVIDER_{role.upper()}_MODEL={provider.name}/{model}")
-        lines.append(
-            "OSPREY_SENDABLE_HANDLING_CODES=" + ",".join(config.models.sendable_handling_codes)
-        )
+    # ADR-135 (ADR-114 Amendment 6): the engines, each role's default, and what may be sent. No
+    # key is here: only the gateway reads one, from the secrets apply writes.
+    lines += model_engines_env(config)
     lines += reporting_env(config)
     # §2.5: "It never sees a secret. Credentials are entered as references." Nothing above is a
     # value; every one of these is a name, a path or a choice already written in osprey.yaml.

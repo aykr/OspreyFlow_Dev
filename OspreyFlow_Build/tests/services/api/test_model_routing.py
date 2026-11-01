@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
-from services.api.model_routing import ModelEgressRefused, RoleRoute, RoutedModel
+from services.api.model_routing import Engine, ModelEgressRefused, ModelRoutes, RoutedModel
 
 from schemas.domain import Handling
 from schemas.model import (
@@ -56,14 +56,18 @@ class _Inner:
 def _routed(
     inner: _Inner, *, local: str | None = LOCAL, sendable: Sequence[str] = ("P",)
 ) -> RoutedModel:
+    """Amendment 6's one provider, as ADR-135 reads it: an engine with a key, the default for the
+    one role it takes."""
+    openai = Engine(name="openai", label="OpenAI", models={"extraction": PROVIDER},
+                    key_present=True)  # fmt: skip
     return RoutedModel(
         inner,  # type: ignore[arg-type]
-        routes={
-            "extraction": RoleRoute(local=local, provider=PROVIDER),
-            "vision": RoleRoute(local="moondream", provider=None),
-            "transcription": RoleRoute(local="whisper", provider=None),
-        },
-        sendable_handling_codes=frozenset(sendable),
+        routes=ModelRoutes(
+            locals={"extraction": local, "vision": "moondream", "transcription": "whisper"},
+            engines={"openai": openai},
+            defaults={"extraction": "openai"},
+            sendable=frozenset(sendable),
+        ),
     )
 
 
@@ -120,18 +124,26 @@ async def test_with_no_sendable_codes_nothing_is_ever_sent() -> None:
 
 
 def test_the_conduit_reads_its_routes_from_what_the_renderer_wrote() -> None:
-    """The names `harness/render.py` writes into `deployment.env` are the ones read here."""
+    """The names `harness/render.py` writes into `deployment.env` are the ones read here
+    (`test_model_engines.py` reads them from the renderer itself)."""
     from services.api.config import DeploymentModels
     from services.api.model_routing import routes_from_env
 
     local = DeploymentModels(extraction=LOCAL, vision="moondream", transcription="whisper",
                              embedding="minilm")  # fmt: skip
-    routes, codes = routes_from_env(
+    routes = routes_from_env(
         local,
-        {"OSPREY_PROVIDER_EXTRACTION_MODEL": PROVIDER, "OSPREY_SENDABLE_HANDLING_CODES": "P, C"},
+        {
+            "OSPREY_MODEL_ENGINES": '[{"name":"openai","label":"OpenAI",'
+            '"roles":{"extraction":"openai/gpt-4o-mini"}}]',
+            "OSPREY_MODEL_DEFAULTS": '{"extraction":"openai"}',
+            "OSPREY_MODEL_KEY_PRESENT_OPENAI": "yes",
+            "OSPREY_SENDABLE_HANDLING_CODES": "P, C",
+        },
     )
-    assert routes["extraction"] == RoleRoute(local=LOCAL, provider=PROVIDER)
-    assert routes["vision"] == RoleRoute(local="moondream", provider=None)
-    assert codes == frozenset({"P", "C"})
-    routes, codes = routes_from_env(local, {})
-    assert all(r.provider is None for r in routes.values()) and codes == frozenset()
+    assert routes.locals["extraction"] == LOCAL
+    assert routes.engines["openai"].models == {"extraction": PROVIDER}
+    assert routes.default_for("extraction") == "openai" and routes.default_for("vision") == "local"
+    assert routes.sendable == frozenset({"P", "C"})
+    bare = routes_from_env(local, {})
+    assert bare.engines == {} and bare.sendable == frozenset()

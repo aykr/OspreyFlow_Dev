@@ -32,7 +32,9 @@ def _entry(case: str, at: datetime, question: str) -> QuestionEntry:
         read_ids=["doc-1", "doc-2"],
         candidate_ids=["c1", "c2"],
         unplaced=1,
-        model="local-model",
+        model="gemini/gemini-2.5-flash",
+        # ADR-135: the engine that answered is kept with the answer.
+        engine="gemini",
         created_at=at,
         graph_node_ids=["node-1", "node-2"],
         graph_link_ids=["link-1"],
@@ -82,6 +84,7 @@ async def test_a_question_stored_before_graph_facts_reads_back_with_none(store) 
     (listed,) = await store.list_for_case(case)
     assert listed.question == "old"
     assert (listed.graph_node_ids, listed.graph_link_ids, listed.graph_citations) == ([], [], [])
+    assert listed.engine is None  # ADR-135: not recorded before engines were
 
 
 async def test_a_row_stored_before_events_were_recorded_reads_back_as_not_recorded(store) -> None:
