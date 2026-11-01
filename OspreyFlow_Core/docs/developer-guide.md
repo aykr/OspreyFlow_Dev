@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.8** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.9** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.9 | 2026-11-01 | §9.1: the API's OpenAPI document, `GET /v1/openapi.json`, signed in, its version the release. |
 | 1.8 | 2026-11-01 | §3.8a: the Checks on load step — attaching the case's and the deployment's rules to a pipeline and choosing what a hit does there. §3.8: Verify shows the alerts its sample would raise, beside the rejections, and writes nothing. §2: a data engineer attaches rules but does not write them. |
 | 1.7 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
 | 1.6 | 2026-10-29 | Describes v0.4.1. No change to its content. |
@@ -474,6 +475,10 @@ Every route is under `/v1`; a case's routes are under `/v1/investigations/{inves
 missing right is refused with `403` and the right's name; a case you have no level on answers as if
 it did not exist.
 
+**The OpenAPI document** describes every route: `GET /v1/openapi.json` at the deployment's own address,
+signed in like every other route. Its `info.version` is the release the deployment runs (for example
+`v0.4.1`, or `dev-<commit>` off a release), the same version Admin → System shows.
+
 | Method and path | Needs |
 | --- | --- |
 | `GET /v1/ingest/connectors`, `/v1/ingest/packs`, `/v1/ingest/transforms` | Signed in |
@@ -491,6 +496,7 @@ it did not exist.
 | `POST …/ingest/recipes/{recipe_id}/held-rows/release`; `POST …/held-rows/reject` | `decide_held_rows`, Author |
 | `GET /v1/admin/schedules` and its actions | `operate_schedules` |
 | `GET /v1/me/rights` | Signed in: your own rights |
+| `GET /v1/openapi.json` | Signed in: the OpenAPI document |
 
 ### 9.2 Files on the server
 

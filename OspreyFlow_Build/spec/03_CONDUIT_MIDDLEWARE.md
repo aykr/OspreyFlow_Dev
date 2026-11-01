@@ -91,8 +91,8 @@ process started with no rendered version says `dev-unknown`. The packages' own `
 
 **Tests:** `tests/services/api/test_openapi_published.py` — refused without sign-in; FastAPI's
 unauthenticated copies gone; the version rendered from a checkout tagged `v0.4.1` read back through
-the route; the workspace proxy's `/v1/` location carries it. GDS remediation O1
-(`process/gds/gds_remediation_plan.md`).
+the route; the workspace proxy's `/v1/` location carries it. It closes the GDS baseline audit's
+open-standards item O1.
 
 ### 3.1 Investigations
 

@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "b934c0d0ab8777f55a845903b75ad77b6a5853baf89c5b2a9f904046bd6829a3",
+    "body": "8d65a85436eea267ec594c687bf172f7c3774850db2d8a64a2f5ed99b6016303",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -10,12 +10,12 @@
       "images/admin/06-demo-packs.png": "46ff5e939c137a1e32ff3a4009e57eeda9e8aa1d50b13c36c49ed91aa2f25dc2",
       "images/admin/07-superset.png": "821b76c53a1481b17f26ee5006a9ef80a452c3d61ab5206330eb4c367f5514fd"
     },
-    "pdf": "2a5a60347884eb450479f02823f8fc5a5c56cc7928af93d4a5ee81a3edd8eb3c",
-    "source": "28e08acf9cfa43f653425d81d1d6a0162eadd8ab8cd6a2cc922c3afaaacd989d",
-    "version": "1.19"
+    "pdf": "8d21d8e781c4f559463b73e0b9034541087ce508a331c5b25042482d2923725a",
+    "source": "e6071e571ea8e83d30857f4623c7f0f149d2ab47884735aeae3f4bb50f999154",
+    "version": "1.20"
   },
   "developer-guide.md": {
-    "body": "a02fd859094913e43fe782e749071216807fa7077d4bf3b1ba5771322968f81b",
+    "body": "75aaf5895f317e27480885af51b7e5ae9eb6b2456b852918520a5e1b59e96939",
     "images": {
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
       "images/developer/02-pipeline-canvas.png": "5b865977a3c4f6eb99c9ab9610b92c8772614501f5be0842cc715590616af793",
@@ -32,12 +32,12 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "8807667c9232b42d54bae7d61d7fea6f4b9b1a1d2086eda0e43e5a6b69133bef",
-    "source": "36e8e02f04e59327d001dcf5006ddb96fdfe1aeab5747411f5e2b391b881c909",
-    "version": "1.8"
+    "pdf": "1fa592cc9a80378f5f02f216b5da3d21a6125d5dbed9889ddf203efa4013d541",
+    "source": "e5e71c5f6335ea773276b62bca89d01f4903db6153a1a183c2f17e045ef66938",
+    "version": "1.9"
   },
   "user-guide.md": {
-    "body": "77c307f8c4489ac93ceef9e09694cd3554df110496499edc6793dabbaa34bb7d",
+    "body": "935ed60506a27720d4f9f04693f566ddc25a6a531649fa5a76bac6438a3acdee",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -51,7 +51,7 @@
       "images/user/10-ownership-due-diligence.png": "d28baa7b047b18e8a2572635c22c0a8476db7fccdd8c4d445d84a03b02254fe0",
       "images/user/11-history.png": "d3bf4e146ffc55cbeae6c88bbc9d254b5d467564da53822ddd1cdfd594162c26",
       "images/user/12-questions.png": "4da2b5f26da67363dd79368a908d3f5b69a5a1049771018d86c03da38e8936a1",
-      "images/user/13-watches.png": "efad696e0f0d80a061185fa48c8e6072d4edecf60ce616c2d82e2a46c7717238",
+      "images/user/13-watches.png": "f6265a4ff6b5329743c45023750ba11d9828c09563291bca8797f8cf66635805",
       "images/user/14-timeline.png": "daeabfabf41ca7ac92f3be489d2c4e4156dc0ee991e14b6222a4b1040f40c2ee",
       "images/user/15-timeline-weekly.png": "a1b4e771b840cbf42c7532d17a270c6b6c2d8e65b6a360b445a66b821294186c",
       "images/user/16-search.png": "301570cd3996899b4d579634104fec087a3bf5edc0e631bd7efbbb8557a0ff22",
@@ -61,13 +61,13 @@
       "images/user/20-metrics.png": "bb0659af72c65773c860d4d261299171bc0a4a997318af3fec7ae326ee6bcdbc",
       "images/user/21-alerts-in-reporting.png": "fe3bdcd4abd83a5fd65481fcced067cadd527138b27cef73b3fc6a2f6ecc0264",
       "images/user/22-rule-sentences.png": "64309e02b668b8de41cb656e0855f75e76a559c730b2133bbf40aebad23ccb0d",
-      "images/user/23-screening-lists.png": "ef5367d8daa64f21a8eefc3d0305b04a691c3febc19a5bece4c1066b6322acca",
+      "images/user/23-screening-lists.png": "d26c9dd397623fde61cf5d794794d1c2b7408a420e52e100baf79093f82881ec",
       "images/user/24-aml-templates.png": "ba583a099a4777b93e91cfdaa574c8f905fad8bebde236c2afeb16793f857905",
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "649d78f540c8695af0b27468083fe107ddfafc84a50d45cf0a797b188c3e1189",
-    "source": "7b2c5ff0a1dde503117ff71a5d15376062c2738df03e37949246b54c4c2236dd",
-    "version": "1.16"
+    "pdf": "d424dff56e5a87969e80c8b9083b4c953efe7acd5379b921b5ef9d1982110528",
+    "source": "e8537e1c56043f8b6e86ba04f1860083a02a91b4a4630df7fa6f35339d8c7dda",
+    "version": "1.17"
   }
 }

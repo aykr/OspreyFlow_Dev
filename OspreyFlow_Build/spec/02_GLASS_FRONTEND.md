@@ -190,7 +190,7 @@ narrowed.
 ```
 
 The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
-*Watches*, *Alerts* (the case team's alert queue, its rules, held rows and audit — ADR-109, §3.3),
+*Alerts* — named *Monitoring* since ADR-133 — (the one alert queue, its rules, the watches with their alert inbox in its *Watches* tab, held rows and audit — ADR-109, §3.3; the rail's own *Watches* entry was removed by the owner's answer of 1 November 2026, ADR-133 Amendment 5),
 *Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
 questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
 *Ingest Studio*; in the Ingest
@@ -361,8 +361,8 @@ One row, 40px. From the left:
 
 There is no application switch: the Ingest Studio is reached from the rail, and while it is open the
 bar shows a brass line under it and drops what belongs only to the Glass (search, the view switch,
-Export). *Back to the investigation* on the rail returns to the Glass view that was last open. Watches,
-Alerts, Ownership, History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
+Export). *Back to the investigation* on the rail returns to the Glass view that was last open.
+Monitoring (with the watches in its Watches tab), Ownership, History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
@@ -907,7 +907,7 @@ analyst will learn to dismiss.
 **Typology rules and the *Alerts* place (ADR-109).** A case's typology rules (structuring, rapid
 movement, circular flow — each a closed set of parameters, never an expression) judge its loads,
 before commit or after as each rule declares, and raise alerts to **the case team's queue**: the
-*Alerts* place on the left rail, after *Watches*. It opens on the queue (open and claimed by
+*Alerts* place on the left rail (*Monitoring* since ADR-133), after *Cases*. It opens on the queue (open and claimed by
 default; closed and all by choice), each alert named by its typology and its finding in words, the
 entities named as the reader sees them — an alert any part of which the reader cannot see is not
 shown or counted. Opening one shows **what fired it**: the finding, when the rule ran (as the data
@@ -916,11 +916,12 @@ loaded, before commit, or after), the span when it has one, and a table of the t
 parties it concerns, each named with its type (an empty transactions table once stood there; found
 live, 11 October 2026). An alert with no node on the graph says so: what it concerns is held under
 markings no single marking covers. Where the alert stands is one sentence — "Open", "Claimed by you",
-"Closed as a true positive: <reason>". An Editor claims it, releases it,
+"Closed as True match: <reason>" (ADR-133 Amendment 5: the closing reason by its label). An Editor claims it, releases it,
 puts it **on the canvas** (its node, its entities and the links it cites, all or none; the view
 switches to the graph with those nodes selected; the alert's node is labelled by what its rule
-found, "KYC screening alert", never by its id — rule 7) and closes it as a true or false positive with a
-required reason; a true positive confirms the alert's node (rule 5) and, for a screening alert,
+found, "KYC screening alert", never by its id — rule 7) and closes it with one of the closed list of
+closing reasons — True match, False positive, Duplicate, No further action, Referred (ADR-133
+Amendment 5), a radio group reached by keyboard — and required words; a true match confirms the alert's node (rule 5) and, for a screening alert,
 the match it found, so due diligence then says "confirmed" rather than "possibly" (ADR-109
 Amendment 7). A Viewer reads only. Its
 other tabs: **Rules** (every rule, what it looks for in words, where it runs; an Author deploys —
@@ -1013,7 +1014,8 @@ the view switch itself, never proved by keyboard before, in `keyboard/shell.spec
 
 **The Glass follows the person's rights (ADR-112).** It reads `GET /v1/me/rights` at sign-in and
 leaves out what it would only be refused — never in place of the Conduit's check
-(`rights/visibility.ts`): the rail shows *Watches* for keep_watches, *Alerts* for read_alert_queue,
+(`rights/visibility.ts`): the rail shows *Monitoring* (`alerts`) for read_alert_queue or keep_watches (ADR-133 Amendment 5: the
+watches are in its Watches tab, the rail having no Watches entry),
 *Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
 *Proposed types* for manage_ontology, *Ingest Studio* for edit_pipelines (an analyst adds files from
 the canvas), *Dashboards* for read_reports, *Admin* for any administration right; the view switch offers Graph and Map for
