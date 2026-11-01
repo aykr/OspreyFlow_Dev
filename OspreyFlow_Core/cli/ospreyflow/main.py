@@ -50,7 +50,7 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "update", "uninstall", "repair-sign-in",
+    "update", "uninstall", "repair-sign-in", "switch",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -194,6 +194,16 @@ def _parser() -> argparse.ArgumentParser:
         "--no-demo-accounts", action="store_true", help="for an install made without them"
     )
     verbs.add_parser("status", help="say each service's state")
+    switch = verbs.add_parser(
+        "switch",
+        help="make this the deployment running: stop any other OspreyFlow deployment, then start "
+        "and open this one",
+    )
+    switch.add_argument(
+        "--list",
+        action="store_true",
+        help="list this machine's OspreyFlow deployments; change nothing",
+    )
     verbs.add_parser("open", help="open the Glass in the browser")
 
     logs = verbs.add_parser("logs", help="show service logs")
@@ -515,6 +525,64 @@ def _stop(ctx: _Context) -> int:
     return 0
 
 
+def _deployments(ctx: _Context) -> list[tuple[str, bool, Path]] | None:
+    """This machine's OspreyFlow deployments, as Docker's own Compose labels name them: `(project,
+    running, rendered folder)` for each project whose compose file is a product's
+    `deploy/generated/<name>/compose.yaml` (ADR-132 Amendment 3). Any other project is left out, so
+    it is never stopped. `None` when Docker cannot be asked."""
+    code, output = ctx.capture(
+        ["docker", "compose", "ls", "--all", "--format", "json"], cwd=ctx.product
+    )
+    if code != 0:
+        return None
+    found: list[tuple[str, bool, Path]] = []
+    for row in _services(output):
+        for config in str(row.get("ConfigFiles", "")).split(","):
+            compose_file = Path(config.strip())
+            folder = compose_file.parent
+            if compose_file.name != "compose.yaml" or folder.parent.name != "generated":
+                continue
+            if folder.parent.parent.name != "deploy":
+                continue
+            if not (folder.parents[2] / "osprey.yaml").is_file():
+                continue
+            running = "running" in str(row.get("Status", ""))
+            found.append((str(row.get("Name", "")), running, folder))
+    return found
+
+
+def _switch(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-132 Amendment 3: one deployment running at a time on a machine with room for one. Stops
+    every other OspreyFlow deployment that is running (with its own env file), then starts and
+    opens this one. `--list` only says what there is."""
+    own = ctx.deployed().resolve()
+    deployments = _deployments(ctx)
+    if deployments is None:
+        print(
+            "Could not ask Docker about this machine's deployments. Is Docker running?",
+            file=sys.stderr,
+        )
+        return 1
+    if args.list:
+        for name, running, folder in deployments:
+            state = "running" if running else "stopped"
+            if folder.resolve() == own:
+                print(f"{name}: {state} (this one)")
+                continue
+            product = folder.parents[2]
+            print(f"{name}: {state} \u2014 {product} \u2014 {public_origin(product)}")
+        return 0
+    for name, running, folder in deployments:
+        if running and folder.resolve() != own:
+            print(f"Stopping {name}, so this one has the machine to itself.")
+            ctx.step(f"stop {name}", [*compose(folder), "stop"])
+    ctx.step("start the deployment", [*compose(ctx.deployed()), "up", "-d", "--wait"])
+    address = public_origin(ctx.product)
+    ctx.open_url(address)
+    print(f"Opening {address}")
+    return 0
+
+
 def _services(text: str) -> list[dict[str, Any]]:
     stripped = text.strip()
     if not stripped:
@@ -609,6 +677,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _stop(ctx)
     if verb == "status":
         return _status(ctx)
+    if verb == "switch":
+        return _switch(args, ctx)
     if verb == "open":
         address = public_origin(ctx.product)
         ctx.open_url(address)

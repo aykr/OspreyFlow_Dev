@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -203,3 +204,81 @@ def test_a_one_shot_step_that_finished_is_not_a_fault(
     assert "keycloak-db: exited (code 3)" in capsys.readouterr().out
     rig.ps_output = ps(("glass", "exited", 0), ("keycloak-db", "exited", 0))
     assert rig("status") == 1
+
+
+# --- switch: one deployment running at a time on one machine (ADR-132 Amendment 3) -------------
+
+
+def _other_deployment(root: Path, name: str) -> Path:
+    """Another product folder on the same machine, with a rendered deployment."""
+    (root / "harness").mkdir(parents=True)
+    (root / "harness" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "osprey.yaml").write_text("{}\n", encoding="utf-8")
+    deployment = root / "deploy" / "generated" / name
+    deployment.mkdir(parents=True)
+    (deployment / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    (deployment / "deployment.env").write_text("X=1\n", encoding="utf-8")
+    return deployment
+
+
+def _ls(*rows: tuple[str, str, Path]) -> str:
+    return json.dumps([{"Name": n, "Status": s, "ConfigFiles": str(f)} for n, s, f in rows])
+
+
+def test_switch_stops_the_other_running_deployment_then_starts_and_opens_this_one(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """Found running two Lite deployments on one machine (ADR-132 Amendment 1): Docker had the
+    memory for one, and switching meant three commands with `OSPREYFLOW_HOME` set by hand. A project
+    that is not an OspreyFlow deployment is never touched."""
+    rig.install_deployment()
+    other = _other_deployment(tmp_path / "second", "osprey-govuk")
+    unrelated = tmp_path / "elsewhere" / "docker-compose.yml"
+    rig.responses["ls"] = [
+        (0, _ls(
+            ("osprey-govuk", "running(16)", other / "compose.yaml"),
+            ("osprey-local-lite", "exited(18)", rig.deployment / "compose.yaml"),
+            ("noggin-mac", "running(2)", unrelated),
+        ))  # fmt: skip
+    ]
+
+    assert rig("switch") == 0
+
+    other_compose = [
+        "docker", "compose",
+        "--env-file", str(other / "deployment.env"),
+        "-f", str(other / "compose.yaml"),
+    ]  # fmt: skip
+    assert rig.runner.argvs() == [
+        [*other_compose, "stop"],
+        [*_compose(rig), "up", "-d", "--wait"],
+    ]
+    assert rig.opened == ["http://ospreyflow.localhost"]
+
+
+def test_switch_with_nothing_else_running_only_starts_this_one(rig: Rig) -> None:
+    rig.install_deployment()
+    own = ("osprey-local-lite", "exited(18)", rig.deployment / "compose.yaml")
+    rig.responses["ls"] = [(0, _ls(own))]
+    assert rig("switch") == 0
+    assert rig.runner.argvs() == [[*_compose(rig), "up", "-d", "--wait"]]
+
+
+def test_switch_list_names_each_deployment_its_state_and_address(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rig.install_deployment()
+    other = _other_deployment(tmp_path / "second", "osprey-govuk")
+    rig.responses["ls"] = [
+        (0, _ls(
+            ("osprey-govuk", "running(16)", other / "compose.yaml"),
+            ("osprey-local-lite", "exited(18)", rig.deployment / "compose.yaml"),
+            ("noggin-mac", "running(2)", tmp_path / "elsewhere" / "docker-compose.yml"),
+        ))  # fmt: skip
+    ]
+    assert rig("switch", "--list") == 0
+    said = capsys.readouterr().out
+    assert "osprey-govuk: running" in said and str(tmp_path / "second") in said
+    assert "osprey-local-lite: stopped (this one)" in said
+    assert "noggin" not in said
+    assert rig.runner.argvs() == []

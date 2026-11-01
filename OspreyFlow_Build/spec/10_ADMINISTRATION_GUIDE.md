@@ -292,6 +292,7 @@ Lite and `https://<domain>` for Small and Enterprise.
 | --- | --- |
 | `ospreyflow start` | Brings the deployment up and waits for every service; `--build` rebuilds from the checkout first |
 | `ospreyflow stop` | Stops every container; nothing is removed |
+| `ospreyflow switch` | Makes this the deployment running: stops any other OspreyFlow deployment on the machine (each with its own settings), then starts and opens this one. `--list` names each deployment, running or stopped, and changes nothing. Pick the deployment as for any command, for example `OSPREYFLOW_HOME=<its product folder> ospreyflow switch` |
 | `ospreyflow status` | Each service's state and health; exits 1 unless everything is running and healthy |
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |

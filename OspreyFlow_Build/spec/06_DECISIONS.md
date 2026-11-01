@@ -20482,3 +20482,29 @@ order; the skip link's target focusable; a service name never markup), and
    `test_under_govuk_the_words_name_no_product_and_the_title_is_not_repeated` and
    `govuk_sign_in.test.mjs`'s card case, each shown red first; `brand.test.tsx` and
    `HomePage.test.tsx` for the two pages.
+
+### ADR-132, Amendment 3 (1 November 2026) — `ospreyflow switch`: one deployment running at a time
+
+Status: accepted, the owner's request ("commit this into the main product as well").
+
+Context. Amendment 1 lets a machine hold more than one Lite deployment; a machine with room for one
+must run them in turn. Switching meant stopping one deployment and starting the other, each with
+`OSPREYFLOW_HOME` set by hand for its own commands.
+
+Decision. A verb of the `ospreyflow` command (ADR-114), not a script beside it:
+
+1. `ospreyflow switch` makes the deployment the command points at (`OSPREYFLOW_HOME`, the recorded
+   home, or the current folder, as for every verb) the running one: it stops every other OspreyFlow
+   deployment that is running, each with its own env file, then starts this one and opens it.
+2. It finds the others from Docker's own Compose labels: a project whose compose file is a product's
+   `deploy/generated/<name>/compose.yaml`, with an `osprey.yaml` in that product. Any other Compose
+   project on the machine is never stopped. No folder is configured or remembered.
+3. `ospreyflow switch --list` names each such deployment, running or stopped, with its product folder
+   and address, and changes nothing.
+4. It never builds and never changes the recorded home.
+
+Tests that would fail if it were broken (`tests/cli/test_lifecycle.py`, shown red first): the other
+running deployment is stopped with its own env file before this one starts and opens, and an
+unrelated project is not touched; with nothing else running only this one starts; `--list` names each
+OspreyFlow deployment and its state, marks this one, leaves out other projects and runs nothing. The
+administration guide's §8 table names the verb (`test_admin_guide.py`).
