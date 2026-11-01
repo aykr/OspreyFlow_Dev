@@ -50,3 +50,15 @@ test("shrinking the map's box keeps every drawn node in view", async ({ page }) 
   expect(outside).toEqual([]);
 });
 
+
+// The mitigation for CVE-2026-85061 (`06_DECISIONS.md`, ADR-014's accepted-risk amendment):
+// MapLibre's own attribution control renders HTML through its broken `DOM.sanitize()`, so the map
+// is built without it and the attribution is drawn by `MapView` as plain text. Before the GDS
+// baseline audit (1 November 2026) nothing would have failed had the control been switched back
+// on; shown red with `attributionControl: true` in `MapView.tsx`.
+test("MapLibre's attribution control is never drawn; the attribution is plain text", async ({ page }) => {
+  await page.goto("/keyboard/map-view-harness.html");
+  await expect.poll(() => centre(page), { timeout: 20_000 }).not.toBeNull();
+  await expect(page.locator(".maplibregl-ctrl-attrib")).toHaveCount(0);
+  await expect(page.getByText("Harness", { exact: true })).toBeVisible();
+});
