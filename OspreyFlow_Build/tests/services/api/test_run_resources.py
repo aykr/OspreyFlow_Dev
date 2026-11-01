@@ -37,6 +37,10 @@ class _Store:
         self.args = args
         self.closed = False
 
+    async def load_alert_facts(self, facts: Any) -> None:
+        """The analytics port's alert-fact sink (ADR-134), which run resources attach to the alert
+        store since that change; a store that opens nothing keeps nothing."""
+
     @classmethod
     async def connect(cls, *args: Any, **kwargs: Any) -> Any:
         return cls(*args, **kwargs)
