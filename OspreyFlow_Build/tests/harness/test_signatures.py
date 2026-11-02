@@ -9,7 +9,8 @@ the B5c row), against a throwaway registry and key.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import subprocess
+from collections.abc import Callable, Sequence
 from typing import Any
 from pathlib import Path
 
@@ -290,3 +291,57 @@ def test_a_blob_without_its_signature_is_refused(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         main(["--lock", str(lock), "--repository", "acme/ospreyflow", "--tag", "v0.5.0",
               "--blob", "a", "--blob", "b", "--blob-signature", "a.json"])  # fmt: skip
+
+
+# ADR-114 Amendment 30: the product's home is `Solirius/ospreyflow`. A checkout cloned from the address
+# the product names as its home (`RELEASES_URL`) accepts a release signed by that repository's own
+# `release.yml` only; one signed by the old home's workflow, `aykr/OspreyFlow`, is refused.
+NEW_HOME = "Solirius/ospreyflow"
+OLD_HOME = "aykr/OspreyFlow"
+
+
+def _cosign_holding_a_signature_by(repository: str, tag: str) -> Callable[[Sequence[str]], tuple[int, str]]:
+    """cosign as it answers for an image whose certificate names `repository`'s release workflow at
+    `tag`: it verifies only when asked for exactly that identity, and otherwise refuses in its own
+    words. The refusal is the point; a fake that verified any identity could not show this red."""
+    signer = f"https://github.com/{repository}/.github/workflows/release.yml@refs/tags/{tag}"
+
+    def run(argv: Sequence[str]) -> tuple[int, str]:
+        asked = argv[argv.index("--certificate-identity") + 1]
+        issuer = argv[argv.index("--certificate-oidc-issuer") + 1]
+        if asked == signer and issuer == GITHUB_ISSUER:
+            return 0, "Verification for ... -- The following checks were performed"
+        return 1, (
+            "Error: no matching signatures: none of the expected identities matched what was in the "
+            f"certificate, got subjects [{signer}] with issuer {GITHUB_ISSUER}"
+        )
+
+    return run
+
+
+def _checkout_cloned_from_the_products_home(tmp_path: Path) -> Path:
+    from harness.render import RELEASES_URL
+
+    home = RELEASES_URL.removesuffix("/releases")
+    checkout = tmp_path / "ospreyflow"
+    checkout.mkdir()
+    subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+    subprocess.run(["git", "-C", str(checkout), "remote", "add", "origin", f"{home}.git"], check=True)
+    return checkout
+
+
+def test_the_products_home_is_the_solirius_repository() -> None:
+    from harness.render import RELEASES_URL
+
+    assert RELEASES_URL == f"https://github.com/{NEW_HOME}/releases"
+
+
+def test_a_release_signed_by_the_old_homes_workflow_is_refused(tmp_path: Path) -> None:
+    from harness.update import real_host
+
+    host = real_host(tmp_path / "deployment", _checkout_cloned_from_the_products_home(tmp_path))
+    identity = host.identity("v0.4.2")
+    lock = _lock(workspace=D, api=E, ingest=D, ner=E)
+    with pytest.raises(SignatureRefused):
+        verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(OLD_HOME, "v0.4.2")))
+    verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(NEW_HOME, "v0.4.2")))
