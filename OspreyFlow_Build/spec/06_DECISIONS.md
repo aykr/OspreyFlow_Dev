@@ -21728,3 +21728,84 @@ and `test_the_list_versions_differ_by_one_designation_matching_one_customer`
 (`test_ledger_monitoring_batches.py`); the seed placing the files, each release and the reset
 (`test_seed_ledger_monitoring.py`); and `seed_internal` running the three steps for `ledger` alone,
 leaving the Conduit up. Each was shown red in the code's own shape; the evidence is in the step's report.
+
+## ADR-138 — Starter packs: a theme and a domain chosen at install, several deployments side by side, and a public dataset of the administrator's choosing — ACCEPTED (design)
+
+Status: accepted from the owner's request of 2 November 2026 ("in the installation guides … clear
+options for installing starter packs … multiple deployments covering themes like vanilla, i.e. the
+base OspreyFlow branded installs, and any available design system based ones like gov.uk, along with
+the domain models like AML, crime etc."; and, answering the scope questions: an install option and the
+guides; crime, AML, fraud and cyber; "provide an ability to the user to specify a public dataset like
+Vast to be included in the install pack"; a blank starter as well). Built in build-order step 9c.
+
+**Context.** Every piece exists but is scattered: `appearance.brand` (`ospreyflow`, `govuk`), the
+domain packs every deployment composes (FIBO, NIEM, STIX; a case's `domains`, ADR-126), the demo
+packs (section 11 of the administration guide), and `deployment.name` with `network.public_origin`
+(ADR-132 Amendment 1), which let a second deployment share nothing with the first. But `osprey.yaml`
+sits in the checkout, so a second deployment today needs its own checkout (the owner's GOV.UK demo runs
+from a git worktree, switched by a script outside the product). An administrator has no single choice
+that says "a GOV.UK service for crime analysis" or "the OspreyFlow look for AML".
+
+**Decision.**
+1. **A starter is a theme and a domain**, named `<theme>-<domain>`, chosen with
+   `ospreyflow install --starter <name>` and on the guided install page's first screen. It only
+   pre-fills answers the install already asks; every one can still be changed, and the rendered
+   `osprey.yaml` records the starter as a comment, not a setting (nothing at run time depends on it).
+   - **Themes:** `ospreyflow` (the base brand, "vanilla") and `govuk` (the GOV.UK Design System; for a
+     service on a gov.uk domain only, as appendix A already says: the install asks for the service
+     name, organisation and phase). A theme is an `appearance.brand` value, so a later design system
+     is a new brand value plus its tokens, and becomes a starter theme without changing this ADR.
+   - **Domains:**
+     | Domain | Case domains | Demo data it loads | Notes |
+     | --- | --- | --- | --- |
+     | `crime` | `niem` | `prison-intelligence` (and `hmp`) | Intelligence analysis, prison intelligence |
+     | `aml` | `fibo` | `operation-ledger`; the synthetic screening lists | Typology and AML templates deployed in its case |
+     | `fraud` | `fibo` | `fixture-corp` at install; `paysim` offered as the administrator's download | PaySim is never fetched by the install |
+     | `cyber` | `stix` | a new synthetic STIX 2.1 pack, `cyber-intrusion` (to build) | Until it exists, the cyber starter loads no demo case and says so |
+     | `blank` | none chosen | none, and no demo accounts | A real service starting from nothing; every domain pack remains available |
+   - Every starter keeps every domain pack in the ontology (ADR-126 is unchanged): the domain sets the
+     demo case's `domains`, the demo data and the starter's templates, never what the ontology offers.
+2. **Several deployments side by side, supported.** `ospreyflow install --name <name>` gives a deployment
+   its own folder (`~/.ospreyflow/deployments/<name>/`, holding its `osprey.yaml`, rendered files and
+   `deployment.env`, mode 600), its own Compose project and volumes, and its own address
+   (`--address`, default `http://<name>.localhost:<next free port>`). The checkout is shared; no
+   worktree is needed. `ospreyflow deployments` lists them (name, starter, address, running or
+   stopped), and every verb takes `--name` (default: the only deployment, or the one last used).
+   `ospreyflow switch <name>` stops the running Lite deployment and starts the named one, since a Lite
+   machine runs one at a time by default. An existing checkout-rooted deployment keeps working
+   unchanged and is listed as `default`.
+3. **A public dataset of the administrator's choosing** may be added to a starter at install or later:
+   `ospreyflow demo add public --file <path> --manifest <dataset.yaml>`. The manifest names the
+   dataset, its source page, its licence text, its checksum and the Ingest Studio recipe (or one of
+   the shipped recipes) that loads it.
+   - **The VAST Challenge datasets are the first catalogue entries.** These are the IEEE VAST Challenge
+     scenarios: fictional, published for visual-analytics research. Each is shipped as a manifest
+     and a recipe only. The data itself is downloaded by the administrator and never carried by
+     OspreyFlow, as with PaySim. Which challenges are catalogued, and their licence terms, are
+     confirmed in step 9c and recorded in spec 00's licence register.
+   - **Rule 9 holds.** A dataset that is fictional or synthetic loads like PaySim. A dataset holding
+     real people's data is accepted only through the Enron path: the administrator types `yes`,
+     acknowledging the real data and their organisation's own lawful basis. It never enters CI or the
+     repository, and the owner's device additionally needs its real-data exceptions entry (ADR-035
+     §C3).
+4. **The guides.** The administration guide gains a new section, "Choosing a starter", near the front:
+   the theme × domain table, one command per starter, the guided-page equivalent, running several
+   deployments side by side, and adding a public dataset. Section 11 (demo packs) points to it. The
+   user guide says which demo case each starter brings.
+
+**Tests that would fail if this were violated (rule 12):**
+- each starter's rendered `osprey.yaml` carries its brand and its demo packs, and nothing else differs
+  from the defaults;
+- two named deployments share no volume, folder, Compose project or port;
+- `--name` on every verb reaches only that deployment (planted: a verb that ignores it);
+- `blank` makes no demo case and no demo account;
+- a `govuk` starter without a service name is refused in words;
+- a public-dataset manifest whose checksum differs is refused before anything loads;
+- a manifest declaring real personal data is refused without the acceptance;
+- `deployment.env` under `~/.ospreyflow/deployments/` is mode 600.
+
+**Consequences.** The owner's `ospreyflow-switch` script becomes unnecessary once `ospreyflow switch`
+exists. The owner's two existing deployments (everyday in the checkout, GOV.UK in a worktree) keep
+working, and can be moved under `~/.ospreyflow/deployments/` later, which the guide describes and
+which needs the owner's go-ahead. A cyber demo pack is new synthetic data work, and is built with
+fixtures before it is offered.
