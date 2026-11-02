@@ -477,7 +477,8 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               onChange={(e) =>
                 change({
                   strength: e.target.value as SentenceDraft["strength"],
-                  reaches: e.target.value === "shared_attribute_rarity" ? "2" : "0.8",
+                  // The client's rarity measure, the default (ADR-139 Amendment 2), is at most 1.
+                  reaches: e.target.value === "shared_attribute_rarity" ? "0.9" : "0.8",
                   ...(draft.runs === "pre_commit" ? { runs: "post_commit" as const } : {}),
                 })
               }
