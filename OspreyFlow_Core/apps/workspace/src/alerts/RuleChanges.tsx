@@ -19,7 +19,8 @@ const STATUS_WORDS: Record<string, string> = {
 /** The words a waiting change shows on the rule. */
 export function pendingWords(rule: TypologyRule): string | null {
   if (!rule.pending_action) return null;
-  const who = rule.pending_by ?? "someone";
+  // ADR-106: the proposer's name as the rules list serves it; the id only where none resolved.
+  const who = rule.pending_by_name ?? rule.pending_by ?? "someone";
   return `Waiting for a second person's approval: ${ACTION_WORDS[rule.pending_action] ?? rule.pending_action}, proposed by ${who}.`;
 }
 

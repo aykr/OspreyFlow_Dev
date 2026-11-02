@@ -157,6 +157,14 @@ describe("maker–checker on a whole-deployment rule (decision 7)", () => {
     expect(screen.queryByRole("button", { name: "Approve Sanctioned people" })).toBeNull();
   });
 
+  it("names who proposed it by their name, not their identity-provider id (step 9d finding 1)", async () => {
+    const named = { ...pending, pending_by: "6f1c2a9e-idp-subject", pending_by_name: "Mo Maker" } as TypologyRule;
+    serve({ "GET rules": () => json(200, [named]), "GET patterns": () => json(200, { patterns: [] }), "/v1/ontology": () => json(200, ONTOLOGY) });
+    render(<RulesPanel apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="author" isAdministrator accountId="checker" />);
+    await screen.findByText("Waiting for a second person's approval: deploying it, proposed by Mo Maker.");
+    expect(screen.queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
+  });
+
   it("shows the rule's versions with who made and who decided each", async () => {
     serve({
       "GET rules": () => json(200, [rule()]),
@@ -212,6 +220,22 @@ describe("closing a high-severity alert (decision 7)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Propose the close" }));
     await screen.findByText("Close proposed as False positive; it waits for a second person to approve it.");
     expect(calls.some((c) => c.path === "alert-queue/a1/disposition")).toBe(true);
+  });
+
+  it("names who proposed the close by their name on the approver's screen (step 9d finding 1)", async () => {
+    const closing = { ...ALERT, status: "closing", disposition: "referred", disposition_reason: "to the regional unit",
+      close_proposed_by: "6f1c2a9e-idp-subject" }; // prettier-ignore
+    serve({
+      "GET alert-queue": () => json(200, [{ alert: closing, summary: "4 movements", kind: "typology", severity: "high", audience: "case" }]),
+      "GET alert-queue/a1": () => json(200, { alert: closing, summary: "4 movements", nodes: [], edges: [], transactions: [], kind: "typology",
+        severity: "high", audience: "case", close_proposed_by_name: "Priya Shah" }), // prettier-ignore
+      "GET alert-assignees": () => json(200, []),
+    });
+    render(<AlertQueue apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="editor" accountId="second" onCanvas={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Open alert:\s*High\s*severity/ }));
+    const detail = await screen.findByRole("region", { name: "What fired this alert" });
+    await within(detail).findByText(/proposed by Priya Shah: waiting for a second person/);
+    expect(within(detail).queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
   });
 
   it("lets a second member approve or send back, and the proposer only withdraw", async () => {

@@ -10679,6 +10679,18 @@ A name is readable by anyone who may read the record it sits on — already true
 the name is the point. Five minutes of staleness after an account rename. A deployment without
 `OIDC_ADMIN_USERS_URL` (or without the exchange client) sees ids exactly as today.
 
+### ADR-106, Amendment 1 (2 November 2026) — the proposer of a waiting change, by name
+
+Status: accepted 2 November 2026 (build-order step 9d finding 1: the v4 captures showed the approval
+screens naming the proposer by an identity-provider id). Two more decision 5 fields, under decision
+3's rule: `AlertExplanation.close_proposed_by_name`, resolved by the alert's explain route for the
+one `close_proposed_by` id it serves, only after the reader has been served the alert; and
+`TypologyRule.pending_by_name`, resolved by the case's rules list for the `pending_by` ids of the
+rules it serves. Neither is stored. Tests, red first: `test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else`
+(a refused reader causes no lookup) and `test_a_waiting_change_names_its_proposer_and_asks_only_for_proposers_served`,
+each with a directory stand-in that records the ids asked for and knows only its own accounts; and
+the Glass's two screens in `StageD.test.tsx`.
+
 ### ADR-105, Amendment 1 (9 October 2026) — Set picture… from the node's own menu
 
 Status: accepted 9 October 2026 (the owner: "Can you add the ability to associate an image to node to its right click menu?").

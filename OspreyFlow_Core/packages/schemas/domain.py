@@ -1087,6 +1087,9 @@ class TypologyRule(TypologyRuleInput):
     pending_action: RuleChangeAction | None = None
     pending_by: str | None = None
     pending_version: int | None = None
+    #: ADR-106: `pending_by`'s display name, resolved when the rules list is served and never
+    #: stored (step 9d finding 1: the waiting change named its proposer by an identity-provider id).
+    pending_by_name: str | None = None
 
 
 HeldRowStatus = Literal["held", "released", "rejected"]
@@ -1333,6 +1336,10 @@ class AlertExplanation(BaseModel):
     severity: AlertSeverity = "medium"
     audience: AlertAudience = "case"
     team: str | None = None
+    #: ADR-106: the display name of `alert.close_proposed_by`, resolved when the alert is explained
+    #: to a reader who may read it, never stored (step 9d finding 1: the approval screen named the
+    #: proposer by an identity-provider id).
+    close_proposed_by_name: str | None = None
 
 
 class AlertDispositionInput(BaseModel):

@@ -82,13 +82,15 @@ export function ageWords(iso: string, now: Date = new Date()): string {
   return `${days} day${days === 1 ? "" : "s"} old`;
 }
 
-/** Where an alert stands, in one sentence: "Claimed by you", "Closed as True match: …". */
-export function statusSentence(alert: Alert, mine: boolean): string {
+/** Where an alert stands, in one sentence: "Claimed by you", "Closed as True match: …". A close
+ * waiting for a second person names who proposed it by `proposerName` (the explanation's
+ * `close_proposed_by_name`, ADR-106), the id only where no name could be resolved. */
+export function statusSentence(alert: Alert, mine: boolean, proposerName?: string | null): string {
   if (alert.status === "closed") {
     return alert.disposition ? `Closed as ${closingReasonLabel(alert.disposition)}: ${alert.disposition_reason ?? ""}` : "Closed";
   }
   if (alert.status === "closing") {
-    const by = alert.close_proposed_by ?? "a member";
+    const by = proposerName ?? alert.close_proposed_by ?? "a member";
     return `Closing as ${closingReasonLabel(alert.disposition)} (${alert.disposition_reason ?? ""}), proposed by ${mine ? "you" : by}: waiting for a second person to approve it`;
   }
   if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : alert.assignee}`;
@@ -301,7 +303,7 @@ function AlertDetail(props: AlertDetailProps) {
         </table>
       )}
       <p className="label" style={{ margin: 0 }}>
-        {statusSentence(alert, mine)}
+        {statusSentence(alert, mine, why.close_proposed_by_name)}
       </p>
       {said && <p role="status" className="label">{said}</p>}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}
