@@ -782,8 +782,10 @@ update raises, and how a closed alert reaches the case's reports.
 
 - As the admin, *Monitoring → Lists*: "UK Sanctions List (synthetic)" reads *Not yet read*. **Refresh
   now**: version 28/09/2026, five entries (a ship is not screened), every customer re-screened, no
-  alert. Keep the case's screening rule from the onboarding chapter (*Screen customers against the
-  lists*) live: the list update needs it.
+  alert. The list update needs the case's screening rule, *Screen customers against the lists*: the
+  seed deploys it from the *KYC screening* template's defaults, after each load commits, as the
+  case's Author (`osprey-demo-admin`), and a reseed leaves it as it is. Check it is live under
+  *Monitoring → Rules*; if a rehearsal retired it, reseed, or deploy that template again as the Author.
 
 **1. After the SAR** (as the analyst):
 
