@@ -1095,6 +1095,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await app.state.superset_embedder.aclose()
         # A closed store must not outlive the app that held it (a test app is started again).
         app.state.datasets = None
+        # ADR-139: a route that judges rules reads this store when the app holds one, so a closed
+        # one left here would fail them; without it they judge with the weights file's influencers.
+        app.state.strength_influencers = None
         await litellm_client.aclose()
         await resources.close()
 
