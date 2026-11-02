@@ -346,7 +346,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         f"Seeded Operation Ledger: {result.transactions_loaded} transactions "
         f"({len(result.events)} timeline events), the SAR "
-        f"({result.sar_document_id or 'not written — no media store?'}), and "
+        f"({result.sar_document_id or 'not written: its recipe wrote no document'}), and "
         f"{len(geometry_records())} map points under investigation_scope={scope!r}; "
         f"the screening list {list_name!r} ({len(entries)} synthetic entries)."
     )

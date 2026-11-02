@@ -159,3 +159,21 @@ async def test_building_the_ledger_twice_makes_nothing_twice() -> None:
         places = (await graph.list_nodes("Location", ANALYST, limit=500)).nodes
         names = [p.properties.get("name") for p in places]
         assert names.count("Dunstall Road, Wolverhampton") == 1
+
+
+async def test_a_reseed_names_the_sar_it_wrote_again() -> None:
+    """Step 9d finding 6: the everyday deployment's Ledger reseed printed "the SAR (not written — no
+    media store?)" while a fresh install named it. The media store was there both times: the SAR's
+    bytes are the same, so its `content:` id is the same, and on a reseed the engine merges into the
+    document already there (`merged_node_ids`) rather than creating it (`created_node_ids`), which is
+    all the seed looked in. The second build names the same, still-readable document."""
+    ontology = load_deployment_ontology()
+    media = InMemoryMediaStore()
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        first = await build_ledger_graph(graph=graph, ontology=ontology, principal=ANALYST, media=media)
+        again = await build_ledger_graph(graph=graph, ontology=ontology, principal=ANALYST, media=media)
+        assert first.sar_document_id is not None
+        assert again.sar_document_id == first.sar_document_id
+        sar = await graph.get_node(again.sar_document_id, ANALYST)
+        assert sar is not None
+        assert (await media.get(sar.properties["object_ref"])).decode() == SAR_TEXT
