@@ -7,8 +7,8 @@ Worked out as the store works them out: the stored weight by `compute_weight` wi
 weights file; standard strength by `connection_strength`; client parity by `parity_strength`, with a
 stored link's rarity term `1 − 1/n` over the visible links of its type (the case is one dataset and
 OFFICIAL throughout, so every analyst sees all of it, as the client's analysts do), and a shared
-value's by `share_rarity(C(k, 2), Σ C(k_b, 2))` over the values of its kind. Each claim is checked at
-two load dates; client parity has no recency, so its figures are the same at both.
+value's by `share_rarity(C(k, 2), Σ C(k_b, 2))` over the values of its kind. Each claim is checked
+at two load dates; client parity has no recency, so its figures are the same at both.
 
 The scene's claims, each a test (capture steps `CAP-S7` to `CAP-S10`, not yet run):
 - the switch itself, and back (CAP-S7, CAP-S10);
@@ -90,17 +90,16 @@ def _evidence(link: pid_plan.PlanLink) -> dict[str, str]:
         if trigger is None or link.link_type not in a.influencer.link_types:
             continue
         ends = {link.source, link.target} | (NEIGHBOURS[link.source] & NEIGHBOURS[link.target])
-        if any(
-            KIND.get(k) == getattr(trigger, "entity_type", None)
-            and str(PROPS[k].get(getattr(trigger, "property", ""))) in getattr(trigger, "values", [])
-            for k in ends
-        ):
+        kind = getattr(trigger, "entity_type", None)
+        prop, values = getattr(trigger, "property", ""), getattr(trigger, "values", [])
+        if any(KIND.get(k) == kind and str(PROPS[k].get(prop)) in values for k in ends):
             found[a.influencer.id] = str(getattr(trigger, "entity_type", ""))
     return found
 
 
 def _standard(link: pid_plan.PlanLink, now: datetime) -> float:
-    return connection_strength(_weight(link, now), link.link_type, SHIPPED, _evidence(link), RULES)[0]
+    weight = _weight(link, now)
+    return connection_strength(weight, link.link_type, SHIPPED, _evidence(link), RULES)[0]
 
 
 def _parity(link: pid_plan.PlanLink) -> tuple[float, float]:
@@ -112,7 +111,9 @@ def _parity(link: pid_plan.PlanLink) -> tuple[float, float]:
 
 
 def _link(link_type: str, a: str, b: str) -> pid_plan.PlanLink:
-    (found,) = [lk for lk in LINKS if lk.link_type == link_type and {lk.source, lk.target} == {a, b}]
+    (found,) = [
+        lk for lk in LINKS if lk.link_type == link_type and {lk.source, lk.target} == {a, b}
+    ]
     return found
 
 
@@ -129,9 +130,9 @@ def test_the_cases_author_switches_it_to_client_parity_and_back() -> None:
 
 @pytest.mark.parametrize("now", LOAD_DATES, ids=["at-cut-off", "six-months-on"])
 def test_under_client_parity_a_calls_count_and_age_no_longer_draw_it_heavier(now: datetime) -> None:
-    """CAP-S8: the principal's PIN calls to the coordinator are the case's busiest call (201); a call
-    seen once is the quietest. Standard draws the busy one heavier; client parity draws them alike,
-    at `1 − 1/2,572 + 0.1348` (the direct add), the same at either load date."""
+    """CAP-S8: the principal's PIN calls to the coordinator are the case's busiest call (201); a
+    call seen once is the quietest. Standard draws the busy one heavier; client parity draws them
+    alike, at `1 − 1/2,572 + 0.1348` (the direct add), the same at either load date."""
     calls = [lk for lk in LINKS if lk.link_type == "COMMUNICATED_WITH"]
     busiest = _link("COMMUNICATED_WITH", "pin:principal", "number:coordinator")
     assert busiest.occurrences == max(c.occurrences for c in calls) == 201
@@ -169,7 +170,8 @@ def test_under_client_parity_the_assault_evidenced_conflict_is_above_every_plain
 def _share(value: str) -> float:
     """The client's rarity of one value: its pair links among the case's persons against those of
     every value of its kind."""
-    total = sum(pair_links(len(NEIGHBOURS[b] & PEOPLE)) for b, t in KIND.items() if t == KIND[value])
+    kind = KIND[value]
+    total = sum(pair_links(len(NEIGHBOURS[b] & PEOPLE)) for b, t in KIND.items() if t == kind)
     return share_rarity(pair_links(len(NEIGHBOURS[value] & PEOPLE)), total)
 
 
