@@ -113,6 +113,17 @@ resumed session starts here.
 
 ## Open questions found during the run
 
+18. **Step 9f, connection strength (ADR-139 Amendment 1)**, for the owner:
+    - **The client's sizes.** Both shipped influencers add 0.1348 (doubling an ordinary link's count),
+      marked "to be confirmed with the client". Once known, enter them as an installation-wide version
+      (two people), with no code change.
+    - **`incident_type` is `category`.** ADR-139 names an Incident's `incident_type`; the NIEM pack has
+      `category`. Built on `category`; say so to the client, or add the property?
+    - **The demo's "shared address" is a cell** (ADR-127 Amendment 42): the case holds no home
+      addresses. Keep, or add the visitors' addresses as a new file and recipe?
+    - **The count-based rarity** (decision 4's last bullet) is not built: nothing asks for it yet.
+    - **J6b's three minutes** in the 60-minute script (its Appendix C, item 10).
+
 17. **Step 9b, the GDS re-audit**, for the owner:
     - **Lite answers on every network interface** (S10, P1). `harness/site.py` publishes the front
       proxy as `"<port>:8080"`, so Docker binds `0.0.0.0`; a machine on the same network that sends

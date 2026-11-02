@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.9** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.10** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.10 | 2026-11-02 | New §7.6, Connection strength: the stored weight's formula, the influencer schema and its resolution order, influencers applied at read time under the reader's access, the rarity query, and shipping influencers in the weights file. §9.1: the strength and rarity routes and the influencers' routes. |
 | 1.9 | 2026-11-01 | §9.1: the API's OpenAPI document, `GET /v1/openapi.json`, signed in, its version the release. |
 | 1.8 | 2026-11-01 | §3.8a: the Checks on load step — attaching the case's and the deployment's rules to a pipeline and choosing what a hit does there. §3.8: Verify shows the alerts its sample would raise, beside the rejections, and writes nothing. §2: a data engineer attaches rules but does not write them. |
 | 1.7 | 2026-11-01 | The opening says what OspreyFlow is for: intelligence mapping, for crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting. |
@@ -452,6 +453,97 @@ wrap the read. Does it send the element, or anything built from it, to a reader?
 principal, changes an element in two datasets, and checks that every stored source is kept and that
 what is sent back carries none.
 
+### 7.6 Connection strength: weights, influencers and rarity
+
+A link's **connection strength** is its stored weight with the influencers that apply to it, worked
+out when it is read. **Shared-attribute rarity** is a separate measure beside it. Both are computed in
+the graph adapter, as the reader, and neither is ever stored (ADR-139; spec 01 §6.1a).
+
+**The stored weight** (weights version 3, `packages/ontology/weights/default.yaml`):
+
+```
+weight = normalise( α·log1p(occurrences)/log1p(heavy(type)) + β·recency(last seen) )
+normalise(x) = 1 / (1 + e^(−(x − midpoint)/scale)),   recency(t) = 0.5^(age/90 days)
+```
+
+with α = 0.5, β = 0.2, `scale` = α/3 and `midpoint` = β + α/3, or a structural type's fixed weight.
+It comes from the link alone (ADR-123): no other link's count reaches it.
+
+**Influencers** (`packages/schemas/strength.py`, `StrengthInfluencer`):
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `label` | Its key (lower case, `-` and `_`) and what the legend says |
+| `trigger` | `{entity_type, property, values}`: a record of that type whose property holds one of the values, at one end of the link or linked to both ends. Omitted: a **direct-links** influencer, applying to its link types always |
+| `link_types` | The link types it changes |
+| `change`, `size` | `add` (a boost to the pre-logistic score, above 0 and at most 2), `multiply` (0.1 to 5), `floor` (a strength, above 0 and at most 1) or `exclude` (size 0: no stronger than the stored weight) |
+| `enabled` | `false` in a later layer switches off the influencer of the same id beneath it |
+| `note` | Shown beside it, such as "to be confirmed with the client" |
+
+Applied to a link of stored weight `w` (`ontology/influencers.py`, `connection_strength`):
+
+```
+raw      = midpoint + scale · ln(w / (1 − w))       # the logistic's inverse
+strength = normalise( (raw + Σ add) · Π multiply )
+strength = max(strength, every floor)
+strength = min(strength, w)   if any exclude
+```
+
+With nothing applying, the strength is `w`. Each step rises with `w`, so adding occurrences never
+lowers a strength, whatever influencers apply (`tests/ontology/test_influencers.py` proves it over a
+grid of every combination).
+
+**Resolution order:** a case override, then the installation set, then the weights file. Influencers
+are matched by `id`; a later layer's replaces an earlier one's, and a case may switch any off by id.
+The installation set is maker–checker (the right `manage_strength_influencers`; a second holder
+approves, never the proposer; every version kept in `strength_influencer_versions`). A case override
+is its Author's (`case_strength_influencers`, every version kept). Both are audited.
+
+**Read time, under access.** `GraphPort.connection_strengths(edge_ids, principal, influencers=…)`
+reads the links as `get_edges` does (the link and both ends visible), then, for each triggered
+influencer, finds the evidencing records with the access step on every vertex and every link it
+steps over. A record the reader may not see, or one reached only over a link they may not see, is not
+found, so it changes nothing: the strength is the strength in a world without it. The conformance
+suite's `test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence` holds
+every adapter to it.
+
+**The rarity query.** `GraphPort.shared_attribute_rarity(node_ids, principal, scope=…)`, for two
+visible entities of one type:
+
+```
+rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
+```
+
+An attribute is a visible node (of no type in the file's `rarity.exclude_types`) linked to each of the
+two by a visible link; `N_visible` counts the visible entities of the pair's type in scope;
+`df_visible(a)` counts those linked to `a` by a visible link. **Per dataset** (the default) it is
+worked out in each dataset the two and the attribute all belong to, the highest kept and named; **across
+the case**, over every dataset the reader may read. In ArcadeDB it is three reads: the entities and
+their attribute ids, each attribute's visible neighbours with their types and datasets, and the
+visible count per type and dataset. More pairs to score than the cap (2,000,000) is refused as
+`limit_exceeded`, never scored in part. The Glass is sent the score and the visible shared attributes,
+never `N` or `df`.
+
+**Shipping influencers in the weights file.** The developer defaults sit beside the weight versions,
+under `influencers:`; they are not a weight version and change no stored weight:
+
+```yaml
+influencers:
+  - id: direct
+    label: Direct link
+    link_types: [COMMUNICATED_WITH, TRANSACTED, VISITED, SHARED_CELL_WITH]
+    change: add
+    size: 0.1348
+    note: to be confirmed with the client
+rarity:
+  exclude_types: [Alert]
+```
+
+A shipped boost's size is calibrated, not tuned: how far doubling an ordinary link's count (from the
+default rule's heavy count, 10, to 20) moves its pre-logistic score, α·(ln 21 − ln 11)/ln 11 = 0.1348.
+`test_influencers.py` holds the shipped sizes to it, and the loader refuses a malformed influencer by
+its position and id.
+
 ## 8. Screening lists
 
 Sanctions, PEP and adverse-media lists are kept beside the graph, not in it, deployment-wide, and
@@ -495,6 +587,10 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `GET …/held-rows` | `read_held_rows`, Editor |
 | `POST …/ingest/recipes/{recipe_id}/held-rows/release`; `POST …/held-rows/reject` | `decide_held_rows`, Author |
 | `GET /v1/admin/schedules` and its actions | `operate_schedules` |
+| `POST …/connection-strength`; `POST …/rarity` | `investigate`, Viewer: strengths and rarity over the working set, as the reader |
+| `GET …/strength-influencers` | `investigate`, Viewer: the legend and the case's override |
+| `PUT …/strength-influencers` | `investigate`, Author: the case's override |
+| `GET`, `POST /v1/strength-influencers`; `POST /v1/strength-influencers/{version}/approve`, `…/send-back` | `manage_strength_influencers`; never the proposer's approval |
 | `GET /v1/me/rights` | Signed in: your own rights |
 | `GET /v1/openapi.json` | Signed in: the OpenAPI document |
 

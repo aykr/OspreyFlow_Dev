@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.24** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.25** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.25 | 2026-11-02 | §9.2: the right to manage connection-strength influencers, held by the Analyst and Admin roles. §9.6: approving an installation-wide influencer version, a second person's decision; a case's own influencers need none. |
 | 1.24 | 2026-11-02 | §1, "HTTP or HTTPS": Lite now answers on this computer only — every port it publishes is bound to `127.0.0.1`, the Conduit's own port included — so other machines cannot reach it; Small and Enterprise must have an `https://` address, and `osprey.yaml` refuses a plain-HTTP one; a gov.uk address is refused for Lite. §8.1 says the same. |
 | 1.23 | 2026-11-02 | §1: a note, "HTTP or HTTPS" — Lite is plain HTTP on a `localhost` address and has no HTTPS option, and its port is published on every network interface, so it is never opened to a network; Small and Enterprise are HTTPS with a certificate Caddy obtains and renews, port 80 only for the certificate and the move to HTTPS; the managed services over TLS; a gov.uk service over HTTPS. §8.1 links to it. |
 | 1.22 | 2026-11-02 | New §1a, Choosing a starter: a theme and a domain at install (`--starter`, and the guided page's first screen), the GOV.UK service's name, several deployments side by side (`--name`, `ospreyflow deployments`, `ospreyflow switch <name>`) and how the checkout's own deployment fits in, and a public dataset of your own choosing (`ospreyflow demo add public`) with the VAST Challenge catalogue and its terms. §7: `starter`, `appearance`, `demo_accounts`. §8: `ospreyflow deployments`, `ospreyflow starters`, `--name`. §11: the `cyber-intrusion` pack, and where each starter's demo comes from. Appendix A: `deployment.graph_port`. |
@@ -635,9 +636,9 @@ holding its right:
 
 | Role | For |
 | --- | --- |
-| **Analyst** | Cases: investigate, edit the graph, confirm what models proposed, alerts and rules, exports, watches |
+| **Analyst** | Cases: investigate, edit the graph, confirm what models proposed, alerts and rules, exports, watches; proposing and approving connection-strength influencers |
 | **Data Engineer** | Pipelines: build, verify, publish, run and schedule them; the source files they load; held rows; screening lists. (It also carries the right to revert a load, which no screen or command uses yet) |
-| **Admin** (`osprey-admin`) | The Admin area; the ontology and the map; the audit and export ledgers |
+| **Admin** (`osprey-admin`) | The Admin area; the ontology and the map; the audit and export ledgers; proposing and approving connection-strength influencers |
 | **Reports Viewer** | Reports and data feeds; the alert queue, read-only |
 
 A single right can be given on its own. **Nobody can be given more than the person giving it
@@ -756,13 +757,14 @@ only** stops it. The **Schedule** column shows when each list is refreshed and w
 
 ### 9.6 Approval rights: a second person
 
-Two decisions wait for a second person with the right, and **the person who proposed one can never
+Three decisions wait for a second person with the right, and **the person who proposed one can never
 approve it** (ADR-133 decision 7):
 
 | Decision | Who proposes it | Who approves it |
 | --- | --- | --- |
 | Deploying, changing or retiring a rule **for the whole deployment** | An Author of the case who holds `deploy_rules` and `administer_system` (an analyst who is also an administrator) | **Another** person with the same rights and level |
 | Closing a **high-severity** alert another person may see | A member of the case who triages alerts (`triage_alerts`, Editor) | **Another** member who triages alerts in that case |
+| A new version of the **installation-wide connection-strength influencers** (ADR-139) | Anyone holding `manage_strength_influencers` (the Analyst and Admin roles hold it) | **Another** person holding it |
 
 A rule for one case, or just for its author, needs no approval. An alert only its owner may see (their
 own hotlist's, kept to them) is closed by its owner alone, since no second person may read it. Writing
@@ -773,6 +775,15 @@ to pipelines (Checks on load) but does not write them.
 Analyst and the Admin roles** (or `deploy_rules` and `administer_system` granted singly), each an
 Author of a case the rule is listed in (a whole-deployment rule is listed in every case). With one such person, a whole-deployment rule can be
 proposed but never run.
+
+**Approving influencers.** In **Monitoring → Connection strength**, a version waiting for a second
+person shows what it would put in force, who proposed it and why. Another holder of the right chooses
+**Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
+withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.
+Every version is kept, with who proposed and who decided it, and each step is in the audit stream. A
+case's Author may add influencers for that case, or switch off installation-wide ones in it, without a
+second person; that too is audited. Give the right singly (`right:manage_strength_influencers`) to
+someone who should set influencers without the rest of a role.
 
 Every proposal, approval and rejection is in the case's rule audit, and every rule keeps its versions
 — who proposed each and who decided it. **After upgrading to this version**, a whole-deployment rule
