@@ -18,6 +18,7 @@ is exactly what must never be observable.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -6486,7 +6487,8 @@ async def test_shared_attribute_rarity_is_the_inverse_frequency_of_what_the_read
         ids = await _rarity_world(adapter)
         people = [ids[f"p{i}"] for i in range(1, 6)]
         result = await adapter.shared_attribute_rarity(
-            people, OFFICIAL, pairs=[(ids["p1"], ids["p2"]), (ids["p3"], ids["p4"])]
+            people, OFFICIAL, pairs=[(ids["p1"], ids["p2"]), (ids["p3"], ids["p4"])],
+            measure="idf",
         )
         p12, p34 = result.pairs
         assert p12.score == pytest.approx(math.log(5 / 2))
@@ -6501,22 +6503,25 @@ async def test_shared_attribute_rarity_is_the_inverse_frequency_of_what_the_read
         }
         # Across the case's readable datasets, the enron persons at L count as well: N is 7.
         across = await adapter.shared_attribute_rarity(
-            people, OFFICIAL, scope="case", pairs=[(ids["p1"], ids["p2"])]
+            people, OFFICIAL, scope="case", pairs=[(ids["p1"], ids["p2"])], measure="idf"
         )
         assert across.pairs[0].score == pytest.approx(math.log(7 / 2) + math.log(7 / 7))
         assert across.pairs[0].dataset is None
         # Per dataset, two entities sharing no dataset have no score; across the case they do.
         mixed = (ids["p1"], ids["q1"])
         assert (await adapter.shared_attribute_rarity(
-            [*mixed], OFFICIAL, pairs=[mixed])).pairs[0].score is None  # fmt: skip
+            [*mixed], OFFICIAL, pairs=[mixed], measure="idf")).pairs[0].score is None  # fmt: skip
         assert (await adapter.shared_attribute_rarity(
-            [*mixed], OFFICIAL, scope="case", pairs=[mixed])).pairs[0].score == pytest.approx(0.0)  # fmt: skip
+            [*mixed], OFFICIAL, scope="case", pairs=[mixed], measure="idf",
+        )).pairs[0].score == pytest.approx(0.0)  # fmt: skip
         # Two of different types have no rarity.
         odd = (ids["p1"], ids["r"])
         assert (await adapter.shared_attribute_rarity(
-            [*odd], OFFICIAL, pairs=[odd])).pairs[0].score is None  # fmt: skip
+            [*odd], OFFICIAL, pairs=[odd], measure="idf")).pairs[0].score is None  # fmt: skip
         # Anyone of the kind, not only those asked: p1's best partner is p2.
-        anyone = await adapter.shared_attribute_rarity([ids["p1"]], OFFICIAL, partners="any")
+        anyone = await adapter.shared_attribute_rarity(
+            [ids["p1"]], OFFICIAL, partners="any", measure="idf"
+        )
         assert anyone.node_values == {ids["p1"]: pytest.approx(math.log(5 / 2))}
         assert [(p.a, p.b) for p in anyone.pairs] == [(ids["p1"], ids["p2"])]
 
@@ -6532,22 +6537,27 @@ async def test_unauthorised_rarity_matches_a_world_without_the_hidden_entity(
     async with factory.context() as adapter:
         ids = await _rarity_world(adapter)
         pair = (ids["p1"], ids["p2"])
-        seen = await adapter.shared_attribute_rarity(list(pair), OFFICIAL, pairs=[pair])
+        seen = await adapter.shared_attribute_rarity(
+            list(pair), OFFICIAL, pairs=[pair], measure="idf"
+        )
         # The world without p6 and p3's SECRET link: N = 5 visible persons, df(r) = 2.
         assert seen.pairs[0].score == pytest.approx(math.log(5 / 2))
         assert ids["p6"] not in {s.node.id for s in seen.pairs[0].shared}
-        cleared = await adapter.shared_attribute_rarity(list(pair), CLEARED, pairs=[pair])
+        cleared = await adapter.shared_attribute_rarity(
+            list(pair), CLEARED, pairs=[pair], measure="idf"
+        )
         # Cleared: N = 6 (p6), df(r) = 4 (p1, p2, p6, and p3 by its SECRET link), df(L) = 5.
         assert cleared.pairs[0].score == pytest.approx(math.log(6 / 4) + math.log(6 / 5))
         # A hidden entity asked for directly has no value and no pair.
         hidden = await adapter.shared_attribute_rarity(
-            [ids["p1"], ids["p6"]], OFFICIAL, pairs=[(ids["p1"], ids["p6"])]
+            [ids["p1"], ids["p6"]], OFFICIAL, pairs=[(ids["p1"], ids["p6"])], measure="idf"
         )
         assert ids["p6"] not in hidden.node_values
         assert hidden.pairs[0].score is None and hidden.pairs[0].shared == []
         # A case reading only enron sees neither p1 nor p2.
         enron = OFFICIAL.model_copy(update={"datasets": ["enron"]})
-        assert (await adapter.shared_attribute_rarity(list(pair), enron, pairs=[pair])).pairs[0].score is None
+        assert (await adapter.shared_attribute_rarity(
+            list(pair), enron, pairs=[pair], measure="idf")).pairs[0].score is None  # fmt: skip
 
 
 async def test_rarity_is_refused_past_its_cap_rather_than_scored_in_part(
@@ -6560,4 +6570,373 @@ async def test_rarity_is_refused_past_its_cap_rather_than_scored_in_part(
         ids = await _rarity_world(adapter)
         people = [ids[f"p{i}"] for i in range(1, 6)]
         with pytest.raises(RarityTooLarge):
-            await adapter.shared_attribute_rarity(people, OFFICIAL, cap=3)
+            await adapter.shared_attribute_rarity(people, OFFICIAL, cap=3, measure="idf")
+
+
+# --- the client's own rarity, client parity and dataset triggers (ADR-139 Amendment 2) -----------
+
+
+async def _share_world(
+    adapter: GraphPort, dataset: str, *, with_hidden: bool
+) -> dict[str, str]:
+    """Persons `p1`..`p6` (OFFICIAL) in `dataset`, and five phones (Endpoints) in it: `e1` and `e5`
+    each held by p1 and p2; `e2` by p3, p4 and p5; `e3` by p6 alone; `e4` by p1. All six are present
+    at one location `L`. With `with_hidden`: a SECRET person `p7` also holds `e4`, and p6 holds `e2` by a
+    SECRET link. Without it, the same world with neither: what an OFFICIAL reader of the first must
+    see."""
+    writes: dict[str, NodeWrite] = {
+        f"p{i}": _node("Person", classification="OFFICIAL", datasets=[dataset]) for i in range(1, 7)
+    }
+    for key in ("e1", "e2", "e3", "e4", "e5"):
+        writes[key] = _node("Endpoint", classification="OFFICIAL", datasets=[dataset])
+    writes["L"] = _node("Location", classification="OFFICIAL", datasets=[dataset])
+    if with_hidden:
+        writes["p7"] = _node("Person", classification="SECRET", datasets=[dataset])
+    await _write(adapter, list(writes.values()), [])
+    ids = {k: w.id for k, w in writes.items()}
+
+    def uses(person: str, phone: str, classification: str = "OFFICIAL") -> EdgeWrite:
+        return _edge("USES", ids[person], ids[phone], classification=classification,
+                     datasets=[dataset])  # fmt: skip
+
+    links = [
+        uses("p1", "e1"), uses("p2", "e1"), uses("p1", "e5"), uses("p2", "e5"),
+        uses("p3", "e2"), uses("p4", "e2"), uses("p5", "e2"),
+        uses("p6", "e3"), uses("p1", "e4"),
+        *(_edge("PRESENT_AT", ids[f"p{i}"], ids["L"], classification="OFFICIAL",
+                datasets=[dataset]) for i in range(1, 7)),
+    ]  # fmt: skip
+    if with_hidden:
+        links += [uses("p7", "e4"), uses("p6", "e2", classification="SECRET")]
+    await _write(adapter, [], links)
+    return ids
+
+
+async def test_the_clients_rarity_is_one_less_a_values_share_of_the_pair_links_of_its_kind(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139 Amendment 2, ruling 1, the default measure: `1 − C(k, 2) / Σ_b C(k_b, 2)` over the
+    values of the shared value's kind in the dataset, and a pair takes its highest value (never
+    the sum: p1 and p2 share two phones). The phones' pair links are e1: 1, e5: 1, e2: 3 (three
+    holders), e3 and e4: none, so ΣL = 5."""
+    async with factory.context() as adapter:
+        ids = await _share_world(adapter, "fixture", with_hidden=False)
+        people = [ids[f"p{i}"] for i in range(1, 7)]
+        p12, p34 = (ids["p1"], ids["p2"]), (ids["p3"], ids["p4"])
+        result = await adapter.shared_attribute_rarity(people, OFFICIAL, pairs=[p12, p34])
+        assert result.measure == "share"
+        first, second = result.pairs
+        assert first.score == pytest.approx(1 - 1 / 5) and first.dataset == "fixture"
+        # Ranked: the two rare phones, then the place everyone shares (its only value: 1 − 15/15).
+        assert sorted((round(s.score, 6), s.node.id) for s in first.shared) == sorted([
+            (0.8, ids["e1"]), (0.8, ids["e5"]), (0.0, ids["L"])
+        ])  # fmt: skip
+        assert first.shared[-1].node.id == ids["L"]
+        assert second.score == pytest.approx(1 - 3 / 5)
+        # Each entity's best pair, among those asked.
+        assert result.node_values[ids["p1"]] == pytest.approx(0.8)
+        assert result.node_values[ids["p5"]] == pytest.approx(0.4)
+        assert ids["p6"] not in result.node_values  # only L, which scores 0
+        # The first decision's measure is still there to choose.
+        idf = await adapter.shared_attribute_rarity(people, OFFICIAL, pairs=[p12], measure="idf")
+        assert idf.measure == "idf"
+        assert idf.pairs[0].score == pytest.approx(2 * math.log(6 / 2) + math.log(6 / 6))
+
+
+async def test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2's hidden-holder test (rule 3): a SECRET holder of e4 and a SECRET link from p6
+    to e2 are in no `k` and no `ΣL` for an OFFICIAL reader, so every score equals the score in a
+    world without them (a second dataset, built so); cleared, both count and the scores move."""
+    async with factory.context() as adapter:
+        hidden = await _share_world(adapter, "with-hidden", with_hidden=True)
+        bare = await _share_world(adapter, "without", with_hidden=False)
+
+        async def scores(ids: dict[str, str], who: Principal) -> list[float | None]:
+            pairs = [(ids["p1"], ids["p2"]), (ids["p3"], ids["p4"]), (ids["p1"], ids["p6"])]
+            found = await adapter.shared_attribute_rarity(
+                [ids[f"p{i}"] for i in range(1, 7)], who, pairs=pairs
+            )
+            return [p.score for p in found.pairs]
+
+        assert await scores(hidden, OFFICIAL) == pytest.approx(await scores(bare, OFFICIAL))
+        assert await scores(hidden, OFFICIAL) == pytest.approx([0.8, 0.4, 0.0])
+        # Cleared: e2 has four holders (6 pair links), e4 two (1): ΣL = 1 + 1 + 6 + 1 = 9.
+        assert await scores(hidden, CLEARED) == pytest.approx([1 - 1 / 9, 1 - 6 / 9, 0.0])
+        # The hidden person is never named among what a pair shares.
+        cleared = await adapter.shared_attribute_rarity(
+            [hidden["p1"], hidden["p7"]], OFFICIAL, pairs=[(hidden["p1"], hidden["p7"])]
+        )
+        assert cleared.pairs[0].score is None and cleared.pairs[0].shared == []
+
+
+async def test_the_clients_rarity_is_refused_past_its_cap_rather_than_counted_in_part(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 2: `ΣL` is counted over every value of the kind in scope, not only those the pair
+    holds, so the holders read for it are held to the cap as well. One pair (three
+    contributions) is under a cap of 5; the phones' and the place's holders (9 and 6) are not."""
+    from ports.graph import RarityTooLarge
+
+    async with factory.context() as adapter:
+        ids = await _share_world(adapter, "fixture", with_hidden=False)
+        pair = (ids["p1"], ids["p2"])
+        with pytest.raises(RarityTooLarge):
+            await adapter.shared_attribute_rarity(list(pair), OFFICIAL, pairs=[pair], cap=5)
+        # The IDF measure reads no such sum, so the same request is within the cap.
+        idf = await adapter.shared_attribute_rarity(
+            list(pair), OFFICIAL, pairs=[pair], cap=5, measure="idf"
+        )
+        assert idf.pairs[0].score is not None
+
+
+def _parity_influencers() -> list[Any]:
+    """The client's two adds, as OspreyFlow holds them: `non_dup_add` (0.2) as the direct-links
+    influencer on calls, and `abs_add` per dataset as a dataset-triggered one, on calls and on a
+    pair linked through a shared value: 0.1 for `calls`, 0.9 for `assaults`."""
+    from schemas.strength import SHARED_VALUE, ActiveInfluencer, DatasetTrigger, StrengthInfluencer
+
+    def by_dataset(dataset: str, size: float) -> Any:
+        return ActiveInfluencer(layer="installation", version=1, influencer=StrengthInfluencer(
+            id=f"source-{dataset}", label=f"From {dataset}", size=size,
+            trigger=DatasetTrigger(datasets=[dataset]),
+            link_types=["COMMUNICATED_WITH", SHARED_VALUE],
+        ))  # fmt: skip
+
+    return [
+        ActiveInfluencer(layer="file", influencer=StrengthInfluencer(
+            id="direct", label="Direct link", link_types=["COMMUNICATED_WITH"], size=0.2,
+        )),  # fmt: skip
+        by_dataset("calls", 0.1),
+        by_dataset("assaults", 0.9),
+    ]
+
+
+async def _calls_world(adapter: GraphPort) -> dict[str, str]:
+    """Endpoints `x1`..`x6` in `calls`, and `x7`, SECRET. Calls x1–x2, x2–x3, x3–x4 and x5–x6
+    (OFFICIAL), x1–x4 (SECRET), and x1–x7 (an OFFICIAL call to the SECRET endpoint), all in
+    `calls`; the call x5–x6 is also in `assaults`."""
+    writes = {
+        f"x{i}": _node("Endpoint", classification="OFFICIAL", datasets=["calls", "assaults"])
+        for i in range(1, 7)
+    }
+    writes["x7"] = _node("Endpoint", classification="SECRET", datasets=["calls"])
+    await _write(adapter, list(writes.values()), [])
+    ids = {k: w.id for k, w in writes.items()}
+
+    def call(a: str, b: str, classification: str = "OFFICIAL", datasets: tuple[str, ...] = (
+        "calls",)) -> EdgeWrite:
+        return _edge("COMMUNICATED_WITH", ids[a], ids[b], classification=classification,
+                     datasets=list(datasets))  # fmt: skip
+
+    links = {
+        "c12": call("x1", "x2"), "c23": call("x2", "x3"), "c34": call("x3", "x4"),
+        "c56": call("x5", "x6", datasets=("calls", "assaults")),
+        "c14": call("x1", "x4", classification="SECRET"),
+        "c17": call("x1", "x7"),
+    }  # fmt: skip
+    await _write(adapter, [], list(links.values()))
+    ids.update({k: e.id for k, e in links.items()})
+    return ids
+
+
+async def test_client_parity_is_the_links_own_rarity_plus_the_adds_with_no_count_or_recency(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2, ruling 2: under `client_parity` a stored link's strength is its rarity term —
+    the link a value of its own among the visible links of its type in the dataset, `1 − 1/n` —
+    plus every add that applies, on the client's scale (`raw_sum`), drawn on 0–1 by the parity
+    curve. Four calls are visible in `calls` (one is SECRET, one reaches a SECRET endpoint):
+    1 − 1/4 + 0.2 + 0.1."""
+    from ontology.influencers import parity_drawn
+
+    async with factory.context() as adapter:
+        ids = await _calls_world(adapter)
+        name = {v: k for k, v in ids.items()}
+        found = {
+            name[s.edge_id]: s
+            for s in await adapter.connection_strengths(
+                [ids[k] for k in ("c12", "c23", "c56", "c14")], OFFICIAL,
+                influencers=_parity_influencers(), composition="client_parity",
+            )
+        }  # fmt: skip
+        c12 = found["c12"]
+        assert c12.composition == "client_parity" and c12.dataset == "calls"
+        assert c12.rarity_term == pytest.approx(0.75)
+        assert c12.raw_sum == pytest.approx(0.75 + 0.2 + 0.1)
+        assert c12.strength == pytest.approx(parity_drawn(1.05))
+        assert sorted(a.id for a in c12.applied) == ["direct", "source-calls"]
+        assert [a.dataset for a in c12.applied if a.id == "source-calls"] == ["calls"]
+        # No count and no recency: two calls with different counts score alike.
+        assert found["c23"].raw_sum == pytest.approx(c12.raw_sum)
+        # A link in two datasets takes its higher: in `assaults` it is the only call (term 0),
+        # and that dataset's add is the larger: 0 + 0.2 + 0.9 against 0.75 + 0.2 + 0.1.
+        c56 = found["c56"]
+        assert c56.raw_sum == pytest.approx(1.1) and c56.dataset == "assaults"
+        # The SECRET call is not returned.
+        assert "c14" not in found
+        # Cleared, the other two count: 1 − 1/6.
+        (cleared,) = await adapter.connection_strengths(
+            [ids["c12"]], CLEARED, influencers=_parity_influencers(), composition="client_parity"
+        )
+        assert cleared.rarity_term == pytest.approx(1 - 1 / 6)
+        # The standard composition is unchanged: the stored weight with the influencers.
+        (standard,) = await adapter.connection_strengths(
+            [ids["c12"]], OFFICIAL, influencers=_parity_influencers()
+        )
+        assert standard.composition == "standard" and standard.raw_sum is None
+        assert standard.strength > standard.base_weight
+
+
+async def test_a_dataset_trigger_applies_only_to_links_in_a_dataset_the_reader_may_read(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2, ruling 3 (rule 3): a dataset-triggered influencer applies to that dataset's
+    links only, and not to a link whose evidencing dataset the reader cannot read — the call x5–x6
+    is in `calls` and `assaults`; a reader of `calls` alone sees it with nothing from `assaults`,
+    exactly as a call in `calls` alone, under both compositions."""
+    async with factory.context() as adapter:
+        ids = await _calls_world(adapter)
+        calls_only = OFFICIAL.model_copy(update={"datasets": ["calls"]})
+        both = OFFICIAL.model_copy(update={"datasets": ["calls", "assaults"]})
+        for composition in ("standard", "client_parity"):
+            seen = {
+                s.edge_id: s
+                for s in await adapter.connection_strengths(
+                    [ids["c12"], ids["c56"]], calls_only, influencers=_parity_influencers(),
+                    composition=composition,
+                )
+            }  # fmt: skip
+            assert [a.id for a in seen[ids["c56"]].applied if a.dataset] == ["source-calls"]
+            assert seen[ids["c56"]].strength == pytest.approx(seen[ids["c12"]].strength)
+            # Read with `assaults`, it applies, to that call only.
+            read = {
+                s.edge_id: s
+                for s in await adapter.connection_strengths(
+                    [ids["c12"], ids["c56"]], both, influencers=_parity_influencers(),
+                    composition=composition,
+                )
+            }  # fmt: skip
+            assert "source-assaults" in {a.id for a in read[ids["c56"]].applied}, composition
+            assert "source-assaults" not in {a.id for a in read[ids["c12"]].applied}
+        # Standard: the assault add (0.9) on top of the calls one draws the link stronger.
+        (standard,) = await adapter.connection_strengths(
+            [ids["c56"]], both, influencers=_parity_influencers()
+        )
+        (narrow,) = await adapter.connection_strengths(
+            [ids["c56"]], calls_only, influencers=_parity_influencers()
+        )
+        assert standard.strength > narrow.strength
+
+
+async def test_client_parity_scores_a_pair_linked_through_a_shared_value(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2: a pair linked through a shared value (the client's `dup_*` row) scores its
+    rarity plus the adds naming `SHARED_VALUE` that apply in the dataset, on the client's scale
+    and drawn; under `standard` there is no parity score."""
+    from ontology.influencers import parity_drawn
+    from schemas.strength import SHARED_VALUE, ActiveInfluencer, DatasetTrigger, StrengthInfluencer
+
+    async with factory.context() as adapter:
+        ids = await _share_world(adapter, "fixture", with_hidden=False)
+        add = [ActiveInfluencer(layer="case", version=1, influencer=StrengthInfluencer(
+            id="source-fixture", label="From the fixture", size=0.05,
+            trigger=DatasetTrigger(datasets=["fixture"]), link_types=[SHARED_VALUE],
+        ))]  # fmt: skip
+        pair = (ids["p1"], ids["p2"])
+        result = await adapter.shared_attribute_rarity(
+            list(pair), OFFICIAL, pairs=[pair], influencers=add, composition="client_parity"
+        )
+        (found,) = result.pairs
+        assert result.composition == "client_parity"
+        assert found.parity_raw == pytest.approx(0.8 + 0.05)
+        assert found.parity_strength == pytest.approx(parity_drawn(0.85))
+        assert [a.id for a in found.parity_applied] == ["source-fixture"]
+        # A reader who cannot read `fixture` sees neither the pair nor the add.
+        elsewhere = OFFICIAL.model_copy(update={"datasets": ["calls"]})
+        (unseen,) = (await adapter.shared_attribute_rarity(
+            list(pair), elsewhere, pairs=[pair], influencers=add, composition="client_parity",
+        )).pairs  # fmt: skip
+        assert unseen.score is None and unseen.parity_raw is None
+        standard = await adapter.shared_attribute_rarity(list(pair), OFFICIAL, pairs=[pair])
+        assert standard.pairs[0].parity_raw is None
+
+
+async def test_client_parity_scores_equal_a_transcription_of_the_clients_r_function(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139 Amendment 2's golden parity test. A synthetic link table is run through the
+    client's `add_strength_column`, transcribed line by line into plain Python (fixture
+    arithmetic, `tests/ontology/client_r_function.py`), once per dataset; the same data is loaded
+    and read back under `client_parity`, and every row's score is identical: a `dup_*` row as the
+    pair linked through its value, a direct row as its stored link. The table holds the shapes
+    that map exactly, one kind per call; the module's words and `test_client_parity.py` say which
+    do not."""
+    from tests.ontology.client_r_function import ADDS, BY_HAND, LINK_TYPE, TABLE, client_scores
+
+    from schemas.strength import SHARED_VALUE, ActiveInfluencer, DatasetTrigger, StrengthInfluencer
+
+    client = client_scores()
+    # The transcription itself, against the figures worked by hand.
+    assert {(r.dataset, r.source, r.target): v for r, v in client.items()} == pytest.approx(BY_HAND)
+
+    # The same data, loaded. A shared value is a node held by each party; a direct row a link.
+    holders: dict[tuple[str, str], set[str]] = {}
+    for row in TABLE:
+        if row.type.startswith("dup_"):
+            holders.setdefault((row.dataset, row.value), set()).update({row.source, row.target})
+    parties = {(r.dataset, p) for r in TABLE for p in (r.source, r.target)}
+    writes: dict[str, NodeWrite] = {}
+    for dataset, party in sorted(parties):
+        kind = "Person" if any(party in h for (d, _), h in holders.items() if d == dataset) else "Endpoint"
+        writes[party] = _node(kind, classification="OFFICIAL", datasets=[dataset])
+    for dataset, value in sorted(holders):
+        writes[value] = _node("Endpoint", classification="OFFICIAL", datasets=[dataset])
+    async with factory.context() as adapter:
+        await _write(adapter, list(writes.values()), [])
+        ids = {k: w.id for k, w in writes.items()}
+        links: dict[Any, EdgeWrite] = {}
+        uses = [
+            _edge("USES", ids[p], ids[value], classification="OFFICIAL", datasets=[dataset])
+            for (dataset, value), held in sorted(holders.items()) for p in sorted(held)
+        ]  # fmt: skip
+        for row in TABLE:
+            if not row.type.startswith("dup_"):
+                links[row] = _edge(LINK_TYPE[row.type], ids[row.source], ids[row.target],
+                                   classification="OFFICIAL", datasets=[row.dataset])  # fmt: skip
+        await _write(adapter, [], [*uses, *links.values()])
+
+        # The client's adds, as OspreyFlow holds them: `non_dup_add` (one size for every
+        # dataset here) as the direct-links influencer, `abs_add` per dataset by its dataset.
+        (non_dup,) = {n for _, n in ADDS.values()}
+        influencers = [
+            ActiveInfluencer(layer="installation", version=1, influencer=StrengthInfluencer(
+                id="direct", label="Direct link", link_types=sorted(LINK_TYPE.values()),
+                size=non_dup,
+            )),
+            *(ActiveInfluencer(layer="installation", version=1, influencer=StrengthInfluencer(
+                id=f"source-{dataset}", label=f"From {dataset}", size=abs_add,
+                trigger=DatasetTrigger(datasets=[dataset]),
+                link_types=[*sorted(LINK_TYPE.values()), SHARED_VALUE],
+            )) for dataset, (abs_add, _) in ADDS.items()),
+        ]  # fmt: skip
+
+        ours: dict[Any, float | None] = {}
+        stored = await adapter.connection_strengths(
+            [e.id for e in links.values()], OFFICIAL, influencers=influencers,
+            composition="client_parity",
+        )  # fmt: skip
+        by_edge = {s.edge_id: s for s in stored}
+        for row, edge in links.items():
+            ours[row] = by_edge[edge.id].raw_sum
+        dup_rows = [r for r in TABLE if r.type.startswith("dup_")]
+        pairs = [(ids[r.source], ids[r.target]) for r in dup_rows]
+        rarity = await adapter.shared_attribute_rarity(
+            sorted({x for p in pairs for x in p}), OFFICIAL, pairs=pairs,
+            influencers=influencers, composition="client_parity",
+        )  # fmt: skip
+        for row, pair in zip(dup_rows, rarity.pairs, strict=True):
+            ours[row] = pair.parity_raw
+        assert {r: ours[r] for r in TABLE} == pytest.approx(client, abs=1e-12)
