@@ -46,6 +46,11 @@ class AlertEntitySnapshot(BaseModel):
     node_id: str
     entity_type: str
     name: str
+    #: Step 9e: for a screening list's own entry for a listed party (`kyc_rules._listed_write`
+    #: gives it `listing` and `list_name`), the list it is the entry on. A screening alert cites
+    #: the customer and that entry, never merged (rule 6), and named alike they read as one person
+    #: matched twice; the stored item says which is the list's, as the Glass does (`concernWords`).
+    list_entry_on: str | None = None
 
 
 class AlertLinkSnapshot(BaseModel):

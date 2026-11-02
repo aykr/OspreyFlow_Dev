@@ -1,6 +1,6 @@
 // The words a pack and a trend are described in, shared by the screens and the print document so
 // the two never say different things (ADR-113 stage 5). Pure: no DOM, no fetch.
-import type { AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
+import type { AlertEntitySnapshot, AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
 import { closingReasonLabel } from "../alerts/closingReasons";
 
 const NUMBER = new Intl.NumberFormat("en-GB");
@@ -116,6 +116,12 @@ export function alertStatusSentence(alert: AlertSnapshot): string {
 }
 
 /** Rule 5: a match no person has confirmed is inferred, and the pack says so. */
+/** One entity an alert matched: its name and type and, for a screening list's own entry
+ * (`list_entry_on`, step 9e), whose entry it is — as the alert's detail says (`concernWords`). */
+export function alertEntityWords(entity: AlertEntitySnapshot): string {
+  return `${entity.name} (${entity.entity_type})${entity.list_entry_on ? ` · the entry on ${entity.list_entry_on}` : ""}`;
+}
+
 export function alertMatchSentence(alert: AlertSnapshot): string {
   return alert.match === "confirmed" ? "Confirmed by a person." : "Inferred: no one has confirmed this match.";
 }

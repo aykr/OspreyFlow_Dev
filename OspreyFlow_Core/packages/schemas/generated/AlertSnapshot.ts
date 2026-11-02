@@ -12,6 +12,7 @@ export type RaisedAt = string;
 export type NodeId = string;
 export type EntityType = string;
 export type Name = string;
+export type ListEntryOn = string | null;
 export type Entities = AlertEntitySnapshot[];
 export type EdgeId = string;
 export type Type = string;
@@ -65,6 +66,7 @@ export interface AlertEntitySnapshot {
   node_id: NodeId;
   entity_type: EntityType;
   name: Name;
+  list_entry_on?: ListEntryOn;
   [k: string]: unknown;
 }
 /**
