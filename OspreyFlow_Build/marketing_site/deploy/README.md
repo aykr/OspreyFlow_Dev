@@ -1,42 +1,96 @@
 # OspreyFlow website: going live
 
-`index.html` is the whole site in one file: fonts, screenshots, the Solirius Reply logo and the animation are all inside it. The video carousel's first slide loads `intro-video.html`, the animated overview, so keep that file next to `index.html`.
+The site is five files and a folder:
 
-## Option A: GitHub Pages (recommended)
+| File | What it is |
+| --- | --- |
+| `index.html` | The home page: one file exported from the design tool, with fonts, screenshots, the Solirius Reply logo and the animation inside it. |
+| `intro-video.html` | The animated overview, shown in the home page's video carousel. Keep it next to `index.html`. |
+| `public-sector.html` | The UK public sector option: the GOV.UK theme for gov.uk services, designed to meet the GDS Service Standard, for every UK department (build order step 12). Hand-written, no external requests. |
+| `monitoring.html` | Monitoring and alerting (build order step 12). Hand-written, no external requests. |
+| `assets/` | The two new pages' screenshots (about 1 MB, nine JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
+| `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
-1. On GitHub, create a public repository, for example `ospreyflow-site`. Alternatively, use the existing `aykr/OspreyFlow` repository and put the files in a `docs/` folder.
-2. Upload `index.html`, `intro-video.html` and `.nojekyll` to the root of the repository, or to `docs/`, and commit.
-3. Go to **Settings → Pages**. Under *Build and deployment*, choose **Deploy from a branch**, then select branch `main` and folder `/ (root)` or `/docs`. Click **Save**.
-4. After a minute or two the site is live at `https://<your-account>.github.io/<repository>/`. The address is shown at the top of the Pages settings.
-5. Optional, to use your own domain: in **Settings → Pages → Custom domain**, enter it, for example `ospreyflow.solirius.com`. Then add a `CNAME` DNS record pointing to `<your-account>.github.io`, and tick **Enforce HTTPS** once it is available.
+## How it is published: within the repository move (build order step 13)
 
-To update the site later, replace `index.html` in the repository and commit. Pages republishes automatically.
+The site is **not published until the repository move**, and then with the rest of the product's pages
+(`process/REPO_MOVE_PLAN.md`, Stage 3, step 5). Nothing here is pushed before then.
 
-## Option B: Google Sites
+1. In Stage 2, change the home page's `repoUrl` to `https://github.com/Solirius/ospreyflow` and export
+   the site again (see "Changes waiting for the next export" below).
+2. In Stage 3, `marketing_site/publish_pages.sh` (aimed at the new repository) copies `index.html`,
+   `intro-video.html`, `public-sector.html`, `monitoring.html`, `assets/`, `.nojekyll` and, if present,
+   `CNAME` onto the product repository's `gh-pages` branch, and Pages serves them at
+   `https://solirius.github.io/ospreyflow/`.
+3. In Stage 4, check the pages at the new address (the checklist below).
 
-Google Sites can't host an HTML file directly. It shows external pages in an embed frame. The most reliable way is to publish on GitHub Pages first (Option A), then embed that address:
+The new pages link to each other, to `index.html`, to `index.html#start` and to `intro-video.html`
+only. They do not link to the repository, so `repoUrl` is the one place the address changes.
 
-1. Open your Google Site and go to **Insert → Embed → By URL**.
-2. Paste the GitHub Pages address and choose **Whole page**. Click **Insert**.
-3. Drag the embed's handles to the full width of the section and make it tall. The site scrolls inside the frame.
-4. Click **Publish**.
+## How the home page was edited, and what the design source still needs
 
-Alternatively, add a menu item or a button on Google Sites that links to the GitHub Pages address and opens it in a new tab.
+`index.html` keeps its visible page in a `<script type="__bundler/template">` block: one JSON string,
+written with `</` as `</` and non-ASCII characters kept as they are. There is no checksum. On
+2 November 2026 (step 12) the template was decoded, edited and encoded again with exactly that
+encoding; the unedited template re-encodes to the same bytes, so nothing else in the file changed.
+The edit added:
 
-Pasting the file into **Insert → Embed → Embed code** isn't recommended. The file is about 2.4 MB, which is larger than that box reliably accepts.
+- two links in the header's navigation, **UK public sector** (`public-sector.html`) and **Monitoring**
+  (`monitoring.html`);
+- a section, **For the UK public sector, with monitoring at its core** (`#public-sector`, before
+  *Get started*), with a card for each new page.
 
-## Adding the introduction video later
+**Changes waiting for the next export.** The design source, `OspreyFlow Site.dc.html`, is not in this
+repository, so the next export from it would undo the edit above. Before exporting again:
 
-The page shows a placeholder until a video address is set.
+- add the two navigation links and the `#public-sector` section to the design source (copy them from
+  the template in this `index.html`);
+- set `repoUrl` to `https://github.com/Solirius/ospreyflow`, within the repository move (step 13), not
+  before;
+- run `OspreyFlow_Build/tests/test_website_wording.py` on the new export.
 
-1. Upload the video to YouTube or Vimeo and copy its **embed** URL, for example `https://www.youtube.com/embed/VIDEO_ID`.
-2. In the design project, open `OspreyFlow Site.dc.html`, set the `videoUrl` setting to that URL, and export the standalone HTML again.
-3. Replace `index.html` in the repository with the new export.
+Found in the browser check (step 12), and already in the export before it: the home page asks the
+server for three addresses that are its own unrendered placeholders (`{{ videoUrl }}`,
+`{{ overviewUrl }}`, `{{ f.src }}`), which give "not found" in the console; and the *Get started*
+commands run together on one line. Both are for the design source.
 
-The animated placeholder video (`OspreyFlow Intro Video.dc.html`) can be exported as MP4 from **Share → Export → Video** in the design project, then uploaded the same way.
+## The wording rule
+
+The owner's rule (1 November 2026): the site says OspreyFlow is **designed to meet the GDS Service
+Standard**. It never says "GDS-compliant", "compliant with", "certified", "accredited" or "assessed",
+because only a service assessment panel decides whether a service meets the Standard. Every page that
+names the Standard also lists the three independent checks as **planned**: an independent accessibility
+audit, a penetration test and a DPIA. The public sector page claims only what the step 9b re-audit
+evidences (`process/gds/`). `OspreyFlow_Build/tests/test_website_wording.py` holds every page to this,
+reading the home page's decoded template, and runs in `make test`.
 
 ## Checklist before going live
 
-- The GitHub link in the page points to `https://github.com/aykr/OspreyFlow`. If the public repository lives elsewhere, change the `repoUrl` setting and export again.
-- The product screenshots are from the current product decks. Replace them with fresh captures when the restyled workspace is released.
-- Confirm that the Solirius Reply logo and the team photo are cleared for use on this site.
+- [ ] `repoUrl` points to `https://github.com/Solirius/ospreyflow` (step 13), and the export carries the
+      two navigation links and the `#public-sector` section.
+- [ ] `test_website_wording.py` passes on the files about to be published.
+- [ ] The independent accessibility audit, penetration test and DPIA are still listed as planned. When
+      one is done, change the pages to say so, and update the test.
+- [ ] The Service Standard points on `public-sector.html` still match the latest re-audit in
+      `process/gds/gds_compliance_report.md`.
+- [ ] Every page opens at the new address, with no request to another site, no horizontal scroll at
+      phone width, and the light and dark themes both readable.
+- [ ] The screenshots are still the current product. They come from the synthetic Prison Intelligence
+      and Operation Ledger demonstrations (`OspreyFlow_presentations/`, captured 2 November 2026); no
+      image from any other case is used.
+- [ ] The Solirius Reply logo and the team photo on the home page are cleared for use on this site.
+- [ ] No GOV.UK crown, GDS Transport typeface or GOV.UK logo appears on the site's own pages; they
+      appear only inside OspreyFlow's own screenshots of its GOV.UK theme.
+
+## Other hosting
+
+GitHub Pages is the way the site is published (ADR-114 Amendment 28). To show it in Google Sites,
+publish on Pages first, then in Google Sites use **Insert → Embed → By URL** with the Pages address
+and **Whole page**. Pasting the file into an embed-code box is not reliable: `index.html` is about
+2.5 MB.
+
+## Adding the introduction video later
+
+The home page shows a placeholder until a video address is set. Upload the video to YouTube or Vimeo,
+set the design source's `videoUrl` setting to its **embed** URL (for example
+`https://www.youtube.com/embed/VIDEO_ID`), export the site again and replace `index.html`.

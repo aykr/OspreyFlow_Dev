@@ -4,7 +4,8 @@
 # The site names Solirius Reply, which the packaging rules keep out of the product, so it never goes through the
 # product export (`make publish-user-repo`) and never reaches `main`. It goes on a branch of its own,
 # which GitHub Pages serves. Only what Pages needs is published: `deploy/index.html`,
-# `deploy/intro-video.html`, `deploy/.nojekyll` and, if present, `deploy/CNAME`.
+# `deploy/intro-video.html`, `deploy/public-sector.html`, `deploy/monitoring.html`, `deploy/assets/`,
+# `deploy/.nojekyll` and, if present, `deploy/CNAME`.
 #
 #   sh OspreyFlow_Build/marketing_site/publish_pages.sh           # commit locally, print the push
 #   sh OspreyFlow_Build/marketing_site/publish_pages.sh --push    # and push it
@@ -17,7 +18,7 @@ DEPLOY="$HERE/deploy"
 BRANCH=gh-pages
 
 [ -d "$PRODUCT/.git" ] || { echo "STOP: $PRODUCT is not the product repository's checkout." >&2; exit 1; }
-for f in index.html intro-video.html .nojekyll; do
+for f in index.html intro-video.html public-sector.html monitoring.html .nojekyll; do
   [ -f "$DEPLOY/$f" ] || { echo "STOP: $DEPLOY/$f is missing." >&2; exit 1; }
 done
 
@@ -41,7 +42,8 @@ fi
 trap 'git -C "$PRODUCT" worktree remove --force "$WORK" >/dev/null 2>&1 || true' EXIT
 
 find "$WORK" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-cp "$DEPLOY/index.html" "$DEPLOY/intro-video.html" "$DEPLOY/.nojekyll" "$WORK/"
+cp "$DEPLOY/index.html" "$DEPLOY/intro-video.html" "$DEPLOY/public-sector.html" "$DEPLOY/monitoring.html" "$DEPLOY/.nojekyll" "$WORK/"
+cp -R "$DEPLOY/assets" "$WORK/assets"
 [ ! -f "$DEPLOY/CNAME" ] || cp "$DEPLOY/CNAME" "$WORK/"
 
 cd "$WORK"
