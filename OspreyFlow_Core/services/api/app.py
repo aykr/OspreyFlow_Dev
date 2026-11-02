@@ -8701,6 +8701,7 @@ async def read_alert_queue(
     principal: PrincipalDep,
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
     audit: AuditDep,
     status_filter: Annotated[
         Literal["open", "claimed", "closing", "closed", "active", "all"], Query(alias="status")
@@ -8729,7 +8730,18 @@ async def read_alert_queue(
         resolved_query={"status": status_filter, "kind": kind, "severity": severity},
         result_cardinality=len(rows),
     )
-    return rows
+    # ADR-106 Amendment 1: each claimed row's assignee by name, asked for only the assignees of
+    # the rows served (step 9e: "Claimed by" named an identity-provider id).
+    assignees = sorted({r.alert.assignee for r in rows if r.alert.assignee})
+    if not assignees:
+        return rows
+    names = await principal_names.display_names(assignees)
+    return [
+        r.model_copy(update={"assignee_name": names.get(r.alert.assignee)})
+        if r.alert.assignee
+        else r
+        for r in rows
+    ]
 
 
 @app.get(
@@ -8772,15 +8784,23 @@ async def explain_alert(
     audit: AuditDep,
 ) -> AlertExplanation:
     """What fired the alert: its entities and node, the links and each transaction it cites; and,
-    for a close waiting for a second person, who proposed it, by name (ADR-106: resolved for that
-    one id, only once the reader has been served the alert)."""
+    for a close waiting for a second person, who proposed it, and for a claimed alert, who holds
+    it, by name (ADR-106: resolved for those ids, only once the reader has been served the alert)."""
     explanation = await alert_queue.explain(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
     proposer = explanation.alert.close_proposed_by
-    if proposer:
-        names = await principal_names.display_names([proposer])
-        explanation = explanation.model_copy(update={"close_proposed_by_name": names.get(proposer)})
+    assignee = explanation.alert.assignee
+    people = sorted({p for p in (proposer, assignee) if p})
+    if people:
+        # ADR-106 Amendment 1: the proposer and the assignee by name, asked for those ids alone.
+        names = await principal_names.display_names(people)
+        explanation = explanation.model_copy(
+            update={
+                "close_proposed_by_name": names.get(proposer) if proposer else None,
+                "assignee_name": names.get(assignee) if assignee else None,
+            }
+        )
     await audit.record(
         principal=principal,
         action="explain_alert",

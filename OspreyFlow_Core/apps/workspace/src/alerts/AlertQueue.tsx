@@ -84,8 +84,14 @@ export function ageWords(iso: string, now: Date = new Date()): string {
 
 /** Where an alert stands, in one sentence: "Claimed by you", "Closed as True match: …". A close
  * waiting for a second person names who proposed it by `proposerName` (the explanation's
- * `close_proposed_by_name`, ADR-106), the id only where no name could be resolved. */
-export function statusSentence(alert: Alert, mine: boolean, proposerName?: string | null): string {
+ * `close_proposed_by_name`, ADR-106), and a claimed alert who holds it by `assigneeName`
+ * (`assignee_name`, step 9e); the id only where no name could be resolved. */
+export function statusSentence(
+  alert: Alert,
+  mine: boolean,
+  proposerName?: string | null,
+  assigneeName?: string | null,
+): string {
   if (alert.status === "closed") {
     return alert.disposition ? `Closed as ${closingReasonLabel(alert.disposition)}: ${alert.disposition_reason ?? ""}` : "Closed";
   }
@@ -93,7 +99,7 @@ export function statusSentence(alert: Alert, mine: boolean, proposerName?: strin
     const by = proposerName ?? alert.close_proposed_by ?? "a member";
     return `Closing as ${closingReasonLabel(alert.disposition)} (${alert.disposition_reason ?? ""}), proposed by ${mine ? "you" : by}: waiting for a second person to approve it`;
   }
-  if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : alert.assignee}`;
+  if (alert.status === "claimed" && alert.assignee) return `Claimed by ${mine ? "you" : (assigneeName ?? alert.assignee)}`;
   return STATUS_WORDS[alert.status ?? "open"] ?? "Open";
 }
 
@@ -178,7 +184,7 @@ export function AlertQueue(props: AlertQueueProps) {
                 </button>
                 <p className="label" style={{ margin: 0, padding: "0 var(--sp-8)" }}>
                   {STATUS_WORDS[row.alert.status ?? "open"]}
-                  {row.alert.assignee ? ` · ${row.alert.assignee === props.accountId ? "you" : row.alert.assignee}` : ""}
+                  {row.alert.assignee ? ` · ${row.alert.assignee === props.accountId ? "you" : (row.assignee_name ?? row.alert.assignee)}` : ""}
                   {` · ${audienceWords(f.audience, f.team)} · ${ageWords(row.alert.created_at)} · ${when(row.alert.created_at)}`}
                 </p>
               </li>
@@ -303,7 +309,7 @@ function AlertDetail(props: AlertDetailProps) {
         </table>
       )}
       <p className="label" style={{ margin: 0 }}>
-        {statusSentence(alert, mine, why.close_proposed_by_name)}
+        {statusSentence(alert, mine, why.close_proposed_by_name, why.assignee_name)}
       </p>
       {said && <p role="status" className="label">{said}</p>}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}

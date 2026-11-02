@@ -16,7 +16,10 @@ What a mistake would do, and the case that catches it:
 - a medium alert held up — `test_a_medium_alert_closes_at_once`;
 - the waiting close naming its proposer by an identity-provider id (step 9d finding 1), or the
   directory asked for a person on a read the reader may not make (ADR-106 decision 3) —
-  `test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else`.
+  `test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else`;
+- "Claimed by <id>": the claimed alert naming its assignee by an identity-provider id (step 9e), or
+  the directory asked for an assignee on an alert the reader is refused —
+  `test_a_claimed_alert_names_its_assignee_in_the_detail_and_the_queue`.
 """
 
 from __future__ import annotations
@@ -191,3 +194,40 @@ def test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else(
     w.as_ = w.owner
     plain = client.get(f"{Q.format(case=w.case)}/{other.id}").json()
     assert plain["close_proposed_by_name"] is None and directory.asked == []
+
+
+def test_a_claimed_alert_names_its_assignee_in_the_detail_and_the_queue(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Step 9e: "Claimed by <id>" named the assignee by their identity-provider id. The detail serves
+    `assignee_name` and each queue row its own, resolved as the proposer's is (ADR-106 Amendment 1):
+    only for the ids the response already serves, and never for a reader refused the alert."""
+    w, client = world
+    alert = _high(w)
+    _save(client, w, alert)
+    w.as_ = w.member
+    claimed = client.post(f"{Q.format(case=w.case)}/{alert.id}/claim")
+    assert claimed.status_code == 200, claimed.text
+    directory = _Directory({w.member.id: "Priya Shah", w.owner.id: "Owner Name"})
+    app.dependency_overrides[get_principal_names] = lambda: directory
+    w.as_ = w.owner
+    detail = client.get(f"{Q.format(case=w.case)}/{alert.id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert (body["alert"]["assignee"], body["assignee_name"]) == (w.member.id, "Priya Shah")
+    assert directory.asked == [w.member.id]
+    directory.asked.clear()
+    rows = {r["alert"]["id"]: r for r in client.get(Q.format(case=w.case)).json()}
+    assert rows[alert.id]["assignee_name"] == "Priya Shah"
+    assert directory.asked == [w.member.id], "asked once, for the assignees served alone"
+    # Rule 3 and ADR-106 decision 3: a reader refused the alert never has its assignee looked up.
+    directory.asked.clear()
+    w.as_ = w.outsider
+    assert client.get(f"{Q.format(case=w.case)}/{alert.id}").status_code in (403, 404)
+    assert directory.asked == []
+    # An unclaimed alert names no one and asks for no one.
+    other = _high(w)
+    _save(client, w, other)
+    w.as_ = w.owner
+    plain = client.get(f"{Q.format(case=w.case)}/{other.id}").json()
+    assert plain["assignee_name"] is None and directory.asked == []

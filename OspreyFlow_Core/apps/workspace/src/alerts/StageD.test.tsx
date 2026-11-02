@@ -238,6 +238,24 @@ describe("closing a high-severity alert (decision 7)", () => {
     expect(within(detail).queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
   });
 
+  it("names who claimed it by their name, in the queue and the detail (step 9e)", async () => {
+    const claimed = { ...ALERT, severity: "medium", assignee: "6f1c2a9e-idp-subject" };
+    serve({
+      "GET alert-queue": () => json(200, [{ alert: claimed, summary: "4 movements", kind: "typology", severity: "medium", audience: "case",
+        assignee_name: "Pat Jones" }]), // prettier-ignore
+      "GET alert-queue/a1": () => json(200, { alert: claimed, summary: "4 movements", nodes: [], edges: [], transactions: [], kind: "typology",
+        severity: "medium", audience: "case", assignee_name: "Pat Jones" }), // prettier-ignore
+      "GET alert-assignees": () => json(200, []),
+    });
+    render(<AlertQueue apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="editor" accountId="second" onCanvas={vi.fn()} />);
+    const queue = await screen.findByRole("region", { name: "Alert queue" });
+    await within(queue).findByText(/Claimed · Pat Jones ·/);
+    fireEvent.click(await screen.findByRole("button", { name: /Open alert:/ }));
+    const detail = await screen.findByRole("region", { name: "What fired this alert" });
+    await within(detail).findByText("Claimed by Pat Jones");
+    expect(screen.queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
+  });
+
   it("lets a second member approve or send back, and the proposer only withdraw", async () => {
     const closing = { ...ALERT, status: "closing", disposition: "false_positive", disposition_reason: "known", close_proposed_by: "member" };
     let calls = await openAlert(closing, "second");

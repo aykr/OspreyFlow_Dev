@@ -10691,6 +10691,14 @@ rules it serves. Neither is stored. Tests, red first: `test_a_waiting_close_name
 each with a directory stand-in that records the ids asked for and knows only its own accounts; and
 the Glass's two screens in `StageD.test.tsx`.
 
+**Step 9e (2 November 2026): the assignee too.** "Claimed by <id>" named the person holding an alert
+by an identity-provider id. Two more fields under the same rule: `AlertExplanation.assignee_name`,
+resolved by the explain route with the proposer, for the ids it serves, in one lookup; and
+`QueuedAlert.assignee_name`, resolved by the queue route for the assignees of the rows it serves.
+Neither is stored. Tests, red first: `test_a_claimed_alert_names_its_assignee_in_the_detail_and_the_queue`
+(a refused reader causes no lookup; an unclaimed alert asks for no one) and the Glass's queue row and
+detail in `StageD.test.tsx`.
+
 ### ADR-105, Amendment 1 (9 October 2026) — Set picture… from the node's own menu
 
 Status: accepted 9 October 2026 (the owner: "Can you add the ability to associate an image to node to its right click menu?").
