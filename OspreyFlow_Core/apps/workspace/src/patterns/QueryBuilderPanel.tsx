@@ -95,8 +95,9 @@ export function QueryBuilderPanel({
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [proposal, setProposal] = useState<PatternProposal | null>(null);
-  // ADR-135 decision 5: the engine to ask, among those offered for extraction. The Conduit runs
-  // ask to search locally whatever is named (it sends no handling code); the proposal says so.
+  // ADR-135 decision 5: the engine to ask, among those offered for extraction. Since ADR-135
+  // Amendment 1 the question carries the case's handling and datasets, so a hosted engine is asked
+  // only when both gates allow it; otherwise it runs locally, and the proposal says which answered.
   const engineChoice = useEngineChoice(apiBaseUrl, bearerToken, "extraction", investigationId);
   // A proposal replaces the pattern drawn, so what it replaced is kept until it is restored or
   // another proposal replaces it: one press of "Restore the previous pattern" is the undo.
