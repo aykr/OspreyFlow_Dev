@@ -116,7 +116,7 @@ graph store and the analytics database as clusters of their own.
 - **Small and Enterprise serve HTTPS** at `https://<your domain>`. The front proxy (Caddy) obtains
   the certificate for your domain and renews it automatically. Port 80 is open only for the
   certificate's challenge and to send a request for your domain on to HTTPS (443); any other
-  request on port 80 is refused. On Enterprise, the cluster's load balancer passes 80 and 443 to
+  request on port 80 gets "not found", apart from the proxy's own health check. On Enterprise, the cluster's load balancer passes 80 and 443 to
   the proxy.
 - **The managed services behind Small and Enterprise are reached over TLS:** PostgreSQL always
   (`sslmode` is `require` at least), the object store always over HTTPS, and the cache and the
