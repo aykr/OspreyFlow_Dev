@@ -642,7 +642,7 @@ from .screening_refresh import (
 )
 from .screening_refresh import refresh as refresh_screening_list
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
-from .sentence_rules import is_deployment_wide, run_scheduled_rule
+from .sentence_rules import is_deployment_wide, run_scheduled_rule, strength_context
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -9635,6 +9635,7 @@ async def preview_rule_sentence(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     body: RulePreviewRequest,
+    influencers_store: StrengthInfluencersDep,
 ) -> RulePreview:
     """Decision 3: "Preview on the last 90 days" — the rule run as the caller over the case's stored
     data, counted only over what they may see (rules 3 and 7). It raises no alert and writes no
@@ -9653,6 +9654,8 @@ async def preview_rule_sentence(
     entries: dict[str, list[Any]] = {}
     if relationship is not None and relationship.kind == "on_screening_list":
         entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
+    # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
+    influencers, rarity_exclude = await strength_context(influencers_store, investigation.id)
     preview = await preview_sentence(
         sentence,
         principal,
@@ -9663,6 +9666,8 @@ async def preview_rule_sentence(
             ontology=ontology,
             hotlisted=hotlisted,
             screening_entries=entries,
+            influencers=influencers,
+            rarity_exclude_types=rarity_exclude,
         ),
     )
     await audit.record(

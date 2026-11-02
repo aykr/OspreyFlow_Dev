@@ -22,9 +22,11 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from ontology.influencers import load_strength_defaults, resolve_influencers
 from schemas.analytics import EventRecord
 from schemas.domain import EdgeWrite, Interval, NodeWrite, PatternQuery, Principal, TypologyRule
 from schemas.sentences import SentenceRuleParams
+from schemas.strength import ActiveInfluencer
 
 from .dataset_scope import made_in
 from .kyc_rules import customer_rows
@@ -41,6 +43,7 @@ from .rule_sentences import (
 
 if TYPE_CHECKING:
     from .rule_evaluation import Finding, RuleGate
+    from .strength_influencers import InfluencerStore
 
 
 def sentence_of_rule(rule: TypologyRule) -> SentenceRuleParams | None:
@@ -115,6 +118,19 @@ def rows_of_finding(
     return sorted(rows)
 
 
+async def strength_context(
+    store: InfluencerStore | None, investigation_id: str
+) -> tuple[list[ActiveInfluencer], tuple[str, ...]]:
+    """ADR-139: the influencers in force in the case, and the types rarity leaves out. With no
+    store (a run that has none), the weights file's defaults alone."""
+    defaults = load_strength_defaults()
+    if store is None:
+        active, _ = resolve_influencers(defaults.influencers)
+    else:
+        active, _, _ = await store.active_for_case(investigation_id, defaults.influencers)
+    return active, defaults.rarity_exclude_types
+
+
 async def _context(
     rule: TypologyRule, deployer: Principal, gate: RuleGate
 ) -> tuple[SentenceRuleParams, PatternQuery, SentenceContext]:
@@ -145,6 +161,7 @@ async def _context(
         if gate.screening is None:
             raise RuntimeError("this run has no screening lists to screen against")
         entries[params.sentence.subject] = await gate.screening.entries(params.sentence.subject)
+    influencers, exclude = await strength_context(gate.influencers, gate.investigation_id)
     ctx = SentenceContext(
         graph=gate.graph,
         analytics=gate.analytics,
@@ -152,6 +169,8 @@ async def _context(
         ontology=gate.ontology,
         hotlisted=hotlisted,
         screening_entries=entries,
+        influencers=influencers,
+        rarity_exclude_types=exclude,
     )
     return params, saved.definition, ctx
 

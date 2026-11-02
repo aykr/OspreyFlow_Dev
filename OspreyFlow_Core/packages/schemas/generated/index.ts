@@ -304,6 +304,8 @@ export type { OnScreeningListRelationship } from "./OnScreeningListRelationship"
 export type { CountFrequency } from "./CountFrequency";
 export type { AmountFrequency } from "./AmountFrequency";
 export type { FirstTimeFrequency } from "./FirstTimeFrequency";
+export type { StrengthReaches } from "./StrengthReaches";
+export type { RarityReaches } from "./RarityReaches";
 export type { RuleSchedule } from "./RuleSchedule";
 export type { RuleSentence } from "./RuleSentence";
 export type { SentenceRuleParams } from "./SentenceRuleParams";

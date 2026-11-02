@@ -70,6 +70,7 @@ from schemas.sentences import (
     SentenceRefusal,
     SentenceRuleParams,
 )
+from schemas.strength import ActiveInfluencer
 
 from .alert_queue import node_name
 from .working_set.models import MAX_NODES, LimitExceeded, LimitExceededError
@@ -240,6 +241,18 @@ def check_sentence(sentence: RuleSentence, ontology: OntologySchema) -> None:
             raise SentenceRefused(
                 blank, "not_screened", "only a Person or an Organisation is screened by name"
             )
+    strength = sentence.strength
+    if strength is not None and strength.kind == "connection_strength":
+        if strength.link_type is not None:
+            edge = _link(ontology, strength.link_type, "strength")
+            if not _touches(edge, subject.name):
+                raise SentenceRefused(
+                    "strength",
+                    "link_not_for_subject",
+                    f"“{_link_label(edge)}” does not link a {subject.name}",
+                )
+        if strength.other_type is not None:
+            _entity(ontology, strength.other_type, "strength")
     frequency = sentence.frequency
     if frequency is not None:
         edge = _link(ontology, frequency.link_type, "frequency")
@@ -470,6 +483,21 @@ def sentence_words(sentence: RuleSentence, ontology: OntologySchema | None = Non
                 )
             case _:
                 words.append(f"for the first time ever by “{link}”")
+    strength = sentence.strength
+    if strength is not None:
+        if strength.kind == "connection_strength":
+            other = _a(strength.other_type) if strength.other_type else "anything it is linked to"
+            by = f" by “{label(strength.link_type)}”" if strength.link_type else ""
+            words.append(
+                f"and the connection strength between it and {other}{by} reaches "
+                f"{_number(strength.reaches)}"
+            )
+        else:
+            where = "per dataset" if strength.scope == "dataset" else "across the case's datasets"
+            words.append(
+                f"and the shared-attribute rarity between it and another {sentence.subject} "
+                f"reaches {_number(strength.reaches)} ({where})"
+            )
     team = "my team" if sentence.team == "my_team" else "the case team"
     audience = {"just_me": "me alone", "this_case": team, "deployment": "every case's team"}
     if sentence.runs == "schedule" and sentence.schedule is not None:
@@ -505,6 +533,10 @@ class SentenceContext:
     hotlisted: frozenset[str] | None = None
     #: Screening-list entries by entity type, reference data (ADR-109 phase F).
     screening_entries: dict[str, list[Any]] = field(default_factory=dict)
+    #: ADR-139: the link-strength influencers in force in the case (case, then installation, then
+    #: the weights file's), which a strength condition judges by; and the types rarity leaves out.
+    influencers: Sequence[ActiveInfluencer] = ()
+    rarity_exclude_types: tuple[str, ...] = ("Alert",)
 
 
 @dataclass(frozen=True)
@@ -666,6 +698,58 @@ async def _meets_relationship(
     return f"a {hits[0].score:.2f} match to an entry on {hits[0].entry.list_name}"
 
 
+async def _meets_strength(
+    node: Node, sentence: RuleSentence, author: Principal, ctx: SentenceContext
+) -> str | None:
+    """ADR-139 decision 8: `None` when the subject's strength (or rarity) does not reach the
+    sentence's figure, as the author may see it; else the words it adds. Both are worked out in
+    the graph adapter under the author's access, so evidence the author could not read never
+    raises an alert."""
+    strength = sentence.strength
+    if strength is None:
+        return ""
+    if strength.kind == "connection_strength":
+        reached = await ctx.graph.expand(
+            ExpandRequest(
+                node_ids=[node.id], depth=1,
+                edge_types=[strength.link_type] if strength.link_type else [],
+            ),
+            author,
+        )  # fmt: skip
+        others = {n.id: n for n in reached.nodes}
+        ends: dict[str, str] = {}
+        for edge in reached.edges:
+            if node.id not in (edge.source, edge.target):
+                continue
+            other_id = edge.target if edge.source == node.id else edge.source
+            other = others.get(other_id)
+            if other is None or (strength.other_type and other.type != strength.other_type):
+                continue
+            ends[edge.id] = other_id
+        if not ends:
+            return None
+        found = await ctx.graph.connection_strengths(
+            sorted(ends), author, influencers=ctx.influencers
+        )
+        best = max(found, key=lambda s: (s.strength, s.edge_id), default=None)
+        if best is None or best.strength < strength.reaches:
+            return None
+        return (
+            f"connection strength {best.strength:.2f} with {node_name(others[ends[best.edge_id]])}"
+        )
+    result = await ctx.graph.shared_attribute_rarity(
+        [node.id], author, scope=strength.scope, partners="any",
+        exclude_types=ctx.rarity_exclude_types,
+    )  # fmt: skip
+    value = result.node_values.get(node.id)
+    if value is None or value < strength.reaches:
+        return None
+    partner = next((p.b for p in result.pairs if p.a == node.id), None)
+    named = await ctx.graph.get_nodes([partner], author) if partner else []
+    with_whom = f" with {node_name(named[0])}" if named else ""
+    return f"shared-attribute rarity {value:.2f}{with_whom}"
+
+
 async def _frequencies(
     subjects: Sequence[Node],
     sentence: RuleSentence,
@@ -740,7 +824,10 @@ async def judge_subjects(
         said = await _meets_relationship(node, sentence, author, ctx)
         if said is None:
             continue
-        kept.append((node, [said] if said else []))
+        strong = await _meets_strength(node, sentence, author, ctx)
+        if strong is None:
+            continue
+        kept.append((node, [w for w in (said, strong) if w]))
     counts = await _frequencies([n for n, _ in kept], sentence, author, ctx, window)
     hits: list[Hit] = []
     for node, reasons in kept:
