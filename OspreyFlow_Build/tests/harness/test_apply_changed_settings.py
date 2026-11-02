@@ -339,8 +339,9 @@ def test_a_run_once_job_is_neither_started_nor_waited_on(
     deployment: Deployment, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Step 2e's follow-up: the `ingest` job reads deployment.env whole, so a new key changes what
-    reaches it — but `up --wait` naming it starts it, it exits, and the apply reported failure though
-    every service was healthy. Its rendered files are still written, so its next run reads them."""
+    reaches it — but `up --wait` naming it starts it, it exits, and the apply reported failure
+    though every service was healthy. Its rendered files are still written, so its next run reads
+    them."""
     services = yaml.safe_load((deployment.folder / "compose.yaml").read_text("utf-8"))["services"]
     assert services["ingest"]["restart"] == "no" and services["ingest"]["profiles"] == ["batch"]
     deployment.write_config(GEMINI)

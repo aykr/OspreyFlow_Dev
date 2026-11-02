@@ -11,8 +11,9 @@ Every place a service name comes from in the product, and the case that catches 
   `test_no_seed_or_demo_fixture_writes_a_service_name`.
 
 The demo cases are read from the pack registry (`scripts.demo_packs`), not a hand-written list, so
-a new pack is covered when it is registered. `test_the_check_fails_for_the_govuk_deployments_own_name`
-plants the GOV.UK deployment's own value, in the shape a starter carries it, and shows the check red.
+a new pack is covered when it is registered.
+`test_the_check_fails_for_the_govuk_deployments_own_name` plants the GOV.UK deployment's own value,
+in the shape a starter carries it, and shows the check red.
 """
 
 from __future__ import annotations
@@ -86,11 +87,14 @@ def test_no_seed_or_demo_fixture_writes_a_service_name() -> None:
     assert "service_name" not in (CORE / "scripts/refresh.py").read_text(encoding="utf-8")
 
 
-def test_the_check_fails_for_the_govuk_deployments_own_name(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_check_fails_for_the_govuk_deployments_own_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Rule 15: the GOV.UK deployment's own value, "Prison Intelligence", planted where a starter
     carries its name — the check must name it, on the command's starter and on the guided page."""
     crime = starters.DOMAINS["crime"]
-    planted = {**starters.DOMAINS, "crime": dataclasses.replace(crime, service_name="Prison Intelligence")}
+    renamed = dataclasses.replace(crime, service_name="Prison Intelligence")
+    planted = {**starters.DOMAINS, "crime": renamed}
     monkeypatch.setattr(starters, "DOMAINS", planted)
     found = {where: _demo_named_in(name) for where, name in offered_service_names().items()}
     hits = {where: hit for where, hit in found.items() if hit}

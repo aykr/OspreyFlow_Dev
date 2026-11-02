@@ -41,8 +41,8 @@ from scripts.load_screening_list import parse_list
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 from services.api.config import PostgresConfig
 from services.api.dataset_scope import stamping
-from services.api.investigations import AccessLevel
 from services.api.ingest_sources import UPLOAD_SUBDIR, ingest_root
+from services.api.investigations import AccessLevel
 from services.api.media_store import open_media_store
 from services.api.rule_evaluation import transaction_key
 from services.api.screening import ScreeningListStore
@@ -228,16 +228,14 @@ async def deploy_screening_rule(
     the KYC screening template's defaults (`ledger_monitoring.SCREENING`), after each load commits,
     in the Ledger's dataset, **as the case's Author** (the first `--grant ACCOUNT=author`), as that
     Author would from Monitoring → Rules → Templates: a case rule is the Author's to deploy, and the
-    list refresh runs it as its deployer, so it must be an account the identity provider knows, never
-    the seed's own worker. Left as it is when one of that name is live already (a reseed); deployed
-    afresh when a rehearsal retired it."""
+    list refresh runs it as its deployer, so it must be an account the identity provider knows,
+    never the seed's own worker. Left as it is when one of that name is live already (a reseed);
+    deployed afresh when a rehearsal retired it."""
     authors = [a for a, level in map(parse_grant, grants) if level is AccessLevel.AUTHOR]
     name = ledger_monitoring.SCREENING_NAME
     if not authors:
         return f"{name!r} was not deployed: no case Author was granted (--grant ACCOUNT=author)"
-    author = Principal(
-        id=authors[0], clearance=clearance, org_unit=org_unit, datasets=[LEDGER.id]
-    )
+    author = Principal(id=authors[0], clearance=clearance, org_unit=org_unit, datasets=[LEDGER.id])
     live = [
         r
         for r in await rules.list_for_case(case, author)
@@ -248,7 +246,9 @@ async def deploy_screening_rule(
     await rules.create(
         author,
         case,
-        TypologyRuleInput.model_validate({"name": name, "params": dict(ledger_monitoring.SCREENING)}),
+        TypologyRuleInput.model_validate(
+            {"name": name, "params": dict(ledger_monitoring.SCREENING)}
+        ),
     )
     return f"deployed {name!r} from the KYC screening template, as the case's Author"
 
