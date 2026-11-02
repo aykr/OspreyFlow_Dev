@@ -199,6 +199,7 @@ def test_a_site_s_own_values_follow_the_rendered_ones(tmp_path: Path) -> None:
 
 def test_another_profile_is_refused(tmp_path: Path) -> None:
     config = tmp_path / "osprey.yaml"
-    config.write_text("profile: small\n", encoding="utf-8")
+    config.write_text("profile: small\nnetwork: {public_origin: 'https://osprey.example.org'}\n",
+                      encoding="utf-8")
     with pytest.raises(ClusterInstallFailed, match="profile: cluster"):
         install(config, out_root=tmp_path, kube=FakeKube(), environ={}, resolver=_resolver)

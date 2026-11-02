@@ -28,7 +28,12 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
   await expect(page.getByRole("radio", { name: /local-lite/ })).toBeFocused();
   await page.keyboard.press("ArrowDown"); // moves selection to "small" within the radio group
   await expect(page.getByRole("radio", { name: /^small/ })).toBeChecked();
-  await page.keyboard.press("Tab"); // Tab exits the radio group as a whole, straight to Save
+  // S11 (the owner's ruling of 2 November 2026): Small is HTTPS, so choosing it asks for its
+  // address, saved with the profile in the same write.
+  await page.keyboard.press("Tab"); // Tab exits the radio group as a whole, to the address
+  await expect(page.getByRole("textbox", { name: /^Address/ })).toBeFocused();
+  await page.keyboard.type("https://osprey.example.org");
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save profile" })).toBeFocused();
 
   const [response] = await Promise.all([
@@ -36,6 +41,8 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
+  const savedProfile = (await response.json()) as { profile: string; network: { public_origin: string } };
+  expect([savedProfile.profile, savedProfile.network.public_origin]).toEqual(["small", "https://osprey.example.org"]);
   await expect(page.getByText("Profile", { exact: false }).first()).toBeVisible();
   await expect(page.locator(".summary-rail").getByText("decided")).toBeVisible();
 
@@ -721,10 +728,16 @@ test("install page: Small's Domain screen is reached by keyboard and a real Ente
   await page.keyboard.type("osprey.example.org");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save domain" })).toBeFocused();
-  const [response] = await Promise.all([
+  // S11: the draft's profile becomes Small only now, with its https:// address in the same write.
+  const isConfigPut = (r: Response) => r.url().includes("/api/config") && r.request().method() === "PUT";
+  const [response, draft] = await Promise.all([
     page.waitForResponse(isAnswersPut),
+    page.waitForResponse(isConfigPut),
     page.keyboard.press("Enter"),
   ]);
+  expect(draft.ok()).toBe(true);
+  const drafted = (await draft.json()) as { profile: string; network: { public_origin: string } };
+  expect([drafted.profile, drafted.network.public_origin]).toEqual(["small", "https://osprey.example.org"]);
   expect(response.ok()).toBe(true);
   const saved = (await response.json()) as { answers: { cloud: { domain: string; region: string } } };
   expect(saved.answers.cloud.domain).toBe("osprey.example.org");

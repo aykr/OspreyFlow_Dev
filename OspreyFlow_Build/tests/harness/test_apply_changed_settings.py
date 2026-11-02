@@ -310,6 +310,30 @@ def test_an_invalid_osprey_yaml_changes_nothing(
     assert not list(deployment.out_root.glob(".*staging"))
 
 
+@pytest.mark.parametrize(
+    ("bad", "words"),
+    [
+        ("profile: small\nnetwork: {public_origin: 'http://osprey.example.org'}\n",
+         "a Small deployment's network.public_origin must be an https:// address"),
+        ("network: {public_origin: 'http://intel.service.gov.uk'}\n",
+         "is a gov.uk address, and Lite answers on this computer only"),
+    ],
+)  # fmt: skip
+def test_apply_refuses_plain_http_for_small_and_lite_for_gov_uk_in_words(
+    deployment: Deployment, bad: str, words: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S11 and O2 (the owner's ruling of 2 November 2026): `ospreyflow apply` refuses, in plain
+    words and with nothing changed, a Small `osprey.yaml` whose address is plain HTTP, and a Lite one
+    whose address is on gov.uk."""
+    before = deployment.snapshot()
+    deployment.config.write_text(bad, encoding="utf-8")
+    assert deployment.reapply({}) == 1
+    err = capsys.readouterr().err
+    assert words in err and "nothing was changed" in err, err
+    assert "Traceback" not in err
+    assert deployment.snapshot() == before and deployment.compose.calls == []
+
+
 def test_a_deployment_not_installed_is_refused(
     tmp_path: Path, compose: FakeCompose, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -30,7 +30,8 @@ def _owned(text: str) -> set[str]:
 
 def test_a_pulled_small_deployment_names_only_images_the_release_builds() -> None:
     config = OspreyConfig.model_validate(
-        {"profile": "small", "reporting": {"sync": True, "superset": True}}
+        {"profile": "small", "reporting": {"sync": True, "superset": True},
+         "network": {"public_origin": "https://osprey.example.org"}}
     )
     compose = render(config, resolver=_resolver).artefacts["compose.yaml"]
     named = _owned(compose)

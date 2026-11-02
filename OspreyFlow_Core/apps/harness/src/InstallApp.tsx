@@ -23,8 +23,20 @@ import { SummaryRail } from "./SummaryRail";
 
 // Each mode's own profile (`ospreyflow.answers.PROFILES`), written to the draft when the mode is
 // saved. Enterprise's is not written: a cluster profile is refused until it names its hosts, which
-// stage B7 collects, so its answers are kept and the draft is left as it is.
-const PROFILE_FOR: Partial<Record<InstallMode, Profile>> = { lite: "local-lite", small: "small" };
+// stage B7 collects, so its answers are kept and the draft is left as it is. Small's is not written
+// with the mode either: Small is HTTPS (S11, the owner's ruling of 2 November 2026), so its profile
+// is refused until its address is known, and the Domain screen writes the two together.
+const PROFILE_FOR: Partial<Record<InstallMode, Profile>> = { lite: "local-lite" };
+
+/** The draft's profile and address for a Small install whose domain is answered, when the draft
+ * does not already say so; otherwise nothing to write. */
+function smallDraft(answers: InstallAnswers, config: OspreyConfig): Partial<OspreyConfig> | null {
+  const domain = answers.mode === "small" ? answers.cloud?.domain?.trim() : undefined;
+  if (!domain) return null;
+  const origin = `https://${domain}`;
+  if (config.profile === "small" && config.network?.public_origin === origin) return null;
+  return { profile: "small", network: { ...config.network, public_origin: origin } };
+}
 
 export function InstallApp() {
   const [config, setConfig] = useState<OspreyConfig | null>(null);
@@ -47,9 +59,10 @@ export function InstallApp() {
     const profile = PROFILE_FOR[answers.mode];
     const modeChanged = state !== null && answers.mode !== state.mode;
     setState(await putInstallAnswers(answers));
-    if (modeChanged && profile) {
+    const draft = modeChanged && profile ? { profile } : config ? smallDraft(answers, config) : null;
+    if (draft) {
       try {
-        setConfig(await putConfig({ profile }));
+        setConfig(await putConfig(draft));
       } catch (exc) {
         // The answers are saved; the draft keeps its profile, which the Profile screen can still change.
         throw new Error(`Your mode is saved, but its profile could not be set: ${errorMessage(exc)}`);

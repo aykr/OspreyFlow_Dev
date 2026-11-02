@@ -52,6 +52,8 @@ from tools.layout import REPO as _REPO
 from schemas.deployment import DEFAULT_PUBLIC_ORIGIN, OspreyConfig, SearchBackend
 
 ARTEFACTS = ("compose.yaml", "deployment.env", "versions.lock", "RUNBOOK.md", "Caddyfile")
+#: S11: Small and Enterprise are HTTPS (the owner's ruling of 2 November 2026).
+HTTPS = {"public_origin": "https://osprey.example.org"}
 #: Read by the Glass as JSON (ADR-114 Amendment 4), so it carries no comment banner.
 ALL_ARTEFACTS = (*ARTEFACTS, "glass.json")
 
@@ -74,6 +76,9 @@ governance:
   handling_scheme: uk-law-enforcement
   ontology: default
   real_data_exceptions: config/real_data_exceptions.yaml
+network:
+  # S11: Small is HTTPS (the owner's ruling of 2 November 2026).
+  public_origin: https://osprey.example.org
 map:
   default: osm-local
   providers:
@@ -291,7 +296,7 @@ def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
     # ADR-114 Amendment 1/2: the console on the harness's port is gone; the Admin area is inside
     # the Glass, at the deployment's own address.
     assert f"localhost:{HARNESS_PORT}" not in runbook
-    assert "| Admin area | `http://" in runbook and "*Admin* on Start" in runbook
+    assert "| Admin area | `https://osprey.example.org" in runbook and "*Admin* on Start" in runbook
 
 
 def test_the_address_the_runbook_names_for_the_admin_console_is_served_in_the_default_mode(
@@ -341,10 +346,14 @@ def test_the_rendered_env_names_the_public_origin_as_the_only_cors_origin(
     assert len(lines) == 1, lines
 
     value = lines[0].split("=", 1)[1]
-    assert value == DEFAULT_PUBLIC_ORIGIN, (
+    # The fixture is Small, so its address is its own HTTPS one (S11).
+    origin = "https://osprey.example.org"
+    assert value == origin, (
         f"CORS_ALLOWED_ORIGINS is {value!r}; it must be exactly the deployment's own public "
-        f"origin ({DEFAULT_PUBLIC_ORIGIN!r}) and nothing else"
+        f"origin ({origin!r}) and nothing else"
     )
+    lite = render(OspreyConfig(), resolver=_fake_resolver).artefacts["deployment.env"]
+    assert f"CORS_ALLOWED_ORIGINS={DEFAULT_PUBLIC_ORIGIN}" in lite.splitlines()
     assert "5173" not in value, f"the Vite development origin is in a rendered deployment: {value}"
 
 
@@ -497,7 +506,9 @@ def test_local_lite_and_small_both_render() -> None:
     """ADR-011: Compose for both. Rendered separately so a profile-specific crash is not hidden by
     the other profile passing."""
     for profile in ("local-lite", "small"):
-        config = OspreyConfig.model_validate({"profile": profile})
+        # S11: Small is HTTPS; Lite keeps its default address.
+        https = {"network": HTTPS} if profile == "small" else {}
+        config = OspreyConfig.model_validate({"profile": profile, **https})
         result = render(config, resolver=_fake_resolver)
         assert set(result.artefacts) == set(ALL_ARTEFACTS)
         assert f"osprey-{profile}" in result.artefacts["compose.yaml"]
@@ -509,7 +520,7 @@ def test_the_cluster_profile_renders_the_charts_values_rather_than_compose() -> 
     values' own promises)."""
     config = OspreyConfig.model_validate(
         {"profile": "cluster", "components": {"analytics_engine": "clickhouse"},
-         "cluster": {"shared_storage_class": "efs-sc"},
+         "cluster": {"shared_storage_class": "efs-sc"}, "network": HTTPS,
          "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}}
     )  # fmt: skip
     assert set(render(config, resolver=_fake_resolver).artefacts) == {
@@ -667,10 +678,11 @@ def test_every_published_port_is_overridable_with_the_spec_s_own_default(
     env = rendered.artefacts["deployment.env"]
 
     # ADR-114 Amendment 4: the workspace is reached through the front proxy, which publishes the
-    # public origin's own port; moving it is an edit to `network.public_origin`.
+    # public origin's own port; moving it is an edit to `network.public_origin`. The fixture is
+    # Small on HTTPS: 80 and 443 on every interface, the graph store on this machine only.
     assert "ports" not in compose["services"]["workspace"]
     assert compose["services"]["proxy"]["ports"] == [
-        "80:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"
+        "80:80", "443:443", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"
     ]  # fmt: skip
     assert "OSPREY_API_PORT=8000" in env
 
@@ -729,7 +741,7 @@ def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None
 
     closed = yaml.safe_load(render(OspreyConfig(), allow_unpinned=True).artefacts["compose.yaml"])
     assert "ports" not in closed["services"]["api"]
-    assert "${OSPREY_API_PORT:-8000}:8000" not in closed["services"]["proxy"]["ports"], (
+    assert not any("OSPREY_API_PORT" in p for p in closed["services"]["proxy"]["ports"]), (
         "the Conduit is published by default — the Glass does not need it and §7 does not want it"
     )
     assert closed["services"]["proxy"]["ports"], "the workspace must still be reachable"
@@ -739,8 +751,9 @@ def test_the_conduit_is_not_published_by_default_and_is_when_asked_for() -> None
             OspreyConfig(network=NetworkConfig(expose_conduit=True)), allow_unpinned=True
         ).artefacts["compose.yaml"]
     )
-    # ADR-114 Amendment 7: through the proxy, so the Conduit itself needs no route out.
-    assert "${OSPREY_API_PORT:-8000}:8000" in opened["services"]["proxy"]["ports"], (
+    # ADR-114 Amendment 7: through the proxy, so the Conduit itself needs no route out; and on a
+    # Lite deployment, on this computer only (S10).
+    assert "127.0.0.1:${OSPREY_API_PORT:-8000}:8000" in opened["services"]["proxy"]["ports"], (
         "network.expose_conduit: true did not publish the Conduit, so the option does nothing"
     )
 
@@ -1353,7 +1366,9 @@ def test_the_ingest_root_is_mounted_read_only_into_the_conduit_for_every_rendere
     from schemas.deployment import ComponentsConfig, Profile, StorageRoots
 
     for profile in (Profile.LOCAL_LITE, Profile.SMALL):
-        config = OspreyConfig(profile=profile)
+        config = OspreyConfig.model_validate(
+            {"profile": profile, "network": HTTPS if profile is Profile.SMALL else {}}
+        )
         compose = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])
         api = compose["services"]["api"]
         assert f"{config.components.storage.ingest}:{INGEST_CONTAINER_PATH}:ro" in api["volumes"], (
@@ -1419,7 +1434,9 @@ def test_only_the_uploaded_folder_inside_the_ingest_root_is_writable_for_the_con
     from schemas.deployment import ComponentsConfig, Profile, StorageRoots
 
     for profile in (Profile.LOCAL_LITE, Profile.SMALL):
-        config = OspreyConfig(profile=profile)
+        config = OspreyConfig.model_validate(
+            {"profile": profile, "network": HTTPS if profile is Profile.SMALL else {}}
+        )
         volumes = yaml.safe_load(render(config, allow_unpinned=True).artefacts["compose.yaml"])[
             "services"
         ]["api"]["volumes"]

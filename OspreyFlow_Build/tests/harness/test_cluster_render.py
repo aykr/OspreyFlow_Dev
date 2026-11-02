@@ -214,7 +214,8 @@ def test_what_a_cluster_cannot_run_is_refused_in_words(
 ) -> None:
     config = OspreyConfig.model_validate(
         {"profile": "cluster", "components": components, "external": AWS,
-         "cluster": {"shared_storage_class": "efs-sc"}}
+         "cluster": {"shared_storage_class": "efs-sc"},
+         "network": {"public_origin": "https://osprey.example.org"}}
     )  # fmt: skip
     with pytest.raises(ClusterNotRenderable, match=re.escape(said)):
         render(config, resolver=_resolver)
@@ -245,9 +246,8 @@ def test_a_variable_inside_a_value_is_defined_before_the_value_that_names_it() -
     ("origin", "ports"),
     [
         ("https://osprey.example.org", [{"port": 80, "target": 80}, {"port": 443, "target": 443}]),
-        # Plain HTTP: Caddy runs unprivileged on 8080; the balancer answers on the address's port.
-        ("http://osprey.example.org", [{"port": 80, "target": 8080}]),
-        ("http://osprey.example.org:8081", [{"port": 8081, "target": 8080}]),
+        # A plain-HTTP address is refused for Enterprise at validation (S11, the owner's ruling of
+        # 2 November 2026; `test_deployment_schema.py`), so the balancer never answers one.
     ],
 )
 def test_the_load_balancer_reaches_the_port_caddy_listens_on(

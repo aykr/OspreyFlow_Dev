@@ -20,6 +20,8 @@ from schemas.deployment import (
 from tools.layout import REPO as REPO_ROOT
 
 COMMITTED_CONFIG = REPO_ROOT / "osprey.yaml"
+#: S11: Small and Enterprise are HTTPS (the owner's ruling of 2 November 2026).
+HTTPS = {"public_origin": "https://osprey.example.org"}
 
 
 def test_the_committed_osprey_yaml_still_validates() -> None:
@@ -130,14 +132,20 @@ def test_a_cluster_names_the_managed_services_it_runs_on(missing: str) -> None:
 
 
 def test_a_cluster_on_its_managed_services_is_valid() -> None:
-    ok = OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED})
+    ok = OspreyConfig.model_validate(
+        {"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED, "network": HTTPS}
+    )
     assert ok.profile is Profile.CLUSTER
     assert ok.external.valkey is not None and ok.external.valkey.tls is True
     azure = {**CLUSTER_SERVICES, "object_store": None,
              "media": {"blob_account": "ospreymedia1a2b"}}  # fmt: skip
-    assert OspreyConfig.model_validate({"profile": "cluster", "external": azure, "cluster": SHARED}).external.media
+    assert OspreyConfig.model_validate(
+        {"profile": "cluster", "external": azure, "cluster": SHARED, "network": HTTPS}
+    ).external.media
     with_search = {**CLUSTER_SERVICES, "search": {"url": "https://search-osprey.eu-west-2.es.amazonaws.com"}}
-    assert OspreyConfig.model_validate({"profile": "cluster", "external": with_search, "cluster": SHARED}).external.search
+    assert OspreyConfig.model_validate(
+        {"profile": "cluster", "external": with_search, "cluster": SHARED, "network": HTTPS}
+    ).external.search
 
 
 def test_managed_valkey_and_search_are_for_a_cluster() -> None:
@@ -193,7 +201,7 @@ def test_a_cluster_names_the_storage_class_its_pods_share() -> None:
     with pytest.raises(ValidationError, match="shared_storage_class"):
         OspreyConfig.model_validate({"profile": "cluster", "external": CLUSTER_SERVICES})
     ok = OspreyConfig.model_validate(
-        {"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED}
+        {"profile": "cluster", "external": CLUSTER_SERVICES, "cluster": SHARED, "network": HTTPS}
     )
     assert ok.cluster.namespace == "ospreyflow"
     assert ok.cluster.shared_storage_class == "efs-sc" and ok.cluster.storage_class is None
@@ -212,3 +220,66 @@ def test_a_cluster_namespace_is_a_kubernetes_name(namespace: str) -> None:
 def test_a_clusters_settings_belong_to_the_cluster_profile_only(setting: dict[str, str]) -> None:
     with pytest.raises(ValidationError, match="only meaningful at profile: cluster"):
         OspreyConfig.model_validate({"profile": "small", "cluster": setting})
+
+
+# --- S11 and O2: the address's scheme and domain against the profile (GDS re-audit; the owner's
+# --- ruling of 2 November 2026; `05_DEPLOYMENT.md` §7) -------------------------------------------
+
+
+def _profile(profile: str, origin: str | None) -> dict[str, object]:
+    raw: dict[str, object] = {"profile": profile}
+    if profile == "cluster":
+        raw |= {"external": CLUSTER_SERVICES, "cluster": SHARED}
+    if origin is not None:
+        raw["network"] = {"public_origin": origin}
+    return raw
+
+
+@pytest.mark.parametrize("profile", ["small", "cluster"])
+@pytest.mark.parametrize(
+    "origin", ["http://osprey.example.org", "http://ospreyflow.localhost", "http://10.0.0.5:8080", None]
+)
+def test_small_and_enterprise_refuse_a_plain_http_address_in_words(
+    profile: str, origin: str | None
+) -> None:
+    """S11: Small and Enterprise are reached by other people over a network, so their address is
+    HTTPS, with the certificate the front proxy obtains. An edited `osprey.yaml` could serve either
+    over plain HTTP; it is refused, saying why and what to write instead. No address at all is the
+    Lite default, plain HTTP, and is refused the same way."""
+    assert OspreyConfig.model_validate(_profile(profile, HTTPS["public_origin"])).profile.value == profile
+    with pytest.raises(ValidationError) as refused:
+        OspreyConfig.model_validate(_profile(profile, origin))
+    words = str(refused.value)
+    assert "must be an https:// address" in words, words
+    assert ("a Small" if profile == "small" else "an Enterprise") in words, words
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://intel.service.gov.uk", "http://intel.service.gov.uk", "https://Intel.Service.GOV.UK",
+     "https://gov.uk", "http://osprey.gov.uk:8080"],
+)  # fmt: skip
+def test_a_gov_uk_address_refuses_lite_in_words(origin: str) -> None:
+    """O2, as the owner ruled it: a gov.uk address is a public service, and Lite answers on this
+    computer only in plain HTTP. Lite with a gov.uk address is refused, naming Small or Enterprise;
+    the same address on Small validates."""
+    with pytest.raises(ValidationError) as refused:
+        OspreyConfig.model_validate({"network": {"public_origin": origin}})
+    words = str(refused.value)
+    assert "gov.uk address" in words and "Lite" in words and "Small or Enterprise" in words, words
+    if origin.startswith("https://"):
+        assert OspreyConfig.model_validate(_profile("small", origin)).profile is Profile.SMALL
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["http://ospreyflow.localhost", "http://govuk.ospreyflow.localhost:8081", "http://alpha.localhost:8090",
+     "http://localhost:8080", "https://osprey.localhost", "http://notgov.uk.example.org", "http://fakegov.uk"],
+)  # fmt: skip
+def test_lite_keeps_its_own_addresses(origin: str) -> None:
+    """Both of the owner's deployments (Lite at a `*.localhost` address, one with the GOV.UK brand)
+    and every address the install and the starters give Lite still validate; a name that merely
+    contains "gov.uk" is not a gov.uk address."""
+    assert OspreyConfig.model_validate({"network": {"public_origin": origin}}).profile is Profile.LOCAL_LITE
+    govuk = {"brand": "govuk", "service_name": "Intelligence", "organisation": "Ministry of Examples"}
+    assert OspreyConfig.model_validate({"network": {"public_origin": origin}, "appearance": govuk})

@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -986,6 +987,33 @@ class OspreyConfig(BaseModel):
             raise ValueError(
                 "a managed Valkey or search is for profile: cluster; Small runs its own on the "
                 "server"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _the_address_suits_the_profile(self) -> OspreyConfig:
+        """S11 and O2 (GDS re-audit; the owner's ruling of 2 November 2026; `05_DEPLOYMENT.md`
+        §7). Small and Enterprise are reached by other people over a network, so their address is
+        HTTPS. Lite answers on this computer only, in plain HTTP (S10), so a gov.uk address, which
+        the public reaches, is never Lite. Refused in words, so `ospreyflow apply` and the guided
+        page say why and what to write instead."""
+        origin = self.network.public_origin
+        if self.profile is not Profile.LOCAL_LITE and not origin.startswith("https://"):
+            name = "a Small" if self.profile is Profile.SMALL else "an Enterprise"
+            raise ValueError(
+                f"network.public_origin {origin!r} is plain HTTP: {name} deployment's "
+                "network.public_origin must be an https:// address (for example "
+                "https://osprey.example.org), because other people reach it over a network and the "
+                "front proxy obtains its certificate. Plain HTTP is for Lite, on this computer only"
+            )
+        host = (urlsplit(origin).hostname or "").rstrip(".").lower()
+        if self.profile is Profile.LOCAL_LITE and (host == "gov.uk" or host.endswith(".gov.uk")):
+            raise ValueError(
+                f"network.public_origin {origin!r} is a gov.uk address, and Lite answers on this "
+                "computer only, in plain HTTP. A gov.uk service is reached by the public over "
+                "HTTPS: install it as Small or Enterprise (profile: small or cluster) with an "
+                "https:// address, or give Lite a localhost address such as "
+                "http://ospreyflow.localhost"
             )
         return self
 
