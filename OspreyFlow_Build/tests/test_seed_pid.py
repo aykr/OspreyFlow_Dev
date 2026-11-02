@@ -2183,6 +2183,27 @@ def test_the_fallback_says_what_it_skips() -> None:
         assert phrase in said, phrase
 
 
+def test_the_fallback_says_it_publishes_and_does_not_load_and_what_to_run_next(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Step 9d finding 5: the fallback publishes the reports pipeline and loads nothing (its own
+    docstring: "Publishes the committed, fully mapped reports recipe"), but the capture runbook
+    read it as putting chapter 4's reports in. Its help, and what it prints, say it does not load
+    them, and name the two runs that do, reports first (setup guide section 9)."""
+    with pytest.raises(SystemExit):
+        seed_pid.parse_args(["--help"])
+    help_text = " ".join(capsys.readouterr().out.split())
+    flag = help_text[help_text.index("--publish-reports-fallback Publish") :]
+    _says_it_does_not_load_and_what_to_run(flag)
+    _says_it_does_not_load_and_what_to_run(" ".join(seed_pid.FALLBACK_NEXT.split()))
+
+
+def _says_it_does_not_load_and_what_to_run(said: str) -> None:
+    assert "does not load" in said, said
+    reports, incidents = said.find("Intelligence reports"), said.find("Report incidents")
+    assert -1 < reports < incidents, said
+
+
 # --- refusals, by name ----------------------------------------------------------------------------
 
 
