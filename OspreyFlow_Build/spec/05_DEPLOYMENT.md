@@ -1087,7 +1087,7 @@ build stands against the table above:
   as well — off by default, for an operator debugging the Conduit directly or for a second client
   that is not the Glass — and turning it on widens the exposed surface by a whole tier.
 - **Which interfaces each profile answers on, and over what — DECIDED, the owner's ruling of
-  2 November 2026** (GDS re-audit findings S10, S11 and O2, `process/gds/`):
+  2 November 2026** (GDS re-audit findings S10, S11 and O2):
   - **Lite answers on this computer only.** Every port a `local-lite` deployment publishes is bound
     to `127.0.0.1`: the front proxy (`127.0.0.1:<port>:8080`, or `127.0.0.1:80:80` and
     `127.0.0.1:<port>:443` on an HTTPS `localhost` address), the graph store's door, and the

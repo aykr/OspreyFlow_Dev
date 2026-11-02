@@ -8785,7 +8785,7 @@ async def explain_alert(
 ) -> AlertExplanation:
     """What fired the alert: its entities and node, the links and each transaction it cites; and,
     for a close waiting for a second person, who proposed it, and for a claimed alert, who holds
-    it, by name (ADR-106: resolved for those ids, only once the reader has been served the alert)."""
+    it, by name (ADR-106: resolved for those ids, once the reader has been served the alert)."""
     explanation = await alert_queue.explain(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
