@@ -396,3 +396,33 @@ def test_idle_time_ends_the_page(rig: Rig) -> None:
     # any request, even a refused one, is use
     TestClient(app, client=("127.0.0.1", 51000)).get("/api/install/state")
     assert install_page.idle_check(app, minutes=30)() is False
+
+
+# --- ADR-138: the starter, on the Mode screen ---------------------------------------------------
+
+
+def test_state_offers_every_starter_with_what_it_pre_fills(rig: Rig) -> None:
+    from ospreyflow import starters
+
+    rows = rig.signed().get("/api/install/state").json()["starters"]
+    assert [r["name"] for r in rows] == starters.names()
+    crime = next(r for r in rows if r["name"] == "govuk-crime")
+    assert crime["demo_packs"] == ["prison-intelligence", "hmp"]
+    assert crime["case_domains"] == ["niem"]
+    assert crime["service_name"] == "Analyse crime intelligence"
+    blank = next(r for r in rows if r["name"] == "ospreyflow-blank")
+    assert blank["demo_packs"] == [] and blank["demo_accounts"] is False
+    assert blank["service_name"] is None
+
+
+def test_a_starter_is_saved_with_the_answers(rig: Rig) -> None:
+    reply = rig.signed().put("/api/install/answers", json={"mode": "lite", "starter": "ospreyflow-blank"})
+    assert reply.status_code == 200, reply.text
+    assert yaml.safe_load(rig.answers.read_text(encoding="utf-8"))["starter"] == "ospreyflow-blank"
+
+
+def test_a_govuk_starter_without_a_service_name_is_refused_in_words(rig: Rig) -> None:
+    reply = rig.signed().put("/api/install/answers", json={"mode": "lite", "starter": "govuk-crime"})
+    assert reply.status_code == 422
+    assert "no service name was given" in reply.json()["error"]
+    assert not rig.answers.exists()

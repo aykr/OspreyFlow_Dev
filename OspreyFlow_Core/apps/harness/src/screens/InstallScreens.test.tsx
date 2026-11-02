@@ -83,6 +83,97 @@ describe("ModeScreen", () => {
   });
 });
 
+const STARTERS: NonNullable<InstallState["starters"]> = [
+  {
+    name: "ospreyflow-crime", theme: "ospreyflow", domain: "crime", label: "The base OspreyFlow look — Crime",
+    demo_packs: ["prison-intelligence", "hmp"], case_domains: ["niem"], demo_accounts: true, service_name: null,
+  },
+  {
+    name: "govuk-aml", theme: "govuk", domain: "aml", label: "The GOV.UK Design System — AML",
+    demo_packs: ["operation-ledger"], case_domains: ["fibo"], demo_accounts: true,
+    service_name: "Investigate money laundering",
+  },
+  {
+    name: "ospreyflow-blank", theme: "ospreyflow", domain: "blank", label: "The base OspreyFlow look — Blank",
+    demo_packs: [], case_domains: [], demo_accounts: false, service_name: null,
+  },
+];
+
+describe("ModeScreen's starter (ADR-138)", () => {
+  it("offers no starter first, then each starter, and saves the chosen one with the mode", () => {
+    const onSaveAnswers = vi.fn().mockResolvedValue(undefined);
+    render(<ModeScreen state={state({ starters: STARTERS })} onSaveAnswers={onSaveAnswers} />);
+    const select = screen.getByRole("combobox", { name: "Starter (optional)" }) as HTMLSelectElement;
+    expect(select.value).toBe("");
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["", ...STARTERS.map((s) => s.name)]);
+    fireEvent.change(select, { target: { value: "ospreyflow-crime" } });
+    expect(screen.getByText(/Demo packs: prison-intelligence, hmp/)).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Service name" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save mode" }));
+    expect(onSaveAnswers).toHaveBeenCalledWith({ mode: "lite", starter: "ospreyflow-crime" });
+  });
+
+  it("asks a GOV.UK starter for the service, offering a name for the whole service", () => {
+    const onSaveAnswers = vi.fn().mockResolvedValue(undefined);
+    render(<ModeScreen state={state({ starters: STARTERS })} onSaveAnswers={onSaveAnswers} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Starter (optional)" }), { target: { value: "govuk-aml" } });
+    const name = screen.getByRole("textbox", { name: "Service name" }) as HTMLInputElement;
+    expect(name.value).toBe("Investigate money laundering");
+    expect(screen.getByText(/name the service, not one case/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Organisation" }), { target: { value: "Test Department" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save mode" }));
+    expect(onSaveAnswers).toHaveBeenCalledWith({
+      mode: "lite",
+      starter: "govuk-aml",
+      appearance: { service_name: "Investigate money laundering", organisation: "Test Department", phase: "beta" },
+    });
+  });
+
+  it("says blank makes no demo case and no demo accounts", () => {
+    render(<ModeScreen state={state({ starters: STARTERS })} onSaveAnswers={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Starter (optional)" }), { target: { value: "ospreyflow-blank" } });
+    expect(screen.getByText(/No demo case and no demo accounts/)).toBeTruthy();
+  });
+
+  it("keeps the demo packs chosen for the same starter, and drops them when the starter changes", async () => {
+    const onSaveAnswers = vi.fn().mockResolvedValue(undefined);
+    const chosen = state({ starters: STARTERS, answers: { mode: "lite", starter: "ospreyflow-crime", demo_packs: ["hmp"] } });
+    render(<ModeScreen state={chosen} onSaveAnswers={onSaveAnswers} />);
+    fireEvent.click(screen.getByRole("button", { name: "Save mode" }));
+    expect(onSaveAnswers).toHaveBeenLastCalledWith({ mode: "lite", starter: "ospreyflow-crime", demo_packs: ["hmp"] });
+    await waitFor(() => expect((screen.getByRole("button", { name: "Save mode" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.change(screen.getByRole("combobox", { name: "Starter (optional)" }), { target: { value: "ospreyflow-blank" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save mode" }));
+    expect(onSaveAnswers).toHaveBeenLastCalledWith({ mode: "lite", starter: "ospreyflow-blank" });
+  });
+
+  it("shows no starter choice on a page served without starters", () => {
+    render(<ModeScreen state={state()} onSaveAnswers={vi.fn()} />);
+    expect(screen.queryByRole("combobox", { name: "Starter (optional)" })).toBeNull();
+  });
+});
+
+describe("DemoPacksScreen with a starter (ADR-138)", () => {
+  it("ticks the starter's packs and keeps the starter and its look when it saves", () => {
+    const onSaveAnswers = vi.fn().mockResolvedValue(undefined);
+    const withStarter = state({
+      starters: STARTERS,
+      answers: { mode: "lite", starter: "govuk-aml", appearance: { service_name: "S", phase: "beta" } },
+      packs: [
+        { id: "hmp", title: "HMP", shows: "x", delivery: "generated", licence: "Own work" },
+        { id: "operation-ledger", title: "Ledger", shows: "y", delivery: "generated", licence: "Own work" },
+      ],
+    });
+    render(<DemoPacksScreen state={withStarter} onSaveAnswers={onSaveAnswers} />);
+    expect((screen.getByRole("checkbox", { name: "Ledger" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ledger" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save demo packs" }));
+    expect(onSaveAnswers).toHaveBeenCalledWith({
+      mode: "lite", starter: "govuk-aml", appearance: { service_name: "S", phase: "beta" }, demo_packs: [],
+    });
+  });
+});
+
 describe("FoldersScreen", () => {
   it("saves the ingest and basemap folders as the storage settings", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);

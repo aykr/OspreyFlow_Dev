@@ -113,11 +113,36 @@ export interface InstallCloud {
 }
 
 /** The body of `PUT /api/install/answers`, which `ospreyflow.answers.load_answers` checks. */
+/** ADR-138: the look an install sets (`appearance.*`); the GOV.UK theme asks for all three. */
+export interface InstallAppearance {
+  brand?: "ospreyflow" | "govuk";
+  service_name?: string;
+  organisation?: string;
+  phase?: "alpha" | "beta" | "live" | "none";
+}
+
 export interface InstallAnswers {
   mode: InstallMode;
   demo_packs?: string[];
   paysim_file?: string;
   cloud?: InstallCloud;
+  /** ADR-138 decision 1: a theme and a domain, pre-filling the answers. */
+  starter?: string;
+  appearance?: InstallAppearance;
+  demo_accounts?: boolean;
+}
+
+/** One starter as the Mode screen offers it (`harness/install_page.py`'s `starter_rows`). */
+export interface InstallStarter {
+  name: string;
+  theme: "ospreyflow" | "govuk";
+  domain: string;
+  label: string;
+  demo_packs: string[];
+  case_domains: string[];
+  demo_accounts: boolean;
+  /** The GOV.UK service name offered first; null for the base theme and for blank. */
+  service_name: string | null;
 }
 
 export interface InstallPack {
@@ -132,6 +157,8 @@ export interface InstallState {
   mode: InstallMode;
   answers: InstallAnswers;
   packs: InstallPack[];
+  /** ADR-138: absent from a page served before starters existed. */
+  starters?: InstallStarter[];
   modes: Record<InstallMode, { available: boolean; says?: string }>;
   /** The person's home folder, where suggested folders go. */
   home: string;

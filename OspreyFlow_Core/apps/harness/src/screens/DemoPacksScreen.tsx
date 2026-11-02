@@ -10,7 +10,9 @@ export function DemoPacksScreen({
   state: InstallState;
   onSaveAnswers: (answers: InstallAnswers) => Promise<void>;
 }) {
-  const [chosen, setChosen] = useState<string[]>(state.answers.demo_packs ?? []);
+  // ADR-138: a starter's packs are ticked until the packs are chosen here.
+  const starter = state.starters?.find((s) => s.name === state.answers.starter);
+  const [chosen, setChosen] = useState<string[]>(state.answers.demo_packs ?? starter?.demo_packs ?? []);
   const [paysimFile, setPaysimFile] = useState(state.answers.paysim_file ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -25,10 +27,14 @@ export function DemoPacksScreen({
     try {
       // Offered order, not tick order, so the same choice is always the same answer.
       const packs = state.packs.map((p) => p.id).filter((id) => chosen.includes(id));
+      // Every other answer is kept (the starter and the look among them); only the packs change.
+      const rest: InstallAnswers = { ...state.answers };
+      delete rest.demo_packs;
+      delete rest.paysim_file;
       await onSaveAnswers({
-        mode: state.answers.mode,
-        ...(state.answers.cloud ? { cloud: state.answers.cloud } : {}),
-        ...(packs.length ? { demo_packs: packs } : {}),
+        ...rest,
+        // With a starter, an empty choice is said outright: left out, the starter's packs apply.
+        ...(packs.length || rest.starter ? { demo_packs: packs } : {}),
         ...(packs.includes("paysim") && paysimFile ? { paysim_file: paysimFile } : {}),
       });
     } catch (exc) {

@@ -61,6 +61,7 @@ _CLI = str(Path(__file__).resolve().parents[1] / "cli")
 if _CLI not in sys.path:
     sys.path.append(_CLI)
 
+from ospreyflow import starters  # noqa: E402
 from ospreyflow.answers import AnswersRefused, load_answers  # noqa: E402
 from ospreyflow.home import deployment_dir, python_for  # noqa: E402
 from ospreyflow.run import Redactor  # noqa: E402
@@ -147,6 +148,29 @@ def _pack_rows() -> list[dict[str, Any]]:
     ]
 
 
+def starter_rows() -> list[dict[str, Any]]:
+    """Each starter as the Mode screen offers it: its name, theme and domain, the demo packs and
+    case domains it pre-fills, whether it makes demo accounts, and the GOV.UK service name offered
+    first (ADR-138 decision 1; `cli/ospreyflow/starters.py` is the one source)."""
+    rows = []
+    for name in starters.names():
+        starter = starters.parse(name)
+        rows.append(
+            {
+                "name": name,
+                "theme": starter.theme,
+                "domain": starter.domain.id,
+                "label": f"{starters.THEMES[starter.theme].split(',')[0]} — "
+                f"{starter.domain.label}",
+                "demo_packs": list(starter.domain.demo_packs),
+                "case_domains": list(starter.domain.case_domains),
+                "demo_accounts": starter.domain.demo_accounts,
+                "service_name": starter.domain.service_name if starter.govuk else None,
+            }
+        )
+    return rows
+
+
 def _redactor(product: Path) -> Redactor:
     try:
         env_file = deployment_dir(product) / "deployment.env"
@@ -224,6 +248,8 @@ def create_install_app(
             "mode": mode_now(),
             "answers": answers,
             "packs": packs,
+            # ADR-138 decision 1: the starters the Mode screen offers, and what each pre-fills.
+            "starters": starter_rows(),
             "home": str(Path.home()),
             "modes": {
                 "lite": {"available": True},
