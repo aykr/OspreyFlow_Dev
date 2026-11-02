@@ -332,6 +332,7 @@ export type { LoadChecksView } from "./LoadChecksView";
 export type { WouldRaise } from "./WouldRaise";
 export type { CheckNotJudged } from "./CheckNotJudged";
 export type { InfluencerTrigger } from "./InfluencerTrigger";
+export type { DatasetTrigger } from "./DatasetTrigger";
 export type { StrengthInfluencer } from "./StrengthInfluencer";
 export type { InfluencerSetInput } from "./InfluencerSetInput";
 export type { InfluencerSetVersion } from "./InfluencerSetVersion";

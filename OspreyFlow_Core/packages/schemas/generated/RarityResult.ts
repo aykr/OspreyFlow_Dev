@@ -40,7 +40,19 @@ export type Reverted = boolean;
 export type Datasets = string[];
 export type Score1 = number;
 export type Shared = SharedAttribute[];
+export type ParityRaw = number | null;
+export type ParityStrength = number | null;
+export type Id = string;
+export type Label = string;
+export type Change = "add" | "multiply" | "floor" | "exclude";
+export type Size = number;
+export type Layer = "file" | "installation" | "case";
+export type RecordKind = string | null;
+export type Dataset1 = string | null;
+export type ParityApplied = AppliedInfluencer[];
 export type Pairs = PairRarity[];
+export type Measure = "share" | "idf";
+export type Composition = "standard" | "client_parity";
 
 /**
  * `node_values`: each working-set entity's highest rarity with another working-set entity of
@@ -50,6 +62,8 @@ export interface RarityResult {
   scope: Scope;
   node_values: NodeValues;
   pairs: Pairs;
+  measure?: Measure;
+  composition?: Composition;
   [k: string]: unknown;
 }
 export interface NodeValues {
@@ -66,11 +80,15 @@ export interface PairRarity {
   score: Score;
   dataset?: Dataset;
   shared?: Shared;
+  parity_raw?: ParityRaw;
+  parity_strength?: ParityStrength;
+  parity_applied?: ParityApplied;
   [k: string]: unknown;
 }
 /**
- * One attribute node a pair shares, as the viewer may see it, with its contribution to the
- * pair's rarity (`ln(N_visible / df_visible)`), a score and never a count.
+ * One attribute node a pair shares, as the viewer may see it, with its score: its
+ * contribution to the pair's rarity (`ln(N_visible / df_visible)`) under `idf`, its own rarity
+ * (`1 − L/ΣL`) under `share`; a score and never a count.
  */
 export interface SharedAttribute {
   node: Node;
@@ -136,5 +154,19 @@ export interface AuditStub {
   recipe_id?: RecipeId;
   recipe_version?: RecipeVersion;
   reverted?: Reverted;
+  [k: string]: unknown;
+}
+/**
+ * One influencer that changed one link, and the kind of record that evidenced it (None for a
+ * direct-links influencer). Only a record the viewer may see is ever named.
+ */
+export interface AppliedInfluencer {
+  id: Id;
+  label: Label;
+  change: Change;
+  size: Size;
+  layer: Layer;
+  record_kind?: RecordKind;
+  dataset?: Dataset1;
   [k: string]: unknown;
 }

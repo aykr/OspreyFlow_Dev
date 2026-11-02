@@ -34,8 +34,9 @@ _DEFAULT_PATH = Path(__file__).resolve().parent / "weights" / "default.yaml"
 _DERIVATION_TOLERANCE = 1e-9
 DEFAULT_RULE = "default"
 #: The weights file's top-level keys: the append-only weight versions, and (ADR-139) the shipped
-#: link-strength influencers and the rarity settings, which change no stored weight.
-_TOP_LEVEL_KEYS = {"versions", "influencers", "rarity"}
+#: link-strength influencers and the rarity settings, and (Amendment 2) the default composition,
+#: none of which changes a stored weight.
+_TOP_LEVEL_KEYS = {"versions", "influencers", "rarity", "composition"}
 _RULE_KEYS = {"unit", "heavy", "fixed"}
 _VERSION_KEYS = {
     "version",

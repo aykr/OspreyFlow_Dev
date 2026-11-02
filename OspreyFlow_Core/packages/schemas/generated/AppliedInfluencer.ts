@@ -6,6 +6,7 @@ export type Change = "add" | "multiply" | "floor" | "exclude";
 export type Size = number;
 export type Layer = "file" | "installation" | "case";
 export type RecordKind = string | null;
+export type Dataset = string | null;
 
 /**
  * One influencer that changed one link, and the kind of record that evidenced it (None for a
@@ -18,5 +19,6 @@ export interface AppliedInfluencer {
   size: Size;
   layer: Layer;
   record_kind?: RecordKind;
+  dataset?: Dataset;
   [k: string]: unknown;
 }

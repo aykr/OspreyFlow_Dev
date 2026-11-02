@@ -127,6 +127,12 @@ influencers:
     note: to be confirmed with the client
 # Shared-attribute rarity (ADR-139 decision 4): any node linked to both entities of a pair is an
 # attribute they share, except a node of these types (an alert is a rule's finding, not a fact
-# about either of them).
+# about either of them). `measure` (ADR-139 Amendment 2): `share`, the client's own
+# (1 − the value's share of the pair links through values of its kind), or `idf` (Σ ln(N/df)).
 rarity:
   exclude_types: [Alert]
+  measure: share
+# How connection strength is composed (ADR-139 Amendment 2): `standard` (the stored weight with
+# the influencers) or `client_parity` (rarity plus the influencers' adds, the client's own sum).
+# An installation version (maker–checker) or a case override may choose the other.
+composition: standard

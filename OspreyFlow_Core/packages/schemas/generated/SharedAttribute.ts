@@ -36,8 +36,9 @@ export type Datasets = string[];
 export type Score = number;
 
 /**
- * One attribute node a pair shares, as the viewer may see it, with its contribution to the
- * pair's rarity (`ln(N_visible / df_visible)`), a score and never a count.
+ * One attribute node a pair shares, as the viewer may see it, with its score: its
+ * contribution to the pair's rarity (`ln(N_visible / df_visible)`) under `idf`, its own rarity
+ * (`1 − L/ΣL`) under `share`; a score and never a count.
  */
 export interface SharedAttribute {
   node: Node;
