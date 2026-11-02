@@ -63,9 +63,9 @@ from harness.render import (
     render_ollama_pull_script,
     service_images,
 )
-from harness.site import answer_localhost_with_loopback, deployment_origins
+from harness.site import LOOPBACK, answer_localhost_with_loopback, deployment_origins
 
-from schemas.deployment import OspreyConfig, generated_folder
+from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -370,6 +370,44 @@ def _routing_up_to_date(directory: Path) -> bool:
     return True
 
 
+def _bare(port: object) -> bool:
+    """A short-form published port with no host address (`80:8080`,
+    `${OSPREY_API_PORT:-8000}:8000`): the part before the first colon is an address only when it
+    has a dot or a bracket."""
+    if not isinstance(port, str) or ":" not in port:
+        return False
+    host = port.split(":", 1)[0]
+    return "." not in host and not host.startswith("[")
+
+
+def _published_on_loopback(directory: Path) -> None:
+    """S10 (`05_DEPLOYMENT.md` §7): every port a Lite deployment publishes is bound to `127.0.0.1`.
+    A deployment rendered before it publishes its proxy as a bare `HOST:CONTAINER`, on every
+    interface, and nothing else here rewrites a service the deployment already has (found at the
+    step 11 rehearsal, 2 November 2026: both of the owner's deployments still answered on every
+    interface after `start --build`). Only the host address is added; the operator's own port
+    numbers stay, and `up` recreates the service because its ports changed."""
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file() or load_config(config_path).profile is not Profile.LOCAL_LITE:
+        return
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text)
+    changed = False
+    for service in (document.get("services") or {}).values():
+        ports = service.get("ports") if isinstance(service, dict) else None
+        if not ports:
+            continue
+        bound = [f"{LOOPBACK}:{port}" if _bare(port) else port for port in ports]
+        if bound != ports:
+            service["ports"] = bound
+            changed = True
+    if changed:
+        body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+        compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+
+
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
@@ -430,6 +468,7 @@ def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
     _pins_moved(directory)
+    _published_on_loopback(directory)
     _glass_settings_up_to_date(directory)
     routing_changed = _routing_up_to_date(directory)
     _release_up_to_date(directory)
