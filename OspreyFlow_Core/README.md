@@ -87,9 +87,12 @@ architecture each reader needs.
 
 ## Installing and running it
 
-Install the command once, from this repository (`install.ps1` on Windows):
+Install the command once, from a checkout of this repository, `https://github.com/Solirius/ospreyflow`
+(`install.ps1` on Windows):
 
 ```
+git clone https://github.com/Solirius/ospreyflow.git
+cd ospreyflow
 sh install.sh
 ```
 
