@@ -130,7 +130,7 @@ describe("the Alerts place", () => {
     ]);  // prettier-ignore
     const close = screen.getByRole("button", { name: "Close the alert" });
     expect((close as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Reason for closing"), { target: { value: "Passed to the NCA" } });
+    fireEvent.change(screen.getByLabelText("Why, in words: the reason for closing"), { target: { value: "Passed to the NCA" } });
     expect((close as HTMLButtonElement).disabled).toBe(true); // words alone are not a closing reason
     fireEvent.click(screen.getByRole("radio", { name: "Referred" }));
     expect((close as HTMLButtonElement).disabled).toBe(false);

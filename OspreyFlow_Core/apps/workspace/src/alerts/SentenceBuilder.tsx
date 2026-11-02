@@ -378,7 +378,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               </label>
               <label className="label" style={BLANK}>
                 Of a
-                <Select aria-label="Near a" value={draft.otherType} onChange={(e) => change({ otherType: e.target.value })}>
+                <Select aria-label="Of a (the type near it)" value={draft.otherType} onChange={(e) => change({ otherType: e.target.value })}>
                   <option value="">Choose…</option>
                   {ontology.entity_types
                     .filter((t) => t.name !== "Alert")
@@ -422,7 +422,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
           {draft.frequency !== "none" && (
             <label className="label" style={BLANK}>
               By
-              <Select aria-label="Counted link type" value={draft.frequencyLink} onChange={(e) => change({ frequencyLink: e.target.value, amountProperty: "" })}>
+              <Select aria-label="By (counted link type)" value={draft.frequencyLink} onChange={(e) => change({ frequencyLink: e.target.value, amountProperty: "" })}>
                 {eventLinks.map((l) => (
                   <option key={l.name} value={l.name}>
                     {linkLabel(l)}
@@ -441,7 +441,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
             <>
               <label className="label" style={BLANK}>
                 Total of
-                <Select aria-label="Amount" value={draft.amountProperty} onChange={(e) => change({ amountProperty: e.target.value })}>
+                <Select aria-label="Total of (amount)" value={draft.amountProperty} onChange={(e) => change({ amountProperty: e.target.value })}>
                   <option value="">Choose…</option>
                   {amounts.map((p) => (
                     <option key={p.name} value={p.name}>
@@ -479,7 +479,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
           <label className="label" style={BLANK}>
             For
             <Select
-              aria-label="Scope"
+              aria-label="For (scope)"
               value={draft.scope}
               onChange={(e) => {
                 const scope = e.target.value as SentenceDraft["scope"];
@@ -496,7 +496,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
           {!justMe && (
             <label className="label" style={BLANK}>
               Alert goes to
-              <Select aria-label="Team" value={draft.team} onChange={(e) => change({ team: e.target.value as SentenceDraft["team"] })}>
+              <Select aria-label="Alert goes to (team)" value={draft.team} onChange={(e) => change({ team: e.target.value as SentenceDraft["team"] })}>
                 <option value="case">the case team</option>
                 <option value="my_team">my team</option>
               </Select>
@@ -524,7 +524,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               {draft.every === "weekly" && (
                 <label className="label" style={BLANK}>
                   On
-                  <Select aria-label="Day of the week" value={draft.weekday} onChange={(e) => change({ weekday: e.target.value })}>
+                  <Select aria-label="On (day of the week)" value={draft.weekday} onChange={(e) => change({ weekday: e.target.value })}>
                     {WEEKDAY_WORDS.map((day, i) => (
                       <option key={day} value={String(i + 1)}>
                         {day}
@@ -535,7 +535,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               )}
               <label className="label" style={BLANK}>
                 At (Europe/London)
-                <Select aria-label="Hour" value={draft.hour} onChange={(e) => change({ hour: e.target.value })}>
+                <Select aria-label="At (hour, Europe/London)" value={draft.hour} onChange={(e) => change({ hour: e.target.value })}>
                   {Array.from({ length: 24 }, (_, h) => (
                     <option key={h} value={String(h)}>
                       {`${String(h).padStart(2, "0")}:00`}
@@ -631,7 +631,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
         <span style={ROW}>
           <label className="label" style={BLANK}>
             Read a saved pattern as a sentence
-            <Select aria-label="Pattern to read as a sentence" value={readFrom} onChange={(e) => setReadFrom(e.target.value)}>
+            <Select aria-label="Read a saved pattern as a sentence" value={readFrom} onChange={(e) => setReadFrom(e.target.value)}>
               <option value="">Choose one you saved…</option>
               {props.patterns.map((p) => (
                 <option key={p.pattern_id} value={p.pattern_id}>

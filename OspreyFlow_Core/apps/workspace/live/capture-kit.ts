@@ -129,7 +129,7 @@ export async function openQueuedAlert(page: Page, summary: RegExp) {
 
 /** Shows the queue's closed alerts as well as the open ones. */
 export async function queueShowsAll(page: Page): Promise<void> {
-  await page.getByRole("combobox", { name: "Which alerts" }).selectOption("all");
+  await page.getByRole("combobox", { name: "Show which alerts" }).selectOption("all");
   await page.waitForTimeout(2000);
 }
 
@@ -141,7 +141,7 @@ export type ClosingReasonLabel = "True match" | "False positive" | "Duplicate" |
 export async function closeOpenedAlert(page: Page, reason: Exclude<ClosingReasonLabel, "True match">, words: string) {
   const detail = page.getByRole("region", { name: "What fired this alert" });
   await detail.getByRole("radiogroup", { name: "Closing reason" }).getByRole("radio", { name: reason }).check();
-  await detail.getByRole("textbox", { name: "Reason for closing" }).fill(words);
+  await detail.getByRole("textbox", { name: "Why, in words: the reason for closing" }).fill(words);
   await detail.getByRole("button", { name: /^(Close the alert|Propose the close)$/ }).click();
   await expect(detail.getByRole("status")).toBeVisible({ timeout: 30_000 });
   console.log(`closed: ${await detail.getByRole("status").textContent()}`);

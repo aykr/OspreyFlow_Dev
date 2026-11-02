@@ -343,6 +343,6 @@ if (params.get("sentence") === "schedule") {
   await settle();
   choose("Every", "weekly");
   await settle();
-  choose("Day of the week", "1");
-  choose("Hour", "7");
+  choose("On (day of the week)", "1");
+  choose("At (hour, Europe/London)", "7");
 }

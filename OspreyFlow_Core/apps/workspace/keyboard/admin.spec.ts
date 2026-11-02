@@ -233,11 +233,11 @@ test("a schedule is changed by keyboard, keeping its owner", async ({ page }) =>
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
   await press(page, "Change schedule of Daily custody export");
-  const often = page.getByLabel("How often");
+  const often = page.getByLabel("Run on a schedule (how often)");
   await often.selectOption("weekdays"); // a native select, as the other walkthroughs drive one
   await often.focus();
   await page.keyboard.press("Tab");
-  await expect(page.getByLabel("Time", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("At (time)", { exact: true })).toBeFocused();
   await page.keyboard.type("0730");
   await expect(page.getByRole("status", { name: "Schedule preview" })).toContainText("every weekday at 07:30");
   await press(page, "Save schedule of Daily custody export");

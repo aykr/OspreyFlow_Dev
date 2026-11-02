@@ -137,8 +137,8 @@ describe("Schedules and runs", () => {
     const sent = serve();
     place(["operate_schedules"]);
     fireEvent.click(await screen.findByRole("button", { name: "Change schedule of Daily custody export" }));
-    fireEvent.change(screen.getByLabelText("How often"), { target: { value: "weekdays" } });
-    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "07:30" } });
+    fireEvent.change(screen.getByLabelText("Run on a schedule (how often)"), { target: { value: "weekdays" } });
+    fireEvent.change(screen.getByLabelText("At (time)"), { target: { value: "07:30" } });
     fireEvent.click(screen.getByRole("button", { name: "Save schedule of Daily custody export" }));
     await waitFor(() => expect(sent).toContain("PUT schedules/feed"));
     expect(bodies.get("PUT schedules/feed")).toEqual({ cron: "30 7 * * 1-5", timezone: "Europe/London" });

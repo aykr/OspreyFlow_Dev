@@ -127,10 +127,10 @@ describe("the Ownership place", () => {
   it("asks the server at the chosen threshold, and refuses one out of range", async () => {
     const calls = serve();
     await traceCrescent();
-    fireEvent.change(screen.getByLabelText("Beneficial ownership threshold"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Beneficial owner at (%)"), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Trace again" }));
     await waitFor(() => expect(calls).toContain("ownership/C?threshold=10"));
-    fireEvent.change(screen.getByLabelText("Beneficial ownership threshold"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Beneficial owner at (%)"), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Trace again" }));
     expect(await screen.findByText("The threshold is a percentage above 0 and at most 100.")).toBeTruthy();
   });

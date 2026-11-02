@@ -121,7 +121,7 @@ export function AlertQueue(props: AlertQueueProps) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
             Show
-            <Select aria-label="Which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
+            <Select aria-label="Show which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
               <option value="active">Open, claimed and closing</option>
               <option value="closed">Closed</option>
               <option value="all">All</option>
@@ -360,7 +360,7 @@ function AlertDetail(props: AlertDetailProps) {
           )}
           <label className="label" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
             {mine ? "Why withdraw it" : "Why send it back"}
-            <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason for sending the close back" />
+            <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} aria-label={`${mine ? "Why withdraw it" : "Why send it back"}: the reason for sending the close back`} />
           </label>
           <Button
             disabled={busy || !reason.trim()}
@@ -397,7 +397,7 @@ function AlertDetail(props: AlertDetailProps) {
               rows={2}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              aria-label="Reason for closing"
+              aria-label="Why, in words: the reason for closing"
             />
           </label>
           <div style={{ display: "flex", gap: "var(--sp-8)" }}>
@@ -448,7 +448,7 @@ function GiveTo(props: {
     <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "flex-end", flexWrap: "wrap" }}>
       <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
         Give to
-        <Select aria-label="Give this alert to" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+        <Select aria-label="Give to (a member of the case)" value={chosen} onChange={(e) => setChosen(e.target.value)}>
           <option value="">Choose a member…</option>
           {people.map((p) => (
             <option key={p.id} value={p.id}>

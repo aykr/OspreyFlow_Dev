@@ -125,7 +125,7 @@ describe("the Monitoring place", () => {
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&kind=hotlist"));
     fireEvent.change(screen.getByRole("combobox", { name: "Severity" }), { target: { value: "high" } });
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&kind=hotlist&severity=high"));
-    fireEvent.change(screen.getByRole("combobox", { name: "Which alerts" }), { target: { value: "closed" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Show which alerts" }), { target: { value: "closed" } });
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=closed&kind=hotlist&severity=high"));
   });
 
@@ -135,7 +135,7 @@ describe("the Monitoring place", () => {
     );
     place();
     fireEvent.click(await screen.findByRole("button", { name: alertName("Medium", "Structuring") }));
-    const giveTo = await screen.findByRole("combobox", { name: "Give this alert to" });
+    const giveTo = await screen.findByRole("combobox", { name: "Give to (a member of the case)" });
     expect(within(giveTo).getByRole("option", { name: "Priya Shah" })).toBeTruthy();
     fireEvent.change(giveTo, { target: { value: "member-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Give" }));
@@ -144,7 +144,7 @@ describe("the Monitoring place", () => {
 
     fireEvent.click(screen.getByRole("button", { name: alertName("High", "Hotlist") }));
     await screen.findByRole("button", { name: "Claim" });
-    expect(screen.queryByRole("combobox", { name: "Give this alert to" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Give to (a member of the case)" })).toBeNull();
     expect(screen.getByText(/claimed by someone who can see it/)).toBeTruthy();
   });
 

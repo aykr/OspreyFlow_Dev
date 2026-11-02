@@ -249,7 +249,7 @@ test("an alert is closed with its reason, by keyboard", async ({ page }) => {
   await page.getByRole("radio", { name: "True match" }).focus();
   await page.keyboard.press("Space");
   await expect(page.getByRole("radio", { name: "True match" })).toBeChecked();
-  await page.getByLabel("Reason for closing").fill("Matches the SAR");
+  await page.getByLabel("Why, in words: the reason for closing").fill("Matches the SAR");
   await press(page, page.getByRole("button", { name: "Close the alert" }));
   await expect(page.getByText(/Closed as True match/).first()).toBeVisible();
   expect(state.sent.find((s) => s.path === "alert-queue/a1/disposition")?.body).toEqual({
@@ -264,7 +264,7 @@ test("a closing reason is chosen from the closed list with the arrow keys, by ke
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
   const close = page.getByRole("button", { name: "Close the alert" });
-  await page.getByLabel("Reason for closing").fill("Passed to the NCA");
+  await page.getByLabel("Why, in words: the reason for closing").fill("Passed to the NCA");
   await expect(close).toBeDisabled(); // words alone are not a closing reason
   await page.getByRole("radio", { name: "True match" }).focus();
   for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowDown");
@@ -311,7 +311,7 @@ test("the watches and their alert inbox are reached from Monitoring's Watches ta
 test("the queue is filtered, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await page.getByRole("combobox", { name: "Which alerts" }).selectOption("closed");
+  await page.getByRole("combobox", { name: "Show which alerts" }).selectOption("closed");
   await expect.poll(() => state.queueFilters).toContain("closed");
   registerCovered(REGISTRY, "filter-the-queue-by-keyboard");
 });
@@ -331,7 +331,7 @@ test("a case alert is given to a member, by keyboard (ADR-133 stage a)", async (
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
-  await page.getByRole("combobox", { name: "Give this alert to" }).selectOption("analyst-2");
+  await page.getByRole("combobox", { name: "Give to (a member of the case)" }).selectOption("analyst-2");
   await press(page, page.getByRole("button", { name: "Give", exact: true }));
   await expect(page.getByText("Given to Priya Shah.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "alert-queue/a1/assign")?.body).toEqual({ assignee: "analyst-2" });
@@ -404,7 +404,7 @@ test("a pattern drawn in the Query builder is deployed as a rule, by keyboard", 
   await press(page, page.getByRole("tab", { name: "Rules" }));
   await page.getByLabel("Rule name").fill("Drawn: company with a phone");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("pattern");
-  await page.getByRole("combobox", { name: "Saved pattern" }).selectOption("pat-1");
+  await page.getByRole("combobox", { name: "Saved pattern", exact: true }).selectOption("pat-1");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
   await expect(page.getByText("Deployed “Drawn: company with a phone”.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({

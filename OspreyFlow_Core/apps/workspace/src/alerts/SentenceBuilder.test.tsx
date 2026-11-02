@@ -171,7 +171,7 @@ describe("the sentence builder", () => {
         : null,
     );
     builder("author", false, [{ id: "s", pattern_id: "pat-1", version: 1, name: "Okafors", owner_id: "a", created_at: "", definition: { nodes: [], edges: [] } }]);
-    fireEvent.change(await screen.findByLabelText("Pattern to read as a sentence"), { target: { value: "pat-1" } });
+    fireEvent.change(await screen.findByLabelText("Read a saved pattern as a sentence"), { target: { value: "pat-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Read as a sentence" }));
     await waitFor(() => expect((screen.getByLabelText("Condition 1: value") as HTMLInputElement).value).toBe("Okafor"));
   });
@@ -180,7 +180,7 @@ describe("the sentence builder", () => {
     const sent = serve();
     const onDeployed = builder();
     await listedPeople();
-    const scopes = () => [...(screen.getByLabelText("Scope") as HTMLSelectElement).options].map((o) => o.value);
+    const scopes = () => [...(screen.getByLabelText("For (scope)") as HTMLSelectElement).options].map((o) => o.value);
     expect(scopes()).toEqual(["just_me", "this_case"]);
     fireEvent.change(screen.getByLabelText("Severity"), { target: { value: "high" } });
     fireEvent.change(screen.getByLabelText("Name of the sentence rule"), { target: { value: "Listed people" } });
@@ -190,7 +190,7 @@ describe("the sentence builder", () => {
     cleanup();
     serve();
     builder("author", true);
-    await screen.findByLabelText("Scope");
+    await screen.findByLabelText("For (scope)");
     expect(scopes()).toEqual(["just_me", "this_case", "deployment"]);
   });
 
@@ -199,7 +199,7 @@ describe("the sentence builder", () => {
     builder("editor");
     fireEvent.change(await screen.findByLabelText("Name of the sentence rule"), { target: { value: "Mine" } });
     expect((screen.getByRole("button", { name: "Deploy the sentence" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Scope"), { target: { value: "just_me" } });
+    fireEvent.change(screen.getByLabelText("For (scope)"), { target: { value: "just_me" } });
     expect((screen.getByRole("button", { name: "Deploy the sentence" }) as HTMLButtonElement).disabled).toBe(false);
     cleanup();
     serve();

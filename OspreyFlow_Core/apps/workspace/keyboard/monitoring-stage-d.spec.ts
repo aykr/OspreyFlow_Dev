@@ -127,8 +127,8 @@ test("a sentence is set to run every week on a day at an hour, and deployed, by 
   await expect(form.getByRole("combobox", { name: "Subject" })).toHaveValue("Person");
   await form.getByRole("combobox", { name: "Runs" }).selectOption("schedule");
   await form.getByRole("combobox", { name: "Every" }).selectOption("weekly");
-  await form.getByRole("combobox", { name: "Day of the week" }).selectOption("3");
-  await form.getByRole("combobox", { name: "Hour" }).selectOption("8");
+  await form.getByRole("combobox", { name: "On (day of the week)" }).selectOption("3");
+  await form.getByRole("combobox", { name: "At (hour, Europe/London)" }).selectOption("8");
   await form.getByLabel("Name of the sentence rule").focus();
   await page.keyboard.type("Weekly listed people");
   await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
@@ -193,7 +193,7 @@ test("closing a high-severity alert is proposed, by keyboard", async ({ page }) 
   await page.getByRole("radio", { name: "True match" }).focus();
   await page.keyboard.press("ArrowDown");
   await expect(page.getByRole("radio", { name: "False positive" })).toBeChecked();
-  await page.getByLabel("Reason for closing").focus();
+  await page.getByLabel("Why, in words: the reason for closing").focus();
   await page.keyboard.type("a known payroll deposit");
   await press(page, page.getByRole("button", { name: "Propose the close" }));
   await expect(page.getByRole("status")).toContainText("Close proposed as False positive");
@@ -211,7 +211,7 @@ test("a second member approves a proposed close, and another is sent back, by ke
   await expect(page.getByRole("status")).toContainText("Approved: the alert is closed.");
   expect(sent.some((s) => s.path === "alert-queue/h1/approve-close")).toBe(true);
   registerCovered(REGISTRY, "approve-closing-a-high-severity-alert-by-keyboard");
-  await page.getByLabel("Reason for sending the close back").focus();
+  await page.getByLabel(/the reason for sending the close back$/).focus();
   await page.keyboard.type("check the second deposit first");
   await press(page, page.getByRole("button", { name: "Send back" }));
   await expect.poll(() => sent.find((s) => s.path === "alert-queue/h1/send-back")?.body).toEqual({
@@ -224,7 +224,7 @@ test("a screening list's refresh schedule is set, by keyboard", async ({ page })
   await page.goto("/keyboard/alerts-harness.html?lists=manage");
   await press(page, page.getByRole("tab", { name: "Lists" }));
   await page.getByRole("combobox", { name: "Refreshed" }).selectOption("weekly");
-  await page.getByRole("combobox", { name: "Refresh day" }).selectOption("1");
+  await page.getByRole("combobox", { name: "On (refresh day)" }).selectOption("1");
   await press(page, page.getByRole("button", { name: "Save the schedule" }));
   await expect(page.getByRole("status")).toContainText("is refreshed every Monday at 05:00 (Europe/London), as you.");
   expect(sent.find((s) => s.method === "PUT")?.body).toEqual({ schedule: { every: "weekly", hour: 5, weekday: 1 } });
