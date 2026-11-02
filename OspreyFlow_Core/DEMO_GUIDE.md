@@ -783,7 +783,7 @@ update raises, and how a closed alert reaches the case's reports.
 - As the admin, *Monitoring → Lists*: "UK Sanctions List (synthetic)" reads *Not yet read*. **Refresh
   now**: version 28/09/2026, five entries (a ship is not screened), every customer re-screened, no
   alert. The list update needs the case's screening rule, *Screen customers against the lists*: the
-  seed deploys it from the *KYC screening* template's defaults, after each load commits, as the
+  seed deploys it from the *Screening on onboarding* template's defaults (its typology, *KYC screening*), after each load commits, as the
   case's Author (`osprey-demo-admin`), and a reseed leaves it as it is. Check it is live under
   *Monitoring → Rules*; if a rehearsal retired it, reseed, or deploy that template again as the Author.
 
@@ -867,7 +867,7 @@ the report viewer and the admin (the case's Author).
    Monday. The booking is a record; no visit is written.
 4. Case Author (the admin account; a rule for the case team needs the Author level, and the demo analyst
    is an Editor), *Monitoring → Rules*: write "Calls to a number on a seized handset" as a sentence (an
-   Endpoint whose endpoint kind equals msisdn, within 2 steps of a Device; high; this case; the case team;
+   Endpoint whose endpoint kind is msisdn, within 2 steps of a Device; high; this case; the case team;
    after each load commits), **Show the drawn pattern**, **Preview on the last 90 days**, **Deploy the
    sentence**. Only after step 3: deployed before the bookings load, it would also flag the coordinator's
    number.

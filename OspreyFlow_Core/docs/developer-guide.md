@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.11** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.12** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.12 | 2026-11-02 | Checked against the code end to end (build order step 10). §7.6 and §7.7: the tests named are in the developer repository, beside the test suites, not in this one. |
 | 1.11 | 2026-11-02 | §7.6: the client's rarity measure (the default) and the IDF measure, the two compositions, dataset triggers and shared-value influencers, and the port's new parameters. New §7.7, The client's code and OspreyFlow's equivalent: their R function beside OspreyFlow's arithmetic, line by line, a worked synthetic example whose numbers match, the golden parity test, and the row shapes that do not map exactly. |
 | 1.10 | 2026-11-02 | New §7.6, Connection strength: the stored weight's formula, the influencer schema and its resolution order, influencers applied at read time under the reader's access, the rarity query, and shipping influencers in the weights file. §9.1: the strength and rarity routes and the influencers' routes. |
 | 1.9 | 2026-11-01 | §9.1: the API's OpenAPI document, `GET /v1/openapi.json`, signed in, its version the release. |
@@ -491,8 +492,8 @@ strength = min(strength, w)   if any exclude
 ```
 
 With nothing applying, the strength is `w`. Each step rises with `w`, so adding occurrences never
-lowers a strength, whatever influencers apply (`tests/ontology/test_influencers.py` proves it over a
-grid of every combination).
+lowers a strength, whatever influencers apply (the developer repository's
+`tests/ontology/test_influencers.py` proves it over a grid of every combination).
 
 **Resolution order:** a case override, then the installation set, then the weights file. Influencers
 are matched by `id`; a later layer's replaces an earlier one's, and a case may switch any off by id.
@@ -594,7 +595,7 @@ in its place:
 `raw_sum` is the client's `edge_strength`; the Glass draws `parity_drawn(raw_sum)` and the Inspector
 shows `raw_sum` to four places.
 
-**A worked example** (synthetic; `tests/ontology/client_r_function.py`). Three tables, each called with
+**A worked example** (synthetic; the developer repository's `tests/ontology/client_r_function.py`). Three tables, each called with
 its own `abs_add` and a `non_dup_add` of 0.2:
 
 | Dataset | Rows | `abs_add` | The client's figures | OspreyFlow's figures |
