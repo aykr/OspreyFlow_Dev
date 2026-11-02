@@ -20404,7 +20404,10 @@ Consequences.
      those is withdrawn). The guard rail that remains is the GOV.UK preset only when
      `network.public_origin` ends in `.gov.uk`, enforced on the server. Today `appearance` is set
      in `osprey.yaml` and nothing refuses `govuk` on another domain; the guard rail belongs with the
-     tab.
+     tab. **The owner's ruling of 2 November 2026 (GDS re-audit O2, `05_DEPLOYMENT.md` §7):** the
+     rule enforced now is the other way round — a gov.uk address refuses the Lite profile, in words —
+     so the GOV.UK look stays available on a `localhost` address for a demonstration on one
+     computer; the tab's own guard rail is still to come with the tab.
 - **Sign-in and the dashboards.** The identity provider's pages (`id.`, the Keycloak login theme)
   and Superset (`bi.`) are separate products and do not yet read `appearance`; see the spike's
   hand-back for what each shows under the GOV.UK brand.
