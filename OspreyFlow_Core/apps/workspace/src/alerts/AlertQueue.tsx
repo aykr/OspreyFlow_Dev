@@ -28,7 +28,7 @@ import {
   type SeverityFilter,
 } from "./api";
 import { CLOSING_REASONS, closingReasonLabel, type ClosingReason } from "./closingReasons";
-import { money, nodeName, typologyLabel, when } from "./names";
+import { concernWords, money, nodeName, typologyLabel, when } from "./names";
 
 export interface AlertQueueProps extends AlertsApi {
   level: AccessLevel | null;
@@ -275,7 +275,7 @@ function AlertDetail(props: AlertDetailProps) {
           {nodes
             .filter((n) => n.type !== "Alert")
             .map((n) => (
-              <li key={n.id}>{`${nodeName(n)} · ${n.type}`}</li>
+              <li key={n.id}>{concernWords(n)}</li>
             ))}
         </ul>
       ) : (
