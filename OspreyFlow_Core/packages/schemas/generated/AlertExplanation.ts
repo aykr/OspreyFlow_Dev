@@ -82,6 +82,7 @@ export type Kind = "typology" | "hotlist" | "monitor";
 export type Severity1 = "low" | "medium" | "high";
 export type Audience = "case" | "team" | "owner";
 export type Team1 = string | null;
+export type CloseProposedByName = string | null;
 
 /**
  * What fired an alert, for the reader (ADR-109 phase B): the entities it concerns and its
@@ -99,6 +100,7 @@ export interface AlertExplanation {
   severity?: Severity1;
   audience?: Audience;
   team?: Team1;
+  close_proposed_by_name?: CloseProposedByName;
   [k: string]: unknown;
 }
 /**

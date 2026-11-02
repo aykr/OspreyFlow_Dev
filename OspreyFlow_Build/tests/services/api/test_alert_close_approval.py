@@ -13,7 +13,10 @@ What a mistake would do, and the case that catches it:
   `test_a_proposed_close_sent_back_returns_the_alert_to_its_proposer`;
 - an owner-only alert that no second person could ever read, stuck waiting for one —
   `test_an_alert_its_owner_alone_may_read_closes_without_a_second_person`;
-- a medium alert held up — `test_a_medium_alert_closes_at_once`.
+- a medium alert held up — `test_a_medium_alert_closes_at_once`;
+- the waiting close naming its proposer by an identity-provider id (step 9d finding 1), or the
+  directory asked for a person on a read the reader may not make (ADR-106 decision 3) —
+  `test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else`.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi.testclient import TestClient
-from services.api.app import app, get_principal
+from services.api.app import app, get_principal, get_principal_names
 
 from conduit_common.identity import new_id
 from tests.services.api.test_monitoring_routes import (  # noqa: F401 - `world` is a fixture
@@ -142,3 +145,49 @@ def test_the_approval_routes_need_sign_in_the_right_the_case_and_an_editor(
             assert client.post(paths[key], json={"reason": "x"}).status_code in (401, 403), key
     finally:
         app.dependency_overrides[get_principal] = saved
+
+
+class _Directory:
+    """`PrincipalNameDirectory` as a read sees it: a name for an account it knows, none for an id it
+    does not (the identity provider's 404), and a record of every id it was asked for."""
+
+    def __init__(self, known: dict[str, str]) -> None:
+        self.known = known
+        self.asked: list[str] = []
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        wanted = list(ids)
+        self.asked += wanted
+        return {i: self.known[i] for i in wanted if i in self.known}
+
+
+def test_a_waiting_close_names_its_proposer_and_asks_for_no_one_else(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Step 9d finding 1: the approval screen said who proposed the close by their identity-provider
+    id. The alert's detail serves the proposer's name beside the id, resolved for that one id."""
+    w, client = world
+    alert = _high(w)
+    _save(client, w, alert)
+    paths = _paths(w, alert.id)
+    w.as_ = w.member
+    client.post(paths["close"], json={"disposition": "referred", "reason": "to the regional unit"})
+    directory = _Directory({w.member.id: "Priya Shah", w.owner.id: "Owner Name"})
+    app.dependency_overrides[get_principal_names] = lambda: directory
+    w.as_ = w.owner
+    detail = client.get(f"{Q.format(case=w.case)}/{alert.id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert (body["alert"]["close_proposed_by"], body["close_proposed_by_name"]) == (w.member.id, "Priya Shah")
+    assert directory.asked == [w.member.id]
+    # Rule 3 and ADR-106 decision 3: a reader refused the alert never has its proposer looked up.
+    directory.asked.clear()
+    w.as_ = w.outsider
+    assert client.get(f"{Q.format(case=w.case)}/{alert.id}").status_code in (403, 404)
+    assert directory.asked == []
+    # An alert no one has proposed closing names no proposer, and asks for no one.
+    other = _high(w)
+    _save(client, w, other)
+    w.as_ = w.owner
+    plain = client.get(f"{Q.format(case=w.case)}/{other.id}").json()
+    assert plain["close_proposed_by_name"] is None and directory.asked == []

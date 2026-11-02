@@ -12,7 +12,10 @@ What a mistake would do, and the case that catches it:
   `test_a_deployment_scope_rule_deployed_by_one_person_is_pending_until_a_second_approves`;
 - self-approval through the route — `test_the_author_cannot_approve_their_own_rule`;
 - approval by someone without the administrator's right — `test_approving_needs_the_administrators_right`;
-- a data engineer writing an analyst's rule — `test_an_engineer_cannot_author_an_analyst_rule`.
+- a data engineer writing an analyst's rule — `test_an_engineer_cannot_author_an_analyst_rule`;
+- a waiting change naming its proposer by an identity-provider id (step 9d finding 1), or the
+  directory asked for anyone but the proposers of the rules served (ADR-106 decision 3) —
+  `test_a_waiting_change_names_its_proposer_and_asks_only_for_proposers_served`.
 """
 
 from __future__ import annotations
@@ -220,3 +223,38 @@ def test_the_new_rule_routes_need_the_right_the_case_and_their_level(world: tupl
         assert client.get(f"{_base(w)}/{rid}/versions").status_code in (401, 403)
     finally:
         app.dependency_overrides[get_principal] = saved
+
+
+class _Directory:
+    """As `test_alert_close_approval._Directory`: names for known accounts, a record of what was
+    asked."""
+
+    def __init__(self, known: dict[str, str]) -> None:
+        self.known = known
+        self.asked: list[str] = []
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        wanted = list(ids)
+        self.asked += wanted
+        return {i: self.known[i] for i in wanted if i in self.known}
+
+
+def test_a_waiting_change_names_its_proposer_and_asks_only_for_proposers_served(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Step 9d finding 1: the rules list said who proposed a waiting change by their identity-
+    provider id. It serves the proposer's name beside the id, asking only for proposers it serves."""
+    w, client = world
+    rule = _deploy(w, client)
+    w.as_ = w.analyst
+    _deploy(w, client, scope="this_case")  # live at once: nobody to name
+    directory = _Directory({w.maker.id: "Maker Name", w.checker.id: "Checker Name"})
+    app.dependency_overrides[get_principal_names] = lambda: directory
+    w.as_ = w.checker
+    listed = client.get(_base(w))
+    assert listed.status_code == 200, listed.text
+    served = {r["id"]: r for r in listed.json()}
+    assert (served[rule["id"]]["pending_by"], served[rule["id"]]["pending_by_name"]) == (
+        w.maker.id, "Maker Name")  # fmt: skip
+    assert all(r["pending_by_name"] is None for r in served.values() if r["pending_by"] is None)
+    assert set(directory.asked) == {r["pending_by"] for r in served.values() if r["pending_by"]}

@@ -11,7 +11,9 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+
+import { isRunNowRequest, runNowOutcome } from "./run-wait";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** `OspreyFlow_Core`, the checkout the capture specs run from. */
@@ -162,4 +164,16 @@ export async function scrollAllToTop(page: Page): Promise<void> {
     window.scrollTo(0, 0);
   });
   await page.waitForTimeout(500);
+}
+
+/** Presses a pipeline's **Run now** and waits for **that run's own** answer: the run-now request is
+ * answered only once its run has finished, with its own load id and counts (`run-wait.ts`). Never
+ * the Publish screen's runs list, which already shows earlier runs' "Succeeded:" before this one
+ * finishes (step 9d finding 7). Returns the run's outcome in words. */
+export async function runNowAndWait(page: Page, runNow: Locator, timeout = 300_000): Promise<string> {
+  const own = page.waitForResponse((r) => isRunNowRequest(r.request().method(), r.url()), { timeout });
+  await runNow.click();
+  const response = await own;
+  const body: unknown = await response.json().catch(() => null);
+  return runNowOutcome(response.status(), body);
 }

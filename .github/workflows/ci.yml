@@ -647,6 +647,7 @@ jobs:
           ../OspreyFlow_Build/tests/test_seed_links_replace.py
           ../OspreyFlow_Build/tests/test_stamp_datasets.py
           ../OspreyFlow_Build/tests/test_stamp_records.py
+          ../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py
       - run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
@@ -985,6 +986,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py
           --ignore=../OspreyFlow_Build/tests/test_stamp_records.py
+          --ignore=../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py
           --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py
           --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py
           ../OspreyFlow_Build/tests

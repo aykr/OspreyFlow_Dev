@@ -713,6 +713,13 @@ def _mounted_sources(service: Mapping[str, Any]) -> list[str]:
     return sources
 
 
+def is_run_once_job(service: Mapping[str, Any]) -> bool:
+    """A run-once batch job (`render.py`'s `ingest`: `restart: "no"`, behind a profile), which `up`
+    never starts. Named in an `up`, Compose starts it anyway; it exits (the loader exits 2 without
+    its arguments), and `--wait` reads that as a failed start."""
+    return service.get("restart") == "no" or bool(service.get("profiles"))
+
+
 def services_to_restart(old: Path, new: Path) -> set[str]:
     """The services whose rendered configuration differs between the deployment as it is (`old`)
     and as rendered now (`new`), and nothing else (ADR-137 decision 1):
@@ -720,7 +727,11 @@ def services_to_restart(old: Path, new: Path) -> set[str]:
     - a `deployment.env` variable whose value changed reaches it — through `env_file`, unless its
       own `environment` sets that variable (which wins over the file), or by `${...}` in its
       definition;
-    - a file it mounts from the deployment's folder changed."""
+    - a file it mounts from the deployment's folder changed.
+
+    A run-once job (`is_run_once_job`) is never among them, though its files change with the rest:
+    nothing of it is running to restart, and its next `compose run` reads the new files. Started and
+    waited on, it failed the apply with every service healthy (step 2e's follow-up)."""
     before, after = _services(old), _services(new)
     old_files, new_files = _files(old), _files(new)
     changed_files = {
@@ -732,7 +743,7 @@ def services_to_restart(old: Path, new: Path) -> set[str]:
     changed_vars = {k for k in old_env.keys() | new_env.keys() if old_env.get(k) != new_env.get(k)}
     restart: set[str] = set()
     for name, service in after.items():
-        if not isinstance(service, dict):
+        if not isinstance(service, dict) or is_run_once_job(service):
             continue
         if before.get(name) != service:
             restart.add(name)

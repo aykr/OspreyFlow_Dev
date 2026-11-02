@@ -303,6 +303,7 @@ export type Version = number;
 export type PendingAction = ("deploy" | "change" | "retire") | null;
 export type PendingBy = string | null;
 export type PendingVersion = number | null;
+export type PendingByName = string | null;
 
 /**
  * A deployed rule. It belongs to the case it was deployed in and evaluates as its deployer's
@@ -329,6 +330,7 @@ export interface TypologyRule {
   pending_action?: PendingAction;
   pending_by?: PendingBy;
   pending_version?: PendingVersion;
+  pending_by_name?: PendingByName;
   [k: string]: unknown;
 }
 export interface StructuringParams {

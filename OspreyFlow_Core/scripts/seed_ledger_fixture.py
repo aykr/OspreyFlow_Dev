@@ -36,15 +36,17 @@ from typing import cast
 
 import duckdb
 import yaml
-from scripts.case_seed import add_case_arguments, check_case_arguments, scope_for
+from scripts.case_seed import add_case_arguments, check_case_arguments, parse_grant, scope_for
 from scripts.load_screening_list import parse_list
 from scripts.seed_support import KNOWN_STRAY_ADVICE, report_ids_stored_twice
 from services.api.config import PostgresConfig
 from services.api.dataset_scope import stamping
 from services.api.ingest_sources import UPLOAD_SUBDIR, ingest_root
+from services.api.investigations import AccessLevel
 from services.api.media_store import open_media_store
 from services.api.rule_evaluation import transaction_key
 from services.api.screening import ScreeningListStore
+from services.api.typology_rules import TypologyRuleStore
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -59,7 +61,7 @@ from ontology.packs import load_deployment_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest
-from schemas.domain import Principal
+from schemas.domain import Principal, TypologyRuleInput
 from schemas.screening import ScreeningSubscriptionInput
 
 SCREENING_LIST = (
@@ -213,6 +215,44 @@ async def subscribe_uk_list(store: ScreeningListStore, by: str) -> str:
     )
 
 
+async def deploy_screening_rule(
+    rules: TypologyRuleStore,
+    case: str,
+    grants: list[str],
+    *,
+    clearance: str,
+    org_unit: str,
+) -> str:
+    """Makes the case's screening rule live (step 9d finding 4): A3's list update raises its alert
+    only through an active `kyc_screening` rule, and the seed had never deployed one. Deployed from
+    the KYC screening template's defaults (`ledger_monitoring.SCREENING`), after each load commits,
+    in the Ledger's dataset, **as the case's Author** (the first `--grant ACCOUNT=author`), as that
+    Author would from Monitoring → Rules → Templates: a case rule is the Author's to deploy, and the
+    list refresh runs it as its deployer, so it must be an account the identity provider knows,
+    never the seed's own worker. Left as it is when one of that name is live already (a reseed);
+    deployed afresh when a rehearsal retired it."""
+    authors = [a for a, level in map(parse_grant, grants) if level is AccessLevel.AUTHOR]
+    name = ledger_monitoring.SCREENING_NAME
+    if not authors:
+        return f"{name!r} was not deployed: no case Author was granted (--grant ACCOUNT=author)"
+    author = Principal(id=authors[0], clearance=clearance, org_unit=org_unit, datasets=[LEDGER.id])
+    live = [
+        r
+        for r in await rules.list_for_case(case, author)
+        if r.status == "active" and r.name == name and r.params.typology == "kyc_screening"
+    ]
+    if live:
+        return f"{name!r} is live already"
+    await rules.create(
+        author,
+        case,
+        TypologyRuleInput.model_validate(
+            {"name": name, "params": dict(ledger_monitoring.SCREENING)}
+        ),
+    )
+    return f"deployed {name!r} from the KYC screening template, as the case's Author"
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m scripts.seed_ledger_fixture",
@@ -342,11 +382,20 @@ async def _run(args: argparse.Namespace) -> int:
         monitoring.append(await subscribe_uk_list(screening, principal.id))
     finally:
         await screening.close()
+    rules = await TypologyRuleStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        monitoring.append(
+            await deploy_screening_rule(
+                rules, scope, list(args.grant), clearance=args.clearance, org_unit=args.org_unit
+            )
+        )
+    finally:
+        await rules.close()
 
     print(
         f"Seeded Operation Ledger: {result.transactions_loaded} transactions "
         f"({len(result.events)} timeline events), the SAR "
-        f"({result.sar_document_id or 'not written — no media store?'}), and "
+        f"({result.sar_document_id or 'not written: its recipe wrote no document'}), and "
         f"{len(geometry_records())} map points under investigation_scope={scope!r}; "
         f"the screening list {list_name!r} ({len(entries)} synthetic entries)."
     )

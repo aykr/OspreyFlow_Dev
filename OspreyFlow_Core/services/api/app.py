@@ -8768,12 +8768,19 @@ async def explain_alert(
     graph: GraphDep,
     analytics: AnalyticsDep,
     alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
     audit: AuditDep,
 ) -> AlertExplanation:
-    """What fired the alert: its entities and node, the links and each transaction it cites."""
+    """What fired the alert: its entities and node, the links and each transaction it cites; and,
+    for a close waiting for a second person, who proposed it, by name (ADR-106: resolved for that
+    one id, only once the reader has been served the alert)."""
     explanation = await alert_queue.explain(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
+    proposer = explanation.alert.close_proposed_by
+    if proposer:
+        names = await principal_names.display_names([proposer])
+        explanation = explanation.model_copy(update={"close_proposed_by_name": names.get(proposer)})
     await audit.record(
         principal=principal,
         action="explain_alert",
@@ -9017,10 +9024,20 @@ async def list_typology_rules(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     typology_rules: TypologyRulesDep,
+    principal_names: PrincipalNamesDep,
 ) -> list[TypologyRule]:
     """The case's rules, retired ones included — what watches this case's loads is the case
-    team's to know (ruling 3)."""
-    return await typology_rules.list_for_case(investigation.id, principal)
+    team's to know (ruling 3). A change waiting for a second person names who proposed it
+    (ADR-106: asked for only the proposers of the rules served here)."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    proposers = sorted({r.pending_by for r in rules if r.pending_by})
+    if not proposers:
+        return rules
+    names = await principal_names.display_names(proposers)
+    return [
+        r.model_copy(update={"pending_by_name": names.get(r.pending_by)}) if r.pending_by else r
+        for r in rules
+    ]
 
 
 @app.post(

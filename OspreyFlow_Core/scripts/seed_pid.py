@@ -7,7 +7,8 @@ Amendments 25 to 27 and 30 to 32; Brief 2 sections 5, 7 and 8).
     python -m scripts.seed_pid --reset-live --case-name ... [--show-ids]   # the rehearsal reset
     python -m scripts.seed_pid --check --case-name ...       # the demo numbers, loading nothing
     python -m scripts.seed_pid --release-batch-2             # chapter 9's files (Conduit stays up)
-    python -m scripts.seed_pid --publish-reports-fallback    # chapter 4 fallback (Conduit stays up)
+    python -m scripts.seed_pid --publish-reports-fallback    # chapter 4 fallback: publishes, loads
+                                                             # nothing (Conduit stays up)
 
 Run the first two through `python -m scripts.seed_internal prison-intelligence [--reset-live]
 --stop-api` (or `ospreyflow demo add prison-intelligence`), inside the deployment's network, where
@@ -256,6 +257,14 @@ FALLBACK_SKIPS = (
     "This is a publish as the Conduit's route makes it, but it skips the route's role, case Editor "
     "and Verify checks: it is the operator's command, and the committed file is what the engine's "
     "own golden test ran."
+)
+
+
+#: What the fallback leaves to do (step 9d finding 5): it publishes the reports pipeline and loads
+#: nothing, so chapter 4's reports are in only once its two pipelines have run, reports first.
+FALLBACK_NEXT = (
+    "It publishes the reports pipeline and does not load it: run Intelligence reports, then Report "
+    "incidents, from the Studio's Publish screen, reports first."
 )
 
 
@@ -2090,7 +2099,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     modes.add_argument(
         "--publish-reports-fallback",
         action="store_true",
-        help="Publish the committed reports recipe in place of a live mapping (Conduit stays up).",
+        help=(
+            "Publish the committed reports recipe in place of a live mapping (Conduit stays up). "
+            + FALLBACK_NEXT
+        ),
     )
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
     args.mode = (
@@ -2498,7 +2510,7 @@ async def _fallback(args: argparse.Namespace) -> int:
         await store.close()
     print(
         f"Published {published.recipe_id} version {published.version} from the committed, fully "
-        "mapped file. Run it from the Studio's Publish screen."
+        f"mapped file. {FALLBACK_NEXT}"
     )
     print(FALLBACK_SKIPS)
     return 0

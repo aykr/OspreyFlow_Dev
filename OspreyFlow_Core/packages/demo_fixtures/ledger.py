@@ -317,8 +317,15 @@ async def build_ledger_graph(
         if recipe.id == "ledger-transactions":
             transactions = report.rows_read
         if recipe.id == "ledger-sar":
+            # Created on a first seed; on a reseed the same bytes give the same `content:` id, and
+            # the engine merges into the document already there (step 9d finding 6: the reseed
+            # said "not written — no media store?" with the store present and the SAR in it).
             sar_document_id = next(
-                (node_id for node_id in report.created_node_ids if node_id.startswith("content:")),
+                (
+                    node_id
+                    for node_id in (*report.created_node_ids, *report.merged_node_ids)
+                    if node_id.startswith("content:")
+                ),
                 None,
             )
 
