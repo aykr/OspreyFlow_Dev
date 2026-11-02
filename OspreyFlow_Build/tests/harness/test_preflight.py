@@ -348,6 +348,7 @@ def test_an_unreachable_declared_host_fails_and_names_it() -> None:
             "cluster": {"hosts": [{"name": "node-a", "address": "192.0.2.1"}],
                         "shared_storage_class": "efs-sc"},
             "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
+            "network": {"public_origin": "https://osprey.example.org"},
         }
     )
     context = PreflightContext(config=config, out_dir=Path("/nonexistent"))
@@ -833,6 +834,25 @@ def test_an_ip_qualified_interpolated_host_port_parses() -> None:
     compose = {"services": {"arcadedb": {"ports": published}}}
     assert ports.declared_ports(compose, {}) == [("arcadedb", 2480)]
     assert ports.declared_ports(compose, {"OSPREY_ARCADEDB_PORT": "2491"}) == [("arcadedb", 2491)]
+
+
+def test_lites_loopback_ports_from_the_real_render_are_each_checked() -> None:
+    """S10 binds every Lite port to `127.0.0.1` (the owner's ruling of 2 November 2026). The port
+    check must still find each one in the real render's shape — the proxy's bare number and the
+    Conduit's interpolated door behind an address — or it would pass vacuously, as it once did.
+    """
+    config = OspreyConfig.model_validate(
+        {"network": {"public_origin": "http://alpha.localhost:8090", "expose_conduit": True}}
+    )
+    compose = yaml.safe_load(
+        render(config, resolver=lambda _image: "sha256:" + "0" * 64).artefacts["compose.yaml"]
+    )
+    assert compose["services"]["proxy"]["ports"] == [
+        "127.0.0.1:8090:8080",
+        "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480",
+        "127.0.0.1:${OSPREY_API_PORT:-8000}:8000",
+    ]
+    assert ports.declared_ports(compose, {}) == [("proxy", 8090), ("proxy", 2480), ("proxy", 8000)]
 
 
 def test_an_unresolvable_port_is_skipped_rather_than_guessed() -> None:

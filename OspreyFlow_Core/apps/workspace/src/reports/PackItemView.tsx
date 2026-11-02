@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, itemShortTitle } from "./packText";
+import { KIND_LABEL, alertEntityWords, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, itemShortTitle } from "./packText";
 import { TrendChart } from "./TrendChart";
 
 function Content({ item }: { item: PackItem }) {
@@ -47,7 +47,7 @@ function Content({ item }: { item: PackItem }) {
         {(alert.entities ?? []).length > 0 && (
           <ul aria-label="Entities it matched" style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
             {(alert.entities ?? []).map((e) => (
-              <li key={e.node_id}>{`${e.name} (${e.entity_type})`}</li>
+              <li key={e.node_id}>{alertEntityWords(e)}</li>
             ))}
           </ul>
         )}

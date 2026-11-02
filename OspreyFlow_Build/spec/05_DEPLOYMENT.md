@@ -763,7 +763,7 @@ silently.
 
 ### 3.1 Tests never reach a deployment on the same machine (the owner's answer, 1 November 2026)
 
-A Lite deployment publishes ArcadeDB on 2480 (to `127.0.0.1`), the proxy on 80, and on a
+A Lite deployment publishes ArcadeDB on 2480 and the proxy on 80 (both to `127.0.0.1`, §7), and on a
 developer's machine the Glass and Keycloak on 8080 and 8081 and Postgres on 5432. A test run whose
 shell had not pinned the store ports reached the owner's everyday ArcadeDB on 2480, because
 `ARCADEDB_HTTP_PORT` defaults to 2480 (`BUILD_ORDER_2026-11.md`, open question 8). **The test
@@ -1086,6 +1086,35 @@ build stands against the table above:
   is reachable without being exposed. `network.expose_conduit: true` in `osprey.yaml` publishes it
   as well — off by default, for an operator debugging the Conduit directly or for a second client
   that is not the Glass — and turning it on widens the exposed surface by a whole tier.
+- **Which interfaces each profile answers on, and over what — DECIDED, the owner's ruling of
+  2 November 2026** (GDS re-audit findings S10, S11 and O2):
+  - **Lite answers on this computer only.** Every port a `local-lite` deployment publishes is bound
+    to `127.0.0.1`: the front proxy (`127.0.0.1:<port>:8080`, or `127.0.0.1:80:80` and
+    `127.0.0.1:<port>:443` on an HTTPS `localhost` address), the graph store's door, and the
+    Conduit's door under `network.expose_conduit` (`harness/site.py`, `_bind`). A deployment kept by
+    name (ADR-138) is Lite, so the same holds. Before this, the proxy's bare `<port>:8080` was
+    published on every interface, and a machine on the same network that sent
+    `Host: ospreyflow.localhost` reached the Glass and sign-in in plain HTTP. Browsers and host tools
+    reach a `*.localhost` name at `127.0.0.1` (`answer_localhost_with_loopback` for tools); a client
+    that tries `::1` first falls back to it. Preflight's port check binds `127.0.0.1`, which is
+    where Lite now publishes. Tests: `test_front_proxy.py::test_no_lite_published_port_binds_every_interface`
+    (red on the bare mapping), `test_named_render.py::test_a_named_deployment_answers_on_this_computer_only`,
+    `test_preflight.py::test_lites_loopback_ports_from_the_real_render_are_each_checked`.
+  - **Small and Enterprise keep publishing 80 and 443 on every interface**, because other people
+    reach them (`test_front_proxy.py::test_small_still_publishes_80_and_443_on_every_interface`).
+  - **Small and Enterprise are HTTPS.** `osprey.yaml` refuses, in words, a `small` or `cluster`
+    deployment whose `network.public_origin` is not `https://` — the Lite default included, so a
+    cloud profile names its address — and `ospreyflow apply`, the guided page and the Set-up
+    console say so and change nothing. The guided page writes Small's profile to its draft only with
+    its address, from the Domain screen; the Set-up console's Profile screen asks for the address
+    when Small or Enterprise is chosen and saves both in one write.
+  - **A gov.uk address is never Lite.** A `local-lite` deployment whose address is `gov.uk` or ends
+    in `.gov.uk` is refused, in words naming Small or Enterprise: a gov.uk service is reached by the
+    public over HTTPS. This is the guard rail ADR-132 consequence 5 asked for, as the owner ruled it;
+    the GOV.UK *brand* on a `localhost` address stays allowed, for demonstrations on one computer.
+    Tests: `test_deployment_schema.py` (`…refuse_a_plain_http_address_in_words`,
+    `…gov_uk_address_refuses_lite_in_words`, `…lite_keeps_its_own_addresses`) and
+    `test_apply_changed_settings.py::test_apply_refuses_plain_http_for_small_and_lite_for_gov_uk_in_words`.
 - **Nothing in a backup may be encrypted with a deployment-scoped key** (§6.1, decided 25 September
   2026). A backup carries no secrets and a restore re-mints them, so any value encrypted with a
   key that dies with the deployment would restore as unreadable bytes — a restore that reports

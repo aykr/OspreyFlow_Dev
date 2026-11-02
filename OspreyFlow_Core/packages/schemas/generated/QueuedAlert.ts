@@ -32,6 +32,7 @@ export type Kind = "typology" | "hotlist" | "monitor";
 export type Severity1 = "low" | "medium" | "high";
 export type Audience = "case" | "team" | "owner";
 export type Team1 = string | null;
+export type AssigneeName = string | null;
 
 /**
  * One row of the case's alert queue: the alert, and its finding in words with the entities
@@ -44,6 +45,7 @@ export interface QueuedAlert {
   severity?: Severity1;
   audience?: Audience;
   team?: Team1;
+  assignee_name?: AssigneeName;
   [k: string]: unknown;
 }
 /**

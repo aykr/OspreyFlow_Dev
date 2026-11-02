@@ -70,3 +70,31 @@ describe("an alert trend in words", () => {
     expect(trendSentence({ ...f, result: { ...f.result, measure: "count", events: 54 } })).toBe("54 alerts in 12 weeks");
   });
 });
+
+describe("a screening alert's list entry (step 9e)", () => {
+  // The alert cites the customer and the list's own entry for the listed party, never merged
+  // (rule 6); the stored item says which is the list's (`list_entry_on`), so a pack read later
+  // does not show one person matched twice.
+  const SCREENED = {
+    ...ALERT_ITEM,
+    alert: {
+      ...ALERT_ITEM.alert!,
+      entities: [
+        { node_id: "n-customer", entity_type: "Person", name: "Sofia Ruiz" },
+        { node_id: "n-listed", entity_type: "Person", name: "Sofia Ruiz", list_entry_on: "UK Sanctions List (synthetic)" },
+      ],
+    },
+  };
+  const LINES = ["Sofia Ruiz (Person)", "Sofia Ruiz (Person) · the entry on UK Sanctions List (synthetic)"];
+
+  it("is named as the list's on the screen", () => {
+    render(<PackItemView item={SCREENED} />);
+    const list = screen.getByRole("list", { name: "Entities it matched" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual(LINES);
+  });
+
+  it("is named as the list's on the printed page", () => {
+    const html = packPrintHtml(manifest([SCREENED]));
+    for (const line of LINES) expect(html).toContain(`<li>${line}</li>`);
+  });
+});

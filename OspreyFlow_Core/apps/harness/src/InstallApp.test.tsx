@@ -2,7 +2,7 @@
 //
 // The guided install page's shell: the nav shows the chosen mode's screens only, in decision 6's
 // order, and the Map screen is the Set-up console's Geospatial one.
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const client = vi.hoisted(() => ({
@@ -77,5 +77,33 @@ describe("InstallApp", () => {
     expect(navNames()).toEqual(["Mode", "Cloud and region", "Domain", "Components", "Models", "Governance", "Demo packs", "Review"]);
     expect(screen.queryByRole("button", { name: "Folders" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Map" })).toBeNull();
+  });
+});
+
+describe("the draft's profile and address (S11, the owner's ruling of 2 November 2026)", () => {
+  const small = (answers: Record<string, unknown>) => ({ mode: "small", answers: { mode: "small", ...answers }, packs: [], modes: MODES, home: "/home/ada" });
+
+  it("does not write Small's profile on choosing the mode, before its address is known", async () => {
+    client.getInstallState.mockResolvedValue({ mode: "lite", answers: { mode: "lite" }, packs: [], modes: MODES, home: "/home/ada" });
+    client.putInstallAnswers.mockResolvedValue(small({}));
+    render(<InstallApp />);
+    fireEvent.click(await screen.findByRole("radio", { name: /^Small/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save mode" }));
+    await waitFor(() => expect(client.putInstallAnswers).toHaveBeenCalled());
+    // Small's profile alone is refused (Small is HTTPS); the Domain screen writes it with its address.
+    expect(client.putConfig).not.toHaveBeenCalled();
+  });
+
+  it("writes Small's profile and its https:// address together when the domain is saved", async () => {
+    client.getInstallState.mockResolvedValue(small({ cloud: { provider: "aws", region: "eu-west-2" } }));
+    client.putInstallAnswers.mockResolvedValue(small({ cloud: { provider: "aws", region: "eu-west-2", domain: "osprey.example.org" } }));
+    client.putConfig.mockResolvedValue({ profile: "small", network: { public_origin: "https://osprey.example.org" } });
+    render(<InstallApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Domain" }));
+    fireEvent.change(screen.getByLabelText("Domain name"), { target: { value: "osprey.example.org" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save domain" }));
+    await waitFor(() =>
+      expect(client.putConfig).toHaveBeenCalledWith({ profile: "small", network: { public_origin: "https://osprey.example.org" } }),
+    );
   });
 });

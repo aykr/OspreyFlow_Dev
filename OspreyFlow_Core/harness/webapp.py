@@ -391,6 +391,14 @@ def create_app(
 
     @app.post("/api/consequences")
     def post_consequences(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        # S11: Small and Enterprise need an https:// address, but a profile's consequences
+        # (machines, orchestrator, memory) do not depend on it, and the Profile screen previews a
+        # choice before its address is typed. So the preview stands in an HTTPS address for a
+        # cloud profile; the save (`PUT /api/config`) judges the real one.
+        if body.get("profile") not in (None, Profile.LOCAL_LITE.value):
+            given = body.get("network")
+            network: dict[str, Any] = given if isinstance(given, dict) else {}
+            body = {**body, "network": {**network, "public_origin": "https://preview.invalid"}}
         try:
             config = OspreyConfig.model_validate(body)
         except ValidationError as exc:

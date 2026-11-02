@@ -394,6 +394,15 @@ def _match(explained: AlertExplanation) -> str:
     return "confirmed" if confirmed and not links_inferred else "inferred"
 
 
+def _list_entry_on(node: Node) -> str | None:
+    """The list a screening list's own entry is on (`kyc_rules._listed_write` writes `listing` and
+    `list_name`), else none: the same test as the Glass's `concernWords` (step 9d finding 2)."""
+    listing, name = node.properties.get("listing"), node.properties.get("list_name")
+    if isinstance(listing, str) and isinstance(name, str) and name.strip():
+        return name
+    return None
+
+
 def alert_item(
     explained: AlertExplanation,
     events: Sequence[EventRecord],
@@ -407,10 +416,11 @@ def alert_item(
     names = {n.id: node_name(n) for n in explained.nodes}
     cited = set(alert.edge_ids)
     entities = [
-        AlertEntitySnapshot(node_id=n.id, entity_type=n.type, name=node_name(n))
+        AlertEntitySnapshot(node_id=n.id, entity_type=n.type, name=node_name(n),
+                            list_entry_on=_list_entry_on(n))
         for n in explained.nodes
         if n.id != alert.alert_node_id
-    ]
+    ]  # fmt: skip
     links = [
         AlertLinkSnapshot(edge_id=e.id, type=e.type, source_name=names.get(e.source, e.source),
                           target_name=names.get(e.target, e.target))

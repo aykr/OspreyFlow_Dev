@@ -6,7 +6,9 @@
   `test_a_deployment_outside_a_checkout_builds_from_the_checkout_by_its_own_path`;
 - a checkout-rooted deployment renders byte for byte as before (`../../..`) —
   `test_a_checkout_rooted_deployment_still_builds_from_three_folders_up`;
-- its graph store is published at its own port — `test_the_graph_port_is_the_deployments_own`.
+- its graph store is published at its own port — `test_the_graph_port_is_the_deployments_own`;
+- its front proxy published on every network interface, though a named deployment is Lite (S10, the
+  owner's ruling of 2 November 2026) — `test_a_named_deployment_answers_on_this_computer_only`.
 """
 
 from __future__ import annotations
@@ -79,3 +81,11 @@ def test_without_a_graph_port_the_render_is_as_before(tmp_path: Path) -> None:
     stage = _stage(*_named_config(tmp_path, graph_port=None))
     env = (stage / "deployment.env").read_text(encoding="utf-8").splitlines()
     assert "OSPREY_ARCADEDB_PORT=2480" in env
+
+
+def test_a_named_deployment_answers_on_this_computer_only(tmp_path: Path) -> None:
+    """S10: a deployment kept by name is a Lite one (ADR-138), so its own port is bound to
+    `127.0.0.1` as the checkout's is, through `apply`'s real staging step."""
+    stage = _stage(*_named_config(tmp_path))
+    proxy = yaml.safe_load((stage / "compose.yaml").read_text(encoding="utf-8"))["services"]["proxy"]
+    assert proxy["ports"] == ["127.0.0.1:8090:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]

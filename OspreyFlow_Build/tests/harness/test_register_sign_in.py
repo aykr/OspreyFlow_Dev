@@ -762,7 +762,8 @@ def test_without_demo_accounts_registration_makes_none_and_writes_nothing(
                "SUPERSET_PUBLIC_ORIGIN=https://bi.osprey.example.org")  # fmt: skip
     before = env.read_text(encoding="utf-8")
     config = tmp_path / "osprey.yaml"
-    config.write_text("profile: small\n", encoding="utf-8")
+    config.write_text("profile: small\nnetwork: {public_origin: 'https://osprey.example.org'}\n",
+                      encoding="utf-8")
     code = register_sign_in.main(["--profile", "small", "--out-root", str(out), "--config",
                                   str(config), "--keycloak-url", ISSUER, "--no-demo-accounts"])  # fmt: skip
     assert code == 0

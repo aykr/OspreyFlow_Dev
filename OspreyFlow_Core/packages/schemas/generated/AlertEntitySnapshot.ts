@@ -3,6 +3,7 @@
 export type NodeId = string;
 export type EntityType = string;
 export type Name = string;
+export type ListEntryOn = string | null;
 
 /**
  * An entity an alert matched, named as its adder read it.
@@ -11,5 +12,6 @@ export interface AlertEntitySnapshot {
   node_id: NodeId;
   entity_type: EntityType;
   name: Name;
+  list_entry_on?: ListEntryOn;
   [k: string]: unknown;
 }

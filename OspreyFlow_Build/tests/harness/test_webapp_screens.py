@@ -66,6 +66,15 @@ def _fake_resolver(image: object) -> str:
     return "sha256:" + f"{abs(hash(image)):064x}"[:64]
 
 
+#: S11 (the owner's ruling of 2 November 2026): Small and Enterprise are HTTPS, so the Profile screen
+#: sends a non-Lite profile with its address in the same write.
+_ADDRESS = {"public_origin": "https://osprey.example.org"}
+
+
+def _profile_answer(profile: str) -> dict[str, object]:
+    return {"profile": profile} if profile == "local-lite" else {"profile": profile, "network": _ADDRESS}
+
+
 def _client(config_path: Path) -> TestClient:
     app = create_app(config_path=config_path)
     # A loopback client tuple — `TestClient`'s own default (`("testclient", 50000)`) is not
@@ -89,7 +98,7 @@ def test_the_three_screens_round_trip_through_osprey_yaml_and_render_identically
     config_path.write_text(_GOVERNANCE_AND_MAP, encoding="utf-8")
     client = _client(config_path)
 
-    profile_response = client.put("/api/config", json={"profile": profile})
+    profile_response = client.put("/api/config", json=_profile_answer(profile))
     assert profile_response.status_code == 200, profile_response.text
 
     components_response = client.put(
@@ -114,7 +123,7 @@ def test_the_three_screens_round_trip_through_osprey_yaml_and_render_identically
     hand_built = OspreyConfig.model_validate(
         {
             **yaml.safe_load(_GOVERNANCE_AND_MAP),
-            "profile": profile,
+            **_profile_answer(profile),
             "components": {
                 "graph_store": graph_store,
                 "analytics_engine": analytics_engine,
@@ -144,7 +153,7 @@ def test_small_profile_matches_stage_2_section_1s_own_fixture_byte_for_byte(tmp_
     config_path = tmp_path / "osprey.yaml"
     config_path.write_text(_GOVERNANCE_AND_MAP, encoding="utf-8")
     client = _client(config_path)
-    assert client.put("/api/config", json={"profile": "small"}).status_code == 200
+    assert client.put("/api/config", json=_profile_answer("small")).status_code == 200
     assert (
         client.put(
             "/api/config",
@@ -195,6 +204,7 @@ def test_a_cluster_the_chart_cannot_run_is_refused_in_words(tmp_path: Path) -> N
                         "shared_storage_class": "efs-sc"},
             "external": {"postgres": {"host": "db.example.org"}, "valkey": {"host": "cache.example.org"}, "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}},
             "components": {"graph_store": "janusgraph", "analytics_engine": "clickhouse"},
+            "network": _ADDRESS,
         },
     )
     assert switch_response.status_code == 200, switch_response.text
@@ -237,7 +247,7 @@ def test_a_second_screens_answer_does_not_erase_the_firsts(tmp_path: Path) -> No
     config_path = tmp_path / "osprey.yaml"
     client = _client(config_path)
 
-    assert client.put("/api/config", json={"profile": "small"}).status_code == 200
+    assert client.put("/api/config", json=_profile_answer("small")).status_code == 200
     assert client.put("/api/config", json={"models": _MODELS_ANSWER}).status_code == 200
 
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -271,3 +281,24 @@ def test_the_governance_screen_round_trips_through_osprey_yaml(tmp_path: Path) -
 
     # Read back through the same route a fresh page load uses, not only the file on disk.
     assert client.get("/api/config").json()["governance"] == answer
+
+
+def test_small_or_enterprise_without_an_https_address_is_refused_in_words(tmp_path: Path) -> None:
+    """S11: the Set-up console's Profile screen saves Small or Enterprise with its address in the
+    same write; the profile alone, still at Lite's plain-HTTP address, is refused in the schema's
+    own words, and nothing is written."""
+    config_path = tmp_path / "osprey.yaml"
+    config_path.write_text(_GOVERNANCE_AND_MAP, encoding="utf-8")
+    before = config_path.read_text(encoding="utf-8")
+    client = _client(config_path)
+    refused = client.put("/api/config", json={"profile": "small"})
+    assert refused.status_code == 422
+    assert "a Small deployment's network.public_origin must be an https:// address" in refused.text
+    assert config_path.read_text(encoding="utf-8") == before
+    plain = client.put("/api/config", json={"profile": "small", "network": {"public_origin": "http://osprey.example.org"}})
+    assert plain.status_code == 422 and "https://" in plain.text
+    # The preview of a choice comes before its address is typed: the consequences of Small do
+    # not depend on the address, so the preview still answers.
+    preview = client.post("/api/consequences", json={"profile": "small"})
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["profile"] == "small"

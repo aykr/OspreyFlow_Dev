@@ -3,7 +3,7 @@
 // the PDF from the browser's own print dialogue. Every page carries THAT item's own marking, top
 // and bottom — never the pack's level — and every interpolated string is escaped.
 import type { PackExport, PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
+import { KIND_LABEL, alertEntityWords, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
 import { manifestSentence } from "../export/api";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -70,7 +70,7 @@ function itemContent(item: PackItem): string {
       `<p class="notice">${escapeHtml(alertStatusSentence(a))}</p>` +
       `<p class="notice">${escapeHtml(alertMatchSentence(a))}</p>` +
       (a.hotlist_entry ? `<p>Hotlist entry: ${escapeHtml(a.hotlist_entry)}</p>` : "") +
-      list("Entities it matched", (a.entities ?? []).map((e) => `${e.name} (${e.entity_type})`)) +
+      list("Entities it matched", (a.entities ?? []).map(alertEntityWords)) +
       list("Evidence", alertEvidence(a))
     );
   }

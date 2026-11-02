@@ -17,6 +17,11 @@ export function ProfileScreen({
   onSave: (patch: Partial<OspreyConfig>) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<Profile>(config.profile ?? "local-lite");
+  // S11 (the owner's ruling of 2 November 2026): Small and Enterprise are HTTPS, so choosing one
+  // asks for its address, saved with the profile in one write; Lite keeps its own address.
+  const savedOrigin = config.network?.public_origin ?? "";
+  const [address, setAddress] = useState(savedOrigin.startsWith("https://") ? savedOrigin : "");
+  const cloud = selected !== "local-lite";
   const [consequences, setConsequences] = useState<Consequences | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,7 +50,9 @@ export function ProfileScreen({
     setSaving(true);
     setError(null);
     try {
-      await onSave({ profile: selected });
+      await onSave(
+        cloud ? { profile: selected, network: { ...config.network, public_origin: address.trim() } } : { profile: selected },
+      );
     } catch (exc) {
       setError(exc instanceof ApiError ? exc.body : String(exc));
     } finally {
@@ -71,6 +78,26 @@ export function ProfileScreen({
           </label>
         ))}
       </fieldset>
+
+      {cloud && (
+        <>
+          <label htmlFor="profile-address">Address (https://…)</label>
+          <input
+            id="profile-address"
+            type="url"
+            inputMode="url"
+            required
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            aria-describedby="profile-address-help"
+            placeholder="https://osprey.example.org"
+          />
+          <p id="profile-address-help" className="help">
+            {selected === "small" ? "A Small" : "An Enterprise"} deployment is reached by other people over a network, so
+            its address is HTTPS: the front proxy obtains its certificate. Plain HTTP is for Lite, on this computer only.
+          </p>
+        </>
+      )}
 
       {consequences && (
         <dl aria-label="Consequences of this choice">

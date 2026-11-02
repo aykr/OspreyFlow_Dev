@@ -238,6 +238,48 @@ describe("closing a high-severity alert (decision 7)", () => {
     expect(within(detail).queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
   });
 
+  it("names who claimed it by their name, in the queue and the detail (step 9e)", async () => {
+    const claimed = { ...ALERT, severity: "medium", assignee: "6f1c2a9e-idp-subject" };
+    serve({
+      "GET alert-queue": () => json(200, [{ alert: claimed, summary: "4 movements", kind: "typology", severity: "medium", audience: "case",
+        assignee_name: "Pat Jones" }]), // prettier-ignore
+      "GET alert-queue/a1": () => json(200, { alert: claimed, summary: "4 movements", nodes: [], edges: [], transactions: [], kind: "typology",
+        severity: "medium", audience: "case", assignee_name: "Pat Jones" }), // prettier-ignore
+      "GET alert-assignees": () => json(200, []),
+    });
+    render(<AlertQueue apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="editor" accountId="second" onCanvas={vi.fn()} />);
+    const queue = await screen.findByRole("region", { name: "Alert queue" });
+    await within(queue).findByText(/Claimed · Pat Jones ·/);
+    fireEvent.click(await screen.findByRole("button", { name: /Open alert:/ }));
+    const detail = await screen.findByRole("region", { name: "What fired this alert" });
+    await within(detail).findByText("Claimed by Pat Jones");
+    expect(screen.queryByText(/6f1c2a9e-idp-subject/)).toBeNull();
+  });
+
+  it("names the approval group by its visible legend (A14, WCAG 2.5.3)", async () => {
+    const closing = { ...ALERT, status: "closing", disposition: "false_positive", disposition_reason: "known", close_proposed_by: "member" };
+    await openAlert(closing, "second");
+    const group = await screen.findByRole("group", { name: "A second person decides this close" });
+    expect(group.getAttribute("aria-label")).toBeNull();
+  });
+
+  it("says in words why the close button is not yet available, and stops once it is (A14)", async () => {
+    await openAlert({ ...ALERT, severity: "medium" }, "member");
+    const button = await screen.findByRole("button", { name: /^(Close the alert|Propose the close)$/ });
+    const reason = () => {
+      const id = button.getAttribute("aria-describedby");
+      return id ? (document.getElementById(id)?.textContent ?? null) : null;
+    };
+    expect(button).toHaveProperty("disabled", true);
+    expect(reason()).toBe("To close it, choose a closing reason and say why, in words.");
+    expect(screen.getByText("To close it, choose a closing reason and say why, in words.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "False positive" }));
+    expect(reason()).toBe("To close it, say why, in words.");
+    fireEvent.change(screen.getByLabelText(/the reason for closing$/), { target: { value: "a known supplier" } });
+    expect(button).toHaveProperty("disabled", false);
+    expect(reason()).toBeNull();
+  });
+
   it("lets a second member approve or send back, and the proposer only withdraw", async () => {
     const closing = { ...ALERT, status: "closing", disposition: "false_positive", disposition_reason: "known", close_proposed_by: "member" };
     let calls = await openAlert(closing, "second");

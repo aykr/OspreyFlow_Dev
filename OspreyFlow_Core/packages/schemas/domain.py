@@ -1306,6 +1306,9 @@ class QueuedAlert(BaseModel):
     severity: AlertSeverity = "medium"
     audience: AlertAudience = "case"
     team: str | None = None
+    #: ADR-106 Amendment 1, as `AlertExplanation.assignee_name`: the display name of
+    #: `alert.assignee`, resolved for the rows served, never stored (step 9e).
+    assignee_name: str | None = None
 
 
 class ExplainedTransaction(BaseModel):
@@ -1340,6 +1343,9 @@ class AlertExplanation(BaseModel):
     #: to a reader who may read it, never stored (step 9d finding 1: the approval screen named the
     #: proposer by an identity-provider id).
     close_proposed_by_name: str | None = None
+    #: ADR-106 Amendment 1: the display name of `alert.assignee`, resolved the same way (step 9e:
+    #: "Claimed by" named the assignee by an identity-provider id).
+    assignee_name: str | None = None
 
 
 class AlertDispositionInput(BaseModel):

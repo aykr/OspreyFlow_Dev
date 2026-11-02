@@ -83,6 +83,7 @@ export type Severity1 = "low" | "medium" | "high";
 export type Audience = "case" | "team" | "owner";
 export type Team1 = string | null;
 export type CloseProposedByName = string | null;
+export type AssigneeName = string | null;
 
 /**
  * What fired an alert, for the reader (ADR-109 phase B): the entities it concerns and its
@@ -101,6 +102,7 @@ export interface AlertExplanation {
   audience?: Audience;
   team?: Team1;
   close_proposed_by_name?: CloseProposedByName;
+  assignee_name?: AssigneeName;
   [k: string]: unknown;
 }
 /**

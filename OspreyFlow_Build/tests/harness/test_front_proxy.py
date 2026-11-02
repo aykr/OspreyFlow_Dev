@@ -17,7 +17,12 @@ What a mistake would do, and the case that catches it:
   `test_the_glass_learns_its_identity_provider_at_run_time`;
 - Superset or the Conduit left on the old ports — `test_superset_origins_are_the_derived_names`;
 - a host tool that needs the operating system to resolve `*.localhost` —
-  `test_a_localhost_name_reaches_loopback_where_the_resolver_refuses_it`.
+  `test_a_localhost_name_reaches_loopback_where_the_resolver_refuses_it`;
+- a Lite port published on every network interface, so another machine on the network reaches the
+  Glass in plain HTTP (GDS re-audit finding S10, the owner's ruling of 2 November 2026) —
+  `test_no_lite_published_port_binds_every_interface`;
+- Small or Enterprise moved onto loopback too, so nobody can reach them —
+  `test_small_still_publishes_80_and_443_on_every_interface`.
 """
 
 from __future__ import annotations
@@ -64,11 +69,51 @@ def test_only_the_proxy_is_published() -> None:
     published = {name: s["ports"] for name, s in services.items() if s.get("ports")}
     # ADR-114 Amendment 7: the proxy alone publishes — the public origin, and the graph store's door
     # on this machine only (Amendment 4 decision 3), which the proxy now serves.
-    assert published == {"proxy": ["80:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]}
+    # S10: on this computer only.
+    assert published == {"proxy": ["127.0.0.1:80:8080", "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480"]}
     # The Conduit only when an operator opts in — through the proxy too.
     opted = _compose(_render(network={"expose_conduit": True}))
     assert {n for n, s in opted.items() if s.get("ports")} == {"proxy"}
-    assert "${OSPREY_API_PORT:-8000}:8000" in opted["proxy"]["ports"]
+    assert "127.0.0.1:${OSPREY_API_PORT:-8000}:8000" in opted["proxy"]["ports"]
+
+
+#: Each Lite shape the renderer can be asked for: the default, a named deployment's own port
+#: (ADR-138), an HTTPS `localhost` origin, the Conduit's door opened, and dashboards on.
+_LITE_SHAPES: tuple[tuple[str, dict[str, Any]], ...] = (
+    ("http://ospreyflow.localhost", {}),
+    ("http://alpha.localhost:8090", {"deployment": {"name": "alpha", "graph_port": 2503}}),
+    ("https://osprey.localhost", {}),
+    ("http://ospreyflow.localhost", {"network": {"expose_conduit": True}}),
+)
+
+
+def _bound_to_every_interface(mapping: str) -> bool:
+    """A compose `ports` entry with no bind address (`HOST:CONTAINER`, its host side perhaps
+    `${VAR:-n}`) or an explicit wildcard one: Docker publishes it on every interface."""
+    if mapping.startswith(("0.0.0.0:", "[::]:", "::")):
+        return True
+    return not mapping.startswith(("127.0.0.1:", "[::1]:"))
+
+
+@pytest.mark.parametrize(("origin", "extra"), _LITE_SHAPES)
+def test_no_lite_published_port_binds_every_interface(origin: str, extra: dict[str, Any]) -> None:
+    """S10 (GDS re-audit, the owner's ruling of 2 November 2026): Lite answers on this computer
+    only. A bare `80:8080` let a machine on the same network send `Host: ospreyflow.localhost` and
+    reach the Glass and sign-in in plain HTTP; so every port Lite publishes, the front proxy's and
+    the Conduit's door included, is bound to `127.0.0.1`."""
+    services = _compose(_render(origin, **{k: dict(v) for k, v in extra.items()}))
+    published = [(name, str(m)) for name, s in services.items() for m in s.get("ports") or []]
+    assert published, "the proxy publishes at least the origin's port"
+    wide = [(name, m) for name, m in published if _bound_to_every_interface(m)]
+    assert wide == [], f"published on every network interface: {wide}"
+
+
+def test_small_still_publishes_80_and_443_on_every_interface() -> None:
+    """Small is reached by other people over a network, so its front proxy must answer on every
+    interface: 80 for the certificate's challenge and the move to HTTPS, 443 for the service."""
+    services = _compose(_render("https://osprey.example.org", profile="small"))
+    assert services["proxy"]["ports"][:2] == ["80:80", "443:443"]
+    assert "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480" in services["proxy"]["ports"]
 
 
 def test_each_name_reaches_its_service() -> None:
@@ -93,7 +138,7 @@ def test_every_address_derives_from_the_public_origin() -> None:
         "http://a.test:8443", "http://id.a.test:8443", "http://bi.a.test:8443"
     )  # fmt: skip
     assert names.port == 8443
-    assert _compose(_render("http://a.test:8443"))["proxy"]["ports"][0] == "8443:8080"
+    assert _compose(_render("http://a.test:8443"))["proxy"]["ports"][0] == "127.0.0.1:8443:8080"
     secure = site.sites(OspreyConfig.model_validate({"network": {"public_origin": "https://osprey.example.org"}}))
     assert (secure.identity, secure.port) == ("https://id.osprey.example.org", 443)
     assert site.sites(OspreyConfig()).glass == "http://ospreyflow.localhost", "the Lite default"
