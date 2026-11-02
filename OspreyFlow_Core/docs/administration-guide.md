@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.25** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.26** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.26 | 2026-11-02 | Checked against the code end to end (build order step 10). §10: Ask to search carries the case's handling and datasets, so the analyst's engine choice applies to it as to Ask the case; it no longer always runs on the local engine. |
 | 1.25 | 2026-11-02 | §9.2: the right to manage connection-strength influencers, held by the Analyst and Admin roles. §9.6: approving an installation-wide influencer version, a second person's decision; a case's own influencers need none. |
 | 1.24 | 2026-11-02 | §1, "HTTP or HTTPS": Lite now answers on this computer only — every port it publishes is bound to `127.0.0.1`, the Conduit's own port included — so other machines cannot reach it; Small and Enterprise must have an `https://` address, and `osprey.yaml` refuses a plain-HTTP one; a gov.uk address is refused for Lite. §8.1 says the same. |
 | 1.23 | 2026-11-02 | §1: a note, "HTTP or HTTPS" — Lite is plain HTTP on a `localhost` address and has no HTTPS option, and its port is published on every network interface, so it is never opened to a network; Small and Enterprise are HTTPS with a certificate Caddy obtains and renews, port 80 only for the certificate and the move to HTTPS; the managed services over TLS; a gov.uk service over HTTPS. §8.1 links to it. |
@@ -868,9 +869,10 @@ recorded in the audit log — who made it, when, and from what to what.
 **Who chooses.** The administrator sets each role's default. An analyst may choose, for each
 question in Ask the case, among the engines offered — the local engine and each enabled provider
 that has a key — each shown "under contract" or "no contract". An engine the case's datasets may not
-reach is shown but cannot be chosen, with the reason beneath the choice. Ask to search sends no case
-material, only the case's vocabulary and the question, so it always runs on the local engine, and
-says so. Every answer names the engine and model that produced it.
+reach is shown but cannot be chosen, with the reason beneath the choice. Ask to search offers the
+same choice: its question goes under the case's handling and from the case's datasets, through the
+same two checks, and the deployment's own model answers whenever they do not allow the engine
+chosen. Every answer names the engine and model that produced it.
 
 Admin → System shows each role's model, each engine with its models, the roles it is the default
 for, whether its key is present and whether it is under a privacy contract (with its reference), and

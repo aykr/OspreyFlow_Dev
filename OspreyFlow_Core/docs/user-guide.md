@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.21** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.22** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.22 | 2026-11-02 | Checked against the Glass end to end (build order step 10). §7.1: Monitoring's tabs include **Lists** and **Connection strength**, and say which levels see Held rows and Audit. §5.12: the legend marks the composition, not the rarity measure, as a case override (a case cannot choose the measure). §7.6: the *For* choices as the builder words them (*just me*). |
 | 1.21 | 2026-11-02 | §5.12: shared-attribute rarity is now worked out by the client's own measure (one less a shared value's share of the pairs linked through values of its kind), with the earlier measure still to choose; the two compositions, standard and client parity, and the raw sum on the client's scale; an influencer triggered by a dataset; a case switched to client parity by its Author. §7.6: a strength figure on the client's scale. |
 | 1.20 | 2026-11-02 | New §5.12, How connection strength is worked out: a link's strength from its own count and recency, the influencers that change it (direct links, and a boost from a record that evidences the link, such as an assault), shared-attribute rarity, the legend, the two new filters in Metrics, the Matrix's two sorts, the Inspector's explanation, who changes influencers, and why two analysts can see different rarity. §7.6: a rule on connection strength or rarity. |
 | 1.19 | 2026-11-02 | §4: the demonstration cases each starter brings, and their domains; a public dataset's case. |
@@ -504,10 +505,11 @@ proposal and a second person's approval); a case's Author may switch one case to
 compare the two on the same case, and back.
 
 **Where you see it:**
-- **The legend** lists, under *Connection strength*, the composition in force and the rarity measure
-  (marked **Case override** if the case chose it), every influencer in force in the case — what
-  triggers it, the links it changes, the change and its size, and where it came from (shipped,
-  installation-wide, or **Case override**) — which link types count as direct, and the rarity note.
+- **The legend** lists, under *Connection strength*: the composition in force (marked **Case
+  override** if the case chose it); the rarity measure, which only the installation chooses; every
+  influencer in force in the case — what triggers it, the links it changes, the change and its size,
+  and where it came from (shipped, installation-wide, or **Case override**); which link types count
+  as direct; and the rarity note.
 - **Metrics** (§5.7) offers *Connection strength* and *Shared-attribute rarity* to rank by and to
   filter by. Choose one under **Filter** and slide **Metric value at least**: a link below the
   strength, and a person none of whose links reach it, fade; with rarity, a person whose rarest
@@ -603,7 +605,8 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 ![Monitoring: the one queue, with a hotlist alert open](images/user/09-monitoring.png)
 
 The rail's **Monitoring** (its badge counts what is open or claimed) is the one place for alerts. Its
-tabs are **Queue**, **Rules**, **Watches**, and, by your level in the case, **Held rows** and **Audit**.
+tabs are **Queue**, **Rules**, **Watches**, **Lists** and **Connection strength**, and, by your level in the
+case, **Held rows** (an Editor or Author) and **Audit** (an Author or an administrator).
 
 **The queue holds every kind of alert you may see**, in one list:
 
@@ -739,7 +742,7 @@ and its link types — so there is nothing to type that could fail to be underst
   when the rule runs — after each load commits, or before it. Before commit you also choose what a hit
   does: load with its alert, or hold its rows for a reviewer in **Held rows**. A rule that names a link
   runs after commit, since a link is read from the stored graph.
-- **For.** *Just me* (the alerts reach you alone, like a monitor's), *this case*, or — for an
+- **For.** *just me* (the alerts reach you alone, like a monitor's), *this case*, or — for an
   administrator — *the whole deployment*, which watches every case's loads.
 
 **Show the drawn pattern** shows the same rule as the Query builder would draw it. Once deployed, the
