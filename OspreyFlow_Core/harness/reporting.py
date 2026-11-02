@@ -16,7 +16,6 @@ from pathlib import Path
 from harness.site import sites
 from schemas.deployment import OspreyConfig
 
-
 #: Superset's build context from a checkout-rooted deployment's folder (`deploy/generated/<name>/`):
 #: `deploy/superset`, two folders up. Kept byte for byte for those deployments.
 SUPERSET_CONTEXT_FROM_OUTPUT_DIR = "../../superset"
