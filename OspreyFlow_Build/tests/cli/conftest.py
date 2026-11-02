@@ -137,7 +137,8 @@ class Rig:
 
     def ask(self, prompt: str, default: str = "") -> str:
         self.questions.append(prompt)
-        return self.replies.pop(0) if self.replies else default
+        # As the real prompt (`ospreyflow.main._ask`): an empty reply takes the default.
+        return (self.replies.pop(0) if self.replies else "") or default
 
     def ask_secret(self, prompt: str) -> str:
         self.secret_prompts.append(prompt)
@@ -187,8 +188,12 @@ def product(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def rig(product: Path, tmp_path: Path) -> Rig:
-    """The demo data root is pinned under `tmp_path`, so no test can reach the real home folder."""
-    return Rig(product, env={"OSPREYFLOW_DEMO_DATA": str(tmp_path / "demo-data")})
+    """The demo data root and the home folder (`~/.ospreyflow/deployments`, ADR-138) are pinned
+    under `tmp_path`, so no test can reach the real home folder."""
+    return Rig(
+        product,
+        env={"OSPREYFLOW_DEMO_DATA": str(tmp_path / "demo-data"), "HOME": str(tmp_path / "home")},
+    )
 
 
 def make_python_stub(product: Path, script: str) -> None:

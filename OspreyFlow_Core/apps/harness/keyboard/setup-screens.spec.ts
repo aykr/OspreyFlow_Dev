@@ -501,6 +501,8 @@ test("install page: Tab reaches the Mode screen's radio group and a real Enter s
   await expect(page.getByRole("button", { name: "Review", exact: true })).toBeFocused();
   await page.keyboard.press("Tab"); // the radio group, on the checked radio
   await expect(page.getByRole("radio", { name: /^Lite/ })).toBeFocused();
+  await page.keyboard.press("Tab"); // the starter (ADR-138), left at "No starter"
+  await expect(page.getByRole("combobox", { name: "Starter (optional)" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
   const [response] = await Promise.all([
@@ -510,6 +512,59 @@ test("install page: Tab reaches the Mode screen's radio group and a real Enter s
   expect(response.ok()).toBe(true);
   expect(((await response.json()) as { mode: string }).mode).toBe("lite");
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-mode");
+});
+
+test("install page: the Mode screen's starter is chosen by keyboard, the GOV.UK service named, and a real Enter saves it", async ({
+  page,
+}) => {
+  // ADR-138 decision 1: a starter on the guided page's first screen, with the GOV.UK theme's three
+  // questions, every step by keyboard against the real `harness/install_page.py`.
+  await openInstallPage(page);
+  await page.getByRole("radio", { name: /^Lite/ }).focus();
+  await page.keyboard.press("Tab");
+  const starter = page.getByRole("combobox", { name: "Starter (optional)" });
+  await expect(starter).toBeFocused();
+  // Type-ahead, as a person choosing from a closed list does: "g" reaches the first GOV.UK starter.
+  await page.keyboard.type("g");
+  await expect(starter).toHaveValue("govuk-crime");
+  await page.keyboard.press("Tab"); // the service name, offered for the whole service
+  const service = page.getByRole("textbox", { name: "Service name" });
+  await expect(service).toBeFocused();
+  await expect(service).toHaveValue("Analyse crime intelligence");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "Organisation" })).toBeFocused();
+  await page.keyboard.type("Keyboard Test Department");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("combobox", { name: "Phase" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
+  const [response] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(response.ok()).toBe(true);
+  const saved = (await response.json()) as {
+    answers: { starter: string; appearance: { service_name: string; organisation: string; phase: string } };
+  };
+  expect(saved.answers.starter).toBe("govuk-crime");
+  expect(saved.answers.appearance).toEqual({
+    service_name: "Analyse crime intelligence",
+    organisation: "Keyboard Test Department",
+    phase: "beta",
+  });
+  // Put back: the cases after this one walk Lite's screens without a starter.
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(starter).toBeFocused();
+  await page.keyboard.type("n"); // "No starter: choose each answer yourself"
+  await expect(starter).toHaveValue("");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
+  const [cleared] = await Promise.all([page.waitForResponse(isAnswersPut), page.keyboard.press("Enter")]);
+  expect(((await cleared.json()) as { answers: { starter?: string } }).answers.starter).toBeUndefined();
+  registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-starter");
 });
 
 test("install page: a keyboard-activated switch reaches Folders and a real Enter saves them", async ({
@@ -617,7 +672,9 @@ test("install page: Small's Cloud and region screen is reached by keyboard and a
   await expect(page.getByRole("radio", { name: /^Lite/ })).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(page.getByRole("radio", { name: /^Small/ })).toBeChecked();
+  await page.keyboard.press("Tab"); // the starter (ADR-138), left as it is
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
   const [modeResponse] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.keyboard.press("Enter"),
@@ -703,7 +760,9 @@ test("install page: Lite's Install is reached by keyboard, a real Enter runs it 
   await expect(page.getByRole("radio", { name: /^Small/ })).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await expect(page.getByRole("radio", { name: /^Lite/ })).toBeChecked();
+  await page.keyboard.press("Tab"); // the starter (ADR-138), left as it is
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
   const [modeResponse] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.keyboard.press("Enter"),

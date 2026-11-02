@@ -1,0 +1,55 @@
+# ADR-138: the VAST Challenge 2008 MC3 cell phone call records (about 400 phones over ten days in
+# June 2006, on the fictional island of Isla del Sueño). The five fields the tasks page documents
+# (http://www.cs.umd.edu/hcil/VASTchallenge08/tasks.html): From, To, Datetime (`yyyymmdd hhmm`),
+# Duration (seconds) and Cell Tower. Each phone an `Endpoint` of kind `handle` (the data gives
+# identifiers, not numbers); each call a temporal `COMMUNICATED_WITH` link with its duration.
+# `yyyymmdd hhmm` is ISO 8601's basic form, so the engine reads `20060601 0815` as 1 June 08:15
+# whatever the date order; `mdy` is declared for any value written otherwise. The values carry no
+# offset and are read as UTC. The golden test runs it on a tiny synthetic file in this shape.
+id: vast-2008-mc3-calls
+version: 1
+label: "VAST Challenge 2008 MC3: cell phone calls (synthetic)"
+connector:
+  profile: generic-csv
+  date_order: mdy
+ontology_version: 17
+pack_versions: {}
+
+defaults:
+  legal_basis: A public research dataset of a fictional scenario
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: public-dataset, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: caller
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: From}
+        value_normalised: {field: From}
+        handle: {field: From}
+        endpoint_kind: {literal: handle}
+    - ref: called
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: To}
+        value_normalised: {field: To}
+        handle: {field: To}
+        endpoint_kind: {literal: handle}
+  edges:
+    - type: COMMUNICATED_WITH
+      from: caller
+      to: called
+      temporal:
+        at: {field: Datetime, transform: "datetime(tz=UTC)"}
+      properties:
+        duration_s: {field: Duration}
+
+unmapped_fields:
+  - {field: Cell Tower, note: "Where the call began. A phone identifier is not placed at a tower: the ontology places people, devices and vehicles, so the tower stays in the source file."}

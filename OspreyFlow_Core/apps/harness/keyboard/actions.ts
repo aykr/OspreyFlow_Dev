@@ -46,4 +46,6 @@ export const SETUP_SCREENS_ACTIONS = defineActionRegistry("SETUP_SCREENS_ACTIONS
   "submit-save-answers",
   // ADR-137 decision 3: a provider's key, entered on the install page's Models screen.
   "submit-set-key",
+  // ADR-138 decision 1: a starter chosen on the Mode screen, and the GOV.UK service named.
+  "submit-save-starter",
 ] as const);

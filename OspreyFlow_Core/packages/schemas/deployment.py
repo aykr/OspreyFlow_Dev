@@ -741,6 +741,18 @@ class DeploymentConfig(BaseModel):
             "deployment on the same machine shares none of them."
         ),
     )
+    #: ADR-138 decision 2: a deployment installed beside another (`ospreyflow install --name`)
+    #: publishes its graph store on a loopback port of its own, so two share no port.
+    graph_port: int | None = Field(
+        default=None,
+        ge=1024,
+        le=65535,
+        description=(
+            "Default: 2480. The port on this machine (127.0.0.1 only) the graph store's own tools "
+            "reach it at. A deployment installed beside another with ospreyflow install --name is "
+            "given one of its own, so the two share no port."
+        ),
+    )
 
     @field_validator("name")
     @classmethod

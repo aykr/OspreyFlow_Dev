@@ -1,0 +1,33 @@
+# ADR-138 decision 3: the first catalogue entries are IEEE VAST Challenge datasets. OspreyFlow ships
+# this manifest and its recipe only; the data is downloaded by the administrator and never carried
+# (as with PaySim). Confirmed on 2 November 2026 (spec/00_ARCHITECTURE.md §7's licence register):
+# no licence, terms of use, redistribution or commercial-use statement is published on the source
+# page, the WUSTL mirror or the challenge's task page. "No licence stated" grants no right to pass
+# the data on: it is never redistributed, and is used on the administrator's own machine.
+#
+# `sha256` is not recorded: OspreyFlow never downloads VAST data, so nobody has hashed the real file.
+# Until it is recorded, `ospreyflow demo add public` refuses this entry and says how to pin the file
+# you downloaded (`python -m scripts.public_dataset pin`), which writes your own manifest with it.
+id: vast-2012-mc2
+name: "VAST Challenge 2012, Mini-Challenge 2: Bank of Money regional network (firewall log)"
+source_page: "https://www.cs.umd.edu/hcil/varepository/VAST%20Challenge%202012/challenges/MC2%20-%20Bank%20of%20Money%20regional%20Network%20Op/"
+licence: >-
+  No licence or terms of use are stated on the source page, the WUSTL mirror
+  (https://visualdata.wustl.edu/varepository/) or the task description
+  (http://www.cs.umd.edu/hcil/VASTchallenge2012/TaskDescriptions.htm). No right to redistribute is
+  granted: use it on your own machine, never pass it on, and do not rely on it for commercial use
+  without the publishers' permission.
+licence_url: "http://www.cs.umd.edu/hcil/VASTchallenge2012/TaskDescriptions.htm"
+citation: >-
+  VAST Challenge 2012, Mini-Challenge 2 ("Bank of Money regional Network Operations"), IEEE VAST
+  Challenge; Visual Analytics Benchmark Repository, University of Maryland.
+redistribution: not_stated
+commercial_use: not_stated
+fictional: true
+real_personal_data: false
+file:
+  name: Firewall-04072012.csv
+  sha256: null
+  delimiter: ","
+recipe: vast_2012_mc2_firewall_recipe.yaml
+domains: [stix]

@@ -35,6 +35,7 @@ is still `python -m harness.apply`. Every compose call reads the deployment's ow
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -87,7 +88,21 @@ def _register(argv: list[str]) -> int:
     return register_sign_in.main(argv)
 
 
+#: ADR-138: the folder of a deployment kept under `~/.ospreyflow/deployments/<name>/`, which the
+#: `ospreyflow` command names when it runs this (or a seed) for a deployment chosen with `--name`.
+DEPLOYMENT_DIR_VARIABLE = "OSPREYFLOW_DEPLOYMENT_DIR"
+
+
 def _deployment_dir(repo_root: Path) -> Path:
+    named = os.environ.get(DEPLOYMENT_DIR_VARIABLE)
+    if named:
+        chosen = Path(named)
+        if not (chosen / "compose.yaml").is_file():
+            raise NothingToRefresh(
+                f"{chosen} holds no rendered deployment (no compose.yaml). Install it first with "
+                "`ospreyflow install --name <name>`."
+            )
+        return chosen
     generated = repo_root / "deploy" / "generated"
     # ADR-132 Amendment 1: the deployment's own folder first, `deployment.name` or the profile, so a
     # product folder holding two rendered deployments rebuilds the one its `osprey.yaml` names.
@@ -198,6 +213,14 @@ def _models_up_to_date(directory: Path) -> bool:
     return False
 
 
+def _build_context(services: dict) -> str:
+    """The `build.context` the deployment's own Conduit names (`../../..` before ADR-138)."""
+    api = services.get("api")
+    build = api.get("build") if isinstance(api, dict) else None
+    context = build.get("context") if isinstance(build, dict) else None
+    return str(context) if context else "../../.."
+
+
 def _like_the_deployment(config: OspreyConfig, services: dict, directory: Path) -> OspreyConfig:
     """Build or pull as the deployment does. `apply --build` builds the owned images from the
     checkout but leaves the copied `osprey.yaml` without `source_path`, so the mode is read from the
@@ -205,7 +228,9 @@ def _like_the_deployment(config: OspreyConfig, services: dict, directory: Path) 
     that does not exist)."""
     api = services.get("api")
     if isinstance(api, dict) and "build" in api and config.components.source_path is None:
-        root = directory.parent.parent.parent
+        # Where the deployment builds from: three levels up for one in a checkout's
+        # `deploy/generated/`, the checkout's own path for one kept under `~/.ospreyflow` (ADR-138).
+        root = (directory / str(_build_context(services))).resolve()
         return config.model_copy(
             update={"components": config.components.model_copy(update={"source_path": str(root)})}
         )
@@ -227,7 +252,9 @@ def _new_services_added(directory: Path) -> None:
     document = yaml.safe_load(text)
     services = document.setdefault("services", {})
     config = _like_the_deployment(config, services, directory)
-    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
+    rendered = yaml.safe_load(
+        _render_compose(config, service_images(config, build_context=_build_context(services)))
+    )["services"]
     changed = False
     layout = _on_the_internal_network(document)
     left_out = []
@@ -359,7 +386,9 @@ def _pins_moved(directory: Path) -> None:
     # report-sync runs the Conduit's image with no `build` of its own: rendered in pull mode it
     # looked "moved" to a registry image that does not exist (ADR-111 Amendment 4's refresh).
     config = _like_the_deployment(config, services, directory)
-    rendered = yaml.safe_load(_render_compose(config, service_images(config)))["services"]
+    rendered = yaml.safe_load(
+        _render_compose(config, service_images(config, build_context=_build_context(services)))
+    )["services"]
     moved: dict[str, str] = {}
     for name, wanted in rendered.items():
         service = services.get(name)

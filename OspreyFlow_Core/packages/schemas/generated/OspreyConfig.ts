@@ -329,6 +329,10 @@ export type ServiceStatus = string | null;
  */
 export type Name2 = string | null;
 /**
+ * Default: 2480. The port on this machine (127.0.0.1 only) the graph store's own tools reach it at. A deployment installed beside another with ospreyflow install --name is given one of its own, so the two share no port.
+ */
+export type GraphPort = number | null;
+/**
  * Default: ospreyflow. The GOV.UK look, for a service on a gov.uk domain only.
  */
 export type Brand = "ospreyflow" | "govuk";
@@ -671,6 +675,7 @@ export interface WelcomeConfig {
  */
 export interface DeploymentConfig {
   name?: Name2;
+  graph_port?: GraphPort;
 }
 /**
  * How every page of the deployment looks (ADR-132): the deployment's brand, which is not the

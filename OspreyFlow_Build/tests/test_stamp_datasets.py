@@ -231,9 +231,13 @@ def test_every_seeds_case_name_is_known_to_the_stamping() -> None:
     from scripts.seed_internal import DATASETS
     from scripts.stamp_datasets import SEED_CASE_NAMES
 
+    # `public` (ADR-138) has no case name of its own: each public dataset's case is named from its
+    # manifest, and its seed stamps every write as it makes it, so the stamping never looks it up.
+    named = {key: d for key, d in DATASETS.items() if d.case_name}
+    assert set(DATASETS) - set(named) == {"public"}
     assert {
-        name: SEED_CASE_NAMES.get(name) for name in (d.case_name for d in DATASETS.values())
-    } == {d.case_name: key for key, d in DATASETS.items()}
+        name: SEED_CASE_NAMES.get(name) for name in (d.case_name for d in named.values())
+    } == {d.case_name: key for key, d in named.items()}
 
 
 def test_the_seeds_unit_is_the_one_every_case_is_in_unless_told() -> None:

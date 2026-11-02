@@ -1039,6 +1039,23 @@ code is MIT "unless stated otherwise". `appearance.brand: govuk` is defined to m
 gov.uk domain (ADR-132), which is the only use the font is put to. The files are self-hosted from the
 deployment's own origin (`/assets/govuk/`), never a CDN, and fetched only by a GOV.UK-brand page.
 
+**ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
+Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the
+data (`packages/demo_fixtures/public_datasets/`); the administrator downloads the file and adds it to
+their own deployment with `ospreyflow demo add public`. ADR-026 holds: the published files are never
+in this repository or CI, and the golden tests run on tiny synthetic files in each challenge's
+published column shape. Read on 2 November 2026:
+
+| Dataset | Terms as published | Fictional | Citation | Sources |
+| --- | --- | --- | --- | --- |
+| VAST Challenge 2012, Mini-Challenge 2 ("Bank of Money regional Network Operations"): the firewall log (`vast-2012-mc2`; the `cyber` starter) | **No licence or terms of use stated** on the repository page, its WUSTL mirror (whose about page says only "Full credit and provenance information is given separately for each benchmark") or the task description ("DESCRIPTION ORIGINALLY FROM the VAST Challenge 2012"). No licence grants no right to redistribute: the manifest records redistribution and commercial use as `not_stated`, and the guide says to use it on one's own machine, never pass it on, and not rely on it commercially without the publishers' permission | Yes: a fictional bank's network of about 5,000 machines; no real personal data indicated | VAST Challenge 2012, Mini-Challenge 2, IEEE VAST Challenge; Visual Analytics Benchmark Repository, University of Maryland | `cs.umd.edu/hcil/varepository/VAST Challenge 2012/challenges/MC2 - Bank of Money regional Network Op/`; `visualdata.wustl.edu/varepository/`; `cs.umd.edu/hcil/VASTchallenge2012/TaskDescriptions.htm`; the 15-column header from COMIDDS (Fraunhofer FKIE), `fkie-cad.github.io/COMIDDS/content/datasets/vast_2012` — a secondary source, to be checked against the download |
+| VAST Challenge 2008, Mini Challenge 3 ("Cell Phone Calls"): call records (`vast-2008-mc3`; the `crime` starter) | **No licence or terms of use stated** on the repository page, the tasks page or the 2008 home page (whose registration wording is for entering the challenge). Recorded and advised as above | Yes: "The datasets used for these challenges are synthetic" (the tasks page); about 400 phones on the fictional Isla del Sueño | VAST Challenge 2008, Mini Challenge 3, IEEE VAST Challenge; Visual Analytics Benchmark Repository, University of Maryland | `cs.umd.edu/hcil/varepository/VAST Challenge 2008/challenges/MC3 - Cell Phone Calls/`; `cs.umd.edu/hcil/VASTchallenge08/tasks.html` (the five fields From, To, Datetime, Duration, Cell Tower; the file's own name and header spelling are not published there) |
+
+Not catalogued: VAST 2011 MC2 (its IDS log is Snort text, not a table), VAST 2013 MC3 (its netflow
+columns could not be confirmed from a published page), and VAST 2014 MC1/MC2 and 2021 (the GAStech
+scenario: their columns are not published, and a note that MC1's background material "should not be
+reproduced" could not be confirmed). The older SEMVAST mirror (`vast.cs.umass.edu`) did not resolve.
+
 `make licence-check` runs `pip-licenses` and `license-checker` against the allowlist and fails
 on any addition. Run it in CI on every pull request, not nightly. A sidecar's own environment is out
 of its sight, so the `ner` image gates its licences itself at build (`services/ner/licence_gate.py`,

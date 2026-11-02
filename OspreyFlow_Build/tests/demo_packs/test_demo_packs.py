@@ -18,12 +18,12 @@ from tools.layout import CORE
 
 _EXPECTED_IDS = {
     "hmp", "fixture-corp", "operation-ledger", "paysim", "enron", "prison-intelligence",
-    "prison-intelligence-scale",
+    "cyber-intrusion", "prison-intelligence-scale",
 }  # fmt: skip
 _LICENCE_SHA256 = "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5"
 _REFUSAL = (
     "There is no demo pack called '{}'. "
-    "The packs are: hmp, fixture-corp, operation-ledger, paysim, enron, prison-intelligence, prison-intelligence-scale."
+    "The packs are: hmp, fixture-corp, operation-ledger, paysim, enron, prison-intelligence, cyber-intrusion, prison-intelligence-scale."
 )
 
 
@@ -153,7 +153,7 @@ def test_each_seeded_pack_names_a_seed_module_that_exists() -> None:
     seeded = [p for p in demo_packs.packs() if p.delivery == "seed"]
 
     assert {p.id for p in seeded} == {
-        "hmp", "fixture-corp", "operation-ledger", "prison-intelligence",
+        "hmp", "fixture-corp", "operation-ledger", "prison-intelligence", "cyber-intrusion",
         "prison-intelligence-scale",
     }  # fmt: skip
     for pack in seeded:

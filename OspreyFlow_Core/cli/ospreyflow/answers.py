@@ -33,6 +33,13 @@ a person at the prompts and CI install the same way.
       storage_class: gp3           #   each store's own volumes; the cluster's default when left out
       shared_storage_class: efs-sc #   the volume every Conduit shares: EFS on AWS, Azure Files
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
+    starter: govuk-crime           # ADR-138: a theme and a domain, pre-filling the answers below
+    appearance:                    # the look (appearance.* in osprey.yaml)
+      brand: govuk                 #   ospreyflow | govuk
+      service_name: Analyse crime intelligence   # GOV.UK: required; names the whole service
+      organisation: Example Department
+      phase: beta                  #   alpha | beta | live | none
+    demo_accounts: true            # false for no demo accounts (the blank starter's answer)
 
 Unknown keys are refused by name, as `osprey.yaml`'s are, so a typo never silently means the
 default. This module depends on nothing but PyYAML: the command is small, and the deployment's own
@@ -50,6 +57,7 @@ from typing import Any
 
 import yaml
 
+from ospreyflow import starters
 from ospreyflow.home import LITE_ORIGIN
 
 MODES = ("lite", "small", "enterprise")
@@ -59,7 +67,7 @@ PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
 _TOP = {
     "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
-    "mail", "external", "cluster",
+    "mail", "external", "cluster", "starter", "appearance", "demo_accounts",
 }  # fmt: skip
 _SECTIONS = {
     "components": {"dashboards"},
@@ -68,6 +76,7 @@ _SECTIONS = {
     "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email", "api_cidrs"},
     "mail": {"host", "port", "from", "starttls", "username"},
     "cluster": {"namespace", "storage_class", "shared_storage_class"},
+    "appearance": {"brand", "service_name", "organisation", "phase"},
 }
 #: The sections a named `config:` replaces; giving both is refused rather than one silently winning.
 _CONFIG_SECTIONS = ("components", "folders", "models")
@@ -96,6 +105,44 @@ class Answers:
     #: The addresses OpenTofu opens the cluster's API to (ADR-114 Amendment 19): an input to the
     #: build, not a setting of the deployment, so never in `osprey.yaml`.
     api_cidrs: tuple[str, ...] = ()
+    #: ADR-138: the starter the answers were pre-filled from, if any (recorded as a comment only).
+    starter: starters.Starter | None = None
+    #: `appearance.*` as the answers set it (brand, service_name, organisation, phase); empty
+    #: leaves the product's own.
+    appearance: dict[str, str] = field(default_factory=dict)
+    #: Whether the install makes the demo accounts (`--no-demo-accounts` also turns them off).
+    demo_accounts: bool = True
+    #: ADR-126 `domains` the demo cases are set to: the starter's domain's, else each seed's own.
+    case_domains: tuple[str, ...] | None = None
+
+
+def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) -> dict[str, str]:
+    """The answers' `appearance`, with the starter's theme as the brand when none is given; a GOV.UK
+    service refused in words without its name (ADR-138 decision 1)."""
+    chosen = {k: str(v) for k, v in section.items() if v not in (None, "")}
+    if starter is not None:
+        chosen.setdefault("brand", starter.theme)
+        if starter.govuk and chosen["brand"] == "govuk":
+            chosen.setdefault("phase", starters.DEFAULT_PHASE)  # a new service is not yet live
+    brand = chosen.get("brand")
+    if brand is not None and brand not in starters.THEMES:
+        raise AnswersRefused(
+            f"appearance.brand is one of {', '.join(starters.THEMES)}, not {brand!r}"
+        )
+    phase = chosen.get("phase")
+    if phase is not None and phase not in starters.PHASES:
+        raise AnswersRefused(
+            f"appearance.phase is one of {', '.join(starters.PHASES)}, not {phase!r}"
+        )
+    if brand == "govuk" and not chosen.get("service_name", "").strip():
+        offered = starter.domain.service_name if starter is not None else None
+        example = f" (this starter offers {offered!r})" if offered else ""
+        raise AnswersRefused(
+            "a GOV.UK service is named in its header, and no service name was given: give "
+            f"appearance.service_name, or --service-name{example}. Name the service the whole "
+            "deployment is, since it holds many cases, not one case. Nothing was installed"
+        )
+    return chosen
 
 
 def _known(where: str, raw: Mapping[str, Any], allowed: set[str]) -> None:
@@ -213,6 +260,22 @@ def load_answers(
             "paysim_file is the PaySim pack's file, and the paysim pack is not chosen"
         )
 
+    starter: starters.Starter | None = None
+    if raw.get("starter") is not None:
+        try:
+            starter = starters.parse(str(raw["starter"]))
+        except starters.UnknownStarter as unknown:
+            raise AnswersRefused(str(unknown)) from None
+        if "demo_packs" not in raw:
+            # Pre-filled: the starter's packs this checkout offers (a cyber starter on a checkout
+            # without `cyber-intrusion` loads no demo case, and the install says so).
+            chosen = tuple(p for p in starter.domain.demo_packs if p in offered)
+    appearance = _appearance(sections["appearance"], starter)
+    demo_accounts = _boolean(
+        "demo_accounts",
+        raw.get("demo_accounts", starter.domain.demo_accounts if starter is not None else True),
+    )
+
     folders = sections["folders"]
     return Answers(
         mode=str(mode),
@@ -236,6 +299,10 @@ def load_answers(
         external=copy.deepcopy(dict(external)),
         cluster=cluster,
         api_cidrs=api_cidrs,
+        starter=starter,
+        appearance=appearance,
+        demo_accounts=demo_accounts,
+        case_domains=starter.domain.case_domains if starter is not None else None,
     )
 
 
@@ -246,6 +313,9 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         loaded = yaml.safe_load(answers.config.read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
             raise AnswersRefused(f"{answers.config} does not hold settings")
+        if answers.appearance:
+            # ADR-138: the guided page installs from its draft; the look is a Mode-screen answer.
+            loaded["appearance"] = {**(loaded.get("appearance") or {}), **answers.appearance}
         return loaded
     config = copy.deepcopy(dict(base))
     config["profile"] = PROFILES[answers.mode]
@@ -264,6 +334,9 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         }
     if answers.external:
         config["external"] = copy.deepcopy(answers.external)
+    if answers.appearance:
+        # ADR-138: only what the answers say; the rest of the section stays as the base has it.
+        config["appearance"] = {**(config.get("appearance") or {}), **answers.appearance}
     if answers.mode == "enterprise":
         # 05 §3b: a cluster's Conduits share ClickHouse; DuckDB would give each its own events.
         config.setdefault("components", {})["analytics_engine"] = "clickhouse"

@@ -81,6 +81,7 @@ from harness.render import (
     DEFAULT_OUT_ROOT,
     REPO_ROOT,
     SECRETS_FILE,
+    build_context_for,
     load_config,
     render,
     render_litellm_config,
@@ -618,7 +619,9 @@ def keep_existing_secrets(new: str, previous: str) -> str:
 def render_deployment(config: OspreyConfig, out_dir: Path, *, images_from: Path | None) -> Any:
     """Step 1: the deployment's files, and — for an install from a release — its images pinned to
     the verified lock before anything can start them."""
-    rendered = render(config, allow_unpinned=True)
+    # ADR-138: rendered outside a checkout, the images are built from the checkout by its own path.
+    context = build_context_for(out_dir, config.components.source_path)
+    rendered = render(config, allow_unpinned=True, build_context=context)
     write_artefacts(rendered, out_dir)
     if images_from is not None:
         pin_release_images(out_dir, images_from)
