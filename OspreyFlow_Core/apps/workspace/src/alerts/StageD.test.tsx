@@ -84,8 +84,8 @@ describe("a rule on a schedule (decision 1)", () => {
     render(<SentenceBuilder apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="author" isAdministrator={false} patterns={[]} onDeployed={vi.fn()} />);
     fireEvent.change(await screen.findByLabelText("Runs"), { target: { value: "schedule" } });
     fireEvent.change(screen.getByLabelText("Every"), { target: { value: "weekly" } });
-    fireEvent.change(screen.getByLabelText("Day of the week"), { target: { value: "3" } });
-    fireEvent.change(screen.getByLabelText("Hour"), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("On (day of the week)"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("At (hour, Europe/London)"), { target: { value: "8" } });
     fireEvent.change(screen.getByLabelText("Name of the sentence rule"), { target: { value: "Weekly check" } });
     fireEvent.click(screen.getByRole("button", { name: "Deploy the sentence" }));
     await waitFor(() => expect(calls.some((c) => c.path === "rules/sentence")).toBe(true));
@@ -215,7 +215,7 @@ describe("closing a high-severity alert (decision 7)", () => {
   it("proposes the close and says it waits for a second person", async () => {
     const calls = await openAlert(ALERT, "member");
     await screen.findByText(/closing it here proposes the close/);
-    fireEvent.change(screen.getByLabelText("Reason for closing"), { target: { value: "known" } });
+    fireEvent.change(screen.getByLabelText("Why, in words: the reason for closing"), { target: { value: "known" } });
     fireEvent.click(screen.getByRole("radio", { name: "False positive" }));
     fireEvent.click(screen.getByRole("button", { name: "Propose the close" }));
     await screen.findByText("Close proposed as False positive; it waits for a second person to approve it.");
@@ -248,7 +248,7 @@ describe("closing a high-severity alert (decision 7)", () => {
     calls = await openAlert(closing, "member");
     await screen.findByText(/You proposed this close/);
     expect(screen.queryByRole("button", { name: "Approve the close" })).toBeNull();
-    fireEvent.change(screen.getByLabelText("Reason for sending the close back"), { target: { value: "on reflection" } });
+    fireEvent.change(screen.getByLabelText(/the reason for sending the close back$/), { target: { value: "on reflection" } });
     fireEvent.click(screen.getByRole("button", { name: "Withdraw the close" }));
     await waitFor(() => expect(calls.find((c) => c.path === "alert-queue/a1/send-back")?.body).toEqual({ reason: "on reflection" }));
   });
@@ -273,7 +273,7 @@ describe("a screening list's refresh schedule (Amendment 3 item 4)", () => {
     });
     render(<ListsPanel apiBaseUrl="http://api" bearerToken="t" canManage />);
     fireEvent.change(await screen.findByLabelText("Refreshed"), { target: { value: "weekly" } });
-    fireEvent.change(screen.getByLabelText("Refresh day"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("On (refresh day)"), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the schedule" }));
     await screen.findByText("“Synthetic list” is refreshed every Monday at 05:00 (Europe/London), as you.");
     expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ schedule: { every: "weekly", hour: 5, weekday: 1 } });

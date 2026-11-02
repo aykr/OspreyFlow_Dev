@@ -59,15 +59,15 @@ describe("the structured schedule", () => {
   it("reads an existing daily schedule back as Every day at its time", async () => {
     serve();
     place();
-    expect(((await screen.findByLabelText("How often")) as HTMLSelectElement).value).toBe("daily");
-    await waitFor(() => expect((screen.getByLabelText("Time") as HTMLInputElement).value).toBe("06:00"));
+    expect(((await screen.findByLabelText("Run on a schedule (how often)")) as HTMLSelectElement).value).toBe("daily");
+    await waitFor(() => expect((screen.getByLabelText("At (time)") as HTMLInputElement).value).toBe("06:00"));
   });
 
   it("explains a chosen schedule in words with its next five runs, then saves it with its zone", async () => {
     const sent = serve();
     place();
-    fireEvent.change(await screen.findByLabelText("How often"), { target: { value: "weekdays" } });
-    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "07:30" } });
+    fireEvent.change(await screen.findByLabelText("Run on a schedule (how often)"), { target: { value: "weekdays" } });
+    fireEvent.change(screen.getByLabelText("At (time)"), { target: { value: "07:30" } });
     const preview = await screen.findByRole("status", { name: "Schedule preview" });
     expect(within(preview).getByText("Runs every weekday at 07:30 (Europe/London).")).toBeTruthy();
     expect(within(preview).getAllByRole("listitem")).toHaveLength(5);
@@ -83,7 +83,7 @@ describe("the structured schedule", () => {
   it("says, in the Conduit's words, a schedule it could not keep", async () => {
     serve();
     place();
-    fireEvent.change(await screen.findByLabelText("How often"), { target: { value: "cron" } });
+    fireEvent.change(await screen.findByLabelText("Run on a schedule (how often)"), { target: { value: "cron" } });
     fireEvent.change(screen.getByLabelText("Cron expression"), { target: { value: "*/5 * * * *" } });
     expect((await screen.findByRole("alert")).textContent).toContain("more often than every 15 minutes");
   });

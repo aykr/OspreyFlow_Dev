@@ -324,7 +324,7 @@ function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: strin
       </label>
       <label className="label" style={FIELD}>
         Real dataset it is (empty for one of OspreyFlow&apos;s synthetic lists)
-        <Input aria-label="Real dataset" placeholder="ofac_sdn" value={dataset} onChange={(e) => setDataset(e.target.value)} />
+        <Input aria-label="Real dataset it is" placeholder="ofac_sdn" value={dataset} onChange={(e) => setDataset(e.target.value)} />
       </label>
       {CLOSED_LISTS[source] && (
         <p className="label" style={{ margin: 0, fontWeight: 600 }}>
@@ -408,7 +408,7 @@ function ScheduleForm(props: ListsApi & { lists: ScreeningListStatus[]; onSaved:
       {every === "weekly" && (
         <label className="label" style={FIELD}>
           On
-          <Select aria-label="Refresh day" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+          <Select aria-label="On (refresh day)" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
             {WEEKDAY_WORDS.map((day, i) => (
               <option key={day} value={String(i + 1)}>
                 {day}
@@ -420,7 +420,7 @@ function ScheduleForm(props: ListsApi & { lists: ScreeningListStatus[]; onSaved:
       {every !== "none" && (
         <label className="label" style={FIELD}>
           At (Europe/London)
-          <Select aria-label="Refresh hour" value={hour} onChange={(e) => setHour(e.target.value)}>
+          <Select aria-label="At (refresh hour, Europe/London)" value={hour} onChange={(e) => setHour(e.target.value)}>
             {Array.from({ length: 24 }, (_, h) => (
               <option key={h} value={String(h)}>
                 {`${String(h).padStart(2, "0")}:00`}

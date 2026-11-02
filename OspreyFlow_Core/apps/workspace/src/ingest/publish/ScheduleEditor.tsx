@@ -80,7 +80,7 @@ export function ScheduleEditor({ apiBaseUrl, bearerToken, choice, timezone, disa
     <div style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 480 }}>
       <label className="label" style={field}>
         Run on a schedule
-        <Select aria-label="How often" value={choice.kind} disabled={disabled}
+        <Select aria-label="Run on a schedule (how often)" value={choice.kind} disabled={disabled}
                 onChange={(e) => set(changed(e.target.value as ScheduleChoice["kind"], choice))}>
           {KINDS.map((k) => (
             <option key={k.id} value={k.id}>{k.label}</option>
@@ -97,7 +97,7 @@ export function ScheduleEditor({ apiBaseUrl, bearerToken, choice, timezone, disa
       {choice.kind === "weekly" && (
         <label className="label" style={field}>
           On
-          <Select aria-label="Day of the week" value={String(choice.day)} disabled={disabled}
+          <Select aria-label="On (day of the week)" value={String(choice.day)} disabled={disabled}
                   onChange={(e) => set({ ...choice, day: Number(e.target.value) })}>
             {DAYS.map((d, i) => (
               <option key={d} value={i}>{d}</option>
@@ -108,7 +108,7 @@ export function ScheduleEditor({ apiBaseUrl, bearerToken, choice, timezone, disa
       {(choice.kind === "daily" || choice.kind === "weekdays" || choice.kind === "weekly") && (
         <label className="label" style={field}>
           At
-          <Input aria-label="Time" type="time" value={choice.time} disabled={disabled}
+          <Input aria-label="At (time)" type="time" value={choice.time} disabled={disabled}
                  onChange={(e) => set({ ...choice, time: e.target.value })} />
         </label>
       )}

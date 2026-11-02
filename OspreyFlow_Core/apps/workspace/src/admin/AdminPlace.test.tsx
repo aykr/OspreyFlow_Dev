@@ -67,7 +67,7 @@ describe("the Admin area", () => {
     place(["manage_dashboards"]);
     fireEvent.change(await screen.findByLabelText("Dashboard name"), { target: { value: "Board" } });
     fireEvent.change(screen.getByLabelText("Dashboard unit"), { target: { value: "verify" } });
-    await waitFor(() => expect((screen.getByLabelText("Dashboard clearance") as HTMLSelectElement).value).toBe("OFFICIAL"));
+    await waitFor(() => expect((screen.getByLabelText("Dashboard reads at clearance") as HTMLSelectElement).value).toBe("OFFICIAL"));
     fireEvent.click(screen.getByRole("button", { name: "Register" }));
     expect(await screen.findByText("s3cret")).toBeTruthy();
     expect(screen.getByRole("table", { name: "Dashboard identities" }).textContent).toContain("sa-1");
@@ -82,7 +82,7 @@ describe("the Admin area", () => {
     place(["manage_dashboards"]);
     fireEvent.change(await screen.findByLabelText("Dashboard name"), { target: { value: "Board" } });
     fireEvent.change(screen.getByLabelText("Dashboard unit"), { target: { value: "verify" } });
-    await waitFor(() => expect((screen.getByLabelText("Dashboard clearance") as HTMLSelectElement).value).toBe("OFFICIAL"));
+    await waitFor(() => expect((screen.getByLabelText("Dashboard reads at clearance") as HTMLSelectElement).value).toBe("OFFICIAL"));
     fireEvent.click(screen.getByRole("button", { name: "Register" }));
     expect(await screen.findByText("A dashboard cannot read above your own clearance (SECRET asked).")).toBeTruthy();
   });

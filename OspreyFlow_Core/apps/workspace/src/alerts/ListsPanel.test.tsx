@@ -172,7 +172,7 @@ describe("the Lists tab", () => {
     fireEvent.change(within(form).getByLabelText("List name"), { target: { value: "UN list" } });
     fireEvent.change(within(form).getByLabelText("Connector"), { target: { value: "un_consolidated" } });
     fireEvent.change(within(form).getByLabelText("File in the ingest folder"), { target: { value: "lists/consolidated.xml" } });
-    fireEvent.change(within(form).getByLabelText("Real dataset"), { target: { value: "un_consolidated" } });
+    fireEvent.change(within(form).getByLabelText("Real dataset it is"), { target: { value: "un_consolidated" } });
     fireEvent.click(within(form).getByRole("button", { name: "Subscribe" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Subscribed to “UN list”"));
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({

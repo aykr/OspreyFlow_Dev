@@ -118,7 +118,7 @@ export function OwnershipPlace(props: OwnershipPlaceProps) {
           <Input
             type="number"
             step="1"
-            aria-label="Beneficial ownership threshold"
+            aria-label="Beneficial owner at (%)"
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
             style={{ width: 90 }}

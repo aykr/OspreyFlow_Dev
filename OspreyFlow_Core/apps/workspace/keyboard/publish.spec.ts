@@ -44,14 +44,14 @@ async function press(page: Page, name: string) {
 test("a schedule is chosen, explained and saved by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/publish-harness.html");
-  const often = page.getByLabel("How often");
+  const often = page.getByLabel("Run on a schedule (how often)");
   await expect(often).toHaveValue("daily");
   await often.focus();
   // A native select is the browser's own keyboard control; driven as the other walkthroughs drive one.
   await often.selectOption("weekdays");
   await often.focus();
   await page.keyboard.press("Tab");
-  await expect(page.getByLabel("Time", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("At (time)", { exact: true })).toBeFocused();
   await page.keyboard.type("0730");
   await expect(page.getByRole("status", { name: "Schedule preview" })).toContainText("Runs every weekday at 07:30");
   await press(page, "Update schedule");

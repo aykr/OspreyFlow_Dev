@@ -525,10 +525,10 @@ test("CAP-M1", async ({ page }) => {
   await page.waitForTimeout(5000);
   await shot(page, "CAP-M1-b");
   // V6: the schedule editor's preview, read and never saved (Brief 2 section 7.4).
-  const cadence = page.getByLabel("How often");
+  const cadence = page.getByLabel("Run on a schedule (how often)");
   console.log(`V6 cadences: ${JSON.stringify(await cadence.locator("option").allTextContents())}`);
   await cadence.selectOption("weekdays");
-  await page.getByLabel("Time", { exact: true }).fill("07:30");
+  await page.getByLabel("At (time)", { exact: true }).fill("07:30");
   await page.waitForTimeout(3000);
   const preview = page.getByRole("status", { name: "Schedule preview" });
   console.log(`V6 preview: ${await preview.textContent().catch(() => "(none)")}`);
@@ -797,10 +797,10 @@ test("chapter 9d: the case's Author writes the rule as a sentence, previews it a
   await form.getByRole("combobox", { name: "Condition 1: value" }).selectOption("msisdn");
   await form.getByRole("combobox", { name: "Relationship" }).selectOption("within_steps");
   await form.getByRole("combobox", { name: "Steps" }).selectOption("2");
-  await form.getByRole("combobox", { name: "Near a" }).selectOption("Device");
+  await form.getByRole("combobox", { name: "Of a (the type near it)" }).selectOption("Device");
   await form.getByRole("combobox", { name: "Severity" }).selectOption("high");
-  await form.getByRole("combobox", { name: "Scope" }).selectOption("this_case");
-  await form.getByRole("combobox", { name: "Team" }).selectOption("case");
+  await form.getByRole("combobox", { name: "For (scope)" }).selectOption("this_case");
+  await form.getByRole("combobox", { name: "Alert goes to (team)" }).selectOption("case");
   await form.getByRole("combobox", { name: "Runs" }).selectOption("post_commit");
   await form.getByRole("button", { name: "Show the drawn pattern" }).click();
   await expect(form.getByRole("region", { name: "The drawn pattern" })).toBeVisible();

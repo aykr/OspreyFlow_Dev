@@ -568,7 +568,7 @@ function Dashboards({ api }: { api: AdminApi }) {
         </label>
         <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
           Reads at clearance
-          <Select aria-label="Dashboard clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
+          <Select aria-label="Dashboard reads at clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
             {levels.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}

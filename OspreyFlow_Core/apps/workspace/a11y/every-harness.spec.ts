@@ -55,6 +55,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     "stage=d&tab=rules&sentence=schedule",
     "stage=d&open=a-close",
     "stage=d&tab=lists&lists=manage",
+    // The GDS re-audit (step 9b, 2 November 2026): an alert opened with its close form (the five
+    // closing reasons, step 7b), and a KYC screening alert opened (a close match to a listed party).
+    "open=a-hot",
+    "open=a-kyc",
   ],
   // ADR-133 decision 6, stage (d): the Checks on load step (the default) and Verify's would-be alerts.
   "checks-on-load-harness.html": ["view=verify"],
@@ -69,6 +73,38 @@ function appliesBrand(page: string): boolean {
   } catch {
     return false;
   }
+}
+
+// WCAG 2.5.3 Label in Name for form fields, which axe-core does not test: its
+// `label-content-name-mismatch` rule reads only controls named from their content (buttons, links),
+// never an input, select or textarea whose `aria-label` overrides the visible `<label>` around it.
+// Found by the GDS re-audit (step 9b, 2 November 2026): "Why, in words (required)" was spoken as
+// "Reason for closing", so a speech-input user saying what they saw reached nothing. The visible
+// label, up to its first comma, colon or bracket, must appear in the field's accessible name as
+// whole words (2.5.3's requirement; the understanding document's best practice puts it first, and
+// the rest may add context, as "On (day of the week)").
+// Returns each offender as "visible → name", so a failure says what to change.
+async function labelInNameOffenders(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const offenders: string[] = [];
+    for (const control of document.querySelectorAll<HTMLElement>("input, select, textarea")) {
+      if (control instanceof HTMLInputElement && control.type === "hidden") continue;
+      const name = control.getAttribute("aria-label");
+      if (!name) continue;
+      const label =
+        control.closest("label") ??
+        (control.id ? document.querySelector(`label[for="${CSS.escape(control.id)}"]`) : null);
+      if (!label || !label.checkVisibility()) continue;
+      const copy = label.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll("input, select, textarea, button, [aria-hidden='true']").forEach((n) => n.remove());
+      const visible = (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+      const lead = visible.split(/[:,(]/)[0].trim().toLowerCase();
+      const escaped = lead.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const words = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, "u");
+      if (lead && !words.test(name.toLowerCase())) offenders.push(`"${visible}" → "${name}"`);
+    }
+    return offenders;
+  });
 }
 
 test("the scan found the harness pages", () => {
@@ -99,5 +135,13 @@ for (const name of pages) {
         expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       });
     }
+    // The words do not change with the theme or the brand, so one look per state.
+    test(`${name}${state ? ` ${state}` : ""}: every labelled field's name contains its visible label (2.5.3)`, async ({
+      page,
+    }) => {
+      await page.goto(`/keyboard/${name}${state ? `?${state}` : ""}`);
+      await page.waitForLoadState("networkidle");
+      expect(await labelInNameOffenders(page)).toEqual([]);
+    });
   }
 }

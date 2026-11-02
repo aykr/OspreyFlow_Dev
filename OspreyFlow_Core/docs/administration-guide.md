@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.22** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.23** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.23 | 2026-11-02 | §1: a note, "HTTP or HTTPS" — Lite is plain HTTP on a `localhost` address and has no HTTPS option, and its port is published on every network interface, so it is never opened to a network; Small and Enterprise are HTTPS with a certificate Caddy obtains and renews, port 80 only for the certificate and the move to HTTPS; the managed services over TLS; a gov.uk service over HTTPS. §8.1 links to it. |
 | 1.22 | 2026-11-02 | New §1a, Choosing a starter: a theme and a domain at install (`--starter`, and the guided page's first screen), the GOV.UK service's name, several deployments side by side (`--name`, `ospreyflow deployments`, `ospreyflow switch <name>`) and how the checkout's own deployment fits in, and a public dataset of your own choosing (`ospreyflow demo add public`) with the VAST Challenge catalogue and its terms. §7: `starter`, `appearance`, `demo_accounts`. §8: `ospreyflow deployments`, `ospreyflow starters`, `--name`. §11: the `cyber-intrusion` pack, and where each starter's demo comes from. Appendix A: `deployment.graph_port`. |
 | 1.21 | 2026-11-01 | §9.5: a sixth connector, the FCDO's UK Sanctions List (the XML file, Open Government Licence v3.0); the OFSI connector marked as reading a closed list, on the Lists tab and in the subscribe form. §12: the `closed` section's labels are the five closing reasons as stored. |
 | 1.20 | 2026-11-01 | §9.5: the UN and OpenSanctions connectors are marked "licence not confirmed" and read OspreyFlow's synthetic lists only, whatever this device's exceptions admit; the refreshes' counts of customers re-screened and alerts raised are your own unit's. |
@@ -99,6 +100,29 @@ All three run the same product: the same containers, the same Glass, Ingest Stud
 Small swaps the deployment's own PostgreSQL and object store for the cloud's, and gets a real
 domain with HTTPS. Enterprise runs the same services as replicas across the cluster's nodes, the
 graph store and the analytics database as clusters of their own.
+
+### HTTP or HTTPS
+
+- **Lite serves plain HTTP** at a `localhost` address: `http://ospreyflow.localhost`, or a named
+  deployment's `http://<name>.localhost:<port>` (section 1a.1). That is deliberate. Lite is for one
+  computer, its traffic is meant to stay on that machine, and browsers treat `localhost` as a secure
+  context, so sign-in works without a certificate.
+- **Lite has no HTTPS option.** The install, the guided page and every starter give it an
+  `http://…localhost` address, and Lite is not built or tested with a certificate.
+- **Never open a Lite deployment to other machines on a network.** Its front proxy publishes its port
+  on every network interface of the computer, not on this computer alone, so a firewall that lets
+  that port in would let other machines reach it, in plain HTTP. Keep the computer's firewall
+  closed to it, and use Small or Enterprise for anything other people reach.
+- **Small and Enterprise serve HTTPS** at `https://<your domain>`. The front proxy (Caddy) obtains
+  the certificate for your domain and renews it automatically. Port 80 is open only for the
+  certificate's challenge and to send a request for your domain on to HTTPS (443); any other
+  request on port 80 gets "not found", apart from the proxy's own health check. On Enterprise, the cluster's load balancer passes 80 and 443 to
+  the proxy.
+- **The managed services behind Small and Enterprise are reached over TLS:** PostgreSQL always
+  (`sslmode` is `require` at least), the object store always over HTTPS, and the cache and the
+  mail server over TLS unless you turn it off (`external.*` and `mail.starttls`, Appendix A).
+- **A service on a gov.uk domain must be served over HTTPS,** the GOV.UK theme included. Outside a
+  demonstration on one computer, that means Small or Enterprise, never Lite.
 
 ## 1a. Choosing a starter
 
@@ -536,9 +560,11 @@ One front proxy is the deployment's only door. Under the address in `network.pub
 - **sign-in** (Keycloak) at `id.`;
 - **dashboards** (Superset) at `bi.`, when dashboards are on.
 
-Lite publishes port 80 and, on this computer only, `127.0.0.1:2480` for the graph store's own
-tools. Small publishes 80 (for the certificate) and 443. The Conduit's own port is published only
-with `network.expose_conduit: true`.
+Lite publishes port 80 (on every network interface) and, on this computer only, `127.0.0.1:2480`
+for the graph store's own tools. Small publishes 80 (for the certificate and the move to HTTPS)
+and 443. Which of them is plain HTTP and which HTTPS, and why Lite must never be opened to a
+network: the note **HTTP or HTTPS** in section 1. The Conduit's own port is published only
+with `network.expose_conduit: true`, and then on every network interface too.
 
 ### 8.2 Where things are
 

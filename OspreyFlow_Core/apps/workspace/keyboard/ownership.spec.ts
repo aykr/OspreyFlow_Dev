@@ -93,7 +93,7 @@ test("a trace is asked again at another threshold, by keyboard", async ({ page }
   const asked = await serve(page);
   await page.goto("/keyboard/ownership-harness.html");
   await traceCrescent(page);
-  await page.getByLabel("Beneficial ownership threshold").fill("10");
+  await page.getByLabel("Beneficial owner at (%)").fill("10");
   await press(page, page.getByRole("button", { name: "Trace again" }));
   await expect.poll(() => asked).toContain("ownership/C?threshold=10");
   registerCovered(REGISTRY, "trace-again-at-another-threshold-by-keyboard");
