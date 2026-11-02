@@ -1,8 +1,10 @@
 # OspreyFlow
 
-OspreyFlow is an open-source intelligence mapping platform for crime analysis, anti-money-laundering,
-fraud detection, and event monitoring and alerting. It ingests
-structured records and unstructured material (text, audio, imagery), resolves entities across
+OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection
+platform, developed by Solirius Reply and released under the Apache License 2.0.
+
+It serves crime analysis, anti-money-laundering, fraud detection, and event monitoring and alerting.
+It ingests structured records and unstructured material (text, audio, imagery), resolves entities across
 sources, persists them in a property graph, and gives an analyst a single workspace in which
 network, social-network, pattern, temporal and geospatial analysis are five views of one working
 set rather than five separate tools.
