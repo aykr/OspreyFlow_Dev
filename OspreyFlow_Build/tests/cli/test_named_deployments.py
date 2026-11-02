@@ -503,3 +503,22 @@ def test_models_reads_the_named_deployments_own_settings(
     assert machine("models", "--name", "bravo") == 0
     said = capsys.readouterr().out
     assert "Bravo engine" in said and "Alpha engine" not in said
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [("demo", "add", "hmp", "--name", "bravo"), ("demo", "--name", "bravo", "add", "hmp"),
+     ("--name", "bravo")],
+)  # fmt: skip
+def test_name_may_come_before_or_after_the_demo_packs_own_words(
+    machine: Machine, argv: tuple[str, ...]
+) -> None:
+    """As the guide writes it (`ospreyflow demo add hmp --name crime-demo`), and after the verb."""
+    assert machine.install("bravo") == 0
+    (machine.home / ".ospreyflow" / "current").unlink()
+    machine.docker.checkout_deployment(machine.product)
+    machine.docker.calls.clear()
+    words = argv if argv[0] == "demo" else ("demo", "add", "hmp", *argv)
+    assert machine(*words) == 0
+    (seed,) = [e for a, e, _c in machine.docker.calls if "scripts.seed_internal" in a]
+    assert seed["OSPREYFLOW_DEPLOYMENT_DIR"] == str(machine.root / "bravo")

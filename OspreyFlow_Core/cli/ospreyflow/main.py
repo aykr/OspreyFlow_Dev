@@ -191,7 +191,8 @@ def _parser() -> argparse.ArgumentParser:
     # ADR-138 decision 2: every verb acts on one deployment, chosen by name.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
-        "--name", dest="deployment_name", default=None,
+        # SUPPRESS, so a nested parser (`demo add`) given no --name keeps the one given before it.
+        "--name", dest="deployment_name", default=argparse.SUPPRESS,
         help="the deployment to act on: one installed with --name, or 'default' (the checkout's); "
         "default: the only one, or the one last used",
     )  # fmt: skip
@@ -289,8 +290,8 @@ def _parser() -> argparse.ArgumentParser:
 
     demo_verb = verbs.add_parser("demo", help="list or add demo packs")
     actions = demo_verb.add_subparsers(dest="action", required=True, metavar="ACTION")
-    actions.add_parser("list", help="the demo packs")
-    add = actions.add_parser("add", help="add a demo pack")
+    actions.add_parser("list", help="the demo packs", parents=[common])
+    add = actions.add_parser("add", help="add a demo pack", parents=[common])
     add.add_argument("pack")
     add.add_argument("--file", type=Path, help="the downloaded file (PaySim, Enron, public)")
     add.add_argument(
@@ -317,10 +318,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     key_actions = models.add_subparsers(dest="action", metavar="ACTION")
     set_key = key_actions.add_parser(
-        "key", help="set or rotate a provider's key (from OSPREY_MODEL_KEY_<NAME>, else asked for)"
+        "key",
+        help="set or rotate a provider's key (from OSPREY_MODEL_KEY_<NAME>, else asked for)",
+        parents=[common],
     )
     set_key.add_argument("name", help="the provider, as osprey.yaml names it (gemini, openai, …)")
-    remove = key_actions.add_parser("remove-key", help="remove a provider's key")
+    remove = key_actions.add_parser(
+        "remove-key", help="remove a provider's key", parents=[common]
+    )
     remove.add_argument("name")
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
@@ -1141,7 +1146,7 @@ def main(
             if args.verb != "doctor":
                 raise
             product = Path.cwd()
-        given = args.deployment_name
+        given = getattr(args, "deployment_name", None)
         wanted = args.deployment if args.verb == "switch" and args.deployment else given
         if args.verb == "switch" and args.deployment and given and given != args.deployment:
             raise CommandRefused("Name the deployment once: ospreyflow switch <name>.")
