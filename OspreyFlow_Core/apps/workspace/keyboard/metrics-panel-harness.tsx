@@ -112,6 +112,10 @@ const STRENGTH_LEGEND = {
   direct_link_types: ["ASSOCIATE_OF"],
   switched_off: [],
   rarity_note: "Shared-attribute rarity is worked out over what you may see: two analysts with different access can see different rarity for the same pair.",
+  // ADR-139 Amendment 2: `?composition=client_parity` draws the case switched to client parity.
+  ...(new URLSearchParams(window.location.search).get("composition") === "client_parity"
+    ? { composition: "client_parity" as const, composition_layer: "case" as const, rarity_measure: "share" as const }
+    : { composition: "standard" as const, composition_layer: "file" as const, rarity_measure: "share" as const }),
 }; // prettier-ignore
 
 function Harness() {

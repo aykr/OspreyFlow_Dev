@@ -7,6 +7,7 @@ import type {
   CaseInfluencersInput,
   ConnectionStrengths,
   InfluencerSetHistory,
+  InfluencerSetInput,
   InfluencerSetVersion,
   RarityResult,
   StrengthInfluencer,
@@ -94,10 +95,11 @@ export function proposeInfluencers(
   bearerToken: string,
   influencers: StrengthInfluencer[],
   words: string,
+  choices: Pick<InfluencerSetInput, "composition" | "rarity_measure"> = {},
 ) {
   return call<InfluencerSetVersion>(`${apiBaseUrl}/v1/strength-influencers`, bearerToken, {
     method: "POST",
-    body: JSON.stringify({ influencers, words }),
+    body: JSON.stringify({ influencers, words, ...choices }),
   });
 }
 

@@ -515,6 +515,19 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               </label>
             </>
           )}
+          {draft.strength === "connection_strength" && (
+            <label className="label" style={BLANK}>
+              On
+              <Select
+                aria-label="On (scale, for strength)"
+                value={draft.strengthScale}
+                onChange={(e) => change({ strengthScale: e.target.value as SentenceDraft["strengthScale"] })}
+              >
+                <option value="drawn">the drawn scale, 0 to 1</option>
+                <option value="client">the client's scale (a raw sum, under client parity)</option>
+              </Select>
+            </label>
+          )}
           {draft.strength === "shared_attribute_rarity" && (
             <label className="label" style={BLANK}>
               Worked out

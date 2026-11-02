@@ -7,6 +7,11 @@
 //
 // It lives in Monitoring, beside the rules: influencers change what the rules on strength judge, and
 // both are for the analysts who hold the right, not only the administrator.
+//
+// ADR-139 Amendment 2: an influencer may be triggered by a dataset as well as by a record, and may
+// change a pair linked through a shared value; the case's Author may switch the case's composition
+// (standard, or the client's parity sum) for a demonstration; an installation version chooses its
+// composition and rarity measure, by the same maker–checker.
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
@@ -27,7 +32,19 @@ import {
   saveCaseInfluencers,
   sendBackInfluencers,
 } from "./api";
-import { andList, influencerWords, layerWords, type LinkName } from "./words";
+import {
+  andList,
+  COMPOSITION_LABEL,
+  compositionWords,
+  influencerWords,
+  layerWords,
+  MEASURE_LABEL,
+  SHARED_VALUE,
+  SHARED_VALUE_LABEL,
+  type Composition,
+  type LinkName,
+  type RarityMeasure,
+} from "./words";
 
 export interface StrengthPanelProps {
   apiBaseUrl: string;
@@ -77,7 +94,9 @@ function InfluencerForm({
 }) {
   const [label, setLabel] = useState("");
   const [linkTypes, setLinkTypes] = useState<string[]>([]);
-  const [triggered, setTriggered] = useState(false);
+  const [when, setWhen] = useState<"always" | "record" | "dataset">("always");
+  const triggered = when === "record";
+  const [dataset, setDataset] = useState("");
   const [entityType, setEntityType] = useState(entityTypes[0]?.name ?? "");
   const declared = entityTypes.find((e) => e.name === entityType);
   const properties = declared?.properties ?? [];
@@ -90,17 +109,23 @@ function InfluencerForm({
   const [problem, setProblem] = useState<string | null>(null);
 
   const add = () => {
+    const recordValues = (chosenProperty?.values?.length ? values : [typedValue.trim()]).filter(Boolean);
+    const datasets = [dataset.trim()].filter(Boolean);
     const trigger = triggered
-      ? {
-          entity_type: entityType,
-          property,
-          values: (chosenProperty?.values?.length ? values : [typedValue.trim()]).filter(Boolean),
-        }
-      : null;
+      ? { entity_type: entityType, property, values: recordValues }
+      : when === "dataset"
+        ? { kind: "dataset", datasets }
+        : null;
     if (!label.trim()) return setProblem("Give it a label: the legend shows it.");
     if (linkTypes.length === 0) return setProblem("Choose at least one link type it changes.");
-    if (trigger && (!trigger.property || trigger.values.length === 0)) {
+    if (triggered && (!property || recordValues.length === 0)) {
       return setProblem("Choose the record's property and at least one value that triggers it.");
+    }
+    if (when === "dataset" && datasets.length === 0) {
+      return setProblem("Name the dataset whose links it changes.");
+    }
+    if (linkTypes.includes(SHARED_VALUE) && (triggered || change !== "add")) {
+      return setProblem("A pair linked through a shared value takes an added boost, triggered by a dataset or always.");
     }
     setProblem(null);
     onAdd({
@@ -116,6 +141,7 @@ function InfluencerForm({
     setLinkTypes([]);
     setValues([]);
     setTypedValue("");
+    setDataset("");
   };
 
   return (
@@ -141,14 +167,33 @@ function InfluencerForm({
               {t.label ?? t.name}
             </label>
           ))}
+        <label className="strength-panel__choice">
+          <Checkbox
+            id={`${idPrefix}-link-${SHARED_VALUE}`}
+            checked={linkTypes.includes(SHARED_VALUE)}
+            onChange={() =>
+              setLinkTypes((held) =>
+                held.includes(SHARED_VALUE) ? held.filter((x) => x !== SHARED_VALUE) : [...held, SHARED_VALUE],
+              )
+            }
+          />
+          {SHARED_VALUE_LABEL}
+        </label>
       </fieldset>
       <label className="strength-panel__field">
         <span>When it applies</span>
-        <Select aria-label="When it applies" value={triggered ? "record" : "always"} onChange={(e) => setTriggered(e.target.value === "record")}>
+        <Select aria-label="When it applies" value={when} onChange={(e) => setWhen(e.target.value as typeof when)}>
           <option value="always">Always: these are direct links</option>
           <option value="record">When a record evidences the link</option>
+          <option value="dataset">When the link is in a dataset</option>
         </Select>
       </label>
+      {when === "dataset" && (
+        <label className="strength-panel__field">
+          <span>Dataset it is in</span>
+          <Input aria-label="Dataset it is in" value={dataset} onChange={(e) => setDataset(e.target.value)} />
+        </label>
+      )}
       {triggered && (
         <>
           <label className="strength-panel__field">
@@ -293,6 +338,10 @@ export function StrengthPanel(props: StrengthPanelProps) {
   // The case's own override being written.
   const [added, setAdded] = useState<StrengthInfluencer[]>([]);
   const [switchedOff, setSwitchedOff] = useState<string[]>([]);
+  // ADR-139 Amendment 2: the case's own composition ("" = as the installation chooses).
+  const [caseComposition, setCaseComposition] = useState<Composition | "">("");
+  const [proposalComposition, setProposalComposition] = useState<Composition | "">("");
+  const [proposalMeasure, setProposalMeasure] = useState<RarityMeasure | "">("");
   // A new installation-wide version being written.
   const [proposal, setProposal] = useState<StrengthInfluencer[] | null>(null);
   const [proposalWords, setProposalWords] = useState("");
@@ -307,6 +356,7 @@ export function StrengthPanel(props: StrengthPanelProps) {
         setFound(got);
         setAdded([...(got.override?.added ?? [])]);
         setSwitchedOff([...(got.override?.switched_off ?? [])]);
+        setCaseComposition((got.override?.composition ?? "") as Composition | "");
       })
       .catch((err: unknown) => !cancelled && setProblem(err instanceof Error ? err.message : String(err)));
     if (canManage) {
@@ -364,6 +414,9 @@ export function StrengthPanel(props: StrengthPanelProps) {
               Direct links: {found.legend.direct_link_types.length ? andList(found.legend.direct_link_types.map(linkName)) : "none"}.{" "}
               {found.legend.rarity_note}
             </p>
+            <p className="strength-panel__muted" aria-label="Composition in force">
+              {compositionWords(found.legend)}
+            </p>
           </>
         ) : (
           !problem && <p className="strength-panel__muted">Reading the influencers in force…</p>
@@ -396,6 +449,20 @@ export function StrengthPanel(props: StrengthPanelProps) {
               ))}
             </fieldset>
           )}
+          <label className="strength-panel__field">
+            <span>How strength is worked out in this case</span>
+            <Select
+              aria-label="How strength is worked out in this case"
+              value={caseComposition}
+              onChange={(e) => setCaseComposition(e.target.value as Composition | "")}
+            >
+              <option value="">As the installation chooses</option>
+              <option value="standard">{COMPOSITION_LABEL.standard}: the stored weight with the influencers</option>
+              <option value="client_parity">
+                {COMPOSITION_LABEL.client_parity}: rarity plus the adds, as the client works it out
+              </option>
+            </Select>
+          </label>
           <InfluencerForm
             idPrefix="case"
             entityTypes={entityTypes}
@@ -408,6 +475,8 @@ export function StrengthPanel(props: StrengthPanelProps) {
               void saveCaseInfluencers(apiBaseUrl, bearerToken, investigationId, {
                 added,
                 switched_off: switchedOff,
+                // Sent only when chosen: an override without one is exactly the body it was.
+                ...(caseComposition ? { composition: caseComposition } : {}),
                 words: "",
               })
                 .then(() => done("This case's influencers are saved."))
@@ -506,13 +575,40 @@ export function StrengthPanel(props: StrengthPanelProps) {
                 onAdd={(i) => setProposal((held) => [...(held ?? []).filter((h) => h.id !== i.id), i])}
               />
               <label className="strength-panel__field">
+                <span>Composition</span>
+                <Select
+                  aria-label="Composition"
+                  value={proposalComposition}
+                  onChange={(e) => setProposalComposition(e.target.value as Composition | "")}
+                >
+                  <option value="">As shipped ({COMPOSITION_LABEL[(history.default_composition ?? "standard") as Composition]})</option>
+                  <option value="standard">{COMPOSITION_LABEL.standard}</option>
+                  <option value="client_parity">{COMPOSITION_LABEL.client_parity}</option>
+                </Select>
+              </label>
+              <label className="strength-panel__field">
+                <span>Rarity measure</span>
+                <Select
+                  aria-label="Rarity measure"
+                  value={proposalMeasure}
+                  onChange={(e) => setProposalMeasure(e.target.value as RarityMeasure | "")}
+                >
+                  <option value="">As shipped ({MEASURE_LABEL[(history.default_rarity_measure ?? "share") as RarityMeasure]})</option>
+                  <option value="share">{MEASURE_LABEL.share}</option>
+                  <option value="idf">{MEASURE_LABEL.idf}</option>
+                </Select>
+              </label>
+              <label className="strength-panel__field">
                 <span>Why, for the approver</span>
                 <Input aria-label="Why, for the approver" value={proposalWords} onChange={(e) => setProposalWords(e.target.value)} />
               </label>
               <Button
                 variant="primary"
                 onClick={() =>
-                  void proposeInfluencers(apiBaseUrl, bearerToken, proposal, proposalWords)
+                  void proposeInfluencers(apiBaseUrl, bearerToken, proposal, proposalWords, {
+                    composition: proposalComposition || null,
+                    rarity_measure: proposalMeasure || null,
+                  })
                     .then((v) => {
                       setProposal(null);
                       setProposalWords("");
