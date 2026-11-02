@@ -77,8 +77,17 @@ PID_SCALE = SeedDataset(
     domains=("niem",),
 )
 
+#: ADR-138: the cyber starter's synthetic STIX 2.1 intrusion (`demo_fixtures.cyber_intrusion`).
+CYBER_INTRUSION = SeedDataset(
+    id="cyber-intrusion",
+    name="Cyber intrusion (synthetic)",
+    source="cyber-intrusion-generator",
+    case_name="Cyber intrusion (synthetic demo)",
+    domains=("stix",),
+)
+
 SEED_DATASETS: tuple[SeedDataset, ...] = (
-    ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS, PID, PID_SCALE,
+    ENRON, FIXTURE_CORP, HMP, LEDGER, PAYSIM, SCENARIOS, PID, PID_SCALE, CYBER_INTRUSION,
 )  # fmt: skip
 
 

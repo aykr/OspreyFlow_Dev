@@ -1,0 +1,30 @@
+# ADR-138 decision 3: a VAST Challenge catalogue entry; manifest and recipe only, the data is the
+# administrator's own download. Confirmed on 2 November 2026: the 2008 tasks page says "The datasets
+# used for these challenges are synthetic" (http://www.cs.umd.edu/hcil/VASTchallenge08/tasks.html);
+# no licence or terms of use are stated there or on the repository page. Not redistributed.
+#
+# `sha256` is not recorded (OspreyFlow never downloads VAST data): pin your own download first with
+# `python -m scripts.public_dataset pin`. The record fields are the tasks page's; the file name and
+# header spelling inside the archive are confirmed against your download (`--file` names it).
+id: vast-2008-mc3
+name: "VAST Challenge 2008, Mini Challenge 3: cell phone calls (Isla del Sueño, synthetic)"
+source_page: "https://www.cs.umd.edu/hcil/varepository/VAST%20Challenge%202008/challenges/MC3%20-%20Cell%20Phone%20Calls/"
+licence: >-
+  No licence or terms of use are stated on the source page or on the challenge's tasks page
+  (http://www.cs.umd.edu/hcil/VASTchallenge08/tasks.html), which says the data is synthetic. No
+  right to redistribute is granted: use it on your own machine, never pass it on, and do not rely
+  on it for commercial use without the publishers' permission.
+licence_url: "http://www.cs.umd.edu/hcil/VASTchallenge08/tasks.html"
+citation: >-
+  VAST Challenge 2008, Mini Challenge 3 ("Cell Phone Calls"), IEEE VAST Challenge; Visual
+  Analytics Benchmark Repository, University of Maryland.
+redistribution: not_stated
+commercial_use: not_stated
+fictional: true
+real_personal_data: false
+file:
+  name: cell-phone-calls.csv
+  sha256: null
+  delimiter: ","
+recipe: vast_2008_mc3_calls_recipe.yaml
+domains: [niem]

@@ -53,6 +53,7 @@ def test_each_seed_names_the_packs_the_record_gives() -> None:
         "scenarios": (),
         "prison-intelligence": ("niem",),
         "prison-intelligence-scale": ("niem",),
+        "cyber-intrusion": ("stix",),
     }
     assert LEDGER.domains == ("fibo",)
     assert HMP.domains == ("fibo", "niem")

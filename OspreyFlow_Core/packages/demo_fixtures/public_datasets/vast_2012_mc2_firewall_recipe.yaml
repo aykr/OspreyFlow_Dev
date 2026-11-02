@@ -1,0 +1,61 @@
+# ADR-138: the VAST Challenge 2012 MC2 firewall log (the fictional Bank of Money's regional network,
+# about 5,000 machines). One row per connection event, in the 15 columns COMIDDS documents
+# (https://fkie-cad.github.io/COMIDDS/content/datasets/vast_2012; confirm the header against your
+# own download): each source and destination address an `Endpoint` of kind `ip`, the event a
+# temporal `COMMUNICATED_WITH` link at its `Date/time`. Timestamps without an offset are read as UTC;
+# a non-ISO date is read day first (the log writes `05/Apr/2012 17:51:26`). The golden test runs it
+# on a tiny synthetic file in this shape (tests/demo_fixtures/test_public_dataset_recipes.py).
+id: vast-2012-mc2-firewall
+version: 1
+label: "VAST Challenge 2012 MC2: firewall log (fictional network)"
+connector:
+  profile: generic-csv
+  date_order: dmy
+ontology_version: 17
+pack_versions: {}
+
+defaults:
+  legal_basis: A public research dataset of a fictional scenario
+  provenance: {state: asserted}
+  handling: {classification: OFFICIAL, handling_code: P, originator: public-dataset, owning_unit: verify}
+
+row_template:
+  entities:
+    - ref: source
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: Source IP}
+        value_normalised: {field: Source IP}
+        endpoint_kind: {literal: ip}
+    - ref: destination
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: Destination IP}
+        value_normalised: {field: Destination IP}
+        endpoint_kind: {literal: ip}
+  edges:
+    - type: COMMUNICATED_WITH
+      from: source
+      to: destination
+      temporal:
+        at: {field: Date/time, transform: "datetime(tz=UTC)"}
+
+unmapped_fields:
+  - {field: Syslog priority, note: "The firewall's severity; not a property of the link."}
+  - {field: Operation, note: "Built, Teardown or Deny; one link records that the two talked."}
+  - {field: Message code, note: "The firewall's own message code."}
+  - {field: Protocol, note: "TCP or UDP; kept in the source file."}
+  - {field: Source hostname, note: "Often empty; the address names the machine."}
+  - {field: Destination hostname, note: "Often empty; the address names the machine."}
+  - {field: Source port, note: "Ephemeral; kept in the source file."}
+  - {field: Destination port, note: "Kept in the source file; Destination service names it."}
+  - {field: Destination service, note: "Kept in the source file."}
+  - {field: Direction, note: "inbound or outbound, relative to the firewall."}
+  - {field: Connections built, note: "A counter of the firewall's."}
+  - {field: Connections torn down, note: "A counter of the firewall's."}

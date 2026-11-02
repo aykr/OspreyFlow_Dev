@@ -128,6 +128,13 @@ _DESCRIPTIONS: dict[str, _Description] = {
         "through the Ingest Studio from source files, each source with its own marking.",
         "Prison Intelligence Dataset (synthetic demo)",
     ),
+    # ADR-138: the cyber starter's demo.
+    "cyber-intrusion": _Description(
+        "Cyber intrusion — a STIX 2.1 threat case (synthetic)",
+        "A fictional threat actor's campaign against a water company: its backdoor, two "
+        "command-and-control servers, the indicators that find them and the traffic observed.",
+        "Cyber intrusion (synthetic demo)",
+    ),
     # ADR-127 Amendment 40: the scale cohort, a pack of its own.
     "prison-intelligence-scale": _Description(
         "Prison Intelligence Dataset: scale cohort (synthetic)",
