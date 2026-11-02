@@ -289,8 +289,16 @@ GET    /v1/jobs/{id}/events             SSE progress stream
 narrowed to what the reader may see (as `compute/{metric}` does) and ask the graph adapter as the
 reader: strength is each link's stored weight with the influencers in force in the case (case
 override, then the installation's approved set, then the weights file's), an influencer applying only
-where a record the reader may see evidences the link; rarity is `Σ ln(N_visible / df_visible)` over
-shared attribute nodes, per dataset by default (`01_DOMAIN_MODEL.md` §6.1a). Neither is stored. The
+where a record the reader may see evidences the link (or, ADR-139 Amendment 2, the link belongs to a
+dataset the influencer names and the reader may read); rarity is the client's share measure (or
+`Σ ln(N_visible / df_visible)`, the IDF measure, by the installation's choice) over shared attribute
+nodes, per dataset by default (`01_DOMAIN_MODEL.md` §6.1a). Both read the case's composition and
+measure, resolved case override, installation version, weights file: under client parity a link's
+strength is its rarity term plus the adds (`raw_sum` beside the drawn 0–1 strength), and each pair
+asked for carries its parity sum. An installation version (`POST /v1/strength-influencers`) may name
+`composition` and `rarity_measure`, in force only once approved; the case's `PUT` may name
+`composition`. A dataset-triggered influencer is named to a reader only by the datasets they may read,
+in the legend and in the case's override. Neither is stored. The
 response carries scores, the influencers' definitions and the reader's own visible attributes, never
 `N`, `df`, a corpus count or the weight components (rule 7). An influencer naming a type, property,
 value or link type the ontology does not declare is refused `422 influencer_refused`, in words. A

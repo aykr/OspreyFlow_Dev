@@ -15,7 +15,7 @@
     "version": "1.25"
   },
   "developer-guide.md": {
-    "body": "a10f6f508b93d7851f07a6f07879f1d4b5db059b621b688cc64afcaa91d14788",
+    "body": "6504831403f051842bab1ef6122a8f63b4db1d8a9adf2934ba3fda49d0a1ec0f",
     "images": {
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
       "images/developer/02-pipeline-canvas.png": "5b865977a3c4f6eb99c9ab9610b92c8772614501f5be0842cc715590616af793",
@@ -32,12 +32,12 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "e0ca4d9495810378574df6ca4120684e6346b3e869d345cb852cc40378b74d40",
-    "source": "2c8c8d5c6c5e636b7f9a6386b46ee45a4a4ed24e5b7f0ac60459bb8eec2a1e7f",
-    "version": "1.10"
+    "pdf": "8b3b0b84ac067f35772e0df156f8f5e2bc0797323bb28ab7bb92adcfd4447150",
+    "source": "e6550d604d207a0c5c06f4d243f58b4773ace58236b68557f5d26afb90f5c17b",
+    "version": "1.11"
   },
   "user-guide.md": {
-    "body": "90c14578eca428cfe0f8a04ad7cbbc4139a3ae4663413556e2d336f4151f68f9",
+    "body": "96ab5b220400a9ce10c0eb62aa9f67f6d5b3a0b70d8c24e93ad51c75e808fbb5",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -66,8 +66,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "76eac7b8eed806da3993ac4c58cb5774d5c09b060a66b238708d556588760b73",
-    "source": "d894b006d710b3ab64a0a301b53ec1c88ebedb04c4c1334ca1b6b65774be8f15",
-    "version": "1.20"
+    "pdf": "ca5918a8e1f4112d4dc949c38ade167b393a1a9c30c43069ead79f1f777badf2",
+    "source": "d729af0c006ebe9bcc35c341209a4e266096a30c5744e0b8330e7ef54307a65f",
+    "version": "1.21"
   }
 }

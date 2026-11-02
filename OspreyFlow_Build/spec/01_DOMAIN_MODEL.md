@@ -958,9 +958,11 @@ adapter, as the reader (`GraphPort.connection_strengths`); it is never stored, s
 influencer takes effect at once with no recompute.
 
 **An influencer** (`packages/schemas/strength.py`, `StrengthInfluencer`) has a trigger (an evidencing
-record's type, one of its declared properties, and values), the link types it influences, a change
-(`add`, `multiply`, `floor`, `exclude`), a size and a legend label. **Direct links are an influencer
-with no trigger**, applying to its named link types always. Applied to a stored weight `w`:
+record's type, one of its declared properties, and values; or, ADR-139 Amendment 2, **a dataset**:
+every link that belongs to it), the link types it influences (or `SHARED_VALUE`, a pair linked through
+a shared value, which takes an `add` triggered by a dataset or by nothing), a change (`add`,
+`multiply`, `floor`, `exclude`), a size and a legend label. **Direct links are an influencer with no
+trigger**, applying to its named link types always. Applied to a stored weight `w`:
 
 ```
 raw      = midpoint + scale · ln(w / (1 − w))          # the logistic's inverse; exact
@@ -977,7 +979,10 @@ Nothing applying leaves `w`. Every step is non-decreasing in `w`, so §6.1's inv
 the trigger's type whose property holds one of its values, at one end of the link or linked to both of
 its ends by links the reader may see. The access step is on every vertex and link stepped over, so a
 hidden record changes nothing (rule 3): the strength is the strength in a world without it
-(`test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence`).
+(`test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence`). **A
+dataset-triggered influencer applies only where the link belongs to that dataset and the reader may
+read it**, and the legend names it to a reader only by the datasets they may read
+(`test_a_dataset_trigger_applies_only_to_links_in_a_dataset_the_reader_may_read`).
 
 **Resolution order:** a case override (its Author's, audited), then the installation set (proposed and
 approved by two holders of `manage_strength_influencers`; every version kept), then the weights file's
@@ -989,23 +994,51 @@ shipped defaults: **direct** (`COMMUNICATED_WITH`, `TRANSACTED`, `VISITED`, `SHA
 doubling an ordinary link's count (the default rule's heavy 10 to 20) moves its pre-logistic score —
 "to be confirmed with the client".
 
-**Shared-attribute rarity** is its own measure beside strength, never folded into it
-(`GraphPort.shared_attribute_rarity`). For two visible entities `u`, `v` of one type:
+**Shared-attribute rarity** is its own measure beside strength, never folded into it under the standard
+composition (`GraphPort.shared_attribute_rarity`). For two visible entities `u`, `v` of one type, an
+attribute (a **shared value**) is a visible node (of a type not in the weights file's
+`rarity.exclude_types`, `Alert`) linked to each of the two by a visible link. Two measures (ADR-139
+Amendment 2), the first the default (`rarity.measure`, or an installation version's choice):
 
 ```
-rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
+share:  rarity(a)    = 1 − C(k(a), 2) / Σ_b C(k(b), 2)     # the client's 1 − N/ΣN
+        rarity(u, v) = max over shared values a of rarity(a)
+idf:    rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
 ```
 
-An attribute is a visible node (of a type not in the weights file's `rarity.exclude_types`, `Alert`)
-linked to each of the two by a visible link; `N_visible` is the number of visible entities of the
-pair's type in scope, `df_visible(a)` the number of those linked to `a` by a visible link. **Scope**: per
+`k(a)`, like `df_visible(a)`, is the number of visible entities of the pair's type linked to `a` by a
+visible link; `b` runs over every visible value of `a`'s type in scope; `N_visible` is the number of
+visible entities of the pair's type in scope. A hidden holder is in no `k` and no sum
+(`test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders`). **Scope**: per
 dataset by default (in each dataset `u`, `v` and `a` all belong to; the highest kept and named; no
 dataset in common, no score), or across every dataset the reader may read. Worked out at query time
 over what the reader may see, never over the corpus and never stored; a hidden entity sharing `a` is
 in no count (`test_unauthorised_rarity_matches_a_world_without_the_hidden_entity`). Two readers with
 different access may therefore see different rarity for one pair. The Glass is sent the score and the
-reader's visible shared attributes, never `N` or `df` (rule 7). More pairs to score than the cap
-(2,000,000) is refused as `limit_exceeded` (rule 2).
+reader's visible shared attributes, never `N`, `df`, `k` or a sum (rule 7). More pairs to score, or
+(`share`) holders to read for the sums, than the cap (2,000,000) is refused as `limit_exceeded` (rule 2).
+
+**Two compositions** (ADR-139 Amendment 2; Amendment 3 records how they were read). The weights file's
+`composition`, an installation version's (maker–checker), or a case override's (its Author's), resolved
+case, installation, file, chooses how connection strength is made:
+
+```
+standard:       strength = the influencers applied to the stored weight (above)
+client_parity:  raw_sum  = rarity term + Σ add                # no count, no recency, adds only
+                strength = 1 / (1 + e^(−(raw_sum − 1) / 0.1))  # drawn on 0–1, order preserving
+```
+
+A stored link's rarity term is `1 − 1/n`, `n` the links of its type the reader may see in the dataset
+(the link as a value of its own held by its two ends); a pair linked through a shared value takes that
+value's `share` rarity. Each is worked out in each dataset the link (or pair) belongs to and the reader
+may read, the highest kept and named. Client parity reads the `share` measure always. It is computed at
+read time under access, like rarity: a hidden link is in no `n`
+(`test_client_parity_is_the_links_own_rarity_plus_the_adds_with_no_count_or_recency`). The Glass draws
+and filters on the 0–1 strength; the Inspector also shows `raw_sum`, the client's scale; a monitoring
+condition names either scale (`StrengthReaches.scale`). It equals the client's own
+`add_strength_column` on a link table holding one kind per call
+(`test_client_parity_scores_equal_a_transcription_of_the_clients_r_function`); a table mixing kinds does
+not map exactly (Amendment 3).
 
 ### 6.2 Clique Metric
 
