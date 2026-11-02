@@ -15,10 +15,18 @@ developer defaults (`packages/ontology/weights/default.yaml`).
 **Stored weights are unchanged** (weights version 3): a link's connection strength is its stored
 weight with the influencers that apply to it, worked out when it is read, never stored.
 
-**Rarity** is its own measure beside strength, never folded into it: for two entities of one kind,
-`Σ ln(N_visible / df_visible(a))` over the attribute nodes `a` they share, counted over what the
-viewer may see, per dataset or across the case's readable datasets. The Glass is sent the score and
-the shared attributes it may see, never `N` or `df` (rule 7).
+**Rarity** is its own measure beside strength, never folded into it, counted over what the viewer
+may see, per dataset or across the case's readable datasets. Two measures (ADR-139 Amendment 2):
+**`share`, the client's own and the default**, `1 − L_visible(a) / Σ_b L_visible(b)` for the value
+`a` linking a pair, where `L_visible(a) = C(k, 2)` for the `k` visible holders of `a` and the sum
+runs over the values of `a`'s kind in scope (a pair takes its highest); and **`idf`**,
+`Σ ln(N_visible / df_visible(a))` over the values the pair shares (the first decision's). The Glass
+is sent the score and the shared values it may see, never `N`, `df`, `k` or `L` (rule 7).
+
+**Two compositions** (Amendment 2, ruling 2): `standard` (the stored weight with the influencers,
+above) and `client_parity` (strength = rarity + the influencers' adds, no count and no recency, the
+client's `add_strength_column`), chosen by a version of the installation set or a case override,
+and drawn on 0–1 through a logistic of the sum (`ontology/influencers.py`'s `parity_drawn`).
 
 TypeScript is generated from these models (`generate_ts.py`); drift fails the build.
 """
@@ -40,6 +48,17 @@ InfluencerChange = Literal["add", "multiply", "floor", "exclude"]
 InfluencerLayer = Literal["file", "installation", "case"]
 #: Rarity per dataset (the client's own, the default) or across the case's readable datasets.
 RarityScope = Literal["dataset", "case"]
+#: ADR-139 Amendment 2: the client's share of pair links (the default) or the first decision's IDF.
+RarityMeasure = Literal["share", "idf"]
+#: ADR-139 Amendment 2: the stored weight with influencers, or the client's rarity plus adds.
+StrengthComposition = Literal["standard", "client_parity"]
+#: A monitoring condition's figure: on the drawn 0–1 scale, or on the client's raw sum.
+StrengthScale = Literal["drawn", "client"]
+
+#: The link-type name an influencer uses for a pair linked through a shared value (the client's
+#: `dup_*` rows): in OspreyFlow a shared value is a two-step path, not a stored link type, so this
+#: name is reserved and no ontology declares it.
+SHARED_VALUE = "SHARED_VALUE"
 
 #: The most values one trigger lists, the most link types one influencer names, the most
 #: influencers one layer holds.
@@ -61,6 +80,7 @@ class InfluencerTrigger(BaseModel):
     `values`, which the viewer may see, at one end of the link or linked to both of its ends (the
     record "evidences" the link)."""
 
+    kind: Literal["record"] = "record"
     entity_type: str = Field(min_length=1, max_length=80)
     property: str = Field(min_length=1, max_length=80)
     values: list[str] = Field(min_length=1, max_length=TRIGGER_VALUES_MAX)
@@ -75,13 +95,34 @@ class InfluencerTrigger(BaseModel):
         return values
 
 
+class DatasetTrigger(BaseModel):
+    """ADR-139 Amendment 2, ruling 3: an influencer triggered by a dataset (or the source loaded
+    into it), as the client's `abs_add` is by the table it is called on. It applies to every link
+    evidenced in one of `datasets`: a stored link that belongs to it, or a pair linked through a
+    shared value in it. It applies only where the viewer may read that dataset, so a link seen
+    through another dataset is never thickened by one they cannot read (rule 3)."""
+
+    kind: Literal["dataset"] = "dataset"
+    datasets: list[str] = Field(min_length=1, max_length=TRIGGER_VALUES_MAX)
+
+    @field_validator("datasets")
+    @classmethod
+    def _distinct(cls, values: list[str]) -> list[str]:
+        if any(not v.strip() for v in values):
+            raise ValueError("a dataset is never empty")
+        if len(set(values)) != len(values):
+            raise ValueError("each dataset is named once")
+        return values
+
+
 class StrengthInfluencer(BaseModel):
     """One influencer (decision 1). `trigger` None is a direct-links influencer. `enabled` False,
-    in a higher layer, switches off the influencer of the same `id` below it."""
+    in a higher layer, switches off the influencer of the same `id` below it. `link_types` may
+    name `SHARED_VALUE`: a pair linked through a shared value (Amendment 2)."""
 
     id: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=80)
-    trigger: InfluencerTrigger | None = None
+    trigger: InfluencerTrigger | DatasetTrigger | None = None
     link_types: list[str] = Field(min_length=1, max_length=INFLUENCER_LINK_TYPES_MAX)
     change: InfluencerChange = "add"
     #: add: a boost before the logistic, above 0 and at most `ADD_MAX`; multiply: a factor from
@@ -124,6 +165,14 @@ class StrengthInfluencer(BaseModel):
             raise ValueError("a floor is a strength above 0 and at most 1")
         if self.change == "exclude" and size != 0:
             raise ValueError("an exclusion has no size; leave it at 0")
+        if SHARED_VALUE in self.link_types:
+            if isinstance(self.trigger, InfluencerTrigger):
+                raise ValueError(
+                    "a pair linked through a shared value is evidenced by its dataset, not by a "
+                    "record; trigger it by a dataset, or by nothing"
+                )
+            if self.change != "add":
+                raise ValueError("a pair linked through a shared value takes an added boost only")
         return self
 
 
@@ -136,9 +185,12 @@ def _unique_ids(influencers: list[StrengthInfluencer]) -> list[StrengthInfluence
 
 
 class InfluencerSetInput(BaseModel):
-    """A proposed installation-wide set: the whole set as it would stand once approved."""
+    """A proposed installation-wide set: the whole set as it would stand once approved, with the
+    composition and rarity measure it chooses (Amendment 2; None keeps the weights file's)."""
 
     influencers: list[StrengthInfluencer] = Field(max_length=INFLUENCERS_MAX)
+    composition: StrengthComposition | None = None
+    rarity_measure: RarityMeasure | None = None
     #: Why, in words, for the approver.
     words: str = Field(default="", max_length=500)
 
@@ -159,6 +211,8 @@ class InfluencerSetVersion(BaseModel):
 
     version: int = Field(ge=1)
     influencers: list[StrengthInfluencer]
+    composition: StrengthComposition | None = None
+    rarity_measure: RarityMeasure | None = None
     status: InfluencerSetStatus
     proposed_by: str
     proposed_at: datetime
@@ -174,10 +228,13 @@ class InfluencerSetVersion(BaseModel):
 
 class InfluencerSetHistory(BaseModel):
     """`GET /v1/strength-influencers`: every version, newest first, and the developer defaults
-    that apply where no approved version names an influencer."""
+    that apply where no approved version names an influencer (with the file's composition and
+    rarity measure)."""
 
     versions: list[InfluencerSetVersion]
     defaults: list[StrengthInfluencer]
+    default_composition: StrengthComposition = "standard"
+    default_rarity_measure: RarityMeasure = "share"
 
 
 class InfluencerDecision(BaseModel):
@@ -192,6 +249,9 @@ class CaseInfluencersInput(BaseModel):
 
     added: list[StrengthInfluencer] = Field(default_factory=list, max_length=INFLUENCERS_MAX)
     switched_off: list[str] = Field(default_factory=list, max_length=INFLUENCERS_MAX)
+    #: Amendment 2: the composition this case uses (for a demonstration of client parity, say);
+    #: None, the installation's.
+    composition: StrengthComposition | None = None
     words: str = Field(default="", max_length=500)
 
     @field_validator("added")
@@ -236,6 +296,11 @@ class StrengthLegend(BaseModel):
     direct_link_types: list[str]
     switched_off: list[str] = Field(default_factory=list)
     rarity_note: str
+    #: Amendment 2: the composition in force in the case, where it came from, and the rarity
+    #: measure.
+    composition: StrengthComposition = "standard"
+    composition_layer: InfluencerLayer = "file"
+    rarity_measure: RarityMeasure = "share"
     #: The case override's version, None when the case has none.
     case_version: int | None = None
     case_set_by_name: str | None = None
@@ -251,6 +316,8 @@ class AppliedInfluencer(BaseModel):
     size: float
     layer: InfluencerLayer
     record_kind: str | None = None
+    #: A dataset-triggered influencer: the dataset (readable by the viewer) that evidenced it.
+    dataset: str | None = None
 
 
 class LinkStrength(BaseModel):
@@ -271,6 +338,14 @@ class LinkStrength(BaseModel):
     occurrences: int = 0
     last_seen: datetime | None = None
     applied: list[AppliedInfluencer] = Field(default_factory=list)
+    #: Amendment 2: the composition `strength` was worked out under. Under `client_parity`,
+    #: `rarity_term` is the link's own term (`1 − 1/n` for the `n` visible links of its type in
+    #: `dataset`), `raw_sum` that term plus the adds (the client's scale), and `strength` the sum
+    #: drawn on 0–1. All three None under `standard`.
+    composition: StrengthComposition = "standard"
+    rarity_term: float | None = None
+    raw_sum: float | None = None
+    dataset: str | None = None
 
 
 class ConnectionStrengthRequest(BaseModel):
@@ -286,8 +361,9 @@ class ConnectionStrengths(BaseModel):
 
 
 class SharedAttribute(BaseModel):
-    """One attribute node a pair shares, as the viewer may see it, with its contribution to the
-    pair's rarity (`ln(N_visible / df_visible)`), a score and never a count."""
+    """One attribute node a pair shares, as the viewer may see it, with its score: its
+    contribution to the pair's rarity (`ln(N_visible / df_visible)`) under `idf`, its own rarity
+    (`1 − L/ΣL`) under `share`; a score and never a count."""
 
     node: Node
     score: float
@@ -303,6 +379,12 @@ class PairRarity(BaseModel):
     score: float | None
     dataset: str | None = None
     shared: list[SharedAttribute] = Field(default_factory=list)
+    #: Amendment 2, under `client_parity`: the pair's strength through the value linking them,
+    #: the rarity plus the adds that apply to a shared value (the client's `dup_*` rows), on the
+    #: client's scale and drawn on 0–1, and those adds. None under `standard`.
+    parity_raw: float | None = None
+    parity_strength: float | None = None
+    parity_applied: list[AppliedInfluencer] = Field(default_factory=list)
 
 
 class RarityRequest(BaseModel):
@@ -320,6 +402,8 @@ class RarityResult(BaseModel):
     scope: RarityScope
     node_values: dict[str, float]
     pairs: list[PairRarity]
+    measure: RarityMeasure = "share"
+    composition: StrengthComposition = "standard"
 
 
 #: The rarity note the legend carries (decision 7), in the user guide's words.
@@ -331,6 +415,7 @@ RARITY_NOTE = (
 
 ALL_MODELS = (
     InfluencerTrigger,
+    DatasetTrigger,
     StrengthInfluencer,
     InfluencerSetInput,
     InfluencerSetVersion,

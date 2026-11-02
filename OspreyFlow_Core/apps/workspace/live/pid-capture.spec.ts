@@ -1109,7 +1109,8 @@ test("CAP-M5-b", async ({ page }) => {
 // --- connection strength (ADR-139; the demo script's strength scene, ADR-127 Amendment 42) --------
 //
 // Read-only but for CAP-S6, which saves the case's own influencer as its Author (the presenter's
-// step; `CAPTURE_RUNBOOK_v4.md` says how to undo it). Every person is found by the prison number
+// step; `CAPTURE_RUNBOOK_v4.md` says how to undo it), and CAP-S7 and CAP-S10, which switch the case
+// to client parity and back (ADR-139 Amendment 2; ADR-127 Amendment 43). Every person is found by the prison number
 // the plan gives them, never by a name written here.
 
 /** The cast member's prison number and the name the canvas draws ("Family, Given"). */
@@ -1274,4 +1275,85 @@ test("CAP-S6", async ({ page }) => {
   console.log(`S6 preview: ${await preview.textContent()}`);
   await rule.scrollIntoViewIfNeeded();
   await shot(page, "CAP-S6-b");
+});
+
+// --- both compositions on one case (ADR-139 Amendment 2; ADR-127 Amendment 43) -------------------
+//
+// Not yet run. The case's Author switches it to client parity (CAP-S7), the Inspector shows the raw
+// sums on the client's scale (CAP-S8), what two relay members share is ranked by the client's own
+// measure (CAP-S9), and the Author switches it back (CAP-S10). Every figure the logs must say is
+// proved on the plan by `tests/scenarios/test_pid_client_parity.py`.
+
+/** Monitoring > Connection strength, as the case's Author: the case's composition chosen and saved. */
+async function setCaseComposition(page: Page, value: "client_parity" | ""): Promise<void> {
+  await monitoringTab(page, "Connection strength");
+  const tab = page.locator(".strength-panel");
+  await tab.getByRole("combobox", { name: "How strength is worked out in this case" }).selectOption(value);
+  await tab.getByRole("button", { name: "Save this case's influencers" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "saved" })).toBeVisible();
+}
+
+test("CAP-S7", async ({ page }) => {
+  // The case's Author switches the case to client parity (a), and the legend says so, marked as
+  // the case's own (b). Changes the case: CAP-S10 switches it back.
+  await freshCase(page, "admin");
+  await setCaseComposition(page, "client_parity");
+  await expect(page.getByLabel("Composition in force")).toContainText("client parity (this case's own)");
+  await shot(page, "CAP-S7-a");
+  await principalStar(page);
+  const indicator = page.locator(".canvas-legend").getByLabel("Composition", { exact: true });
+  await expect(indicator).toContainText("Composition: client parity");
+  console.log(`S7 legend: ${await indicator.textContent()}`);
+  await shot(page, "CAP-S7-b");
+});
+
+test("CAP-S8", async ({ page }) => {
+  // Under client parity: the principal's busiest call, explained, with its raw sum on the client's
+  // scale, the same as the case's quietest call's (a); and his assault-evidenced conflict, above
+  // every plain conflict (b).
+  await freshCase(page);
+  const { national } = coordinatorNumber();
+  await pickFromSearch(page, `+44 ${national.slice(1)}`, /^Endpoint/);
+  await page.getByRole("button", { name: "Expand" }).first().click().catch(() => undefined);
+  await page.waitForTimeout(4000);
+  await selectLinkInMatrix(page, "COMMUNICATED_WITH", /PIN-/);
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "Connection strength", exact: true }).click();
+  const raw = page.getByLabel("Raw sum on the client's scale");
+  await expect(raw).toBeVisible();
+  console.log(`S8-a: ${await raw.textContent()} | ${await page.getByRole("list", { name: "What this link's strength rests on" }).textContent()}`);
+  await shot(page, "CAP-S8-a");
+  await principalStar(page);
+  const calder = castMember("calder_1");
+  await selectLinkInMatrix(page, "In conflict with", new RegExp(calder.name.split(",")[0]!));
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "Connection strength", exact: true }).click();
+  await expect(raw).toBeVisible();
+  console.log(`S8-b: ${await raw.textContent()}`);
+  await shot(page, "CAP-S8-b");
+});
+
+test("CAP-S9", async ({ page }) => {
+  // What two relay members share, ranked by the client's own measure (one less a value's share of
+  // the pair links through values of its kind): the fourth relay man, then the principal, then
+  // Fenwick Moor.
+  await freshCase(page);
+  const [one, two] = await addCast(page, ["relay_1", "relay_2"]);
+  await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "What these two share", exact: true }).click();
+  const shared = page.getByRole("list", { name: "Shared attributes, rarest first" });
+  await expect(shared).toBeVisible();
+  await expect(page.getByText(/measured by share of pair links/)).toBeVisible();
+  console.log(`S9: ${await shared.textContent()}`);
+  await shot(page, "CAP-S9");
+});
+
+test("CAP-S10", async ({ page }) => {
+  // The case's Author switches it back: the legend reads the shipped composition again.
+  await freshCase(page, "admin");
+  await setCaseComposition(page, "");
+  await expect(page.getByLabel("Composition in force")).toContainText("Composition: standard");
+  console.log(`S10: ${await page.getByLabel("Composition in force").textContent()}`);
+  await shot(page, "CAP-S10");
 });

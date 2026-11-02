@@ -42,7 +42,14 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
-from schemas.strength import ActiveInfluencer, LinkStrength, RarityResult, RarityScope
+from schemas.strength import (
+    ActiveInfluencer,
+    LinkStrength,
+    RarityMeasure,
+    RarityResult,
+    RarityScope,
+    StrengthComposition,
+)
 
 
 class SubgraphTooLarge(Exception):
@@ -495,6 +502,7 @@ class GraphPort(Protocol):
         principal: Principal,
         *,
         influencers: Sequence[ActiveInfluencer],
+        composition: StrengthComposition = "standard",
     ) -> list[LinkStrength]:
         """`06_DECISIONS.md` ADR-139 decisions 2, 5 and 9: each link of `edge_ids` the principal
         may see (the link and both its ends, as `get_edges`), with its connection strength: its
@@ -505,7 +513,15 @@ class GraphPort(Protocol):
         exists: a node of the trigger's type whose property holds one of its values, at one end of
         the link, or linked to both ends by links the principal may see (rule 3). A record they
         may not see, or a record reached only over a link they may not see, changes nothing; so
-        the strength is the strength in a world without it. Nothing is stored."""
+        the strength is the strength in a world without it. A **dataset-triggered** influencer
+        (Amendment 2) applies only where the link belongs to one of its datasets that the
+        principal may read. Nothing is stored.
+
+        `composition="client_parity"` (Amendment 2): the strength is the link's rarity term plus
+        the adds that apply (`ontology/influencers.py`'s `parity_strength`), worked out in each
+        dataset the link belongs to and the principal may read, the highest kept and named. The
+        term is `1 − 1/n`, `n` the links of the link's type in that dataset the principal may see
+        (the link and both its ends), so a hidden link is in no `n`."""
         ...
 
     async def shared_attribute_rarity(
@@ -518,10 +534,21 @@ class GraphPort(Protocol):
         partners: Literal["among", "any"] = "among",
         exclude_types: Sequence[str] = ("Alert",),
         cap: int = RARITY_PAIR_CAP,
+        measure: RarityMeasure = "share",
+        influencers: Sequence[ActiveInfluencer] = (),
+        composition: StrengthComposition = "standard",
     ) -> RarityResult:
-        """`06_DECISIONS.md` ADR-139 decision 4: shared-attribute rarity over what the principal
-        may see. For two visible entities `u`, `v` of one type, an attribute they share is a
-        visible node (of no type in `exclude_types`) linked to each by a visible link, and
+        """`06_DECISIONS.md` ADR-139 decision 4 and Amendment 2: shared-attribute rarity over what
+        the principal may see. For two visible entities `u`, `v` of one type, an attribute (a
+        shared value) is a visible node (of no type in `exclude_types`) linked to each by a
+        visible link. **`measure="share"`, the client's and the default:**
+
+            rarity(a)    = 1 − C(k(a), 2) / Σ_b C(k(b), 2)
+            rarity(u, v) = the highest rarity(a) over the values they share
+
+        where `k(a)` is how many entities of their type the principal may see linked to `a` by a
+        link they may see, and `b` runs over every visible value of `a`'s type in scope.
+        **`measure="idf"`:**
 
             rarity(u, v) = Σ over shared attributes a of ln(N_visible / df_visible(a))
 
@@ -536,8 +563,13 @@ class GraphPort(Protocol):
         another of `node_ids` (`partners="among"`) or with any visible entity of its type
         (`"any"`); none when nothing scores above 0. `pairs`: each requested pair, with its
         shared attributes ranked by their contribution, highest first; in `"any"` mode, also each
-        node's best pair. More than `cap` pairs to score is `RarityTooLarge`, never scored in
-        part (rule 2)."""
+        node's best pair. More than `cap` pairs to score, or (`share`) more than `cap` holders to
+        read for the sums, is `RarityTooLarge`, never scored in part (rule 2).
+
+        `composition="client_parity"`: each pair returned also carries its parity score, the
+        rarity plus the adds of the `influencers` naming `SHARED_VALUE` that apply in the dataset
+        (a dataset-triggered one only where the principal may read it), on the client's scale and
+        drawn on 0–1."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

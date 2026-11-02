@@ -9,11 +9,23 @@ access predicate, never here after retrieval). The influencers are the case's in
 case → installation → file (`InfluencerStore.active_for_case`). The answer carries scores, the
 reader's visible shared attributes, and the influencers' own definitions: never `N`, `df`, a
 corpus count or the stored weight components (rule 7; ADR-122).
+
+**Amendment 2:** the case's composition and rarity measure (`InfluencerStore.settings_for_case`)
+travel with each read: under client parity, strengths are the client's sums drawn on 0–1 and a
+pair's parity score rides with its rarity. A dataset-triggered influencer is told to the reader
+only by the datasets they may read (`as_the_reader_sees`).
 """
 
 from __future__ import annotations
 
-from ontology.influencers import StrengthDefaults, legend_of
+from collections.abc import Sequence
+
+from ontology.influencers import (
+    StrengthDefaults,
+    legend_of,
+    resolve_influencers,
+    resolve_settings,
+)
 from ports.graph import GraphPort, RarityTooLarge
 from schemas.domain import Principal
 from schemas.strength import (
@@ -38,9 +50,12 @@ async def case_legend(
     store: InfluencerStore,
     defaults: StrengthDefaults,
     names: PrincipalNameDirectory | None = None,
+    readable: Sequence[str] | None = None,
 ) -> StrengthLegend:
-    """The legend box's account of strength for a case: exactly the influencers in force."""
+    """The legend box's account of strength for a case: exactly the influencers in force, as the
+    reader may be told of them, and the composition and rarity measure."""
     active, switched_off, case = await store.active_for_case(investigation_id, defaults.influencers)
+    settings = await store.settings_for_case(investigation_id, defaults)
     set_by_name = None
     if case is not None and names is not None:
         set_by_name = (await names.display_names([case.set_by])).get(case.set_by)
@@ -49,6 +64,8 @@ async def case_legend(
         switched_off,
         case_version=case.version if case else None,
         case_set_by_name=set_by_name,
+        settings=settings,
+        readable=readable,
     )
 
 
@@ -72,11 +89,17 @@ async def case_connection_strengths(
         named = set(body.edge_ids)
         in_view = [e for e in in_view if e in named]
     active, switched_off, case = await store.active_for_case(investigation_id, defaults.influencers)
-    links = await graph.connection_strengths(in_view, principal, influencers=active)
+    settings = await store.settings_for_case(investigation_id, defaults)
+    links = await graph.connection_strengths(
+        in_view, principal, influencers=active, composition=settings.composition
+    )
     return ConnectionStrengths(
         links=links,
-        legend=legend_of(active, switched_off, case_version=case.version if case else None),
-    )
+        legend=legend_of(
+            active, switched_off, case_version=case.version if case else None,
+            settings=settings, readable=principal.datasets,
+        ),
+    )  # fmt: skip
 
 
 async def case_rarity(
@@ -87,6 +110,7 @@ async def case_rarity(
     graph: GraphPort,
     principal: Principal,
     defaults: StrengthDefaults,
+    store: InfluencerStore | None = None,
 ) -> RarityResult:
     """Each visible working-set entity's highest rarity with another of its kind in the working
     set, and the pairs asked for. A pair naming an entity not in the reader's view has no score
@@ -96,6 +120,12 @@ async def case_rarity(
     ids = sorted(visible.nodes)
     in_view = set(ids)
     pairs = [(a, b) for a, b in body.pairs if a in in_view and b in in_view]
+    if store is not None:
+        active, _, _ = await store.active_for_case(investigation_id, defaults.influencers)
+        settings = await store.settings_for_case(investigation_id, defaults)
+    else:
+        active, _ = resolve_influencers(defaults.influencers)
+        settings = resolve_settings(defaults)
     try:
         result = await graph.shared_attribute_rarity(
             ids,
@@ -103,6 +133,9 @@ async def case_rarity(
             scope=body.scope,
             pairs=pairs,
             exclude_types=defaults.rarity_exclude_types,
+            measure=settings.rarity_measure,
+            influencers=active,
+            composition=settings.composition,
         )
     except RarityTooLarge as refused:
         raise LimitExceededError(
@@ -113,6 +146,8 @@ async def case_rarity(
         scope=result.scope,
         node_values=result.node_values,
         pairs=[explained.get((a, b)) or PairRarity(a=a, b=b, score=None) for a, b in body.pairs],
+        measure=result.measure,
+        composition=result.composition,
     )
 
 

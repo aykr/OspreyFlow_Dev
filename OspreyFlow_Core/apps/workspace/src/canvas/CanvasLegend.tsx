@@ -18,12 +18,13 @@
 // Last, connection strength (ADR-139 decision 7): exactly the influencers in force in the case, each
 // with what triggers it, the links it changes, the change and its size, and where it came from (a
 // case override marked as such); which link types count as direct; what the case switched off; and
-// that rarity is worked out over what the reader may see.
+// that rarity is worked out over what the reader may see. And (ADR-139 Amendment 2) which composition
+// is in force — standard, or the client's parity sum — where it came from, and the rarity measure.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { StrengthLegend } from "../../../../packages/schemas/generated";
 import { activePalette } from "../color/palette";
-import { andList, influencerWords, layerWords } from "../strength/words";
+import { andList, compositionWords, influencerWords, layerWords } from "../strength/words";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
 import { describeValueIcon, glyphImageUri } from "./valueIcons";
@@ -243,6 +244,13 @@ export function CanvasLegend({
       {strength && (
         <div className="canvas-legend__strength" hidden={!open}>
           <p className="canvas-legend__caption">Connection strength</p>
+          <p className="canvas-legend__note canvas-legend__composition" aria-label="Composition">
+            {strength.composition_layer === "case" && <span className="canvas-legend__tag">Case override</span>}{" "}
+            {compositionWords(strength)}
+            {strength.composition === "client_parity" &&
+              strength.influencers.some((a) => (a.influencer.change ?? "add") !== "add") &&
+              " Only the adds count in it: a multiplier, floor or exclusion is not used."}
+          </p>
           <ul aria-label="Strength influencers" className="canvas-legend__list canvas-legend__links">
             {strength.influencers.map((active) => (
               <li key={active.influencer.id} className="canvas-legend__influencer">

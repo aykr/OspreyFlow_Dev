@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.10** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.11** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.11 | 2026-11-02 | §7.6: the client's rarity measure (the default) and the IDF measure, the two compositions, dataset triggers and shared-value influencers, and the port's new parameters. New §7.7, The client's code and OspreyFlow's equivalent: their R function beside OspreyFlow's arithmetic, line by line, a worked synthetic example whose numbers match, the golden parity test, and the row shapes that do not map exactly. |
 | 1.10 | 2026-11-02 | New §7.6, Connection strength: the stored weight's formula, the influencer schema and its resolution order, influencers applied at read time under the reader's access, the rarity query, and shipping influencers in the weights file. §9.1: the strength and rarity routes and the influencers' routes. |
 | 1.9 | 2026-11-01 | §9.1: the API's OpenAPI document, `GET /v1/openapi.json`, signed in, its version the release. |
 | 1.8 | 2026-11-01 | §3.8a: the Checks on load step — attaching the case's and the deployment's rules to a pipeline and choosing what a hit does there. §3.8: Verify shows the alerts its sample would raise, beside the rejections, and writes nothing. §2: a data engineer attaches rules but does not write them. |
@@ -474,8 +475,8 @@ It comes from the link alone (ADR-123): no other link's count reaches it.
 | Field | Meaning |
 | --- | --- |
 | `id`, `label` | Its key (lower case, `-` and `_`) and what the legend says |
-| `trigger` | `{entity_type, property, values}`: a record of that type whose property holds one of the values, at one end of the link or linked to both ends. Omitted: a **direct-links** influencer, applying to its link types always |
-| `link_types` | The link types it changes |
+| `trigger` | `{entity_type, property, values}` (`kind: record`, the default): a record of that type whose property holds one of the values, at one end of the link or linked to both ends. `{kind: dataset, datasets}`: every link that belongs to one of those datasets, applied only where the reader may read it (ADR-139 Amendment 2). Omitted: a **direct-links** influencer, applying to its link types always |
+| `link_types` | The link types it changes. `SHARED_VALUE` (reserved; no ontology declares it) is a pair linked through a shared value, the client's `dup_*` rows; it takes an `add` triggered by a dataset or by nothing |
 | `change`, `size` | `add` (a boost to the pre-logistic score, above 0 and at most 2), `multiply` (0.1 to 5), `floor` (a strength, above 0 and at most 1) or `exclude` (size 0: no stronger than the stored weight) |
 | `enabled` | `false` in a later layer switches off the influencer of the same id beneath it |
 | `note` | Shown beside it, such as "to be confirmed with the client" |
@@ -507,22 +508,50 @@ found, so it changes nothing: the strength is the strength in a world without it
 suite's `test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence` holds
 every adapter to it.
 
-**The rarity query.** `GraphPort.shared_attribute_rarity(node_ids, principal, scope=…)`, for two
-visible entities of one type:
+**The rarity query.** `GraphPort.shared_attribute_rarity(node_ids, principal, scope=…, measure=…)`,
+for two visible entities of one type. An attribute (a **shared value**) is a visible node (of no type in
+the file's `rarity.exclude_types`) linked to each of the two by a visible link. Two measures, chosen by
+the weights file's `rarity.measure` or an installation version (ADR-139 Amendment 2):
 
 ```
-rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
+share (the client's, the default):
+  rarity(a)    = 1 − C(k(a), 2) / Σ_b C(k(b), 2)      # b: every visible value of a's type in scope
+  rarity(u, v) = max over shared values a of rarity(a)
+idf:
+  rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
 ```
 
-An attribute is a visible node (of no type in the file's `rarity.exclude_types`) linked to each of the
-two by a visible link; `N_visible` counts the visible entities of the pair's type in scope;
-`df_visible(a)` counts those linked to `a` by a visible link. **Per dataset** (the default) it is
+`k(a)` and `df_visible(a)` both count the visible entities of the pair's type linked to `a` by a
+visible link; `N_visible` counts the visible entities of the pair's type in scope. Under `share`, the
+sum over the kind is read too: every visible value of the kind with its visible holders, counted first
+and held to the cap (`render_kind_holders`), so a hidden holder is in no `k` and no sum
+(`test_unauthorised_share_rarity_matches_a_world_without_the_hidden_holders`). **Per dataset** (the default) it is
 worked out in each dataset the two and the attribute all belong to, the highest kept and named; **across
 the case**, over every dataset the reader may read. In ArcadeDB it is three reads: the entities and
 their attribute ids, each attribute's visible neighbours with their types and datasets, and the
-visible count per type and dataset. More pairs to score than the cap (2,000,000) is refused as
-`limit_exceeded`, never scored in part. The Glass is sent the score and the visible shared attributes,
-never `N` or `df`.
+visible count per type and dataset (and, under `share`, the kind's values and holders). More pairs to
+score, or holders to read, than the cap (2,000,000) is refused as `limit_exceeded`, never scored in
+part. The Glass is sent the score and the visible shared attributes, never `N`, `df`, `k` or a sum.
+
+**Two compositions** (ADR-139 Amendment 2). The weights file's `composition:` (`standard`), an
+installation version's `composition`, or a case override's `composition` (resolved case, installation,
+file: `ontology/influencers.py`'s `resolve_settings`) chooses how strength is made:
+
+```
+standard:       strength = the influencers applied to the stored weight (above)
+client_parity:  raw_sum  = rarity term + Σ add   (no count, no recency; no multiply, floor or exclude)
+                strength = 1 / (1 + e^(−(raw_sum − 1) / 0.1))      # parity_drawn, order preserving
+  a stored link's rarity term   = 1 − 1/n   (n: the visible links of its type in the dataset)
+  a shared-value pair's term    = the share rarity of the value linking them
+```
+
+`connection_strengths(…, composition="client_parity")` returns each link's `rarity_term`, `raw_sum`
+and the `dataset` it was worked out in (the highest-scoring of those it belongs to and the reader may
+read); `shared_attribute_rarity(…, influencers=…, composition="client_parity")` returns each pair's
+`parity_raw`, `parity_strength` and `parity_applied`. Client parity always reads the `share` measure.
+The routes pass the case's resolved composition and measure; the legend carries them
+(`composition`, `composition_layer`, `rarity_measure`) and names a dataset trigger only by the
+datasets the reader may read.
 
 **Shipping influencers in the weights file.** The developer defaults sit beside the weight versions,
 under `influencers:`; they are not a weight version and change no stored weight:
@@ -537,12 +566,59 @@ influencers:
     note: to be confirmed with the client
 rarity:
   exclude_types: [Alert]
+  measure: share          # or idf
+composition: standard     # or client_parity
 ```
 
 A shipped boost's size is calibrated, not tuned: how far doubling an ordinary link's count (from the
 default rule's heavy count, 10, to 20) moves its pre-logistic score, α·(ln 21 − ln 11)/ln 11 = 0.1348.
 `test_influencers.py` holds the shipped sizes to it, and the loader refuses a malformed influencer by
 its position and id.
+
+### 7.7 The client's code and OspreyFlow's equivalent
+
+The client supplied the R function their pipeline uses (ADR-139 Amendment 2). It is called once per
+dataset's link table; `the_col` holds the shared value itself. Line by line, with what OspreyFlow does
+in its place:
+
+| The client's R | What it does | OspreyFlow's equivalent |
+| --- | --- | --- |
+| `shared_values_table_1 <- edges_dt[, .(shared_values=get(the_col))][, .N, by = shared_values]` | `N`: how many rows of the table carry each value | A value is an attribute node; the `dup_*` rows through it are its pairs of visible holders, `C(k, 2)` (`pair_links`), `k` counted by the adapter under access |
+| `shared_values_table_1[, edge_strength_1 := (1 - (N / sum(N)))]` | `1 − N/ΣN`, `ΣN` being every row of the table | `share_rarity(C(k,2), Σ_b C(k_b,2))`, the sum over the visible values of the same kind in the dataset (`ShareTotals`) |
+| `setnames(…)` | Renames the columns back | — (no arithmetic) |
+| `edges_dt <- merge(edges_dt, shared_values_table_1, by = the_col, all.x = T)` | Each row takes its value's term | A shared-value pair takes the term of the value linking it (the highest, if several: Amendment 3); a stored link takes `1 − 1/n`, itself a value held by its two ends among the `n` visible links of its type |
+| `edges_dt[, edge_strength := edge_strength_1 + abs_add]` | `abs_add` on every row of the table | A **dataset-triggered** influencer, `add` of `abs_add`, on the dataset's link types and `SHARED_VALUE` |
+| `edges_dt[, edge_strength_1 := NULL]` | Drops the column | — |
+| `edges_dt[!(type %like% "dup_"), edge_strength := edge_strength + non_dup_add]` | `non_dup_add` on every row not of a `dup_*` type | The **direct-links** influencer (no trigger), `add` of `non_dup_add`, on the stored link types; never on `SHARED_VALUE` |
+
+`raw_sum` is the client's `edge_strength`; the Glass draws `parity_drawn(raw_sum)` and the Inspector
+shows `raw_sum` to four places.
+
+**A worked example** (synthetic; `tests/ontology/client_r_function.py`). Three tables, each called with
+its own `abs_add` and a `non_dup_add` of 0.2:
+
+| Dataset | Rows | `abs_add` | The client's figures | OspreyFlow's figures |
+| --- | --- | --- | --- | --- |
+| phones | `dup_phone`: P1–P2 (ph1); P3–P4, P3–P5, P4–P5 (ph2); P1–P6 (ph3); P2–P6 (ph4) | 0.05 | ΣN = 6; ph1, ph3, ph4: 1 − 1/6 + 0.05 = **0.8833**; ph2: 1 − 3/6 + 0.05 = **0.5500** | holders 2, 3, 2, 2: Σ C(k,2) = 1 + 3 + 1 + 1 = 6; the same two figures, as `parity_raw` |
+| calls | `call`: X1–X2, X2–X3, X3–X4, X4–X5, each its own value | 0.1 | ΣN = 4; 1 − 1/4 + 0.1 + 0.2 = **1.0500** | four visible `COMMUNICATED_WITH` links: 1 − 1/4, plus the dataset and direct adds: **1.0500** as `raw_sum` |
+| transfers | `money`: T1–T2, T2–T3 | 0.15 | ΣN = 2; 1 − 1/2 + 0.15 + 0.2 = **0.8500** | two visible `TRANSACTED` links: **0.8500** |
+
+The golden parity test (`test_client_parity_scores_equal_a_transcription_of_the_clients_r_function`,
+in the `GraphPort` conformance suite) runs that table through a line-by-line transcription of the R
+function, loads the same data into the store, reads it back under `client_parity`, and asserts every
+row's score is identical; planting a slip (counting holders instead of pairs, or leaving the dataset's
+add off the shared values) turns it red.
+
+**How a direct row's term arises in their code, and where the mapping stops.** The R function adds
+`edge_strength_1` to every row, a direct row included: its `the_col` holds that row's own value, so its
+term is `1 − N(v)/ΣN`, with `ΣN` every row of the table of every type. OspreyFlow reads a stored link as
+a value of its own among the links of its type in the dataset. The two agree exactly when one call of
+the function holds **one kind**: `dup_*` rows through values of one kind, or direct rows of one type,
+each carrying its own value. They do **not** agree when one call mixes kinds (`dup_*` and direct rows
+together, two shared-value kinds, or two direct types: the client's `ΣN` then counts every row,
+OspreyFlow's one kind; `test_a_table_mixing_kinds_is_the_shape_that_does_not_map_exactly` shows it as
+a figure), nor when several direct rows carry one value (OspreyFlow stores one link per pair and type).
+Both are open questions for the client (ADR-139 Amendment 3).
 
 ## 8. Screening lists
 

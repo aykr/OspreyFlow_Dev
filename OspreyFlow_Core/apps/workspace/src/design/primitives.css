@@ -564,6 +564,13 @@
 .strength-explained__heading { margin: 0; font-weight: 600; color: var(--text-primary); }
 .strength-explained__muted { margin: 0; color: var(--text-secondary); }
 .strength-explained__problem { margin: 0; color: var(--error); }
+/* ADR-139 Amendment 2: under client parity, the raw sum on the client's scale beside the drawn one. */
+.strength-explained__raw {
+  margin: 0; display: flex; justify-content: space-between; gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8); border: 1px solid var(--border-strong); border-radius: var(--r-control);
+  color: var(--text-primary);
+}
+.strength-explained__raw .value { font-variant-numeric: tabular-nums; font-weight: 600; }
 /* ADR-139 decision 3: Monitoring's Connection strength tab. */
 .strength-panel { display: grid; gap: var(--sp-16); max-width: 720px; }
 .strength-panel section { display: grid; gap: var(--sp-8); }

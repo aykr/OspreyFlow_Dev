@@ -310,12 +310,17 @@ if (params.get("sentence") === "preview") {
 }
 
 // `?sentence=strength` (with `tab=rules`, ADR-139 decision 8): a sentence on connection strength.
-if (params.get("sentence") === "strength") {
+// `?sentence=strength-client` (ADR-139 Amendment 2): the figure on the client's scale.
+if (params.get("sentence") === "strength" || params.get("sentence") === "strength-client") {
   for (let i = 0; i < 40 && !choose("Subject", "Person"); i++) await settle();
   await settle();
   choose("Strength", "connection_strength");
   await settle();
-  choose("Reaches", "0.85");
+  if (params.get("sentence") === "strength-client") {
+    choose("On (scale, for strength)", "client");
+    await settle();
+  }
+  choose("Reaches", params.get("sentence") === "strength-client" ? "1.2" : "0.85");
 }
 
 // `?template=<typology>` (with `tab=rules`): that template fills the form; a jurisdiction list is typed.

@@ -54,6 +54,34 @@ test("a link's connection strength is explained, and what its ends share ranked,
   registerCovered(REGISTRY, "explain-a-links-strength-by-keyboard");
 });
 
+test("under client parity a link's raw sum on the client's scale is read by keyboard (ADR-139 Amendment 2)", async ({
+  page,
+}) => {
+  await serve(page);
+  const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/v1/investigations/inv-1/connection-strength", (r) =>
+    r.fulfill(json({
+      links: [{ edge_id: "e1", edge_type: "ASSOCIATE_OF", base_weight: 0.62, strength: 0.6969, parameter_set: "3/default",
+        heavy: 10, occurrences: 2, last_seen: "2026-04-18T00:00:00Z", composition: "client_parity", rarity_term: 0.75,
+        raw_sum: 1.0848, dataset: "prison-intelligence",
+        applied: [{ id: "direct", label: "Direct link", change: "add", size: 0.1348, layer: "file", record_kind: null }] }],
+      legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+    })), // prettier-ignore
+  );
+  await page.route("**/v1/investigations/inv-1/rarity", (r) =>
+    r.fulfill(json({ scope: "dataset", node_values: {}, measure: "share", composition: "client_parity", pairs: [] })),
+  );
+  await page.goto("/keyboard/inspector-harness.html");
+  await header(page, "Connection strength").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Composition", { exact: true })).toHaveText("Composition: Client parity");
+  await expect(page.getByLabel("Raw sum on the client's scale")).toContainText("1.0848");
+  const lines = page.getByRole("list", { name: "What this link's strength rests on" });
+  await expect(lines).toContainText("Its rarity term 0.7500, in prison-intelligence");
+  await expect(lines).not.toContainText("Seen 2 times");
+  registerCovered(REGISTRY, "read-a-links-raw-sum-under-client-parity-by-keyboard");
+});
+
 test("a part opens and folds by Enter on its header", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/inspector-harness.html");

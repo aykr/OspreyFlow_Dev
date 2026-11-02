@@ -7,7 +7,8 @@
 // waiting (Approve offered); `?as=maker` is that version's proposer (Approve withheld, Withdraw
 // offered); `?as=author` is the case's Author with nothing waiting (the case's own override offered,
 // and a new installation version to propose); `?as=editor` reads what is in force alone. The data is
-// synthetic (rule 9).
+// synthetic (rule 9). `&composition=client_parity` (ADR-139 Amendment 2): the case already switched to
+// client parity by its own override.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -50,7 +51,9 @@ const APPROVED = {
 
 const state = {
   waiting: as === "checker" || as === "maker",
-  override: null as null | { added: unknown[]; switched_off: string[] },
+  override: (params.get("composition") === "client_parity"
+    ? { added: [], switched_off: [], composition: "client_parity" }
+    : null) as null | { added: unknown[]; switched_off: string[]; composition?: string | null },
 };
 
 function legend() {
@@ -66,6 +69,9 @@ function legend() {
       switched_off: off,
       rarity_note:
         "Shared-attribute rarity is worked out over what you may see: two analysts with different access can see different rarity for the same pair.",
+      composition: state.override?.composition ?? "standard",
+      composition_layer: state.override?.composition ? "case" : "file",
+      rarity_measure: "share",
     },
     override: state.override,
     can_override: as === "author",
@@ -79,11 +85,17 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   window.__STRENGTH__!.sent.push({ method, path, body });
   const json = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
   if (path === "/v1/investigations/inv-1/strength-influencers") {
-    if (method === "PUT") state.override = { added: body.added, switched_off: body.switched_off };
+    if (method === "PUT")
+      state.override = { added: body.added, switched_off: body.switched_off, composition: body.composition ?? null };
     return json(200, legend());
   }
   if (path === "/v1/strength-influencers" && method === "GET")
-    return json(200, { versions: state.waiting ? [WAITING, APPROVED] : [APPROVED], defaults: [DIRECT, SOURCE] });
+    return json(200, {
+      versions: state.waiting ? [WAITING, APPROVED] : [APPROVED],
+      defaults: [DIRECT, SOURCE],
+      default_composition: "standard",
+      default_rarity_measure: "share",
+    });
   if (path === "/v1/strength-influencers" && method === "POST") {
     state.waiting = true;
     return json(201, { ...WAITING, version: 3, influencers: body.influencers, proposed_by: `analyst-${as}` });

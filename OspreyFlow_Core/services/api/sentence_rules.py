@@ -22,7 +22,12 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from ontology.influencers import load_strength_defaults, resolve_influencers
+from ontology.influencers import (
+    StrengthSettings,
+    load_strength_defaults,
+    resolve_influencers,
+    resolve_settings,
+)
 from schemas.analytics import EventRecord
 from schemas.domain import EdgeWrite, Interval, NodeWrite, PatternQuery, Principal, TypologyRule
 from schemas.sentences import SentenceRuleParams
@@ -120,15 +125,17 @@ def rows_of_finding(
 
 async def strength_context(
     store: InfluencerStore | None, investigation_id: str
-) -> tuple[list[ActiveInfluencer], tuple[str, ...]]:
-    """ADR-139: the influencers in force in the case, and the types rarity leaves out. With no
-    store (a run that has none), the weights file's defaults alone."""
+) -> tuple[list[ActiveInfluencer], tuple[str, ...], StrengthSettings]:
+    """ADR-139: the influencers in force in the case, the types rarity leaves out, and (Amendment
+    2) the composition and rarity measure. With no store (a run that has none), the weights
+    file's alone."""
     defaults = load_strength_defaults()
     if store is None:
         active, _ = resolve_influencers(defaults.influencers)
-    else:
-        active, _, _ = await store.active_for_case(investigation_id, defaults.influencers)
-    return active, defaults.rarity_exclude_types
+        return active, defaults.rarity_exclude_types, resolve_settings(defaults)
+    active, _, _ = await store.active_for_case(investigation_id, defaults.influencers)
+    settings = await store.settings_for_case(investigation_id, defaults)
+    return active, defaults.rarity_exclude_types, settings
 
 
 async def _context(
@@ -161,7 +168,9 @@ async def _context(
         if gate.screening is None:
             raise RuntimeError("this run has no screening lists to screen against")
         entries[params.sentence.subject] = await gate.screening.entries(params.sentence.subject)
-    influencers, exclude = await strength_context(gate.influencers, gate.investigation_id)
+    influencers, exclude, settings = await strength_context(
+        gate.influencers, gate.investigation_id
+    )
     ctx = SentenceContext(
         graph=gate.graph,
         analytics=gate.analytics,
@@ -171,6 +180,8 @@ async def _context(
         screening_entries=entries,
         influencers=influencers,
         rarity_exclude_types=exclude,
+        composition=settings.composition,
+        rarity_measure=settings.rarity_measure,
     )
     return params, saved.definition, ctx
 

@@ -22295,3 +22295,116 @@ number two people share).
 - the sizes of `abs_add` and `non_dup_add` per dataset;
 - the rarity of a pair linked by several shared values;
 - that `dup_*` covers exactly the shared-value types.
+
+### ADR-139, Amendment 3 (2 November 2026) — step 9g as built: how Amendment 2 was read
+
+Status: built on 2 November 2026 (build-order step 9g), on the branch `strength-client-parity`; open to
+the owner's review. Each item is how the build read a point Amendment 2 left open, or what it found.
+Amendment 1's reading of the NIEM property stands: the trigger property is `category`, which the
+ontology declares, not `incident_type`.
+
+**As built:**
+1. **Where the composition is chosen.** "A weights version names the composition" was read as: the
+   weights file's new top-level `composition:` (the developer default, `standard`) and `rarity.measure`
+   (`share`), beside its frozen `versions:`, which are not touched (a new weight version would ask for a
+   recompute no stored weight needs); and an **installation influencer-set version** may name
+   `composition` and `rarity_measure`, by the same maker–checker as its influencers, in force only once
+   approved. A **case override** may name `composition` (no second person; audited), for a
+   demonstration. Resolution: case, installation, file (`resolve_settings`).
+2. **"The same kind".** A shared value's kind is its own entity type (a phone is an `Endpoint`); its
+   holders are the entities of the pair's type linked to it by a visible link. `Σ_b C(k_b, 2)` runs over
+   every visible value of that type in scope, per dataset (the value and its holders in the dataset) or
+   across the case. One call of the client's function carries one `the_col`, so one kind, which this
+   matches.
+3. **A stored (direct) link's rarity term under client parity** is the link read as a value of its own,
+   held by its two ends, among the links of its type the reader may see in the dataset: `1 − 1/n`
+   (`n` counts a link only when it and both its ends are visible). A link in several datasets is worked
+   out in each one it belongs to and the reader may read, and the highest raw sum (with that dataset's
+   adds) is kept and named. Amendment 2 is silent on a direct link's term; this is what makes a table of
+   direct rows map exactly.
+4. **A pair linked by several values** takes the highest, as Amendment 2 says; **in several datasets**,
+   the dataset whose rarity plus adds is highest.
+5. **Client parity takes adds only.** The client's sum has no multiplier, floor or exclusion, so under
+   client parity those changes are left out of the sum; the legend says so when one is in force (the
+   demo's own "Assault in this case" floor is one).
+6. **Client parity always reads the `share` measure**, whatever the installation's `rarity_measure`:
+   the sum is on the client's scale only with their measure.
+7. **The drawing curve** is a logistic of its own, centred on 1 with a scale of 0.1, not the stored
+   weight's (`midpoint` 0.367, `scale` 1/6): the client's sums cluster between about 0.5 and 1.5, which
+   the weight's curve would draw at 0.88 to 1.00 and leave a filter slider no room; the parity curve
+   draws an unboosted unique value at 0.5 and keeps every sum's order
+   (`test_each_composition_keeps_its_own_order_under_its_drawing`).
+8. **A dataset or source trigger** (`DatasetTrigger`, `{kind: dataset, datasets}`): "source" is read as
+   the dataset a source is loaded into, since a link records its datasets and not its source system. It
+   applies to a stored link that belongs to one of its datasets, and to a pair linked through a shared
+   value in it, only where the reader's case reads that dataset; the legend and the case's override name
+   it to a reader only by the datasets they may read, and not at all if none. A dataset name is not
+   checked against the deployment's datasets: one no case reads is inert.
+9. **`SHARED_VALUE`** is the reserved link-type name an influencer uses for a pair linked through a
+   shared value (the client's `dup_*` rows); no ontology declares it; it takes an `add` triggered by a
+   dataset or by nothing (a record does not evidence a path), and it is never "direct".
+10. **A monitoring condition's scale** is `StrengthReaches.scale`: `drawn` (0 to 1, the default) or
+    `client` (a raw sum, up to 10). Under the standard composition there is no raw sum, so a
+    client-scale condition is met by nothing; it is not refused, since a case may switch composition
+    after the rule is written.
+11. **The cap** (rule 2) now also holds the holders read for the client's sums: one pair may share a
+    value of a kind with millions of values. Past 2,000,000 pair contributions plus holder steps, the
+    read is refused `limit_exceeded`.
+12. **The default measure changed for every installation.** Rarity is now on 0 to 1. A rarity rule
+    written under IDF with a figure above 1 (the builder offered 2) is now met by nothing until its
+    installation chooses `idf` or the rule is rewritten; the builder now offers 0.9. Recorded as an open
+    question rather than migrated.
+
+**The golden parity test and where the mapping stops.** `tests/ontology/client_r_function.py`
+transcribes `add_strength_column` line by line; the conformance case
+`test_client_parity_scores_equal_a_transcription_of_the_clients_r_function` loads a synthetic table
+(phones `dup_phone` rows, calls and transfers direct rows, each dataset its own call) and asserts
+identical scores (0.8833 and 0.5500 for the phones, 1.0500 for the calls, 0.8500 for the transfers),
+shown red by counting holders instead of pair links and by leaving the dataset's add off the shared
+values. **It does not map exactly** for: a call of the function holding more than one kind (`dup_*` and
+direct rows together, two `dup_*` kinds, two direct types), because the client's `ΣN` counts every row
+of the table and OspreyFlow's one kind
+(`test_a_table_mixing_kinds_is_the_shape_that_does_not_map_exactly`: 0.5 for both rows against 0 and
+0); several direct rows carrying one value (OspreyFlow stores
+one link per pair and type); and a direct row whose value is also a shared value (the client counts it
+in that value's `N`). The R function's `%like% "dup_"` is a pattern match anywhere in the type name, and
+`merge` reorders rows; neither changes a score.
+
+**For the client to confirm** (beyond Amendment 2's three):
+- whether one call of `add_strength_column` ever holds rows of more than one kind, and if it does,
+  whether `ΣN` should span them all (then OspreyFlow would sum across kinds in the dataset);
+- what `the_col` holds on a direct row: a value of its own, a shared value (the number called), or
+  nothing (`NA`, which `data.table` groups as one value);
+- whether two direct rows can carry the same value (repeated calls as separate rows);
+- the thresholds they use on the raw sum, for monitoring rules on their scale.
+
+**Tests**, each shown red first in the code's own shape (evidence `s9g_*`): the conformance cases (the
+client's measure, the hidden holder, the cap, client parity on a stored link and on a pair, a dataset
+trigger, the golden case); the pure arithmetic, order, resolution and the mixing shape
+(`tests/ontology/test_client_parity.py`); the case reads under access
+(`working_set/test_connection_strength_access_control.py`: a hidden link in no `n`, a hidden holder in no `k`, an unread dataset
+neither applied nor told); maker–checker and the case's switch (`test_strength_influencer_routes.py`);
+the client-scale condition (`test_strength_sentence_rules.py`); the demo on the plan
+(`scenarios/test_pid_client_parity.py`); the Glass's units (`strength/clientParity.test.tsx`), keyboard
+steps (`strength.spec.ts`, `inspector.spec.ts`, `metrics-panel.spec.ts`) and axe states.
+
+### ADR-127, Amendment 43 (2 November 2026) — the strength scene shows both compositions
+
+Status: added with ADR-139 Amendment 2's build (step 9g); steps 7 to 10 of J6b in
+`PRISON_DEMO_SCRIPT_v4_PROPOSED.md` and Part C of `CAPTURE_RUNBOOK_v4.md`, not yet rehearsed.
+
+**No generated data changed.** The case's Author switches the case to client parity through its own
+override, and back; every claim is proved on the plan at any load date
+(`tests/scenarios/test_pid_client_parity.py`):
+1. **The switch and back:** the legend reads "client parity (this case's own)", then standard again.
+2. **Count and age no longer count:** the principal's PIN calls to the coordinator (201, the case's
+   busiest) and a call seen once draw alike, at `1 − 1/2,572 + 0.1348 = 1.1344` on the client's scale,
+   about 0.79 drawn.
+3. **The assault-evidenced conflict:** under standard, some busier or fresher plain conflicts draw above
+   the principal's conflict with calder_1; under client parity it is above all 94 plain conflicts
+   (1.1244 against 0.9896), since only its assault add separates them.
+4. **The rare shared contact under the client's measure:** relay_4 (0.9994) above the principal
+   (0.9383) above Fenwick Moor (0.1562), the order IDF gave.
+
+Captures `CAP-S7` to `CAP-S10`, both brands, in `apps/workspace/live/pid-capture.spec.ts`; not run. The
+scene grows by about a minute and a half (the script's Appendix C, item 10).

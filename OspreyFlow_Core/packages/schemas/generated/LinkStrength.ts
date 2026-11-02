@@ -15,7 +15,12 @@ export type Change = "add" | "multiply" | "floor" | "exclude";
 export type Size = number;
 export type Layer = "file" | "installation" | "case";
 export type RecordKind = string | null;
+export type Dataset = string | null;
 export type Applied = AppliedInfluencer[];
+export type Composition = "standard" | "client_parity";
+export type RarityTerm = number | null;
+export type RawSum = number | null;
+export type Dataset1 = string | null;
 
 /**
  * A link's connection strength as its viewer may see it (decision 5), with what explains it
@@ -33,6 +38,10 @@ export interface LinkStrength {
   occurrences?: Occurrences;
   last_seen?: LastSeen;
   applied?: Applied;
+  composition?: Composition;
+  rarity_term?: RarityTerm;
+  raw_sum?: RawSum;
+  dataset?: Dataset1;
   [k: string]: unknown;
 }
 /**
@@ -46,5 +55,6 @@ export interface AppliedInfluencer {
   size: Size;
   layer: Layer;
   record_kind?: RecordKind;
+  dataset?: Dataset;
   [k: string]: unknown;
 }

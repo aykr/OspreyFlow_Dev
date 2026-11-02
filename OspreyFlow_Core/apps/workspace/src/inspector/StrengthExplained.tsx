@@ -1,15 +1,25 @@
 // A selected link's connection strength, explained (ADR-139 decision 9): its count against what is
 // heavy for its type, its recency, the rule and version applied, each influencer that changed it
 // (naming the kind of record that evidenced it), and what its two ends share, ranked by rarity.
+// ADR-139 Amendment 2: the composition and the rarity measure are named, and under client parity the
+// raw sum on the client's scale is shown beside the drawn strength, so their thresholds compare.
 // Read from the store as the reader, so it never says a count from beyond what they may see.
 import { useEffect, useState } from "react";
 
 import type { Edge, LinkStrength, PairRarity } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { fetchConnectionStrengths, fetchRarity } from "../strength/api";
-import { strengthExplanation, type LinkName } from "../strength/words";
+import {
+  COMPOSITION_LABEL,
+  MEASURE_LABEL,
+  strengthExplanation,
+  type Composition,
+  type LinkName,
+  type RarityMeasure,
+} from "../strength/words";
 
 const SCORE = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const EXACT = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
 export interface StrengthExplainedProps {
   apiBaseUrl: string;
@@ -31,6 +41,7 @@ export interface PairSharedProps {
  * link's two ends, or for two nodes selected together. */
 export function PairShared({ apiBaseUrl, bearerToken, investigationId, a, b }: PairSharedProps) {
   const [pair, setPair] = useState<PairRarity | null>(null);
+  const [measure, setMeasure] = useState<RarityMeasure>("share");
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +49,9 @@ export function PairShared({ apiBaseUrl, bearerToken, investigationId, a, b }: P
     setProblem(null);
     void fetchRarity(apiBaseUrl, bearerToken, investigationId, "dataset", [[a, b]])
       .then((rarity) => {
-        if (!cancelled) setPair(rarity.pairs[0] ?? null);
+        if (cancelled) return;
+        setPair(rarity.pairs[0] ?? null);
+        setMeasure((rarity.measure ?? "share") as RarityMeasure);
       })
       .catch((err: unknown) => {
         if (!cancelled) setProblem(err instanceof Error ? err.message : String(err));
@@ -74,8 +87,18 @@ export function PairShared({ apiBaseUrl, bearerToken, investigationId, a, b }: P
           </ol>
           <p className="strength-explained__muted">
             Shared-attribute rarity {SCORE.format(pair.score)}
-            {pair.dataset ? `, worked out in ${pair.dataset}` : ""}, over what you may see.
+            {pair.dataset ? `, worked out in ${pair.dataset}` : ""}, over what you may see; measured by{" "}
+            {MEASURE_LABEL[measure]}.
           </p>
+          {pair.parity_raw !== null && pair.parity_raw !== undefined && (
+            <p className="strength-explained__muted" aria-label="Client parity through what they share">
+              Client parity through what they share: raw sum {EXACT.format(pair.parity_raw)} on the client's scale
+              {(pair.parity_applied ?? []).length > 0
+                ? ` (rarity and ${(pair.parity_applied ?? []).map((x) => x.label).join(", ")})`
+                : " (rarity alone)"}
+              ; drawn at {SCORE.format(pair.parity_strength ?? 0)}.
+            </p>
+          )}
         </>
       )}
     </>
@@ -104,8 +127,18 @@ export function StrengthExplained({ apiBaseUrl, bearerToken, investigationId, ed
 
   if (problem) return <p className="strength-explained__problem">{problem}</p>;
   if (!link) return <p className="strength-explained__muted">Working out this link's strength…</p>;
+  const composition = (link.composition ?? "standard") as Composition;
   return (
     <div className="strength-explained">
+      <p className="strength-explained__heading" aria-label="Composition">
+        Composition: {COMPOSITION_LABEL[composition]}
+      </p>
+      {composition === "client_parity" && link.raw_sum !== null && link.raw_sum !== undefined && (
+        <p className="strength-explained__raw" aria-label="Raw sum on the client's scale">
+          <span>Raw sum, the client's scale</span>
+          <span className="value">{EXACT.format(link.raw_sum)}</span>
+        </p>
+      )}
       <ul aria-label="What this link's strength rests on" className="strength-explained__lines">
         {strengthExplanation(link, linkName).map((line) => (
           <li key={line}>{line}</li>

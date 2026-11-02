@@ -37,9 +37,10 @@ const EXTRA_STATES: Record<string, string[]> = {
   "matrix-harness.html": ["select=p2,p4", "many=1", "strength=1"],
   // ADR-139: the two new filter metrics chosen; a link's strength explained in the Inspector; the
   // Connection strength tab as a proposer, as a case's Author and as an Editor.
-  "metrics-panel-harness.html": ["filter=strength", "filter=rarity"],
-  "inspector-harness.html": ["strength=1"],
-  "strength-harness.html": ["as=maker", "as=author", "as=editor"],
+  "metrics-panel-harness.html": ["filter=strength", "filter=rarity", "composition=client_parity"],
+  "inspector-harness.html": ["strength=1", "strength=parity"],
+  // ADR-139 Amendment 2: the case switched to client parity, as its Author sees it.
+  "strength-harness.html": ["as=maker", "as=author", "as=editor", "as=author&composition=client_parity"],
   // ADR-133 stage (b): the Rules tab with a rule written as a sentence, its drawn pattern and its
   // preview shown.
   // ADR-133 stage (c): the Lists tab, as a reader and as whoever may load lists after a refresh
@@ -51,6 +52,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "tab=rules&sentence=preview",
     // ADR-139 decision 8: a sentence on connection strength.
     "tab=rules&sentence=strength",
+    // ADR-139 Amendment 2: the figure on the client's scale.
+    "tab=rules&sentence=strength-client",
     "tab=lists",
     "tab=lists&lists=manage&refreshed=1",
     "tab=rules&template=high_risk_jurisdiction",

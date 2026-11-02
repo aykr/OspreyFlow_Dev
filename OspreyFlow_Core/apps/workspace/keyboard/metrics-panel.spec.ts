@@ -230,6 +230,25 @@ test("the legend lists the strength influencers in force, folded and opened by k
   registerCovered("METRICS_PANEL_ACTIONS", "legend-lists-the-strength-influencers-by-keyboard");
 });
 
+test("the legend's composition indicator says the case is under client parity, by keyboard (ADR-139 Amendment 2)", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/metrics-panel-harness.html?composition=client_parity");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Legend");
+  const indicator = page.getByLabel("Composition", { exact: true });
+  await expect(indicator).toBeVisible();
+  await expect(indicator).toContainText("Case override");
+  await expect(indicator).toContainText("Composition: client parity (this case's own)");
+  // The case's own floor has no place in the client's sum, and the legend says so.
+  await expect(indicator).toContainText("Only the adds count in it");
+  await page.keyboard.press("Enter");
+  await expect(indicator).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(indicator).toBeVisible();
+  registerCovered("METRICS_PANEL_ACTIONS", "legend-shows-the-composition-by-keyboard");
+});
+
 test("every registered metrics-panel action has its own proving test case above", () => {
   assertAllCovered("METRICS_PANEL_ACTIONS", METRICS_PANEL_ACTIONS);
 });

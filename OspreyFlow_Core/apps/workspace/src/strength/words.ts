@@ -7,9 +7,30 @@ import type {
   AppliedInfluencer,
   LinkStrength,
   StrengthInfluencer,
+  StrengthLegend,
 } from "../../../../packages/schemas/generated";
 
+/** The link-type name an influencer uses for a pair linked through a shared value (ADR-139
+ * Amendment 2; `schemas/strength.py`'s `SHARED_VALUE`): the client's `dup_*` rows. */
+export const SHARED_VALUE = "SHARED_VALUE";
+export const SHARED_VALUE_LABEL = "A pair linked through a shared value";
+
+export type Composition = "standard" | "client_parity";
+export type RarityMeasure = "share" | "idf";
+
+export const COMPOSITION_LABEL: Record<Composition, string> = {
+  standard: "Standard",
+  client_parity: "Client parity",
+};
+
+export const MEASURE_LABEL: Record<RarityMeasure, string> = {
+  share: "share of pair links (the client's)",
+  idf: "inverse frequency (IDF)",
+};
+
 const NUMBER = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 });
+/** The client's own scale, to four places, so their thresholds can be compared. */
+const EXACT = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 /** "an Incident", "a Document". */
@@ -47,17 +68,47 @@ export function changeWords(change: AppliedInfluencer["change"], size: number): 
   }
 }
 
-/** What triggers an influencer: a kind of record and its values, or nothing (direct links). */
+/** What triggers an influencer: a kind of record and its values, a dataset, or nothing (direct
+ * links). */
 export function triggerWords(influencer: StrengthInfluencer): string {
-  const trigger = influencer.trigger;
-  if (!trigger) return "always (these are direct links)";
+  const trigger = influencer.trigger as
+    | { kind?: "record"; entity_type: string; property: string; values: string[] }
+    | { kind: "dataset"; datasets: string[] }
+    | null
+    | undefined;
+  if (!trigger) {
+    return influencer.link_types.every((t) => t === SHARED_VALUE) ? "always" : "always (these are direct links)";
+  }
+  if (trigger.kind === "dataset") return `when the link is evidenced in ${orList(trigger.datasets)}`;
   const property = trigger.property.replace(/_/g, " ");
-  return `when ${withArticle(trigger.entity_type)}'s ${property} is ${orList(trigger.values as string[])}`;
+  return `when ${withArticle(trigger.entity_type)}'s ${property} is ${orList(trigger.values)}`;
+}
+
+/** A link type's name, with the shared-value pseudo-type said in words. */
+export function withSharedValue(linkName: LinkName): LinkName {
+  return (type) => (type === SHARED_VALUE ? SHARED_VALUE_LABEL.toLowerCase() : linkName(type));
+}
+
+/** The legend's composition indicator (ADR-139 Amendment 2): which composition is in force, where it
+ * came from, and the rarity measure. */
+export function compositionWords(legend: Pick<StrengthLegend, "composition" | "composition_layer" | "rarity_measure">): string {
+  const composition = (legend.composition ?? "standard") as Composition;
+  const from =
+    legend.composition_layer === "case"
+      ? "this case's own"
+      : legend.composition_layer === "installation"
+        ? "installation-wide"
+        : "shipped with OspreyFlow";
+  const measure = MEASURE_LABEL[(legend.rarity_measure ?? "share") as RarityMeasure];
+  if (composition === "client_parity") {
+    return `Composition: client parity (${from}): strength is rarity plus the adds, with no count or recency, drawn on 0 to 1; rarity by ${measure}.`;
+  }
+  return `Composition: standard (${from}): strength is the stored weight with the influencers; rarity by ${measure}.`;
 }
 
 /** One influencer in a sentence, for the legend and the editor. */
 export function influencerWords(influencer: StrengthInfluencer, linkName: LinkName = AS_IS): string {
-  const links = andList(influencer.link_types.map(linkName));
+  const links = andList(influencer.link_types.map(withSharedValue(linkName)));
   return `${links}: ${changeWords(influencer.change ?? "add", influencer.size ?? 0)}, ${triggerWords(influencer)}`;
 }
 
@@ -89,16 +140,30 @@ export function strengthExplanation(link: LinkStrength, linkName: LinkName = AS_
     );
     lines.push(link.last_seen ? `Last seen on ${DAY.format(new Date(link.last_seen))}.` : "No end date: as recent as it gets.");
   }
-  lines.push(`Worked out under ${ruleWords(link.parameter_set, linkName)}: stored weight ${NUMBER.format(link.base_weight)}.`);
+  const parity = link.composition === "client_parity";
+  if (parity) {
+    lines.length = 0;
+    lines.push("Client parity: worked out as the client does, from rarity and the adds alone; its count and age are not used.");
+    lines.push(
+      `Its rarity term ${EXACT.format(link.rarity_term ?? 0)}${link.dataset ? `, in ${link.dataset}` : ""}: one less its share of the links of its type you can see there.`,
+    );
+  } else {
+    lines.push(`Worked out under ${ruleWords(link.parameter_set, linkName)}: stored weight ${NUMBER.format(link.base_weight)}.`);
+  }
   for (const applied of link.applied ?? []) {
     const because = applied.record_kind
       ? `, because ${withArticle(applied.record_kind)} you can see evidences it`
-      : ", a direct link";
-    lines.push(
-      `${applied.label} (${layerWords({ layer: applied.layer, version: null })})${because}: ${changeWords(applied.change, applied.size)}.`,
-    );
+      : applied.dataset
+        ? `, because it is in ${applied.dataset}`
+        : ", a direct link";
+    const what = parity ? `adds ${NUMBER.format(applied.size)}` : changeWords(applied.change, applied.size);
+    lines.push(`${applied.label} (${layerWords({ layer: applied.layer, version: null })})${because}: ${what}.`);
   }
-  lines.push(`Connection strength ${NUMBER.format(link.strength)}.`);
+  if (parity) {
+    lines.push(`Raw sum ${EXACT.format(link.raw_sum ?? 0)} on the client's scale; drawn at ${NUMBER.format(link.strength)} on 0 to 1.`);
+  } else {
+    lines.push(`Connection strength ${NUMBER.format(link.strength)}.`);
+  }
   return lines;
 }
 

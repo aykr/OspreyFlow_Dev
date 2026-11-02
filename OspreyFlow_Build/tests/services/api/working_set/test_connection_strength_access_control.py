@@ -9,6 +9,10 @@ answer in a world without them — and that nothing in it names them or counts b
 (rule 7). The **real** ArcadeDB adapter (a throwaway one), as every access-control case here; the
 working-set store is the in-memory fake, and the influencer store a stand-in returning one
 influencer, since neither's own logic is what is tested.
+
+ADR-139 Amendment 2 adds three reads to prove under access: client parity's strength (a hidden link
+of the same type is in no `n`), the client's rarity measure (a hidden holder is in no `k` and no
+sum), and a dataset trigger the reader cannot read (neither applied nor told in the legend).
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from services.api.working_set.service import WorkingSetService
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.handling import load_uk_le_scheme
-from ontology.influencers import StrengthDefaults
+from ontology.influencers import StrengthDefaults, StrengthSettings
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -37,7 +41,9 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.strength import (
+    SHARED_VALUE,
     ActiveInfluencer,
+    DatasetTrigger,
     CaseInfluencers,
     ConnectionStrengthRequest,
     ConnectionStrengths,
@@ -57,6 +63,8 @@ UNIT = "unit-1"
 OFFICIAL = Principal(id="analyst-official", clearance="OFFICIAL", org_unit=UNIT)
 CLEARED = Principal(id="analyst-secret", clearance="SECRET", org_unit=UNIT)
 DEFAULTS = StrengthDefaults(influencers=(), rarity_exclude_types=("Alert",))
+#: The first decision's measure, which the cases written before Amendment 2 read.
+DEFAULTS_IDF = StrengthDefaults(influencers=(), rarity_exclude_types=("Alert",), rarity_measure="idf")
 PASSPORT = ActiveInfluencer(
     layer="case",
     version=1,
@@ -69,8 +77,17 @@ PASSPORT = ActiveInfluencer(
 
 
 class _Influencers:
+    def __init__(
+        self, active: list[ActiveInfluencer] | None = None, settings: StrengthSettings | None = None
+    ) -> None:
+        self.active = [PASSPORT] if active is None else active
+        self.settings = settings or StrengthSettings()
+
     async def active_for_case(self, investigation_id: str | None, shipped: Any) -> Any:
-        return [PASSPORT], [], None
+        return self.active, [], None
+
+    async def settings_for_case(self, investigation_id: str | None, defaults: Any) -> Any:
+        return self.settings
 
 
 def _provenance() -> Provenance:
@@ -96,11 +113,14 @@ def _node(kind: str, classification: str, **properties: object) -> NodeWrite:
     )  # fmt: skip
 
 
-def _edge(kind: str, source: str, target: str, classification: str = "OFFICIAL") -> EdgeWrite:
+def _edge(
+    kind: str, source: str, target: str, classification: str = "OFFICIAL",
+    datasets: list[str] | None = None,
+) -> EdgeWrite:
     return EdgeWrite(
         id=new_edge_id(), type=kind, source=source, target=target, provenance=_provenance(),
         handling=_handling(classification),  # type: ignore[arg-type]
-        created_by="loader-1", created_at=now_utc(),
+        created_by="loader-1", created_at=now_utc(), datasets=datasets or [],
     )  # fmt: skip
 
 
@@ -177,7 +197,7 @@ async def test_the_case_rarity_read_never_counts_or_names_a_hidden_entity(
         async def read(who: Principal, pairs: list[tuple[str, str]]) -> RarityResult:
             return await case_rarity(
                 CASE, RarityRequest(scope="case", pairs=pairs), working_set=working_set,
-                graph=graph, principal=who, defaults=DEFAULTS,
+                graph=graph, principal=who, defaults=DEFAULTS_IDF,
             )  # fmt: skip
 
         seen = await read(OFFICIAL, [(p1.id, p2.id), (p1.id, hidden.id)])
@@ -188,10 +208,118 @@ async def test_the_case_rarity_read_never_counts_or_names_a_hidden_entity(
         # The pair naming the hidden person is answered as one naming nobody: the reader's own ids
         # echoed, no score, nothing shared. Beyond that echo, the answer never names them.
         assert seen.pairs[1].model_dump() == {"a": p1.id, "b": hidden.id, "score": None,
-                                              "dataset": None, "shared": []}  # fmt: skip
+                                              "dataset": None, "shared": [], "parity_raw": None,
+                                              "parity_strength": None, "parity_applied": []}  # fmt: skip
         assert hidden.id not in seen.model_copy(update={"pairs": seen.pairs[:1]}).model_dump_json()
         cleared = await read(CLEARED, [(p1.id, p2.id)])
         assert cleared.pairs[0].score == pytest.approx(math.log(4 / 3))
+
+
+@pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+async def test_client_parity_through_the_case_read_never_counts_a_hidden_link(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2 (rule 3): under client parity a link's rarity term is `1 − 1/n` over the links
+    of its type the reader may see. A SECRET call, and a call to a SECRET endpoint, are in no `n`:
+    the OFFICIAL reader's sum is the sum in a world without them, and nothing names them."""
+    async with factory.context() as graph:
+        x1, x2, x3, x4 = (_node("Endpoint", "OFFICIAL") for _ in range(4))
+        hidden_end = _node("Endpoint", "SECRET")
+        c12, c34 = _edge("COMMUNICATED_WITH", x1.id, x2.id), _edge("COMMUNICATED_WITH", x3.id, x4.id)
+        secret_call = _edge("COMMUNICATED_WITH", x2.id, x3.id, "SECRET")
+        to_hidden = _edge("COMMUNICATED_WITH", x1.id, hidden_end.id)
+        working_set = await _seed(graph, [x1, x2, x3, x4, hidden_end], [c12, c34, secret_call, to_hidden])
+        direct = ActiveInfluencer(layer="file", influencer=StrengthInfluencer(
+            id="direct", label="Direct link", link_types=["COMMUNICATED_WITH"], size=0.2))  # fmt: skip
+        parity = _Influencers([direct], StrengthSettings(composition="client_parity"))
+
+        async def read(who: Principal) -> ConnectionStrengths:
+            return await case_connection_strengths(
+                CASE, ConnectionStrengthRequest(), working_set=working_set, graph=graph,
+                principal=who, store=parity, defaults=DEFAULTS,  # type: ignore[arg-type]
+            )  # fmt: skip
+
+        seen = await read(OFFICIAL)
+        by_id = {s.edge_id: s for s in seen.links}
+        assert set(by_id) == {c12.id, c34.id}
+        # The world without the two: two calls, 1 − 1/2, and the direct add.
+        assert by_id[c12.id].rarity_term == pytest.approx(0.5)
+        assert by_id[c12.id].raw_sum == pytest.approx(0.7)
+        assert seen.legend.composition == "client_parity"
+        wire = seen.model_dump_json()
+        for hidden in (hidden_end.id, secret_call.id, to_hidden.id):
+            assert hidden not in wire
+        cleared = {s.edge_id: s for s in (await read(CLEARED)).links}
+        assert cleared[c12.id].rarity_term == pytest.approx(1 - 1 / 4)
+
+
+@pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+async def test_the_case_rarity_read_in_the_clients_measure_never_counts_a_hidden_holder(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2's hidden-holder test, through the case read: the client's `1 − C(k,2)/ΣC` with
+    a SECRET person holding the common phone counts only what the reader may see."""
+    async with factory.context() as graph:
+        p1, p2, p3, p4 = (_node("Person", "OFFICIAL") for _ in range(4))
+        hidden = _node("Person", "SECRET")
+        rare, common = _node("Endpoint", "OFFICIAL"), _node("Endpoint", "OFFICIAL")
+        edges = [_edge("USES", p.id, rare.id) for p in (p1, p2)]
+        edges += [_edge("USES", p.id, common.id) for p in (p3, p4, hidden)]
+        working_set = await _seed(graph, [p1, p2, p3, p4, hidden, rare, common], edges)
+
+        async def read(who: Principal) -> RarityResult:
+            return await case_rarity(
+                CASE, RarityRequest(scope="case", pairs=[(p1.id, p2.id), (p3.id, p4.id)]),
+                working_set=working_set, graph=graph, principal=who, defaults=DEFAULTS,
+            )  # fmt: skip
+
+        seen = await read(OFFICIAL)
+        assert seen.measure == "share"
+        # Without the hidden holder: rare 1 pair link, common 1; ΣL = 2.
+        assert [p.score for p in seen.pairs] == pytest.approx([0.5, 0.5])
+        assert hidden.id not in seen.model_dump_json()
+        cleared = await read(CLEARED)
+        # Cleared: common has three holders, 3 pair links; ΣL = 4.
+        assert [p.score for p in cleared.pairs] == pytest.approx([0.75, 0.25])
+
+
+@pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+async def test_a_dataset_trigger_the_reader_cannot_read_is_neither_applied_nor_told(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2, ruling 3 (rule 3): a link in `calls` and `assaults`, read by an analyst whose
+    case reads `calls` alone, is not thickened by the `assaults` influencer, and the legend they
+    are sent does not name it; a reader of both sees it applied and named."""
+    async with factory.context() as graph:
+        a = _node("Endpoint", "OFFICIAL")
+        b = _node("Endpoint", "OFFICIAL")
+        both = ["calls", "assaults"]
+        a.datasets, b.datasets = both, both
+        call = _edge("COMMUNICATED_WITH", a.id, b.id, datasets=both)
+        working_set = await _seed(graph, [a, b], [call])
+        by_assaults = ActiveInfluencer(layer="installation", version=1, influencer=StrengthInfluencer(
+            id="source-assaults", label="From the assaults table", size=0.3,
+            trigger=DatasetTrigger(datasets=["assaults"]),
+            link_types=["COMMUNICATED_WITH", SHARED_VALUE],
+        ))  # fmt: skip
+        for settings in (StrengthSettings(), StrengthSettings(composition="client_parity")):
+            store = _Influencers([by_assaults], settings)
+
+            async def read(who: Principal, store: _Influencers = store) -> ConnectionStrengths:
+                return await case_connection_strengths(
+                    CASE, ConnectionStrengthRequest(), working_set=working_set, graph=graph,
+                    principal=who, store=store, defaults=DEFAULTS,  # type: ignore[arg-type]
+                )  # fmt: skip
+
+            calls_only = await read(OFFICIAL.model_copy(update={"datasets": ["calls"]}))
+            (link,) = calls_only.links
+            assert link.applied == [], settings
+            assert calls_only.legend.influencers == []
+            assert "assaults" not in calls_only.model_dump_json()
+            reader_of_both = await read(OFFICIAL.model_copy(update={"datasets": both}))
+            (link,) = reader_of_both.links
+            assert [x.id for x in link.applied] == ["source-assaults"], settings
+            assert [x.influencer.id for x in reader_of_both.legend.influencers] == ["source-assaults"]
 
 
 #: A name that would carry a count: what rarity is worked out from, a corpus figure, or a figure for

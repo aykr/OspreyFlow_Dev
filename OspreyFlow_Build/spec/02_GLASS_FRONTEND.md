@@ -872,7 +872,14 @@ what the case switched off, and the rarity note. The Inspector explains a select
 count against what is heavy, recency, rule and version, each influencer applied naming the kind of
 record that evidenced it) and ranks what its two ends, or two selected nodes, share. Monitoring gains a
 *Connection strength* tab: the case's override (its Author) and the installation set's maker–checker
-(`manage_strength_influencers`).
+(`manage_strength_influencers`). **ADR-139 Amendment 2:** the legend names the composition in force
+(standard or client parity), where it came from and the rarity measure; under client parity the
+Inspector shows the link's rarity term, each add and the **raw sum on the client's scale** beside the
+drawn strength, and *What these two share* the pair's parity sum; the tab offers the case's
+composition (*How strength is worked out in this case*), an installation version's composition and
+rarity measure, a dataset trigger and the shared-value link choice; the rule builder's strength figure
+names its scale (drawn, or the client's). Each has a keyboard step (`strength.spec.ts`,
+`inspector.spec.ts`, `metrics-panel.spec.ts`) and axe states.
 
 Community detection produces a **hull overlay**, not a recolour: a translucent boundary drawn
 around each community at 8% channel opacity, labelled with size and dominant entity type.

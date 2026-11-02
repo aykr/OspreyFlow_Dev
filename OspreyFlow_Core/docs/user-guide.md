@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.20** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.21** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.21 | 2026-11-02 | §5.12: shared-attribute rarity is now worked out by the client's own measure (one less a shared value's share of the pairs linked through values of its kind), with the earlier measure still to choose; the two compositions, standard and client parity, and the raw sum on the client's scale; an influencer triggered by a dataset; a case switched to client parity by its Author. §7.6: a strength figure on the client's scale. |
 | 1.20 | 2026-11-02 | New §5.12, How connection strength is worked out: a link's strength from its own count and recency, the influencers that change it (direct links, and a boost from a record that evidences the link, such as an assault), shared-attribute rarity, the legend, the two new filters in Metrics, the Matrix's two sorts, the Inspector's explanation, who changes influencers, and why two analysts can see different rarity. §7.6: a rule on connection strength or rarity. |
 | 1.19 | 2026-11-02 | §4: the demonstration cases each starter brings, and their domains; a public dataset's case. |
 | 1.18 | 2026-11-01 | §7.5: a hotlist can hold an account number, matched on the account however its spaces are written. §7.4: a money-flow rule judges only movements between accounts its author may see. §7.10: the UK Sanctions List (FCDO) among the lists; the closed OFSI list says so. |
@@ -456,8 +457,8 @@ membership) has a fixed weight. No other link moves it, so nothing you cannot se
 
 | Part | What it says |
 | --- | --- |
-| **What triggers it** | A record that evidences the link: for example an Incident whose category is assault, disorder or find, at one end of the link or involving both people. **Direct links** have no trigger. |
-| **Which links it changes** | Named link types, such as *In conflict with* or *Role in*. |
+| **What triggers it** | A record that evidences the link: for example an Incident whose category is assault, disorder or find, at one end of the link or involving both people. Or **a dataset**: every link in that dataset (an assaults table, say), as the client's own code boosts a whole table. **Direct links** have no trigger. |
+| **Which links it changes** | Named link types, such as *In conflict with* or *Role in*; or *a pair linked through a shared value* (two people who share a phone, say), which takes an added boost only. |
 | **The change** | **Add** a boost (the usual), **multiply**, set a **floor** (at least this strong), or **exclude** (no stronger than its stored weight). |
 | **Its size, and a label** | The label is what the legend shows. |
 
@@ -467,21 +468,44 @@ a role in such an incident, and a conflict, association or cell share between pe
 stronger. Their sizes are calibrated so that a boost moves an ordinary link about as far as doubling
 its count would, and are marked "to be confirmed with the client". Boosts add up.
 
-**An influencer applies only if you may see the record that evidences the link.** An assault report
-above your clearance never thickens a line you can see, so it never tells you it exists. The stored
+**An influencer applies only if you may see the record that evidences the link,** or, for a dataset,
+only if your case reads that dataset. An assault report above your clearance never thickens a line
+you can see, so it never tells you it exists; a dataset your case does not read is not named in your
+legend at all. The stored
 weight never changes: influencers are applied as the link is read, so a change takes effect at once.
 
 **3. Shared-attribute rarity.** Two people who share something few others share are more interesting
-than two who share what everyone does. Rarity adds, for each thing two people of one kind share (a
-cell, a phone number, a visitor, a report, a group), the logarithm of how many people there are over
-how many share it. A shared visitor nobody else has scores high; the prison they are both held in
-scores almost nothing. It is worked out per dataset unless you choose across the case's datasets, and
-**only over what you may see**: if two analysts have different access, they can see different rarity
-for the same pair, and both are right for what each may see. Rarity is its own measure, never folded
-into the strength.
+than two who share what everyone does. A thing two people of one kind share (a cell, a phone number, a
+visitor, a report, a group) is a **shared value**. By default rarity is worked out as the client works
+it out: a value held by *k* people links *k × (k − 1) / 2* pairs, and its rarity is one less its share
+of all the pairs linked through values of its kind. A phone two people share, among phones that link
+few pairs, scores near 1; the prison everyone is held in scores near 0. Two people take the rarity of
+the rarest value they share. Your installation may choose the earlier measure instead, **inverse
+frequency**, which adds, for each thing two people share, the logarithm of how many people there are
+over how many share it; the legend says which is in force. It is worked out per dataset unless you
+choose across the case's datasets, and **only over what you may see**: if two analysts have different
+access, they can see different rarity for the same pair, and both are right for what each may see.
+Rarity is its own measure, never folded into the strength, except under client parity (below).
+
+**Two compositions.** How the three ideas make a strength is the installation's choice, shown in the
+legend:
+
+| Composition | Strength is | Drawn on |
+| --- | --- | --- |
+| **Standard** (shipped) | the link's stored weight, from its own count and recency, with the influencers applied | 0 to 1 |
+| **Client parity** | rarity plus the influencers' added boosts, with no count and no recency: the client's own sum | 0 to 1, through a curve that keeps the sums' order; the Inspector also shows the **raw sum on the client's scale** |
+
+Under client parity, a stored link's rarity is that of the link itself among the links of its type you
+can see in its dataset (one less one over how many there are), and a pair linked through a shared
+value takes that value's rarity. Only added boosts count in the sum: a multiplier, floor or exclusion
+is left out, and the legend says so. Because rarity is worked out over what you may see, so is a
+client-parity strength. An installation chooses its composition in the same way as its influencers (a
+proposal and a second person's approval); a case's Author may switch one case to client parity, to
+compare the two on the same case, and back.
 
 **Where you see it:**
-- **The legend** lists, under *Connection strength*, every influencer in force in the case — what
+- **The legend** lists, under *Connection strength*, the composition in force and the rarity measure
+  (marked **Case override** if the case chose it), every influencer in force in the case — what
   triggers it, the links it changes, the change and its size, and where it came from (shipped,
   installation-wide, or **Case override**) — which link types count as direct, and the rarity note.
 - **Metrics** (§5.7) offers *Connection strength* and *Shared-attribute rarity* to rank by and to
@@ -492,20 +516,25 @@ into the strength.
   by either.
 - **The Inspector** explains a selected link under **Connection strength**: its count against what is
   heavy for its type, when it was last seen, the rule and weights version it was worked out under,
-  each influencer that changed it and the kind of record that evidenced it, and what its two ends
-  share, rarest first. With two people selected, **What these two share** does the same for them.
+  each influencer that changed it and the kind of record (or the dataset) that evidenced it, and what
+  its two ends share, rarest first, with the measure named. Under client parity it shows instead the
+  link's rarity term, each boost added, and the **raw sum on the client's scale**, beside the strength
+  it is drawn at. With two people selected, **What these two share** does the same for them.
 
 **Who changes influencers.** An installation-wide set is proposed in **Monitoring → Connection
 strength** by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
-version is kept. A case's **Author** may add influencers for that case, or switch off installation-wide
-ones in it; that needs no second person, because it changes only that case, and the legend marks it.
-Both are recorded in the audit.
+version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
+may add influencers for that case, switch off installation-wide ones in it, or choose its composition
+under *How strength is worked out in this case*; that needs no second person, because it changes only
+that case, and the legend marks it. Both are recorded in the audit.
 
 **Rules on strength.** A rule written as a sentence (§7.6) may say "and the connection strength
-between it and … reaches X", or "… the shared-attribute rarity between it and another … reaches X". It
-is previewed like any other, and judged as its author, on what its author may see: it never raises an
-alert on evidence its author could not read.
+between it and … reaches X", or "… the shared-attribute rarity between it and another … reaches X". A
+strength figure is on the drawn scale (0 to 1) or **on the client's scale** (the raw sum, which only
+client parity has: under the standard composition such a rule raises nothing). It is previewed like
+any other, and judged as its author, on what its author may see: it never raises an alert on evidence
+its author could not read.
 
 ## 6. Questions to the model
 
@@ -701,7 +730,8 @@ and its link types — so there is nothing to type that could fail to be underst
   of a type; *at a location in a drawn area*; *on one of my hotlists*; or, for a person or an
   organisation, *on a screening list* at a name match you choose.
 - **How strongly connected.** Optionally: *the connection strength* between the subject and something
-  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1; or *the
+  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on
+  the client's scale* a raw sum up to 10 (met only under client parity); or *the
   shared-attribute rarity* between it and another of its type *reaches* a figure, per dataset or across
   the case's datasets (§5.12). Both are read from the stored graph, so the rule runs after commit or on
   a schedule, and both are worked out as you, the rule's author, may see them.

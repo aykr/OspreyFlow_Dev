@@ -140,7 +140,17 @@ const RARITY_ANSWERS = {
     { node: { ...person("x2", "unused"), type: "Organisation", properties: { name: "Fenwick Moor Prison" } }, score: 0 },
   ] }],
 }; // prettier-ignore
-const STRENGTH_OPEN = new URLSearchParams(window.location.search).get("strength") === "1";
+/** `?strength=parity` (ADR-139 Amendment 2): the same link under client parity, its raw sum shown. */
+const PARITY = new URLSearchParams(window.location.search).get("strength") === "parity";
+if (PARITY) {
+  Object.assign(STRENGTH_ANSWERS.links[0]!, {
+    composition: "client_parity", rarity_term: 0.75, raw_sum: 1.0848, dataset: "prison-intelligence", strength: 0.6969,
+    applied: [{ id: "direct", label: "Direct link", change: "add", size: 0.1348, layer: "file", record_kind: null }],
+  }); // prettier-ignore
+  Object.assign(RARITY_ANSWERS, { measure: "share", composition: "client_parity" });
+  Object.assign(RARITY_ANSWERS.pairs[0]!, { score: 0.9, parity_raw: 0.9, parity_strength: 0.2689, parity_applied: [] });
+}
+const STRENGTH_OPEN = new URLSearchParams(window.location.search).get("strength") === "1" || PARITY;
 if (STRENGTH_OPEN) {
   window.fetch = async (input: RequestInfo | URL) => {
     const url = String(input);
