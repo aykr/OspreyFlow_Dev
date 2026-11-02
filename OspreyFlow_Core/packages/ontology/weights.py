@@ -33,6 +33,9 @@ from .errors import OntologyError
 _DEFAULT_PATH = Path(__file__).resolve().parent / "weights" / "default.yaml"
 _DERIVATION_TOLERANCE = 1e-9
 DEFAULT_RULE = "default"
+#: The weights file's top-level keys: the append-only weight versions, and (ADR-139) the shipped
+#: link-strength influencers and the rarity settings, which change no stored weight.
+_TOP_LEVEL_KEYS = {"versions", "influencers", "rarity"}
 _RULE_KEYS = {"unit", "heavy", "fixed"}
 _VERSION_KEYS = {
     "version",
@@ -250,7 +253,9 @@ def load_weight_history(path: Path | None = None) -> list[WeightRules]:
         # Text that composes but cannot be built: a `!!python/object` tag, a list as a key.
         raise OntologyError(f"the weights file {source} cannot be read: {error}") from error
     if isinstance(loaded, dict):
-        unknown = sorted(str(key) for key in loaded if key != "versions")
+        # ADR-139: the developer-default influencers and the rarity settings sit beside the
+        # versions (`ontology/influencers.py` reads them); they are not a weight version.
+        unknown = sorted(str(key) for key in loaded if key not in _TOP_LEVEL_KEYS)
         if unknown:
             raise OntologyError(f"the weights file {source} has an unknown key {unknown[0]!r}")
     versions = loaded.get("versions") if isinstance(loaded, dict) else None

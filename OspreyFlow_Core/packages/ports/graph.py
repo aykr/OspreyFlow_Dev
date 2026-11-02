@@ -42,6 +42,7 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
+from schemas.strength import ActiveInfluencer, LinkStrength, RarityResult, RarityScope
 
 
 class SubgraphTooLarge(Exception):
@@ -74,6 +75,20 @@ class StoredLink:
 
     reverted: bool
     superseded: bool
+
+
+class RarityTooLarge(Exception):
+    """`GraphPort.shared_attribute_rarity` refused rather than worked out in part (rule 2): the
+    pairs it would have to score exceed `cap`. The Conduit renders it as `limit_exceeded`."""
+
+    def __init__(self, *, pairs: int, cap: int) -> None:
+        super().__init__(f"{pairs:,} pairs to score, more than the {cap:,} allowed")
+        self.pairs = pairs
+        self.cap = cap
+
+
+#: The most entity pairs one rarity read scores before it is refused (rule 2).
+RARITY_PAIR_CAP = 2_000_000
 
 
 class FindLimitExceeded(Exception):
@@ -472,6 +487,57 @@ class GraphPort(Protocol):
         with how many there are. Every link and node on the way passes the access step (rule 3):
         a hidden contact or link is in no count. A node the principal cannot see shares with
         nobody."""
+        ...
+
+    async def connection_strengths(
+        self,
+        edge_ids: Sequence[EdgeId],
+        principal: Principal,
+        *,
+        influencers: Sequence[ActiveInfluencer],
+    ) -> list[LinkStrength]:
+        """`06_DECISIONS.md` ADR-139 decisions 2, 5 and 9: each link of `edge_ids` the principal
+        may see (the link and both its ends, as `get_edges`), with its connection strength: its
+        stored weight with the `influencers` that apply to it (`ontology/influencers.py`), ordered
+        by id. A hidden or absent id is left out, as `get_edges` leaves it out.
+
+        A triggered influencer applies only where an **evidencing record the principal may see**
+        exists: a node of the trigger's type whose property holds one of its values, at one end of
+        the link, or linked to both ends by links the principal may see (rule 3). A record they
+        may not see, or a record reached only over a link they may not see, changes nothing; so
+        the strength is the strength in a world without it. Nothing is stored."""
+        ...
+
+    async def shared_attribute_rarity(
+        self,
+        node_ids: Sequence[NodeId],
+        principal: Principal,
+        *,
+        scope: RarityScope = "dataset",
+        pairs: Sequence[tuple[NodeId, NodeId]] = (),
+        partners: Literal["among", "any"] = "among",
+        exclude_types: Sequence[str] = ("Alert",),
+        cap: int = RARITY_PAIR_CAP,
+    ) -> RarityResult:
+        """`06_DECISIONS.md` ADR-139 decision 4: shared-attribute rarity over what the principal
+        may see. For two visible entities `u`, `v` of one type, an attribute they share is a
+        visible node (of no type in `exclude_types`) linked to each by a visible link, and
+
+            rarity(u, v) = Σ over shared attributes a of ln(N_visible / df_visible(a))
+
+        where `N_visible` is how many entities of their type the principal may see in scope, and
+        `df_visible(a)` how many of those are linked to `a` by a link they may see. **Scope**
+        `"dataset"`: worked out in each dataset `u`, `v` and `a` all belong to, the highest kept
+        and named (no dataset in common: no score); `"case"`: across every dataset the principal
+        may read. Never stored, never over the corpus: a hidden entity sharing `a` is in no count,
+        so the score is the score in a world without it.
+
+        `node_values`: for each of `node_ids` the principal may see, its highest rarity with
+        another of `node_ids` (`partners="among"`) or with any visible entity of its type
+        (`"any"`); none when nothing scores above 0. `pairs`: each requested pair, with its
+        shared attributes ranked by their contribution, highest first; in `"any"` mode, also each
+        node's best pair. More than `cap` pairs to score is `RarityTooLarge`, never scored in
+        part (rule 2)."""
         ...
 
     async def apply_schema(self, schema: OntologySchema) -> SchemaReport: ...

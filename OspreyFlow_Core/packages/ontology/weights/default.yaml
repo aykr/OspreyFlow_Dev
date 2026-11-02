@@ -92,3 +92,41 @@ versions:
       USES: {fixed: 0.75}
       PAIRED_WITH: {fixed: 0.75}
       OCCURRED_AT: {fixed: 0.75}
+
+# ADR-139: link-strength influencers the developers ship, and the rarity settings. Neither is a
+# weight version and neither changes a stored weight: a link's connection strength is its stored
+# weight (version 3 above) with the influencers that apply to it, worked out when it is read, under
+# the viewer's access (`ontology/influencers.py`; `01_DOMAIN_MODEL.md` §6.1a). An installation-wide
+# set approved by two people (maker–checker) replaces an influencer of the same id here, and a case
+# override replaces both; `enabled: false` in a later layer switches one off.
+#
+# The sizes are calibrated as `midpoint` and `scale` are, not hand-tuned: a boost moves an ordinary
+# link about as far as doubling its count would. An ordinary link is one at the default rule's
+# heavy count (10); doubling it to 20 adds alpha * (ln 21 - ln 11) / ln 11 = 0.1348 to the
+# pre-logistic score, and `test_influencers.py` holds the file to that derivation. They are to be
+# confirmed with the client, whose relative sizes are not yet known (ADR-139 context).
+influencers:
+  - id: direct
+    label: Direct link
+    # No trigger: these link types are direct connections whatever evidences them.
+    link_types: [COMMUNICATED_WITH, TRANSACTED, VISITED, SHARED_CELL_WITH]
+    change: add
+    size: 0.1348
+    note: to be confirmed with the client
+  - id: incident-source
+    label: Evidenced by an assault, disorder or find
+    # An Incident is at one end of a ROLE_IN link, and evidences the person-to-person links of the
+    # people it involves: a conflict, an association or a shared cell (NIEM pack v3).
+    trigger:
+      entity_type: Incident
+      property: category
+      values: [assault, disorder, find]
+    link_types: [ROLE_IN, IN_CONFLICT_WITH, ASSOCIATE_OF, SHARED_CELL_WITH]
+    change: add
+    size: 0.1348
+    note: to be confirmed with the client
+# Shared-attribute rarity (ADR-139 decision 4): any node linked to both entities of a pair is an
+# attribute they share, except a node of these types (an alert is a rule's finding, not a fact
+# about either of them).
+rarity:
+  exclude_types: [Alert]

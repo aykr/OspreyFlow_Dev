@@ -6320,3 +6320,244 @@ async def test_supersede_edge_refuses_a_write_standing_for_more_than_one(
         await adapter.rollback_transaction(tx)
         (link,) = await adapter.edges_among([a, b], EVERYTHING)
         assert link.id == old_edge_id and link.audit.superseded_by is None
+
+
+# --- connection strength and rarity (ADR-139) ----------------------------------------------------
+
+
+def _strength_influencers() -> list[Any]:
+    from schemas.strength import ActiveInfluencer, InfluencerTrigger, StrengthInfluencer
+
+    passport = InfluencerTrigger(
+        entity_type="Document", property="document_kind", values=["passport"]
+    )
+    return [
+        ActiveInfluencer(layer="file", influencer=StrengthInfluencer(
+            id="direct", label="Direct link", link_types=["COMMUNICATED_WITH"], size=0.2,
+        )),
+        ActiveInfluencer(layer="installation", version=1, influencer=StrengthInfluencer(
+            id="passport", label="Evidenced by a passport", trigger=passport,
+            link_types=["ASSOCIATE_OF", "VERIFIED_BY"], size=0.3,
+        )),
+    ]  # fmt: skip
+
+
+async def _strength_world(adapter: GraphPort) -> dict[str, str]:
+    """`a`–`b` and `e`–`f` and `c`–`d` and `g`–`h` are ASSOCIATE_OF pairs. A passport evidences
+    `a`–`b` (both verified by it, OFFICIAL); a SECRET passport evidences `c`–`d`; an OFFICIAL
+    passport evidences `e`–`f`, but `f`'s link to it is SECRET; a utility bill evidences `g`–`h`.
+    `x` and `y` are endpoints in a call (a direct link); `a` uses `x`."""
+    kinds = {k: "Person" for k in "abcdefgh"} | {"x": "Endpoint", "y": "Endpoint"}
+    writes = {k: _node(t, classification="OFFICIAL") for k, t in kinds.items()}
+    writes["passport"] = _node("Document", classification="OFFICIAL", document_kind="passport")
+    writes["hidden_passport"] = _node("Document", classification="SECRET",
+                                      document_kind="passport")  # fmt: skip
+    writes["half_passport"] = _node("Document", classification="OFFICIAL",
+                                    document_kind="passport")  # fmt: skip
+    writes["bill"] = _node("Document", classification="OFFICIAL", document_kind="utility_bill")
+    await _write(adapter, list(writes.values()), [])
+    ids = {k: w.id for k, w in writes.items()}
+    links = {
+        "ab": _edge("ASSOCIATE_OF", ids["a"], ids["b"], classification="OFFICIAL"),
+        "cd": _edge("ASSOCIATE_OF", ids["c"], ids["d"], classification="OFFICIAL"),
+        "ef": _edge("ASSOCIATE_OF", ids["e"], ids["f"], classification="OFFICIAL"),
+        "gh": _edge("ASSOCIATE_OF", ids["g"], ids["h"], classification="OFFICIAL"),
+        "a_passport": _edge("VERIFIED_BY", ids["a"], ids["passport"], classification="OFFICIAL"),
+        "b_passport": _edge("VERIFIED_BY", ids["b"], ids["passport"], classification="OFFICIAL"),
+        "c_hidden": _edge("VERIFIED_BY", ids["c"], ids["hidden_passport"], classification="OFFICIAL"),
+        "d_hidden": _edge("VERIFIED_BY", ids["d"], ids["hidden_passport"], classification="OFFICIAL"),
+        "e_half": _edge("VERIFIED_BY", ids["e"], ids["half_passport"], classification="OFFICIAL"),
+        "f_half": _edge("VERIFIED_BY", ids["f"], ids["half_passport"], classification="SECRET"),
+        "g_bill": _edge("VERIFIED_BY", ids["g"], ids["bill"], classification="OFFICIAL"),
+        "h_bill": _edge("VERIFIED_BY", ids["h"], ids["bill"], classification="OFFICIAL"),
+        "xy": _edge("COMMUNICATED_WITH", ids["x"], ids["y"], classification="OFFICIAL",
+                    occurrences=3),
+        "ax": _edge("USES", ids["a"], ids["x"], classification="OFFICIAL"),
+    }  # fmt: skip
+    await _write(adapter, [], list(links.values()))
+    ids.update({k: e.id for k, e in links.items()})
+    return ids
+
+
+async def _strengths(adapter: GraphPort, ids: dict[str, str], keys: str, who: Principal) -> dict[str, Any]:
+    name = {v: k for k, v in ids.items()}
+    found = await adapter.connection_strengths(
+        [ids[k] for k in keys.split()], who, influencers=_strength_influencers()
+    )
+    return {name[s.edge_id]: s for s in found}
+
+
+async def test_connection_strength_applies_an_influencer_only_with_a_visible_evidencing_record(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139's trigger test: a triggered influencer applies only where a record with the named
+    value evidences the link (at one end, or linked to both ends); a direct influencer applies to
+    its named link types alone; nothing is stored, and nothing applying leaves the stored weight."""
+    async with factory.context() as adapter:
+        ids = await _strength_world(adapter)
+        seen = await _strengths(adapter, ids, "ab gh xy ax a_passport g_bill", OFFICIAL)
+        ab = seen["ab"]
+        assert ab.strength > ab.base_weight
+        assert [(a.id, a.record_kind, a.layer) for a in ab.applied] == [
+            ("passport", "Document", "installation")
+        ]
+        # The record at one end of the link evidences it too.
+        assert [a.id for a in seen["a_passport"].applied] == ["passport"]
+        # A utility bill is not the named value.
+        assert seen["gh"].applied == [] and seen["gh"].strength == seen["gh"].base_weight
+        assert seen["g_bill"].applied == []
+        # Direct links: the call, not the USES link.
+        assert [(a.id, a.record_kind) for a in seen["xy"].applied] == [("direct", None)]
+        assert seen["xy"].strength > seen["xy"].base_weight
+        assert seen["ax"].applied == [] and seen["ax"].strength == seen["ax"].base_weight
+        # The explanation's facts: the type, its rule and count, never a corpus count.
+        assert seen["xy"].edge_type == "COMMUNICATED_WITH" and seen["xy"].occurrences == 3
+        assert seen["xy"].heavy == 40 and seen["xy"].fixed is None
+        # Nothing is stored: the link reads back with the weight it was written with.
+        (stored,) = await adapter.get_edges([ids["ab"]], OFFICIAL)
+        assert stored.weight == ab.base_weight
+
+
+async def test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139's hidden-evidence test (rule 3): a passport the reader may not see, or one they
+    reach only over a link they may not see, changes nothing — the strength is the strength in a
+    world without it; and a hidden link is not returned at all. Cleared, both apply."""
+    async with factory.context() as adapter:
+        ids = await _strength_world(adapter)
+        official = await _strengths(adapter, ids, "cd ef gh", OFFICIAL)
+        # A world without the hidden evidence is `g`–`h`'s: the same type, count and recency.
+        for key in ("cd", "ef"):
+            assert official[key].applied == [], key
+            assert official[key].strength == official[key].base_weight, key
+            assert official[key].strength == pytest.approx(official["gh"].strength), key
+        cleared = await _strengths(adapter, ids, "cd ef", CLEARED)
+        assert [a.id for a in cleared["cd"].applied] == ["passport"]
+        assert [a.id for a in cleared["ef"].applied] == ["passport"]
+        assert cleared["cd"].strength > official["cd"].strength
+        # The SECRET link itself is not returned, as `get_edges` would not return it.
+        assert "f_half" not in await _strengths(adapter, ids, "f_half e_half", OFFICIAL)
+        # Another dataset's records are not in a case's world.
+        in_fixture = OFFICIAL.model_copy(update={"datasets": ["fixture"]})
+        assert await _strengths(adapter, ids, "ab", in_fixture) == {}
+
+
+async def _rarity_world(adapter: GraphPort) -> dict[str, str]:
+    """Five OFFICIAL persons `p1`..`p5` in the fixture dataset. `p1` and `p2` share a rare
+    endpoint `r`; all five share the location `L`. A SECRET person `p6` also uses `r`, and `p3`
+    uses `r` by a SECRET link. `q1`, `q2` are in the enron dataset and also present at `L`."""
+    writes: dict[str, NodeWrite] = {
+        f"p{i}": _node("Person", classification="OFFICIAL", datasets=["fixture"])
+        for i in range(1, 6)
+    }
+    writes["p6"] = _node("Person", classification="SECRET", datasets=["fixture"])
+    writes["q1"] = _node("Person", classification="OFFICIAL", datasets=["enron"])
+    writes["q2"] = _node("Person", classification="OFFICIAL", datasets=["enron"])
+    writes["r"] = _node("Endpoint", classification="OFFICIAL", datasets=["fixture"])
+    writes["L"] = _node("Location", classification="OFFICIAL", datasets=["fixture", "enron"])
+    await _write(adapter, list(writes.values()), [])
+    ids = {k: w.id for k, w in writes.items()}
+    links = [
+        _edge("USES", ids["p1"], ids["r"], classification="OFFICIAL", datasets=["fixture"]),
+        _edge("USES", ids["p2"], ids["r"], classification="OFFICIAL", datasets=["fixture"]),
+        _edge("USES", ids["p6"], ids["r"], classification="OFFICIAL", datasets=["fixture"]),
+        _edge("USES", ids["p3"], ids["r"], classification="SECRET", datasets=["fixture"]),
+        *(
+            _edge("PRESENT_AT", ids[f"p{i}"], ids["L"], classification="OFFICIAL",
+                  datasets=["fixture"])
+            for i in range(1, 6)
+        ),
+        _edge("PRESENT_AT", ids["q1"], ids["L"], classification="OFFICIAL", datasets=["enron"]),
+        _edge("PRESENT_AT", ids["q2"], ids["L"], classification="OFFICIAL", datasets=["enron"]),
+    ]  # fmt: skip
+    await _write(adapter, [], links)
+    return ids
+
+
+async def test_shared_attribute_rarity_is_the_inverse_frequency_of_what_the_reader_shares(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139 decision 4: ln(N/df) summed over shared attributes, per dataset; a pair's shared
+    attributes ranked, the rarer first; each entity's best pair among those asked."""
+    import math
+
+    async with factory.context() as adapter:
+        ids = await _rarity_world(adapter)
+        people = [ids[f"p{i}"] for i in range(1, 6)]
+        result = await adapter.shared_attribute_rarity(
+            people, OFFICIAL, pairs=[(ids["p1"], ids["p2"]), (ids["p3"], ids["p4"])]
+        )
+        p12, p34 = result.pairs
+        assert p12.score == pytest.approx(math.log(5 / 2))
+        assert p12.dataset == "fixture"
+        assert [(s.node.id, round(s.score, 6)) for s in p12.shared] == [
+            (ids["r"], round(math.log(5 / 2), 6)), (ids["L"], 0.0)
+        ]
+        assert p34.score == pytest.approx(0.0)
+        # Only p1 and p2 share anything that scores.
+        assert result.node_values == {
+            ids["p1"]: pytest.approx(math.log(5 / 2)), ids["p2"]: pytest.approx(math.log(5 / 2))
+        }
+        # Across the case's readable datasets, the enron persons at L count as well: N is 7.
+        across = await adapter.shared_attribute_rarity(
+            people, OFFICIAL, scope="case", pairs=[(ids["p1"], ids["p2"])]
+        )
+        assert across.pairs[0].score == pytest.approx(math.log(7 / 2) + math.log(7 / 7))
+        assert across.pairs[0].dataset is None
+        # Per dataset, two entities sharing no dataset have no score; across the case they do.
+        mixed = (ids["p1"], ids["q1"])
+        assert (await adapter.shared_attribute_rarity(
+            [*mixed], OFFICIAL, pairs=[mixed])).pairs[0].score is None  # fmt: skip
+        assert (await adapter.shared_attribute_rarity(
+            [*mixed], OFFICIAL, scope="case", pairs=[mixed])).pairs[0].score == pytest.approx(0.0)  # fmt: skip
+        # Two of different types have no rarity.
+        odd = (ids["p1"], ids["r"])
+        assert (await adapter.shared_attribute_rarity(
+            [*odd], OFFICIAL, pairs=[odd])).pairs[0].score is None  # fmt: skip
+        # Anyone of the kind, not only those asked: p1's best partner is p2.
+        anyone = await adapter.shared_attribute_rarity([ids["p1"]], OFFICIAL, partners="any")
+        assert anyone.node_values == {ids["p1"]: pytest.approx(math.log(5 / 2))}
+        assert [(p.a, p.b) for p in anyone.pairs] == [(ids["p1"], ids["p2"])]
+
+
+async def test_unauthorised_rarity_matches_a_world_without_the_hidden_entity(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-139's rarity test (rule 3): with a hidden person sharing the rare endpoint, and a hidden
+    link from another, the score equals the score in a world without either; cleared, both count.
+    Nothing hidden is named among the shared attributes."""
+    import math
+
+    async with factory.context() as adapter:
+        ids = await _rarity_world(adapter)
+        pair = (ids["p1"], ids["p2"])
+        seen = await adapter.shared_attribute_rarity(list(pair), OFFICIAL, pairs=[pair])
+        # The world without p6 and p3's SECRET link: N = 5 visible persons, df(r) = 2.
+        assert seen.pairs[0].score == pytest.approx(math.log(5 / 2))
+        assert ids["p6"] not in {s.node.id for s in seen.pairs[0].shared}
+        cleared = await adapter.shared_attribute_rarity(list(pair), CLEARED, pairs=[pair])
+        # Cleared: N = 6 (p6), df(r) = 4 (p1, p2, p6, and p3 by its SECRET link), df(L) = 5.
+        assert cleared.pairs[0].score == pytest.approx(math.log(6 / 4) + math.log(6 / 5))
+        # A hidden entity asked for directly has no value and no pair.
+        hidden = await adapter.shared_attribute_rarity(
+            [ids["p1"], ids["p6"]], OFFICIAL, pairs=[(ids["p1"], ids["p6"])]
+        )
+        assert ids["p6"] not in hidden.node_values
+        assert hidden.pairs[0].score is None and hidden.pairs[0].shared == []
+        # A case reading only enron sees neither p1 nor p2.
+        enron = OFFICIAL.model_copy(update={"datasets": ["enron"]})
+        assert (await adapter.shared_attribute_rarity(list(pair), enron, pairs=[pair])).pairs[0].score is None
+
+
+async def test_rarity_is_refused_past_its_cap_rather_than_scored_in_part(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Rule 2: more pairs to score than the cap is `RarityTooLarge`, never a part of them."""
+    from ports.graph import RarityTooLarge
+
+    async with factory.context() as adapter:
+        ids = await _rarity_world(adapter)
+        people = [ids[f"p{i}"] for i in range(1, 6)]
+        with pytest.raises(RarityTooLarge):
+            await adapter.shared_attribute_rarity(people, OFFICIAL, cap=3)
