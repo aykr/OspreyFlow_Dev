@@ -22,6 +22,7 @@ import {
   openQueuedAlert,
   rail,
   reportsTab,
+  runNowAndWait,
   scrollAllToTop,
   shotInto,
   signInAs,
@@ -572,11 +573,9 @@ async function runNow(page: Page, open: RegExp): Promise<string> {
       await publish.click();
     }
   }
-  await run.click();
-  const outcome = page.getByText(/Succeeded:|Failed|refused/i).first();
-  await expect(outcome).toBeVisible({ timeout: 240_000 });
+  // The new run's own answer, never the runs list's older "Succeeded:" (step 9d finding 7).
+  const runs = await runNowAndWait(page, run, 240_000);
   await page.waitForTimeout(3000);
-  const runs = (await page.getByRole("list", { name: "Runs of this recipe" }).textContent()) ?? "";
   // The Publish screen's own way back to the recipe list, by its exact name: `/Back/` also matched
   // the rail's "Back to the investigation", which left the Studio (31 October 2026).
   await page.getByRole("button", { name: "← Back", exact: true }).click();
@@ -695,11 +694,9 @@ async function loadIncoming(page: Page, open: RegExp, file: string): Promise<voi
   const run = page.getByRole("button", { name: "Run now" });
   await run.waitFor();
   await page.getByLabel(/^Source file/).fill(`${INCOMING}/${file}`);
-  await run.click();
-  const runs = page.getByRole("list", { name: "Runs of this recipe" });
-  await expect(runs).toContainText(/Succeeded|Failed|refused/i, { timeout: 300_000 }).catch(() => undefined);
+  // The new run's own answer, never the runs list's older "Succeeded" (step 9d finding 7).
+  console.log(`${file}: ${await runNowAndWait(page, run)}`);
   await page.waitForTimeout(5000);
-  console.log(`${file} runs: ${await runs.textContent()}`);
 }
 
 /** The queue's hotlist rows, newest first (high severity, then newest: `alerts.py`'s order), so
