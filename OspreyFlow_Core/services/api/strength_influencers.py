@@ -15,7 +15,10 @@ shipped influencers switched off in it. It needs no second person, because it ch
 case; every version of it is kept in `case_strength_influencers`, and each change is audited.
 
 **Resolution** (`active_for_case`): the case override, then the installation set, then the file
-(`ontology/influencers.py`'s `resolve_influencers`).
+(`ontology/influencers.py`'s `resolve_influencers`). **The composition and the rarity measure**
+(ADR-139 Amendment 2) resolve the same way (`settings_for_case`): an installation version may
+choose them, by the same maker–checker, and a case override may choose the composition (for a
+demonstration of client parity, say).
 """
 
 from __future__ import annotations
@@ -28,13 +31,22 @@ from typing import Any
 
 import asyncpg
 
-from ontology.influencers import resolve_influencers
+from ontology.influencers import (
+    StrengthDefaults,
+    StrengthSettings,
+    resolve_influencers,
+    resolve_settings,
+)
 from schemas.domain import OntologySchema, Principal
 from schemas.strength import (
+    SHARED_VALUE,
     ActiveInfluencer,
     CaseInfluencersInput,
     InfluencerSetHistory,
     InfluencerSetVersion,
+    InfluencerTrigger,
+    RarityMeasure,
+    StrengthComposition,
     StrengthInfluencer,
 )
 
@@ -62,11 +74,14 @@ CREATE TABLE IF NOT EXISTS case_strength_influencers (
     set_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (investigation_id, version)
 );
+ALTER TABLE strength_influencer_versions ADD COLUMN IF NOT EXISTS composition TEXT;
+ALTER TABLE strength_influencer_versions ADD COLUMN IF NOT EXISTS rarity_measure TEXT;
+ALTER TABLE case_strength_influencers ADD COLUMN IF NOT EXISTS composition TEXT;
 """
 
 _COLUMNS = (
     "version, influencers, status, proposed_by, proposed_at, words, decided_by, decided_at, "
-    "decision_words"
+    "decision_words, composition, rarity_measure"
 )
 
 
@@ -86,13 +101,15 @@ def check_influencers(influencers: Sequence[StrengthInfluencer], ontology: Ontol
     and each link type."""
     for influencer in influencers:
         for link_type in influencer.link_types:
+            if link_type == SHARED_VALUE:
+                continue  # a pair linked through a shared value (Amendment 2): no stored type
             if ontology.edge_type(link_type) is None:
                 raise InfluencerRefused(
                     influencer.id, f"“{link_type}” is not a link type this deployment declares"
                 )
         trigger = influencer.trigger
-        if trigger is None:
-            continue
+        if not isinstance(trigger, InfluencerTrigger):
+            continue  # direct links, or a dataset (any dataset name; one never read is inert)
         entity = ontology.entity_type(trigger.entity_type)
         if entity is None:
             raise InfluencerRefused(
@@ -130,6 +147,17 @@ class CaseOverride:
     set_at: datetime
 
 
+@dataclass(frozen=True)
+class InstallationSet:
+    """The approved version in force: its influencers, and the composition and rarity measure it
+    chose (None: the weights file's)."""
+
+    version: int
+    influencers: list[StrengthInfluencer]
+    composition: StrengthComposition | None = None
+    rarity_measure: RarityMeasure | None = None
+
+
 def _influencers(raw: Any) -> list[StrengthInfluencer]:
     data: Any = json.loads(raw) if isinstance(raw, str) else raw
     return [StrengthInfluencer.model_validate(i) for i in data or []]
@@ -146,6 +174,8 @@ def _version(row: asyncpg.Record, in_force: int | None) -> InfluencerSetVersion:
         decided_by=row["decided_by"],
         decided_at=row["decided_at"],
         decision_words=row["decision_words"],
+        composition=row["composition"],
+        rarity_measure=row["rarity_measure"],
         in_force=row["version"] == in_force,
     )
 
@@ -176,30 +206,51 @@ class InfluencerStore:
         )
         return int(value) if value is not None else None
 
-    async def history(self, defaults: Sequence[StrengthInfluencer]) -> InfluencerSetHistory:
+    async def history(
+        self,
+        defaults: Sequence[StrengthInfluencer],
+        file_defaults: StrengthDefaults | None = None,
+    ) -> InfluencerSetHistory:
         """Every version, newest first, the one in force marked."""
         async with self._pool.acquire() as conn:
             in_force = await self._in_force_version(conn)
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM strength_influencer_versions ORDER BY version DESC"
             )
-        return InfluencerSetHistory(
+        history = InfluencerSetHistory(
             versions=[_version(r, in_force) for r in rows], defaults=list(defaults)
         )
+        if file_defaults is not None:
+            history.default_composition = file_defaults.composition
+            history.default_rarity_measure = file_defaults.rarity_measure
+        return history
 
-    async def in_force(self) -> tuple[int, list[StrengthInfluencer]] | None:
-        """The approved version in force and its influencers; None before any is approved."""
+    async def in_force(self) -> InstallationSet | None:
+        """The approved version in force, its influencers and its choices; None before any is
+        approved."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT version, influencers FROM strength_influencer_versions "
+                "SELECT version, influencers, composition, rarity_measure "
+                "FROM strength_influencer_versions "
                 "WHERE status = 'approved' ORDER BY version DESC LIMIT 1"
             )
         if row is None:
             return None
-        return int(row["version"]), _influencers(row["influencers"])
+        return InstallationSet(
+            version=int(row["version"]),
+            influencers=_influencers(row["influencers"]),
+            composition=row["composition"],
+            rarity_measure=row["rarity_measure"],
+        )
 
     async def propose(
-        self, influencers: Sequence[StrengthInfluencer], words: str, principal: Principal
+        self,
+        influencers: Sequence[StrengthInfluencer],
+        words: str,
+        principal: Principal,
+        *,
+        composition: StrengthComposition | None = None,
+        rarity_measure: RarityMeasure | None = None,
     ) -> InfluencerSetVersion:
         """A new version, waiting for a second person; it changes nothing until approved."""
         now = datetime.now(UTC)
@@ -217,9 +268,10 @@ class InfluencerStore:
             version = int(latest or 0) + 1
             row = await conn.fetchrow(
                 f"INSERT INTO strength_influencer_versions ({_COLUMNS}) "
-                "VALUES ($1, $2::jsonb, 'pending', $3, $4, $5, NULL, NULL, NULL) "
+                "VALUES ($1, $2::jsonb, 'pending', $3, $4, $5, NULL, NULL, NULL, $6, $7) "
                 f"RETURNING {_COLUMNS}",
-                version, _dumped(influencers), principal.id, now, words,
+                version, _dumped(influencers), principal.id, now, words, composition,
+                rarity_measure,
             )  # fmt: skip
             in_force = await self._in_force_version(conn)
         assert row is not None
@@ -272,7 +324,7 @@ class InfluencerStore:
     async def case_override(self, investigation_id: str) -> CaseOverride | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT version, added, switched_off, words, set_by, set_at "
+                "SELECT version, added, switched_off, words, set_by, set_at, composition "
                 "FROM case_strength_influencers WHERE investigation_id = $1 "
                 "ORDER BY version DESC LIMIT 1",
                 investigation_id,
@@ -285,6 +337,7 @@ class InfluencerStore:
             override=CaseInfluencersInput(
                 added=_influencers(row["added"]),
                 switched_off=json.loads(switched) if isinstance(switched, str) else switched,
+                composition=row["composition"],
                 words=row["words"] or "",
             ),
             set_by=row["set_by"],
@@ -309,10 +362,11 @@ class InfluencerStore:
             version = int(latest or 0) + 1
             await conn.execute(
                 "INSERT INTO case_strength_influencers (investigation_id, version, added, "
-                "switched_off, words, set_by, set_at) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, "
-                "$6, $7)",
+                "switched_off, words, set_by, set_at, composition) VALUES ($1, $2, $3::jsonb, "
+                "$4::jsonb, $5, $6, $7, $8)",
                 investigation_id, version, _dumped(override.added),
                 json.dumps(override.switched_off), override.words, principal.id, now,
+                override.composition,
             )  # fmt: skip
         return CaseOverride(version=version, override=override, set_by=principal.id, set_at=now)
 
@@ -327,16 +381,31 @@ class InfluencerStore:
         case = await self.case_override(investigation_id) if investigation_id else None
         active, switched_off = resolve_influencers(
             shipped,
-            installation[1] if installation else None,
+            installation.influencers if installation else None,
             case.override if case else None,
-            installation_version=installation[0] if installation else None,
+            installation_version=installation.version if installation else None,
             case_version=case.version if case else None,
         )
         return active, switched_off, case
 
+    async def settings_for_case(
+        self, investigation_id: str | None, defaults: StrengthDefaults
+    ) -> StrengthSettings:
+        """The composition and rarity measure in force in a case (Amendment 2): the case
+        override's composition, then the installation version's choices, then the file's."""
+        installation = await self.in_force()
+        case = await self.case_override(investigation_id) if investigation_id else None
+        return resolve_settings(
+            defaults,
+            installation.composition if installation else None,
+            installation.rarity_measure if installation else None,
+            case.override.composition if case else None,
+        )
+
 
 __all__ = [
     "CaseOverride",
+    "InstallationSet",
     "InfluencerRefused",
     "check_influencers",
     "InfluencerChangeRefused",

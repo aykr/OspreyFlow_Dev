@@ -286,3 +286,94 @@ def test_a_case_override_applies_only_in_its_case_and_only_its_author_sets_it(
                json={"added": [{**ASSAULT, "size": 0.9}]})  # fmt: skip
     assert _in_force(w, client)["incident-source"] == ("case", 0.9)
     assert _in_force(w, client, w.other_case)["incident-source"] == ("installation", 0.6)
+
+
+# --- ADR-139 Amendment 2: the composition, the rarity measure and dataset triggers -------------
+
+
+def _composition(w: _World, client: TestClient, case: str | None = None) -> tuple[str, str, str]:
+    legend = _legend(w, client, case)["legend"]
+    return legend["composition"], legend["composition_layer"], legend["rarity_measure"]
+
+
+def test_an_installation_composition_takes_effect_only_when_a_second_person_approves(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Amendment 2: an installation chooses client parity (and a rarity measure) by maker–checker,
+    as it does its influencers: the proposal changes nothing until approved, and the version keeps
+    what it chose."""
+    w, client = world
+    assert _composition(w, client) == ("standard", "file", "share")
+    history = client.get("/v1/strength-influencers").json()
+    assert (history["default_composition"], history["default_rarity_measure"]) == ("standard", "share")
+    made = client.post("/v1/strength-influencers", json={
+        "influencers": [MONEY], "composition": "client_parity", "rarity_measure": "share",
+        "words": "the client's own sum",
+    })  # fmt: skip
+    assert made.status_code == 201, made.text
+    assert made.json()["composition"] == "client_parity"
+    assert _composition(w, client) == ("standard", "file", "share")
+    w.as_ = w.checker
+    assert client.post(f"/v1/strength-influencers/{made.json()['version']}/approve").status_code == 200
+    assert _composition(w, client) == ("client_parity", "installation", "share")
+    # A later version that chooses IDF under the standard composition.
+    again = client.post("/v1/strength-influencers", json={
+        "influencers": [MONEY], "composition": "standard", "rarity_measure": "idf"})  # fmt: skip
+    w.as_ = w.maker
+    client.post(f"/v1/strength-influencers/{again.json()['version']}/approve")
+    assert _composition(w, client) == ("standard", "installation", "idf")
+
+
+def test_a_case_override_switches_only_its_case_to_client_parity(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Amendment 2, ruling 5: the demonstration's switch. The case's Author sets client parity for
+    the case alone; the case's own wins over the installation's; clearing it restores it."""
+    w, client = world
+    w.as_ = w.maker
+    saved = client.put(f"/v1/investigations/{w.case}/strength-influencers",
+                       json={"composition": "client_parity"})  # fmt: skip
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["override"]["composition"] == "client_parity"
+    assert _composition(w, client) == ("client_parity", "case", "share")
+    assert _composition(w, client, w.other_case) == ("standard", "file", "share")
+    w.as_ = w.editor
+    refused = client.put(f"/v1/investigations/{w.case}/strength-influencers",
+                         json={"composition": "standard"})  # fmt: skip
+    assert refused.status_code == 403
+    w.as_ = w.maker
+    client.put(f"/v1/investigations/{w.case}/strength-influencers", json={})
+    assert _composition(w, client) == ("standard", "file", "share")
+
+
+def test_a_dataset_trigger_and_a_shared_value_are_accepted_and_told_only_to_a_reader_of_it(
+    world: tuple[_World, TestClient],
+) -> None:
+    """Amendment 2, ruling 3: a dataset-triggered influencer, on stored links and on a pair linked
+    through a shared value, is accepted (no ontology name to check beyond the link types); the
+    legend names it only to a reader whose case reads that dataset (the fixture's analysts read
+    `ds-1`)."""
+    w, client = world
+    w.as_ = w.maker
+    by_dataset = {
+        "id": "source-ds-1", "label": "From ds-1", "link_types": ["TRANSACTED", "SHARED_VALUE"],
+        "trigger": {"kind": "dataset", "datasets": ["ds-1", "ds-2"]}, "size": 0.2,
+    }  # fmt: skip
+    elsewhere = {**by_dataset, "id": "source-ds-9", "trigger": {"kind": "dataset", "datasets": ["ds-9"]}}
+    saved = client.put(f"/v1/investigations/{w.case}/strength-influencers",
+                       json={"added": [by_dataset, elsewhere]})  # fmt: skip
+    assert saved.status_code == 200, saved.text
+    shown = {a["influencer"]["id"]: a["influencer"]["trigger"] for a in saved.json()["legend"]["influencers"]}
+    assert shown["source-ds-1"] == {"kind": "dataset", "datasets": ["ds-1"]}
+    assert "source-ds-9" not in shown
+    assert "ds-9" not in str(saved.json()["legend"])
+    # A reader who cannot set the override is not told of it there either.
+    w.as_ = w.editor
+    override = _legend(w, client)["override"]
+    assert [i["id"] for i in override["added"]] == ["source-ds-1"]
+    assert "ds-9" not in str(override)
+    # A record trigger on a shared value is refused in words.
+    w.as_ = w.maker
+    bad = {**ASSAULT, "link_types": ["SHARED_VALUE"]}
+    refused = client.put(f"/v1/investigations/{w.case}/strength-influencers", json={"added": [bad]})
+    assert refused.status_code == 422

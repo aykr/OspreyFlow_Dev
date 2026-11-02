@@ -101,7 +101,7 @@ from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, principal_may_view
-from ontology.influencers import StrengthDefaults, load_strength_defaults
+from ontology.influencers import StrengthDefaults, as_the_reader_sees, load_strength_defaults
 from ontology.packs import pack_catalogue
 from ontology.pattern_where import PatternConditionRefused, check_pattern_conditions
 from ontology.yardstick import Yardstick, load_phia_yardstick
@@ -281,6 +281,7 @@ from schemas.sentences import (
     SentenceRuleParams,
 )
 from schemas.strength import (
+    ActiveInfluencer,
     CaseInfluencers,
     CaseInfluencersInput,
     ConnectionStrengthRequest,
@@ -9149,7 +9150,7 @@ async def list_strength_influencers_route(
 ) -> InfluencerSetHistory:
     """ADR-139 decision 3: every installation-wide version, newest first, with the one in force,
     and the weights file's defaults beneath them."""
-    history = await store.history(defaults.influencers)
+    history = await store.history(defaults.influencers, defaults)
     return history.model_copy(
         update={"versions": await _with_names(history.versions, principal_names)}
     )
@@ -9170,13 +9171,18 @@ async def propose_strength_influencers_route(
     """A new installation-wide version, waiting for a second person: it changes no strength until
     approved (maker–checker, ADR-133 stage (d)'s pattern)."""
     check_influencers(body.influencers, ontology)
-    version = await store.propose(body.influencers, body.words, principal)
+    version = await store.propose(
+        body.influencers, body.words, principal, composition=body.composition,
+        rarity_measure=body.rarity_measure,
+    )  # fmt: skip
     await audit.record(
         principal=principal,
         action="strength_influencers_proposed",
         resolved_query={
             "version": version.version,
             "influencers": [i.id for i in body.influencers],
+            "composition": body.composition,
+            "rarity_measure": body.rarity_measure,
         },
         result_cardinality=len(body.influencers),
     )
@@ -9243,17 +9249,24 @@ async def case_strength_influencers_route(
     """ADR-139 decision 7: the case's legend (exactly the influencers in force, a case override
     marked), and its override, which its Author may change."""
     legend = await case_legend(
-        investigation.id, store=store, defaults=defaults, names=principal_names
-    )
+        investigation.id, store=store, defaults=defaults, names=principal_names,
+        readable=principal.datasets,
+    )  # fmt: skip
     case = await store.case_override(investigation.id)
     try:
         await investigations.get_authorized(investigation.id, principal, need=AccessLevel.AUTHOR)
         can_override = True
     except InsufficientAccessError:
         can_override = False
-    return CaseInfluencers(
-        legend=legend, override=case.override if case else None, can_override=can_override
-    )
+    override = case.override if case else None
+    if override is not None and not can_override:
+        # Amendment 2, ruling 3: a dataset trigger is told only by the datasets the reader reads.
+        shown = as_the_reader_sees(
+            [ActiveInfluencer(influencer=i, layer="case") for i in override.added],
+            principal.datasets,
+        )
+        override = override.model_copy(update={"added": [a.influencer for a in shown]})
+    return CaseInfluencers(legend=legend, override=override, can_override=can_override)
 
 
 @app.put(
@@ -9284,6 +9297,7 @@ async def set_case_strength_influencers_route(
             "version": saved.version,
             "added": [i.id for i in body.added],
             "switched_off": body.switched_off,
+            "composition": body.composition,
         },
         result_cardinality=len(body.added) + len(body.switched_off),
     )
@@ -9325,14 +9339,16 @@ async def rarity_route(
     working_set: WorkingSetDep,
     graph: GraphDep,
     defaults: StrengthDefaultsDep,
+    store: OptionalStrengthInfluencersDep = None,
 ) -> RarityResult:
     """ADR-139 decisions 4 and 6: each working-set entity's highest shared-attribute rarity with
     another of its kind there, and each pair asked for with its shared attributes ranked. Scores
     and the reader's visible attributes only, never N or df (rule 7); past its cap,
-    `limit_exceeded` (rule 2)."""
+    `limit_exceeded` (rule 2). Amendment 2: in the case's rarity measure, and under client parity
+    each pair with its parity score."""
     return await case_rarity(
         investigation.id, body, working_set=working_set, graph=graph, principal=principal,
-        defaults=defaults,
+        defaults=defaults, store=store,
     )  # fmt: skip
 
 
@@ -9670,7 +9686,9 @@ async def preview_rule_sentence(
     if relationship is not None and relationship.kind == "on_screening_list":
         entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
     # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
-    influencers, rarity_exclude = await strength_context(influencers_store, investigation.id)
+    influencers, rarity_exclude, strength_settings = await strength_context(
+        influencers_store, investigation.id
+    )
     preview = await preview_sentence(
         sentence,
         principal,
@@ -9683,6 +9701,8 @@ async def preview_rule_sentence(
             screening_entries=entries,
             influencers=influencers,
             rarity_exclude_types=rarity_exclude,
+            composition=strength_settings.composition,
+            rarity_measure=strength_settings.rarity_measure,
         ),
     )
     await audit.record(

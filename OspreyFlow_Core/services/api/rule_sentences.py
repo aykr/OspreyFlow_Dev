@@ -70,7 +70,7 @@ from schemas.sentences import (
     SentenceRefusal,
     SentenceRuleParams,
 )
-from schemas.strength import ActiveInfluencer
+from schemas.strength import ActiveInfluencer, RarityMeasure, StrengthComposition
 
 from .alert_queue import node_name
 from .working_set.models import MAX_NODES, LimitExceeded, LimitExceededError
@@ -488,9 +488,10 @@ def sentence_words(sentence: RuleSentence, ontology: OntologySchema | None = Non
         if strength.kind == "connection_strength":
             other = _a(strength.other_type) if strength.other_type else "anything it is linked to"
             by = f" by “{label(strength.link_type)}”" if strength.link_type else ""
+            scale = " on the client's scale" if strength.scale == "client" else ""
             words.append(
                 f"and the connection strength between it and {other}{by} reaches "
-                f"{_number(strength.reaches)}"
+                f"{_number(strength.reaches)}{scale}"
             )
         else:
             where = "per dataset" if strength.scope == "dataset" else "across the case's datasets"
@@ -537,6 +538,9 @@ class SentenceContext:
     #: the weights file's), which a strength condition judges by; and the types rarity leaves out.
     influencers: Sequence[ActiveInfluencer] = ()
     rarity_exclude_types: tuple[str, ...] = ("Alert",)
+    #: ADR-139 Amendment 2: the composition and rarity measure in force in the case.
+    composition: StrengthComposition = "standard"
+    rarity_measure: RarityMeasure = "share"
 
 
 @dataclass(frozen=True)
@@ -729,8 +733,18 @@ async def _meets_strength(
         if not ends:
             return None
         found = await ctx.graph.connection_strengths(
-            sorted(ends), author, influencers=ctx.influencers
+            sorted(ends), author, influencers=ctx.influencers, composition=ctx.composition
         )
+        if strength.scale == "client":
+            # The client's raw sum exists only under client parity (Amendment 2).
+            sums = [s for s in found if s.raw_sum is not None]
+            best = max(sums, key=lambda s: (s.raw_sum or 0.0, s.edge_id), default=None)
+            if best is None or (best.raw_sum or 0.0) < strength.reaches:
+                return None
+            return (
+                f"connection strength {best.raw_sum:.2f} on the client's scale with "
+                f"{node_name(others[ends[best.edge_id]])}"
+            )
         best = max(found, key=lambda s: (s.strength, s.edge_id), default=None)
         if best is None or best.strength < strength.reaches:
             return None
@@ -739,7 +753,7 @@ async def _meets_strength(
         )
     result = await ctx.graph.shared_attribute_rarity(
         [node.id], author, scope=strength.scope, partners="any",
-        exclude_types=ctx.rarity_exclude_types,
+        exclude_types=ctx.rarity_exclude_types, measure=ctx.rarity_measure,
     )  # fmt: skip
     value = result.node_values.get(node.id)
     if value is None or value < strength.reaches:

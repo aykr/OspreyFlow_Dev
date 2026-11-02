@@ -96,10 +96,10 @@ async def _write(graph: object, nodes: list[NodeWrite], edges: list[EdgeWrite]) 
     await graph.commit_transaction(tx)  # type: ignore[attr-defined]
 
 
-def _ctx(graph: object) -> SentenceContext:
+def _ctx(graph: object, **settings: object) -> SentenceContext:
     return SentenceContext(
         graph=graph, analytics=None, investigation_scope="case-1", ontology=ONTOLOGY,  # type: ignore[arg-type]
-        influencers=[PASSPORT],
+        influencers=settings.pop("influencers", [PASSPORT]), **settings,  # type: ignore[arg-type]
     )  # fmt: skip
 
 
@@ -163,9 +163,50 @@ async def test_a_rarity_rule_is_judged_on_what_its_author_may_see(
         # As the author sees it, ln(3/2); with the hidden person, ln(4/3), below the figure.
         sentence = RuleSentence(subject="Person", strength=RarityReaches(
             reaches=round(math.log(3 / 2) - 0.01, 4), scope="case"))  # fmt: skip
-        seen = await preview_sentence(sentence, OFFICIAL, _ctx(graph))
+        seen = await preview_sentence(sentence, OFFICIAL, _ctx(graph, rarity_measure="idf"))
         assert seen.would_raise == 2
         assert {e.node_id for e in seen.examples} == {p1.id, p2.id}
         assert all(hidden.id not in e.words for e in seen.examples)
-        cleared = await preview_sentence(sentence, CLEARED, _ctx(graph))
+        cleared = await preview_sentence(sentence, CLEARED, _ctx(graph, rarity_measure="idf"))
         assert cleared.would_raise == 0
+
+
+DIRECT = ActiveInfluencer(layer="file", influencer=StrengthInfluencer(
+    id="direct", label="Direct link", link_types=["COMMUNICATED_WITH"], size=0.2))  # fmt: skip
+
+
+def test_a_strength_figure_names_its_scale() -> None:
+    """Amendment 2: a figure on the client's scale may pass 1 (a raw sum); a drawn one may not."""
+    with pytest.raises(ValidationError, match="client's scale"):
+        StrengthReaches(reaches=1.1)
+    sentence = RuleSentence(subject="Person", strength=StrengthReaches(reaches=1.1, scale="client"))
+    assert "reaches 1.1 on the client's scale" in sentence_words(sentence, ONTOLOGY)
+
+
+@pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+async def test_a_condition_on_the_clients_scale_is_judged_on_the_authors_raw_sum(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Amendment 2: under client parity a condition on the client's scale reads the raw sum, as
+    its author may see it: two calls visible (1 − 1/2 + 0.2 = 0.7), a SECRET third raising the
+    cleared author's to 1 − 1/3 + 0.2. Under the standard composition the client's scale has no
+    sum, and nothing is raised."""
+    async with factory.context() as graph:
+        x1, x2, x3 = (_node("Endpoint", "OFFICIAL") for _ in range(3))
+        await _write(graph, [x1, x2, x3], [
+            _edge("COMMUNICATED_WITH", x1.id, x2.id), _edge("COMMUNICATED_WITH", x2.id, x3.id),
+            _edge("COMMUNICATED_WITH", x1.id, x3.id, "SECRET"),
+        ])  # fmt: skip
+        sentence = RuleSentence(subject="Endpoint", strength=StrengthReaches(
+            link_type="COMMUNICATED_WITH", reaches=0.8, scale="client"))  # fmt: skip
+        parity = {"influencers": [DIRECT], "composition": "client_parity"}
+        seen = await preview_sentence(sentence, OFFICIAL, _ctx(graph, **parity))
+        assert seen.would_raise == 0
+        cleared = await preview_sentence(sentence, CLEARED, _ctx(graph, **parity))
+        assert cleared.would_raise == 3
+        assert "on the client's scale" in cleared.examples[0].words
+        low = sentence.model_copy(update={"strength": StrengthReaches(
+            link_type="COMMUNICATED_WITH", reaches=0.7, scale="client")})  # fmt: skip
+        assert (await preview_sentence(low, OFFICIAL, _ctx(graph, **parity))).would_raise == 3
+        standard = await preview_sentence(low, OFFICIAL, _ctx(graph, influencers=[DIRECT]))
+        assert standard.would_raise == 0
