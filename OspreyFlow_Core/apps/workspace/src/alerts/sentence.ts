@@ -331,7 +331,9 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
     conditions: draft.conditions.map(condition),
     relationship,
     frequency,
-    strength,
+    // Sent only when the rule names one (ADR-139), as a schedule is: a sentence without one is
+    // exactly the sentence it was before the blank existed.
+    ...(strength ? { strength } : {}),
     severity: draft.severity,
     team: draft.scope === "just_me" ? "case" : draft.team,
     runs,

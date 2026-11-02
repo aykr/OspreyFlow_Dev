@@ -21,7 +21,7 @@ describe("the strength blank", () => {
   it("sends a rarity condition with its scope, and none when the blank is empty", () => {
     const rare = toSentence({ ...emptyDraft("Person"), strength: "shared_attribute_rarity", reaches: "2.5", rarityScope: "case" });
     expect((rare as unknown as { strength: unknown }).strength).toEqual({ kind: "shared_attribute_rarity", reaches: 2.5, scope: "case" });
-    expect((toSentence(emptyDraft("Person")) as unknown as { strength: unknown }).strength).toBeNull();
+    expect("strength" in (toSentence(emptyDraft("Person")) as object)).toBe(false);
   });
 
   it("is not sent unfinished: a figure above 0, a strength at most 1, and after commit", () => {
