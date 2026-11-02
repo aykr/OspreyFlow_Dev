@@ -149,6 +149,9 @@ ROUTE_RIGHTS = {
     "resolve_now_route": "resolve_entities",
     "readiness_route": None,
     "liveness_route": None,
+    # The API's OpenAPI document (`03_CONDUIT_MIDDLEWARE.md` §3.0a; GDS remediation O1): behind
+    # sign-in as every `/v1` route is, and no right beyond it, as the ontology below.
+    "openapi_document_route": None,
     "get_ontology_route": None,
     "get_map_providers_route": None,
     "get_map_tile_route": None,
