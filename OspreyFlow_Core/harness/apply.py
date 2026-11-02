@@ -111,6 +111,16 @@ class ApplyFailed(RuntimeError):
         super().__init__(f"{stage}: {detail}")
 
 
+def move_into_place(stage: Path, out_dir: Path) -> None:
+    """The staged files copied over the deployment's folder, which keeps its own mode: `copytree`
+    also copies the stage folder's mode onto it, so a named deployment's folder, made `700` by the
+    command because it holds `deployment.env` (ADR-138), became `755` (found at step 11b)."""
+    mode = out_dir.stat().st_mode & 0o777 if out_dir.is_dir() else None
+    shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+    if mode is not None:
+        out_dir.chmod(mode)
+
+
 def analytics_secret_lines(config: OspreyConfig) -> str:
     """ClickHouse's password, minted here once and written under both names — the server's
     (`OSPREY_CLICKHOUSE_PASSWORD`, read by the compose file) and the Conduit's
@@ -922,7 +932,7 @@ def reapply(
         removed = set(_services(out_dir)) - set(_services(stage))
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
-        shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+        move_into_place(stage, out_dir)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     if restart or removed:
@@ -1221,7 +1231,7 @@ def main(
         # is touched (ADR-132, ruling 6).
         try:
             preflight(PreflightContext(config=config, out_dir=stage))
-            shutil.copytree(stage, out_dir, dirs_exist_ok=True)
+            move_into_place(stage, out_dir)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
         result.record("preflight", "all checks pass or skip")
