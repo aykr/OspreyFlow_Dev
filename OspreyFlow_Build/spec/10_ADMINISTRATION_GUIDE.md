@@ -27,6 +27,143 @@ Small swaps the deployment's own PostgreSQL and object store for the cloud's, an
 domain with HTTPS. Enterprise runs the same services as replicas across the cluster's nodes, the
 graph store and the analytics database as clusters of their own.
 
+## 1a. Choosing a starter
+
+A **starter** is a theme and a domain, chosen at install. It only fills in answers the install
+already asks — the look, the GOV.UK service's name, organisation and phase, the demo packs and
+whether demo accounts are made — and every one can still be changed. The `osprey.yaml` it makes
+records the starter in a comment at the top; nothing at run time reads it. Every domain pack (FIBO,
+NIEM, STIX) stays available to every case whatever the starter: the domain chooses the demo data
+and what its demo cases are set to, never what the ontology offers.
+
+| | `crime` | `aml` | `fraud` | `cyber` | `blank` |
+| --- | --- | --- | --- | --- | --- |
+| **Demo case's domains** | NIEM | FIBO | FIBO | STIX | none chosen |
+| **Demo data** | `prison-intelligence`, `hmp` | `operation-ledger`, with its synthetic screening lists | `fixture-corp`; PaySim offered as your own download, never fetched | `cyber-intrusion` | none, and no demo accounts |
+| **`ospreyflow` theme** (the base look) | `ospreyflow-crime` | `ospreyflow-aml` | `ospreyflow-fraud` | `ospreyflow-cyber` | `ospreyflow-blank` |
+| **`govuk` theme** (GOV.UK, a gov.uk service only) | `govuk-crime` | `govuk-aml` | `govuk-fraud` | `govuk-cyber` | `govuk-blank` |
+
+`ospreyflow starters` (or `ospreyflow install --list-starters`) prints the same table and the
+command for each.
+
+**One command per starter.** Add `--yes` to take every other default; leave it out to be asked.
+
+```
+ospreyflow install --mode lite --starter ospreyflow-crime
+ospreyflow install --mode lite --starter ospreyflow-aml
+ospreyflow install --mode lite --starter ospreyflow-fraud
+ospreyflow install --mode lite --starter ospreyflow-cyber
+ospreyflow install --mode lite --starter ospreyflow-blank
+ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "<your organisation>"
+ospreyflow install --mode lite --starter govuk-aml --service-name "Investigate money laundering" --organisation "<your organisation>"
+ospreyflow install --mode lite --starter govuk-fraud --service-name "Investigate fraud" --organisation "<your organisation>"
+ospreyflow install --mode lite --starter govuk-cyber --service-name "Investigate cyber incidents" --organisation "<your organisation>"
+ospreyflow install --mode lite --starter govuk-blank --service-name "<your service's name>" --organisation "<your organisation>"
+```
+
+**The GOV.UK theme** asks for the service's name, organisation and phase (`--service-name`,
+`--organisation`, `--phase alpha|beta|live|none`; the phase offered first is `beta`). Without a
+service name the install is refused, in words, before anything is changed. **Name the service, not a
+case:** the GOV.UK header shows the name on every page of every case, so the names offered above
+describe the whole deployment; "Prison Intelligence" in the header of the Ledger's case is the
+mistake this avoids. `blank` offers no name: a real service names itself.
+
+**On the guided page** (`ospreyflow install --gui`, section 4.1) the starter is on the first screen,
+Mode, under **Starter (optional)**; a GOV.UK starter shows the service's name (filled in with the
+name above), organisation and phase there. The Demo packs screen then shows the starter's packs
+ticked, to change if you wish.
+
+**In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
+`appearance.organisation` and `appearance.phase`.
+
+### 1a.1 Several deployments side by side
+
+`--name` keeps a deployment of its own beside any other on the same computer:
+
+```
+ospreyflow install --mode lite --name crime-demo --starter ospreyflow-crime
+ospreyflow install --mode lite --name aml-govuk --starter govuk-aml --service-name "Investigate money laundering" --organisation "<your organisation>"
+```
+
+Each one has:
+
+- its own folder, `~/.ospreyflow/deployments/<name>/`, holding its `osprey.yaml`, every file
+  rendered from it and its `deployment.env` (readable by your account alone, `600`; the folder is
+  `700`);
+- its own Compose project and volumes, named `<name>`: no case, account or index is shared;
+- its own address — `--address`, by default `http://<name>.localhost:<the next free port>` from 8090
+  — and its own graph-store port on this computer (`deployment.graph_port`, from 2500).
+
+A name that Docker already knows as another folder's Compose project is refused, before anything is
+written: two deployments under one name would share containers. The checkout itself is shared; no
+second checkout or worktree is needed.
+
+**Every command takes `--name`**: `ospreyflow start --name crime-demo`, `ospreyflow status --name
+aml-govuk`, `ospreyflow demo add hmp --name crime-demo`, `ospreyflow backup --name aml-govuk` (whose
+backups are kept in the deployment's own folder). Without `--name`, a command acts on the deployment
+last used, or on the only one there is.
+
+```
+ospreyflow deployments          # each one's name, starter, address and whether it is running
+ospreyflow switch aml-govuk     # stop the running one, start aml-govuk, open it
+ospreyflow switch default       # back to the checkout's own
+```
+
+A Lite computer runs one deployment at a time by default, which is what `ospreyflow switch` is for.
+
+**The deployment installed in the checkout** — every install before this version, with its
+`osprey.yaml` in the checkout and its files in `deploy/generated/` — is listed as `default` and works
+exactly as before: no command moves, renames or changes it. It could later be moved under
+`~/.ospreyflow/deployments/` (install a named deployment, restore a backup of the checkout's into it,
+check it, then uninstall the checkout's with `--keep-data` until you are sure); that is a step for
+the administrator to take deliberately, never something an update does.
+
+### 1a.2 Adding a public dataset
+
+A public dataset you download yourself can be added to any deployment, at install or later:
+
+```
+ospreyflow demo add public --file <the downloaded file> --manifest <its dataset.yaml>
+```
+
+A **manifest** says what the dataset is, its source page, its licence or terms as the source states
+them, the file's SHA-256, whether it holds real people's data, and the Ingest Studio recipe that
+loads it. The file is checked against the checksum before anything else happens; a file that differs
+is refused, and nothing is loaded. It loads into a case of its own, named after the dataset.
+
+**Real personal data** (`real_personal_data: true` in its manifest) is loaded only once you type
+`yes`, accepting that it is real people's data and that your organisation has its own lawful basis
+to process it — as for Enron (section 11); `--accept-real-data` accepts in a scripted run. It never
+belongs in a repository or a test run.
+
+**The VAST Challenge catalogue.** OspreyFlow ships manifests and recipes — never the data — for two
+IEEE VAST Challenge datasets, fictional scenarios published for visual-analytics research:
+
+| Catalogue id | Dataset | Suits | Source |
+| --- | --- | --- | --- |
+| `vast-2012-mc2` | VAST Challenge 2012, Mini-Challenge 2: the fictional Bank of Money's regional network — its firewall log (`Firewall-04072012.csv`) | the `cyber` starter (its case is set to STIX) | the Visual Analytics Benchmark Repository, University of Maryland |
+| `vast-2008-mc3` | VAST Challenge 2008, Mini Challenge 3: cell phone call records on the fictional island of Isla del Sueño (synthetic) | the `crime` starter (its case is set to NIEM) | the same repository |
+
+**Their terms.** Neither the source pages, nor the challenges' task pages, nor the repository's
+mirror at Washington University state any licence or terms of use (checked 2 November 2026). No
+licence means no right to redistribute is granted: download the data yourself, use it on your own
+computer, never pass it on, and do not rely on it for commercial use without the publishers'
+permission. Each manifest says so.
+
+**Their checksums.** OspreyFlow never downloads VAST data, so the catalogue records no checksum, and
+`demo add public` refuses an entry until you record the checksum of the file you downloaded:
+
+```
+python -m scripts.public_dataset --list
+python -m scripts.public_dataset pin --manifest vast-2012-mc2 --file Firewall-04072012.csv --out ~/OspreyFlow/vast-2012-mc2.yaml
+ospreyflow demo add public --file Firewall-04072012.csv --manifest ~/OspreyFlow/vast-2012-mc2.yaml --name crime-demo
+```
+
+`pin` writes your own copy of the manifest, with the recipe beside it; check first that the file
+came from the source page, since what you pin is what every later check holds the file to. The
+column layout each recipe reads is the challenge's published one; check it against your download's
+first line.
+
 ## 2. Before you start
 
 ### 2.1 Lite
@@ -101,7 +238,7 @@ ospreyflow install --mode lite
 ```
 
 asks a few questions — dashboards on or off, the folder the Ingest Studio lists, the folder for a
-basemap, which demo packs — then:
+basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in first: section 1a):
 
 1. writes `osprey.yaml` from the answers (refusing, with nothing changed, if a different
    `osprey.yaml` is already there, unless `--force`);
@@ -119,7 +256,8 @@ builds from the checkout even on a release tag.
 ### 4.1 The guided page: `ospreyflow install --gui`
 
 Opens a page in your browser, on this computer only, behind a one-time link (anyone else, or any
-other link, is refused). It walks through the same answers as screens:
+other link, is refused). It walks through the same answers as screens, with a starter (section 1a)
+offered on the first, Mode:
 
 - **Lite**: Mode, Folders, Profile, Components, Map (register a local basemap, build it, verify
   it), Models, Governance, Demo packs, Review (which runs the doctor), then Install, with the
@@ -281,6 +419,9 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
 | `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
 | `config` | Use this `osprey.yaml` exactly as it is, instead of `components`, `folders` and `models` |
+| `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
+| `appearance.brand`, `appearance.service_name`, `appearance.organisation`, `appearance.phase` | The look (appendix A's `appearance`); `govuk` needs `service_name`, which names the whole service |
+| `demo_accounts` | `true` (default) makes the demo accounts; `false` makes none (the `blank` starter's answer) |
 
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
@@ -292,7 +433,9 @@ Lite and `https://<domain>` for Small and Enterprise.
 | --- | --- |
 | `ospreyflow start` | Brings the deployment up and waits for every service; `--build` rebuilds from the checkout first |
 | `ospreyflow stop` | Stops every container; nothing is removed |
-| `ospreyflow switch` | Makes this the deployment running: stops any other OspreyFlow deployment on the machine (each with its own settings), then starts and opens this one. `--list` names each deployment, running or stopped, and changes nothing. Pick the deployment as for any command, for example `OSPREYFLOW_HOME=<its product folder> ospreyflow switch` |
+| `ospreyflow switch [<name>]` | Makes this the deployment running: stops any other OspreyFlow deployment on the machine (each with its own settings), then starts and opens the named one (`default` for the checkout's; section 1a.1). `--list` names each deployment, running or stopped, and changes nothing. A deployment in another checkout is still picked with `OSPREYFLOW_HOME=<its product folder> ospreyflow switch` |
+| `ospreyflow deployments` | Lists this computer's deployments — the checkout's as `default`, and each kept by name — with the starter each was made from, its address and whether it is running |
+| `ospreyflow starters` | Lists the starters, and the install command for each (section 1a) |
 | `ospreyflow status` | Each service's state and health; exits 1 unless everything is running and healthy |
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
@@ -303,7 +446,9 @@ Lite and `https://<domain>` for Small and Enterprise.
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
 | `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched |
 
-Every service restarts itself if it stops; nothing is registered with the operating system.
+Every command takes `--name <name>` to act on a deployment kept by name, or `--name default` for the
+checkout's own (section 1a.1). Every service restarts itself if it stops; nothing is registered with
+the operating system.
 
 **Enterprise** is looked after with Kubernetes' own tools, not these verbs (which drive a Compose
 deployment): `kubectl get pods -n ospreyflow`, `kubectl logs`, and `helm uninstall ospreyflow -n
@@ -327,6 +472,7 @@ with `network.expose_conduit: true`.
 | Where | What |
 | --- | --- |
 | `osprey.yaml` (the checkout) | The deployment's settings; never a secret |
+| `~/.ospreyflow/deployments/<name>/` | A deployment kept by name (section 1a.1): its own `osprey.yaml`, every file rendered from it, its `deployment.env` (`600`) and its `backups/`; `~/.ospreyflow/current` names the one last used |
 | `deploy/generated/<profile>/` | The deployment: `compose.yaml`, `deployment.env` (every password and key it made), `Caddyfile`, `glass.json`, `realm.json`, `litellm.yaml`, `versions.lock`, `RUNBOOK.md`, `state/` |
 | `backups/` | Backup sets |
 | `.install/` | The guided page's draft and answers; a release install's verified lock |
@@ -516,8 +662,13 @@ guided install's Models screen shows it as the configuration holds it.
 | `hmp` | Organised crime: a prison's people, phones, calls, visits and places (synthetic) | Generated |
 | `fixture-corp` | Network shapes, and duplicate records matched without being merged (synthetic) | Generated |
 | `operation-ledger` | Preventive AML: a structuring ring, onboarding screened before it commits, ownership through a trust (synthetic) | Generated |
+| `cyber-intrusion` | Cyber threat analysis in STIX 2.1: a fictional threat actor's campaign against a water company — its backdoor, two command-and-control servers, the indicators that find them and the traffic observed; its case is set to STIX (synthetic) | Generated |
 | `paysim` | Mobile-money fraud: 6.36 million simulated transactions with fraud labels | Downloaded by you |
 | `enron` | **Real data**: about 150 people's real email at Enron, 1998–2002 — who wrote to whom, when, and about what | Downloaded by you; accepted before it loads; never by an install |
+
+**Which a starter brings** is section 1a's table: a starter loads its domain's packs, into cases
+set to its domain's packs. A **public dataset** of your own choosing, such as a VAST Challenge
+dataset, is added with `ospreyflow demo add public` (section 1a.2).
 
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
 <id>`. Each loads into its own case, with the installing administrator as Author. **PaySim** is a
@@ -780,6 +931,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `welcome.service_status` | str or none | none | A page saying whether the service is up. |
 | `deployment` | section | — | Which deployment this is, on a machine that runs more than one. |
 | `deployment.name` | str or none | none | Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them. |
+| `deployment.graph_port` | int or none | none | The port on this machine (127.0.0.1 only) the graph store's own tools reach it at. A deployment installed beside another with ospreyflow install --name is given one of its own, so the two share no port. |
 | `appearance` | section | — | How every page looks: the deployment's brand, and what a GOV.UK header names. |
 | `appearance.brand` | `ospreyflow` \| `govuk` | `ospreyflow` | The GOV.UK look, for a service on a gov.uk domain only. |
 | `appearance.service_name` | str or none | none | The service's name in the GOV.UK header and the page title. |

@@ -21809,3 +21809,138 @@ exists. The owner's two existing deployments (everyday in the checkout, GOV.UK i
 working, and can be moved under `~/.ospreyflow/deployments/` later, which the guide describes and
 which needs the owner's go-ahead. A cyber demo pack is new synthetic data work, and is built with
 fixtures before it is offered.
+
+### ADR-138, Amendment 1 (2 November 2026) — what step 9c built, and how it read the decision
+
+Built on branch `starter-packs` (build-order step 9c). Where the ADR was silent, the reading taken is
+the conservative one, recorded here for the owner, who may overturn any of it.
+
+**Starters (decision 1).**
+1. *A starter is an answer.* `ospreyflow install --starter <theme>-<domain>`, and `starter:` in the
+   answers file, which is how the guided page passes it (its Mode screen writes it). The answers file
+   gains `appearance` (`brand`, `service_name`, `organisation`, `phase`) and `demo_accounts`; the
+   command gains `--service-name`, `--organisation` and `--phase`. A starter pre-fills the brand, the
+   demo packs and `demo_accounts`; any of them given outright wins. `ospreyflow starters` (and
+   `install --list-starters`) list them. The rendered `osprey.yaml` begins with two comment lines
+   naming the starter, its theme and domain and its demo packs; nothing reads them but
+   `ospreyflow deployments`.
+2. *The GOV.UK theme.* The service name is required: offered at the prompt and on the guided page,
+   and refused in words with `--yes` or an answers file that gives none — before anything is
+   changed. The organisation is asked and optional (the schema allows none); the phase offered first
+   is `beta`, since a service just installed is not live.
+3. *The name offered names the service, not a case* (step 9d finding 3): crime "Analyse crime
+   intelligence", AML "Investigate money laundering", fraud "Investigate fraud", cyber "Investigate
+   cyber incidents"; blank offers none. This settles finding 3 for an install from a starter only:
+   the two existing deployments keep the `service_name` their `osprey.yaml` sets until it is
+   changed there and applied (`ospreyflow apply`).
+4. *The domain sets the demo cases' domains.* Each pack a starter loads is seeded with the
+   starter's case domains (`--case-domains`, through `scripts.seed_internal` to every seed's
+   `scripts/case_seed.py`), set only while nobody has chosen (ADR-126 decision 2 is unchanged). So
+   the crime starter's HMP case is NIEM, not the seed's own FIBO and NIEM, and the fraud starter's
+   Fixture Corp case is FIBO, not the POLE core. A pack added later with `ospreyflow demo add` takes
+   its seed's own.
+5. *The table's notes.* AML: Operation Ledger brings its synthetic screening lists; its typology
+   templates are deployed in the case as its walkthrough says, not by the install (the "Screen
+   customers against the lists" template is step 9d finding 4). Fraud: PaySim is named at the end of
+   the install, with its download page and command, and never fetched. Cyber: on a checkout without
+   `cyber-intrusion` the starter loads nothing and says so. Blank: no demo pack, no `--demo-analyst`,
+   no sign-in registration of demo accounts, and the install says so.
+
+**Several deployments side by side (decision 2).**
+6. *Where it is.* `~/.ospreyflow/deployments/<name>/` (mode 700) holds the deployment's
+   `osprey.yaml` and everything `harness.apply` renders from it (`--config <folder>/osprey.yaml
+   --out-root ~/.ospreyflow/deployments`), `deployment.env` 600 as everywhere. Its `osprey.yaml`
+   starts from the checkout's less `deployment` and `appearance` (which name the checkout's own
+   deployment and look), with the answers over it, then `deployment.name: <name>`, its address and
+   its graph-store port.
+7. *Building from the checkout.* Compose reads `build.context` from the compose file's folder, and
+   `../../..` from a home-folder deployment is the home folder. `harness.render.build_context_for`
+   names the checkout by its own path for a deployment rendered outside it, and keeps `../../..`
+   for one in `deploy/generated/`, whose files are byte for byte as before; `scripts.refresh` reads
+   the context a deployment already has.
+8. *No port shared.* A new setting, `deployment.graph_port` (Appendix A): the loopback port the
+   graph store's door is published at, 2480 when unset (every existing deployment). A named
+   deployment is given the first free from 2500, and an address port, the first free from 8090;
+   neither is ever 80, 443, 2480, 5432, 8000, 8080 or 8081, one another deployment this command
+   knows has, or one something on the computer is listening on. `--address` is checked the same way.
+9. *Its Compose project.* `deployment.name` is the project and names the volumes. A name that
+   Docker already lists as another folder's project is refused before anything is written: Compose
+   would otherwise recreate that project's containers from the new file — worse than a refusal. The
+   test stand-in refuses a duplicate project and a bound port, as Docker would leave them broken
+   (rule 15). A name already installed is refused (use `apply` or `start`), never reinstalled over.
+10. *Which deployment a verb acts on.* `--name` (every verb; it may follow a demo pack's or a key's
+    own words); else the one last used, recorded in `~/.ospreyflow/current` by `install --name`,
+    `switch` and any verb given `--name`; else the only one; else `default`. `current` is never
+    written on a computer with no named deployment, so the owner's two deployments behave exactly as
+    before. `--name default` is the checkout's. Scripts that find the deployment themselves
+    (`scripts.refresh` for `start --build`, every seed) take `OSPREYFLOW_DEPLOYMENT_DIR`; `backup`,
+    `restore` and `repair-sign-in` are given its `--config` and folder; a named deployment's backups
+    go to its own `backups/`.
+11. *Lite only, and the terminal only.* `--name` with Small or Enterprise is refused (each is a
+    deployment of its own); the guided page installs the checkout's deployment and refuses `--name`.
+12. *The owner's deployments.* Nothing was moved, started, stopped or touched. The worktree
+    deployment (`osprey-govuk`) stays reachable as before, with `OSPREYFLOW_HOME`; `switch --list`
+    still finds it. Moving either under `~/.ospreyflow/deployments/` is described in the guide (§1a.1:
+    a named install, a restore of a backup into it, a check, then the checkout's removed with
+    `--keep-data`) and needs the owner's go-ahead.
+
+**Public datasets (decision 3).**
+13. *The manifest* is `schemas.public_dataset.PublicDatasetManifest` (no TypeScript: the Glass does
+    not read it): id, name, source page, licence text and address, citation, `redistribution` and
+    `commercial_use` (`allowed`, `forbidden`, `not_stated`), `fictional`, `real_personal_data` (a
+    dataset cannot be both), the file (name, SHA-256, size, delimiter, encoding), the recipe (beside
+    the manifest, or the catalogue's) and the case's `domains`.
+14. *The order.* The command asks the checkout (`scripts.public_dataset verify`) to check the
+    manifest, the recipe and the file's size and SHA-256; a refusal stops it before anything else
+    runs. Then any acceptance (below), then `stage` copies the file, manifest and recipe to
+    `<demo data>/public/<id>/`, then `scripts.seed_internal public --public-id <id>` runs
+    `scripts.seed_public` in the deployment's network, which checks the checksum again and loads the
+    rows through `load_with_rules` into the dataset `public-<id>` and a case named "<name> (public
+    dataset)"; the load's events go to DuckDB (Lite's analytics store).
+15. *A catalogue entry has no checksum.* OspreyFlow never downloads VAST data, so nobody has hashed
+    the real files and `file.sha256` is null in the catalogue. `verify` refuses such an entry, in
+    words, until the administrator `pin`s the file they downloaded, which writes a manifest of their
+    own with its checksum (and the recipe beside it). That is trust on first use, and the guide says
+    so: check the file came from the source page before pinning it.
+16. *Real personal data* is placed only with `--accepted` (passed once the person typed `yes`, or
+    gave `--accept-real-data`), with an acceptance record beside it, and the seed refuses a real
+    dataset whose record is missing — Enron's path. As for Enron, the record admits it on a user's
+    computer; on the owner's device the real-data exceptions entry (ADR-035 §C3) is the owner's
+    own control and is not checked by this path.
+17. *The VAST catalogue* (spec 00 §7 has the citations): `vast-2012-mc2`, the 2012 MC2 firewall log
+    (the cyber starter's, case STIX), and `vast-2008-mc3`, the 2008 MC3 call records (crime, NIEM).
+    No terms are stated for either, so nothing permits redistribution: each manifest records
+    `not_stated`, and the guide says to use the data on one's own machine only and not rely on it
+    commercially without permission. The rule that the published VAST files never enter this
+    repository or CI is unchanged. The 2012 header comes from a secondary catalogue (COMIDDS) and the 2008 file's own header is
+    not published, so each recipe says to check the header against the download.
+
+**The cyber-intrusion pack.**
+18. A deterministic STIX 2.1 bundle (UUIDv5 ids, fixed times, RFC 5737 addresses, `.example`
+    domains): a threat actor, a campaign, a backdoor, the victim's identity, two
+    command-and-control servers, five indicators, four observed-data objects and the relationships.
+    In the graph, SDOs are the STIX pack's types and the identity an `Organisation`; an indicator is
+    a `Document` (its pattern its title) that `INDICATES` what it detects; each watched address or
+    domain is an `Endpoint` (`ip`, or `handle` for a domain, which the core's `endpoint_kind` has no
+    value for) that `INDICATES` its server; each observation is a `Document` the two addresses are
+    `MENTIONED_IN`, with a timed `COMMUNICATED_WITH` link between them. The seed writes the graph
+    only; the timeline reads the links' times.
+
+**Not verified here.** No deployment was installed, started or seeded: the named install,
+`switch` and `deployments` were driven against stand-ins for Docker and the render; `seed_public`
+and `seed_cyber_intrusion` were not run against a real ArcadeDB (their writes are checked against
+the deployment ontology by the stand-in graph that validates as the adapter does). The guided
+page's starter was walked by keyboard against the real install page.
+
+**Tests that would fail (rule 12)**, each shown red first in the code's own shape (evidence in the
+step's report): `tests/cli/test_starters.py` (each starter's `osprey.yaml` and packs, the case
+domains, blank, the GOV.UK refusal, the guided page's draft), `tests/cli/test_named_deployments.py`
+(no folder, project, volume or port shared; `--name` on every verb, planted with `logs` reading the
+checkout's; a taken project name; the checkout's deployment unchanged; `switch`, `deployments`),
+`tests/harness/test_named_render.py` (`deployment.env` 600 under the home folder; the build context;
+the graph port), `tests/test_named_deployment_scripts.py`, `tests/cli/test_demo_public.py` and
+`tests/demo_fixtures/test_public_dataset.py` (a checksum that differs refused before anything is
+placed; real data refused without the acceptance; an unpinned entry refused),
+`tests/demo_fixtures/test_public_dataset_recipes.py`, `tests/demo_fixtures/test_cyber_intrusion.py`,
+`tests/harness/test_install_page.py`, the harness unit tests and the keyboard step
+`submit-save-starter`.

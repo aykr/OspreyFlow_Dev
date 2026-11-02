@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.18** · 2026-11-01 · For OspreyFlow v0.4.1 · Issued
+**Version 1.19** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.19 | 2026-11-02 | §4: the demonstration cases each starter brings, and their domains; a public dataset's case. |
 | 1.18 | 2026-11-01 | §7.5: a hotlist can hold an account number, matched on the account however its spaces are written. §7.4: a money-flow rule judges only movements between accounts its author may see. §7.10: the UK Sanctions List (FCDO) among the lists; the closed OFSI list says so. |
 | 1.17 | 2026-11-01 | §7.3: closing an alert takes one of five closing reasons (True match, False positive, Duplicate, No further action, Referred) and words. §7.5 and the left rail: watches, and the alert inbox, are in Monitoring's Watches tab; the rail has no Watches entry. §7.10: UN and OpenSanctions are marked "licence not confirmed", and whoever manages lists sees only their own unit's counts. Ask to search answers on the engine you choose when the case's data may leave (the engine choice). The mark on the top bar is read aloud as "Osprey, go to Home". |
 | 1.16 | 2026-11-01 | §7.11: a rule that runs on a schedule, every day or every week, and its runs. §7.12: a second person's approval — for a rule for the whole deployment, and for closing a high-severity alert; a rule's versions. §7.3 and §7.10 point to them, and a list may be refreshed on a schedule. |
@@ -132,6 +133,24 @@ one dataset; you may see it through any one the case reads, but what it says of 
   "Edited the brief", in **History**. That step cannot be restored, since a brief is not a canvas.
   Attaching and detaching are recorded, but do not appear in History.
 - A branch does not inherit the brief.
+
+**The demonstration cases a deployment starts with.** Your administrator may have installed
+OspreyFlow from a **starter** (a theme and a domain; administration guide §1a). Each starter brings
+the demonstration cases of its domain, all synthetic, each set to its domain's packs (so its reports
+and choices fit it). Every pack stays available to the cases you create.
+
+| Starter | The demonstration cases it brings | The cases' domain |
+| --- | --- | --- |
+| `…-crime` | Prison Intelligence Dataset (synthetic demo); HMP fixture (synthetic demo) | NIEM |
+| `…-aml` | Operation Ledger (synthetic demo), with its synthetic screening lists | FIBO |
+| `…-fraud` | Fixture Corp (synthetic demo); PaySim only if your administrator downloads and adds it | FIBO |
+| `…-cyber` | Cyber intrusion (synthetic demo): a STIX 2.1 threat case | STIX |
+| `…-blank` | None, and no demonstration accounts | — |
+
+The theme (`ospreyflow-…` or `govuk-…`) changes only the look: under the GOV.UK theme, the header
+names the service your administrator chose, the same on every case. A dataset your administrator
+added from outside, such as a VAST Challenge dataset, is a case of its own named after the dataset,
+"(public dataset)".
 
 ## 5. The Glass
 
