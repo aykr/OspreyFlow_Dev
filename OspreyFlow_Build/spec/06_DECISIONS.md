@@ -22408,3 +22408,72 @@ override, and back; every claim is proved on the plan at any load date
 
 Captures `CAP-S7` to `CAP-S10`, both brands, in `apps/workspace/live/pid-capture.spec.ts`; not run. The
 scene grows by about a minute and a half (the script's Appendix C, item 10).
+
+### ADR-034, Amendment 1 (2 November 2026) — the company's name is no longer an authorship identifier
+
+**The owner's ruling of 1 November 2026** (`process/REPO_MOVE_PLAN.md`, Stage 1 ruling 1): "Remove the
+clause that prevents the use of the word Solirius. I want to embrace the theme that 'OspreyFlow is an open
+source intelligence mapping, anti-money-laundering and fraud detection platform, developed by Solirius
+Reply and released under the Apache License 2.0.'"
+
+1. **§B5 is amended.** The employer's name and domain (`solirius`, `solirius.com`) are no longer
+   authorship identifiers. §B5's binding now reads: the product tree, the published guides and the prompt
+   register carry no **personal** name, handle or personal email address. The company may be named as the
+   product's developer.
+2. **The personal identifiers stay refused**, and the set is corrected
+   (`tools/packaging_gate.py` `AUTHORSHIP_PATTERN`, used by the bundle gate and by
+   `tools/publish_user_repo.py`):
+   - the owner's name, spaced, dotted, hyphenated or run together. §B5's pattern, `ayan\.?kar`, missed
+     "Ayan Kar" with a space; the amendment's own red run found it;
+   - the address most commits of the developer repository carry (`ayan.d.kar`, from
+     `git log --format='%ae'`), which §B5's history check predates;
+   - the handle `ayankarsolirius`.
+
+   The pattern is `ayan[\s._-]?(?:d[._-])?kar|ayankarsolirius`, case-insensitive. A personal address at
+   the company's domain is still refused, by its name part.
+3. **The statement.** It goes where the product describes itself: the opening of Core's `README.md`, the
+   guided install page (above every screen), the marketing site's home page, and About on the welcome page
+   (`apps/workspace/src/welcome/statement.ts`). Under the GOV.UK brand it is in About's identity block,
+   never in the GOV.UK chrome. `NOTICE` keeps "Copyright 2026 The OspreyFlow Authors" (§B6), and the GOV.UK
+   footer keeps "Built with OspreyFlow, open source." (the owner, 1 November 2026).
+4. **ADR-114 Amendment 28's first reason** for the separate `gh-pages` branch (the site names the company)
+   no longer applies. The branch stays as the way the site is published.
+
+**Tests**, each shown red first (evidence `s13_*`): each personal identifier planted in a real commit of a
+throwaway repository and refused (`tests/test_publish_user_repo.py`
+`test_a_personal_authorship_identifier_is_refused`, red under a pattern that matches only the handle and
+under one that matches nothing; "Ayan Kar" and `ayan.d.kar` red under §B5's own pattern); the statement,
+and Core's real `README.md`, published (`test_the_company_named_in_the_statement_is_published`,
+`test_the_real_readme_is_published_with_the_statement`, red under §B5's pattern); About under both brands
+and the GOV.UK chrome without it (`SignInScreen.test.tsx`); the install page above every screen
+(`InstallApp.test.tsx`); the site's home page (`tests/test_website_wording.py`).
+
+### ADR-114, Amendment 30 (2 November 2026) — the product repository moves to Solirius/ospreyflow
+
+**The owner's request and rulings of 1 November 2026** (`process/REPO_MOVE_PLAN.md`), with the go-ahead
+for Stages 2 to 4 on 2 November. This replaces Amendment 21's and Amendment 27's `aykr/OspreyFlow` as the
+user repository; those amendments stay as written, as history.
+
+1. **The product repository is `https://github.com/Solirius/ospreyflow`**, public. `make
+   publish-user-repo`'s output is pushed there. The developer repository is unchanged.
+2. **Images and chart** are published by the product's `release.yml` under `ghcr.io/solirius/` (the
+   workflow names the registry from the repository's owner, so nothing in it changes).
+3. **The site** is the product repository's `gh-pages` branch, served at
+   `https://solirius.github.io/ospreyflow/`, with no custom domain. `marketing_site/publish_pages.sh`
+   stops unless the product checkout's `origin` is `Solirius/ospreyflow`.
+4. **The first release there is v0.4.2.** The old releases (v0.1.0 to v0.4.1) are not copied. Every
+   existing user is asked to wipe their install and clone again from the new repository; no in-place move
+   of an old install is planned.
+5. **Signatures.** An install accepts only a release signed by its own origin's `release.yml`
+   (Amendment 8), so a checkout cloned from `Solirius/ospreyflow` accepts only that repository's workflow.
+   `harness/render.py` `RELEASES_URL`, the address the product names as its home, is
+   `https://github.com/Solirius/ospreyflow/releases`.
+6. **Stage 5:** `aykr/OspreyFlow` and its `ghcr.io/aykr/` images and chart are deleted, on the owner's
+   go-ahead on the day, after a mirror and the release assets are kept outside git.
+
+**Tests**, each shown red first (evidence `s13_*`): `tests/harness/test_signatures.py`
+`test_a_release_signed_by_the_old_homes_workflow_is_refused` (a checkout cloned from `RELEASES_URL`'s
+repository, through `harness.update.real_host`'s own identity, against a cosign stand-in that verifies
+only the identity its certificate names and refuses any other in cosign's words; red while
+`RELEASES_URL` named `aykr/OspreyFlow`); `tests/test_website_wording.py`
+`test_every_repository_address_on_the_site_is_the_products_new_home`.
