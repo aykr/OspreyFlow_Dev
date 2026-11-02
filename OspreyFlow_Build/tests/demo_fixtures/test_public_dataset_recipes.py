@@ -10,7 +10,7 @@ admitted into this repository).
 - addresses or phones loaded as the wrong kind, or calls without their time —
   `test_the_firewall_log_loads_each_connection_between_two_ip_endpoints`,
   `test_the_call_records_load_each_call_with_its_time_and_duration`;
-- a `yyyymmdd` date read day first (1 June read as 6 January) —
+- a `yyyymmdd hhmm` call time read wrongly (as 6 January, or shifted to a local zone) —
   `test_the_call_records_load_each_call_with_its_time_and_duration`.
 """
 
