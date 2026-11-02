@@ -21967,3 +21967,151 @@ placed; real data refused without the acceptance; an unpinned entry refused),
 `tests/demo_fixtures/test_public_dataset_recipes.py`, `tests/demo_fixtures/test_cyber_intrusion.py`,
 `tests/harness/test_install_page.py`, the harness unit tests and the keyboard step
 `submit-save-starter`.
+
+## ADR-139 — Connection strength: link-strength influencers, direct links and rarity, as graph filters and monitoring conditions — ACCEPTED (design)
+
+Status: accepted from the owner's instructions of 2 November 2026, after a client described its own
+"connection strength" calculation. The owner recorded the client's answers, and the owner's own
+rulings, interactively the same day. Built in build-order step 9f. It is to be explained in the user
+guide, the developer guide and the decks, and demonstrated in the Prison Intelligence demo with
+captures.
+
+**Context: the client's method.** For each dataset, the client applies three steps:
+1. **A rarity score, inverse-frequency (IDF-like).** A link resting on a value few others share
+   scores higher. Their measure is the log of N divided by how many share the value, summed over the
+   shared values.
+2. **A flat source boost** for links from assaults, disorders and finds.
+3. **A flat direct boost** for direct connections: phone calls and contacts, money transfers, visits
+   and cell shares.
+
+Further answers:
+- The boosts are **added and stack**. Their size relative to rarity is **not yet known**.
+- Strength is used for display, filtering, prioritisation, and alerts and referrals.
+- All of the client's analysts see the whole of each dataset.
+
+**Context: OspreyFlow today** (spec 01 §6.1). A link's stored weight comes from that link alone: its
+own count against its type's heavy count, and its recency, through a logistic. Structural types have
+fixed weights, and the parameters are a versioned, append-only weights file. ADR-123 removed the
+corpus-wide rarity term, because a score built from counts across the corpus moves with links the
+viewer cannot see (rules 3 and 7).
+
+**Decision.**
+1. **Link-strength influencers, a configurable feature.** An influencer has five parts:
+   - **What triggers it:** an evidencing record's kind and value. For example, an `Incident` whose
+     `incident_type` is `assault`, `disorder` or `find`, or any event or entity type and property the
+     ontology defines.
+   - **Which link types it influences:** for example `ROLE_IN`, or a person-to-person link that the
+     record evidences.
+   - **The kind of change:**
+     - **add** a boost before the logistic (the default, as the client does);
+     - **multiply** the pre-logistic score;
+     - **set a floor** (the link is at least this strong);
+     - **exclude** (the link is drawn no stronger than the base).
+   - **Its size.**
+   - **A label for the legend.**
+
+   **Direct links are an influencer too.** "These link types are direct connections" is a rule with no
+   trigger, applied to the named link types. It ships as calls (`COMMUNICATED_WITH`), money
+   (`TRANSACTED`), visits (`VISITED`) and cell shares (`SHARED_CELL_WITH`), and like every influencer
+   it can be changed.
+
+   **Starting sizes** are calibrated as `midpoint` and `scale` were: a boost moves an ordinary link
+   about as far as doubling its count would. They are marked "to be confirmed with the client".
+2. **Influencers apply at read time, under the viewer's access.**
+   - The stored weight stays as weights version 3 computes it. An influencer's effect is applied when
+     a link is read, inside the adapter's access predicate (rule 3).
+   - **It applies only if the viewer may see the evidencing record.** Otherwise an assault record
+     hidden from an analyst would still thicken a line they can see, and reveal that the record exists.
+   - **Consequences:** a change takes effect at once, with no recompute. Every viewer who sees the
+     same evidence sees the same strength.
+3. **Who sets influencers.**
+   - **Installation-wide influencers** are proposed by an analyst holding a new right,
+     `manage_strength_influencers`, and take effect only when a second person with that right
+     approves. This is maker–checker, as for whole-deployment rules (ADR-133 stage (d)); the proposer
+     cannot approve their own.
+   - **Developers** can also ship influencers in the weights file.
+   - **Every version is kept**, with who proposed and who approved it, and is audited.
+   - **A case's Author** may add influencers for that case, or switch off installation-wide ones
+     there. A case override needs no second person, because it changes only that case; it is shown in
+     the legend and audited.
+   - **Resolution order:** a case override, then the installation set, then the weights file's
+     defaults.
+4. **Rarity is computed at query time, over what the viewer may see.**
+   - **The measure:** for two entities, `Σ over shared attribute nodes a of ln(N_visible / df_visible(a))`,
+     where:
+     - `N_visible` is the number of entities of the pair's kind the viewer may see in scope;
+     - `df_visible(a)` is how many of them the viewer may see linked to `a`.
+
+     This is the client's IDF score, computed per dataset by default (as the client does), or across
+     the case's datasets the viewer may read.
+   - **Where it is computed:** in the graph adapter, under the access predicate. It is never stored
+     and never computed over the corpus.
+   - **What the Glass gets:** the score and the shared attributes the viewer may see, never a count
+     from beyond the filter (rule 7).
+   - **For this client,** whose analysts all see each whole dataset, the numbers equal theirs. Where
+     access varies, two analysts may see different rarity for the same pair, and the user guide says
+     so.
+   - **A count-based rarity** (the client's "a higher number of incidents") is the same measure over a
+     link's occurrence count against the visible distribution for its type.
+5. **The connection strength used everywhere** is the stored weight with the influencers that apply
+   to it. Rarity is its own measure beside it, not folded into the weight, so each can be filtered and
+   explained on its own.
+6. **Graph filters, as the social-network metrics are** (ADR-088's Metrics panel; closeness, clique
+   and others):
+   - "Connection strength" and "Shared-attribute rarity" join the metrics an analyst can choose,
+     threshold and dim by, in the same way.
+   - The Matrix view can sort by both.
+   - Each is keyboard reachable (rule 13) and has its access-control test (rule 4).
+7. **The legend box** shows:
+   - the active influencers, installation and case, each with its trigger, the link types it changes,
+     the kind of change and its size;
+   - which link types count as direct;
+   - that rarity is computed over what you may see;
+   - any case override, marked as such.
+8. **A monitoring rule condition** (ADR-133):
+   - Sentence rules gain "when the connection strength between …" and "when the shared-attribute
+     rarity between …" "… reaches X". These are previewable like the others and judged as the rule's
+     author.
+   - A rule's preview and its alerts use the strength the author may see, so a rule never fires on
+     evidence its author could not read.
+9. **Explaining a strength.** The Inspector shows, for a selected link:
+   - its strength in words: its count against what is heavy for its type, its recency, and the rule
+     and version applied;
+   - each influencer that changed it, naming the evidencing record kind;
+   - for a pair, their shared attributes ranked by rarity.
+
+   It never shows a corpus-wide count.
+10. **Documentation and demonstration:**
+    - **User guide:** a section "How connection strength is worked out" (the three ideas, influencers,
+      the legend, the filters, why rarity can differ between analysts).
+    - **Developer guide:** the formula, the influencer schema and its resolution order, read-time
+      application under access, the rarity query, and how to ship influencers in the weights file.
+    - **Spec 01 §6.1** is updated.
+    - **Decks:** a slide in the Product Overview and the prison decks (step 10).
+    - **The Prison Intelligence demo** shows influencers in the legend, an assault-evidenced link
+      drawn stronger, a direct call against a shared address, a rare shared contact ranking above a
+      common one, the two new filters dimming the canvas, and a monitoring rule on strength. Each is
+      captured in both brands.
+
+**Tests that would fail if this were violated (rule 12):**
+- **Monotonicity:** adding occurrences never lowers strength, over a grid with each influencer kind on
+  and off.
+- **Triggers:** an influencer applies only when an evidencing record has the named value; a direct
+  influencer applies only to its named link types.
+- **Hidden evidence:** an evidencing record the viewer may not see changes nothing (planted: applying
+  it regardless).
+- **Rarity:** the score with a hidden entity sharing the attribute equals the score in a world without
+  it.
+- **The Glass's payload** carries no count from beyond the filter.
+- **Maker–checker:** an installation-wide influencer has no effect until a second person approves, and
+  its proposer cannot approve it.
+- **Case overrides:** they apply only in their case, and the resolution order holds.
+- **The legend** lists exactly the active influencers.
+- **Monitoring:** the rule condition raises an alert on the author's visible strength and not on hidden
+  evidence.
+- **Keyboard:** steps for the new filters, the legend and the influencer editor.
+
+**Consequences.**
+- Weights version 3 stays the stored basis, and no recompute is needed.
+- The client's exact sizes can be entered as an installation-wide influencer version once known, with
+  no code change.
