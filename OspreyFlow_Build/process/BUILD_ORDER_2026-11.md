@@ -102,7 +102,8 @@ resumed session starts here.
 | 10, lists | Build a UK Sanctions List (FCDO) connector in step 8; mark UN and OpenSanctions "licence not confirmed" (Lists tab and admin guide), synthetic only |
 | 11, admin screening counts | Limit them to the admin's own unit (rule 7) |
 | Step 7, Data Engineers' L3 | Keep L3 for the seven typology rules |
-| GOV.UK rehearsal residue | Reinstall that deployment before step 11, listing what is removed first |
+| GOV.UK rehearsal residue | Reinstall that deployment before step 11, listing what is removed first. **2 November (step 9 part 2):** reinstall it now on current `main`, seeding the prison case and the Ledger pack, for the GOV.UK captures (the owner, after the list of what goes) |
+| Everyday deployment for the v4 captures | **2 November:** `ospreyflow start --build` on current `main`, then reseed only the prison case and the Ledger pack; the Enron case and the others untouched |
 
 ## Open questions found during the run
 
