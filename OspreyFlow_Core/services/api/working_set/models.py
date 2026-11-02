@@ -55,7 +55,9 @@ class LimitExceeded(BaseModel):
     capped at the boundary; there is only this, or success."""
 
     error: Literal["limit_exceeded"] = "limit_exceeded"
-    cap_kind: Literal["nodes", "edges"]
+    #: "pairs": a shared-attribute rarity read (ADR-139) with more entity pairs to score than its
+    #: cap; scored in part, it would rank pairs against a partial picture.
+    cap_kind: Literal["nodes", "edges", "pairs"]
     cap: int
     would_be: int
     options: tuple[LimitOption, LimitOption, LimitOption] = _ALL_LIMIT_OPTIONS

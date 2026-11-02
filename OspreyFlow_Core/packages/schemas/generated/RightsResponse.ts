@@ -25,6 +25,7 @@ export type Right =
   | "trace_ownership"
   | "keep_watches"
   | "load_screening_lists"
+  | "manage_strength_influencers"
   | "edit_pipelines"
   | "verify_pipelines"
   | "publish_pipelines"

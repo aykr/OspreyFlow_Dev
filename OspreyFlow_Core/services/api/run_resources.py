@@ -63,6 +63,7 @@ from .recipe_run import RecipeRunDeps
 from .recipe_runs import RecipeRunStore
 from .review import ExtractionCandidateStore
 from .screening import ScreeningListStore
+from .strength_influencers import InfluencerStore
 from .studio_publish import _REPO_ROOT as RECIPES_REPO_ROOT
 from .typology_rules import TypologyRuleStore
 
@@ -102,6 +103,8 @@ class RunResources:
     compute: ComputePort
     jobs: JobQueue
     principal_resolver: PrincipalResolver
+    #: ADR-139: installation-wide and case link-strength influencers.
+    influencers: InfluencerStore
     recipe_repo_root: Path = RECIPES_REPO_ROOT
 
     def run_deps(self) -> RecipeRunDeps:
@@ -131,6 +134,7 @@ class RunResources:
             compute=self.compute,
             kyc_expiries=self.kyc_expiries,
             recipe_runs=self.recipe_runs,
+            influencers=self.influencers,
         )
 
     async def close(self) -> None:
@@ -143,6 +147,7 @@ class RunResources:
         await self.monitors_store.close()
         await self.alerts_store.close()
         await self.typology_rules.close()
+        await self.influencers.close()
         await self.held_rows.close()
         await self.screening_lists.close()
         await self.kyc_expiries.close()
@@ -175,6 +180,8 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     alerts_store = await AlertStore.connect(config.postgres.dsn)
     # ADR-109: each case's typology rules, and the rows a failing pre-commit rule holds.
     typology_rules = await TypologyRuleStore.connect(config.postgres.dsn)
+    # ADR-139: link-strength influencers, installation-wide (maker–checker) and per case.
+    influencers = await InfluencerStore.connect(config.postgres.dsn)
     held_rows = await HeldRowStore.connect(config.postgres.dsn, handling_scheme)
     screening_lists = await ScreeningListStore.connect(config.postgres.dsn)
     kyc_expiries = await KycExpiryStore.connect(config.postgres.dsn)
@@ -228,6 +235,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         monitors_store=monitors_store,
         alerts_store=alerts_store,
         typology_rules=typology_rules,
+        influencers=influencers,
         held_rows=held_rows,
         screening_lists=screening_lists,
         kyc_expiries=kyc_expiries,

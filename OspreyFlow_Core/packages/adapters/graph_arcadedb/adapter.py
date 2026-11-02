@@ -1404,17 +1404,17 @@ class GraphArcadeDBAdapter:
 
         # Each entity's best pair: among the population, or with anyone of its kind.
         best: dict[str, tuple[float, str]] = {}
-        for u in population.values():
+        for member in population.values():
             if among:
                 others = {
-                    o for a in u.attributes if a in attributes for o in attributes[a].neighbours
-                    if o in population and o != u.id
+                    o for a in member.attributes if a in attributes
+                    for o in attributes[a].neighbours if o in population and o != member.id
                 }  # fmt: skip
             else:
                 others = {
-                    o for a in u.attributes if a in attributes
+                    o for a in member.attributes if a in attributes
                     for o, (label, _) in attributes[a].neighbours.items()
-                    if label == u.label and o != u.id
+                    if label == member.label and o != member.id
                 }  # fmt: skip
                 missing = sorted(o for o in others if o not in members)
                 if missing:
@@ -1431,9 +1431,10 @@ class GraphArcadeDBAdapter:
                             attributes=frozenset(str(x) for x in row.get("nb") or []),
                         )
             for other in sorted(others):
-                value, _, _ = score(u.id, other)
-                if value is not None and value > 0 and (u.id not in best or value > best[u.id][0]):
-                    best[u.id] = (value, other)
+                value, _, _ = score(member.id, other)
+                held = best.get(member.id)
+                if value is not None and value > 0 and (held is None or value > held[0]):
+                    best[member.id] = (value, other)
         node_values = {u: value for u, (value, _) in best.items()}
         explained = list(pairs)
         if not among:

@@ -52,6 +52,7 @@ from .recipe_runs import RecipeRunStore, RunTrigger
 from .review import ExtractionCandidateStore
 from .rule_evaluation import RuleGate
 from .screening import ScreeningListStore
+from .strength_influencers import InfluencerStore
 from .studio_map import resolve_source_handling
 from .studio_publish import LoadSink, run_published_recipe
 from .typology_rules import TypologyRuleStore
@@ -85,20 +86,25 @@ class RecipeRunDeps:
     compute: ComputePort
     kyc_expiries: KycExpiryStore
     recipe_runs: RecipeRunStore
+    #: ADR-139: the installation's and each case's link-strength influencers, which a sentence's
+    #: strength condition judges by. None: the weights file's defaults alone.
+    influencers: InfluencerStore | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
         """The scheduler's way in: the application's state, read where the route's getters read
         it, so the two paths cannot be handed different stores."""
-        return cls(
-            **{
-                f.name: getattr(state, _RUN_DEP_STATE_NAMES.get(f.name, f.name))
-                for f in dataclass_fields(cls)
-            }
-        )
+        values: dict[str, Any] = {}
+        for f in dataclass_fields(cls):
+            name = _RUN_DEP_STATE_NAMES.get(f.name, f.name)
+            # An optional dependency (default None) the state does not hold is left None.
+            optional = f.default is None
+            values[f.name] = getattr(state, name, None) if optional else getattr(state, name)
+        return cls(**values)
 
 
 _RUN_DEP_STATE_NAMES = {
+    "influencers": "strength_influencers",
     "recipe_repo_root": "recipes_repo_root",
     "recogniser_for": "pipeline_recogniser_for",
 }
@@ -194,6 +200,7 @@ async def _execute_recipe_run(
         hotlists=deps.hotlists_store,
         ontology=deps.ontology,
         recipe_id=recipe.recipe_id,
+        influencers=deps.influencers,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -318,6 +325,7 @@ async def _rule_gate(
     ontology: OntologySchema | None = None,
     fail_closed: bool = True,
     recipe_id: str | None = None,
+    influencers: InfluencerStore | None = None,
 ) -> RuleGate | None:
     """The case's active typology rules for one load (ADR-109), or `None` when it has none.
     What the KYC and pattern typologies read is required, never defaulted: a route that left it
@@ -356,6 +364,7 @@ async def _rule_gate(
         hotlists=hotlists,
         ontology=ontology,
         on_hit=on_hit,
+        influencers=influencers,
     )
 
 

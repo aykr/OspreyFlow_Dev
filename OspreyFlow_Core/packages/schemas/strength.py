@@ -200,6 +200,24 @@ class CaseInfluencersInput(BaseModel):
         return _unique_ids(value)
 
 
+class CaseInfluencers(BaseModel):
+    """`GET /v1/investigations/{id}/strength-influencers`: the legend for the case, and its own
+    override as its Author last set it (None: it has none)."""
+
+    legend: StrengthLegend
+    override: CaseInfluencersInput | None = None
+    #: Whether the reader is the case's Author, so the Glass offers the override's editor.
+    can_override: bool = False
+
+
+class InfluencerRefusal(BaseModel):
+    """An influencer refused against the deployment's ontology, in words (never a bare 422)."""
+
+    error: Literal["influencer_refused"] = "influencer_refused"
+    influencer: str
+    reason: str
+
+
 class ActiveInfluencer(BaseModel):
     """One influencer in force for a case, and where it came from (`layer`); `version` is the
     installation set's or the case override's version, None for the file's."""
@@ -319,6 +337,8 @@ ALL_MODELS = (
     InfluencerSetHistory,
     InfluencerDecision,
     CaseInfluencersInput,
+    CaseInfluencers,
+    InfluencerRefusal,
     ActiveInfluencer,
     StrengthLegend,
     AppliedInfluencer,
@@ -330,3 +350,5 @@ ALL_MODELS = (
     RarityRequest,
     RarityResult,
 )
+
+CaseInfluencers.model_rebuild()

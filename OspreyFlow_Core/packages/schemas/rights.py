@@ -49,6 +49,9 @@ class Right(StrEnum):
     TRACE_OWNERSHIP = "trace_ownership"  # L7, Viewer: ownership, due diligence, neighbourhood risk
     KEEP_WATCHES = "keep_watches"  # L8, Editor: watchlists and saved-pattern monitors
     LOAD_SCREENING_LISTS = "load_screening_lists"  # L9, licensed lists only
+    # ADR-139 decision 3: propose and approve (a second person) installation-wide link-strength
+    # influencers.
+    MANAGE_STRENGTH_INFLUENCERS = "manage_strength_influencers"  # I10
     # Ingest
     EDIT_PIPELINES = "edit_pipelines"  # D1, Editor
     VERIFY_PIPELINES = "verify_pipelines"  # D2, Editor
@@ -78,7 +81,7 @@ ANALYST = frozenset({
     R.INVESTIGATE, R.EDIT_GRAPH, R.CONFIRM_INFERRED, R.EXTRACT_FILES, R.RESOLVE_ENTITIES,
     R.RECORD_ASSESSMENT, R.ASK_MODEL, R.RUN_ANALYSIS, R.PROPOSE_LINK_TYPE,
     R.READ_ALERT_QUEUE, R.TRIAGE_ALERTS, R.DEPLOY_RULES, R.READ_RULE_AUDIT, R.READ_HELD_ROWS,
-    R.DECIDE_HELD_ROWS, R.TRACE_OWNERSHIP, R.KEEP_WATCHES,
+    R.DECIDE_HELD_ROWS, R.TRACE_OWNERSHIP, R.KEEP_WATCHES, R.MANAGE_STRENGTH_INFLUENCERS,
     R.ADD_INGEST_FILES, R.READ_REPORTS, R.READ_DATA_FEEDS,
 })  # fmt: skip
 DATA_ENGINEER = frozenset({
@@ -93,6 +96,7 @@ ADMIN = frozenset({
     R.SHARE_CASE, R.REMOVE_CASE, R.READ_RULE_AUDIT, R.LOAD_SCREENING_LISTS, R.SCHEDULE_PIPELINES,
     R.REVERT_LOADS, R.ADMINISTER_SYSTEM, R.MANAGE_PEOPLE, R.MANAGE_DASHBOARDS, R.OPERATE_SCHEDULES,
     R.MANAGE_ONTOLOGY, R.MANAGE_GEOSPATIAL, R.READ_AUDIT, R.READ_EXPORT_LEDGER,
+    R.MANAGE_STRENGTH_INFLUENCERS,
 })  # fmt: skip
 REPORTS_VIEWER = frozenset(
     {R.READ_ALERT_QUEUE, R.READ_REPORTS, R.READ_REPORT_FEED, R.READ_DATA_FEEDS}

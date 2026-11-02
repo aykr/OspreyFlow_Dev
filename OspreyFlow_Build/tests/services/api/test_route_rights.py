@@ -248,6 +248,16 @@ ROUTE_RIGHTS = {
     "read_rule_sentence": "investigate",
     "preview_rule_sentence": "investigate",
     "deploy_rule_sentence": "deploy_rules",
+    # ADR-139: installation-wide influencers by maker–checker; the case's reads and its Author's
+    # override are investigation (the case level applying).
+    "list_strength_influencers_route": "manage_strength_influencers",
+    "propose_strength_influencers_route": "manage_strength_influencers",
+    "approve_strength_influencers_route": "manage_strength_influencers",
+    "send_back_strength_influencers_route": "manage_strength_influencers",
+    "case_strength_influencers_route": "investigate",
+    "set_case_strength_influencers_route": "investigate",
+    "connection_strength_route": "investigate",
+    "rarity_route": "investigate",
     "list_screening_lists": "read_alert_queue",
     "manage_screening_lists": "load_screening_lists",
     "subscribe_screening_list": "load_screening_lists",

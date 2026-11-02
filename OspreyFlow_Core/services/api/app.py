@@ -101,6 +101,7 @@ from geo.wkb import polygon_wkb
 from knowledge_adapters import ARITY, REGISTRY
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, principal_may_view
+from ontology.influencers import StrengthDefaults, load_strength_defaults
 from ontology.packs import pack_catalogue
 from ontology.pattern_where import PatternConditionRefused, check_pattern_conditions
 from ontology.yardstick import Yardstick, load_phia_yardstick
@@ -279,6 +280,18 @@ from schemas.sentences import (
     SentenceRuleInput,
     SentenceRuleParams,
 )
+from schemas.strength import (
+    CaseInfluencers,
+    CaseInfluencersInput,
+    ConnectionStrengthRequest,
+    ConnectionStrengths,
+    InfluencerDecision,
+    InfluencerSetHistory,
+    InfluencerSetInput,
+    InfluencerSetVersion,
+    RarityRequest,
+    RarityResult,
+)
 from schemas.trends import (
     TrendDefinition,
     TrendDefinitionInput,
@@ -350,6 +363,7 @@ from .compute_routes import (
     run_compute_metric_job,
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
+from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .dataset_scope import (
     UnknownDatasetError,
     made_in,
@@ -636,6 +650,13 @@ from .site_images import (
     write_site_image,
 )
 from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
+from .strength_influencers import (
+    InfluencerChangeRefused,
+    InfluencerRefused,
+    InfluencerStore,
+    OwnInfluencerChangeRefused,
+    check_influencers,
+)
 from .studio_map import (
     HandlingLoosenedError,
     RowIndexOutOfRangeError,
@@ -862,6 +883,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # at every start, so alert trends recover from any write the analytics store missed.
     await alerts_store.publish_all_facts()
     app.state.typology_rules = typology_rules
+    # ADR-139: link-strength influencers (installation-wide by maker–checker, per case by its
+    # Author) and the weights file's shipped defaults.
+    app.state.strength_influencers = resources.influencers
+    app.state.strength_defaults = load_strength_defaults()
     app.state.held_rows = held_rows
     app.state.screening_lists = screening_lists
     app.state.kyc_expiries = kyc_expiries
@@ -1211,6 +1236,14 @@ def get_typology_rules(request: Request) -> TypologyRuleStore:
     return request.app.state.typology_rules  # type: ignore[no-any-return]
 
 
+def get_strength_influencers(request: Request) -> InfluencerStore:
+    return request.app.state.strength_influencers  # type: ignore[no-any-return]
+
+
+def get_strength_defaults(request: Request) -> StrengthDefaults:
+    return request.app.state.strength_defaults  # type: ignore[no-any-return]
+
+
 def get_held_rows(request: Request) -> HeldRowStore:
     return request.app.state.held_rows  # type: ignore[no-any-return]
 
@@ -1343,6 +1376,8 @@ MonitoringSettingsDep = Annotated[MonitoringSettings, Depends(get_monitoring_set
 MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
+StrengthInfluencersDep = Annotated[InfluencerStore, Depends(get_strength_influencers)]
+StrengthDefaultsDep = Annotated[StrengthDefaults, Depends(get_strength_defaults)]
 HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
 ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
 KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
@@ -1776,6 +1811,36 @@ async def _typology_rule_not_found_handler(
     request: Request, exc: TypologyRuleNotFoundError
 ) -> JSONResponse:
     return JSONResponse(status_code=404, content={"error": "rule_not_found"})
+
+
+@app.exception_handler(InfluencerChangeRefused)
+async def _influencer_change_refused_handler(
+    request: Request, exc: InfluencerChangeRefused
+) -> JSONResponse:
+    """ADR-139 decision 3: a proposal, approval or sending back that cannot be made, in words."""
+    said = str(exc)
+    return JSONResponse(
+        status_code=409,
+        content={"error": "influencer_change_refused", "message": f"{said[0].upper()}{said[1:]}."},
+    )
+
+
+@app.exception_handler(OwnInfluencerChangeRefused)
+async def _own_influencer_change_handler(
+    request: Request, exc: OwnInfluencerChangeRefused
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=403, content={"detail": {"error": "own_change", "message": str(exc)}}
+    )
+
+
+@app.exception_handler(InfluencerRefused)
+async def _influencer_refused_handler(request: Request, exc: InfluencerRefused) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"error": "influencer_refused", "influencer": exc.influencer,
+                 "reason": exc.reason},
+    )  # fmt: skip
 
 
 @app.exception_handler(RuleChangeRefused)
@@ -7787,6 +7852,7 @@ async def verify_studio_recipe(
     hotlists_store: HotlistsStoreDep,
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
+    influencers_store: StrengthInfluencersDep,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -7808,7 +7874,7 @@ async def verify_studio_recipe(
         typology_rules=typology_rules, principal_resolver=principal_resolver,
         screening=screening_lists, compute=compute, patterns=patterns_store,
         hotlists=hotlists_store, ontology=ontology, recipe_id=recipe.recipe_id,
-        **READ_ONLY,  # type: ignore[arg-type]
+        influencers=influencers_store, **READ_ONLY,  # type: ignore[arg-type]
     )  # fmt: skip
 
     async def judge_checks(
@@ -8359,6 +8425,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
             audit=state.audit, valkey=state.valkey, principal_for_owner=as_author, loader=author,
             screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
             hotlists=state.hotlists_store, ontology=state.ontology,
+            influencers=state.strength_influencers,
         )  # fmt: skip
         return await run_scheduled_rule(rule, author, gate, now=slot)
 
@@ -9033,6 +9100,227 @@ async def _alert_triage_conflict_handler(
     return JSONResponse(status_code=409, content={"error": "alert_moved_on"})
 
 
+# --- connection strength (ADR-139) -----------------------------------------------------------
+
+
+async def _with_names(
+    versions: list[InfluencerSetVersion], names: PrincipalNameDirectory
+) -> list[InfluencerSetVersion]:
+    """ADR-106: who proposed and who decided each version, by name, resolved for the versions
+    served here and never stored."""
+    ids = sorted({i for v in versions for i in (v.proposed_by, v.decided_by) if i})
+    if not ids:
+        return versions
+    named = await names.display_names(ids)
+    return [
+        v.model_copy(
+            update={
+                "proposed_by_name": named.get(v.proposed_by),
+                "decided_by_name": named.get(v.decided_by) if v.decided_by else None,
+            }
+        )
+        for v in versions
+    ]
+
+
+@app.get(
+    "/v1/strength-influencers",
+    dependencies=[Depends(require_right(Right.MANAGE_STRENGTH_INFLUENCERS))],
+)
+async def list_strength_influencers_route(
+    store: StrengthInfluencersDep,
+    defaults: StrengthDefaultsDep,
+    principal_names: PrincipalNamesDep,
+) -> InfluencerSetHistory:
+    """ADR-139 decision 3: every installation-wide version, newest first, with the one in force,
+    and the weights file's defaults beneath them."""
+    history = await store.history(defaults.influencers)
+    return history.model_copy(
+        update={"versions": await _with_names(history.versions, principal_names)}
+    )
+
+
+@app.post(
+    "/v1/strength-influencers",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.MANAGE_STRENGTH_INFLUENCERS))],
+)
+async def propose_strength_influencers_route(
+    body: InfluencerSetInput,
+    principal: PrincipalDep,
+    store: StrengthInfluencersDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+) -> InfluencerSetVersion:
+    """A new installation-wide version, waiting for a second person: it changes no strength until
+    approved (maker–checker, ADR-133 stage (d)'s pattern)."""
+    check_influencers(body.influencers, ontology)
+    version = await store.propose(body.influencers, body.words, principal)
+    await audit.record(
+        principal=principal,
+        action="strength_influencers_proposed",
+        resolved_query={
+            "version": version.version,
+            "influencers": [i.id for i in body.influencers],
+        },
+        result_cardinality=len(body.influencers),
+    )
+    return version
+
+
+@app.post(
+    "/v1/strength-influencers/{version}/approve",
+    dependencies=[Depends(require_right(Right.MANAGE_STRENGTH_INFLUENCERS))],
+)
+async def approve_strength_influencers_route(
+    version: int,
+    principal: PrincipalDep,
+    store: StrengthInfluencersDep,
+    audit: AuditDep,
+) -> InfluencerSetVersion:
+    """A second holder of the right puts the waiting version in force; its proposer cannot (403
+    `own_change`)."""
+    approved = await store.approve(version, principal)
+    await audit.record(
+        principal=principal,
+        action="strength_influencers_approved",
+        resolved_query={"version": version, "proposed_by": approved.proposed_by},
+        result_cardinality=len(approved.influencers),
+    )
+    return approved
+
+
+@app.post(
+    "/v1/strength-influencers/{version}/send-back",
+    dependencies=[Depends(require_right(Right.MANAGE_STRENGTH_INFLUENCERS))],
+)
+async def send_back_strength_influencers_route(
+    version: int,
+    body: InfluencerDecision,
+    principal: PrincipalDep,
+    store: StrengthInfluencersDep,
+    audit: AuditDep,
+) -> InfluencerSetVersion:
+    """The waiting version is sent back with words (or withdrawn by its proposer); the set in force
+    stays as it was."""
+    sent = await store.send_back(version, body.words, principal)
+    await audit.record(
+        principal=principal,
+        action="strength_influencers_sent_back",
+        resolved_query={"version": version, "words": body.words},
+        result_cardinality=0,
+    )
+    return sent
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/strength-influencers",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def case_strength_influencers_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    store: StrengthInfluencersDep,
+    defaults: StrengthDefaultsDep,
+    principal_names: PrincipalNamesDep,
+    investigations: InvestigationsDep,
+) -> CaseInfluencers:
+    """ADR-139 decision 7: the case's legend (exactly the influencers in force, a case override
+    marked), and its override, which its Author may change."""
+    legend = await case_legend(
+        investigation.id, store=store, defaults=defaults, names=principal_names
+    )
+    case = await store.case_override(investigation.id)
+    try:
+        await investigations.get_authorized(investigation.id, principal, need=AccessLevel.AUTHOR)
+        can_override = True
+    except InsufficientAccessError:
+        can_override = False
+    return CaseInfluencers(
+        legend=legend, override=case.override if case else None, can_override=can_override
+    )
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/strength-influencers",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def set_case_strength_influencers_route(
+    body: CaseInfluencersInput,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    store: StrengthInfluencersDep,
+    defaults: StrengthDefaultsDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+    investigations: InvestigationsDep,
+) -> CaseInfluencers:
+    """ADR-139 decision 3: the case's Author adds influencers for this case or switches off
+    installation-wide ones in it. No second person (it changes only this case); every version is
+    kept and the change is audited."""
+    check_influencers(body.added, ontology)
+    saved = await store.set_case(investigation.id, body, principal)
+    await audit.record(
+        principal=principal,
+        action="case_strength_influencers_set",
+        investigation_id=investigation.id,
+        resolved_query={
+            "version": saved.version,
+            "added": [i.id for i in body.added],
+            "switched_off": body.switched_off,
+        },
+        result_cardinality=len(body.added) + len(body.switched_off),
+    )
+    return await case_strength_influencers_route(
+        investigation, principal, store, defaults, principal_names, investigations
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/connection-strength",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def connection_strength_route(
+    body: ConnectionStrengthRequest,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    graph: GraphDep,
+    store: StrengthInfluencersDep,
+    defaults: StrengthDefaultsDep,
+) -> ConnectionStrengths:
+    """ADR-139 decisions 5, 6 and 9: each working-set link's connection strength as the reader
+    may see it, with what changed it, and the legend. Worked out in the graph adapter under the
+    reader's access (rule 3); never a count from beyond the filter (rule 7)."""
+    return await case_connection_strengths(
+        investigation.id, body, working_set=working_set, graph=graph, principal=principal,
+        store=store, defaults=defaults,
+    )  # fmt: skip
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rarity",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def rarity_route(
+    body: RarityRequest,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    graph: GraphDep,
+    defaults: StrengthDefaultsDep,
+) -> RarityResult:
+    """ADR-139 decisions 4 and 6: each working-set entity's highest shared-attribute rarity with
+    another of its kind there, and each pair asked for with its shared attributes ranked. Scores
+    and the reader's visible attributes only, never N or df (rule 7); past its cap,
+    `limit_exceeded` (rule 2)."""
+    return await case_rarity(
+        investigation.id, body, working_set=working_set, graph=graph, principal=principal,
+        defaults=defaults,
+    )  # fmt: skip
+
+
 # --- typology rules, their audit, and held rows (ADR-109 phase A) -------------
 
 
@@ -9551,6 +9839,7 @@ async def release_held_rows_route(
     kyc_expiries: KycExpiriesDep,
     patterns_store: PatternsStoreDep,
     recipe_runs: RecipeRunsDep,
+    influencers_store: StrengthInfluencersDep,
 ) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
@@ -9579,6 +9868,7 @@ async def release_held_rows_route(
         expiries=kyc_expiries,
         patterns=patterns_store,
         recipe_id=recipe.recipe_id,
+        influencers=influencers_store,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,

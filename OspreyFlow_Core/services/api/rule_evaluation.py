@@ -78,6 +78,7 @@ from .hotlists import HotlistStore
 from .kyc_expiries import KycExpiryStore
 from .pattern_store import PatternStore
 from .screening import ScreeningListStore
+from .strength_influencers import InfluencerStore
 
 #: The edge type whose events are money movements.
 FLOW_EDGE_TYPE = "TRANSACTED"
@@ -640,6 +641,9 @@ class RuleGate:
     #: ADR-133 decision 6, stage (d): what a hit of a rule does at this pipeline, as its "Checks on
     #: load" step chose ("alert" or "hold"), by rule id. A rule not named keeps its author's choice.
     on_hit: dict[str, str] = field(default_factory=dict)
+    #: ADR-139: where a sentence's strength condition reads the case's influencers (case, then
+    #: installation, then the weights file's); None, the file's alone.
+    influencers: InfluencerStore | None = None
 
     def holds(self, rule: TypologyRule) -> bool:
         """Whether a hit of `rule` holds its rows here: before commit only; as the pipeline chose,

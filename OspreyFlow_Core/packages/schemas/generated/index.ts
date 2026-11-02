@@ -336,6 +336,8 @@ export type { InfluencerSetVersion } from "./InfluencerSetVersion";
 export type { InfluencerSetHistory } from "./InfluencerSetHistory";
 export type { InfluencerDecision } from "./InfluencerDecision";
 export type { CaseInfluencersInput } from "./CaseInfluencersInput";
+export type { CaseInfluencers } from "./CaseInfluencers";
+export type { InfluencerRefusal } from "./InfluencerRefusal";
 export type { ActiveInfluencer } from "./ActiveInfluencer";
 export type { StrengthLegend } from "./StrengthLegend";
 export type { AppliedInfluencer } from "./AppliedInfluencer";
