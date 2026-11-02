@@ -258,6 +258,12 @@ function AlertDetail(props: AlertDetailProps) {
   const closing = alert.status === "closing";
   const mine = (closing ? alert.close_proposed_by : alert.assignee) === props.accountId;
   const secondPerson = closeNeedsSecondPerson(f.severity, f.audience);
+  // A14: what the close still needs, said beside the disabled button and named as its description.
+  const closeMissing = [closingReason === null ? "choose a closing reason" : null, reason.trim() ? null : "say why, in words"].filter(
+    (part): part is string => part !== null,
+  );
+  const closeNeeds = closeMissing.length ? `To close it, ${closeMissing.join(" and ")}.` : null;
+  const closeNeedsId = `close-needs-${alertId}`;
 
   return (
     <section aria-label="What fired this alert" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", overflowY: "auto" }}>
@@ -355,7 +361,8 @@ function AlertDetail(props: AlertDetailProps) {
         </p>
       )}
       {canTriage && closing && (
-        <fieldset aria-label="Approve or send back the close" style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
+        // A14 (WCAG 2.5.3): the group is named by its visible legend alone.
+        <fieldset style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
           <legend className="label">A second person decides this close</legend>
           {mine ? (
             <p className="label" style={{ margin: 0 }}>You proposed this close; another member with the right approves it. You may withdraw it.</p>
@@ -406,9 +413,15 @@ function AlertDetail(props: AlertDetailProps) {
               aria-label="Why, in words: the reason for closing"
             />
           </label>
+          {closeNeeds && (
+            <p id={closeNeedsId} className="label" style={{ margin: 0 }}>
+              {closeNeeds}
+            </p>
+          )}
           <div style={{ display: "flex", gap: "var(--sp-8)" }}>
             <Button
               variant="primary"
+              aria-describedby={closeNeeds ? closeNeedsId : undefined}
               disabled={busy || !reason.trim() || closingReason === null}
               onClick={() => {
                 if (closingReason === null) return;
