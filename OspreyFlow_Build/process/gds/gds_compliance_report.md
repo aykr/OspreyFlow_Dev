@@ -388,14 +388,17 @@ now says so and tells administrators never to open Lite to a network (version 1.
 this step:** binding Lite to loopback changes how both of the owner's running deployments are reached
 on their next `apply`, which is the owner's call. Proposed fix: publish `127.0.0.1:<port>:8080` (and
 `127.0.0.1:` for the Conduit's door) when the origin's host is `localhost` or ends in `.localhost`,
-with a `test_render`-level test shown red first.
+with a `test_render`-level test shown red first. **Closed in step 9e (section 8.7)**, as the owner
+ruled it: every Lite port on `127.0.0.1`, whatever the origin.
 
 **New finding, S11 (P2): the HTTP or HTTPS choice is the answers', not the schema's.** `network.
 public_origin` accepts `http://` or `https://` for any profile. The install answers give Lite
 `http://ospreyflow.localhost` and Small and Enterprise `https://<domain>`, but an edited `osprey.yaml`
 can serve Small over plain HTTP, and nothing refuses a GOV.UK brand on plain HTTP. Proposed: refuse
 `http://` for `small` and the cluster profiles unless the host is a `localhost` name, with the `.gov.uk`
-guard rail (O2) refusing `brand: govuk` over HTTP.
+guard rail (O2) refusing `brand: govuk` over HTTP. **Closed in step 9e (section 8.7)**, as the owner
+ruled it: `http://` refused for Small and Enterprise with no exception, and a gov.uk address refused
+for Lite.
 
 **HTTPS as built, checked against the code:** for an `https://` origin Caddy obtains and renews the
 certificate (`proxy-data:/data` keeps it); it publishes 80 and 443; on 80 it answers the certificate's
@@ -418,11 +421,11 @@ turned off).
 | 6 | Have a multidisciplinary team | service team | service team | — | The client's team |
 | 7 | Use agile ways of working | supported | supported | Steps planned, built and merged with their tests and guides; decision records amended as interpretations were made | The service's own governance |
 | 8 | Iterate and improve frequently | met (product) | met (product) | `ospreyflow apply` for a changed `osprey.yaml` (ADR-137); guides versioned with their PDFs | Release cadence is the service's |
-| 9 | Create a secure service which protects users' privacy | partly | **partly** | Maker–checker for whole-deployment rules and high-severity closes; OpenAPI behind sign-in; the port guard; secrets `600` and named folders `700`, tested; the public-dataset acceptance path; no leak in 94 commits; no high bandit finding | Penetration test, DPIA, SBOM (S4, S7); S1 egress and Key Vault; **S10: Lite on every interface**; S11 |
+| 9 | Create a secure service which protects users' privacy | partly | **partly** | Maker–checker for whole-deployment rules and high-severity closes; OpenAPI behind sign-in; the port guard; secrets `600` and named folders `700`, tested; the public-dataset acceptance path; no leak in 94 commits; no high bandit finding | Penetration test, DPIA, SBOM (S4, S7); S1 egress and Key Vault (S10 and S11 closed in step 9e, section 8.7) |
 | 10 | Define what success looks like and publish performance data | service team | service team | The monitoring board counts intelligence alerts, not the service's own performance | Service KPIs and their publication; service telemetry (O3) |
 | 11 | Choose the right tools and technology | met | met | Recorded decisions ADR-133 to ADR-138 and their amendments | — |
 | 12 | Make new source code open | met | met | Licence register entries for the screening-list sources; UN and OpenSanctions marked "licence not confirmed" and synthetic only | Publication of the repository (step 13) |
-| 13 | Use and contribute to open standards, common components and patterns | partly | partly | OpenAPI 3.1 published and versioned (O1 closed; 219 paths, 218 under `/v1/`); STIX 2.1 (`cyber-intrusion`); the GOV.UK starters | GOV.UK form patterns (A11); the `.gov.uk` guard rail (O2); no contributions back |
+| 13 | Use and contribute to open standards, common components and patterns | partly | partly | OpenAPI 3.1 published and versioned (O1 closed; 219 paths, 218 under `/v1/`); STIX 2.1 (`cyber-intrusion`); the GOV.UK starters | GOV.UK form patterns (A11); no contributions back (O2 closed in step 9e) |
 | 14 | Operate a reliable service | met (product) | met (product) | Named deployments side by side, `ospreyflow deployments` and `switch`; `apply` restarts only what changed and leaves one-shot jobs alone (9d) | Service telemetry and alerting on the platform itself (O3); on-call |
 
 No point's status changed in the re-audit. Point 5 is still "partly": the largest baseline gap (the
@@ -461,3 +464,36 @@ verb was run against one, and no request went to a `*.ospreyflow.localhost` addr
 The tools were throwaway and nothing was added to the product's dependencies: bandit 1.9.4 in a
 scratch virtual environment; gitleaks 8.21.2 and trivy 0.57.1 as Docker images; `npm audit` and
 `@axe-core/playwright` already in the repository.
+
+### 8.7 Step 9e: S10, S11, O2 and A14 closed (2 November 2026)
+
+The owner's ruling of 2 November: "Bind Lite to `127.0.0.1`; refuse `http://` for Small and Enterprise
+and Lite for a `.gov.uk` address." Built on branch `security-9e` from `main` at `94c4df5`; the decision
+is recorded in `05_DEPLOYMENT.md` §7. Each fix has a test run red before the change and green after;
+the red output is in the session scratchpad (`red/s9e_*`).
+
+| Finding | What changed | Red, then green |
+| --- | --- | --- |
+| **S10 (P1)** | Every port a Lite deployment publishes is bound to `127.0.0.1`: the front proxy, the graph store's door and the Conduit's door under `expose_conduit`; named deployments are Lite and follow. Small and Enterprise keep 80 and 443 on every interface | The rendered-compose test failed on all four Lite shapes (`s9e_s10_render_red.txt`), the named staging step and the preflight case likewise (`s9e_s10_named_and_preflight_red.txt`). **Live, through the pinned Caddy on a scratch port:** with `main`'s bare mapping, a request from this machine's LAN address with `Host: s9e.localhost` reached Caddy (`502`, its route to an absent Glass; `s9e_s10_live_caddy_all_interfaces_red.txt`); with the new mapping it did not connect, while the name still routed through `127.0.0.1` and by name, an unknown name got 404 and `/healthz` 200 (`s9e_s10_live_caddy_loopback.txt`). Preflight's port check still finds each loopback port |
+| **S11 (P2)** | `osprey.yaml` refuses, in words, a Small or Enterprise deployment whose address is not `https://`; `apply` refuses it with nothing changed; the guided page writes Small's profile only with its address (Domain screen); the Set-up console's Profile screen asks for the address | Schema cases for both profiles and four addresses, the `apply` case, the Set-up console's 422, and the two harness unit files, each red first (`s9e_s11_o2_red.txt`, `s9e_s11_install_page_red.txt`, `s9e_s11_profile_screen_red.txt`) |
+| **O2 (P2)** | A Lite deployment at a gov.uk address is refused, in words naming Small or Enterprise. The GOV.UK brand on a `localhost` address stays allowed | In `s9e_s11_o2_red.txt`. Copies of both of the owner's deployments' `osprey.yaml` (Lite at `*.localhost`, one GOV.UK-branded), the committed one, all ten starters and a Small answer set validate (`s9e_s11_configs_validate.txt`); neither deployment was touched |
+| **A14 (P3)** | The approval group is named by its visible legend; the disabled close button has a visible line saying what is missing, as its description | `StageD.test.tsx`, two cases (`s9e_a14_red.txt`) |
+
+Also in this step: "Claimed by <id>" now names the assignee (ADR-106 Amendment 1, extended;
+`s9e_claimed_by_name_server_red.txt`, `s9e_claimed_by_name_glass_red.txt`), and a pack's stored
+screening alert names the list's entry as the list's (`s9e_pack_list_entry_*_red.txt`). The
+administration guide's "HTTP or HTTPS" note and §8.1 say Lite answers on this computer only
+(version 1.24).
+
+**Points 9 and 13** stay "partly" (the penetration test, DPIA, SBOM and S1 remain), with no open P1
+security finding from this re-audit.
+
+**Checks run** (ports pinned; no deployment touched): non-live Python suite 6,750 pass, 3 failing as
+on `main` (`test_layout.py` and `test_the_committed_osprey_yaml_still_validates`, from the working
+tree's own untracked folders and the owner's uncommitted `osprey.yaml`; `test_phone_extraction_fixture.py`,
+no object store, which fails in a clean `main` worktree too); the live alert-route files on a
+throwaway PostgreSQL, 38 pass; vitest workspace 2,413 pass (`MatrixView.budget` failed under the
+full run's load and passes alone, as on `main`) and harness 44; workspace keyboard 487 and
+accessibility 216; harness accessibility 34; harness keyboard 18 pass and the 2 known failures
+(ports 80 and 2480 held by the owner's deployment), identical in a `main` worktree; `tsc`, ESLint,
+ruff and mypy clean; every gate passes.
