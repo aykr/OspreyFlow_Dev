@@ -75,6 +75,7 @@ def test_every_shipped_pack_is_listed_with_its_licence_and_credit_and_no_interna
     assert set(listed) == {
         "hmp", "fixture-corp", "operation-ledger", "paysim", "enron", "prison-intelligence",
         "prison-intelligence-scale",
+        "cyber-intrusion",
     }  # fmt: skip
     # ADR-114 Amendment 23 point 4: the real one says so wherever it is listed; no other does.
     assert {pack_id for pack_id, p in listed.items() if p["real_data"]} == {"enron"}
