@@ -10,6 +10,7 @@ import type {
   OntologySchema,
   PublicMapConfig,
   Sighting,
+  StrengthLegend,
 } from "../../../packages/schemas/generated";
 import { fetchSightings } from "./analytics/api";
 import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
@@ -67,6 +68,7 @@ import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { MatrixView } from "./matrix/MatrixView";
+import { fetchCaseInfluencers } from "./strength/api";
 import { defaultProvider, fetchMapConfig } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
@@ -446,6 +448,10 @@ export function App() {
   // in its own colour, dotted. `null` until read, or when the read fails: the ontology's alone.
   const [caseLinkTypes, setCaseLinkTypes] = useState<CaseLinkTypes | null>(null);
   const [linkTypesRead, setLinkTypesRead] = useState(0);
+  // ADR-139 decision 7: the case's connection-strength legend (the influencers in force), read again
+  // whenever the influencer editor saves (`strengthRead`).
+  const [strengthLegend, setStrengthLegend] = useState<StrengthLegend | null>(null);
+  const [strengthRead, setStrengthRead] = useState(0);
   const edgeTypes = useMemo(
     () => caseLinkTypes?.definitions ?? ontologyEdgeTypes,
     [caseLinkTypes, ontologyEdgeTypes],
@@ -798,6 +804,24 @@ export function App() {
       current = false;
     };
   }, [bearerToken, investigationId, linkTypesRead]);
+
+  useEffect(() => {
+    if (!bearerToken || !investigationId) {
+      setStrengthLegend(null);
+      return;
+    }
+    let current = true;
+    fetchCaseInfluencers(API_BASE_URL, bearerToken, investigationId)
+      .then((found) => {
+        if (current) setStrengthLegend(found.legend);
+      })
+      .catch(() => {
+        if (current) setStrengthLegend(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [bearerToken, investigationId, strengthRead]);
 
   useEffect(() => {
     // Persisting an already-resolved id makes no network call and must run regardless of auth
@@ -1356,6 +1380,10 @@ export function App() {
             accountId={principal?.sub ?? null}
             isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             canManageLists={rights?.has("load_screening_lists") ?? false}
+            canManageInfluencers={rights?.has("manage_strength_influencers") ?? false}
+            entityTypes={ontologySchema?.entity_types ?? []}
+            edgeTypes={edgeTypes}
+            onInfluencersChanged={() => setStrengthRead((n) => n + 1)}
             onCanvas={(outcome, nodeIds) => {
               applyStarterDelta(outcome.delta);
               pendingHighlight.current = nodeIds;
@@ -1420,6 +1448,7 @@ export function App() {
                 bearerToken={bearerToken}
                 dimmedNodeIds={dimmedNodeIds}
                 dimmedEdgeIds={dimmedEdgeIds}
+                strengthLegend={strengthLegend}
                 onGroupedCountChange={setGroupedCount}
                 judgementCounts={judgementCounts}
                 degreeMarks={degreeMarks}
@@ -1473,6 +1502,9 @@ export function App() {
                 onSelectLink={selectLinkOffCanvas}
                 onExpand={expandOnGraph}
                 onShowOnGraph={showOnGraph}
+                strength={
+                  investigationId ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId } : undefined
+                }
               />
             )}
             {/* ADR-100: an empty canvas offers where to start, until something is drawn. */}

@@ -101,7 +101,14 @@ export async function dismissWelcome(page: Page): Promise<void> {
 export const rail = (page: Page, name: string) =>
   page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name });
 
-export type MonitoringTab = "Queue" | "Rules" | "Watches" | "Lists" | "Held rows" | "Audit";
+export type MonitoringTab =
+  | "Queue"
+  | "Rules"
+  | "Watches"
+  | "Lists"
+  | "Connection strength"
+  | "Held rows"
+  | "Audit";
 
 /** The Monitoring place on one of its tabs (ADR-133 decision 5). Since the owner's answer of
  * 1 November 2026 the Watches tab is the only way to the hotlists and the alert inbox: the rail's

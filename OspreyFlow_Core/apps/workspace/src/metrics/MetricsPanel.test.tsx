@@ -128,3 +128,79 @@ describe("MetricsPanel sections", () => {
     expect(screen.getByRole("switch", { name: /Show community hulls/ }).getAttribute("aria-checked")).toBe("true");
   });
 });
+
+// ADR-139 decision 6: connection strength and shared-attribute rarity are filter metrics, read from
+// their own routes (worked out in the store as the reader), thresholded and dimming as the others.
+describe("MetricsPanel's strength and rarity filters", () => {
+  function stubStrength() {
+    const asked: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        asked.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
+        const body = url.endsWith("/connection-strength")
+          ? {
+              links: [{ edge_id: "e1", edge_type: "VISITED", base_weight: 0.5, strength: 0.7, applied: [] }],
+              legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+            }
+          : url.endsWith("/rarity")
+            ? { scope: "case", node_values: { n1: 2.2 }, pairs: [] }
+            : { mode: "sync", values: { n1: 5, n2: 3 } };
+        return { ok: true, status: 200, json: async () => body };
+      }),
+    );
+    return asked;
+  }
+
+  function withLink() {
+    const working = createWorkingSet();
+    const person = (id: string) =>
+      ({
+        id, type: "Person", properties: { family_name: id },
+        provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" },
+        handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" },
+        audit: { created_at: "2026-01-01T00:00:00Z", created_by: "loader" }, datasets: [],
+      }) as never; // prettier-ignore
+    working.store.getState().applyDelta({
+      seq: 1,
+      op: "add",
+      nodes: [person("n1"), person("n2")],
+      edges: [{ ...(person("e1") as object), type: "VISITED", source: "n1", target: "n2" } as never],
+    });
+    return working;
+  }
+
+  it("reads connection strength from its route and gives the filter each link's value", async () => {
+    const asked = stubStrength();
+    const onFilterChange = vi.fn();
+    const working = withLink();
+    setup({ graph: working.graph, onFilterChange });
+    fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by metric" }), {
+      target: { value: "connection_strength" },
+    });
+    await waitFor(() =>
+      expect(onFilterChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ metric: "connection_strength", values: { n1: 0.7, n2: 0.7 }, edgeValues: { e1: 0.7 } }),
+      ),
+    );
+    expect(asked.some((a) => a.url === "http://api/v1/investigations/inv-1/connection-strength")).toBe(true);
+  });
+
+  it("reads rarity in the scope chosen", async () => {
+    const asked = stubStrength();
+    const onFilterChange = vi.fn();
+    setup({ graph: withLink().graph, onFilterChange });
+    fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by metric" }), {
+      target: { value: "shared_attribute_rarity" },
+    });
+    fireEvent.change(await screen.findByRole("combobox", { name: "Rarity worked out" }), { target: { value: "case" } });
+    await waitFor(() =>
+      expect(asked.some((a) => a.url.endsWith("/rarity") && (a.body as { scope: string }).scope === "case")).toBe(true),
+    );
+    await waitFor(() =>
+      expect(onFilterChange).toHaveBeenLastCalledWith(expect.objectContaining({ values: { n1: 2.2 } })),
+    );
+  });
+});

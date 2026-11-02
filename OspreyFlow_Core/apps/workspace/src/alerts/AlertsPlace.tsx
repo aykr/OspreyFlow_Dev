@@ -15,6 +15,8 @@ import { HeldRowsPanel } from "./HeldRowsPanel";
 import { ListsPanel } from "./ListsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";
 import { RulesPanel } from "./RulesPanel";
+import type { EdgeTypeDef, EntityTypeDef } from "../../../../packages/schemas/generated";
+import { StrengthPanel } from "../strength/StrengthPanel";
 import { AlertInbox } from "../watches/AlertInbox";
 import { HotlistPanel } from "../watches/HotlistPanel";
 import { MonitorPanel } from "../watches/MonitorPanel";
@@ -30,9 +32,16 @@ export interface AlertsPlaceProps {
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
   /** The alert inbox's jump: the new investigation an alert was branched into, opened. */
   onOpenInvestigation?: (investigationId: string) => void;
+  /** ADR-139: `manage_strength_influencers`, so the installation-wide influencers are offered. */
+  canManageInfluencers?: boolean;
+  /** The ontology's types, for the influencer editor's closed choices. */
+  entityTypes?: readonly EntityTypeDef[];
+  edgeTypes?: readonly EdgeTypeDef[];
+  /** Told when the influencers in force may have changed (the legend is read again). */
+  onInfluencersChanged?: () => void;
 }
 
-type Tab = "queue" | "rules" | "watches" | "lists" | "held" | "audit";
+type Tab = "queue" | "rules" | "watches" | "lists" | "strength" | "held" | "audit";
 
 export function AlertsPlace(props: AlertsPlaceProps) {
   const { apiBaseUrl, bearerToken, investigationId } = props;
@@ -60,6 +69,8 @@ export function AlertsPlace(props: AlertsPlaceProps) {
     { id: "rules", label: "Rules" },
     { id: "watches", label: "Watches" },
     { id: "lists", label: "Lists" },
+    // ADR-139 decision 3: what makes a link strong in this case, and who may change it.
+    { id: "strength", label: "Connection strength" },
     ...(level === "editor" || level === "author" ? [{ id: "held", label: "Held rows" }] : []),
     ...(readsAudit ? [{ id: "audit", label: "Audit" }] : []),
   ];
@@ -79,6 +90,16 @@ export function AlertsPlace(props: AlertsPlaceProps) {
       )}
       {tab === "lists" && (
         <ListsPanel apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} canManage={props.canManageLists ?? false} />
+      )}
+      {tab === "strength" && (
+        <StrengthPanel
+          {...api}
+          accountId={props.accountId}
+          canManage={props.canManageInfluencers ?? false}
+          entityTypes={props.entityTypes ?? []}
+          edgeTypes={props.edgeTypes ?? []}
+          onChanged={props.onInfluencersChanged}
+        />
       )}
       {tab === "held" && <HeldRowsPanel {...api} level={level} />}
       {tab === "audit" && readsAudit && <RuleAuditPanel {...api} />}

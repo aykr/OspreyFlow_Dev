@@ -6,18 +6,37 @@
 // stored. The rule is pure so it can be tested without a screen; `App.tsx` feeds it the graph.
 import type { ComputeMetricName } from "./api";
 
+/** ADR-139 decision 6: connection strength and shared-attribute rarity join the metrics a filter
+ * judges by. Strength is a link's (a node takes its strongest link's), rarity a pair's (a node takes
+ * its highest with another of its kind in view); both are worked out in the store as the reader. */
+export type StrengthMetricName = "connection_strength" | "shared_attribute_rarity";
+export type FilterMetricName = ComputeMetricName | StrengthMetricName;
+
+export function isStrengthMetric(metric: FilterMetricName | null): metric is StrengthMetricName {
+  return metric === "connection_strength" || metric === "shared_attribute_rarity";
+}
+
 export interface MetricFilter {
   /** A link whose weight is below this is dimmed; 0 dims nothing. */
   strengthFloor: number;
   /** The metric nodes are judged by, or `null` for none. */
-  metric: ComputeMetricName | null;
+  metric: FilterMetricName | null;
   /** Nodes whose value is below this are dimmed; `null` while no threshold is set. */
   threshold: number | null;
   /** The metric's values by node id, once fetched; `null` dims nothing by metric. */
   values: Record<string, number> | null;
+  /** A link metric's values by link id (connection strength, ADR-139): a link below the threshold
+   * is dimmed as well as a node none of whose links reaches it. Absent for a node metric. */
+  edgeValues?: Record<string, number> | null;
 }
 
-export const NO_FILTER: MetricFilter = { strengthFloor: 0, metric: null, threshold: null, values: null };
+export const NO_FILTER: MetricFilter = {
+  strengthFloor: 0,
+  metric: null,
+  threshold: null,
+  values: null,
+  edgeValues: null,
+};
 
 export interface FilterEdge {
   id: string;
@@ -59,6 +78,13 @@ export function filterDimming(
     for (const id of nodeIds) {
       const value = filter.values[id];
       if (value === undefined || value < filter.threshold) dimmedNodeIds.add(id);
+    }
+    const edgeValues = filter.edgeValues;
+    if (edgeValues) {
+      for (const edge of edges) {
+        const value = edgeValues[edge.id];
+        if (value === undefined || value < filter.threshold) dimmedEdgeIds.add(edge.id);
+      }
     }
   }
 

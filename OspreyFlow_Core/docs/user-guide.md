@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.19** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.20** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.20 | 2026-11-02 | New §5.12, How connection strength is worked out: a link's strength from its own count and recency, the influencers that change it (direct links, and a boost from a record that evidences the link, such as an assault), shared-attribute rarity, the legend, the two new filters in Metrics, the Matrix's two sorts, the Inspector's explanation, who changes influencers, and why two analysts can see different rarity. §7.6: a rule on connection strength or rarity. |
 | 1.19 | 2026-11-02 | §4: the demonstration cases each starter brings, and their domains; a public dataset's case. |
 | 1.18 | 2026-11-01 | §7.5: a hotlist can hold an account number, matched on the account however its spaces are written. §7.4: a money-flow rule judges only movements between accounts its author may see. §7.10: the UK Sanctions List (FCDO) among the lists; the closed OFSI list says so. |
 | 1.17 | 2026-11-01 | §7.3: closing an alert takes one of five closing reasons (True match, False positive, Duplicate, No further action, Referred) and words. §7.5 and the left rail: watches, and the alert inbox, are in Monitoring's Watches tab; the rail has no Watches entry. §7.10: UN and OpenSanctions are marked "licence not confirmed", and whoever manages lists sees only their own unit's counts. Ask to search answers on the engine you choose when the case's data may leave (the engine choice). The mark on the top bar is read aloud as "Osprey, go to Home". |
@@ -346,9 +347,9 @@ until you open the case afresh.
 ![Metrics: a ranking by betweenness](images/user/20-metrics.png)
 
 **Metrics** ranks what is drawn by degree, weighted degree, betweenness, eigenvector, PageRank,
-clustering coefficient or the clique metric, and can compare two. Choose a row to go to it. Its
-filters — relationship strength, a metric's value — dim, never remove. A metric is shown as size,
-never as colour.
+clustering coefficient, the clique metric, connection strength or shared-attribute rarity (§5.12),
+and can compare two. Choose a row to go to it. Its filters — relationship strength, a metric's
+value — dim, never remove. A metric is shown as size, never as colour.
 
 ### 5.8 Find connections
 
@@ -441,6 +442,70 @@ better than a picture.
 From the keyboard, each table is one Tab stop. The arrow keys move between cells, Home and End to the
 start and end of a row, Page Down and Page Up between pages. Enter selects the row's node; Space adds
 it to the selection or takes it out.
+
+### 5.12 How connection strength is worked out
+
+How strong a link is drawn rests on three ideas. Each can be seen, filtered and explained on its own.
+
+**1. The link's own evidence.** A link's stored weight comes from that link alone: how often it
+occurred, against what is heavy for its type (forty calls, twelve weeks in one cell, six payments),
+and how recently, halving every ninety days. A standing link (custody, family, co-defendants, group
+membership) has a fixed weight. No other link moves it, so nothing you cannot see changes it.
+
+**2. Influencers.** An influencer changes how strong a kind of link is drawn when you look at it:
+
+| Part | What it says |
+| --- | --- |
+| **What triggers it** | A record that evidences the link: for example an Incident whose category is assault, disorder or find, at one end of the link or involving both people. **Direct links** have no trigger. |
+| **Which links it changes** | Named link types, such as *In conflict with* or *Role in*. |
+| **The change** | **Add** a boost (the usual), **multiply**, set a **floor** (at least this strong), or **exclude** (no stronger than its stored weight). |
+| **Its size, and a label** | The label is what the legend shows. |
+
+OspreyFlow ships two. **Direct link**: calls, money transfers, visits and cell shares are drawn
+stronger than links that are only inferred or shared. **Evidenced by an assault, disorder or find**:
+a role in such an incident, and a conflict, association or cell share between people in one, are drawn
+stronger. Their sizes are calibrated so that a boost moves an ordinary link about as far as doubling
+its count would, and are marked "to be confirmed with the client". Boosts add up.
+
+**An influencer applies only if you may see the record that evidences the link.** An assault report
+above your clearance never thickens a line you can see, so it never tells you it exists. The stored
+weight never changes: influencers are applied as the link is read, so a change takes effect at once.
+
+**3. Shared-attribute rarity.** Two people who share something few others share are more interesting
+than two who share what everyone does. Rarity adds, for each thing two people of one kind share (a
+cell, a phone number, a visitor, a report, a group), the logarithm of how many people there are over
+how many share it. A shared visitor nobody else has scores high; the prison they are both held in
+scores almost nothing. It is worked out per dataset unless you choose across the case's datasets, and
+**only over what you may see**: if two analysts have different access, they can see different rarity
+for the same pair, and both are right for what each may see. Rarity is its own measure, never folded
+into the strength.
+
+**Where you see it:**
+- **The legend** lists, under *Connection strength*, every influencer in force in the case — what
+  triggers it, the links it changes, the change and its size, and where it came from (shipped,
+  installation-wide, or **Case override**) — which link types count as direct, and the rarity note.
+- **Metrics** (§5.7) offers *Connection strength* and *Shared-attribute rarity* to rank by and to
+  filter by. Choose one under **Filter** and slide **Metric value at least**: a link below the
+  strength, and a person none of whose links reach it, fade; with rarity, a person whose rarest
+  pairing in view is below it fades. Nothing is removed.
+- **The Matrix** (§5.11) gives each link its **Strength** and the **Rarity** of its two ends, and sorts
+  by either.
+- **The Inspector** explains a selected link under **Connection strength**: its count against what is
+  heavy for its type, when it was last seen, the rule and weights version it was worked out under,
+  each influencer that changed it and the kind of record that evidenced it, and what its two ends
+  share, rarest first. With two people selected, **What these two share** does the same for them.
+
+**Who changes influencers.** An installation-wide set is proposed in **Monitoring → Connection
+strength** by someone holding the right to manage influencers, and takes effect only when **another**
+person with that right approves it; the proposer can withdraw it but never approve it, and every
+version is kept. A case's **Author** may add influencers for that case, or switch off installation-wide
+ones in it; that needs no second person, because it changes only that case, and the legend marks it.
+Both are recorded in the audit.
+
+**Rules on strength.** A rule written as a sentence (§7.6) may say "and the connection strength
+between it and … reaches X", or "… the shared-attribute rarity between it and another … reaches X". It
+is previewed like any other, and judged as its author, on what its author may see: it never raises an
+alert on evidence its author could not read.
 
 ## 6. Questions to the model
 
@@ -635,6 +700,11 @@ and its link types — so there is nothing to type that could fail to be underst
 - **And is.** Optionally: *linked by* a link type to something; *within* 1 to 4 *steps of* something
   of a type; *at a location in a drawn area*; *on one of my hotlists*; or, for a person or an
   organisation, *on a screening list* at a name match you choose.
+- **How strongly connected.** Optionally: *the connection strength* between the subject and something
+  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1; or *the
+  shared-attribute rarity* between it and another of its type *reaches* a figure, per dataset or across
+  the case's datasets (§5.12). Both are read from the stored graph, so the rule runs after commit or on
+  a schedule, and both are worked out as you, the rule's author, may see them.
 - **Then.** The alert's severity; whether it goes to the case team or is labelled for your team; and
   when the rule runs — after each load commits, or before it. Before commit you also choose what a hit
   does: load with its alert, or hold its rows for a reviewer in **Held rows**. A rule that names a link

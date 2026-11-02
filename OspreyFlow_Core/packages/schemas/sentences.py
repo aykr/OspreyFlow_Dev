@@ -199,6 +199,32 @@ SentenceFrequency = Annotated[
     Field(discriminator="kind"),
 ]
 
+# --- the optional strength condition (ADR-139 decision 8) ---------------------------------------
+
+
+class StrengthReaches(BaseModel):
+    """"When the connection strength between the subject and something it is linked to (by a
+    declared link type, or any; to a declared type, or anything) reaches X": the link's stored
+    weight with the influencers in force, as the rule's author may see it (rule 3)."""
+
+    kind: Literal["connection_strength"] = "connection_strength"
+    link_type: str | None = None
+    other_type: str | None = None
+    reaches: float = Field(gt=0, le=1)
+
+
+class RarityReaches(BaseModel):
+    """"When the shared-attribute rarity between the subject and another of its type reaches X":
+    worked out over what the rule's author may see, per dataset or across the case's datasets."""
+
+    kind: Literal["shared_attribute_rarity"] = "shared_attribute_rarity"
+    reaches: float = Field(gt=0, le=100)
+    scope: Literal["dataset", "case"] = "dataset"
+
+
+SentenceStrength = Annotated[StrengthReaches | RarityReaches, Field(discriminator="kind")]
+
+
 SentenceSeverity = Literal["low", "medium", "high"]
 #: Who the alert goes to: the case's queue, or labelled for the author's own team within it.
 SentenceTeam = Literal["case", "my_team"]
@@ -245,6 +271,9 @@ class RuleSentence(BaseModel):
     )
     relationship: SentenceRelationship | None = None
     frequency: SentenceFrequency | None = None
+    #: ADR-139 decision 8: "… and the connection strength (or shared-attribute rarity) between …
+    #: reaches X".
+    strength: SentenceStrength | None = None
     severity: SentenceSeverity = "medium"
     team: SentenceTeam = "case"
     runs: SentenceRuns = "post_commit"
@@ -275,6 +304,11 @@ class RuleSentence(BaseModel):
         ):
             raise ValueError(
                 "a link is read from the stored graph, so a rule that names one runs after commit"
+            )
+        if self.strength is not None and self.runs == "pre_commit":
+            raise ValueError(
+                "strength and rarity are read from the stored graph, so a rule that names one "
+                "runs after commit or on a schedule"
             )
         if self.scope == "just_me":
             if self.team != "case":
@@ -366,6 +400,8 @@ ALL_MODELS = (
     CountFrequency,
     AmountFrequency,
     FirstTimeFrequency,
+    StrengthReaches,
+    RarityReaches,
     RuleSchedule,
     RuleSentence,
     SentenceRuleParams,

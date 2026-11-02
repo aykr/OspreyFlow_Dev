@@ -23,11 +23,13 @@ import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { Toggle } from "../design/primitives/Toggle";
 import { Slider } from "../design/primitives/Slider";
-import { NO_FILTER, valueRange, type MetricFilter } from "./filters";
+import { NO_FILTER, valueRange, type FilterMetricName, type MetricFilter } from "./filters";
 import type { WorkingSetGraph } from "../workingset/store";
-import { fetchComputeMetric, type ComputeMetricName } from "./api";
+import { fetchComputeMetric } from "./api";
+import { fetchConnectionStrengths, fetchRarity, type RarityScope } from "../strength/api";
+import { strengthValues } from "../strength/words";
 
-const METRIC_OPTIONS: { value: ComputeMetricName; label: string }[] = [
+const METRIC_OPTIONS: { value: FilterMetricName; label: string }[] = [
   { value: "degree", label: "Degree" },
   { value: "weighted_degree", label: "Weighted degree" },
   { value: "betweenness", label: "Betweenness" },
@@ -35,7 +37,40 @@ const METRIC_OPTIONS: { value: ComputeMetricName; label: string }[] = [
   { value: "pagerank", label: "PageRank" },
   { value: "clustering_coefficient", label: "Clustering coefficient" },
   { value: "clique_metric", label: "Clique Metric" },
+  // ADR-139 decision 6: worked out in the store over what the reader may see.
+  { value: "connection_strength", label: "Connection strength" },
+  { value: "shared_attribute_rarity", label: "Shared-attribute rarity" },
 ];
+
+interface FetchedValues {
+  values: Record<string, number> | null;
+  edgeValues: Record<string, number> | null;
+}
+
+/** A metric's values by node (and, for connection strength, by link): the compute route for the
+ * network metrics, the strength and rarity routes for ADR-139's two. */
+async function fetchMetricValues(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  graph: WorkingSetGraph,
+  metric: FilterMetricName,
+  rarityScope: RarityScope,
+): Promise<FetchedValues> {
+  if (metric === "connection_strength") {
+    const found = await fetchConnectionStrengths(apiBaseUrl, bearerToken, investigationId);
+    const { nodes, edges } = strengthValues(found.links, (id) =>
+      graph.hasEdge(id) ? [graph.source(id), graph.target(id)] : null,
+    );
+    return { values: nodes, edgeValues: edges };
+  }
+  if (metric === "shared_attribute_rarity") {
+    const found = await fetchRarity(apiBaseUrl, bearerToken, investigationId, rarityScope);
+    return { values: found.node_values, edgeValues: null };
+  }
+  const accepted = await fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metric);
+  return { values: accepted.values ?? null, edgeValues: null };
+}
 
 //: The ranked list's own row cap — a working set can hold thousands of nodes; the panel is a
 //: ranked-highlights view, not a second copy of the full node table (`design/primitives/Table.tsx`
@@ -79,8 +114,10 @@ export function MetricsPanel({
   onCommunitiesChange,
   onFilterChange,
 }: MetricsPanelProps) {
-  const [metricA, setMetricA] = useState<ComputeMetricName>("degree");
-  const [metricB, setMetricB] = useState<ComputeMetricName>("betweenness");
+  const [metricA, setMetricA] = useState<FilterMetricName>("degree");
+  const [metricB, setMetricB] = useState<FilterMetricName>("betweenness");
+  // ADR-139 decision 4: rarity per dataset (the client's own) or across the case's datasets.
+  const [rarityScope, setRarityScope] = useState<RarityScope>("dataset");
   const [compareMode, setCompareMode] = useState(false);
   const [showHulls, setShowHulls] = useState(false);
   const [valuesA, setValuesA] = useState<Record<string, number> | null>(null);
@@ -114,9 +151,9 @@ export function MetricsPanel({
     if (!rankingWanted) return;
     let cancelled = false;
     setError(null);
-    void fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metricA)
-      .then((accepted) => {
-        if (!cancelled) setValuesA(accepted.values ?? null);
+    void fetchMetricValues(apiBaseUrl, bearerToken, investigationId, graph, metricA, rarityScope)
+      .then((fetched) => {
+        if (!cancelled) setValuesA(fetched.values);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -124,7 +161,8 @@ export function MetricsPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId, metricA, rankingWanted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, bearerToken, investigationId, metricA, rankingWanted, rarityScope]);
 
   useEffect(() => {
     if (!compareMode || !rankingWanted) {
@@ -132,9 +170,9 @@ export function MetricsPanel({
       return;
     }
     let cancelled = false;
-    void fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metricB)
-      .then((accepted) => {
-        if (!cancelled) setValuesB(accepted.values ?? null);
+    void fetchMetricValues(apiBaseUrl, bearerToken, investigationId, graph, metricB, rarityScope)
+      .then((fetched) => {
+        if (!cancelled) setValuesB(fetched.values);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -142,7 +180,8 @@ export function MetricsPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId, metricB, compareMode, rankingWanted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, bearerToken, investigationId, metricB, compareMode, rankingWanted, rarityScope]);
 
   useEffect(() => {
     if (!showHulls) {
@@ -168,14 +207,19 @@ export function MetricsPanel({
     if (filter.metric === null) return;
     let cancelled = false;
     const metric = filter.metric;
-    void fetchComputeMetric(apiBaseUrl, bearerToken, investigationId, metric)
-      .then((accepted) => {
+    void fetchMetricValues(apiBaseUrl, bearerToken, investigationId, graph, metric, rarityScope)
+      .then((fetched) => {
         if (cancelled) return;
-        const values = accepted.values ?? null;
+        const values = fetched.values;
         const range = valueRange(values);
         setFilter((current) => {
           if (current.metric !== metric) return current;
-          const next = { ...current, values, threshold: current.threshold ?? range.min };
+          const next = {
+            ...current,
+            values,
+            edgeValues: fetched.edgeValues,
+            threshold: current.threshold ?? range.min,
+          };
           onFilterChange?.(next);
           return next;
         });
@@ -187,7 +231,7 @@ export function MetricsPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBaseUrl, bearerToken, investigationId, filter.metric]);
+  }, [apiBaseUrl, bearerToken, investigationId, filter.metric, rarityScope]);
   const range = valueRange(filter.values);
   const step = Math.max((range.max - range.min) / 100, 0.001);
 
@@ -206,7 +250,7 @@ export function MetricsPanel({
             <Select
               aria-label="Primary metric"
               value={metricA}
-              onChange={(e) => setMetricA(e.target.value as ComputeMetricName)}
+              onChange={(e) => setMetricA(e.target.value as FilterMetricName)}
             >
               {METRIC_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -219,7 +263,7 @@ export function MetricsPanel({
               <Select
                 aria-label="Comparison metric"
                 value={metricB}
-                onChange={(e) => setMetricB(e.target.value as ComputeMetricName)}
+                onChange={(e) => setMetricB(e.target.value as FilterMetricName)}
               >
                 {METRIC_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -278,7 +322,7 @@ export function MetricsPanel({
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
             <label style={{ display: "grid", gap: "var(--sp-4)" }}>
               <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
-                Relationship strength at least {filter.strengthFloor.toFixed(2)}
+                Relationship strength at least: {filter.strengthFloor.toFixed(2)}
               </span>
               <Slider
                 aria-label="Relationship strength at least"
@@ -293,8 +337,8 @@ export function MetricsPanel({
               aria-label="Filter by metric"
               value={filter.metric ?? ""}
               onChange={(e) => {
-                const metric = (e.target.value || null) as ComputeMetricName | null;
-                updateFilter({ metric, values: null, threshold: null });
+                const metric = (e.target.value || null) as FilterMetricName | null;
+                updateFilter({ metric, values: null, edgeValues: null, threshold: null });
               }}
             >
               <option value="">No metric filter</option>
@@ -304,10 +348,30 @@ export function MetricsPanel({
                 </option>
               ))}
             </Select>
+            {filter.metric === "shared_attribute_rarity" && (
+              <Select
+                aria-label="Rarity worked out"
+                value={rarityScope}
+                onChange={(e) => {
+                  setRarityScope(e.target.value as RarityScope);
+                  updateFilter({ values: null, edgeValues: null, threshold: null });
+                }}
+              >
+                <option value="dataset">Per dataset</option>
+                <option value="case">Across the case's datasets</option>
+              </Select>
+            )}
+            {(filter.metric === "connection_strength" || filter.metric === "shared_attribute_rarity") && (
+              <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+                {filter.metric === "connection_strength"
+                  ? "Each link's stored strength with the influencers in the legend; a node takes its strongest link."
+                  : "How rare what two people share is, over what you may see; a node takes its rarest pairing."}
+              </p>
+            )}
             {filter.metric !== null && filter.values !== null && (
               <label style={{ display: "grid", gap: "var(--sp-4)" }}>
                 <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
-                  Metric value at least {(filter.threshold ?? range.min).toFixed(3)}
+                  Metric value at least: {(filter.threshold ?? range.min).toFixed(3)}
                 </span>
                 <Slider
                   aria-label="Metric value at least"

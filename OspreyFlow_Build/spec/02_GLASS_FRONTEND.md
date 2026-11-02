@@ -860,6 +860,20 @@ metric gave no value. The two add to each other and to the timeline's dimming, a
 the union. A filter belongs to the view and is not stored; *Clear filters* returns the full picture.
 Reachable by keyboard (`keyboard/metrics-panel.spec.ts`).
 
+**Connection strength and rarity (ADR-139).** The Metrics panel's metrics gain *Connection strength*
+(a link's stored weight with the influencers in force, `01_DOMAIN_MODEL.md` §6.1a: a link below the
+threshold dims, and a node none of whose links reaches it) and *Shared-attribute rarity* (a node takes
+its rarest pairing with another of its kind in view; per dataset or across the case), ranked and
+filtered as the others, read from `connection-strength` and `rarity` (spec 03), never computed in the
+browser. The Matrix view's link table gains **Strength** and **Rarity** (of the link's two ends),
+sortable. The legend box gains a *Connection strength* part listing exactly the influencers in force,
+each with its trigger, links, change, size and layer (a case override marked), the direct link types,
+what the case switched off, and the rarity note. The Inspector explains a selected link's strength (its
+count against what is heavy, recency, rule and version, each influencer applied naming the kind of
+record that evidenced it) and ranks what its two ends, or two selected nodes, share. Monitoring gains a
+*Connection strength* tab: the case's override (its Author) and the installation set's maker–checker
+(`manage_strength_influencers`).
+
 Community detection produces a **hull overlay**, not a recolour: a translucent boundary drawn
 around each community at 8% channel opacity, labelled with size and dominant entity type.
 Recolouring nodes by community would collide with the entity-type channel and break the one rule

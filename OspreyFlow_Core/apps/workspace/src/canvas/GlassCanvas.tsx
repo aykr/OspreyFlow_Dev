@@ -50,6 +50,7 @@ import type {
   EntityTypeDef,
   Node,
   Path as GraphPath,
+  StrengthLegend,
 } from "../../../../packages/schemas/generated";
 import type { ExportMark } from "../export/api";
 import { captureChartImage } from "../export/chartExport";
@@ -241,6 +242,9 @@ export interface GlassCanvasProps {
   dimmedNodeIds?: ReadonlySet<string>;
   /** Link ids the active cross-filter excludes (ADR-087): dimmed, never removed. */
   dimmedEdgeIds?: ReadonlySet<string>;
+  /** ADR-139 decision 7: the case's connection-strength legend (the influencers in force, the
+   * direct link types, the rarity note), drawn in the legend box. Absent: not shown. */
+  strengthLegend?: StrengthLegend | null;
   onSelectionChange?: (nodeIds: string[]) => void;
   /** A branch of the selected nodes was made (ADR-084): the new case's id and name. The caller
    * opens it. Absent: this canvas offers no "Branch selected" button. */
@@ -415,6 +419,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       bearerToken,
       dimmedNodeIds = EMPTY_DIMMED_SET,
       dimmedEdgeIds = EMPTY_DIMMED_SET,
+      strengthLegend = null,
       onSelectionChange,
       onBranchCreated,
       onAskAboutDocuments,
@@ -3619,7 +3624,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           className="canvas-corner"
           style={toolbarHeight ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties) : undefined}
         >
-          <CanvasLegend types={legendTypes} links={legendLinks} valueIcons={legendValueIcons} onToggleLink={toggleLinkType} />
+          <CanvasLegend
+            types={legendTypes}
+            links={legendLinks}
+            valueIcons={legendValueIcons}
+            onToggleLink={toggleLinkType}
+            strength={strengthLegend}
+          />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>
         {addingFiles && bearerToken && investigationId && (

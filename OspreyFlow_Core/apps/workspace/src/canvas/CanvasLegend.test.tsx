@@ -167,3 +167,62 @@ describe("CanvasLegend's links", () => {
     expect(container.querySelector<HTMLUListElement>('ul[aria-label="Icons by value"]')?.hidden).toBe(true);
   });
 });
+
+// ADR-139 decision 7: the legend box lists exactly the influencers in force, each with its trigger,
+// links, change and size and where it came from (a case override marked), the direct link types,
+// what the case switched off, and that rarity is worked out over what the reader may see.
+describe("CanvasLegend's connection strength", () => {
+  const types = [{ type: "Person", count: 2 }];
+  const links = [
+    { type: "VISITED", label: "Visited", count: 3, colour: null, shown: true },
+    { type: "IN_CONFLICT_WITH", label: "In conflict with", count: 1, colour: null, shown: true },
+  ];
+  const strength = {
+    influencers: [
+      {
+        layer: "installation" as const,
+        version: 2,
+        influencer: { id: "direct", label: "Direct link", link_types: ["VISITED"], change: "add" as const, size: 0.2, trigger: null },
+      },
+      {
+        layer: "case" as const,
+        version: 1,
+        influencer: {
+          id: "assault",
+          label: "Assault in this case",
+          link_types: ["IN_CONFLICT_WITH"],
+          change: "floor" as const,
+          size: 0.7,
+          trigger: { entity_type: "Incident", property: "category", values: ["assault"] },
+        },
+      },
+    ],
+    direct_link_types: ["VISITED"],
+    switched_off: ["incident-source"],
+    rarity_note: "Shared-attribute rarity is worked out over what you may see.",
+  };
+
+  it("lists exactly the influencers in force, the case's own marked, and the direct link types", () => {
+    const { getByRole, getByText } = render(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      <CanvasLegend types={types} links={links} strength={strength as any} />,
+    );
+    const list = getByRole("list", { name: "Strength influencers" });
+    const rows = Array.from(list.querySelectorAll("li")).map((li) => li.textContent ?? "");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Direct link");
+    expect(rows[0]).toContain("Visited: adds 0.2 to the score before the curve, always (these are direct links)");
+    expect(rows[0]).toContain("installation-wide, version 2");
+    expect(rows[0]).not.toContain("Case override");
+    expect(rows[1]).toContain("Case override");
+    expect(rows[1]).toContain("In conflict with: draws it at least 0.7 strong, when an Incident's category is assault");
+    expect(getByText(/Direct links: Visited\./)).toBeTruthy();
+    expect(getByText(/Switched off in this case: incident-source\./)).toBeTruthy();
+    expect(getByText("Shared-attribute rarity is worked out over what you may see.")).toBeTruthy();
+  });
+
+  it("shows no strength part without a legend", () => {
+    const { queryByRole } = render(<CanvasLegend types={types} links={links} />);
+    expect(queryByRole("list", { name: "Strength influencers" })).toBeNull();
+  });
+});

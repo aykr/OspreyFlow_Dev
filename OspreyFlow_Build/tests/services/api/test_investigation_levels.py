@@ -44,6 +44,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/resolution/split"): E,
     ("GET", P + "/resolution/explain/{cluster_id}"): V,
     ("POST", P + "/compute/{metric}"): V,
+    # ADR-139: strength and rarity are reads; a case's influencer override is its Author's.
+    ("POST", P + "/connection-strength"): V,
+    ("POST", P + "/rarity"): V,
+    ("GET", P + "/strength-influencers"): V,
+    ("PUT", P + "/strength-influencers"): A,
     ("POST", P + "/ingest/extract"): E,
     ("GET", P + "/ingest/candidates"): V,
     ("POST", P + "/ingest/candidates/{candidate_id}/accept"): E,

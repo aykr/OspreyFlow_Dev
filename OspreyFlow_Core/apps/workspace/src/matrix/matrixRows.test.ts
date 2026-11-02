@@ -155,3 +155,35 @@ describe("sorting and paging", () => {
     expect(pageContaining(rows, "missing")).toBeNull();
   });
 });
+
+// ADR-139 decision 6: the link table sorts by connection strength and by its ends' rarity; a link
+// not worked out sorts below every one that is, either way round from the bottom.
+describe("ADR-139's strength and rarity columns", () => {
+  const rows = [
+    { id: "l1", from: "A", strength: 0.4, rarity: 2.1 },
+    { id: "l2", from: "B", strength: 0.9, rarity: null },
+    { id: "l3", from: "C", strength: null, rarity: 0.3 },
+  ];
+
+  it("sorts by strength, most first, with an unknown strength last", () => {
+    expect(sortRows(rows, "strength", "descending").map((r) => r.id)).toEqual(["l2", "l1", "l3"]);
+    expect(sortRows(rows, "strength", "ascending").map((r) => r.id)).toEqual(["l3", "l1", "l2"]);
+  });
+
+  it("carries each link's strength and rarity from what was worked out, and null for the rest", () => {
+    const { graph, store } = createWorkingSet();
+    store.getState().applyDelta({
+      seq: 1,
+      op: "snapshot",
+      nodes: [makeNode("p1"), makeNode("p2"), makeNode("p3")],
+      edges: [makeEdge("ab", "p1", "p2"), makeEdge("bc", "p2", "p3")],
+    });
+    const found = linkRows(graph, [], new Set(), { strength: { ab: 0.62 }, rarity: { bc: 1.8 } });
+    const byId = Object.fromEntries(found.map((r) => [r.id, [r.strength, r.rarity]]));
+    expect(byId).toEqual({ ab: [0.62, null], bc: [null, 1.8] });
+  });
+
+  it("sorts by rarity, rarest first", () => {
+    expect(sortRows(rows, "rarity", "descending").map((r) => r.id)).toEqual(["l1", "l3", "l2"]);
+  });
+});

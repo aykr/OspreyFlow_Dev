@@ -11799,6 +11799,7 @@ rights list. Nothing here is built.
 | I7 | Ask the case a question (the model) | V | ✓ | | | |
 | I8 | Run network analysis (centrality, communities, paths at scale) | V | ✓ | ✓ | | |
 | I9 | Propose a link type | E | ✓ | ✓ | | |
+| I10 | Propose and approve installation-wide link-strength influencers (added by ADR-139, 2 November 2026; a second holder approves, never the proposer) | — | ✓ | | ✓ | |
 | **Alerts and AML** |||||||
 | L1 | Read the alert queue | V | ✓ | ✓ | | ✓ |
 | L2 | Triage alerts: claim, release, put on the canvas, close with a reason | E | ✓ | | | |
@@ -22115,3 +22116,109 @@ viewer cannot see (rules 3 and 7).
 - Weights version 3 stays the stored basis, and no recompute is needed.
 - The client's exact sizes can be entered as an installation-wide influencer version once known, with
   no code change.
+
+### ADR-139, Amendment 1 (2 November 2026) — step 9f as built, and how it read the decision
+
+Status: built on 2 November 2026 (build-order step 9f), on the branch `connection-strength`; open to
+the owner's review. Each item is how the build read a point the decision left open, or what it found.
+
+**As built:**
+1. **The arithmetic.** An influencer's change is applied to the stored weight's pre-logistic score,
+   recovered exactly by the logistic's inverse (`raw = midpoint + scale · ln(w/(1 − w))`, the one
+   deployment-wide `midpoint` and `scale`; a weight of exactly 0 or 1 is read as 10⁻⁹ from it). Adds
+   are summed, then multipliers multiplied, then the logistic; then floors (the highest); **then an
+   exclusion, last**, so "no stronger than the base" caps a floor too. Nothing applying leaves the
+   stored weight exactly. A structural link's fixed weight is treated the same way (its inverse is a
+   finite score), so an influencer can change a structural link if it names one; the shipped ones
+   name none. Monotonicity (decision's first test) is held over a grid of every combination of the
+   four changes, with and without evidence; shown red by a boost given only to links below the
+   midpoint.
+2. **"Evidences".** A record evidences a link when it is at one end of the link (a `ROLE_IN` to the
+   incident) or linked to both ends by links the reader may see (two people in one incident). This is
+   one hop each way; a record two hops away evidences nothing.
+3. **The trigger's property is `category`.** The decision says an Incident's `incident_type`; the NIEM
+   pack (version 3) declares `category`, with the values `assault`, `disorder`, `find`, `other` and
+   `throw_over`, and no `incident_type`. The shipped influencer and the demo use `category`.
+4. **The link types an incident evidences** in the shipped ontology, for the shipped
+   `incident-source` influencer: `ROLE_IN` (the incident at one end), and the person-to-person links of
+   people involved in one: `IN_CONFLICT_WITH`, `ASSOCIATE_OF` and `SHARED_CELL_WITH`. Left out:
+   `OCCURRED_AT` (a fixed fact, ADR-120 Amendment 9), `FAMILY_OF` and `CO_DEFENDANT_OF` (not evidenced by
+   an incident), `VISITED` (a visit is not), and `PASSES_ITEMS_TO` (inferred).
+5. **Sizes.** Both shipped influencers add 0.1348: how far doubling an ordinary link's count, from the
+   default rule's heavy count (10) to 20, moves its pre-logistic score, α·(ln 21 − ln 11)/ln 11. A
+   test holds the file to the derivation. Marked "to be confirmed with the client".
+6. **Any trigger-less influencer marks its link types direct** in the legend, as decision 1 defines
+   direct links; a trigger-less floor on money therefore lists money as direct.
+7. **The right `manage_strength_influencers`** (ADR-112's I10) is held by the **Analyst** and **Admin**
+   roles: the decision has analysts propose and approve, and the administrator runs the installation's
+   settings. It is a system-wide right with no case level, as L9 is. The case's own reads
+   (`connection-strength`, `rarity`, `strength-influencers` GET) need `investigate` at Viewer; the case
+   override needs `investigate` at **Author** (the decision names the Author and no right).
+8. **Maker–checker** follows ADR-133 stage (d): a proposal is a whole new set (the version), `pending`
+   until a second holder approves it; one version waits at a time (`409`); the proposer may withdraw it
+   (send it back) but never approve it (`403 own_change`); the version in force is the latest approved,
+   and before any is approved the weights file's are. A version names its proposer and decider by name
+   (ADR-106), resolved when served. Each step is audited (`strength_influencers_proposed`, `…_approved`,
+   `…_sent_back`, `case_strength_influencers_set`). An influencer naming a type, property, value or link
+   type the ontology does not declare is refused `422`, in words.
+9. **Rarity's attribute nodes** are every visible node linked to both entities except an `Alert` (the
+   weights file's `rarity.exclude_types`): a cell, a phone, a visitor, a report, a group and the
+   establishment all count, and the inverse frequency makes the common ones score near zero. Pairs
+   are of one entity type only (a pair of different types has no score). **Per dataset** means each
+   dataset both entities and the attribute belong to, the highest kept and named; two sharing no
+   dataset have no score there. A pair the Glass asks for that is not in the reader's view is answered
+   as one naming nobody (no score, nothing shared), its own ids echoed. Past 2,000,000 pair
+   contributions the read is refused `limit_exceeded` (`cap_kind: "pairs"`, a new value).
+10. **Not built: the count-based rarity** (decision 4's last bullet, "a higher number of incidents").
+    It is the same measure over a link's occurrence count against its type's visible distribution;
+    nothing in the Glass or the rules asks for it yet. Recorded as an open question.
+11. **The Glass.** *Connection strength* and *Shared-attribute rarity* join the Metrics panel's ranking
+    and filter metrics; a node takes its strongest link (strength) or its rarest pairing with another of
+    its kind in view (rarity); the strength filter also dims each link below the threshold. The Matrix's
+    link table sorts by **Strength** and **Rarity** (of the link's two ends). The legend's *Connection
+    strength* part, the Inspector's *Connection strength* section (a link) and *What these two share*
+    (two nodes selected). The influencer editor is a **Monitoring** tab, *Connection strength*, beside
+    the rules it changes, since analysts hold the right: the Admin area is the administrator's alone.
+12. **Rules.** A sentence's `strength` blank: "the connection strength between it and [a type, or
+    anything] [by a link type, or any] reaches X" (X in (0, 1]), judged on the subject's links read as the
+    author (`expand`, then `connection_strengths`), the strongest kept; or "the shared-attribute rarity
+    between it and another of its type reaches X", per dataset or across the case. Either runs after
+    commit or on a schedule, never before commit. A run with no influencer store (a KYC sweep, a list's
+    re-screening) judges with the weights file's influencers alone.
+13. **Stored weights stay version 3**, and the weights file gains two top-level keys beside `versions`
+    (`influencers`, `rarity`), which the loader now accepts; the frozen versions are unchanged.
+
+**Tests**, each shown red first in the code's own shape (evidence `s9f_*`): the pure arithmetic,
+triggers, resolution order and legend (`tests/ontology/test_influencers.py`); the conformance cases
+(`connection_strengths` and `shared_attribute_rarity`, including both hidden-world cases and the cap);
+the case reads under access with a hidden record and a hidden entity, and the payload's field walk
+(`working_set/test_connection_strength_access_control.py`); maker–checker and case overrides
+(`test_strength_influencer_routes.py`); the rule condition as its author (`test_strength_sentence_rules.py`);
+the demo's claims on the plan (`scenarios/test_pid_connection_strength.py`); the Glass's units; keyboard
+(`strength.spec.ts`, and cases in `metrics-panel.spec.ts`, `matrix.spec.ts`, `inspector.spec.ts`) and
+axe states.
+
+### ADR-127, Amendment 42 (2 November 2026) — the storyline gains a connection-strength scene
+
+Status: added with ADR-139's build (step 9f); the scene is J6b of `PRISON_DEMO_SCRIPT_v4_PROPOSED.md`
+and Part C of `CAPTURE_RUNBOOK_v4.md`, not yet rehearsed.
+
+**No generated data changed.** The case already holds each of the scene's ideas, proved on the plan at
+any load date (`tests/scenarios/test_pid_connection_strength.py`):
+1. **An assault-evidenced link drawn stronger:** the principal's conflict with calder_1, both of them in
+   `assault_1`.
+2. **A direct call against a shared address:** cellmate_1 and cellmate_2 held cell F1-03 at different
+   times, so they share that address in custody and no link, where the principal's PIN calls to the
+   coordinator's number are a direct link. **Read as:** a prisoner's address is their cell; the case
+   holds no home addresses. An outside address would be a new file and recipe (open question).
+3. **A rare shared contact ranking above a common one:** relay_1 and relay_2 share relay_4 (three people
+   are linked to him) above the principal (linked to many) and Fenwick Moor (everyone).
+4. **The filters dimming:** any part of the case.
+5. **A strength rule:** with the case's own influencer "Assault in this case" (at least 0.95 on *In
+   conflict with* when an Incident's category is assault), the rule "When a Person is linked by *In
+   conflict with* to a Person and the connection strength between it and a Person by *In conflict
+   with* reaches 0.95" would raise exactly three alerts, the principal, calder_1 and calder_2; without the
+   case's influencer, none. Previewed, not deployed; the override is removed afterwards.
+
+Captures `CAP-S1` to `CAP-S6`, both brands, in `apps/workspace/live/pid-capture.spec.ts`; not run.
+

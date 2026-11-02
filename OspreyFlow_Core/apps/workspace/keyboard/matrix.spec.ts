@@ -215,6 +215,26 @@ test("Show on a row opens the Graph with that node selected", async ({ page }) =
   registerCovered("MATRIX_ACTIONS", "show-a-row-on-the-graph-by-keyboard");
 });
 
+test("the link table sorts by connection strength and by rarity, by keyboard (ADR-139)", async ({ page }) => {
+  await openMatrix(page, "?strength=1");
+  await tabUntilFocused(page, links(page).getByRole("button", { name: "Link", exact: true }));
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowRight");
+  expect(await focusedText(page)).toBe("Strength");
+  // A number sorts most first at the first press, as "Links in view" does.
+  await page.keyboard.press("Enter");
+  await expect(links(page).getByRole("columnheader", { name: "Strength" })).toHaveAttribute("aria-sort", "descending");
+  // The strongest first: OKAFOR's Endpoint link (0.88).
+  await expect(links(page).locator("tbody tr").first()).toContainText("0.88");
+  await page.keyboard.press("ArrowRight");
+  expect(await focusedText(page)).toBe("Rarity");
+  await page.keyboard.press("Enter");
+  await expect(links(page).getByRole("columnheader", { name: "Rarity" })).toHaveAttribute("aria-sort", "descending");
+  // The rarest pairing first: OKAFOR and ADEYEMI (2.40); a pairing with none worked out is last.
+  await expect(links(page).locator("tbody tr").first()).toContainText("2.40");
+  await expect(links(page).locator("tbody tr").last()).toContainText("None");
+  registerCovered("MATRIX_ACTIONS", "sort-links-by-strength-and-rarity-by-keyboard");
+});
+
 test("every Matrix keyboard action has a proving case", () => {
   assertAllCovered("MATRIX_ACTIONS", MATRIX_ACTIONS);
 });

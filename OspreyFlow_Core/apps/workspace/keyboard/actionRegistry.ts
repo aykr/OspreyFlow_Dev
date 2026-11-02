@@ -202,6 +202,10 @@ export const METRICS_PANEL_ACTIONS = defineActionRegistry("METRICS_PANEL_ACTIONS
   "row-select-and-centre",
   "filter-section-sets-a-strength-floor-by-keyboard",
   "filter-section-dims-below-a-metric-value-by-keyboard",
+  // ADR-139 decisions 6 and 7: the two new filter metrics, and the legend's strength part.
+  "filter-section-dims-below-connection-strength-by-keyboard",
+  "filter-section-dims-below-shared-attribute-rarity-by-keyboard",
+  "legend-lists-the-strength-influencers-by-keyboard",
 ] as const);
 
 /**
@@ -585,6 +589,18 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
   "subscribe-to-a-screening-list-by-keyboard",
 ] as const);
 
+/** ADR-139 decision 3 in the Monitoring place's Connection strength tab: a waiting installation-wide
+ * version approved by a second holder of the right, and withdrawn (never approved) by its proposer; a
+ * new version proposed with an influencer written blank by blank; a case's own override set by its
+ * Author; and decision 8's strength blank written in a sentence rule. `keyboard/strength.spec.ts`. */
+export const STRENGTH_ACTIONS = defineActionRegistry("STRENGTH_ACTIONS", [
+  "approve-a-waiting-influencer-version-by-keyboard",
+  "withdraw-ones-own-influencer-version-by-keyboard",
+  "propose-an-influencer-version-by-keyboard",
+  "set-a-case-override-by-keyboard",
+  "write-a-strength-rule-by-keyboard",
+] as const);
+
 /** ADR-133 stage (d) in the Monitoring place: a rule written to run on a schedule, its schedule and
  * runs read; a whole-deployment rule approved and another's change rejected by a second person; a
  * rule's versions read; a high-severity alert's close proposed, approved by a second member, and
@@ -690,6 +706,8 @@ export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [
   "score-a-neighbourhoods-risk-by-keyboard",
   // ADR-115 E4: Expand from the Inspector, through the canvas's own preview.
   "expand-a-node-from-the-inspector-by-keyboard",
+  // ADR-139 decision 9: a link's strength explained, and what its ends share ranked by rarity.
+  "explain-a-links-strength-by-keyboard",
 ] as const);
 
 /** The workspace shell (ADR-097 step 1): the top bar, the left rail, the classification strip.
@@ -854,4 +872,6 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
   "select-a-link-row-by-keyboard",
   "expand-from-a-row-by-keyboard",
   "show-a-row-on-the-graph-by-keyboard",
+  // ADR-139 decision 6: the link table sorts by connection strength and by its ends' rarity.
+  "sort-links-by-strength-and-rarity-by-keyboard",
 ] as const);

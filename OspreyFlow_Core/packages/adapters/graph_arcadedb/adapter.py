@@ -20,19 +20,22 @@ import asyncio
 import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, audience_of, audience_parts, merge_handling
+from ontology.influencers import connection_strength
 from ontology.pattern_where import check_pattern_conditions
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ontology.weights import WeightRules, load_weight_rules
+from ontology.weights import WeightRules, load_weight_history, load_weight_rules
 from ports.graph import (
+    RARITY_PAIR_CAP,
     AmbiguousElementId,
     BulkEdgeResult,
     FindLimitExceeded,
     NodeSuggestions,
+    RarityTooLarge,
     StoredLink,
     StoredNode,
     SubgraphTooLarge,
@@ -78,6 +81,14 @@ from schemas.explore import (
     TypeCounts,
 )
 from schemas.merge import merge_datasets, merge_interval, merge_properties, merge_provenance
+from schemas.strength import (
+    ActiveInfluencer,
+    LinkStrength,
+    PairRarity,
+    RarityResult,
+    RarityScope,
+    SharedAttribute,
+)
 
 from .access_filter import AccessFilter
 from .builders import (
@@ -122,6 +133,18 @@ from .serialization import (
     edge_write_to_properties,
     node_from_element_map,
     node_write_to_properties,
+)
+from .strength import (
+    Attribute,
+    Counts,
+    Member,
+    pair_contributions,
+    pair_score,
+    render_attribute_neighbours,
+    render_kind_counts,
+    render_rarity_members,
+    render_records_at_ends,
+    render_records_linked,
 )
 from .weight import compute_weight
 
@@ -1210,6 +1233,237 @@ class GraphArcadeDBAdapter:
             ],
             total=int(counted.get("result") or 0),
         )
+
+    # --- connection strength and rarity (ADR-139) ---------------------------------------------
+
+    async def _vertex_record_ids(self, ids: Sequence[str]) -> list[str]:
+        """The record ids of the vertices holding `ids`, by each vertex type's unique `id` index
+        (as `get_nodes` resolves them); nothing here is access-filtered, the Gremlin that follows
+        is."""
+        chunks = _id_chunks(ids)
+        if not chunks:
+            return []
+        types = await self._types_with_unique_id("vertex")
+        rids: list[str] = []
+        for chunk in chunks:
+            rids.extend(await self._record_ids(types, chunk))
+        return rids
+
+    def _rule_facts(self, edge: Edge) -> tuple[int | None, float | None]:
+        """What is heavy for the link's type, or its fixed strength, under the version its weight
+        was computed under (`parameter_set`), or the current version when it names none."""
+        rules = self._weight_rules
+        stamp = edge.weight_components.parameter_set if edge.weight_components else None
+        if stamp:
+            version = stamp.split("/", 1)[0]
+            if version.isdigit():
+                history = load_weight_history()
+                if 1 <= int(version) <= len(history):
+                    rules = history[int(version) - 1]
+        _, rule = rules.rule_for(edge.type)
+        return rule.heavy, rule.fixed
+
+    async def connection_strengths(
+        self,
+        edge_ids: Sequence[EdgeId],
+        principal: Principal,
+        *,
+        influencers: Sequence[ActiveInfluencer],
+    ) -> list[LinkStrength]:
+        edges = await self.get_edges(edge_ids, principal)
+        if not edges:
+            return []
+        evidence: dict[str, dict[str, str]] = {e.id: {} for e in edges}
+        for active in influencers:
+            trigger = active.influencer.trigger
+            if trigger is None or not active.influencer.enabled:
+                continue
+            relevant = [e for e in edges if e.type in active.influencer.link_types]
+            if not relevant:
+                continue
+            ends = sorted({end for e in relevant for end in (e.source, e.target)})
+            rids = await self._vertex_record_ids(ends)
+            at_ends = {
+                str(r["result"]) if isinstance(r, dict) else str(r)
+                for r in await self._client.gremlin(
+                    render_records_at_ends(rids, trigger, self._access, principal)
+                )
+            }
+            linked = {
+                str(r["id"]): {str(x) for x in r.get("r") or []}
+                for r in await self._client.gremlin(
+                    render_records_linked(rids, trigger, self._access, principal)
+                )
+            }
+            for edge in relevant:
+                if (
+                    edge.source in at_ends
+                    or edge.target in at_ends
+                    or linked.get(edge.source, set()) & linked.get(edge.target, set())
+                ):
+                    evidence[edge.id][active.influencer.id] = trigger.entity_type
+        found: list[LinkStrength] = []
+        for edge in edges:
+            strength, applied = connection_strength(
+                edge.weight, edge.type, influencers, evidence[edge.id], self._weight_rules
+            )
+            heavy, fixed = self._rule_facts(edge)
+            found.append(
+                LinkStrength(
+                    edge_id=edge.id,
+                    edge_type=edge.type,
+                    base_weight=edge.weight,
+                    strength=strength,
+                    parameter_set=(
+                        edge.weight_components.parameter_set if edge.weight_components else None
+                    ),
+                    heavy=heavy,
+                    fixed=fixed,
+                    occurrences=edge.occurrences,
+                    last_seen=edge.interval.valid_to if edge.interval else None,
+                    applied=applied,
+                )
+            )
+        return found
+
+    async def shared_attribute_rarity(
+        self,
+        node_ids: Sequence[NodeId],
+        principal: Principal,
+        *,
+        scope: RarityScope = "dataset",
+        pairs: Sequence[tuple[NodeId, NodeId]] = (),
+        partners: Literal["among", "any"] = "among",
+        exclude_types: Sequence[str] = ("Alert",),
+        cap: int = RARITY_PAIR_CAP,
+    ) -> RarityResult:
+        asked = list(dict.fromkeys([*node_ids, *(x for p in pairs for x in p)]))
+        rids = await self._vertex_record_ids(asked)
+        members: dict[str, Member] = {}
+        for row in await self._client.gremlin(
+            render_rarity_members(rids, exclude_types, self._access, principal)
+        ):
+            members[str(row["id"])] = Member(
+                id=str(row["id"]),
+                label=str(row["l"]),
+                datasets=frozenset(str(d) for d in row.get("ds") or []),
+                attributes=frozenset(str(x) for x in row.get("nb") or []),
+            )
+        among = partners == "among"
+        population = {i: members[i] for i in dict.fromkeys(node_ids) if i in members}
+        # The attributes to read: any two of the population share (among), or every one any of
+        # them holds (anyone of the kind), and those of the pairs asked for.
+        wanted: set[str] = set()
+        if among:
+            seen: dict[tuple[str, str], int] = {}
+            for m in population.values():
+                for a in m.attributes:
+                    seen[(a, m.label)] = seen.get((a, m.label), 0) + 1
+            wanted |= {a for (a, _), n in seen.items() if n >= 2}
+        else:
+            wanted |= {a for m in population.values() for a in m.attributes}
+        for u, v in pairs:
+            if u in members and v in members:
+                wanted |= members[u].attributes & members[v].attributes
+        attributes: dict[str, Attribute] = {}
+        attribute_rids = await self._vertex_record_ids(sorted(wanted))
+        for row in await self._client.gremlin(
+            render_attribute_neighbours(attribute_rids, self._access, principal)
+        ):
+            attributes[str(row["id"])] = Attribute(
+                id=str(row["id"]),
+                datasets=frozenset(str(d) for d in row.get("ds") or []),
+                neighbours={
+                    str(n["id"]): (str(n["l"]), frozenset(str(d) for d in n.get("ds") or []))
+                    for n in row.get("nb") or []
+                },
+            )
+        work = pair_contributions(population, attributes, among=among)
+        if work > cap:
+            raise RarityTooLarge(pairs=work, cap=cap)
+        counts = Counts()
+        for kind in sorted({m.label for m in members.values()}):
+            total_query, by_dataset_query = render_kind_counts(kind, self._access, principal)
+            (total,) = await self._client.gremlin(total_query)
+            by_dataset = await self._client.gremlin(by_dataset_query)
+            per: dict[str | None, int] = {None: int(total.get("result") or 0)}
+            for row in by_dataset:
+                if isinstance(row, dict) and "result" not in row:
+                    per.update({str(k): int(v) for k, v in row.items()})
+            counts.by_kind[kind] = per
+        per_dataset = scope == "dataset"
+        readable = principal.datasets
+
+        def score(u: str, v: str) -> tuple[float | None, str | None, list[tuple[str, float]]]:
+            if u not in members or v not in members:
+                return None, None, []
+            return pair_score(
+                members[u], members[v], attributes, counts,
+                per_dataset=per_dataset, readable=readable,
+            )  # fmt: skip
+
+        # Each entity's best pair: among the population, or with anyone of its kind.
+        best: dict[str, tuple[float, str]] = {}
+        for member in population.values():
+            if among:
+                others = {
+                    o for a in member.attributes if a in attributes
+                    for o in attributes[a].neighbours if o in population and o != member.id
+                }  # fmt: skip
+            else:
+                others = {
+                    o for a in member.attributes if a in attributes
+                    for o, (label, _) in attributes[a].neighbours.items()
+                    if label == member.label and o != member.id
+                }  # fmt: skip
+                missing = sorted(o for o in others if o not in members)
+                if missing:
+                    for row in await self._client.gremlin(
+                        render_rarity_members(
+                            await self._vertex_record_ids(missing), exclude_types,
+                            self._access, principal,
+                        )
+                    ):  # fmt: skip
+                        members[str(row["id"])] = Member(
+                            id=str(row["id"]),
+                            label=str(row["l"]),
+                            datasets=frozenset(str(d) for d in row.get("ds") or []),
+                            attributes=frozenset(str(x) for x in row.get("nb") or []),
+                        )
+            for other in sorted(others):
+                value, _, _ = score(member.id, other)
+                held = best.get(member.id)
+                if value is not None and value > 0 and (held is None or value > held[0]):
+                    best[member.id] = (value, other)
+        node_values = {u: value for u, (value, _) in best.items()}
+        explained = list(pairs)
+        if not among:
+            explained += [(u, other) for u, (_, other) in sorted(best.items())]
+        attribute_nodes = {
+            n.id: n
+            for n in await self.get_nodes(
+                sorted({a for u, v in explained if u in members and v in members
+                        for a in members[u].attributes & members[v].attributes}),
+                principal,
+            )
+        }  # fmt: skip
+        results: list[PairRarity] = []
+        for u, v in explained:
+            value, dataset, parts = score(u, v)
+            results.append(
+                PairRarity(
+                    a=u,
+                    b=v,
+                    score=value,
+                    dataset=dataset,
+                    shared=[
+                        SharedAttribute(node=attribute_nodes[a], score=s)
+                        for a, s in parts
+                        if a in attribute_nodes
+                    ],
+                )
+            )
+        return RarityResult(scope=scope, node_values=node_values, pairs=results)
 
     async def link_structure(
         self, principal: Principal, *, max_nodes: int, max_edges: int

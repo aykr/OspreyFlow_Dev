@@ -1105,3 +1105,173 @@ test("CAP-M5-b", async ({ page }) => {
   await shot(page, "CAP-M5-b");
   await shot(page, "CAP-A2-C10-c");
 });
+
+// --- connection strength (ADR-139; the demo script's strength scene, ADR-127 Amendment 42) --------
+//
+// Read-only but for CAP-S6, which saves the case's own influencer as its Author (the presenter's
+// step; `CAPTURE_RUNBOOK_v4.md` says how to undo it). Every person is found by the prison number
+// the plan gives them, never by a name written here.
+
+/** The cast member's prison number and the name the canvas draws ("Family, Given"). */
+function castMember(key: string): { number: string; name: string } {
+  const e = `plan.entity('${key}').properties`;
+  const [number, family, given] = fromPlan(`${e}['prison_number'], ${e}['family_name'], ${e}['given_names']`);
+  if (!number || !family) throw new Error(`the plan gave no prison number for ${key}`);
+  return { number, name: `${family}, ${given}` };
+}
+
+/** Adds each cast member to an empty canvas by their prison number. */
+async function addCast(page: Page, keys: string[]): Promise<{ number: string; name: string }[]> {
+  const found = keys.map(castMember);
+  for (const member of found) {
+    await pickFromSearch(page, member.number, /^Person/);
+    await page.waitForTimeout(2500);
+  }
+  return found;
+}
+
+/** The Matrix view, two entity rows selected together (the Inspector's "What these two share"). */
+async function selectTwoInMatrix(page: Page, first: string, second: string): Promise<void> {
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Matrix", exact: true }).click();
+  const entities = page.getByRole("grid", { name: /^Entities in this view/ });
+  await entities.getByRole("rowheader", { name: new RegExp(first) }).click();
+  await entities.getByRole("rowheader", { name: new RegExp(second) }).click({ modifiers: ["Control"] });
+  await page.waitForTimeout(2000);
+}
+
+/** The Matrix view's link row from `from` of `linkLabel`, selected (the Inspector shows the link). */
+async function selectLinkInMatrix(page: Page, linkLabel: string, from: RegExp): Promise<void> {
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Matrix", exact: true }).click();
+  const links = page.getByRole("grid", { name: /^Links in this view/ });
+  const row = links.getByRole("row").filter({ hasText: linkLabel }).filter({ hasText: from }).first();
+  await row.getByRole("rowheader").click();
+  await page.waitForTimeout(2000);
+}
+
+test("CAP-S1", async ({ page }) => {
+  // The legend box: the influencers in force (shipped, so "to be confirmed with the client"), the
+  // direct link types, and that rarity is worked out over what the reader may see.
+  await principalStar(page);
+  const legend = page.locator(".canvas-legend");
+  await expect(legend.getByRole("list", { name: "Strength influencers" })).toBeVisible();
+  console.log(`S1 legend: ${await legend.textContent()}`);
+  await shot(page, "CAP-S1");
+});
+
+test("CAP-S2", async ({ page }) => {
+  // An assault-evidenced conflict drawn stronger: the principal's conflict with calder_1, both of
+  // them in assault_1; the Inspector says why, naming the Incident that evidences it.
+  await principalStar(page);
+  const calder = castMember("calder_1");
+  await selectLinkInMatrix(page, "In conflict with", new RegExp(calder.name.split(",")[0]!));
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "Connection strength", exact: true }).click();
+  const why = page.getByRole("list", { name: "What this link's strength rests on" });
+  await expect(why).toContainText("evidences it");
+  console.log(`S2: ${await why.textContent()}`);
+  await shot(page, "CAP-S2");
+});
+
+test("CAP-S3", async ({ page }) => {
+  // A direct call against a shared address: two men who held the same cell at different times share
+  // that address in custody and nothing direct (a), where the principal's calls to the coordinator
+  // are a direct link, drawn stronger (b).
+  await freshCase(page);
+  const [one, two] = await addCast(page, ["cellmate_1", "cellmate_2"]);
+  await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "What these two share", exact: true }).click();
+  const shared = page.getByRole("list", { name: "Shared attributes, rarest first" });
+  await expect(shared).toBeVisible();
+  console.log(`S3-a: ${await shared.textContent()}`);
+  await shot(page, "CAP-S3-a");
+  await freshCase(page);
+  const { national } = coordinatorNumber();
+  await pickFromSearch(page, `+44 ${national.slice(1)}`, /^Endpoint/);
+  await page.getByRole("button", { name: "Expand" }).first().click().catch(() => undefined);
+  await page.waitForTimeout(4000);
+  await selectLinkInMatrix(page, "COMMUNICATED_WITH", /PIN-/);
+  await page.getByRole("button", { name: "Connection strength", exact: true }).click();
+  const why = page.getByRole("list", { name: "What this link's strength rests on" });
+  await expect(why).toContainText("a direct link");
+  console.log(`S3-b: ${await why.textContent()}`);
+  await shot(page, "CAP-S3-b");
+});
+
+test("CAP-S4", async ({ page }) => {
+  // A rare shared contact ranking above a common one: relay_1 and relay_2 share relay_4 (three
+  // people know him) above the principal (linked to many) and the establishment (everyone).
+  await freshCase(page);
+  const [one, two] = await addCast(page, ["relay_1", "relay_2"]);
+  await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
+  await onlyPanel(page, "Inspector");
+  await page.getByRole("button", { name: "What these two share", exact: true }).click();
+  const shared = page.getByRole("list", { name: "Shared attributes, rarest first" });
+  await expect(shared).toBeVisible();
+  console.log(`S4: ${await shared.textContent()}`);
+  await shot(page, "CAP-S4");
+});
+
+test("CAP-S5", async ({ page }) => {
+  // The two filters dimming: connection strength at 0.8 (a), then shared-attribute rarity (b).
+  await principalStar(page, "Metrics");
+  await page.getByRole("button", { name: /^Filter/ }).click();
+  await page.getByRole("combobox", { name: "Filter by metric" }).selectOption("connection_strength");
+  const threshold = page.getByRole("slider", { name: "Metric value at least" });
+  await expect(threshold).toBeVisible();
+  await threshold.focus();
+  for (let i = 0; i < 60; i++) await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(2000);
+  console.log(`S5-a: ${await counts(page).textContent()}`);
+  await shot(page, "CAP-S5-a");
+  await page.getByRole("combobox", { name: "Filter by metric" }).selectOption("shared_attribute_rarity");
+  await expect(threshold).toBeVisible();
+  await threshold.focus();
+  for (let i = 0; i < 50; i++) await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(2000);
+  console.log(`S5-b: ${await counts(page).textContent()}`);
+  await shot(page, "CAP-S5-b");
+});
+
+test("CAP-S6", async ({ page }) => {
+  // A case's own influencer and a rule on strength, as the case's Author (the demo admin): an
+  // assault in this case draws a conflict at least 0.95 strong (a, the tab; the legend marks it a
+  // case override), and a sentence rule on conflicts reaching 0.95 is previewed (b): it would raise
+  // three alerts, the principal and the two men from the assaults, whenever the case was loaded
+  // (`test_pid_connection_strength.py`). Changes the case: the runbook says how to undo it.
+  test.setTimeout(600_000);
+  await freshCase(page, "admin");
+  await monitoringTab(page, "Connection strength");
+  const tab = page.locator(".strength-panel");
+  const form = tab.locator("fieldset").filter({ hasText: "Add an influencer" }).first();
+  await form.getByRole("textbox", { name: "Label in the legend" }).fill("Assault in this case");
+  await form.getByRole("checkbox", { name: "In conflict with" }).check();
+  await form.getByRole("combobox", { name: "When it applies" }).selectOption("record");
+  await form.getByRole("combobox", { name: "Kind of record" }).selectOption("Incident");
+  await form.getByRole("combobox", { name: "Its property" }).selectOption("category");
+  await form.getByRole("checkbox", { name: "assault" }).check();
+  await form.getByRole("combobox", { name: "Change" }).selectOption("floor");
+  await form.getByRole("spinbutton", { name: "Size" }).fill("0.95");
+  await form.getByRole("button", { name: "Add this influencer" }).click();
+  await tab.getByRole("button", { name: "Save this case's influencers" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "saved" })).toBeVisible();
+  await shot(page, "CAP-S6-a");
+  await monitoringTab(page, "Rules");
+  const rule = page.getByRole("form", { name: "Write a rule as a sentence" });
+  await rule.getByRole("combobox", { name: "Subject" }).selectOption("Person");
+  // Linked by a conflict first, so the rule judges the people with one, not every person in the case.
+  await rule.getByRole("combobox", { name: "Relationship" }).selectOption("linked");
+  await rule.getByRole("combobox", { name: "Link type" }).selectOption("IN_CONFLICT_WITH");
+  await rule.getByRole("combobox", { name: "Linked to" }).selectOption("Person");
+  await rule.getByRole("combobox", { name: "Strength", exact: true }).selectOption("connection_strength");
+  await rule.getByRole("combobox", { name: "By (link type, for strength)" }).selectOption("IN_CONFLICT_WITH");
+  await rule.getByRole("combobox", { name: "With (type, for strength)" }).selectOption("Person");
+  await rule.getByRole("spinbutton", { name: "Reaches" }).fill("0.95");
+  await rule.getByRole("combobox", { name: "Severity" }).selectOption("high");
+  await rule.getByRole("button", { name: "Preview on the last 90 days" }).click();
+  const preview = rule.getByRole("region", { name: "Preview" });
+  await expect(preview).toBeVisible({ timeout: 240_000 });
+  console.log(`S6 preview: ${await preview.textContent()}`);
+  await rule.scrollIntoViewIfNeeded();
+  await shot(page, "CAP-S6-b");
+});

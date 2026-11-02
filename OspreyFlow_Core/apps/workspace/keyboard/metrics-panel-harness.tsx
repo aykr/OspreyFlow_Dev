@@ -89,6 +89,31 @@ const nodes = [node("n0"), node("n1"), node("n2")];
 const edges = [edge("e0", "n0", "n1"), edge("e1", "n1", "n2")];
 workingSet.store.getState().applyDelta({ seq: 1, op: "snapshot", nodes, edges });
 
+// ADR-139 decision 7: the case's connection-strength legend, drawn in the canvas's legend box.
+const STRENGTH_LEGEND = {
+  influencers: [
+    {
+      layer: "file" as const,
+      version: null,
+      influencer: {
+        id: "direct", label: "Direct link", link_types: ["ASSOCIATE_OF"], change: "add" as const, size: 0.1348,
+        trigger: null, note: "to be confirmed with the client",
+      },
+    },
+    {
+      layer: "case" as const,
+      version: 1,
+      influencer: {
+        id: "case-assault", label: "Assault in this case", link_types: ["ASSOCIATE_OF"], change: "floor" as const,
+        size: 0.6, trigger: { entity_type: "Incident", property: "category", values: ["assault"] },
+      },
+    },
+  ],
+  direct_link_types: ["ASSOCIATE_OF"],
+  switched_off: [],
+  rarity_note: "Shared-attribute rarity is worked out over what you may see: two analysts with different access can see different rarity for the same pair.",
+}; // prettier-ignore
+
 function Harness() {
   const glassCanvasRef = useRef<GlassCanvasHandle>(null);
   // Where a node is drawn, so a case can ask whether centring put it in the middle.
@@ -110,6 +135,8 @@ function Harness() {
           investigationId="metrics-panel-fixture"
           apiBaseUrl="http://keyboard-test.invalid"
           bearerToken="unused"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          strengthLegend={STRENGTH_LEGEND as any}
           onFocusChange={(nodeId) => {
             window.__METRICS_PANEL__!.focusedNodeId = nodeId;
           }}
@@ -133,7 +160,48 @@ function Harness() {
 
 await applyHarnessBrand();
 
+// `?filter=strength` or `?filter=rarity` (ADR-139 decision 6): that metric chosen in the Filter
+// section, its values answered by the page itself, for the axe scan. Synthetic (rule 9).
+const FILTER = new URLSearchParams(window.location.search).get("filter");
+if (FILTER) {
+  window.fetch = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.endsWith("/connection-strength")
+      ? {
+          links: [
+            { edge_id: "e0", edge_type: "ASSOCIATE_OF", base_weight: 0.3, strength: 0.3, applied: [] },
+            { edge_id: "e1", edge_type: "ASSOCIATE_OF", base_weight: 0.75, strength: 0.9, applied: [] },
+          ],
+          legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+        }
+      : url.endsWith("/rarity")
+        ? { scope: "dataset", node_values: { n0: 0.4, n1: 2.2 }, pairs: [] }
+        : { mode: "sync", values: { n0: 1, n1: 2, n2: 1 } };
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
+}
+
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
 createRoot(container).render(<Harness />);
+
+if (FILTER) {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+  const header = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button.accordion-section__header")].find(
+      (b) => b.textContent?.trim() === "Filter",
+    );
+  for (let i = 0; i < 40 && !header(); i++) await settle();
+  if (header()?.getAttribute("aria-expanded") === "false") header()?.click();
+  const field = () => document.querySelector<HTMLSelectElement>('[aria-label="Filter by metric"]');
+  for (let i = 0; i < 40 && !field(); i++) await settle();
+  const select = field();
+  if (select) {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(
+      select,
+      FILTER === "rarity" ? "shared_attribute_rarity" : "connection_strength",
+    );
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}

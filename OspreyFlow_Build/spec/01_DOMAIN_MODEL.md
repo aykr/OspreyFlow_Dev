@@ -931,7 +931,7 @@ record). The Glass draws the stored weight it is sent and recomputes none; it is
 components, whose corpus-wide counts include links above its principal's clearance (ADR-122). From
 version 2 those counts move no weight (ADR-123); a weight stored under version 1 or before ADR-120
 still does until recomputed or reseeded. It exposes the normalised result as the edge-strength
-filter slider.
+filter slider; connection strength, the stored weight with its influencers, is §6.1a's.
 
 **`WeightComponents` stores the raw counts, not just the derived float.** `mutual_information` is
 corpus-wide — it depends on how the *whole* corpus looks, which changes as more data loads and
@@ -949,6 +949,63 @@ stored numbers, never a full corpus rescan.
 > stands at the end of the load, with this formula and these `WeightComponents` unchanged and `computed_at` recording the
 > end of the load, instead of against the corpus as it stood when each edge was written. A bulk-loaded edge and an
 > upsert-loaded one would then differ in the weight value but not in the stored counts it is computed from.
+
+### 6.1a Connection strength: influencers and rarity (ADR-139)
+
+The stored weight above is the basis and is never changed. **A link's connection strength** is its
+stored weight with the **influencers** that apply to it, worked out when the link is read, in the graph
+adapter, as the reader (`GraphPort.connection_strengths`); it is never stored, so a change to an
+influencer takes effect at once with no recompute.
+
+**An influencer** (`packages/schemas/strength.py`, `StrengthInfluencer`) has a trigger (an evidencing
+record's type, one of its declared properties, and values), the link types it influences, a change
+(`add`, `multiply`, `floor`, `exclude`), a size and a legend label. **Direct links are an influencer
+with no trigger**, applying to its named link types always. Applied to a stored weight `w`:
+
+```
+raw      = midpoint + scale · ln(w / (1 − w))          # the logistic's inverse; exact
+strength = normalise( (raw + Σ add) · Π multiply )      # multiply ∈ [0.1, 5]
+strength = max(strength, every floor)
+strength = min(strength, w)   if any exclude            # last: "no stronger than the base" is absolute
+```
+
+Nothing applying leaves `w`. Every step is non-decreasing in `w`, so §6.1's invariant carries over:
+**adding occurrences to one pair never lowers its connection strength, whatever influencers apply**
+(`tests/ontology/test_influencers.py`, over every combination of the four changes).
+
+**A triggered influencer applies only where an evidencing record the reader may see exists**: a node of
+the trigger's type whose property holds one of its values, at one end of the link or linked to both of
+its ends by links the reader may see. The access step is on every vertex and link stepped over, so a
+hidden record changes nothing (rule 3): the strength is the strength in a world without it
+(`test_unauthorised_connection_strength_matches_a_world_without_the_hidden_evidence`).
+
+**Resolution order:** a case override (its Author's, audited), then the installation set (proposed and
+approved by two holders of `manage_strength_influencers`; every version kept), then the weights file's
+`influencers:` (the developer defaults). Influencers match by `id`; a later layer replaces an earlier
+one, `enabled: false` switches it off, and a case may switch off any installation or shipped one. The
+shipped defaults: **direct** (`COMMUNICATED_WITH`, `TRANSACTED`, `VISITED`, `SHARED_CELL_WITH`) and
+**incident-source** (an `Incident` whose `category` is assault, disorder or find, on `ROLE_IN`,
+`IN_CONFLICT_WITH`, `ASSOCIATE_OF` and `SHARED_CELL_WITH`), each an `add` of 0.1348, which is how far
+doubling an ordinary link's count (the default rule's heavy 10 to 20) moves its pre-logistic score —
+"to be confirmed with the client".
+
+**Shared-attribute rarity** is its own measure beside strength, never folded into it
+(`GraphPort.shared_attribute_rarity`). For two visible entities `u`, `v` of one type:
+
+```
+rarity(u, v) = Σ over shared attributes a of ln( N_visible / df_visible(a) )
+```
+
+An attribute is a visible node (of a type not in the weights file's `rarity.exclude_types`, `Alert`)
+linked to each of the two by a visible link; `N_visible` is the number of visible entities of the
+pair's type in scope, `df_visible(a)` the number of those linked to `a` by a visible link. **Scope**: per
+dataset by default (in each dataset `u`, `v` and `a` all belong to; the highest kept and named; no
+dataset in common, no score), or across every dataset the reader may read. Worked out at query time
+over what the reader may see, never over the corpus and never stored; a hidden entity sharing `a` is
+in no count (`test_unauthorised_rarity_matches_a_world_without_the_hidden_entity`). Two readers with
+different access may therefore see different rarity for one pair. The Glass is sent the score and the
+reader's visible shared attributes, never `N` or `df` (rule 7). More pairs to score than the cap
+(2,000,000) is refused as `limit_exceeded` (rule 2).
 
 ### 6.2 Clique Metric
 

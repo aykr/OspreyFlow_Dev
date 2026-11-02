@@ -35,6 +35,8 @@ export interface ConditionDraft {
   area: AreaBox;
 }
 
+export type StrengthKind = "none" | "connection_strength" | "shared_attribute_rarity";
+
 export interface SentenceDraft {
   subject: string;
   conditions: ConditionDraft[];
@@ -50,6 +52,13 @@ export interface SentenceDraft {
   withinDays: string;
   amountProperty: string;
   over: string;
+  /** ADR-139 decision 8: "… and the connection strength (or shared-attribute rarity) between …
+   * reaches X". */
+  strength: StrengthKind;
+  strengthLink: string;
+  strengthOther: string;
+  reaches: string;
+  rarityScope: "dataset" | "case";
   severity: "low" | "medium" | "high";
   team: "case" | "my_team";
   runs: "pre_commit" | "post_commit" | "schedule";
@@ -109,6 +118,11 @@ export function emptyDraft(subject = "Person"): SentenceDraft {
     withinDays: "7",
     amountProperty: "",
     over: "10000",
+    strength: "none",
+    strengthLink: "",
+    strengthOther: "",
+    reaches: "0.8",
+    rarityScope: "dataset",
     severity: "medium",
     team: "case",
     runs: "post_commit",
@@ -286,6 +300,17 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
       frequency = { kind: "first_time", link_type: draft.frequencyLink };
       break;
   }
+  let strength: Record<string, unknown> | null = null;
+  if (draft.strength === "connection_strength") {
+    strength = {
+      kind: "connection_strength",
+      link_type: draft.strengthLink || null,
+      other_type: draft.strengthOther || null,
+      reaches: Number(draft.reaches),
+    };
+  } else if (draft.strength === "shared_attribute_rarity") {
+    strength = { kind: "shared_attribute_rarity", reaches: Number(draft.reaches), scope: draft.rarityScope };
+  }
   const holds = draft.runs === "pre_commit" && draft.onHit === "hold";
   // A rule just for its author runs after each load commits, or on a schedule; a whole-deployment
   // rule never runs on a schedule (it is judged within each loading case).
@@ -306,6 +331,9 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
     conditions: draft.conditions.map(condition),
     relationship,
     frequency,
+    // Sent only when the rule names one (ADR-139), as a schedule is: a sentence without one is
+    // exactly the sentence it was before the blank existed.
+    ...(strength ? { strength } : {}),
     severity: draft.severity,
     team: draft.scope === "just_me" ? "case" : draft.team,
     runs,
@@ -351,6 +379,14 @@ export function fromSentence(sentence: RuleSentence): SentenceDraft {
     if (f.amount_property) draft.amountProperty = String(f.amount_property);
     if (f.over) draft.over = String(f.over);
   }
+  const st = (sentence as unknown as { strength?: Loose | null }).strength;
+  if (st) {
+    draft.strength = st.kind as StrengthKind;
+    draft.reaches = String(st.reaches);
+    if (st.link_type) draft.strengthLink = String(st.link_type);
+    if (st.other_type) draft.strengthOther = String(st.other_type);
+    if (st.scope) draft.rarityScope = st.scope === "case" ? "case" : "dataset";
+  }
   draft.severity = (sentence.severity ?? "medium") as SentenceDraft["severity"];
   draft.team = (sentence.team ?? "case") as SentenceDraft["team"];
   draft.runs = (sentence.runs ?? "post_commit") as SentenceDraft["runs"];
@@ -380,6 +416,12 @@ export function unfinished(draft: SentenceDraft): string | null {
     return "Give the area's four corners.";
   if (draft.frequency !== "none" && !draft.frequencyLink) return "Choose the link type whose events are counted.";
   if (draft.frequency === "amount" && !draft.amountProperty) return "Choose the amount to total.";
+  if (draft.strength !== "none") {
+    const figure = Number(draft.reaches);
+    if (!Number.isFinite(figure) || figure <= 0) return "Give the figure the strength or rarity must reach, above 0.";
+    if (draft.strength === "connection_strength" && figure > 1) return "A connection strength is at most 1.";
+    if (draft.runs === "pre_commit") return "Strength is read from the stored graph, so the rule runs after commit or on a schedule.";
+  }
   return null;
 }
 
@@ -412,6 +454,13 @@ export function sentenceSummary(sentence: RuleSentence): string {
   if (f?.kind === "count") parts.push(`${String(f.at_least)} or more times by ${String(f.link_type)} within ${String(f.within_days)} day(s)`);
   if (f?.kind === "amount") parts.push(`a total ${String(f.amount_property)} over ${String(f.over)} by ${String(f.link_type)} within ${String(f.within_days)} day(s)`);
   if (f?.kind === "first_time") parts.push(`for the first time ever by ${String(f.link_type)}`);
+  const st = (sentence as unknown as { strength?: Loose | null }).strength;
+  if (st?.kind === "connection_strength")
+    parts.push(
+      `the connection strength with ${st.other_type ? a(String(st.other_type)) : "anything"}${st.link_type ? ` by ${String(st.link_type)}` : ""} reaches ${String(st.reaches)}`,
+    );
+  if (st?.kind === "shared_attribute_rarity")
+    parts.push(`the shared-attribute rarity with another ${sentence.subject} reaches ${String(st.reaches)}`);
   const whom = { just_me: "its author alone", this_case: sentence.team === "my_team" ? "its author's team" : "the case team", deployment: "every case's team" }[
     (sentence.scope ?? "this_case") as Scope
   ];

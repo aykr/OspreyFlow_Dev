@@ -65,9 +65,13 @@
 .combobox__option { padding: var(--sp-6) var(--sp-8); cursor: pointer; color: var(--text-primary); }
 .combobox__option:hover, .combobox__option[aria-selected="true"] { background: var(--surface-hover); }
 
-.slider { -webkit-appearance: none; width: 100%; height: 4px; border-radius: var(--r-chip); background: var(--border); }
+/* The input is the 24px target (WCAG 2.5.8; found opening the Metrics panel's Filter section to scan it,
+   ADR-139), the 4px track drawn inside it. */
+.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; margin: 0; background: transparent; }
+.slider::-webkit-slider-runnable-track { height: 4px; border-radius: var(--r-chip); background: var(--border); }
+.slider::-moz-range-track { height: 4px; border-radius: var(--r-chip); background: var(--border); }
 /* A control at rest is neutral; brass only while it has focus (ADR-097, DESIGN.md §3.2). */
-.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--text-secondary); cursor: pointer; }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--text-secondary); cursor: pointer; }
 .slider:focus-visible::-webkit-slider-thumb { background: var(--brass); }
 
 .range-slider { position: relative; height: 20px; }
@@ -539,6 +543,49 @@
    and focus only (DESIGN.md §3.2). */
 .canvas-legend__link input { margin: 0; width: 24px; height: 24px; flex: none; accent-color: var(--text-secondary); }
 .canvas-legend__swatch { flex: none; width: 14px; height: 3px; border-radius: 2px; }
+/* ADR-139 decision 7: the connection-strength part, under the links. */
+.canvas-legend__strength { border-top: 1px solid var(--border-subtle); padding-top: var(--sp-6); }
+.canvas-legend__strength[hidden] { display: none; }
+.canvas-legend__caption { margin: 0; padding: 0 var(--sp-8) var(--sp-4); font-weight: 600; color: var(--text-primary); }
+.canvas-legend__strength .canvas-legend__links { border-top: 0; padding-top: 0; }
+.canvas-legend__influencer .canvas-legend__meaning { display: block; }
+.canvas-legend__tag {
+  margin-left: var(--sp-4); padding: 0 var(--sp-4); border: 1px solid var(--border-strong);
+  border-radius: var(--r-control); color: var(--text-primary);
+}
+.canvas-legend__note { margin: 0; padding: 0 var(--sp-8) var(--sp-6); color: var(--text-secondary); }
+/* ADR-139 decision 9: the Inspector's account of a link's strength. */
+.strength-explained { display: grid; gap: var(--sp-8); }
+.strength-explained__lines, .strength-explained__shared {
+  margin: 0; padding-left: var(--sp-16); display: grid; gap: var(--sp-4); color: var(--text-primary);
+}
+.strength-explained__shared li { display: list-item; }
+.strength-explained__shared li > span + span { margin-left: var(--sp-8); }
+.strength-explained__heading { margin: 0; font-weight: 600; color: var(--text-primary); }
+.strength-explained__muted { margin: 0; color: var(--text-secondary); }
+.strength-explained__problem { margin: 0; color: var(--error); }
+/* ADR-139 decision 3: Monitoring's Connection strength tab. */
+.strength-panel { display: grid; gap: var(--sp-16); max-width: 720px; }
+.strength-panel section { display: grid; gap: var(--sp-8); }
+.strength-panel__heading { margin: 0; font-weight: 600; color: var(--text-primary); }
+.strength-panel__muted { margin: 0; color: var(--text-secondary); }
+.strength-panel__problem { margin: 0; color: var(--error); }
+.strength-panel__said { margin: 0; color: var(--text-primary); }
+.strength-panel__list { margin: 0; padding-left: var(--sp-16); display: grid; gap: var(--sp-6); color: var(--text-primary); }
+.strength-panel__list li > span { margin-right: var(--sp-8); }
+.strength-panel__form, .strength-panel__choices {
+  margin: 0; padding: var(--sp-8); display: grid; gap: var(--sp-8);
+  border: 1px solid var(--border-subtle); border-radius: var(--r-control); color: var(--text-primary);
+}
+.strength-panel__choices { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.strength-panel__choices legend, .strength-panel__form legend { padding: 0 var(--sp-4); font-weight: 600; }
+.strength-panel__choice { display: flex; align-items: center; gap: var(--sp-6); min-height: 24px; }
+.strength-panel__field { display: grid; gap: var(--sp-4); color: var(--text-secondary); }
+.strength-panel__waiting, .strength-panel__proposal {
+  display: grid; gap: var(--sp-8); padding: var(--sp-8);
+  border: 1px solid var(--border-strong); border-radius: var(--r-control);
+}
+.strength-panel__history { color: var(--text-secondary); }
 /* The canvas toolbar (ADR-097 step 2, design review item 12): one docked row along the canvas's top
    edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
    control. Its controls are quiet buttons here, not the floating overlay buttons they are elsewhere. */

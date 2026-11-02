@@ -261,11 +261,19 @@ export type Over = number;
 export type WithinDays1 = number;
 export type Kind7 = "first_time";
 export type LinkType4 = string;
+export type Strength = (StrengthReaches | RarityReaches) | null;
+export type Kind8 = "connection_strength";
+export type LinkType5 = string | null;
+export type OtherType2 = string | null;
+export type Reaches = number;
+export type Kind9 = "shared_attribute_rarity";
+export type Reaches1 = number;
+export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team";
 export type Runs = "pre_commit" | "post_commit" | "schedule";
 export type OnHit = "load" | "hold";
-export type Scope = "just_me" | "this_case" | "deployment";
+export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
 export type Hour = number;
 export type Weekday = number | null;
@@ -420,11 +428,12 @@ export interface RuleSentence {
   conditions?: Conditions;
   relationship?: Relationship;
   frequency?: Frequency;
+  strength?: Strength;
   severity?: Severity;
   team?: Team;
   runs?: Runs;
   on_hit?: OnHit;
-  scope?: Scope;
+  scope?: Scope1;
   schedule?: RuleSchedule | null;
   [k: string]: unknown;
 }
@@ -556,6 +565,28 @@ export interface AmountFrequency {
 export interface FirstTimeFrequency {
   kind?: Kind7;
   link_type: LinkType4;
+  [k: string]: unknown;
+}
+/**
+ * "When the connection strength between the subject and something it is linked to (by a
+ * declared link type, or any; to a declared type, or anything) reaches X": the link's stored
+ * weight with the influencers in force, as the rule's author may see it (rule 3).
+ */
+export interface StrengthReaches {
+  kind?: Kind8;
+  link_type?: LinkType5;
+  other_type?: OtherType2;
+  reaches: Reaches;
+  [k: string]: unknown;
+}
+/**
+ * "When the shared-attribute rarity between the subject and another of its type reaches X":
+ * worked out over what the rule's author may see, per dataset or across the case's datasets.
+ */
+export interface RarityReaches {
+  kind?: Kind9;
+  reaches: Reaches1;
+  scope?: Scope;
   [k: string]: unknown;
 }
 /**
