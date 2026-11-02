@@ -650,3 +650,64 @@ def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
         "theme_changed": False,
         "routing_changed": False,
     }
+
+
+def _proxy_published_bare(out: Path, ports: list[str]) -> None:
+    """The deployment as rendered before S10: the proxy's ports with no host address."""
+    import yaml
+
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    document["services"]["proxy"]["ports"] = ports
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+
+
+def test_a_lite_deployment_rendered_before_s10_is_published_on_loopback_at_its_next_start(
+    repo: Path,
+) -> None:
+    """S10 (`05_DEPLOYMENT.md` §7): found at the step 11 rehearsal, both of the owner's Lite
+    deployments still published `80:8080` on every interface after `start --build`, because refresh
+    never rewrites a service the deployment already has. Each bare port gains `127.0.0.1`; the
+    operator's own port number and an address already given stay as they are."""
+    import yaml
+
+    out = _rendered(repo)
+    _proxy_published_bare(
+        out,
+        [
+            "8081:8080",
+            "${OSPREY_API_PORT:-8000}:8000",
+            "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480",
+        ],
+    )
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert after["services"]["proxy"]["ports"] == [
+        "127.0.0.1:8081:8080",
+        "127.0.0.1:${OSPREY_API_PORT:-8000}:8000",
+        "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480",
+    ]
+    assert "OSPREY_POSTGRES_PASSWORD=pg-secret-77" in (out / "deployment.env").read_text()
+
+
+def test_a_deployment_reached_by_other_people_keeps_its_ports_on_every_interface(
+    repo: Path,
+) -> None:
+    """Small and Enterprise are reached by other people (S10): their 80 and 443 stay on every
+    interface, so refresh adds no address to them (planted: binding every profile)."""
+    import yaml
+
+    out = _rendered(repo)
+    raw = yaml.safe_load((out / "osprey.yaml").read_text())
+    raw["profile"] = "small"
+    raw.setdefault("network", {})["public_origin"] = "https://osprey.example.org"
+    (out / "osprey.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+    _proxy_published_bare(out, ["80:80", "443:443"])
+
+    refresh._published_on_loopback(out)
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    assert after["services"]["proxy"]["ports"] == ["80:80", "443:443"]
