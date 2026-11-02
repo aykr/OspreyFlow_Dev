@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { defineConfig } from "@playwright/test";
 
+import { INSTALL_API_PORT, INSTALL_TOKEN, INSTALL_VITE_PORT } from "./installPage";
+
 // The same two real scratch paths `keyboard/playwright.config.ts` already uses, for the same
 // reason: this suite navigates the real `App`, wired to the real `harness.webapp` API, and must
 // never touch this checkout's own real `osprey.yaml` or the owner's own real, gitignored
@@ -10,6 +12,9 @@ import { defineConfig } from "@playwright/test";
 const SCRATCH_CONFIG = join(tmpdir(), `osprey-a11y-spec-${process.pid}.yaml`);
 const SCRATCH_RDE = join(tmpdir(), `real-data-exceptions-a11y-spec-${process.pid}.yaml`);
 const SCRATCH_OUT_ROOT = join(tmpdir(), `osprey-generated-a11y-spec-${process.pid}`);
+
+const INSTALL_SCRATCH = join(tmpdir(), `osprey-install-a11y-spec-${process.pid}`);
+const STUB_PYTHON = '#!/bin/sh\necho "stub $*"\n';
 
 // A fake `--apply-command` is not needed here — this suite never clicks Launch, only scans the
 // DOM axe-core reaches without pressing it.
@@ -40,6 +45,30 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       cwd: "../../..",
       env: { PYTHONPATH: ".:packages" },
+    },
+    // The guided install page (`install-page.spec.ts`, step 9b), started as
+    // `keyboard/playwright.config.ts` starts it: a scratch product folder whose `.venv/bin/python`
+    // only echoes, so nothing is ever installed, and scratch draft and answers files.
+    {
+      command: `npx vite --port ${INSTALL_VITE_PORT} --strictPort`,
+      port: INSTALL_VITE_PORT,
+      reuseExistingServer: !process.env.CI,
+      cwd: "..",
+      env: { HARNESS_API_PORT: INSTALL_API_PORT },
+    },
+    {
+      command:
+        `mkdir -p ${INSTALL_SCRATCH}/product/.venv/bin ${INSTALL_SCRATCH}/product/cli && ` +
+        `printf '${STUB_PYTHON}' > ${INSTALL_SCRATCH}/product/.venv/bin/python && ` +
+        `chmod +x ${INSTALL_SCRATCH}/product/.venv/bin/python && ` +
+        `printf 'profile: local-lite\\n' > ${INSTALL_SCRATCH}/product/osprey.yaml && ` +
+        `uv run python -m harness.install_page --product ${INSTALL_SCRATCH}/product ` +
+        `--token ${INSTALL_TOKEN} --port ${INSTALL_API_PORT} ` +
+        `--draft ${INSTALL_SCRATCH}/osprey.draft.yaml --answers ${INSTALL_SCRATCH}/install.yaml`,
+      port: Number(INSTALL_API_PORT),
+      reuseExistingServer: !process.env.CI,
+      cwd: "../../..",
+      env: { PYTHONPATH: ".:packages:cli" },
     },
   ],
   use: {
