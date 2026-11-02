@@ -114,6 +114,7 @@ STORES = (
     "KycExpiryStore",
     "RecipeRunStore",
     "ExtractionCandidateStore",
+    "InfluencerStore",
 )
 
 
@@ -203,6 +204,7 @@ async def test_closing_closes_everything_the_builder_opened(fakes: _Graph) -> No
         resources.monitors_store,
         resources.alerts_store,
         resources.typology_rules,
+        resources.influencers,
         resources.held_rows,
         resources.screening_lists,
         resources.kyc_expiries,
@@ -231,6 +233,7 @@ CONSTRUCTED_ONLY_IN_THE_BUILDER = (
     "MonitorStore.connect(",
     "AlertStore.connect(",
     "TypologyRuleStore.connect(",
+    "InfluencerStore.connect(",
     "HeldRowStore.connect(",
     "ScreeningListStore.connect(",
     "KycExpiryStore.connect(",

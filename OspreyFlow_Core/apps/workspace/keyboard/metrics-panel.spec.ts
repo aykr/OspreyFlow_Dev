@@ -113,7 +113,7 @@ test("the Filter section's strength slider sets a floor with the arrow keys alon
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
   await expect.poll(async () => (await filterState(page))?.strengthFloor).toBeCloseTo(0.1, 5);
-  await expect(page.getByText(/Relationship strength at least 0\.10/)).toBeVisible();
+  await expect(page.getByText(/Relationship strength at least: 0\.10/)).toBeVisible();
   registerCovered("METRICS_PANEL_ACTIONS", "filter-section-sets-a-strength-floor-by-keyboard");
 });
 

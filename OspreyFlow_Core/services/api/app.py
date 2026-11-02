@@ -1240,6 +1240,13 @@ def get_strength_influencers(request: Request) -> InfluencerStore:
     return request.app.state.strength_influencers  # type: ignore[no-any-return]
 
 
+def get_optional_strength_influencers(request: Request) -> InfluencerStore | None:
+    """For a route that judges rules (a run, Verify, a release, a preview): the store when the
+    application holds one; without it, a strength condition judges with the weights file's
+    influencers alone (`sentence_rules.strength_context`)."""
+    return getattr(request.app.state, "strength_influencers", None)
+
+
 def get_strength_defaults(request: Request) -> StrengthDefaults:
     return request.app.state.strength_defaults  # type: ignore[no-any-return]
 
@@ -1377,6 +1384,9 @@ MonitorsStoreDep = Annotated[MonitorStore, Depends(get_monitors_store)]
 AlertsStoreDep = Annotated[AlertStore, Depends(get_alerts_store)]
 TypologyRulesDep = Annotated[TypologyRuleStore, Depends(get_typology_rules)]
 StrengthInfluencersDep = Annotated[InfluencerStore, Depends(get_strength_influencers)]
+OptionalStrengthInfluencersDep = Annotated[
+    InfluencerStore | None, Depends(get_optional_strength_influencers)
+]
 StrengthDefaultsDep = Annotated[StrengthDefaults, Depends(get_strength_defaults)]
 HeldRowsDep = Annotated[HeldRowStore, Depends(get_held_rows)]
 ScreeningListsDep = Annotated[ScreeningListStore, Depends(get_screening_lists)]
@@ -7852,7 +7862,7 @@ async def verify_studio_recipe(
     hotlists_store: HotlistsStoreDep,
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
-    influencers_store: StrengthInfluencersDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -8271,6 +8281,7 @@ async def run_studio_recipe(
     compute: ComputeDep,
     kyc_expiries: KycExpiriesDep,
     recipe_runs: RecipeRunsDep,
+    influencers: OptionalStrengthInfluencersDep = None,
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -8336,6 +8347,7 @@ async def run_studio_recipe(
             compute=compute,
             kyc_expiries=kyc_expiries,
             recipe_runs=recipe_runs,
+            influencers=influencers,
         ),
         principal=principal,
         recipe=recipe,
@@ -9635,7 +9647,7 @@ async def preview_rule_sentence(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     body: RulePreviewRequest,
-    influencers_store: StrengthInfluencersDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> RulePreview:
     """Decision 3: "Preview on the last 90 days" — the rule run as the caller over the case's stored
     data, counted only over what they may see (rules 3 and 7). It raises no alert and writes no
@@ -9844,7 +9856,7 @@ async def release_held_rows_route(
     kyc_expiries: KycExpiriesDep,
     patterns_store: PatternsStoreDep,
     recipe_runs: RecipeRunsDep,
-    influencers_store: StrengthInfluencersDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a

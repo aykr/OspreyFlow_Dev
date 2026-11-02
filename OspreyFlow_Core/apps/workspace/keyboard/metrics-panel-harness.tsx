@@ -188,11 +188,15 @@ createRoot(container).render(<Harness />);
 
 if (FILTER) {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Filter by metric"]'); i++) {
-    await settle();
-    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("Filter"))?.click();
-  }
-  const select = document.querySelector<HTMLSelectElement>('[aria-label="Filter by metric"]');
+  const header = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button.accordion-section__header")].find(
+      (b) => b.textContent?.trim() === "Filter",
+    );
+  for (let i = 0; i < 40 && !header(); i++) await settle();
+  if (header()?.getAttribute("aria-expanded") === "false") header()?.click();
+  const field = () => document.querySelector<HTMLSelectElement>('[aria-label="Filter by metric"]');
+  for (let i = 0; i < 40 && !field(); i++) await settle();
+  const select = field();
   if (select) {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(
       select,

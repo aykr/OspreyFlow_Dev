@@ -19,6 +19,7 @@ from schemas.ingest import LoadReport, LoadReportView
 
 #: The state attribute each run dependency is read from, as the route's own getters read it.
 STATE_NAMES = {
+    "influencers": "strength_influencers",
     "recipe_repo_root": "recipes_repo_root",
     "recogniser_for": "pipeline_recogniser_for",
 }
@@ -58,6 +59,7 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "screening_lists": given["screening_lists"], "compute": given["compute"],
         "kyc_expiries": given["kyc_expiries"],
         "recipe_runs": given["recipe_runs"],
+        "influencers": given["influencers"],
     }
     investigation, recipe, principal = SimpleNamespace(id="case-1"), object(), object()
     result = await run_studio_recipe(

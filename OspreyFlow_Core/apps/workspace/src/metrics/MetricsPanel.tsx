@@ -322,7 +322,7 @@ export function MetricsPanel({
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-6)" }}>
             <label style={{ display: "grid", gap: "var(--sp-4)" }}>
               <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
-                Relationship strength at least {filter.strengthFloor.toFixed(2)}
+                Relationship strength at least: {filter.strengthFloor.toFixed(2)}
               </span>
               <Slider
                 aria-label="Relationship strength at least"
@@ -371,7 +371,7 @@ export function MetricsPanel({
             {filter.metric !== null && filter.values !== null && (
               <label style={{ display: "grid", gap: "var(--sp-4)" }}>
                 <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
-                  Metric value at least {(filter.threshold ?? range.min).toFixed(3)}
+                  Metric value at least: {(filter.threshold ?? range.min).toFixed(3)}
                 </span>
                 <Slider
                   aria-label="Metric value at least"

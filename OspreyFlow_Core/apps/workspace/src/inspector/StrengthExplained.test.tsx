@@ -25,8 +25,8 @@ function node(id: string, type: string, name: string) {
   }; // prettier-ignore
 }
 
-const RARE = node("x1", "Endpoint", "07700 900640");
-const COMMON = node("x2", "Endpoint", "07700 900111");
+const RARE = node("x1", "Endpoint", "01234 567891");
+const COMMON = node("x2", "Endpoint", "01234 567892");
 
 function serve() {
   const sent: unknown[] = [];
@@ -71,8 +71,8 @@ describe("StrengthExplained", () => {
     expect(lines.textContent).toContain("because an Incident you can see evidences it");
     const shared = await screen.findByRole("list", { name: "Shared attributes, rarest first" });
     expect([...shared.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
-      "Endpoint · 07700 9006402.40",
-      "Endpoint · 07700 9001110.02",
+      "Endpoint · 01234 5678912.40",
+      "Endpoint · 01234 5678920.02",
     ]);
     expect(screen.getByText(/worked out in prison-intelligence, over what you may see/)).toBeTruthy();
     // It asked for this link alone and for its two ends as the pair.

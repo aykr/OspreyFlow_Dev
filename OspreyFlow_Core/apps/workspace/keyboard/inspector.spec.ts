@@ -39,7 +39,7 @@ test("a link's connection strength is explained, and what its ends share ranked,
     r.fulfill(json({
       scope: "dataset", node_values: {},
       pairs: [{ a: "a", b: "b", score: 2.31, dataset: null, shared: [
-        { node: { id: "x1", type: "Endpoint", properties: { value_normalised: "+447700900640" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "f" } }, score: 2.31 }] }],
+        { node: { id: "x1", type: "Endpoint", properties: { value_normalised: "+441234567891" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "f" } }, score: 2.31 }] }],
     })), // prettier-ignore
   );
   await page.goto("/keyboard/inspector-harness.html");
@@ -49,7 +49,7 @@ test("a link's connection strength is explained, and what its ends share ranked,
   const lines = page.getByRole("list", { name: "What this link's strength rests on" });
   await expect(lines).toContainText("Seen 2 times; 10 is heavy");
   await expect(lines).toContainText("because an Incident you can see evidences it");
-  await expect(page.getByRole("list", { name: "Shared attributes, rarest first" })).toContainText("+447700900640");
+  await expect(page.getByRole("list", { name: "Shared attributes, rarest first" })).toContainText("+441234567891");
   expect(asked).toContain(JSON.stringify({ edge_ids: ["e1"] }));
   registerCovered(REGISTRY, "explain-a-links-strength-by-keyboard");
 });
