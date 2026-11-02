@@ -580,6 +580,10 @@ async function runNow(page: Page, open: RegExp): Promise<string> {
   // The Publish screen's own way back to the recipe list, by its exact name: `/Back/` also matched
   // the rail's "Back to the investigation", which left the Studio (31 October 2026).
   await page.getByRole("button", { name: "← Back", exact: true }).click();
+  // A pipeline with a canvas (the reports pipeline once published by the fallback) goes back to its
+  // canvas, not to the list: its "Pipelines" button is the way to the list (2 November 2026).
+  const toList = page.getByRole("button", { name: "Pipelines", exact: true });
+  if (await toList.isVisible().catch(() => false)) await toList.click();
   return runs;
 }
 
@@ -741,6 +745,11 @@ test("CAP-A2-C9", async ({ page }) => {
   await freshCase(page);
   await monitoringTab(page, "Watches");
   await expect(page.getByText(/^Hotlist: /).first()).toBeVisible({ timeout: 60_000 });
+  // The alert's explanation sits below the hotlists, under the fold at 1440 by 900: brought into view
+  // so the shot shows it, not only the inbox's heading (2 November 2026); CAP-M4-a keeps the top. It is
+  // aligned at the bottom so the hotlist stays in view: under the GOV.UK brand the whole page scrolls,
+  // and aligning the inbox's heading at the top showed the footer instead.
+  await page.getByRole("button", { name: "Jump into investigation" }).first().evaluate((el) => el.scrollIntoView({ block: "end" }));
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C9");
   await shot(page, "CAP-M4-b");
@@ -824,7 +833,9 @@ test("CAP-A2-C9S", async ({ page }) => {
   await page.getByRole("button", { name: "Checks on load", exact: true }).click();
   const table = page.getByRole("table", { name: "Rules this pipeline may be checked by" });
   await expect(table.or(page.getByText(/No rule of this case/)).first()).toBeVisible({ timeout: 60_000 });
-  console.log(`checks: ${await page.locator("main").textContent().catch(() => "")}`.slice(0, 800));
+  // The Studio has no `main` landmark: waiting on one hung the test for its whole timeout
+  // (2 November 2026), so the log reads the checks' own table.
+  console.log(`checks: ${await table.or(page.getByText(/No rule of this case/)).first().textContent({ timeout: 10_000 }).catch(() => "")}`.slice(0, 800));
   await page.waitForTimeout(1000);
   await shot(page, "CAP-A2-C9S-a");
   await page.getByRole("button", { name: "← Back to the pipeline" }).click();
@@ -940,6 +951,10 @@ test("CAP-A2-C11M", async ({ page }) => {
   await page.getByRole("button", { name: "Add item" }).click();
   await page.waitForTimeout(3000);
   await scrollAllToTop(page);
+  // The new items are the pack's last: on a pack with earlier rehearsals' items the top of the pack
+  // showed none of them (2 November 2026), so the alert item is brought into view.
+  await page.getByText(/hotlisted identifier appeared/).last().evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(1000);
   await shot(page, "CAP-A2-C11M");
 });
 
@@ -954,6 +969,12 @@ test("CAP-A2-C10M-e", async ({ page }) => {
   test.skip(!(await boards.isVisible().catch(() => false)), "no dashboard for this case: P4 is a slide");
   await boards.click();
   await page.waitForTimeout(15_000);
+  // Dashboards on, the rail entry is there whether or not a board is registered for this case: the
+  // place then says so, and that empty page was shot (2 November 2026). Skip it instead.
+  test.skip(
+    await page.getByText(/^No dashboard you may open/).isVisible().catch(() => false),
+    "no dashboard registered for this case: P4 is a slide",
+  );
   await shot(page, "CAP-A2-C10M-e");
 });
 
