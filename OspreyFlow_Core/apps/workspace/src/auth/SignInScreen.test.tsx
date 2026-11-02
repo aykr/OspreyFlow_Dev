@@ -16,6 +16,11 @@ afterEach(() => {
 });
 
 const PLAIN: WelcomeSettings = { organisationSignIn: null, about: true, links: {}, version: "c01833b" };
+// The product's statement (the owner, 1 November 2026; ADR-034 Amendment 1), written out here so a
+// change to the component's copy is a failing test, not a silent one.
+const STATEMENT =
+  "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, " +
+  "developed by Solirius Reply and released under the Apache License 2.0.";
 
 function card() {
   return within(screen.getByRole("complementary", { name: /^Sign in/ }));
@@ -166,11 +171,14 @@ describe("under GOV.UK, the sign-in card", () => {
     render(<SignInScreen welcome={{ ...PLAIN, links: { privacy: "https://privacy.test/" } }} onSignIn={() => undefined} />);
     const about = document.getElementById("about")!;
     const identity = within(about).getByRole("region", { name: "About OspreyFlow" });
-    expect(identity.textContent).toContain("OspreyFlow is the open-source intelligence analysis and network discovery platform this service is built on.");
+    expect(identity.textContent).toContain(STATEMENT);
+    expect(identity.textContent).toContain("This service is built on it.");
     expect(within(identity).getByText("c01833b")).toBeTruthy();
     expect(identity.querySelector("svg")).not.toBeNull();
     about.remove();
     expect(document.body.textContent).not.toMatch(/OspreyFlow/);
+    // The full statement is About's, never the GOV.UK chrome's (the owner, 1 November 2026).
+    expect(document.body.textContent).not.toMatch(/Solirius|Apache/);
     // The page's own footer keeps its links.
     expect(screen.getByRole("link", { name: "Privacy notice" })).toBeTruthy();
   });
@@ -178,5 +186,20 @@ describe("under GOV.UK, the sign-in card", () => {
   it("under the OspreyFlow brand has no separate About OspreyFlow block", () => {
     render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
     expect(screen.queryByRole("region", { name: "About OspreyFlow" })).toBeNull();
+  });
+
+  // ADR-034 Amendment 1: About says what the product is, who develops it and under which licence.
+  it("under the OspreyFlow brand gives the product's statement in About", () => {
+    applyBrand("ospreyflow");
+    render(<SignInScreen welcome={PLAIN} onSignIn={() => undefined} />);
+    const about = document.getElementById("about")!;
+    expect(about.textContent).toContain(STATEMENT);
+    expect(screen.getAllByText(/developed by Solirius Reply/)).toHaveLength(1);
+  });
+
+  it("gives no statement where the deployment switches About off", () => {
+    applyBrand("ospreyflow");
+    render(<SignInScreen welcome={{ ...PLAIN, about: false }} onSignIn={() => undefined} />);
+    expect(document.body.textContent).not.toMatch(/Solirius/);
   });
 });

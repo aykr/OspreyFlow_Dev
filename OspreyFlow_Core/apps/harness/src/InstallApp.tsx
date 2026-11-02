@@ -4,6 +4,8 @@
 // through `PUT /api/install/answers`; `harness/install_page.py` serves both.
 import { useEffect, useState } from "react";
 
+import { PRODUCT_STATEMENT } from "../../workspace/src/welcome/statement";
+
 import { errorMessage, getConfig, getInstallState, putConfig, putInstallAnswers } from "./api/client";
 import type { InstallAnswers, InstallMode, InstallState, OspreyConfig, Profile } from "./api/types";
 import { CloudScreen } from "./screens/CloudScreen";
@@ -91,6 +93,8 @@ export function InstallApp() {
     <div className="harness-app">
       <SummaryRail decided={decided} screens={nav} ingestRoot={config.components?.storage?.ingest} />
       <main>
+        {/* ADR-034 Amendment 1: what the product is, above every screen. */}
+        <p className="help">{PRODUCT_STATEMENT}</p>
         <nav aria-label="Install screens">
           {nav.map((name) => (
             <button

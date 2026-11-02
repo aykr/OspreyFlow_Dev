@@ -109,6 +109,8 @@ COPY apps/workspace/src/theme ./apps/workspace/src/theme
 # broke this stage (31 October 2026). `tests/harness/test_harness_frontend_copies.py` now follows the
 # harness frontend's imports and fails on any workspace file no COPY here covers.
 COPY apps/workspace/src/brand/brand.ts ./apps/workspace/src/brand/brand.ts
+# The product's statement, shown above every install screen (ADR-034 Amendment 1).
+COPY apps/workspace/src/welcome/statement.ts ./apps/workspace/src/welcome/statement.ts
 RUN npm run build --workspace apps/harness
 
 FROM python:3.12-slim

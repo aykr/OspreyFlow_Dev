@@ -78,6 +78,20 @@ describe("InstallApp", () => {
     expect(screen.queryByRole("button", { name: "Folders" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Map" })).toBeNull();
   });
+
+  // ADR-034 Amendment 1: the install page says what the product is, who develops it and its licence,
+  // above every screen. Written out here so a change to the copy is a failing test.
+  it("says what OspreyFlow is above every screen", async () => {
+    const statement =
+      "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, " +
+      "developed by Solirius Reply and released under the Apache License 2.0.";
+    client.getInstallState.mockResolvedValue({ mode: "lite", answers: { mode: "lite" }, packs: [], modes: MODES, home: "/home/ada" });
+    render(<InstallApp />);
+    await waitFor(() => expect(navNames().length).toBeGreaterThan(0));
+    expect(screen.getByRole("main").textContent).toContain(statement);
+    fireEvent.click(screen.getByRole("button", { name: "Governance" }));
+    expect(screen.getByRole("main").textContent).toContain(statement);
+  });
 });
 
 describe("the draft's profile and address (S11, the owner's ruling of 2 November 2026)", () => {

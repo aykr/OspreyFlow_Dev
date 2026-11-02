@@ -9,7 +9,11 @@ What a mistake would do, and the case that catches it:
 - an internal demo's data, code or the local exceptions list leaving —
   `test_real_data_and_the_exceptions_list_are_refused_but_the_enron_code_is_not`;
 - a machine path leaving — `test_a_home_folder_path_is_refused_in_each_shape`;
-- the owner's identity leaving — `test_a_personal_authorship_identifier_is_refused`;
+- the owner's identity leaving — `test_a_personal_authorship_identifier_is_refused`, one case per
+  identifier;
+- the company's name refused, which ADR-034 Amendment 1 allows —
+  `test_the_company_named_in_the_statement_is_published`,
+  `test_the_real_readme_is_published_with_the_statement`;
 - a refused publish leaving a half-written folder — every refusal asserts nothing was written;
 - an uncommitted local change leaving (the owner's `osprey.yaml`) —
   `test_only_what_is_committed_is_copied`;
@@ -110,14 +114,50 @@ def test_a_container_users_home_is_not_a_machine_path(repo: Path, tmp_path: Path
     assert "harness/restore.py" in publish(commit, tmp_path / "out", repo_root=repo)
 
 
-def test_a_personal_authorship_identifier_is_refused(repo: Path, tmp_path: Path) -> None:
-    from tools.packaging_gate import AUTHORSHIP_PATTERN
+#: The personal identifiers in the developer repository's history (`git log --format='%an|%ae'`), in the
+#: shapes they take in a file: the name, each address, the handle. ADR-034 §B5 found the first three;
+#: Amendment 1 adds the address most commits since carry. Each must still be refused once the company's
+#: name is let in, and the addresses no longer lean on the company's domain to be caught.
+PERSONAL_IDENTIFIERS = (
+    "Ayan Kar", "AyanKar", "ayan.kar@solirius.com", "ayankarsolirius", "ayan.d.kar@gmail.com",
+)  # fmt: skip
 
-    planted = "solirius"
-    assert AUTHORSHIP_PATTERN.search(planted), "the planted name is one the gate knows"
+#: The statement the product describes itself with (the owner, 1 November 2026; ADR-034 Amendment 1).
+STATEMENT = (
+    "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection "
+    "platform, developed by Solirius Reply and released under the Apache License 2.0."
+)
+CORE_README = Path(__file__).resolve().parents[2] / "OspreyFlow_Core" / "README.md"
+
+
+@pytest.mark.parametrize("planted", PERSONAL_IDENTIFIERS)
+def test_a_personal_authorship_identifier_is_refused(
+    repo: Path, tmp_path: Path, planted: str
+) -> None:
     commit = _commit(repo, {**CLEAN, "NOTICE": f"Copyright {planted}\n"})
     (finding,) = _refused(repo, commit, tmp_path / "out")
     assert finding.startswith("NOTICE:1:") and "authorship" in finding
+
+
+def test_the_company_named_in_the_statement_is_published(repo: Path, tmp_path: Path) -> None:
+    """ADR-034 Amendment 1: "Solirius Reply" is no longer an authorship identifier. The statement is
+    planted where the product carries it, in the README's opening, and in NOTICE beside the holder."""
+    readme = f"# OspreyFlow\n\n{STATEMENT}\n"
+    commit = _commit(repo, {**CLEAN, "README.md": readme,
+                            "NOTICE": "Copyright 2026 The OspreyFlow Authors\nSolirius Reply\n"})  # fmt: skip
+    out = tmp_path / "user-repo"
+    assert "README.md" in publish(commit, out, repo_root=repo)
+    assert (out / "README.md").read_text(encoding="utf-8") == readme
+
+
+def test_the_real_readme_is_published_with_the_statement(repo: Path, tmp_path: Path) -> None:
+    """The product's own README, as it is in this checkout, committed and published the way the real
+    export reads it: it opens with the statement, and the gate lets it through."""
+    readme = CORE_README.read_text(encoding="utf-8")
+    opening = " ".join(readme.split("\n## ", 1)[0].split())
+    assert STATEMENT in opening, "the README's opening carries the statement"
+    commit = _commit(repo, {**CLEAN, "README.md": readme})
+    publish(commit, tmp_path / "user-repo", repo_root=repo)
 
 
 def test_only_what_is_committed_is_copied(repo: Path, tmp_path: Path) -> None:

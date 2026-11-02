@@ -2,6 +2,7 @@
 // synthetic demonstration cases. Switched off by `welcome.about: false`.
 import { currentBrand } from "../brand/brand";
 import { MeshMark } from "../shell/BrandMark";
+import { PRODUCT_STATEMENT } from "./statement";
 import amlDecision from "./assets/screen-aml-decision.jpg";
 import amlOwnership from "./assets/screen-aml-ownership.jpg";
 import amlQueue from "./assets/screen-aml-queue.jpg";
@@ -109,7 +110,7 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
             <div>
               <h2 id="about-ospreyflow" className="welcome-identity__title">About OspreyFlow</h2>
               <p className="welcome-about__sub">
-                OspreyFlow is the open-source intelligence analysis and network discovery platform this service is built on.
+                {PRODUCT_STATEMENT} This service is built on it.
                 {version && <> Version <span className="value">{version}</span>.</>}
               </p>
             </div>
@@ -117,6 +118,8 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
         )}
         <h2 className="welcome-about__title">One intelligence map</h2>
         <p className="welcome-about__lead">
+          {/* ADR-034 Amendment 1: under GOV.UK the statement is in the identity block above. */}
+          {currentBrand() !== "govuk" && <>{PRODUCT_STATEMENT} </>}
           Crime analysis, anti-money-laundering and fraud detection use the same graph, rules and reports, and event
           monitoring watches all of it as new data arrives. The screens below come from synthetic demonstration cases.
         </p>

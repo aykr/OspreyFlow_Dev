@@ -6,6 +6,58 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.2 — 2026-11-02
+
+**Before you update: OspreyFlow has a new home.** This is the first release from
+`https://github.com/Solirius/ospreyflow`. OspreyFlow is an open source intelligence mapping,
+anti-money-laundering and fraud detection platform, developed by Solirius Reply and released under
+the Apache License 2.0. Images and the Enterprise chart are now published under `ghcr.io/solirius/`.
+An install cloned from the old repository, `aykr/OspreyFlow`, does not update to this release: it
+looks for releases in the old repository and accepts only that repository's signatures, and the old
+repository and its images will be deleted. Back up anything you need (`ospreyflow backup`), uninstall, and install again
+from a fresh clone:
+`git clone https://github.com/Solirius/ospreyflow.git`, then `sh install.sh` (`install.ps1` on Windows).
+
+- **Monitoring and alerting, a core feature.**
+  - One alert queue for every kind of alert, with severity, team, assignment and who claimed each one.
+  - Rules written as plain sentences, blank by blank from the ontology, shown as the pattern they draw
+    and previewed on the last 90 days before they go live. Rules run on each load, before or after it
+    commits, or on a schedule; a rule change and an alert's close can need a second person to approve
+    (maker–checker).
+  - Four more anti-money-laundering templates: a high-risk jurisdiction, large cash, a dormant account
+    reactivated, and a sudden rise in velocity.
+  - Screening lists as managed sources, with versions and re-screening against the changed entries
+    only: connectors for the UK Sanctions List (FCDO), OFAC, the EU, the UN and OpenSanctions, proven on
+    synthetic files. UN and OpenSanctions are marked "licence not confirmed".
+  - Closing an alert takes one of five reasons and words, kept on the record.
+  - Alerts in reports: an alert as a report pack item, alert trends in the trend builder, and the
+    monitoring dashboard's sections.
+- **Connection strength.** A link's strength and a shared attribute's rarity, in the legend, the
+  Inspector and the canvas, with installation influencers set by maker–checker and overridden per case,
+  a "client parity" composition, and sentence rules on strength and rarity.
+- **The Matrix view.** The network as two tables a screen reader can walk.
+- **The GOV.UK theme.** A deployment can take the GOV.UK brand for a gov.uk service: header, service
+  navigation, phase banner, footer, the GOV.UK type scale and a matching sign-in page. OspreyFlow is
+  credited in the footer and in About.
+- **Starters and several deployments.** `ospreyflow install --starter <theme>-<domain>`, also on the
+  guided install page's Mode screen; `deployment.name` lets one computer hold several Lite deployments,
+  and `ospreyflow switch` runs one at a time.
+- **Model engines.** Several engines, each with its own key (`ospreyflow models`, or the guided install
+  page's Models screen). An analyst chooses the engine in Ask the case and Ask to search, within what the
+  case's datasets allow: egress is set per dataset as well as by handling code.
+- **`ospreyflow apply`** applies a changed `osprey.yaml` safely, and `deployment.env` is kept private
+  (600, and a named deployment's folder 700).
+- **Security.**
+  - Lite answers on this computer only (loopback); Small and Enterprise are HTTPS.
+  - Names, not identity-provider ids, wherever a person is shown.
+  - pyasn1 and pypdf updated, and Superset's pyasn1 pin raised.
+- **Accessibility.** Fixes from the GDS re-audit: each labelled field's spoken name contains its
+  visible label, the start page reflows at 320 pixels, and the sign-in page names its language.
+- **New demo material.** Public datasets with a VAST catalogue and a cyber-intrusion pack; Operation
+  Ledger's monitoring week; the prison demo's monitoring batches.
+- **The API's OpenAPI document** is published at `/v1/openapi.json`, behind sign-in, versioned with the
+  release.
+
 ## v0.4.1 — 2026-10-29
 
 Nothing to do before updating.

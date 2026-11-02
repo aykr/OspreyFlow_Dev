@@ -17,11 +17,10 @@ real `docker build`/`tar` for every case.
    same imprecise-on-purpose matching that gate already accepts for the same reason (these names
    are cited inconsistently; a bare-name check is what actually catches every real case checked
    while `product_tree_link_check.py` was built).
-2. `find_authorship_identifiers` — B7 #2: does an identifier from ADR-034 §B5's own verified set
-   (`git grep -liE "ayan\\.?kar|ayankarsolirius|solirius"`, reused as the identical pattern rather
-   than re-derived) appear in any artefact text, including build metadata and image labels — not
-   only file paths, since a version string built from a git author field is exactly the shape §B7
-   #2 names.
+2. `find_authorship_identifiers` — B7 #2: does a personal identifier from ADR-034 §B5's set, as
+   Amendment 1 amends it (`AUTHORSHIP_PATTERN` below; the company's name is no longer one), appear
+   in any artefact text, including build metadata and image labels — not only file paths, since a
+   version string built from a git author field is exactly the shape §B7 #2 names.
 3. `find_internal_demo_data` — ADR-035 §C2: does any `internal`-classified demo's own path
    (`scripts/demo_registry.py`), or either of the two fixed internal-only locations
    (`config/real_data_exceptions.yaml`, `demo-data/`) — real even though no registry entry
@@ -81,11 +80,13 @@ _ALWAYS_INTERNAL_MARKERS: tuple[str, ...] = (
     "OspreyFlow_Data/",
 )
 
-#: ADR-034 §B5's own verified pattern, reused rather than re-derived: `git grep -liE
-#: "ayan\.?kar|ayankarsolirius|solirius"` matched exactly one tracked file at the time B5 was
-#: written. The third identity ("OspreyFlow" / the GitHub noreply address) is already neutral and
-#: is not a search pattern, per B5's own text.
-AUTHORSHIP_PATTERN = re.compile(r"ayan\.?kar|ayankarsolirius|solirius", re.IGNORECASE)
+#: ADR-034 §B5's personal identifiers, as amended by ADR-034 Amendment 1 (2 November 2026): the
+#: owner's name ("Ayan Kar", spaced, dotted or run together), the address most commits carry
+#: (`ayan.d.kar`) and the handle `ayankarsolirius`. The company's name, Solirius Reply, is no longer an
+#: authorship identifier (the owner's ruling of 1 November 2026): the product says it is developed by
+#: Solirius Reply. B5's original pattern also missed "Ayan Kar" with a space, which the amendment's
+#: tests found. The third identity ("OspreyFlow" / the GitHub noreply address) is neutral, per B5.
+AUTHORSHIP_PATTERN = re.compile(r"ayan[\s._-]?(?:d[._-])?kar|ayankarsolirius", re.IGNORECASE)
 
 
 def find_private_tree_files(artefact_paths: Iterable[str]) -> list[str]:
