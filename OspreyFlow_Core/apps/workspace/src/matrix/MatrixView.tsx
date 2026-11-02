@@ -22,6 +22,7 @@ import type { NamedType } from "../canvas/linkLabel";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
 import type { WorkingSetGraph, WorkingSetStoreState } from "../workingset/store";
+import { fetchConnectionStrengths, fetchRarity } from "../strength/api";
 import {
   entityRows,
   linkRows,
@@ -31,6 +32,7 @@ import {
   sortRows,
   type EntityRow,
   type LinkRow,
+  type LinkValues,
   type SortDirection,
 } from "./matrixRows";
 
@@ -50,9 +52,13 @@ export interface MatrixViewProps {
   /** The canvas's own Expand, through its preview and the working set's cap (rule 2). */
   onExpand: (nodeId: string) => void;
   onShowOnGraph: (nodeId: string) => void;
+  /** ADR-139 decision 6: where to work out each link's connection strength and the rarity of its two
+   * ends, so the link table sorts by both. Absent, neither column is shown. */
+  strength?: { apiBaseUrl: string; bearerToken: string; investigationId: string };
 }
 
 const COUNT = new Intl.NumberFormat("en-GB");
+const STRENGTH = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NONE: ReadonlySet<string> = new Set();
 
 interface Column<R> {
@@ -357,6 +363,7 @@ export function MatrixView({
   onSelectLink,
   onExpand,
   onShowOnGraph,
+  strength,
 }: MatrixViewProps) {
   // Every change to what the working set holds moves `seq` (`workingset/store.ts` is the only
   // place the graph's membership changes), so the rows are read again from the graph then.
@@ -366,10 +373,51 @@ export function MatrixView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [graph, seq, dimmedNodeIds],
   );
-  const links = useMemo(
-    () => linkRows(graph, edgeTypes, dimmedEdgeIds),
+  // ADR-139: each link's strength and its ends' rarity, worked out in the store as the reader each
+  // time the view's links change; until then (or if refused) the columns say so.
+  const [linkValues, setLinkValues] = useState<LinkValues>({});
+  const [valuesProblem, setValuesProblem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!strength) return;
+    let cancelled = false;
+    const pairs = new Map<string, [string, string]>();
+    const byPair = new Map<string, string[]>();
+    graph.forEachEdge((id, _attrs, source, target) => {
+      const [a, b] = source < target ? [source, target] : [target, source];
+      const key = `${a}\u0000${b}`;
+      pairs.set(key, [a, b]);
+      byPair.set(key, [...(byPair.get(key) ?? []), id]);
+    });
+    const { apiBaseUrl, bearerToken, investigationId } = strength;
+    void Promise.all([
+      fetchConnectionStrengths(apiBaseUrl, bearerToken, investigationId),
+      fetchRarity(apiBaseUrl, bearerToken, investigationId, "dataset", [...pairs.values()]),
+    ])
+      .then(([found, rarity]) => {
+        if (cancelled) return;
+        const strengthById: Record<string, number> = {};
+        for (const link of found.links) strengthById[link.edge_id] = link.strength;
+        const rarityById: Record<string, number> = {};
+        for (const pair of rarity.pairs) {
+          if (pair.score === null || pair.score === undefined) continue;
+          const [a, b] = pair.a < pair.b ? [pair.a, pair.b] : [pair.b, pair.a];
+          for (const id of byPair.get(`${a}\u0000${b}`) ?? []) rarityById[id] = pair.score;
+        }
+        setLinkValues({ strength: strengthById, rarity: rarityById });
+        setValuesProblem(null);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setValuesProblem(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graph, seq, edgeTypes, dimmedEdgeIds],
+  }, [graph, seq, strength?.investigationId]);
+  const links = useMemo(
+    () => linkRows(graph, edgeTypes, dimmedEdgeIds, linkValues),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [graph, seq, edgeTypes, dimmedEdgeIds, linkValues],
   );
   const selected = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   // The page to open on is read once, when the view opens: a later selection made here is on the
@@ -431,6 +479,24 @@ export function MatrixView({
     { key: "to", header: "To", sortBy: "to", render: (row) => <span className="value">{row.to}</span> },
     { key: "marking", header: "Marking", sortBy: "marking", render: (row) => <Marking marking={row.marking} /> },
     { key: "provenance", header: "Provenance", sortBy: "provenance", render: (row) => <Provenance state={row.provenance} /> },
+    ...(strength
+      ? ([
+          {
+            key: "strength",
+            header: "Strength",
+            sortBy: "strength",
+            numeric: true,
+            render: (row) => (row.strength === null ? "Not worked out" : STRENGTH.format(row.strength)),
+          },
+          {
+            key: "rarity",
+            header: "Rarity",
+            sortBy: "rarity",
+            numeric: true,
+            render: (row) => (row.rarity === null ? "None" : STRENGTH.format(row.rarity)),
+          },
+        ] satisfies Column<LinkRow>[])
+      : []),
   ];
 
   if (entities.length === 0) {
@@ -480,6 +546,12 @@ export function MatrixView({
       {links.length > 0 && (
         <>
           <h3 className="matrix-view__subheading">Links</h3>
+          {strength && (
+            <p className="matrix-view__intro">
+              {valuesProblem ??
+                "Strength is each link's stored strength with the influencers in the legend; rarity is how rare what its two ends share is, per dataset, over what you may see."}
+            </p>
+          )}
           <Grid<LinkRow>
             noun="links"
             rows={links}

@@ -539,6 +539,49 @@
    and focus only (DESIGN.md §3.2). */
 .canvas-legend__link input { margin: 0; width: 24px; height: 24px; flex: none; accent-color: var(--text-secondary); }
 .canvas-legend__swatch { flex: none; width: 14px; height: 3px; border-radius: 2px; }
+/* ADR-139 decision 7: the connection-strength part, under the links. */
+.canvas-legend__strength { border-top: 1px solid var(--border-subtle); padding-top: var(--sp-6); }
+.canvas-legend__strength[hidden] { display: none; }
+.canvas-legend__caption { margin: 0; padding: 0 var(--sp-8) var(--sp-4); font-weight: 600; color: var(--text-primary); }
+.canvas-legend__strength .canvas-legend__links { border-top: 0; padding-top: 0; }
+.canvas-legend__influencer .canvas-legend__meaning { display: block; }
+.canvas-legend__tag {
+  margin-left: var(--sp-4); padding: 0 var(--sp-4); border: 1px solid var(--border-strong);
+  border-radius: var(--r-control); color: var(--text-primary);
+}
+.canvas-legend__note { margin: 0; padding: 0 var(--sp-8) var(--sp-6); color: var(--text-secondary); }
+/* ADR-139 decision 9: the Inspector's account of a link's strength. */
+.strength-explained { display: grid; gap: var(--sp-8); }
+.strength-explained__lines, .strength-explained__shared {
+  margin: 0; padding-left: var(--sp-16); display: grid; gap: var(--sp-4); color: var(--text-primary);
+}
+.strength-explained__shared li { display: list-item; }
+.strength-explained__shared li > span + span { margin-left: var(--sp-8); }
+.strength-explained__heading { margin: 0; font-weight: 600; color: var(--text-primary); }
+.strength-explained__muted { margin: 0; color: var(--text-secondary); }
+.strength-explained__problem { margin: 0; color: var(--error); }
+/* ADR-139 decision 3: Monitoring's Connection strength tab. */
+.strength-panel { display: grid; gap: var(--sp-16); max-width: 720px; }
+.strength-panel section { display: grid; gap: var(--sp-8); }
+.strength-panel__heading { margin: 0; font-weight: 600; color: var(--text-primary); }
+.strength-panel__muted { margin: 0; color: var(--text-secondary); }
+.strength-panel__problem { margin: 0; color: var(--error); }
+.strength-panel__said { margin: 0; color: var(--text-primary); }
+.strength-panel__list { margin: 0; padding-left: var(--sp-16); display: grid; gap: var(--sp-6); color: var(--text-primary); }
+.strength-panel__list li > span { margin-right: var(--sp-8); }
+.strength-panel__form, .strength-panel__choices {
+  margin: 0; padding: var(--sp-8); display: grid; gap: var(--sp-8);
+  border: 1px solid var(--border-subtle); border-radius: var(--r-control); color: var(--text-primary);
+}
+.strength-panel__choices { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.strength-panel__choices legend, .strength-panel__form legend { padding: 0 var(--sp-4); font-weight: 600; }
+.strength-panel__choice { display: flex; align-items: center; gap: var(--sp-6); min-height: 24px; }
+.strength-panel__field { display: grid; gap: var(--sp-4); color: var(--text-secondary); }
+.strength-panel__waiting, .strength-panel__proposal {
+  display: grid; gap: var(--sp-8); padding: var(--sp-8);
+  border: 1px solid var(--border-strong); border-radius: var(--r-control);
+}
+.strength-panel__history { color: var(--text-secondary); }
 /* The canvas toolbar (ADR-097 step 2, design review item 12): one docked row along the canvas's top
    edge, a hairline below and no shadow (DESIGN.md §6); labelled groups, the Show group one segmented
    control. Its controls are quiet buttons here, not the floating overlay buttons they are elsewhere. */

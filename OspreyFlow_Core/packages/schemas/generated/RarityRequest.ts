@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Scope = "dataset" | "case";
 /**
- * @maxItems 5000
+ * @maxItems 50000
  */
 export type Pairs = [unknown, unknown][];
 

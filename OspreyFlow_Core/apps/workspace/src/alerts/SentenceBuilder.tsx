@@ -465,6 +465,82 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
         </span>
       </fieldset>
 
+      {/* ADR-139 decision 8: a rule on how strong a link is, or how rare what two share is. */}
+      <fieldset style={GROUP}>
+        <legend className="label">…how strongly connected</legend>
+        <span style={ROW}>
+          <label className="label" style={BLANK}>
+            Strength
+            <Select
+              aria-label="Strength"
+              value={draft.strength}
+              onChange={(e) =>
+                change({
+                  strength: e.target.value as SentenceDraft["strength"],
+                  reaches: e.target.value === "shared_attribute_rarity" ? "2" : "0.8",
+                  ...(draft.runs === "pre_commit" ? { runs: "post_commit" as const } : {}),
+                })
+              }
+            >
+              <option value="none">(however strongly)</option>
+              <option value="connection_strength">the connection strength with something reaches a figure</option>
+              <option value="shared_attribute_rarity">the shared-attribute rarity with another reaches a figure</option>
+            </Select>
+          </label>
+          {draft.strength === "connection_strength" && (
+            <>
+              <label className="label" style={BLANK}>
+                By
+                <Select aria-label="By (link type, for strength)" value={draft.strengthLink} onChange={(e) => change({ strengthLink: e.target.value })}>
+                  <option value="">any link</option>
+                  {linksFor(ontology, draft.subject).map((l) => (
+                    <option key={l.name} value={l.name}>
+                      {linkLabel(l)}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="label" style={BLANK}>
+                With
+                <Select aria-label="With (type, for strength)" value={draft.strengthOther} onChange={(e) => change({ strengthOther: e.target.value })}>
+                  <option value="">anything</option>
+                  {ontology.entity_types
+                    .filter((t) => t.name !== "Alert")
+                    .map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                </Select>
+              </label>
+            </>
+          )}
+          {draft.strength === "shared_attribute_rarity" && (
+            <label className="label" style={BLANK}>
+              Worked out
+              <Select aria-label="Worked out (rarity)" value={draft.rarityScope} onChange={(e) => change({ rarityScope: e.target.value as SentenceDraft["rarityScope"] })}>
+                <option value="dataset">per dataset</option>
+                <option value="case">across the case's datasets</option>
+              </Select>
+            </label>
+          )}
+          {draft.strength !== "none" && (
+            <label className="label" style={BLANK}>
+              Reaches
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                aria-label="Reaches"
+                value={draft.reaches}
+                onChange={(e) => change({ reaches: e.target.value })}
+                style={{ width: 96 }}
+              />
+            </label>
+          )}
+        </span>
+      </fieldset>
+
       <fieldset style={GROUP}>
         <legend className="label">…then</legend>
         <span style={ROW}>

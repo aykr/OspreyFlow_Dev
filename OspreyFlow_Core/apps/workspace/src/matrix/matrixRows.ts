@@ -40,6 +40,16 @@ export interface LinkRow {
   marking: string | null;
   provenance: ProvenanceState;
   dimmed: boolean;
+  /** ADR-139: its connection strength as the reader may see it, once worked out; else `null`. */
+  strength: number | null;
+  /** ADR-139: the shared-attribute rarity of its two ends, once worked out; else `null`. */
+  rarity: number | null;
+}
+
+/** ADR-139's two values for the link table, by link id. */
+export interface LinkValues {
+  strength?: Readonly<Record<string, number>>;
+  rarity?: Readonly<Record<string, number>>;
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -63,6 +73,7 @@ export function linkRows(
   graph: WorkingSetGraph,
   edgeTypes: readonly NamedType[],
   dimmed: ReadonlySet<string> = NONE,
+  values: LinkValues = {},
 ): LinkRow[] {
   // Each end's name is worked out once, not once per link (a busy node has thousands).
   const names = new Map<string, string>();
@@ -86,6 +97,8 @@ export function linkRows(
       marking: edge.handling?.classification ?? null,
       provenance: edge.provenance.state,
       dimmed: dimmed.has(id),
+      strength: values.strength?.[id] ?? null,
+      rarity: values.rarity?.[id] ?? null,
     };
   });
 }
@@ -109,6 +122,8 @@ const COLLATOR = new Intl.Collator("en-GB", { numeric: true, sensitivity: "base"
 
 function compareValues(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
+  // A value not worked out (ADR-139's strength or rarity, `null`) compares as "", below every
+  // number written out, so it sorts below every value worked out.
   if (typeof a === "boolean" && typeof b === "boolean") return Number(a) - Number(b);
   return COLLATOR.compare(a == null ? "" : String(a), b == null ? "" : String(b));
 }

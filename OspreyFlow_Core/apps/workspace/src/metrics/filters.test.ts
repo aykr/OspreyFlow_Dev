@@ -69,3 +69,44 @@ describe("valueRange", () => {
     expect(valueRange(null)).toEqual({ min: 0, max: 1 });
   });
 });
+
+// ADR-139 decision 6: connection strength is a link metric. A link below the threshold dims, and a
+// node whose strongest link is below it dims, exactly as the metric filter dims a node.
+describe("filterDimming by connection strength", () => {
+  it("dims each link below the threshold and the nodes none of whose links reach it", () => {
+    const filter: MetricFilter = {
+      ...NO_FILTER,
+      metric: "connection_strength",
+      threshold: 0.5,
+      values: { a: 0.9, b: 0.9, c: 0.3, d: 0.1 },
+      edgeValues: { ab: 0.9, bc: 0.3, cd: 0.1 },
+    };
+    const result = filterDimming(nodes, edges, filter);
+    expect(result.dimmedEdgeIds).toEqual(new Set(["bc", "cd"]));
+    expect(result.dimmedNodeIds).toEqual(new Set(["c", "d"]));
+  });
+
+  it("dims a link it has no strength for, as a node the metric gave no value is dimmed", () => {
+    const filter: MetricFilter = {
+      ...NO_FILTER,
+      metric: "connection_strength",
+      threshold: 0.2,
+      values: { a: 0.9, b: 0.9 },
+      edgeValues: { ab: 0.9 },
+    };
+    expect(filterDimming(nodes, edges, filter).dimmedEdgeIds).toEqual(new Set(["bc", "cd"]));
+  });
+
+  it("dims nodes below a shared-attribute rarity, and leaves the links to the node rule", () => {
+    const filter: MetricFilter = {
+      ...NO_FILTER,
+      metric: "shared_attribute_rarity",
+      threshold: 1,
+      values: { a: 2.3, b: 0.4 },
+      edgeValues: null,
+    };
+    const result = filterDimming(nodes, edges, filter);
+    expect(result.dimmedNodeIds).toEqual(new Set(["b", "c", "d"]));
+    expect(result.dimmedEdgeIds.size).toBe(0);
+  });
+});

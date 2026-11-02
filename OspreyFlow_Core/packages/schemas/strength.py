@@ -310,7 +310,7 @@ class RarityRequest(BaseModel):
     explain (each two ids of the working set)."""
 
     scope: RarityScope = "dataset"
-    pairs: list[tuple[str, str]] = Field(default_factory=list, max_length=5_000)
+    pairs: list[tuple[str, str]] = Field(default_factory=list, max_length=50_000)
 
 
 class RarityResult(BaseModel):

@@ -5,6 +5,7 @@ import { Panel } from "../design/primitives/Panel";
 import { AccordionSection } from "../design/primitives/AccordionSection";
 import { EntityPicture, type EntityPictureProps } from "./EntityPicture";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
+import { PairShared, StrengthExplained } from "./StrengthExplained";
 import { LinkChange } from "./LinkChange";
 import type { LinkChangeResult } from "./linkChangeApi";
 import { LinkHistory } from "./LinkHistory";
@@ -96,7 +97,7 @@ export interface InspectorProps {
   };
 }
 
-type LinkPart = "details" | "change" | "notes" | "events" | "history";
+type LinkPart = "details" | "strength" | "change" | "notes" | "events" | "history";
 type NodePart = "properties" | "picture" | "relationships" | "shared" | "risk" | "provenance" | "source" | "judgements";
 
 /** Which parts of a panel are open, starting from `initial`; `toggle` opens or closes one. */
@@ -196,6 +197,7 @@ export function Inspector({
           selection={selection}
           graph={assessment?.workingSetGraph}
           visualFor={visualFor}
+          assessment={assessment}
         />
       </Panel>
     );
@@ -257,12 +259,14 @@ function SelectionView({
   selection,
   graph,
   visualFor,
+  assessment,
 }: {
   selection: NonNullable<InspectorProps["selection"]>;
   graph: Graph | undefined;
   visualFor?: InspectorProps["visualFor"];
+  assessment?: InspectorProps["assessment"];
 }) {
-  type Part = "summary" | "selected" | "between";
+  type Part = "summary" | "selected" | "between" | "rarity";
   const parts = useOpenParts<Part>(["summary"]);
   const nodes = selection.nodes;
   const ids = new Set(nodes.map((n) => n.id));
@@ -326,6 +330,24 @@ function SelectionView({
           <p style={{ margin: 0, color: "var(--text-tertiary)" }}>No link joins two of them in this view.</p>
         ),
       )}
+      {/* ADR-139 decision 9: two selected together, what they share ranked by rarity. */}
+      {assessment &&
+        nodes.length === 2 &&
+        nodes[0] &&
+        nodes[1] &&
+        section(
+          "rarity",
+          "What these two share",
+          <div className="strength-explained">
+            <PairShared
+              apiBaseUrl={assessment.apiBaseUrl}
+              bearerToken={assessment.bearerToken}
+              investigationId={assessment.investigationId}
+              a={nodes[0].id}
+              b={nodes[1].id}
+            />
+          </div>,
+        )}
     </>
   );
 }
@@ -366,6 +388,19 @@ function LinkView({
   return (
     <>
       {section("details", "Details", <LinkDetails {...link} />)}
+      {/* ADR-139 decision 9: why the link is drawn as strong as it is, and what its ends share. */}
+      {assessment &&
+        section(
+          "strength",
+          "Connection strength",
+          <StrengthExplained
+            apiBaseUrl={assessment.apiBaseUrl}
+            bearerToken={assessment.bearerToken}
+            investigationId={assessment.investigationId}
+            edge={link.edge}
+            linkName={(type) => (linkEditing ? linkTypeName(type, linkEditing.edgeTypes) : type)}
+          />,
+        )}
       {/* ADR-080: a link is changed with a reason and its history kept — in a case, for any type
           but the same-as ones, which are confirmed or marked as not the same. */}
       {assessment &&
