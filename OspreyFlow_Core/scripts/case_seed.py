@@ -12,12 +12,13 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import get_args
 
 from services.api.datasets import Dataset, DatasetStore
 from services.api.investigations import AccessLevel, Investigation, InvestigationStore
 
 from demo_fixtures.datasets import SeedDataset
-from schemas.domain import Principal
+from schemas.domain import DomainPack, Principal
 
 
 def parse_grant(text: str) -> tuple[str, AccessLevel]:
@@ -94,7 +95,12 @@ async def _reads_from_arguments(
 
 
 async def case_from_arguments(
-    *, name: str, seeder: Principal, grant_texts: list[str], dataset: SeedDataset
+    *,
+    name: str,
+    seeder: Principal,
+    grant_texts: list[str],
+    dataset: SeedDataset,
+    domains: Sequence[str] | None = None,
 ) -> Investigation:
     """`ensure_case` against the Conduit's own database, as a seed run inside the deployment sees
     it, reading the seed's `dataset` (ADR-099). Shared by the dataset seeds so each makes its case
@@ -108,7 +114,8 @@ async def case_from_arguments(
             name=name,
             seeder=seeder,
             grants=dict(parse_grant(text) for text in grant_texts),
-            domains=list(dataset.domains),
+            # ADR-138: a starter's domains, when the install gives them, else the seed's own.
+            domains=list(dataset.domains) if domains is None else list(domains),
         )
     finally:
         await store.close()
@@ -123,11 +130,28 @@ def add_case_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--investigation-scope", default=None, help="Write into this case.")
     parser.add_argument("--case-name", default=None, help="Make or reuse a case of this name.")
     parser.add_argument("--grant", action="append", default=[], metavar="ACCOUNT=LEVEL")
+    parser.add_argument(
+        "--case-domains", default=None, metavar="PACKS",
+        help="ADR-138: the domain packs the case is set to while nobody has chosen (comma "
+        "separated; empty for the POLE core), instead of the seed's own",
+    )  # fmt: skip
 
 
 def check_case_arguments(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if bool(args.investigation_scope) == bool(args.case_name):
         parser.error("give exactly one of --investigation-scope and --case-name")
+    known = set(get_args(DomainPack))
+    unknown = sorted(set(case_domain_list(args) or ()) - known)
+    if unknown:
+        packs = ", ".join(sorted(known))
+        parser.error(f"--case-domains: {', '.join(unknown)} is not a domain pack ({packs})")
+
+
+def case_domain_list(args: argparse.Namespace) -> list[str] | None:
+    text = getattr(args, "case_domains", None)
+    if text is None:
+        return None
+    return [d for d in str(text).split(",") if d]
 
 
 async def scope_for(
@@ -139,7 +163,11 @@ async def scope_for(
         await _reads_from_arguments(str(args.investigation_scope), dataset, seeder=seeder)
         return str(args.investigation_scope)
     case = await case_from_arguments(
-        name=args.case_name, seeder=seeder, grant_texts=list(args.grant), dataset=dataset
+        name=args.case_name,
+        seeder=seeder,
+        grant_texts=list(args.grant),
+        dataset=dataset,
+        domains=case_domain_list(args),
     )
     print(f"Case {args.case_name!r} is {case.id}.")
     return case.id

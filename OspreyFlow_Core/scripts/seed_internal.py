@@ -34,6 +34,7 @@ this refuses outside a checkout, and passes the container `--attested-checkout` 
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import re
 import subprocess
@@ -57,6 +58,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTAINER_DATA = "/internal-data"
 #: The demo accounts' organisational unit, which the case must share to be visible to them.
 DEMO_UNIT = "verify"
+#: ADR-138: where `scripts.public_dataset stage` places a public dataset, under the data folder.
+PUBLIC_DATA = "public"
 
 
 class SeedRefused(Exception):
@@ -128,6 +131,13 @@ DATASETS: dict[str, Dataset] = {
         case_name="Prison Intelligence Dataset: scale cohort (synthetic demo)",
         bulk=True,
     ),
+    # ADR-138: the cyber starter's demo, a synthetic STIX 2.1 intrusion generated deterministically.
+    "cyber-intrusion": Dataset(
+        script="scripts.seed_cyber_intrusion", case_name="Cyber intrusion (synthetic demo)"
+    ),
+    # ADR-138 decision 3: a public dataset the administrator downloaded, placed by
+    # `scripts.public_dataset stage` under `public/<id>/`; its case is named from its manifest.
+    "public": Dataset(script="scripts.seed_public", case_name="", data_folder=PUBLIC_DATA),
     # ADR-114 Amendment 23: real data, an optional download each user makes and accepts.
     "enron": Dataset(
         script="scripts.seed_enron",
@@ -287,11 +297,23 @@ def seed_internal(
     mid_demo_step: str | None = None,
     datasets: Mapping[str, Dataset] = DATASETS,
     code_mounts: Sequence[tuple[Path, str]] = (),
+    case_domains: Sequence[str] | None = None,
+    public_id: str | None = None,
 ) -> list[str]:
-    """Return the seed report, one line each. Raises `SeedRefused` before starting anything."""
+    """Return the seed report, one line each. Raises `SeedRefused` before starting anything.
+
+    `case_domains` (ADR-138: a starter's) are the domain packs the case is set to while nobody has
+    chosen, instead of the seed's own. `public_id` names the public dataset `public` loads."""
     if dataset not in datasets:
         raise SeedRefused(f"unknown dataset {dataset!r}; known: {', '.join(sorted(datasets))}")
     spec = datasets[dataset]
+    public_args: list[str] = []
+    if (dataset == "public") != (public_id is not None):
+        raise SeedRefused("--public-id goes with the dataset public, and public needs it")
+    if public_id is not None:
+        spec, public_args, case_domains = _public_dataset(
+            spec, public_id, case_domains, repo_root
+        )
     if repair_strays and restore_missing:
         raise SeedRefused("--repair-strays and --restore-missing are run one at a time")
     if apply and not (repair_strays or restore_missing):
@@ -376,7 +398,15 @@ def seed_internal(
     data_root = Path(chosen_data) if chosen_data else repo_root.parent / "OspreyFlow_Data"
     # ADR-114 Amendment 23: accepted on this machine by the person who added it, or the owner's
     # local exceptions entry (ADR-035 §C3, ADR-053).
-    if spec.real_dataset and not (
+    if spec.real_dataset == "public":
+        folder = data_root / (spec.data_folder or "")
+        if not (folder / real_data_acknowledgement.RECORD).is_file():
+            raise SeedRefused(
+                f"{spec.case_name} holds real personal data and has not been accepted on this "
+                "machine: add it with `ospreyflow demo add public`, which says what it is and asks "
+                "first; nothing was started"
+            )
+    elif spec.real_dataset and not (
         real_data_acknowledgement.accepted(data_root / (spec.data_folder or ""), spec.real_dataset)
         or permitted(spec.real_dataset, REAL_DATA_USE)
     ):
@@ -495,8 +525,11 @@ def seed_internal(
             argv += ["--grant", f"{subs[persona]}={level}"]
     if spec.data_folder:
         argv += ["--data-dir", CONTAINER_DATA, "--attested-checkout"]
-    if spec.real_dataset:
+    if spec.real_dataset and spec.real_dataset != "public":
         argv.append("--attested-permission")
+    argv += public_args
+    if case_domains is not None:
+        argv += ["--case-domains", ",".join(case_domains)]
     if replace_graph and spec.data_folder:
         argv.append("--replace-graph")
     if replace_events and spec.data_folder:
@@ -527,6 +560,38 @@ def seed_internal(
         if running:
             run([*compose, "up", "-d", "--wait", "api"])
     return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _public_dataset(
+    spec: Dataset, public_id: str, case_domains: Sequence[str] | None, repo_root: Path
+) -> tuple[Dataset, list[str], Sequence[str] | None]:
+    """The `public` seed made particular to one staged dataset: its folder, its case's name and
+    domains from its manifest, and whether it is real data (ADR-138 decision 3)."""
+    import yaml
+
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,47}", public_id):
+        raise SeedRefused(f"{public_id!r} is not a public dataset's id")
+    chosen = os.environ.get("OSPREYFLOW_DEMO_DATA")
+    root = Path(chosen) if chosen else repo_root.parent / "OspreyFlow_Data"
+    folder = f"{PUBLIC_DATA}/{public_id}"
+    manifest_path = root / folder / "dataset.yaml"
+    if not manifest_path.is_file():
+        raise SeedRefused(
+            f"the public dataset {public_id} is not placed: {manifest_path} is missing. Add it "
+            "with "
+            "`ospreyflow demo add public --file <path> --manifest <dataset.yaml>`"
+        )
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    name = str(manifest.get("name") or public_id)
+    real = bool(manifest.get("real_personal_data"))
+    particular = dataclasses.replace(
+        spec,
+        case_name=f"{name} ({'real data, this machine only' if real else 'public dataset'})"[:200],
+        data_folder=folder,
+        real_dataset="public" if real else None,
+    )
+    domains = case_domains if case_domains is not None else list(manifest.get("domains") or [])
+    return particular, ["--dataset-id", public_id], domains
 
 
 def _inspect(
@@ -904,7 +969,23 @@ def main(
         "--repair-limit",
         "--confirm",
         "--accept-strays",
+        "--case-domains",
+        "--public-id",
     }
+    case_domains: list[str] | None = None
+    if "--case-domains" in args:
+        value = args[args.index("--case-domains") + 1 :][:1]
+        if not value or value[0].startswith("--"):
+            print("--case-domains takes packs, for example niem or fibo,niem", file=sys.stderr)
+            return 2
+        case_domains = [d for d in value[0].split(",") if d]
+    public_id: str | None = None
+    if "--public-id" in args:
+        value = args[args.index("--public-id") + 1 :][:1]
+        if not value or value[0].startswith("--"):
+            print("--public-id takes the dataset's id, for example vast-2012-mc2", file=sys.stderr)
+            return 2
+        public_id = value[0]
     names = [
         a
         for i, a in enumerate(args)
@@ -961,6 +1042,8 @@ def main(
             mid_demo_step=mid_demo_step,
             datasets=datasets,
             code_mounts=code_mounts,
+            case_domains=case_domains,
+            public_id=public_id,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)

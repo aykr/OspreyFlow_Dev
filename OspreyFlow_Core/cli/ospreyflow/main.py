@@ -26,7 +26,8 @@ from typing import Any, Protocol
 
 import yaml
 
-from . import demo
+from . import demo, starters
+from . import deployments as named
 from . import models as engine_keys
 from .answers import MODES, Answers, AnswersRefused, load_answers, osprey_config
 from .cloud import build_enterprise, build_small
@@ -52,7 +53,8 @@ from .run import (
 
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
-    "update", "uninstall", "repair-sign-in", "switch", "models", "apply",
+    "update", "uninstall", "repair-sign-in", "switch", "models", "apply", "deployments",
+    "starters",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -108,7 +110,12 @@ class _Context:
         start_server: StartServer = _start_server,
         free_port: Callable[[], int] = _free_port,
         ask_secret: AskSecret = getpass.getpass,
+        target: named.Target | None = None,
     ) -> None:
+        #: ADR-138: the deployment the verb acts on — `default` (the checkout's) or one by name.
+        self.target = target or named.default_target(product)
+        #: A new deployment's address and graph-store port, chosen before anything is written.
+        self.named_install: tuple[str, int] = ("", 0)
         self.ask_secret = ask_secret
         self.start_server = start_server
         self.free_port = free_port
@@ -139,7 +146,29 @@ class _Context:
 
     @property
     def deployment(self) -> Path:
-        return deployment_dir(self.product)
+        return self.target.rendered if self.target.named else deployment_dir(self.product)
+
+    @property
+    def config_path(self) -> Path:
+        """The target's `osprey.yaml`: the checkout's, or its own folder's (ADR-138)."""
+        return self.target.config_path
+
+    def origin(self) -> str:
+        return self.target.origin() if self.target.named else public_origin(self.product)
+
+    def named_args(self, out_flag: str = "--out-root") -> list[str]:
+        """For a step of the checkout's own, the arguments that point it at a deployment kept by
+        name: its `osprey.yaml` and the folder it is rendered under. None for `default`, so the
+        checkout's deployment runs every step exactly as before."""
+        if not self.target.named:
+            return []
+        return ["--config", str(self.config_path), out_flag, str(self.target.rendered.parent)]
+
+    def named_env(self) -> dict[str, str]:
+        """For a script that finds the deployment itself (`scripts.refresh`, the seeds)."""
+        if not self.target.named:
+            return {}
+        return {"OSPREYFLOW_DEPLOYMENT_DIR": str(self.target.rendered)}
 
     def deployed(self) -> Path:
         directory = self.deployment
@@ -159,13 +188,40 @@ def _parser() -> argparse.ArgumentParser:
         description="Install, run and look after an OspreyFlow deployment.",
     )
     verbs = parser.add_subparsers(dest="verb", required=True, metavar="VERB")
+    # ADR-138 decision 2: every verb acts on one deployment, chosen by name.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--name", dest="deployment_name", default=None,
+        help="the deployment to act on: one installed with --name, or 'default' (the checkout's); "
+        "default: the only one, or the one last used",
+    )  # fmt: skip
+    original = verbs.add_parser
+
+    def add_parser(name: str, **kwargs: Any) -> argparse.ArgumentParser:
+        return original(name, parents=[common], **kwargs)
+
+    verbs.add_parser = add_parser  # type: ignore[method-assign]
 
     doctor = verbs.add_parser("doctor", help="check the machine's prerequisites")
     doctor.add_argument("--mode", choices=MODES, default="lite")
     doctor.add_argument("--cloud", choices=("aws", "azure"))
 
     install = verbs.add_parser("install", help="install a deployment")
-    install.add_argument("--mode", choices=MODES, required=True)
+    install.add_argument("--mode", choices=MODES)
+    # ADR-138 decision 1: a theme and a domain, pre-filling the answers.
+    install.add_argument(
+        "--starter", metavar="THEME-DOMAIN", help="a starter (ospreyflow starters)"
+    )
+    install.add_argument(
+        "--list-starters", action="store_true", help="list the starters; install nothing"
+    )
+    install.add_argument("--service-name", help="GOV.UK: the service's name in its header")
+    install.add_argument("--organisation", help="GOV.UK: the organisation in its footer")
+    install.add_argument("--phase", choices=starters.PHASES, help="GOV.UK: the phase banner")
+    install.add_argument(
+        "--address", help="with --name: the address it answers at (default "
+        "http://<name>.localhost:<next free port>)",
+    )  # fmt: skip
     install.add_argument("--config", type=Path, help="an answers file (install.yaml)")
     install.add_argument("--yes", action="store_true", help="ask nothing; take the defaults")
     install.add_argument("--force", action="store_true", help="replace a different osprey.yaml")
@@ -213,11 +269,18 @@ def _parser() -> argparse.ArgumentParser:
         "and open this one",
     )
     switch.add_argument(
+        "deployment", nargs="?", help="the deployment to switch to (as --name takes it)"
+    )
+    switch.add_argument(
         "--list",
         action="store_true",
         help="list this machine's OspreyFlow deployments; change nothing",
     )
     verbs.add_parser("open", help="open the Glass in the browser")
+    verbs.add_parser(
+        "deployments", help="list this machine's deployments: name, starter, address, state"
+    )
+    verbs.add_parser("starters", help="list the starters (a theme and a domain) an install offers")
 
     logs = verbs.add_parser("logs", help="show service logs")
     logs.add_argument("service", nargs="?")
@@ -229,10 +292,15 @@ def _parser() -> argparse.ArgumentParser:
     actions.add_parser("list", help="the demo packs")
     add = actions.add_parser("add", help="add a demo pack")
     add.add_argument("pack")
-    add.add_argument("--file", type=Path, help="the downloaded file (PaySim, Enron)")
+    add.add_argument("--file", type=Path, help="the downloaded file (PaySim, Enron, public)")
+    add.add_argument(
+        "--manifest",
+        help="public: the dataset's manifest (a path, or a catalogue id such as vast-2012-mc2)",
+    )
     add.add_argument(
         "--accept-real-data", action="store_true",
-        help="enron: accept, without being asked, that it is real people's email (a scripted run)",
+        help="enron, or a public dataset holding real personal data: accept, without being asked "
+        "(a scripted run)",
     )  # fmt: skip
 
     verbs.add_parser("backup", help="back up every store (arguments go to harness.backup)")
@@ -275,8 +343,34 @@ def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
     return 0 if ok else 1
 
 
-def _prompted_answers(ctx: _Context, mode: str, packs: Sequence[str]) -> dict[str, Any]:
+def _govuk_flags(args: argparse.Namespace) -> dict[str, str]:
+    given = {
+        "service_name": args.service_name,
+        "organisation": args.organisation,
+        "phase": args.phase,
+    }
+    return {k: v for k, v in given.items() if v}
+
+
+def _prompted_answers(
+    ctx: _Context, mode: str, packs: Sequence[str], starter: starters.Starter | None = None,
+    flags: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     raw: dict[str, Any] = {"mode": mode}
+    flags = dict(flags or {})
+    if starter is not None:
+        raw["starter"] = starter.name
+        if starter.govuk:
+            # ADR-138 decision 1: the GOV.UK theme asks for the service's name, organisation and
+            # phase. The name offered names the whole service, never one case (step 9d finding 3).
+            raw["appearance"] = {
+                "service_name": flags.get("service_name")
+                or ctx.ask("The service's name (GOV.UK header)", starter.domain.service_name or ""),
+                "organisation": flags.get("organisation")
+                or ctx.ask("The organisation (GOV.UK footer)", ""),
+                "phase": flags.get("phase")
+                or ctx.ask("The phase (alpha, beta, live or none)", starters.DEFAULT_PHASE),
+            }
     raw["components"] = {
         "dashboards": _yes(ctx.ask("Turn on dashboards (Superset and report sync)? [Y/n]", "y"))
     }
@@ -291,21 +385,57 @@ def _prompted_answers(ctx: _Context, mode: str, packs: Sequence[str]) -> dict[st
             "region": ctx.ask("Region", ""),
             "domain": ctx.ask("Domain name you control", ""),
         }
+    offered_first = (
+        ",".join(p for p in starter.domain.demo_packs if p in packs) if starter is not None else ""
+    )
     chosen = [
         p.strip()
         for p in ctx.ask(
-            f"Demo packs to load, separated by commas ({', '.join(packs)}); blank for none", ""
+            f"Demo packs to load, separated by commas ({', '.join(packs)}); blank for none",
+            offered_first,
         ).split(",")
         if p.strip()
     ]
-    if chosen:
+    if chosen or starter is not None:
         raw["demo_packs"] = chosen
     if "paysim" in chosen:
         raw["paysim_file"] = ctx.ask("Where is the PaySIM download?", "")
+    if isinstance(raw.get("appearance"), dict):
+        raw["appearance"] = {k: v for k, v in raw["appearance"].items() if v}
     return {k: v for k, v in raw.items() if v != ""}
 
 
+def _starter_into(raw: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    """`--starter` and the GOV.UK flags written into answers that came from a file or `--yes`. A
+    file naming another starter is refused rather than one silently winning."""
+    if args.starter:
+        if raw.setdefault("starter", args.starter) != args.starter:
+            raise AnswersRefused(
+                f"the answers name the starter {raw['starter']}, but --starter {args.starter} was "
+                "given; they must agree"
+            )
+    flags = _govuk_flags(args)
+    if flags:
+        appearance = raw.setdefault("appearance", {})
+        if not isinstance(appearance, dict):
+            raise AnswersRefused(f"appearance holds settings, not {appearance!r}")
+        appearance.update(flags)
+    return raw
+
+
 def _raw_answers(args: argparse.Namespace, ctx: _Context, packs: Sequence[str]) -> dict[str, Any]:
+    if args.config is None and not args.yes:
+        starter = None
+        if args.starter:
+            try:
+                starter = starters.parse(args.starter)
+            except starters.UnknownStarter as unknown:
+                raise AnswersRefused(str(unknown)) from None
+        return _prompted_answers(ctx, args.mode, packs, starter, _govuk_flags(args))
+    return _starter_into(_file_or_default_answers(args), args)
+
+
+def _file_or_default_answers(args: argparse.Namespace) -> dict[str, Any]:
     if args.config is not None:
         path = args.config.expanduser()
         try:
@@ -320,15 +450,14 @@ def _raw_answers(args: argparse.Namespace, ctx: _Context, packs: Sequence[str]) 
                 "they must agree"
             )
         return loaded
-    if args.yes:
-        return {"mode": args.mode}
-    return _prompted_answers(ctx, args.mode, packs)
+    return {"mode": args.mode}
 
 
 def _write_config(ctx: _Context, answers: Answers, force: bool) -> None:
-    path = ctx.product / "osprey.yaml"
+    path = ctx.config_path
     config = osprey_config(answers, read_config(ctx.product))
-    if config == read_config(ctx.product):
+    header = starters.comment(answers.starter, answers.demo_packs) if answers.starter else ""
+    if config == read_config(ctx.product) and (not header or _begins_with(path, header)):
         return  # what the answers make is what is there, or the owner's own file used as it is
     if not force:
         raise CommandRefused(
@@ -336,8 +465,15 @@ def _write_config(ctx: _Context, answers: Answers, force: bool) -> None:
             "changed; run again with --force to replace it, or put your settings in the answers "
             "file (or name your own file there with config:)."
         )
-    path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    path.write_text(header + yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     print(f"Wrote {path}.")
+
+
+def _begins_with(path: Path, header: str) -> bool:
+    try:
+        return path.read_text(encoding="utf-8").startswith(header)
+    except OSError:
+        return False
 
 
 def _gui(ctx: _Context) -> int:
@@ -390,7 +526,30 @@ def _gui(ctx: _Context) -> int:
 
 
 def _install(args: argparse.Namespace, ctx: _Context) -> int:
+    if args.list_starters:
+        print("\n".join(starters.listing()))
+        return 0
+    if args.mode is None:
+        raise CommandRefused(
+            "Say which mode to install: --mode lite, small or enterprise (section 1 of the "
+            "administration guide)."
+        )
+    if ctx.target.named and args.mode != "lite":
+        raise CommandRefused(
+            "--name keeps a deployment beside others on this computer, which is Lite. A Small "
+            "server or an Enterprise cluster is a deployment of its own: install it without --name."
+        )
+    if args.address and not ctx.target.named:
+        raise CommandRefused(
+            "--address goes with --name. To move the checkout's own deployment, change "
+            "network.public_origin in its osprey.yaml and run ospreyflow apply."
+        )
     if args.gui:
+        if ctx.target.named:
+            raise CommandRefused(
+                "The guided page installs the checkout's own deployment. Install one by name from "
+                "the terminal: ospreyflow install --mode lite --name <name> --starter <starter>."
+            )
         return _gui(ctx)
     packs = demo.pack_ids(ctx.product, ctx.capture)
     raw = _raw_answers(args, ctx, packs)
@@ -420,9 +579,14 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
             "run this on the server with the answers its first boot wrote (they name its managed "
             "services)"
         )
+    named_ports: tuple[int, ...] | None = None
+    if ctx.target.named:
+        named_ports = _prepare_named(ctx, args)
     # The server runs the stack as Lite does, so it needs what Lite needs (Docker and its ports).
     doctor_mode = "lite" if on_server else args.mode
-    checks = run_doctor(doctor_mode, ctx.probes, product=ctx.product, cloud=args.cloud)
+    checks = run_doctor(
+        doctor_mode, ctx.probes, product=ctx.product, cloud=args.cloud, ports=named_ports
+    )
     if not _print_checks(checks):
         print("Nothing was installed. Fix the above and run ospreyflow install again.")
         return 1
@@ -435,28 +599,116 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     if args.mode == "enterprise":
         return _install_on_cluster(ctx, args, answers)
 
-    _write_config(ctx, answers, args.force)
+    if ctx.target.named:
+        _write_named_config(ctx, args, answers)
+    else:
+        _write_config(ctx, answers, args.force)
+    demo_accounts = answers.demo_accounts and not args.no_demo_accounts
     apply = _apply_argv(ctx, args)
-    if not args.no_demo_accounts:
+    if demo_accounts:
         apply.append("--demo-analyst")
     ctx.step("build and start the deployment", apply)
-    if not args.no_demo_accounts:
-        ctx.step("register the sign-in", [*ctx.python, "-m", "harness.register_sign_in"])
+    if ctx.target.named:
+        named.remember(ctx.env, ctx.target.name)
+    if demo_accounts:
+        ctx.step(
+            "register the sign-in",
+            [*ctx.python, "-m", "harness.register_sign_in", *ctx.named_args()],
+        )
     for pack in answers.demo_packs:
         file = answers.paysim_file if pack == "paysim" else None
-        demo.add_pack(ctx.product, ctx.run, ctx.env, pack, file)
+        demo.add_pack(
+            ctx.product, ctx.run, ctx.env, pack, file,
+            case_domains=answers.case_domains, deployment_env=ctx.named_env(),
+        )  # fmt: skip
 
     print()
-    print(f"OspreyFlow is installed. Open it at {public_origin(ctx.product)}")
-    print(f"Sign in with the accounts in {ctx.deployment / 'deployment.env'}")
-    print("Look after it with: ospreyflow status, ospreyflow open")
+    print(f"OspreyFlow is installed. Open it at {ctx.origin()}")
+    if demo_accounts:
+        print(f"Sign in with the accounts in {ctx.deployment / 'deployment.env'}")
+    else:
+        print(f"The sign-in details are in {ctx.deployment / 'deployment.env'}")
+    if answers.starter is not None:
+        missing = [p for p in answers.starter.domain.demo_packs if p not in packs]
+        if missing:
+            print(f"This checkout has no {', '.join(missing)} demo pack, so it was not loaded.")
+        if answers.starter.domain.note:
+            print(answers.starter.domain.note)
+    name = f" --name {ctx.target.name}" if ctx.target.named else ""
+    print(f"Look after it with: ospreyflow status{name}, ospreyflow open{name}")
     return 0
+
+
+def _docker_projects(ctx: _Context) -> dict[str, list[Path]]:
+    code, output = ctx.capture(
+        ["docker", "compose", "ls", "--all", "--format", "json"], cwd=ctx.product
+    )
+    if code != 0:
+        raise CommandRefused(
+            "Could not ask Docker which Compose projects exist, so a new deployment's name cannot "
+            "be checked. Is Docker running?"
+        )
+    return named.compose_projects(_services(output))
+
+
+def _prepare_named(ctx: _Context, args: argparse.Namespace) -> tuple[int, ...]:
+    """ADR-138 decision 2, before anything is written: the name is free (no Compose project of
+    another folder has it, and no deployment is installed under it), and the deployment is given
+    an address and a graph-store port nobody else has. Returns the ports the doctor checks."""
+    target = ctx.target
+    if (target.rendered / "compose.yaml").is_file():
+        raise CommandRefused(
+            f"A deployment called '{target.name}' is already installed, in {target.folder}. "
+            f"Change a setting with ospreyflow apply --name {target.name}; start it with "
+            f"ospreyflow start --name {target.name}. Nothing was changed."
+        )
+    named.refuse_a_taken_project(target.name, target.folder, _docker_projects(ctx))
+    taken = named.ports_in_use(ctx.product, ctx.env)
+    if args.address:
+        named.check_address(args.address)
+        address = args.address.rstrip("/")
+        port = named._port_of(address)
+        if port in taken:
+            raise CommandRefused(
+                f"Port {port} of {address} is already another deployment's. Give another "
+                "--address, or leave it out to be given a free port."
+            )
+    else:
+        port = named.next_free_port(named.FIRST_ADDRESS_PORT, taken, ctx.probes.port_free)
+        address = named.default_address(target.name, port)
+    graph = named.next_free_port(named.FIRST_GRAPH_PORT, taken | {port}, ctx.probes.port_free)
+    ctx.named_install = (address, graph)
+    return (port, graph)
+
+
+def _write_named_config(ctx: _Context, args: argparse.Namespace, answers: Answers) -> None:
+    """The deployment's own `osprey.yaml`, in its own folder (mode 700): the checkout's settings
+    less what names the checkout's deployment and its look (`deployment`, `appearance`), with the
+    answers over them, then its name, address and graph-store port."""
+    address, graph = ctx.named_install
+    base = {
+        k: v for k, v in read_config(ctx.product).items() if k not in ("deployment", "appearance")
+    }
+    config = osprey_config(answers, base)
+    config["deployment"] = {"name": ctx.target.name, "graph_port": graph}
+    config.setdefault("network", {})["public_origin"] = address
+    header = starters.comment(answers.starter, answers.demo_packs) if answers.starter else ""
+    text = header + yaml.safe_dump(config, sort_keys=False)
+    path = ctx.config_path
+    if path.is_file() and path.read_text(encoding="utf-8") != text and not args.force:
+        raise CommandRefused(
+            f"{path} already exists and differs from what these answers make. Nothing was "
+            "changed; run again with --force to replace it."
+        )
+    named.private_folder(ctx.target.folder)
+    path.write_text(text, encoding="utf-8")
+    print(f"Wrote {path}.")
 
 
 def _apply_argv(ctx: _Context, args: argparse.Namespace) -> list[str]:
     release = None if args.build else _release_at_head(ctx)
     if release is None:
-        return [*ctx.python, "-m", "harness.apply", "--build"]
+        return [*ctx.python, "-m", "harness.apply", "--build", *ctx.named_args()]
     # ADR-114 Amendment 8 point 10: a release's signed images, verified before anything starts.
     (ctx.product / ".install").mkdir(exist_ok=True)
     lock = ctx.product / ".install" / "release.lock"
@@ -465,7 +717,7 @@ def _apply_argv(ctx: _Context, args: argparse.Namespace) -> list[str]:
         [*ctx.python, "-m", "harness.update", "--deployment", str(ctx.deployment),
          "--verify-install", release, "--lock-out", str(lock)],
     )  # fmt: skip
-    return [*ctx.python, "-m", "harness.apply", "--images-from", str(lock)]
+    return [*ctx.python, "-m", "harness.apply", "--images-from", str(lock), *ctx.named_args()]
 
 
 def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers) -> int:
@@ -531,7 +783,11 @@ def _release_at_head(ctx: _Context) -> str | None:
 def _start(args: argparse.Namespace, ctx: _Context) -> int:
     directory = ctx.deployed()
     if args.build:
-        ctx.step("rebuild from the checkout", [*ctx.python, "-m", "scripts.refresh"])
+        ctx.step(
+            "rebuild from the checkout",
+            [*ctx.python, "-m", "scripts.refresh"],
+            env=ctx.named_env(),
+        )
     else:
         ctx.step("start the deployment", [*compose(directory), "up", "-d", "--wait"])
     return 0
@@ -546,15 +802,16 @@ def _apply_settings(ctx: _Context) -> int:
     ctx.step(
         "apply the changed settings",
         [*ctx.python, "-m", "harness.apply", "--reapply",
-         "--config", str(ctx.product / "osprey.yaml"), "--out-root", str(directory.parent)],
+         "--config", str(ctx.config_path), "--out-root", str(directory.parent)],
     )  # fmt: skip
-    print(f"The settings in {ctx.product / 'osprey.yaml'} are applied.")
+    print(f"The settings in {ctx.config_path} are applied.")
     return 0
 
 
 def _repair_sign_in(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-114 Amendment 22: the deployment's sign-in registered again, for its own profile."""
-    step = [*ctx.python, "-m", "harness.register_sign_in", "--profile", ctx.deployed().name]
+    step = [*ctx.python, "-m", "harness.register_sign_in", "--profile", ctx.deployed().name,
+            *ctx.named_args()]  # fmt: skip
     if args.no_demo_accounts:
         step.append("--no-demo-accounts")
     ctx.step("register the sign-in", step)
@@ -578,10 +835,17 @@ def _deployments(ctx: _Context) -> list[tuple[str, bool, Path]] | None:
     if code != 0:
         return None
     found: list[tuple[str, bool, Path]] = []
+    root = named.deployments_root(ctx.env).resolve()
     for row in _services(output):
         for config in str(row.get("ConfigFiles", "")).split(","):
             compose_file = Path(config.strip())
             folder = compose_file.parent
+            if compose_file.name == "compose.yaml" and folder.resolve().parent == root:
+                # ADR-138: a deployment kept by name under ~/.ospreyflow/deployments/.
+                if (folder / "osprey.yaml").is_file():
+                    running = "running" in str(row.get("Status", ""))
+                    found.append((str(row.get("Name", "")), running, folder))
+                continue
             if compose_file.name != "compose.yaml" or folder.parent.name != "generated":
                 continue
             if folder.parent.parent.name != "deploy":
@@ -611,6 +875,12 @@ def _switch(args: argparse.Namespace, ctx: _Context) -> int:
             if folder.resolve() == own:
                 print(f"{name}: {state} (this one)")
                 continue
+            if (folder / "osprey.yaml").is_file() and folder.resolve().parent == (
+                named.deployments_root(ctx.env).resolve()
+            ):
+                address = named.address_of(folder / "osprey.yaml")
+                print(f"{name}: {state} \u2014 {folder} \u2014 {address}")
+                continue
             product = folder.parents[2]
             print(f"{name}: {state} \u2014 {product} \u2014 {public_origin(product)}")
         return 0
@@ -619,9 +889,44 @@ def _switch(args: argparse.Namespace, ctx: _Context) -> int:
             print(f"Stopping {name}, so this one has the machine to itself.")
             ctx.step(f"stop {name}", [*compose(folder), "stop"])
     ctx.step("start the deployment", [*compose(ctx.deployed()), "up", "-d", "--wait"])
-    address = public_origin(ctx.product)
+    named.remember(ctx.env, ctx.target.name)
+    address = ctx.origin()
     ctx.open_url(address)
     print(f"Opening {address}")
+    return 0
+
+
+def _list_deployments(ctx: _Context) -> int:
+    """ADR-138 decision 2: every deployment this command knows — the checkout's own as `default`,
+    each one kept by name — with its starter, address and whether it is running. Changes nothing."""
+    code, output = ctx.capture(
+        ["docker", "compose", "ls", "--all", "--format", "json"], cwd=ctx.product
+    )
+    projects = _services(output) if code == 0 else []
+    running: dict[Path, bool] = {}
+    for row in projects:
+        for config in str(row.get("ConfigFiles", "")).split(","):
+            if config.strip():
+                running[Path(config.strip()).resolve()] = "running" in str(row.get("Status", ""))
+    targets = [named.default_target(ctx.product)]
+    targets += [named.named_target(ctx.env, n) for n in named.named(ctx.env)]
+    chosen = ctx.target.name
+    for target in targets:
+        compose_file = target.rendered / "compose.yaml"
+        if not compose_file.is_file():
+            state = "not installed" if target.named else None
+            if state is None:
+                continue  # the checkout has no deployment of its own
+        elif code != 0:
+            state = "state unknown (Docker did not answer)"
+        else:
+            state = "running" if running.get(compose_file.resolve()) else "stopped"
+        starter = named.starter_of(target.config_path) or "no starter"
+        here = " (the one commands act on)" if target.name == chosen else ""
+        print(f"{target.name}: {starter}, {target.origin()}, {state}{here}")
+        print(f"  {target.folder}")
+    if code != 0:
+        print("Docker did not answer, so whether each is running is not known.", file=sys.stderr)
     return 0
 
 
@@ -715,7 +1020,7 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     directory = ctx.deployed()
     env_file = directory / "deployment.env"
     models = engine_keys.read_models(ctx.product, directory)
-    wanted = engine_keys.read_wanted(ctx.product)
+    wanted = engine_keys.read_wanted(ctx.config_path.parent)
     if args.action is None:
         print("\n".join(engine_keys.list_engines(models, env_file)))
         return 0
@@ -752,8 +1057,13 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _status(ctx)
     if verb == "switch":
         return _switch(args, ctx)
+    if verb == "deployments":
+        return _list_deployments(ctx)
+    if verb == "starters":
+        print("\n".join(starters.listing()))
+        return 0
     if verb == "open":
-        address = public_origin(ctx.product)
+        address = ctx.origin()
         ctx.open_url(address)
         print(f"Opening {address}")
         return 0
@@ -762,9 +1072,17 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     if verb == "demo":
         if args.action == "list":
             return demo.list_packs(ctx.product, ctx.run)
+        if args.pack == "public":
+            demo.add_public(
+                ctx.product, ctx.run, ctx.env, args.file, args.manifest, capture=ctx.capture,
+                ask=ctx.ask, accept_real_data=args.accept_real_data,
+                deployment_env=ctx.named_env(),
+            )  # fmt: skip
+            return 0
         demo.add_pack(
             ctx.product, ctx.run, ctx.env, args.pack, args.file,
             ask=ctx.ask, accept_real_data=args.accept_real_data,
+            deployment_env=ctx.named_env(),
         )  # fmt: skip
         return 0
     if verb == "uninstall":
@@ -801,6 +1119,16 @@ def main(
     passthrough: list[str] = []
     if args_in and args_in[0] in ("backup", "restore", "update"):
         args_in, passthrough = args_in[:1], args_in[1:]
+        # ADR-138: `--name` is the command's own, whatever else goes to the harness.
+        for index, word in enumerate(passthrough):
+            if word == "--name" and index + 1 < len(passthrough):
+                args_in += passthrough[index : index + 2]
+                passthrough = passthrough[:index] + passthrough[index + 2 :]
+                break
+            if word.startswith("--name="):
+                args_in.append(word)
+                passthrough = passthrough[:index] + passthrough[index + 1 :]
+                break
     try:
         args = _parser().parse_args(args_in)
     except SystemExit as stop:
@@ -813,7 +1141,21 @@ def main(
             if args.verb != "doctor":
                 raise
             product = Path.cwd()
-        directory = deployment_dir(product) if (product / "osprey.yaml").is_file() else product
+        given = args.deployment_name
+        wanted = args.deployment if args.verb == "switch" and args.deployment else given
+        if args.verb == "switch" and args.deployment and given and given != args.deployment:
+            raise CommandRefused("Name the deployment once: ospreyflow switch <name>.")
+        target = (
+            named.resolve(wanted, product, env, creating=args.verb == "install")
+            if args.verb not in ("doctor", "starters")
+            else named.default_target(product)
+        )
+        if target.named:
+            directory = target.rendered
+        elif (product / "osprey.yaml").is_file():
+            directory = deployment_dir(product)
+        else:
+            directory = product
         real_probes = probes or SystemProbes(
             compose(directory) if (directory / "compose.yaml").is_file() else None
         )
@@ -830,7 +1172,10 @@ def main(
             start_server,
             free_port,
             ask_secret,
+            target,
         )
+        if wanted is not None and args.verb != "install":
+            named.remember(env, target.name)
         if args.verb == "update":
             # ADR-114 Amendment 8: the checkout's own `harness.update`, told which deployment.
             directory = ctx.deployed()
@@ -840,7 +1185,12 @@ def main(
             )
         if args.verb in ("backup", "restore"):
             module = f"harness.{args.verb}"
-            return ctx.run([*ctx.python, "-m", module, *passthrough], cwd=product)
+            # ADR-138: a deployment kept by name is named to the harness by its own osprey.yaml and
+            # rendered folder; its backups are kept in its own folder, never mixed with another's.
+            pointed = ctx.named_args("--generated-root")
+            if target.named and args.verb == "backup" and "--out-root" not in passthrough:
+                pointed += ["--out-root", str(target.folder / "backups")]
+            return ctx.run([*ctx.python, "-m", module, *pointed, *passthrough], cwd=product)
         return _dispatch(args, ctx)
     except (CommandRefused, AnswersRefused) as refusal:
         print(f"ospreyflow: {refusal}", file=sys.stderr)

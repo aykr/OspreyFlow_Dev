@@ -475,7 +475,9 @@ class UnpinnedImagesError(RuntimeError):
 OWNED_IMAGE_REGISTRY = "ghcr.io/ospreyflow"
 
 
-def service_images(config: OspreyConfig) -> list[ServiceImage]:
+def service_images(
+    config: OspreyConfig, *, build_context: str = "../../.."
+) -> list[ServiceImage]:
     """Every container the rendered stack runs, in a deterministic order.
 
     `05_DEPLOYMENT.md` §3's own `local-lite` list is the reference: "the workspace, one Conduit,
@@ -500,7 +502,7 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
             return ServiceImage(
                 service,
                 f"osprey/{service}:local",
-                build_context=BUILD_CONTEXT_FROM_OUTPUT_DIR,
+                build_context=build_context,
                 dockerfile=dockerfile,
             )
         # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
@@ -590,6 +592,20 @@ def service_images(config: OspreyConfig) -> list[ServiceImage]:
 #: such file or directory`, which names the symptom and not the cause.
 BUILD_CONTEXT_FROM_OUTPUT_DIR = "../../.."
 
+
+def build_context_for(out_dir: Path, source_path: str | None) -> str:
+    """The `build.context` a deployment rendered into `out_dir` names: `../../..` when `out_dir` is
+    `<source>/deploy/generated/<name>/`, as every checkout-rooted deployment is (so its files are
+    byte for byte what they were); the checkout's own absolute path otherwise — a deployment kept
+    under `~/.ospreyflow/deployments/<name>/` (ADR-138 decision 2), where three levels up is the
+    home folder, not the checkout."""
+    if source_path is None:
+        return BUILD_CONTEXT_FROM_OUTPUT_DIR
+    source = Path(source_path).resolve()
+    if (out_dir / BUILD_CONTEXT_FROM_OUTPUT_DIR).resolve() == source:
+        return BUILD_CONTEXT_FROM_OUTPUT_DIR
+    return str(source)
+
 #: Published host ports, as `service -> (env var, default)`. Every one is overridable, because
 #: Preflight found 8000 already held by an unrelated container on a real machine and a deployment
 #: that cannot move its own ports is one an operator has to fight. The defaults are the
@@ -607,6 +623,14 @@ PORT_OVERRIDES: dict[str, tuple[str, int]] = {
     # run on the host and need the database (owner's ruling of 29 September 2026).
     "arcadedb": ("OSPREY_ARCADEDB_PORT", 2480),
 }
+
+def _published_port(config: OspreyConfig, service: str, default: int) -> int:
+    """The host port a service is published at: ArcadeDB's is `deployment.graph_port` when set
+    (ADR-138 decision 2: a deployment beside another shares no port), every other its default."""
+    if service == "arcadedb" and config.deployment.graph_port is not None:
+        return config.deployment.graph_port
+    return default
+
 
 _CONTAINER_PORTS: dict[str, int] = {
     "api": 8000,
@@ -1286,7 +1310,10 @@ def _render_env(config: OspreyConfig) -> str:
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",
-        *[f"{variable}={default}" for variable, default in PORT_OVERRIDES.values()],
+        *[
+            f"{variable}={_published_port(config, service, default)}"
+            for service, (variable, default) in PORT_OVERRIDES.items()
+        ],
     ]
     if config.models.hosted_fallback is not None:
         lines.append(f"OSPREY_HOSTED_FALLBACK={config.models.hosted_fallback}")
@@ -1461,6 +1488,7 @@ def render(
     resolver: DigestResolver | None = None,
     allow_unpinned: bool = False,
     resolved_source_label: str = "local-docker-daemon",
+    build_context: str | None = None,
 ) -> RenderResult:
     """Produces all four of §2.1's artefacts in memory. Pure apart from the digest resolver, which
     is why byte-stability across runs is a property this can be tested for at all.
@@ -1476,7 +1504,11 @@ def render(
         resolver = (
             unresolved_digest_resolver if allow_unpinned else daemon_then_registry_digest_resolver
         )
-    images = service_images(config)
+    images = (
+        service_images(config)
+        if build_context is None
+        else service_images(config, build_context=build_context)
+    )
     if config.profile is Profile.CLUSTER:
         # 05 §3b: the chart's values, translated from the same services (`harness/cluster.py`).
         from harness.cluster import render_cluster

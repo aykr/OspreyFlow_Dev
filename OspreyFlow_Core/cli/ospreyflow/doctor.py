@@ -211,9 +211,15 @@ def _port_check(probes: Probes, port: int) -> Check:
 
 
 def run_doctor(
-    mode: str, probes: Probes, *, product: Path = Path("."), cloud: str | None = None
+    mode: str,
+    probes: Probes,
+    *,
+    product: Path = Path("."),
+    cloud: str | None = None,
+    ports: tuple[int, ...] | None = None,
 ) -> list[Check]:
-    """Every check for `mode`, in the order a person should fix them."""
+    """Every check for `mode`, in the order a person should fix them. `ports` are a deployment's
+    own when it is not the checkout's (ADR-138: one installed by name, at an address of its own)."""
     git = _tool(probes, "git", "git", "Git", "Install Git from https://git-scm.com/downloads.")
     uv = _tool(
         probes, "uv", "uv", "uv",
@@ -224,7 +230,7 @@ def run_doctor(
             *_docker_checks(probes, product),
             git,
             uv,
-            *(_port_check(probes, port) for port in lite_ports(product)),
+            *(_port_check(probes, port) for port in (ports or lite_ports(product))),
         ]
     if mode == "enterprise":
         kube_tools = [

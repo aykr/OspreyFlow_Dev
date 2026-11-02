@@ -26,6 +26,8 @@ PACK_KEYS = {
     "enron": "enron",
     "prison-intelligence": "prison-intelligence",
     "prison-intelligence-scale": "prison-intelligence-scale",
+    # ADR-138: the synthetic STIX 2.1 intrusion case, the cyber starter's demo.
+    "cyber-intrusion": "cyber-intrusion",
 }
 #: PaySim's source page. A test holds this to the pack's own `source_page`.
 PAYSIM_SOURCE_PAGE = "https://www.kaggle.com/datasets/ealaxi/paysim1"
@@ -174,8 +176,12 @@ def add_pack(
     *,
     ask: Callable[[str, str], str] | None = None,
     accept_real_data: bool = False,
+    case_domains: tuple[str, ...] | None = None,
+    deployment_env: Mapping[str, str] | None = None,
 ) -> None:
-    """Seed `pack` into its own case. Raises `CommandRefused` before anything starts when the
+    """Seed `pack` into its own case. `case_domains` (a starter's, ADR-138) are the domain packs the
+    case is set to while nobody has chosen; `deployment_env` points the seed at a deployment kept
+    by name (`OSPREYFLOW_DEPLOYMENT_DIR`). Raises `CommandRefused` before anything starts when the
     request cannot be honoured, and `StepFailed` when a step it ran exits non-zero."""
     if pack not in PACK_KEYS:
         raise CommandRefused(
@@ -197,10 +203,94 @@ def add_pack(
         _place(file, root)
     if pack == "enron" and not _enron(product, run, root, file, ask, accept_real_data):
         return
+    domains = ["--case-domains", ",".join(case_domains)] if case_domains is not None else []
     code = run(
-        [*python, "-m", "scripts.seed_internal", PACK_KEYS[pack], "--stop-api"],
-        env={"OSPREYFLOW_DEMO_DATA": str(root)},
+        [*python, "-m", "scripts.seed_internal", PACK_KEYS[pack], "--stop-api", *domains],
+        env={"OSPREYFLOW_DEMO_DATA": str(root), **(deployment_env or {})},
         cwd=product,
     )
     if code != 0:
         raise StepFailed(f"load the {pack} demo pack", code)
+
+
+# --- A public dataset of the administrator's choosing (ADR-138 decision 3) --------------------
+
+#: The words a public dataset holding real personal data is accepted with: Enron's path, for any
+#: dataset whose manifest says so (rule 9; ADR-035 §C3).
+PUBLIC_REAL_DATA_STATEMENT = (
+    "Its manifest says this dataset holds REAL personal data: real people's names and details. "
+    "Your organisation needs its own lawful basis to process it. It stays on this machine and is "
+    "never shared by OspreyFlow, and it never belongs in a repository or a test run."
+)
+
+
+def add_public(
+    product: Path,
+    run: Runner,
+    env: Mapping[str, str],
+    file: Path | None,
+    manifest: str | None,
+    *,
+    capture: Capture,
+    ask: Callable[[str, str], str] | None = None,
+    accept_real_data: bool = False,
+    deployment_env: Mapping[str, str] | None = None,
+) -> bool:
+    """`ospreyflow demo add public --file <path> --manifest <dataset.yaml>`: the file is checked
+    against its manifest's checksum, by the checkout's own `scripts.public_dataset`, before anything
+    else happens; real personal data is accepted in words (or `--accept-real-data`); then the file,
+    its manifest and its recipe are placed in the demo data folder and loaded into a case of their
+    own. `False` when the person declined."""
+    if file is None or not manifest:
+        raise CommandRefused(
+            "A public dataset is your own download, named by its manifest: give both, as "
+            "ospreyflow demo add public --file <the downloaded file> --manifest <dataset.yaml, or "
+            "a catalogue id such as vast-2012-mc2>. python -m scripts.public_dataset --list names "
+            "the catalogue."
+        )
+    file = file.expanduser()
+    python = python_for(product)
+    code, said = capture(
+        [*python, "-m", "scripts.public_dataset", "verify", "--manifest", manifest, "--file",
+         str(file), "--json"],
+        cwd=product,
+    )  # fmt: skip
+    if code != 0:
+        raise CommandRefused(said.strip() or "The dataset's file does not match its manifest.")
+    try:
+        summary = json.loads(said.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise CommandRefused(
+            "The checkout's dataset check answered in an unexpected form."
+        ) from None
+    print(f"{file.name} is the file {summary['name']}'s manifest names (SHA-256 checked).")
+    print(f"Source: {summary['source_page']}")
+    print(f"Terms: {summary['licence']}")
+    if summary.get("real_personal_data"):
+        print()
+        print(f"{summary['name']} is REAL DATA.")
+        print(PUBLIC_REAL_DATA_STATEMENT)
+        if accept_real_data:
+            print("You accepted with --accept-real-data.")
+        else:
+            answer = ask("Type yes to accept this and add it", "no") if ask else "no"
+            if answer.strip().lower() != "yes":
+                print("Nothing was added.")
+                return False
+    root = demo_data_root(product, env)
+    stage = [*python, "-m", "scripts.public_dataset", "stage", "--manifest", manifest,
+             "--file", str(file), "--into", str(root)]  # fmt: skip
+    if summary.get("real_personal_data"):
+        stage.append("--accepted")
+    code = run(stage, cwd=product)
+    if code != 0:
+        raise StepFailed("place the dataset in the demo data folder", code)
+    code = run(
+        [*python, "-m", "scripts.seed_internal", "public", "--stop-api", "--public-id",
+         str(summary["id"])],
+        env={"OSPREYFLOW_DEMO_DATA": str(root), **(deployment_env or {})},
+        cwd=product,
+    )  # fmt: skip
+    if code != 0:
+        raise StepFailed(f"load {summary['name']}", code)
+    return True
