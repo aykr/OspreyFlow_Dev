@@ -9,7 +9,9 @@
 //
 // It opens on the Matrix, so the axe scans of the page scan the Matrix; `?view=graph` opens on the
 // canvas (the keyboard spec's start). `?many=1` holds 250 more people, so the Matrix pages (rule 2:
-// it says which rows are shown); `?select=p2,p4` opens with those selected.
+// it says which rows are shown); `?select=p2,p4` opens with those selected. `?strength=1` (ADR-139)
+// works out each link's connection strength and its ends' rarity, answered by the page itself, so
+// the link table shows and sorts by both.
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -114,6 +116,33 @@ const NO_LINKS: ReadonlySet<string> = new Set();
 
 window.__MATRIX__ = { view: startView, selection: startSelection, selectedEdge: null };
 
+// ADR-139: the two routes the Matrix reads its Strength and Rarity columns from, answered here.
+const withStrength = params.get("strength") === "1";
+if (withStrength) {
+  const STRENGTHS: Record<string, number> = { l1: 0.62, l2: 0.41, l3: 0.88, l4: 0.7 };
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const body = url.endsWith("/connection-strength")
+      ? {
+          links: Object.entries(STRENGTHS).map(([edge_id, strength]) => ({
+            edge_id, edge_type: "ASSOCIATE_OF", base_weight: strength, strength, applied: [],
+          })),
+          legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+        }
+      : {
+          scope: "dataset",
+          node_values: {},
+          pairs: (JSON.parse(String(init?.body ?? "{}")).pairs ?? []).map(([a, b]: [string, string]) => ({
+            a, b, score: a === "p1" && b === "p2" ? 2.4 : a === "p2" && b === "p4" ? 0.3 : null, shared: [],
+          })),
+        }; // prettier-ignore
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
+}
+const STRENGTH = withStrength
+  ? { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "matrix-fixture" }
+  : undefined;
+
 function Harness() {
   const [view, setView] = useState<"graph" | "matrix">(startView);
   const [selection, setSelection] = useState<string[]>(startSelection);
@@ -192,6 +221,7 @@ function Harness() {
             }}
             onExpand={onGraph("expand")}
             onShowOnGraph={onGraph("show")}
+            strength={STRENGTH}
           />
         )}
       </main>

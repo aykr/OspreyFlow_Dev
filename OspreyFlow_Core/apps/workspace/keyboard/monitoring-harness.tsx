@@ -309,6 +309,15 @@ if (params.get("sentence") === "preview") {
   pressButton("Preview on the last 90 days");
 }
 
+// `?sentence=strength` (with `tab=rules`, ADR-139 decision 8): a sentence on connection strength.
+if (params.get("sentence") === "strength") {
+  for (let i = 0; i < 40 && !choose("Subject", "Person"); i++) await settle();
+  await settle();
+  choose("Strength", "connection_strength");
+  await settle();
+  choose("Reaches", "0.85");
+}
+
 // `?template=<typology>` (with `tab=rules`): that template fills the form; a jurisdiction list is typed.
 const template = params.get("template");
 if (template) {

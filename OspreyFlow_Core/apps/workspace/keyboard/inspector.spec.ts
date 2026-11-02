@@ -19,6 +19,41 @@ async function serve(page: Page) {
 
 const header = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
 
+test("a link's connection strength is explained, and what its ends share ranked, by keyboard (ADR-139)", async ({
+  page,
+}) => {
+  await serve(page);
+  const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  const asked: string[] = [];
+  await page.route("**/v1/investigations/inv-1/connection-strength", (r) => {
+    asked.push(JSON.stringify(r.request().postDataJSON()));
+    return r.fulfill(json({
+      links: [{ edge_id: "e1", edge_type: "ASSOCIATE_OF", base_weight: 0.62, strength: 0.71, parameter_set: "3/default",
+        heavy: 10, occurrences: 2, last_seen: "2026-04-18T00:00:00Z",
+        applied: [{ id: "incident-source", label: "Evidenced by an incident", change: "add", size: 0.1348, layer: "file",
+          record_kind: "Incident" }] }],
+      legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+    })); // prettier-ignore
+  });
+  await page.route("**/v1/investigations/inv-1/rarity", (r) =>
+    r.fulfill(json({
+      scope: "dataset", node_values: {},
+      pairs: [{ a: "a", b: "b", score: 2.31, dataset: null, shared: [
+        { node: { id: "x1", type: "Endpoint", properties: { value_normalised: "+447700900640" }, provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z" }, handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" }, audit: { created_at: "2026-01-01T00:00:00Z", created_by: "f" } }, score: 2.31 }] }],
+    })), // prettier-ignore
+  );
+  await page.goto("/keyboard/inspector-harness.html");
+  await header(page, "Connection strength").focus();
+  await expect(header(page, "Connection strength")).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Enter");
+  const lines = page.getByRole("list", { name: "What this link's strength rests on" });
+  await expect(lines).toContainText("Seen 2 times; 10 is heavy");
+  await expect(lines).toContainText("because an Incident you can see evidences it");
+  await expect(page.getByRole("list", { name: "Shared attributes, rarest first" })).toContainText("+447700900640");
+  expect(asked).toContain(JSON.stringify({ edge_ids: ["e1"] }));
+  registerCovered(REGISTRY, "explain-a-links-strength-by-keyboard");
+});
+
 test("a part opens and folds by Enter on its header", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/inspector-harness.html");

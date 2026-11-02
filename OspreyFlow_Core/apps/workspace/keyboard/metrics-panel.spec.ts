@@ -145,6 +145,91 @@ test("choosing a metric fetches its values and the threshold slider dims below a
   registerCovered("METRICS_PANEL_ACTIONS", "filter-section-dims-below-a-metric-value-by-keyboard");
 });
 
+// ADR-139 decision 6: connection strength and shared-attribute rarity, chosen and thresholded by
+// keyboard alone, read from their own routes (intercepted here, at the transport).
+test("choosing connection strength reads each link's strength and the threshold dims below it, by keyboard (ADR-139)", async ({
+  page,
+}) => {
+  await page.route("**/*/connection-strength", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        links: [
+          { edge_id: "e0", edge_type: "ASSOCIATE_OF", base_weight: 0.3, strength: 0.3, applied: [] },
+          { edge_id: "e1", edge_type: "ASSOCIATE_OF", base_weight: 0.75, strength: 0.9, applied: [] },
+        ],
+        legend: { influencers: [], direct_link_types: [], switched_off: [], rarity_note: "" },
+      }),
+    });
+  });
+  await page.goto("/keyboard/metrics-panel-harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Filter");
+  await page.keyboard.press("Enter");
+  const metric = page.getByRole("combobox", { name: "Filter by metric" });
+  await metric.focus();
+  await page.keyboard.type("Conn");
+  await expect(metric).toHaveValue("connection_strength");
+  await expect.poll(async () => (await filterState(page))?.edgeValues?.e1).toBe(0.9);
+  const threshold = page.getByRole("slider", { name: "Metric value at least" });
+  await threshold.focus();
+  for (let i = 0; i < 20; i++) await page.keyboard.press("ArrowRight");
+  // Past 0.3: the first link (and n0, whose only link it is) falls below; the second stays.
+  await expect.poll(async () => (await filterState(page))?.threshold ?? 0).toBeGreaterThan(0.3);
+  expect((await filterState(page))?.values).toEqual({ n0: 0.3, n1: 0.9, n2: 0.9 });
+  registerCovered("METRICS_PANEL_ACTIONS", "filter-section-dims-below-connection-strength-by-keyboard");
+});
+
+test("choosing shared-attribute rarity reads it in the scope chosen, by keyboard (ADR-139)", async ({ page }) => {
+  const scopes: string[] = [];
+  await page.route("**/*/rarity", async (route) => {
+    scopes.push((route.request().postDataJSON() as { scope: string }).scope);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ scope: "dataset", node_values: { n0: 0.4, n1: 2.2 }, pairs: [] }),
+    });
+  });
+  await page.goto("/keyboard/metrics-panel-harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Filter");
+  await page.keyboard.press("Enter");
+  const metric = page.getByRole("combobox", { name: "Filter by metric" });
+  await metric.focus();
+  await page.keyboard.type("Shared");
+  await expect(metric).toHaveValue("shared_attribute_rarity");
+  await expect.poll(async () => (await filterState(page))?.values?.n1).toBe(2.2);
+  const scope = page.getByRole("combobox", { name: "Rarity worked out" });
+  await scope.focus();
+  await page.keyboard.type("Acr");
+  await expect(scope).toHaveValue("case");
+  await expect.poll(() => scopes.at(-1)).toBe("case");
+  const threshold = page.getByRole("slider", { name: "Metric value at least" });
+  await threshold.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await filterState(page))?.threshold ?? 0).toBeGreaterThan(0.4);
+  registerCovered("METRICS_PANEL_ACTIONS", "filter-section-dims-below-shared-attribute-rarity-by-keyboard");
+});
+
+test("the legend lists the strength influencers in force, folded and opened by keyboard (ADR-139)", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/metrics-panel-harness.html");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabToButtonNamed(page, "Legend");
+  const influencers = page.getByRole("list", { name: "Strength influencers" });
+  await expect(influencers).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(influencers).toBeHidden();
+  await page.keyboard.press("Enter");
+  await expect(influencers).toBeVisible();
+  await expect(influencers.getByRole("listitem")).toHaveCount(2);
+  await expect(influencers).toContainText("Case override");
+  await expect(page.getByText(/worked out over what you may see/)).toBeVisible();
+  registerCovered("METRICS_PANEL_ACTIONS", "legend-lists-the-strength-influencers-by-keyboard");
+});
+
 test("every registered metrics-panel action has its own proving test case above", () => {
   assertAllCovered("METRICS_PANEL_ACTIONS", METRICS_PANEL_ACTIONS);
 });
