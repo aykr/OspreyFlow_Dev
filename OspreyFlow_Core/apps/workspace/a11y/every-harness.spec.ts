@@ -56,7 +56,7 @@ const EXTRA_STATES: Record<string, string[]> = {
     "stage=d&open=a-close",
     "stage=d&tab=lists&lists=manage",
     // The GDS re-audit (step 9b, 2 November 2026): an alert opened with its close form (the five
-    // closing reasons, step 7b), and a screening alert opened (its list entry named, step 9d).
+    // closing reasons, step 7b), and a KYC screening alert opened (a close match to a listed party).
     "open=a-hot",
     "open=a-kyc",
   ],
