@@ -9,7 +9,9 @@ deployment, and `apply` wrote `deployment.env` readable by every account on the 
 These drive the real `harness.apply`, standing in only for the preflight checks (where a case does
 not exercise the real port check) and for Docker. The stand-in for Docker refuses what Compose
 refuses where it matters here (`CLAUDE.md` rule 15): an `up` naming a service the compose file does
-not have, and an env file that is not there — `test_the_stand_in_compose_refuses_as_compose_does`.
+not have, an env file that is not there, and an `up --wait` naming a run-once job (the `ingest`
+loader, which exits 2 without its arguments, so `--wait` reports the deploy failed) —
+`test_the_stand_in_compose_refuses_as_compose_does`.
 
 What a mistake would do, and the case that catches it (rule 12):
 - a provider enabled in `osprey.yaml` never reaching the gateway, or its key landing anywhere but
@@ -22,6 +24,8 @@ What a mistake would do, and the case that catches it (rule 12):
   `test_it_restarts_only_the_services_whose_rendered_files_changed`,
   `test_nothing_changed_restarts_nothing`,
   `test_what_reaches_a_service_decides_whether_it_restarts`;
+- a run-once job (`ingest`) started and waited on, which fails the apply though every service is
+  healthy (found 1 November, step 2e) — `test_a_run_once_job_is_neither_started_nor_waited_on`;
 - an install step run again (accounts, first admin, packs, seeding, a rebuild, a volume) —
   `test_it_runs_no_first_install_step`;
 - the secrets file readable by others — `test_deployment_env_is_600_after_an_install`,
@@ -100,6 +104,12 @@ class FakeCompose:
             unknown = [n for n in named if n not in services]
             if unknown:
                 raise apply.ApplyFailed(stage, f"no such service: {unknown[0]}")
+            # Naming a service starts it whatever its profile; a run-once job then exits, and
+            # `--wait` reads its exit as a failed start (the `ingest` loader exits 2 without its
+            # arguments: `apply` failed so on 1 November with every service healthy).
+            jobs = [n for n in named if services[n].get("restart") == "no"]
+            if jobs and "--wait" in args:
+                raise apply.ApplyFailed(stage, f"service {jobs[0]!r} exited with code 2")
         return ""
 
     def ups(self) -> list[list[str]]:
@@ -207,6 +217,10 @@ def test_the_stand_in_compose_refuses_as_compose_does(deployment: Deployment) ->
     compose_file = deployment.folder / "compose.yaml"
     with pytest.raises(apply.ApplyFailed, match="no such service: nonesuch"):
         deployment.compose([*apply._compose(compose_file), "up", "-d", "nonesuch"], stage="up")
+    with pytest.raises(apply.ApplyFailed, match="'ingest' exited with code 2"):
+        deployment.compose(
+            [*apply._compose(compose_file), "up", "-d", "--wait", "api", "ingest"], stage="up"
+        )
     deployment.env.rename(deployment.env.with_suffix(".gone"))
     with pytest.raises(apply.ApplyFailed, match="couldn't find env file"):
         deployment.compose([*apply._compose(compose_file), "up", "-d", "api"], stage="up")
@@ -314,10 +328,26 @@ def test_it_restarts_only_the_services_whose_rendered_files_changed(
     # The gateway (its routing table, and its key by interpolation); the Conduit (its osprey.yaml,
     # and the engines it is told of); and the other services that read deployment.env whole, whose
     # own environment now blanks the key (ADR-135). Not a store, not the identity provider, not the
-    # proxy, not the local models.
-    assert deployment.compose.restarted() == {"litellm", "api", "workspace", "ingest", "ner"}
+    # proxy, not the local models, and not the run-once `ingest` job (which reads deployment.env
+    # whole, but is never started by `up`: its next `compose run` reads the new settings).
+    assert deployment.compose.restarted() == {"litellm", "api", "workspace", "ner"}
     (up,) = deployment.compose.ups()
     assert "--force-recreate" in up and "--no-deps" in up
+
+
+def test_a_run_once_job_is_neither_started_nor_waited_on(
+    deployment: Deployment, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Step 2e's follow-up: the `ingest` job reads deployment.env whole, so a new key changes what
+    reaches it — but `up --wait` naming it starts it, it exits, and the apply reported failure though
+    every service was healthy. Its rendered files are still written, so its next run reads them."""
+    services = yaml.safe_load((deployment.folder / "compose.yaml").read_text("utf-8"))["services"]
+    assert services["ingest"]["restart"] == "no" and services["ingest"]["profiles"] == ["batch"]
+    deployment.write_config(GEMINI)
+    assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
+    assert "ingest" not in deployment.compose.restarted()
+    assert "ingest" not in capsys.readouterr().out
+    assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
 
 
 def test_nothing_changed_restarts_nothing(
@@ -341,6 +371,9 @@ def test_what_reaches_a_service_decides_whether_it_restarts(tmp_path: Path) -> N
         "interpolates": {"image": "a", "environment": {"X": "${K:-}"}},
         "mounts": {"image": "a", "volumes": ["./table.yaml:/t.yaml:ro", "./theme/x:/x:ro"]},
         "untouched": {"image": "a", "volumes": ["data:/data"]},
+        # A run-once job reads it whole too, but `up` never starts it (`render.py`'s `ingest`).
+        "job": {"image": "a", "env_file": ["deployment.env"], "restart": "no",
+                "profiles": ["batch"]},  # fmt: skip
     }
     for folder, key, table, theme in ((old, "1", "a", "a"), (new, "2", "b", "b")):
         (folder / "theme" / "x").mkdir(parents=True)
