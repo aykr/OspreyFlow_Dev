@@ -11,15 +11,34 @@ image with another command — the same code, not a second copy.
 from __future__ import annotations
 
 import secrets
+from pathlib import Path
 
 from harness.site import sites
 from schemas.deployment import OspreyConfig
 
 
+#: Superset's build context from a checkout-rooted deployment's folder (`deploy/generated/<name>/`):
+#: `deploy/superset`, two folders up. Kept byte for byte for those deployments.
+SUPERSET_CONTEXT_FROM_OUTPUT_DIR = "../../superset"
+
+
+def superset_build_context(build_context: str | None) -> str:
+    """Where Superset's image is built from, given the checkout's own build context (the one the
+    Python images name, `harness.render.build_context_for`): two folders up from a checkout-rooted
+    deployment, as before; `<checkout>/deploy/superset` by its own path for a deployment kept by
+    name under `~/.ospreyflow/deployments/` (ADR-138 decision 2), where two folders up is
+    `~/.ospreyflow`. Found by step 11b's first real named install, whose build failed with
+    `path "~/.ospreyflow/superset" not found`."""
+    if build_context is None or not Path(build_context).is_absolute():
+        return SUPERSET_CONTEXT_FROM_OUTPUT_DIR
+    return str(Path(build_context) / "deploy" / "superset")
+
+
 def reporting_services(
-    config: OspreyConfig, *, api_image: str, building: bool
+    config: OspreyConfig, *, api_image: str, building: bool, build_context: str | None = None
 ) -> dict[str, object]:
-    """The compose stanzas for whichever reporting components `osprey.yaml` switches on."""
+    """The compose stanzas for whichever reporting components `osprey.yaml` switches on.
+    `build_context` is the Python images' own (the checkout), from which Superset's is found."""
     reporting = config.reporting
     services: dict[str, object] = {}
     if reporting.sync:
@@ -64,7 +83,10 @@ def reporting_services(
             },
         }  # fmt: skip
         if building:
-            stanza["build"] = {"context": "../../superset", "dockerfile": "Dockerfile"}
+            stanza["build"] = {
+                "context": superset_build_context(build_context),
+                "dockerfile": "Dockerfile",
+            }
         services["superset"] = stanza
     return services
 

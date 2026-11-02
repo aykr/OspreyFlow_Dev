@@ -1076,7 +1076,11 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
         services[entry.service] = service
     # ADR-111 Amendment 2: report-sync (the Conduit's own image) and Superset, when switched on.
     api = next(entry for entry in images if entry.service == "api")
-    services.update(reporting_services(config, api_image=api.image, building=api.building))
+    services.update(
+        reporting_services(
+            config, api_image=api.image, building=api.building, build_context=api.build_context
+        )
+    )
     _keys_for_the_gateway_alone(config, services)
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
