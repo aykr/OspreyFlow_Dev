@@ -22222,3 +22222,76 @@ any load date (`tests/scenarios/test_pid_connection_strength.py`):
 
 Captures `CAP-S1` to `CAP-S6`, both brands, in `apps/workspace/live/pid-capture.spec.ts`; not run.
 
+
+### ADR-139, Amendment 2 (2 November 2026) — the client's own code: their rarity formula, a "client parity" composition, and dataset triggers
+
+Status: the owner's rulings of 2 November 2026, after the client supplied the R function their
+pipeline uses (`add_strength_column`). Built in build-order step 9g, after step 9f. Where it differs
+from the decision as first written, this amendment governs.
+
+**What the client's code does.** It is called once per dataset's link table, with a column
+`the_col`. The owner confirms that column holds **the shared value itself** (for example the phone
+number two people share).
+- `N` is the number of links in the table carrying each value. `edge_strength_1 = 1 − N / ΣN`, the
+  share of the table's links that do not carry that value, between 0 and 1.
+- A frequency-based second term is written but commented out, so occurrence counts and recency are
+  not used.
+- `abs_add` is added to **every** link in the table. The source boost is therefore triggered by the
+  dataset or source passed in (an assaults, disorders or finds table), not by a property of each link.
+- `non_dup_add` is added to every link whose type is not `dup_*`. The `dup_*` types are shared-value
+  links, so this is the direct boost.
+- The total is an unbounded sum, up to about `1 + abs_add + non_dup_add`.
+
+**Rulings.**
+1. **The default rarity measure is the client's formula.**
+   - For a shared value `a` (an attribute node in OspreyFlow, reached by a two-step path):
+     `rarity(a) = 1 − L_visible(a) / Σ_b L_visible(b)`.
+   - `L_visible(a)` is the number of pair links the viewer may see that run through `a`, that is
+     `C(k, 2)` for the `k` visible holders of `a`. The sum runs over the shared values of the same kind
+     in scope: per dataset by default, as the client does.
+   - A pair's rarity is that of the value linking them. Where several values link them, it is the
+     highest, recorded as an interpretation for the client to confirm.
+   - The IDF measure of the first decision (`Σ ln(N/df)`) remains selectable per installation.
+   - As before, rarity is computed at query time under the viewer's access, and never stored or
+     computed over the corpus.
+2. **A selectable composition, "client parity".** An installation chooses one of two compositions,
+   recorded in a weights version.
+   - **Standard, the default:** the stored count-and-recency weight plus the influencers (decision 1),
+     on 0 to 1, with rarity a separate metric.
+   - **Client parity:** connection strength = rarity + the influencers' adds, with no count and no
+     recency. This reproduces the client's scores.
+     - Because rarity is per viewer, a parity installation's strength is also computed at read time
+       under access. The Metrics filter, the Matrix sort, the legend and the monitoring condition all
+       use it.
+     - The Glass shows strength on 0 to 1 for drawing and filtering (a logistic of the sum, so order
+       is preserved).
+     - The Inspector also shows the **raw sum on the client's scale**, so their thresholds can be
+       compared. A monitoring condition may name either scale.
+3. **Influencer triggers** may be any of:
+   - a **dataset or source** (every link evidenced in that dataset, as `abs_add` does);
+   - a record's kind and property value (an incident type, for example);
+   - none (the direct-links influencer).
+4. **Direct links:** the client marks direct by "not a shared-value type". In OspreyFlow a shared
+   value is a path, not a link type, so every stored link type between two parties is direct unless the
+   influencer excludes it. The shipped direct list stays configurable, as decision 1 says.
+5. **Demonstration and documentation:**
+   - The Prison Intelligence demo shows both compositions on the same case: a parity installation
+     version can be switched on for the case through a case override.
+   - The user guide explains the two compositions.
+   - The developer guide gives the client's R function and OspreyFlow's equivalent, line by line, with
+     a worked example on synthetic data whose numbers match.
+
+**Tests that would fail if this were violated (rule 12):**
+- **Golden parity:** a synthetic link table run through a transcription of the client's R function (in
+  the test, as fixture arithmetic) and through OspreyFlow's parity composition gives the same scores.
+- **Hidden holders:** the rarity of a value with a hidden holder equals the rarity without it (planted:
+  counting the hidden holder).
+- **Dataset triggers:** a dataset-triggered influencer applies to that dataset's links only, and not to
+  a link whose evidencing dataset the viewer cannot read.
+- **Order:** the standard and parity compositions each preserve their own ordering under the logistic
+  drawing.
+
+**For the client to confirm:**
+- the sizes of `abs_add` and `non_dup_add` per dataset;
+- the rarity of a pair linked by several shared values;
+- that `dup_*` covers exactly the shared-value types.
