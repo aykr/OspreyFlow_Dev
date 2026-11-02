@@ -383,7 +383,10 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   // Its own starting point: `local-lite`. The Profile test above saves `small` to the same scratch
   // config, and `small` expects GPU-backed serving, so on a host with no GPU (any CI runner) its
   // Preflight failed the gpu check; on a Mac that check always skips, which hid it (15 October 2026).
-  const reset = await page.request.put("/api/config", { data: { profile: "local-lite" } });
+  // Lite's own address too: the Profile test gave Small an https:// one (S11).
+  const reset = await page.request.put("/api/config", {
+    data: { profile: "local-lite", network: { public_origin: "http://ospreyflow.localhost" } },
+  });
   expect(reset.ok()).toBe(true);
   await page.goto("/keyboard/setup-harness.html");
   await page.getByRole("button", { name: "Preflight", exact: true }).focus();
