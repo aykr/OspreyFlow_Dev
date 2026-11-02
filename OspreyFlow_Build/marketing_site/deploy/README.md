@@ -16,9 +16,11 @@ The site is five files and a folder:
 The site is **not published until the repository move**, and then with the rest of the product's pages
 (`process/REPO_MOVE_PLAN.md`, Stage 3, step 5). Nothing here is pushed before then.
 
-1. In Stage 2, change the home page's `repoUrl` to `https://github.com/Solirius/ospreyflow` and export
-   the site again (see "Changes waiting for the next export" below).
-2. In Stage 3, `marketing_site/publish_pages.sh` (aimed at the new repository) copies `index.html`,
+1. Stage 2 (done, 2 November 2026): the home page's `repoUrl` is `https://github.com/Solirius/ospreyflow`,
+   edited in the bundle's template the same way as step 12's edit (below), since the design source is not
+   in this repository.
+2. In Stage 3, `marketing_site/publish_pages.sh` (which stops unless the product checkout's `origin` is
+   `https://github.com/Solirius/ospreyflow.git`) copies `index.html`,
    `intro-video.html`, `public-sector.html`, `monitoring.html`, `assets/`, `.nojekyll` and, if present,
    `CNAME` onto the product repository's `gh-pages` branch, and Pages serves them at
    `https://solirius.github.io/ospreyflow/`.
@@ -26,6 +28,9 @@ The site is **not published until the repository move**, and then with the rest 
 
 The new pages link to each other, to `index.html`, to `index.html#start` and to `intro-video.html`
 only. They do not link to the repository, so `repoUrl` is the one place the address changes.
+`OspreyFlow_Build/tests/test_website_wording.py` holds every page to that one address, and the home page
+to the product's statement: "OspreyFlow is an open source intelligence mapping, anti-money-laundering
+and fraud detection platform, developed by Solirius Reply and released under the Apache License 2.0."
 
 ## How the home page was edited, and what the design source still needs
 
@@ -45,8 +50,8 @@ repository, so the next export from it would undo the edit above. Before exporti
 
 - add the two navigation links and the `#public-sector` section to the design source (copy them from
   the template in this `index.html`);
-- set `repoUrl` to `https://github.com/Solirius/ospreyflow`, within the repository move (step 13), not
-  before;
+- set `repoUrl` to `https://github.com/Solirius/ospreyflow` (the bundle has it since step 13; the design
+  source does not);
 - run `OspreyFlow_Build/tests/test_website_wording.py` on the new export.
 
 Found in the browser check (step 12), and already in the export before it: the home page asks the
@@ -66,8 +71,8 @@ reading the home page's decoded template, and runs in `make test`.
 
 ## Checklist before going live
 
-- [ ] `repoUrl` points to `https://github.com/Solirius/ospreyflow` (step 13), and the export carries the
-      two navigation links and the `#public-sector` section.
+- [x] `repoUrl` points to `https://github.com/Solirius/ospreyflow` (step 13, 2 November 2026), and the
+      export carries the two navigation links and the `#public-sector` section.
 - [ ] `test_website_wording.py` passes on the files about to be published.
 - [ ] The independent accessibility audit, penetration test and DPIA are still listed as planned. When
       one is done, change the pages to say so, and update the test.

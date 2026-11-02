@@ -1,11 +1,15 @@
 #!/bin/sh
-# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendments 28 and 29).
+# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendments 28, 29 and 30).
 #
-# The site names Solirius Reply, which the packaging rules keep out of the product, so it never goes through the
-# product export (`make publish-user-repo`) and never reaches `main`. It goes on a branch of its own,
-# which GitHub Pages serves. Only what Pages needs is published: `deploy/index.html`,
-# `deploy/intro-video.html`, `deploy/public-sector.html`, `deploy/monitoring.html`, `deploy/assets/`,
-# `deploy/.nojekyll` and, if present, `deploy/CNAME`.
+# The product repository is `Solirius/ospreyflow` (Amendment 30), and Pages serves the branch at
+# https://solirius.github.io/ospreyflow/. The site never goes through the product export
+# (`make publish-user-repo`) and never reaches `main`: it goes on a branch of its own, which GitHub Pages
+# serves. (Amendment 28's first reason, that the site names the company, no longer applies since ADR-034
+# Amendment 1; the branch stays as the way the site is published.)
+#
+# Only what Pages needs is published: `deploy/index.html`, `deploy/intro-video.html`,
+# `deploy/public-sector.html`, `deploy/monitoring.html`, `deploy/assets/`, `deploy/.nojekyll` and, if
+# present, `deploy/CNAME`.
 #
 #   sh OspreyFlow_Build/marketing_site/publish_pages.sh           # commit locally, print the push
 #   sh OspreyFlow_Build/marketing_site/publish_pages.sh --push    # and push it
@@ -18,12 +22,18 @@ DEPLOY="$HERE/deploy"
 BRANCH=gh-pages
 
 [ -d "$PRODUCT/.git" ] || { echo "STOP: $PRODUCT is not the product repository's checkout." >&2; exit 1; }
+# Only the product repository's own home: never the old one, which is to be deleted (Amendment 30).
+ORIGIN="$(git -C "$PRODUCT" remote get-url origin 2>/dev/null || true)"
+case "$ORIGIN" in
+  https://github.com/Solirius/ospreyflow|https://github.com/Solirius/ospreyflow.git|git@github.com:Solirius/ospreyflow.git) ;;
+  *) echo "STOP: $PRODUCT's origin is '$ORIGIN', not https://github.com/Solirius/ospreyflow.git." >&2; exit 1 ;;
+esac
 for f in index.html intro-video.html public-sector.html monitoring.html .nojekyll; do
   [ -f "$DEPLOY/$f" ] || { echo "STOP: $DEPLOY/$f is missing." >&2; exit 1; }
 done
 
 # The site may name the company; it must not carry a personal identifier or a path on this machine.
-if grep -lI -i -E 'ayan\.?kar|ayankarsolirius' "$DEPLOY"/*.html || grep -lI -E '/Users/|/home/' "$DEPLOY"/*.html; then
+if grep -lI -i -E 'ayan[[:space:]._-]?(d[._-])?kar|ayankarsolirius' "$DEPLOY"/*.html || grep -lI -E '/Users/|/home/' "$DEPLOY"/*.html; then
   echo "STOP: the files above carry a personal identifier or a local path." >&2
   exit 1
 fi

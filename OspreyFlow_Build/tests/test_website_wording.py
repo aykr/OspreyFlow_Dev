@@ -189,3 +189,50 @@ def test_the_check_flags_a_check_missing_from_the_bundle(site_copy: Path) -> Non
     page = site_copy / "index.html"
     _plant_in_template(page, "An independent accessibility audit, a penetration test and a DPIA are planned.", "")
     assert set(missing_planned_checks(page_text(page))) == set(CHECKS)
+
+
+# The repository move (build order step 13; ADR-114 Amendment 30): the site points at the product's new
+# home, and says what the product is in the owner's words (ADR-034 Amendment 1).
+
+PRODUCT_REPOSITORY = "https://github.com/Solirius/ospreyflow"
+STATEMENT = (
+    "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, "
+    "developed by Solirius Reply and released under the Apache License 2.0."
+)
+GITHUB_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+
+
+def repository_addresses(path: Path) -> set[str]:
+    """Every GitHub repository address on a page: in its decoded template (the `repoUrl` setting's default
+    and the script's fallback, which the template carries HTML-escaped and JSON-encoded) and in the page."""
+    source = path.read_text(encoding="utf-8")
+    span = _template_span(source)
+    decoded = html.unescape(json.loads(source[span[0] : span[1]])) if span is not None else ""
+    return {m.group(0) for m in GITHUB_REPOSITORY.finditer(html.unescape(source) + "\n" + decoded)}
+
+
+@pytest.mark.parametrize("page", site_pages(), ids=lambda p: p.name)
+def test_every_repository_address_on_the_site_is_the_products_new_home(page: Path) -> None:
+    assert repository_addresses(page) <= {PRODUCT_REPOSITORY}
+
+
+def test_the_home_page_links_to_the_products_new_home() -> None:
+    """Guards the check above against reading nothing: the home page's `repoUrl` is the one address."""
+    assert repository_addresses(DEPLOY / "index.html") == {PRODUCT_REPOSITORY}
+
+
+def test_the_home_page_gives_the_products_statement() -> None:
+    assert STATEMENT in page_text(DEPLOY / "index.html")
+
+
+def test_the_address_check_flags_the_old_home_inside_the_bundles_template(site_copy: Path) -> None:
+    page = site_copy / "index.html"
+    _plant_in_template(page, 'const repoUrl = this.props.repoUrl ?? "https://github.com/Solirius/ospreyflow"',
+                       'const repoUrl = this.props.repoUrl ?? "https://github.com/aykr/OspreyFlow"')  # fmt: skip
+    assert "https://github.com/aykr/OspreyFlow" in repository_addresses(page)
+
+
+def test_the_statement_check_flags_a_home_page_without_it(site_copy: Path) -> None:
+    page = site_copy / "index.html"
+    _plant_in_template(page, STATEMENT, "OspreyFlow is a platform.")
+    assert STATEMENT not in page_text(page)
