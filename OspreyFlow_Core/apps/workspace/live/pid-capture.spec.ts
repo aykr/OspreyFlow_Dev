@@ -139,8 +139,17 @@ export const counts = (page: Page) => page.locator(".status-bar__counts");
 
 /** Opens the case for `persona` on an empty canvas with the welcome panel closed. */
 export async function freshCase(page: Page, persona: Persona = "analyst"): Promise<void> {
-  await signIn(page, persona);
-  await openCase(page);
+  // Once per page: a second sign-in found the identity provider's session and never showed the
+  // form, so CAP-S7 and CAP-S8, which open the case twice, waited out their timeouts (rehearsal,
+  // 2 November 2026). A page already signed in keeps its persona and goes back to the graph.
+  if (page.url() === "about:blank") {
+    await signIn(page, persona);
+    await openCase(page);
+  } else {
+    const graph = page.getByRole("group", { name: "View" }).getByRole("button", { name: "Graph", exact: true });
+    if (await graph.isVisible().catch(() => false)) await graph.click();
+    else await openCase(page);
+  }
   await dismissWelcome(page);
   await clearCanvas(page);
 }
@@ -590,6 +599,19 @@ test("chapter 4: the reports, then their incidents", async ({ page }) => {
   test.setTimeout(600_000);
   await studio(page);
   console.log(`R9: ${await runNow(page, /^Open Intelligence reports/)}`);
+  // Back to the pipeline list by the Studio's own Pipelines tab: after the reports' run, the way back
+  // left a page where "Open Report incidents" never appeared, and the test waited out its whole
+  // timeout (rehearsal, 2 November 2026). Signing in again is no way back: the identity provider's
+  // session skips the form.
+  const incidents = page.getByRole("button", { name: /^Open Report incidents/ });
+  if (!(await incidents.isVisible().catch(() => false))) {
+    await page
+      .getByRole("tab", { name: "Pipelines", exact: true })
+      .or(page.getByRole("button", { name: "Pipelines", exact: true }))
+      .first()
+      .click();
+  }
+  await expect(incidents).toBeVisible();
   console.log(`R17: ${await runNow(page, /^Open Report incidents/)}`);
 });
 
@@ -1121,22 +1143,14 @@ function castMember(key: string): { number: string; name: string } {
   return { number, name: `${family}, ${given}` };
 }
 
-/** Adds each cast member to an empty canvas by their prison number. */
-async function addCast(page: Page, keys: string[]): Promise<{ number: string; name: string }[]> {
-  const found = keys.map(castMember);
-  for (const member of found) {
-    await pickFromSearch(page, member.number, /^Person/);
-    await page.waitForTimeout(2500);
-  }
-  return found;
-}
-
 /** The Matrix view, two entity rows selected together (the Inspector's "What these two share"). */
 async function selectTwoInMatrix(page: Page, first: string, second: string): Promise<void> {
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Matrix", exact: true }).click();
   const entities = page.getByRole("grid", { name: /^Entities in this view/ });
   await entities.getByRole("rowheader", { name: new RegExp(first) }).click();
-  await entities.getByRole("rowheader", { name: new RegExp(second) }).click({ modifiers: ["Control"] });
+  // Command on a Mac, Control elsewhere: on macOS a Control-click is a right-click, which selected
+  // nothing more (rehearsal, 2 November 2026).
+  await entities.getByRole("rowheader", { name: new RegExp(second) }).click({ modifiers: ["ControlOrMeta"] });
   await page.waitForTimeout(2000);
 }
 
@@ -1156,6 +1170,10 @@ test("CAP-S1", async ({ page }) => {
   const legend = page.locator(".canvas-legend");
   await expect(legend.getByRole("list", { name: "Strength influencers" })).toBeVisible();
   console.log(`S1 legend: ${await legend.textContent()}`);
+  // The legend scrolls inside itself: its Connection strength part sat below the link types, out of
+  // the shot (rehearsal, 2 November 2026), so it is brought into view.
+  await legend.getByRole("list", { name: "Strength influencers" }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
   await shot(page, "CAP-S1");
 });
 
@@ -1170,6 +1188,8 @@ test("CAP-S2", async ({ page }) => {
   const why = page.getByRole("list", { name: "What this link's strength rests on" });
   await expect(why).toContainText("evidences it");
   console.log(`S2: ${await why.textContent()}`);
+  // Into view: under the GOV.UK brand's taller header the explanation sat below the fold (rehearsal).
+  await why.scrollIntoViewIfNeeded();
   await shot(page, "CAP-S2");
 });
 
@@ -1177,8 +1197,11 @@ test("CAP-S3", async ({ page }) => {
   // A direct call against a shared address: two men who held the same cell at different times share
   // that address in custody and nothing direct (a), where the principal's calls to the coordinator
   // are a direct link, drawn stronger (b).
-  await freshCase(page);
-  const [one, two] = await addCast(page, ["cellmate_1", "cellmate_2"]);
+  // On the principal's star, as the script's scene has them: two men added alone by search were left
+  // out of the server's view by the large-draw offer, and the Inspector said "No rarity to give"
+  // (rehearsal, 2 November 2026). Both are on the star.
+  await principalStar(page);
+  const [one, two] = ["cellmate_1", "cellmate_2"].map(castMember);
   await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
   await onlyPanel(page, "Inspector");
   await page.getByRole("button", { name: "What these two share", exact: true }).click();
@@ -1186,12 +1209,16 @@ test("CAP-S3", async ({ page }) => {
   await expect(shared).toBeVisible();
   console.log(`S3-a: ${await shared.textContent()}`);
   await shot(page, "CAP-S3-a");
-  await freshCase(page);
+  // The same page, emptied: signing in a second time found the identity provider's session and never
+  // showed the sign-in form, so the test waited out its timeout (rehearsal, 2 November 2026).
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Graph", exact: true }).click();
+  await clearCanvas(page);
   const { national } = coordinatorNumber();
   await pickFromSearch(page, `+44 ${national.slice(1)}`, /^Endpoint/);
-  await page.getByRole("button", { name: "Expand" }).first().click().catch(() => undefined);
+  // Bounded: with no Expand on screen the click waited out the whole test (rehearsal, 2 November 2026).
+  await page.getByRole("button", { name: "Expand" }).first().click({ timeout: 5000 }).catch(() => undefined);
   await page.waitForTimeout(4000);
-  await selectLinkInMatrix(page, "COMMUNICATED_WITH", /PIN-/);
+  await selectLinkInMatrix(page, "Communicated with", /PIN-/); // the Matrix says the label (rehearsal, 2 November 2026)
   await page.getByRole("button", { name: "Connection strength", exact: true }).click();
   const why = page.getByRole("list", { name: "What this link's strength rests on" });
   await expect(why).toContainText("a direct link");
@@ -1202,8 +1229,11 @@ test("CAP-S3", async ({ page }) => {
 test("CAP-S4", async ({ page }) => {
   // A rare shared contact ranking above a common one: relay_1 and relay_2 share relay_4 (three
   // people know him) above the principal (linked to many) and the establishment (everyone).
-  await freshCase(page);
-  const [one, two] = await addCast(page, ["relay_1", "relay_2"]);
+  // On the principal's star, as the script's scene has them: two men added alone by search were left
+  // out of the server's view by the large-draw offer, and the Inspector said "No rarity to give"
+  // (rehearsal, 2 November 2026). Both are on the star.
+  await principalStar(page);
+  const [one, two] = ["relay_1", "relay_2"].map(castMember);
   await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
   await onlyPanel(page, "Inspector");
   await page.getByRole("button", { name: "What these two share", exact: true }).click();
@@ -1216,7 +1246,9 @@ test("CAP-S4", async ({ page }) => {
 test("CAP-S5", async ({ page }) => {
   // The two filters dimming: connection strength at 0.8 (a), then shared-attribute rarity (b).
   await principalStar(page, "Metrics");
-  await page.getByRole("button", { name: /^Filter/ }).click();
+  // The Metrics panel's own Filter section, exactly: /^Filter/ also matched the search box's
+  // "Filters" button (rehearsal, 2 November 2026).
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
   await page.getByRole("combobox", { name: "Filter by metric" }).selectOption("connection_strength");
   const threshold = page.getByRole("slider", { name: "Metric value at least" });
   await expect(threshold).toBeVisible();
@@ -1256,6 +1288,9 @@ test("CAP-S6", async ({ page }) => {
   await form.getByRole("button", { name: "Add this influencer" }).click();
   await tab.getByRole("button", { name: "Save this case's influencers" }).click();
   await expect(page.getByRole("status").filter({ hasText: "saved" })).toBeVisible();
+  // From the top of the tab, where the case's own influencers are listed: shot where the form left
+  // it, the image showed only the emptied form (rehearsal, 2 November 2026).
+  await scrollAllToTop(page);
   await shot(page, "CAP-S6-a");
   await monitoringTab(page, "Rules");
   const rule = page.getByRole("form", { name: "Write a rule as a sentence" });
@@ -1279,7 +1314,7 @@ test("CAP-S6", async ({ page }) => {
 
 // --- both compositions on one case (ADR-139 Amendment 2; ADR-127 Amendment 43) -------------------
 //
-// Not yet run. The case's Author switches it to client parity (CAP-S7), the Inspector shows the raw
+// First run at the step 11 rehearsal (2 November 2026). The case's Author switches it to client parity (CAP-S7), the Inspector shows the raw
 // sums on the client's scale (CAP-S8), what two relay members share is ranked by the client's own
 // measure (CAP-S9), and the Author switches it back (CAP-S10). Every figure the logs must say is
 // proved on the plan by `tests/scenarios/test_pid_client_parity.py`.
@@ -1299,11 +1334,17 @@ test("CAP-S7", async ({ page }) => {
   await freshCase(page, "admin");
   await setCaseComposition(page, "client_parity");
   await expect(page.getByLabel("Composition in force")).toContainText("client parity (this case's own)");
+  // Brought into view: the save leaves the tab scrolled to its form, and the shot showed the form
+  // alone (rehearsal, 2 November 2026).
+  await page.getByLabel("Composition in force").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await shot(page, "CAP-S7-a");
   await principalStar(page);
   const indicator = page.locator(".canvas-legend").getByLabel("Composition", { exact: true });
   await expect(indicator).toContainText("Composition: client parity");
   console.log(`S7 legend: ${await indicator.textContent()}`);
+  // The legend scrolls inside itself; its composition line sat below the link types (rehearsal).
+  await indicator.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
   await shot(page, "CAP-S7-b");
 });
 
@@ -1314,9 +1355,10 @@ test("CAP-S8", async ({ page }) => {
   await freshCase(page);
   const { national } = coordinatorNumber();
   await pickFromSearch(page, `+44 ${national.slice(1)}`, /^Endpoint/);
-  await page.getByRole("button", { name: "Expand" }).first().click().catch(() => undefined);
+  // Bounded: with no Expand on screen the click waited out the whole test (rehearsal, 2 November 2026).
+  await page.getByRole("button", { name: "Expand" }).first().click({ timeout: 5000 }).catch(() => undefined);
   await page.waitForTimeout(4000);
-  await selectLinkInMatrix(page, "COMMUNICATED_WITH", /PIN-/);
+  await selectLinkInMatrix(page, "Communicated with", /PIN-/); // the Matrix says the label (rehearsal, 2 November 2026)
   await onlyPanel(page, "Inspector");
   await page.getByRole("button", { name: "Connection strength", exact: true }).click();
   const raw = page.getByLabel("Raw sum on the client's scale");
@@ -1330,6 +1372,8 @@ test("CAP-S8", async ({ page }) => {
   await page.getByRole("button", { name: "Connection strength", exact: true }).click();
   await expect(raw).toBeVisible();
   console.log(`S8-b: ${await raw.textContent()}`);
+  // Into view, as S2 (rehearsal, 2 November 2026).
+  await raw.scrollIntoViewIfNeeded();
   await shot(page, "CAP-S8-b");
 });
 
@@ -1337,8 +1381,11 @@ test("CAP-S9", async ({ page }) => {
   // What two relay members share, ranked by the client's own measure (one less a value's share of
   // the pair links through values of its kind): the fourth relay man, then the principal, then
   // Fenwick Moor.
-  await freshCase(page);
-  const [one, two] = await addCast(page, ["relay_1", "relay_2"]);
+  // On the principal's star, as the script's scene has them: two men added alone by search were left
+  // out of the server's view by the large-draw offer, and the Inspector said "No rarity to give"
+  // (rehearsal, 2 November 2026). Both are on the star.
+  await principalStar(page);
+  const [one, two] = ["relay_1", "relay_2"].map(castMember);
   await selectTwoInMatrix(page, one!.name.split(",")[0]!, two!.name.split(",")[0]!);
   await onlyPanel(page, "Inspector");
   await page.getByRole("button", { name: "What these two share", exact: true }).click();
@@ -1355,5 +1402,8 @@ test("CAP-S10", async ({ page }) => {
   await setCaseComposition(page, "");
   await expect(page.getByLabel("Composition in force")).toContainText("Composition: standard");
   console.log(`S10: ${await page.getByLabel("Composition in force").textContent()}`);
+  // Brought into view: the save leaves the tab scrolled to its form, and the shot showed the form
+  // alone (rehearsal, 2 November 2026).
+  await page.getByLabel("Composition in force").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await shot(page, "CAP-S10");
 });
