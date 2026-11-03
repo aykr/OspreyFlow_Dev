@@ -10,6 +10,9 @@ export interface LinksAmongRoutes {
   added_nodes: number;
   unconnected_pairs: number;
   more_routes_pairs: number;
+  /** The pairs a route joins within the degree, drawn already or not (build order step 18c, D5).
+   * Absent from an older Conduit. */
+  connected_pairs?: number;
 }
 
 export interface LinksAmongResult extends Partial<LinksAmongRoutes> {
@@ -93,11 +96,14 @@ export function linksAmongNotice(
     return `${plural(added, "link", "links")} added among these.`;
   }
   const within = `within ${routes.degree} degrees`;
+  const nothingAdded = added === 0 && routes.added_nodes === 0;
   const said = [
-    added === 0 && routes.added_nodes === 0
-      ? `No routes ${within} among these.`
-      : `${plural(added, "link", "links")} and ${plural(routes.added_nodes, "node", "nodes")} added: ` +
-        `the routes ${within} among these.`,
+    nothingAdded && (routes.connected_pairs ?? 0) > 0
+      ? `The routes ${within} among these are already drawn.`
+      : nothingAdded
+        ? `No routes ${within} among these.`
+        : `${plural(added, "link", "links")} and ${plural(routes.added_nodes, "node", "nodes")} added: ` +
+          `the routes ${within} among these.`,
   ];
   if (routes.unconnected_pairs > 0) {
     said.push(

@@ -5522,10 +5522,12 @@ async def ask_question_route(
     principal: PrincipalDep,
     questions: QuestionsDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> QuestionAnswer:
     """Asks the model about the case's Documents and graph facts the analyst can see (ADR-098
     decision 4, ADR-129 decision 1): the selection and one link around it, or the whole view. What
-    it proposes is pending until a person accepts it."""
+    it proposes is pending until a person accepts it. The answer names its author as the case's
+    conversation does (ADR-106; build order step 18c: it showed the identity provider's id)."""
     answer = await questions.ask(
         investigation.id,
         body.question,
@@ -5542,7 +5544,8 @@ async def ask_question_route(
         resolved_query={"question_id": answer.id},
         result_cardinality=len(answer.candidates),
     )
-    return answer
+    names = await principal_names.display_names([answer.author])
+    return answer.model_copy(update={"author_name": names.get(answer.author)})
 
 
 @app.get(

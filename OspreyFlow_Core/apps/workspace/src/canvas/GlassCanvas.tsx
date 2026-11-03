@@ -2384,6 +2384,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 added_nodes: result.added_nodes ?? 0,
                 unconnected_pairs: result.unconnected_pairs ?? 0,
                 more_routes_pairs: result.more_routes_pairs ?? 0,
+                connected_pairs: result.connected_pairs ?? 0,
               }
             : undefined;
         setActionError({ x, y, message: linksAmongNotice(result.added, routes), tone: "notice" });
@@ -3667,6 +3668,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 : undefined
             }
             relationship={pendingExpansion.edgeType}
+            edgeTypes={edgeTypesRef.current}
             onChooseType={(edgeType) => {
               const { nodeId, x, y, depth } = pendingExpansion;
               setPendingExpansion(null);

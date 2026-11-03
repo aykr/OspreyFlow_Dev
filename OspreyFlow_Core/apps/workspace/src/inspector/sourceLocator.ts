@@ -13,3 +13,10 @@ export function locatorText(locator: string): string {
   const match = ROW_LOCATOR.exec(locator);
   return match ? `row ${rowNumber(Number(match[1]))}` : locator;
 }
+
+/** A source as it is shown (build order step 18c, D10): a file by its file name, never the server's
+ * own path to it ("/var/lib/osprey/ingest/uploaded/…"); any other source as stored. */
+export function sourceName(documentId: string): string {
+  const parts = documentId.split(/[\\/]/);
+  return parts.length > 1 ? parts[parts.length - 1] || documentId : documentId;
+}

@@ -1,4 +1,5 @@
 import { Popover } from "../design/primitives/Popover";
+import { linkTypeName, type NamedType } from "./linkLabel";
 import type { NarrowingOption } from "./expansionGate";
 import { EXPANSION_CONFIRM_ABOVE } from "./expansionGate";
 import type { PreviewCount } from "./nodeGestures";
@@ -15,6 +16,8 @@ export interface LargeExpansionPromptProps {
   onChooseType: (edgeType: string) => void;
   onChooseAll: () => void;
   onCancel: () => void;
+  /** The case's link types: a relationship is named by its label, never its stored id (rule 7). */
+  edgeTypes?: readonly NamedType[];
 }
 
 function figure(count: PreviewCount): string {
@@ -37,7 +40,13 @@ export function LargeExpansionPrompt({
   onChooseType,
   onChooseAll,
   onCancel,
+  edgeTypes = [],
 }: LargeExpansionPromptProps) {
+  const named = (type: string) => linkTypeName(type, edgeTypes);
+  const inSentence = (type: string) => {
+    const name = named(type);
+    return name.charAt(0).toLowerCase() + name.slice(1);
+  };
   return (
     <Popover x={x} y={y} onClose={onCancel}>
       <div
@@ -52,7 +61,8 @@ export function LargeExpansionPrompt({
       >
         {subject && (
           <span>
-            Expanding <strong>{subject}</strong> by {relationship ?? "every relationship"}.
+            Expanding <strong>{subject}</strong> by{" "}
+            {relationship ? inSentence(relationship) : "every relationship"}.
           </span>
         )}
         <strong className="value">
@@ -69,7 +79,7 @@ export function LargeExpansionPrompt({
             className="radial-menu__item"
             onClick={() => onChooseType(option.edgeType)}
           >
-            {option.edgeType} ({figure(option.wouldAdd)})
+            {named(option.edgeType)} ({figure(option.wouldAdd)})
           </button>
         ))}
         <button

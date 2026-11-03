@@ -77,6 +77,17 @@ describe("the notices", () => {
     );
   });
 
+  // Build order step 18c (D5): with every route of a joined pair already drawn, nothing was added and
+  // the notice said there were no routes.
+  it("says the routes are already drawn when a route joins a pair and nothing was added", () => {
+    expect(
+      linksAmongNotice(0, { degree: 6, added_nodes: 0, unconnected_pairs: 0, more_routes_pairs: 0, connected_pairs: 1 }),
+    ).toBe("The routes within 6 degrees among these are already drawn.");
+    expect(
+      linksAmongNotice(0, { degree: 3, added_nodes: 0, unconnected_pairs: 1, more_routes_pairs: 0, connected_pairs: 2 }),
+    ).toBe("The routes within 3 degrees among these are already drawn. 1 pair is not connected within 3 degrees.");
+  });
+
   it("says how many links were added, or that there were none to add", () => {
     expect(linksAmongNotice(0)).toBe("No more links among these.");
     expect(linksAmongNotice(1)).toBe("1 link added among these.");

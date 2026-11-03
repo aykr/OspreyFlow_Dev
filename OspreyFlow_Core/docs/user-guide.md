@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.24** · 2026-11-03 · For OspreyFlow v0.4.4 · Issued
+**Version 1.25** · 2026-11-03 · For OspreyFlow v0.4.4 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.25 | 2026-11-03 | Rehearsal fixes (build order step 18c). §5.2: **Show links among these** within a number of degrees says when the routes are already drawn; a node put back on the canvas brings back its links. §5.5: a search result chosen goes into the case before it is drawn, so a large draw you cancel leaves the node in the case. §5.4: **Cyclical** makes the timeline tall enough to read the grid; the grid draws correctly with cells chosen or the map open. §5.5: *Add many from a list* says how many different records were found ("37 found, naming 36 different records") and how many records are in the view after adding. §5.8: each route names its links, so two routes through the same people read apart. §5.6: a source file is named by its file name. A large expansion names relationships by their labels. §5.12: the strength legend is read again when you come back to the window. §9: the Figures' **Outcomes** has a column for every closing reason (True match, False positive, Duplicate, No further action, Referred) and one for closed with no outcome; an alert closed as Referred is no longer counted open. Ask the case names the person who asked at once. |
 | 1.24 | 2026-11-03 | §2: staying signed in — a window renews its sign-in by itself, and when your session has ended it asks you to sign in again where you are, without losing the page. |
 | 1.23 | 2026-11-03 | Rehearsal fixes (build order step 15). §5.12: the Matrix's Strength and Rarity fill in as each answer arrives, read *Working out…* meanwhile, and a refused rarity no longer blanks the strengths. §7.3: *Give to* offers people only, never a service account. §9.1: a pack says some items are *not shown* (you may not see something they rest on, or it has since been taken back, as a reverted load takes back its alerts), no longer "withheld from you"; a close reason that ends with a full stop is not given a second. |
 | 1.22 | 2026-11-02 | Checked against the Glass end to end (build order step 10). §7.1: Monitoring's tabs include **Lists** and **Connection strength**, and say which levels see Held rows and Audit. §5.12: the legend marks the composition, not the rarity measure, as a case override (a case cannot choose the measure). §7.6: the *For* choices as the builder words them (*just me*). |
@@ -191,7 +192,10 @@ list** (section 5.5) is a fold here too.
 
 **Selecting.** Click a node; Shift-, Ctrl- or Cmd-click adds or removes one; or draw a lasso. The
 selection bar then offers **Expand**, **Show links among these**, **Branch to a new case**,
-**Remove from view** and **Clear** (Esc).
+**Remove from view** and **Clear** (Esc). Past one degree, **Show links among these** draws the routes
+between the selected nodes, says which pairs are not connected, and says when the routes are already
+drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
+its links in the view back with it.
 
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`) opens its
 menu: **Show links** lists each kind of relationship with how many there are, so you can draw just
@@ -281,7 +285,8 @@ fewer nodes. Change the selection and the branch is an ordinary one.
 ![Cyclical: weekday against hour of day](images/user/15-timeline-weekly.png)
 
 **Cyclical** shows the same events as a grid of weekday against hour, for habits and routines. It
-always draws the case's whole range. Hours and days are UTC.
+always draws the case's whole range. Hours and days are UTC. Choosing it makes the timeline tall enough
+to read the grid's seven rows; a timeline you have made taller stays as it is.
 
 **Choosing cells.** Drag across the grid to choose the cells (a weekday and an hour each) you want; they
 stay outlined and the rest of the grid stays visible. For the keyboard, open **⋯** (**More timeline
@@ -298,8 +303,9 @@ it.
 ![Search: suggestions after two characters](images/user/16-search.png)
 
 Press `/` anywhere (outside a text box) to search. Suggestions start at two characters, across names,
-identifiers and titles; choosing one draws it with what is near it, counting first and asking if it
-is a lot. **Filters** narrow by entity type, how the text matches, and whether to look only at what
+identifiers and titles; choosing one puts it in the case and draws it with what is near it (three
+links out), counting first and asking if it is a lot. Cancelling a large draw leaves the chosen node in
+the case on its own. **Filters** narrow by entity type, how the text matches, and whether to look only at what
 is already drawn. A phone number or account reference is read the same way however you type it, so
 `07700 900640` finds the number held as `+447700900640`.
 
@@ -311,19 +317,22 @@ Editor on the case; without it, the box says so.
    is a header such as "identifier" or "prison number" is left out). They may be prison numbers,
    National Insurance numbers, phone numbers or account references, one a line or separated by commas
    or spaces. A number written with spaces, such as `+44 7700 900640`, is one number.
-2. Press **Count**. It says, for example, "40 identifiers read. 38 found. 2 matched nothing you can
-   see. 1 repeated." Nothing is on the canvas yet. Changing the text clears the count, so a count is
+2. Press **Count**. It says, for example, "40 identifiers read. 37 found, naming 36 different records.
+   3 matched nothing you can see. 1 repeated." Nothing is on the canvas yet. Changing the text clears the count, so a count is
    always of what you would add.
 3. Press **Add** to put the nodes on the canvas without their links; **Show links among all** in the
    canvas toolbar's View group then draws the links. **Add with all links** draws the links among
    the nodes added and those already there instead. For a very large view it adds the nodes without
-   looking for links, as Expand does. **Cancel** (or Esc) empties the box.
+   looking for links, as Expand does. It then says how many records are in the view ("36 records are
+   in the view"): each record once, one already on the canvas included. **Cancel** (or Esc) empties
+   the box.
 
 What the figures mean. *Found* counts every identifier that resolved, repeats included. *Matched
 nothing you can see* is one figure for an identifier that does not exist and one you may not see: the
 words, the counts and the work done are the same either way, so a list cannot be used to test whether a
 hidden person exists. *Repeated* counts identifiers that name what an earlier one did, so three
-spellings of one number count once as found and twice as repeated. If more records than the lookup reads
+spellings of one number count three times as found, twice as repeated, and as one record; when the
+records found are fewer than the identifiers found, the count says how many different records there are. If more records than the lookup reads
 share a value, it says so, "could not be told apart", rather than guessing. A number is matched only to a
 phone number and an account reference only to an account: a PIN holding the same digits is not a match.
 
@@ -339,7 +348,8 @@ Select one node and the Inspector shows its **properties**, its **picture**, its
 (how many of each, drawn or not — **Expand** draws the rest), the entities it **shares contacts**
 with, its **neighbourhood risk** (alerts within two links over the last 90 days, scored on request
 and never stored), its **provenance** — from a record, inferred, or unresolved, and when it was first
-seen — its **source**, the file and row it came from (such as a file name and "row 3"), the **icon for
+seen — its **source**, the file and row it came from (its file name, never the server's folder, and
+"row 3"), the **icon for
 this value** where the type has one (section 5.2), and the **judgements** that cite it. With several selected it summarises them and the links
 between them; with a link selected it shows the link's details, notes, events and history, and lets
 an Editor **change the link** (with a reason, and what stands behind it).
@@ -368,7 +378,9 @@ value — dim, never remove. A metric is shown as size, never as colour.
 
 Choose a **From** and a **To** — by search, or the node you have selected — and **Find connections**
 says how many degrees apart they are and lists the routes at that distance, then widens one degree
-at a time, up to eight. Any route can be drawn on the canvas, marking each node with its distance
+at a time, up to eight. Each route names its people and its links ("Vance, Callum → Fairlop, Dominic →
+Skellion, Rory, by passes items to, then associate of"): two routes through the same people by
+different links are different routes. Any route can be drawn on the canvas, marking each node with its distance
 from From. **Find paths to…** in a node's menu gives the shortest paths between two selected nodes.
 
 ### 5.9 History
@@ -518,7 +530,8 @@ compare the two on the same case, and back.
   override** if the case chose it); the rarity measure, which only the installation chooses; every
   influencer in force in the case — what triggers it, the links it changes, the change and its size,
   and where it came from (shipped, installation-wide, or **Case override**); which link types count
-  as direct; and the rarity note.
+  as direct; and the rarity note. It is read again whenever you come back to the window, so a change
+  the case's Author made elsewhere shows when you return.
 - **Metrics** (§5.7) offers *Connection strength* and *Shared-attribute rarity* to rank by and to
   filter by. Choose one under **Filter** and slide **Metric value at least**: a link below the
   strength, and a person none of whose links reach it, fade; with rarity, a person whose rarest
@@ -909,7 +922,8 @@ verifying documents. All of it is worked out as you read, from what you can see,
 ![Reports → Figures](images/user/07-reports-figures.png)
 
 The view switch's **Reports** shows the case's figures over 4, 12, 26 or 52 weeks: alerts raised each
-week, open alerts by age, outcomes, customers by status, held rows. Every figure is **counted for
+week, open alerts by age, outcomes (open, claimed, each closing reason, and closed with no outcome),
+customers by status, held rows. Every figure is **counted for
 you**: anything you cannot see is in no figure. A period too long to count says to choose a shorter
 one; it never shows part of a chart. Other tabs, as your rights allow: **Trends**, **Packs** (report
 packs, exported to PDF), **Published**, **Data feeds** and **Dashboards**.

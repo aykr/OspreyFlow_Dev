@@ -16,6 +16,9 @@ export interface IdentifierCounts {
   /** Found, but more records than the lookup reads share the value, so which one is meant could
    * not be decided; said, never left out (rule 2). Absent from an older Conduit. */
   undecided?: number;
+  /** How many different records were found: a repeat, or a second identifier of one record, is
+   * found again but added once (build order step 18c, D7). Absent from an older Conduit. */
+  records?: number;
 }
 
 export interface AddedFromList {
@@ -36,7 +39,10 @@ function noun(count: number, one: string, many: string): string {
 export function countSentence(counts: IdentifierCounts): string {
   return (
     `${noun(counts.read, "identifier", "identifiers")} read. ` +
-    `${NUMBER.format(counts.found)} found. ` +
+    `${NUMBER.format(counts.found)} found` +
+    (counts.records !== undefined && counts.records < counts.found
+      ? `, naming ${noun(counts.records, "different record", "different records")}. `
+      : ". ") +
     `${NUMBER.format(counts.matched_nothing)} matched nothing you can see. ` +
     (counts.undecided
       ? `${NUMBER.format(counts.undecided)} could not be told apart: too many records share it. `

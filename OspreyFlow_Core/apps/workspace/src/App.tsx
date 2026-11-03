@@ -105,6 +105,7 @@ import type { WorkingSetDelta } from "./workingset/models";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
+import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";
 import type { HistoryStepSummary } from "./workingset/models";
@@ -549,6 +550,9 @@ export function App() {
   // whenever the influencer editor saves (`strengthRead`).
   const [strengthLegend, setStrengthLegend] = useState<StrengthLegend | null>(null);
   const [strengthRead, setStrengthRead] = useState(0);
+  // D9 (build order step 18c): a composition or influencer changed in another window is shown when
+  // the analyst comes back to this one, not only once the legend is reopened.
+  useOnReturn(() => setStrengthRead((n) => n + 1));
   const edgeTypes = useMemo(
     () => caseLinkTypes?.definitions ?? ontologyEdgeTypes,
     [caseLinkTypes, ontologyEdgeTypes],
@@ -567,7 +571,7 @@ export function App() {
   placeableRef.current = placeableTypes(ontologySchema);
   /** ADR-100: an Explore item does what choosing a search result does: draws it and selects it. */
   const pickToStart = (node: Node) => {
-    drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
+    void drawSearchResult((nodes) => seedToCanvas(nodes, []), node, glassCanvasRef.current);
     setSelectedNode(node);
   };
   /** What Explore adds goes to the case's working set through `/seed`, as a found route does, and is
@@ -1339,8 +1343,8 @@ export function App() {
                 return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
               }}
               onSelect={(node) => {
-                drawSearchResult(
-                  workingSetRef.current.store,
+                void drawSearchResult(
+                  (nodes) => seedToCanvas(nodes, []),
                   node,
                   glassCanvasRef.current,
                 );
@@ -1951,6 +1955,7 @@ export function App() {
                             onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta)}
                             onMark={(marks) => setDegreeMarks((prev) => new Map([...prev, ...marks]))}
                             onClearMarks={() => setDegreeMarks(new Map())}
+                            edgeTypes={edgeTypes}
                           />
                         ),
                       },

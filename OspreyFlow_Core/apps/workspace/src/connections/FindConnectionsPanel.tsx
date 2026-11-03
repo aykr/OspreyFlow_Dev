@@ -9,6 +9,7 @@
 import { useState } from "react";
 
 import type { Node, Path } from "../../../../packages/schemas/generated";
+import { linkTypeName, type NamedType } from "../canvas/linkLabel";
 import type { WorkingSetDelta } from "../workingset/models";
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
@@ -40,6 +41,18 @@ export interface FindConnectionsPanelProps {
   /** Marks each node of an added route with its degree from From. */
   onMark: (marks: Map<string, number>) => void;
   onClearMarks: () => void;
+  /** The case's link types, so a route's links are named by their labels (rule 7). */
+  edgeTypes?: readonly NamedType[];
+}
+
+/** ", by shared a cell with, then associate of": what tells two routes through the same people
+ * apart (build order step 18c, D5). Each link by its type's label, never its stored id. */
+export function routeLinksWords(route: Path, edgeTypes: readonly NamedType[]): string {
+  const names = route.edges.map((edge) => {
+    const name = linkTypeName(edge.type, edgeTypes);
+    return name.charAt(0).toLowerCase() + name.slice(1);
+  });
+  return names.length === 0 ? "" : `, by ${names.join(", then ")}`;
 }
 
 interface DegreeGroup {
@@ -101,6 +114,7 @@ export function FindConnectionsPanel({
   onDelta,
   onMark,
   onClearMarks,
+  edgeTypes = [],
 }: FindConnectionsPanelProps) {
   const context = { apiBaseUrl, bearerToken, investigationId };
   const [from, setFrom] = useState<Node | null>(null);
@@ -219,7 +233,8 @@ export function FindConnectionsPanel({
                   const there = added.has(key) || routeOnCanvas(route, canvas);
                   return (
                     <li key={key}>
-                      <span>{route.nodes.map((n) => displayValue(n)).join(" → ")}</span>{" "}
+                      <span>{route.nodes.map((n) => displayValue(n)).join(" → ")}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{routeLinksWords(route, edgeTypes)}</span>{" "}
                       {there ? (
                         <span style={{ color: "var(--text-tertiary)" }}>On the canvas</span>
                       ) : (

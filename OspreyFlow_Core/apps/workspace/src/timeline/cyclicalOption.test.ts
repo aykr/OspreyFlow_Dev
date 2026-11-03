@@ -78,3 +78,13 @@ describe("the options menu's cell choice", () => {
     expect(cellsFromChoice([0], 11, 9)).toEqual(cellsFromChoice([0], 9, 11));
   });
 });
+
+// Build order step 18c (D3): the stripes were painted over the cells once the option was replaced on
+// a chart that had drawn it. The drawing itself is proved in a browser (`keyboard/cyclical-grid.spec.ts`).
+describe("the weekly grid draws no stripes behind its cells", () => {
+  it("has no split areas on either axis", () => {
+    const option = cyclicalOption({ data: [[9, 5, 4]], max: 4, colours: ["#eee", "#055"], text: "#555", shade: "#123456", cells: [{ weekday: 5, hour: 9 }] });
+    expect(option.xAxis.splitArea.show).toBe(false);
+    expect(option.yAxis.splitArea.show).toBe(false);
+  });
+});

@@ -159,3 +159,19 @@ describe("countSentence with identifiers that could not be told apart", () => {
     );
   });
 });
+
+// Build order step 18c (the 3 November rehearsal's D7): J3 read "37 found" and then "36 added". A
+// repeat of an identifier is found again, but its record is added once; the count says so.
+describe("countSentence when two identifiers name one record", () => {
+  it("says how many different records were found", () => {
+    expect(countSentence({ read: 40, found: 37, matched_nothing: 3, repeated: 1, records: 36 })).toBe(
+      "40 identifiers read. 37 found, naming 36 different records. 3 matched nothing you can see. 1 repeated.",
+    );
+  });
+
+  it("says nothing of it when each found identifier names a record of its own", () => {
+    expect(countSentence({ read: 2, found: 2, matched_nothing: 0, repeated: 0, records: 2 })).toBe(
+      "2 identifiers read. 2 found. 0 matched nothing you can see. 0 repeated.",
+    );
+  });
+});

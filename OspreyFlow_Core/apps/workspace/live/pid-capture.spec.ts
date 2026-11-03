@@ -414,15 +414,9 @@ test("CAP-A2-C3", async ({ page }) => {
   // The timeline is opened and sized before the Map view: opened over a drawn map, the map goes
   // blank (a finding), so the map is drawn last, at its final size.
   await page.getByRole("button", { name: "Show the timeline" }).click();
+  // Choosing Cyclical makes the timeline tall enough for the grid (build order step 18c, D20); the
+  // drag that did it by hand before is gone, so the map keeps its room above the grid.
   await page.getByRole("group", { name: "Timeline view" }).getByRole("button", { name: "Cyclical" }).click();
-  const sash = page.getByRole("separator", { name: "Resize the timeline" });
-  const handle = await sash.boundingBox();
-  if (handle) {
-    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(handle.x + handle.width / 2, handle.y - 220, { steps: 8 });
-    await page.mouse.up();
-  }
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await page.waitForTimeout(6000);
   // The weekend cells are brushed (ADR-130 decision 2): the grid stays whole with the chosen

@@ -1753,3 +1753,63 @@ async def test_a_second_entry_leaves_the_row_and_a_restore_then_follows_it(
     )
     assert restored.version == rec.version + 1
     assert (await once()).version == rec.version + 1, "a reseed after a reset leaves the restore"
+
+
+# --- ADR-127 Amendment 45 (build order step 18c, D4): R9's draft is the file's own, mapped ---
+
+
+async def test_a_mapped_first_draft_holds_the_files_map_and_is_neither_verified_nor_published(
+    store: StudioRecipeStore,
+) -> None:
+    rec = reports_recipe()
+    draft = await store.enter_draft_for_seed(
+        rec, source_location=SEED_LOCATION, dataset_id="prison-intelligence",
+        owning_unit="verify", created_by="osprey-demo-engineer", now=SEED_NOW,
+        pipeline=starting_pipeline(), mapped=True,
+    )  # fmt: skip
+    assert draft.status is StudioRecipeStatus.DRAFT and draft.label == rec.label
+    assert draft.row_template == rec.row_template
+    assert draft.unmapped_fields == rec.unmapped_fields and draft.deduplicate == rec.deduplicate
+    assert draft.verified_at is None and draft.git_path is None and draft.published_at is None
+    assert rec.id not in [r.recipe_id for r in await store.feeding(["prison-intelligence"])]
+
+
+async def test_a_restore_from_the_file_puts_back_the_label_connect_and_the_map(
+    store: StudioRecipeStore,
+) -> None:
+    """D4d: the restore carried the latest version's label, so a presenter's rename survived the
+    reset and the fallback then refused. From the file, everything the presenter touched goes back:
+    the label, the marking, the legal basis, the source and the map."""
+    rec = reports_recipe()
+    await store.enter_draft_for_seed(
+        rec, source_location=SEED_LOCATION, dataset_id="prison-intelligence",
+        owning_unit="verify", created_by="osprey-demo-engineer", now=SEED_NOW,
+        pipeline=starting_pipeline(), mapped=True,
+    )  # fmt: skip
+    presenter = Principal(
+        id="osprey-demo-engineer", clearance="OFFICIAL", org_unit="verify",
+        roles=["data_engineer"], datasets=["prison-intelligence"],
+    )  # fmt: skip
+    touched = await store.update_draft(
+        rec.id, presenter, label="Reports (rehearsal)", legal_basis="An engineer's own words",
+        source_location="uploaded/prison-intelligence/elsewhere.csv",
+    )  # fmt: skip
+    assert rec.row_template is not None and rec.row_template.edges
+    await store.update_row_template(
+        rec.id, presenter,
+        row_template=rec.row_template.model_copy(update={"edges": []}), unmapped_fields=[],
+    )  # fmt: skip
+    assert touched.label == "Reports (rehearsal)"
+    restored = await store.restore_to_draft(
+        rec.id, created_by="osprey-demo-engineer", owning_unit="verify", now=SEED_NOW,
+        pipeline=starting_pipeline(), from_recipe=rec, source_location=SEED_LOCATION,
+    )  # fmt: skip
+    assert restored.version == rec.version + 1 and restored.status is StudioRecipeStatus.DRAFT
+    assert restored.label == rec.label
+    assert restored.legal_basis == rec.defaults.legal_basis
+    assert restored.source_location == SEED_LOCATION
+    assert restored.row_template == rec.row_template
+    assert restored.unmapped_fields == rec.unmapped_fields
+    assert restored.deduplicate == rec.deduplicate
+    assert restored.pipeline == starting_pipeline()
+    assert restored.dataset_id == "prison-intelligence" and restored.verified_at is None

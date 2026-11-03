@@ -371,6 +371,10 @@ class LinksAmongOutcome(BaseModel):
     degree: int = 1
     unconnected_pairs: int = 0
     more_routes_pairs: int = 0
+    #: The pairs a route joins within the degree, drawn already or not (build order step 18c, D5):
+    #: with every route on the canvas nothing is added, and that is not "no routes". Counted from
+    #: the reader's own search, as `unconnected_pairs` is (rule 3).
+    connected_pairs: int = 0
 
 
 class NodeNotInWorkingSetError(Exception):

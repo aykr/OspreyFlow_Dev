@@ -969,12 +969,15 @@ class StudioRecipeStore:
         created_by: str,
         now: datetime,
         pipeline: PipelineGraph,
+        mapped: bool = False,
     ) -> StudioRecipeDraft:
         """R9's first draft (ADR-127 Amendment 23, "R9's draft"): a draft at the recipe's own id and
         version, in `owning_unit`, holding what Connect holds (the connector, the source, the
         marking and its declarations, the legal basis, the dataset) from the committed file, the
         `pipeline` given, and **no** `row_template`, `unmapped_fields` or `deduplicate`, so Map is
-        not done. Not verified, not published, no path.
+        not done. Not verified, not published, no path. With `mapped` (ADR-127 Amendment 45, what
+        the Prison Intelligence seed asks for), the file's `row_template`, `unmapped_fields` and
+        `deduplicate` are kept, so Map is prepared and only Verify and Publish remain.
 
         For the first seed only: `restore_to_draft` needs a row to restore from, and a recipe the
         seed has never entered has none. **A row of that id already there, at any version and in
@@ -991,12 +994,9 @@ class StudioRecipeStore:
             )
         content = _seeded_content(recipe, source_location)
         check_source_declarations(dict(content["handling"]))  # type: ignore[call-overload]
-        content.update(
-            row_template=None,
-            unmapped_fields=[],
-            deduplicate=None,
-            pipeline=pipeline.model_dump(by_alias=True),
-        )
+        content.update(pipeline=pipeline.model_dump(by_alias=True))
+        if not mapped:
+            content.update(row_template=None, unmapped_fields=[], deduplicate=None)
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", recipe.id)
             row = await conn.fetchrow(
@@ -1034,6 +1034,8 @@ class StudioRecipeStore:
         owning_unit: str,
         now: datetime,
         pipeline: PipelineGraph,
+        from_recipe: Recipe | None = None,
+        source_location: str | None = None,
     ) -> StudioRecipeDraft:
         """R9's reset (ADR-127 Amendment 23, "The reset"): a draft at the next version, in
         `owning_unit`, with `row_template`, `unmapped_fields` and `deduplicate` cleared, so Map is
@@ -1046,7 +1048,13 @@ class StudioRecipeStore:
         flagged, or a draft), is set to `superseded`, so afterwards `feeding` lists no such recipe
         and `list_drafts` lists exactly this one. A failure in either statement leaves both as they
         were. **Confined** like `enter_published_for_seed`: it skips the author's and approver's
-        gates, and the one caller is the Prison Intelligence seed's own module."""
+        gates, and the one caller is the Prison Intelligence seed's own module.
+
+        **From the file** (`from_recipe`, ADR-127 Amendment 45): the draft is written exactly as
+        `enter_draft_for_seed(..., mapped=True)` wrote it, from the committed recipe and
+        `source_location`, its label, what Connect holds and its map included, and nothing is
+        carried from the latest version, which a presenter may have renamed, remarked or
+        unmapped."""
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", recipe_id)
             row = await conn.fetchrow(
@@ -1056,13 +1064,21 @@ class StudioRecipeStore:
             if row is None:
                 raise StudioRecipeNotFoundError(recipe_id)
             previous = _row_to_draft(row)
-            content = _content_json(
-                previous,
-                row_template=None,
-                unmapped_fields=[],
-                deduplicate=None,
-                pipeline=pipeline.model_dump(by_alias=True),
-            )
+            label = previous.label
+            if from_recipe is not None:
+                seeded = _seeded_content(from_recipe, source_location or previous.source_location)
+                check_source_declarations(dict(seeded["handling"]))  # type: ignore[call-overload]
+                seeded["pipeline"] = pipeline.model_dump(by_alias=True)
+                content = json.dumps(seeded)
+                label = from_recipe.label
+            else:
+                content = _content_json(
+                    previous,
+                    row_template=None,
+                    unmapped_fields=[],
+                    deduplicate=None,
+                    pipeline=pipeline.model_dump(by_alias=True),
+                )
             await conn.execute(
                 "UPDATE studio_recipes SET status = $1 WHERE recipe_id = $2 AND version = $3",
                 StudioRecipeStatus.SUPERSEDED.value,
@@ -1075,7 +1091,7 @@ class StudioRecipeStore:
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                 recipe_id,
                 previous.version + 1,
-                previous.label,
+                label,
                 StudioRecipeStatus.DRAFT.value,
                 content,
                 owning_unit,

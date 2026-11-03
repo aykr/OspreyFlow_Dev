@@ -25,6 +25,7 @@ from datetime import UTC, date, datetime, timedelta
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from schemas.domain import (
+    CLOSING_REASONS,
     POLE_CLASS_ORDER,
     Alert,
     ExpandRequest,
@@ -59,6 +60,9 @@ CUSTOMER_BOUND = 2_000
 #: How many documents' holders one expansion asks for.
 _EXPAND_BATCH = 200
 AGE_LABELS = ("under a day", "1 to 7 days", "7 to 30 days", "over 30 days")
+#: The Outcomes figures, in the order the feed carries them: open, claimed, each closing reason
+#: (ADR-133 Amendment 5), and closed with none.
+OUTCOME_FIGURES = ("open", "claimed", *CLOSING_REASONS, "closed")
 BANDS = ("low", "medium", "high")
 
 
@@ -94,10 +98,11 @@ def _alert_figures(
         typology = alert.typology or "other"
         weeks[(day - timedelta(days=day.weekday()), typology)] += 1
         row = outcomes.setdefault(typology, OutcomeCount(typology=typology))
-        if alert.status == "closed" and alert.disposition == "true_positive":
-            row.true_positive += 1
-        elif alert.status == "closed" and alert.disposition == "false_positive":
-            row.false_positive += 1
+        if alert.status == "closed":
+            # Each closing reason its own figure, and one with none (taken back) closed: never open
+            # (build order step 18c).
+            name = alert.disposition or "closed"
+            setattr(row, name, getattr(row, name) + 1)
         elif alert.status == "claimed":
             row.claimed += 1
         else:
@@ -339,7 +344,7 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     rows += [("open_by_age", c.label, "", "", c.value) for c in figures.open_by_age]
     for o in figures.outcomes:
         rows += [("outcome", label, o.typology, "", getattr(o, label))
-                 for label in ("open", "claimed", "true_positive", "false_positive")]  # fmt: skip
+                 for label in OUTCOME_FIGURES]  # fmt: skip
     # ADR-134 decision 2: the monitoring dashboard's sections, every kind of alert.
     m = figures.monitoring
     rows += [("raised_by_rule", w.label, w.typology, w.week_start.isoformat(), w.count)

@@ -290,3 +290,42 @@ async def test_ask_the_case_names_its_datasets_and_one_set_to_none_stays_local()
     assert request.datasets == ["open", "kept-in"]
     assert request.model == "local-model"
     assert (answered.engine, answered.model) == ("local", "local-model")
+
+
+async def test_the_answer_just_asked_names_its_author_as_the_conversation_does() -> None:
+    """Build order step 18c: chapter 8's answer, asked on GOV.UK, read "e369dd84-… · 3 Nov" (the
+    identity provider's subject) until the panel was reopened, when the list named "Demo Analyst":
+    the ask route returned the answer with no name, and the Glass showed the stored id (rule 7). The
+    ask names its author as the list does (ADR-106)."""
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from services.api import app as app_module
+    from services.api.questions import AskRequest, QuestionAnswer
+
+    answer = QuestionAnswer(
+        id="q1", author="e369dd84-subject", question="q", answer="a", citations=[], candidates=[],
+        unplaced=0, created_at=datetime(2026, 11, 3, tzinfo=UTC),
+    )  # fmt: skip
+
+    class _Questions:
+        async def ask(self, *_: object, **__: object) -> QuestionAnswer:
+            return answer
+
+    class _Audit:
+        async def record(self, **_: object) -> None:
+            return None
+
+    class _Names:
+        async def display_names(self, ids: object) -> dict[str, str]:
+            return {i: "Demo Analyst" for i in ids if i == "e369dd84-subject"}  # type: ignore[attr-defined]
+
+    got = await app_module.ask_question_route(
+        investigation=SimpleNamespace(id="c1"),  # type: ignore[arg-type]
+        body=AskRequest(question="What connects them?"),
+        principal=SimpleNamespace(id="e369dd84-subject"),  # type: ignore[arg-type]
+        questions=_Questions(),  # type: ignore[arg-type]
+        audit=_Audit(),  # type: ignore[arg-type]
+        principal_names=_Names(),  # type: ignore[arg-type]
+    )
+    assert got.author_name == "Demo Analyst"

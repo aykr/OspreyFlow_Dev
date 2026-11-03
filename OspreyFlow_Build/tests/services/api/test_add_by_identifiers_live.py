@@ -79,7 +79,7 @@ async def test_a_person_the_reader_may_not_see_answers_as_a_made_up_one() -> Non
         for hidden in ("Z2222ZZ", "Z3333ZZ"):
             answer = await resolve_identifiers(graph, [*around, hidden], READER)
             assert answer.counts == made_up.counts == IdentifierCounts(
-                read=2, found=1, matched_nothing=1, repeated=0
+                read=2, found=1, matched_nothing=1, repeated=0, records=1
             )
             assert [n.id for n in answer.nodes] == [n.id for n in made_up.nodes] == [seen.id]
         # The filter is what hid them: cleared for it, the reader finds the SECRET one, and a case
@@ -102,7 +102,9 @@ async def test_each_kind_resolves_to_its_node_and_a_pin_is_not_an_account() -> N
 
         typed = ["Z1111ZZ\nQQ 11 11 11 A\n07700 900123\n+44 7700 900123\nsyn-70417\nPIN-Z1111ZZ"]
         result = await resolve_identifiers(graph, typed, READER)
-        assert result.counts == IdentifierCounts(read=6, found=5, matched_nothing=1, repeated=1)
+        assert result.counts == IdentifierCounts(
+            read=6, found=5, matched_nothing=1, repeated=1, records=3
+        )
         assert {n.id for n in result.nodes} == {person.id, number.id, account.id}
 
 
@@ -118,7 +120,9 @@ async def test_a_pin_and_an_account_holding_the_same_text_each_resolve_to_their_
 
         result = await resolve_identifiers(graph, ["SYN-70417"], READER)
         assert [n.id for n in result.nodes] == [account.id]
-        assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
+        assert result.counts == IdentifierCounts(
+            read=1, found=1, matched_nothing=0, repeated=0, records=1
+        )
 
 
 async def test_more_than_the_bound_of_same_value_nodes_is_never_a_silent_miss() -> None:
@@ -144,4 +148,6 @@ async def test_more_than_the_bound_of_same_value_nodes_is_never_a_silent_miss() 
 
         within = await resolve_identifiers(graph, ["SYN-80002"], READER)
         assert [n.id for n in within.nodes] == [account.id]
-        assert within.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
+        assert within.counts == IdentifierCounts(
+            read=1, found=1, matched_nothing=0, repeated=0, records=1
+        )

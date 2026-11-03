@@ -296,14 +296,17 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
     reports_id = seed_pid.reports_recipe_id()
     plan = pid_plan.build_plan("demo")
     async with opened() as live:
-        # The starting state: the reports recipe a draft with Map not done, listed once, not live.
+        # The starting state (ADR-127 Amendment 45): the reports recipe a draft, mapped from the
+        # committed file, neither verified nor published, listed once, not live.
         assert reports_id not in [r.recipe_id for r in await live.store.feeding([PID.id])], (
             "the reports recipe is not published at the start"
         )
         drafts = [
             d for d in await live.store.list_drafts(live.persona) if d.recipe_id == reports_id
         ]
-        assert len(drafts) == 1 and drafts[0].row_template is None
+        committed = seed_pid._recipe(seed_pid.reports_recipe_file())
+        assert len(drafts) == 1 and drafts[0].row_template == committed.row_template
+        assert drafts[0].verified_at is None
         start_analysts = await _make_an_analysts_link(live, plan)
         start = await snapshot(live)
         start_version = drafts[0].version
@@ -314,6 +317,7 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
         published = await seed_pid.publish_reports_fallback(
             live.store, fallback_principal, ontology=ontology, scheme=scheme, repo_root=RECIPES,
             commit=commit_recipe_file, audit=live.resources.audit, now=datetime.now(UTC),
+            source_location=seed_pid.source_of(INGEST, pid_files.REPORTS),
         )  # fmt: skip
         assert published.status is StudioRecipeStatus.PUBLISHED and published.pipeline is not None
         # The deployment's own path: its real job queue and its configured switch (off).
@@ -357,7 +361,7 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
 
     done = run_seed("--reset-live")
     assert done.returncode == 0, _said(done)
-    for phrase in ("What the reset cannot undo", "removed " + pid_files.BATCH_2):
+    for phrase in ("What the reset cannot undo", "kept " + pid_files.BATCH_2):
         assert phrase in done.stdout, _said(done)
 
     async with opened() as live:
@@ -374,7 +378,8 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
         drafts = [
             d for d in await live.store.list_drafts(live.persona) if d.recipe_id == reports_id
         ]
-        assert len(drafts) == 1 and drafts[0].row_template is None
+        assert len(drafts) == 1 and drafts[0].row_template == committed.row_template
+        assert drafts[0].label == committed.label
         assert drafts[0].version > start_version, "R9's version climbs, said in words"
         assert drafts[0].pipeline == seed_pid.starting_pipeline(
             seed_pid.source_of(INGEST, pid_files.REPORTS)
@@ -383,7 +388,7 @@ async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> N
             r for r in start["registry"] if r[0] != reports_id
         ], "no other recipe's row moved"
     listed = seed_pid.listed_folder(INGEST)
-    assert not (listed / pid_files.BATCH_2).exists(), "batch 2 is out of the listing again"
+    assert (listed / pid_files.BATCH_2).exists(), "chapter 9's release stands (Amendment 45)"
     assert (listed / "incoming" / pid_files.BATCH_2).is_file()
     assert (listed / pid_files.REPORTS).read_bytes() == start_reports
 

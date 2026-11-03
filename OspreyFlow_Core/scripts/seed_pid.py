@@ -28,8 +28,9 @@ listing does not show; nothing else (no manifest, no pictures) lands in the list
 Each committed recipe but the reports recipe is compared with the row it would meet (the store's
 own comparison, so a committed file never differs from its published row), then copied byte for byte
 into the recipe repository, committed there, and entered as published. The reports recipe is entered
-as a draft that Map has not been done on. Each file of the seed's part of `pid_files.SEED_ORDER` is
-run, in that order, through the route's own `run_recipe_as`, unless the ledger already holds an
+as the starting draft, mapped but neither verified nor published (Amendment 45). Each file of the
+seed's part of `pid_files.SEED_ORDER` is run, in that order, through the route's own
+`run_recipe_as`, unless the ledger already holds an
 unreverted load of that recipe, version, case and source; a standing load is reported, with its
 held, rejected and short-read rows, and fails the checks as it would have the first time. The
 pictures go through `EntityPictureService.attach_for_seed`, to each subject found by reference that
@@ -56,10 +57,16 @@ whose source is batch 2 wherever under the dataset's folder it was read. On the 
 refuses it stops, names the refusal by its counts (link types and ids only with `--show-ids`), and
 gives the restore procedure: a reseed skips loads that stand, so the way back is the backup taken
 after seeding.
-Only when every revert has been made does it restore the reports recipe to its starting draft
-(writing no new version when nothing was reverted and it is there already), rewrite the reports
-file, remove chapter 9's files from the listed folder and every file the seed did not
-write, naming each, and say what it cannot undo.
+Only when every revert has been made does it restore the reports recipe to its starting draft,
+exactly as the seed entered it, from the committed file (writing no new version when nothing was
+reverted and it is there already), rewrite the reports file, remove every file the seed did not
+write, naming each, and say what it cannot undo. Chapter 9's released files stay released while
+they are the seed's own copies (Amendment 45), so a reset does not undo `--release-batch-2`.
+
+**R9's draft** (Amendment 45) is the committed file's content, mapped, with the starting pipeline
+(domain model, source, Profile, Map, Load), and neither verified nor published: chapter 4 walks the
+map, runs Verify, corrects the teaching row and publishes. Making the map's 126 handling bindings
+live does not fit the chapter's four minutes (the 3 November rehearsal's D4).
 
 **Deviation from the amendment's wording, and why.** The amendment gives `docker compose exec api`
 for `--release-batch-2` and the fallback; `seed_internal` runs them in a one-shot container from
@@ -400,24 +407,38 @@ def source_of(root: Path, file: str) -> str:
 
 
 def starting_pipeline(source_location: str) -> PipelineGraph:
-    """R9's draft pipeline: a domain model for the NIEM pack and one source at the reports file,
-    read through `generic-csv`. Profile and Map are not done."""
+    """R9's draft pipeline (ADR-127 Amendment 45): the branch the Studio itself draws for a source
+    (`addSourceChain`): a domain model for the NIEM pack, one source read through `generic-csv`,
+    then Profile, Map and Load. A bare source "reaches no load", which the Studio's save gate
+    refuses, so chapter 4 could not be done on the draft.
+
+    The source node names no file: the file is the row's (`source_location`, set by the seed and
+    by Connect). The runner keeps a node's own location over the row's, so a node naming the
+    seed's file made a run read it after Connect had chosen another, which Verify had read. The
+    argument is kept so every caller names the draft's file beside its pipeline."""
+    del source_location  # the row's, never the node's (above)
+    chain = [
+        PipelineNode(
+            id="domain",
+            kind=PipelineNodeKind.DOMAIN_MODEL,
+            label="Domain model",
+            config={"pack": "niem"},
+        ),
+        PipelineNode(
+            id="source",
+            kind=PipelineNodeKind.SOURCE,
+            label="Intelligence reports",
+            config={"connector_profile": "generic-csv"},
+        ),
+        PipelineNode(id="source-profile", kind=PipelineNodeKind.PROFILE, label="Profile"),
+        PipelineNode(id="source-map", kind=PipelineNodeKind.MAP, label="Map"),
+        PipelineNode(id="source-load", kind=PipelineNodeKind.LOAD, label="Load"),
+    ]
     return PipelineGraph(
-        nodes=[
-            PipelineNode(
-                id="domain",
-                kind=PipelineNodeKind.DOMAIN_MODEL,
-                label="Domain model",
-                config={"pack": "niem"},
-            ),
-            PipelineNode(
-                id="source",
-                kind=PipelineNodeKind.SOURCE,
-                label="Intelligence reports",
-                config={"connector_profile": "generic-csv", "source_location": source_location},
-            ),
+        nodes=chain,
+        edges=[
+            PipelineEdge(source=a.id, target=b.id) for a, b in zip(chain, chain[1:], strict=False)
         ],
-        edges=[PipelineEdge(source="domain", target="source")],
     )
 
 
@@ -508,6 +529,12 @@ def _release_one(root: Path, file: str) -> str:
     return f"released {file} into {listed_folder(root)}"
 
 
+def _is_released_copy(root: Path, file: str) -> bool:
+    """Whether the listed `file` is still the seed's own copy of a chapter-9 file."""
+    held = incoming_folder(root) / file
+    return held.is_file() and held.read_bytes() == (listed_folder(root) / file).read_bytes()
+
+
 def release_batch_2(root: Path) -> str:
     """Chapter 9: copies batch 2, and the two monitoring batches after it (ADR-127 Amendment 41),
     from `incoming/` into the listed folder. A file copy only, so the Conduit stays up. Refuses,
@@ -566,6 +593,7 @@ async def enter_recipes(
                 created_by=published_by,
                 now=now,
                 pipeline=starting_pipeline(source),
+                mapped=True,
             )
             continue
         check(recipe, ontology, scheme)
@@ -1745,19 +1773,51 @@ CANNOT_UNDO = (
 
 
 def is_starting_draft(row: Any, source_location: str, owning_unit: str) -> bool:
-    """Whether the reports recipe's latest row is already its starting draft: a draft with Map not
-    done, the starting pipeline, and the source, unit and dataset the seed gave it. Then a reset
+    """Whether the reports recipe's latest row is already its starting draft (Amendment 45): a
+    draft holding exactly what the committed file holds (its label, what Connect holds and its
+    map), the starting pipeline, and the source, unit and dataset the seed gave it. Then a reset
     that reverted nothing has no new version to write (Amendment 30)."""
+    recipe = _recipe(reports_recipe_file())
     return bool(
         row.status is StudioRecipeStatus.DRAFT
-        and row.row_template is None
-        and not row.unmapped_fields
-        and row.deduplicate is None
+        and row.label == recipe.label
+        and not row_differences(row, recipe)
         and row.pipeline == starting_pipeline(source_location)
         and row.source_location == source_location
         and row.owning_unit == owning_unit
         and row.dataset_id == FOLDER
     )
+
+
+async def restore_starting_draft(
+    store: Any, *, source: str, owning_unit: str, created_by: str, now: datetime
+) -> None:
+    """Writes R9's starting draft again, exactly as the seed entered it (Amendment 45): from the
+    committed file, label, Connect and map included, never carried from the latest version, which
+    a presenter may have renamed or remarked. A recipe never entered gets its first draft."""
+    recipe = _recipe(reports_recipe_file())
+    pipeline = starting_pipeline(source)
+    try:
+        await store.restore_to_draft(
+            recipe.id,
+            created_by=created_by,
+            owning_unit=owning_unit,
+            now=now,
+            pipeline=pipeline,
+            from_recipe=recipe,
+            source_location=source,
+        )
+    except StudioRecipeNotFoundError:
+        await store.enter_draft_for_seed(
+            recipe,
+            source_location=source,
+            dataset_id=FOLDER,
+            owning_unit=owning_unit,
+            created_by=created_by,
+            now=now,
+            pipeline=pipeline,
+            mapped=True,
+        )
 
 
 async def _say_resting_links(
@@ -1863,9 +1923,14 @@ async def reset_live(
     keep = {stage.file for stage in SEED_ORDER if stage.file not in CHAPTER_9_FILES}
     if listed.is_dir():
         for path in sorted(listed.iterdir()):
-            if path.is_file() and path.name not in keep:
-                path.unlink()
-                say(f"removed {path.name} from the listed folder")
+            if not path.is_file() or path.name in keep:
+                continue
+            if path.name in CHAPTER_9_FILES and _is_released_copy(root, path.name):
+                # Amendment 45: chapter 9's release stands, so its loads are ready again.
+                say(f"kept {path.name} (chapter 9's release)")
+                continue
+            path.unlink()
+            say(f"removed {path.name} from the listed folder")
     for line in CANNOT_UNDO:
         say(line)
     return 0
@@ -1937,6 +2002,7 @@ async def publish_reports_fallback(
     commit: Callable[..., Awaitable[str]],
     audit: Any,
     now: datetime,
+    source_location: str,
 ) -> StudioRecipeDraft:
     """Publishes the committed, fully mapped reports recipe in place of a live mapping that went
     wrong, as the Conduit's publish route would (Amendment 30): at the draft row's version, with the
@@ -1946,7 +2012,12 @@ async def publish_reports_fallback(
     flipped, and the `publish_studio_recipe` audit entry written. Goes through the store's own
     methods as the persona (the draft is in its unit and dataset), so only Postgres and the recipe
     repository are written. It skips the route's role, case Editor and Verify checks
-    (`FALLBACK_SKIPS`). Refuses a recipe that is not a draft."""
+    (`FALLBACK_SKIPS`). Refuses a recipe that is not a draft, or one in another dataset.
+
+    Whatever the presenter left on the draft goes back to the seed's (Amendment 45): the label, the
+    source (`source_location`, the reports file in the listed folder) and the starting pipeline, so
+    a renamed draft, another file chosen or a half-added branch no longer refuses the fallback or
+    rides into the published recipe."""
     recipe_id = reports_recipe_id()
     draft = await store.get(recipe_id)
     if draft.status is not StudioRecipeStatus.DRAFT:
@@ -1960,12 +2031,7 @@ async def publish_reports_fallback(
     # Before any write (Amendment 34): the row must be the seed's own, and what the writes below
     # would leave must be the committed file's.
     foreign = [
-        name
-        for name, got, wanted in (
-            ("dataset_id", draft.dataset_id, FOLDER),
-            ("label", draft.label, recipe.label),
-        )
-        if got != wanted
+        name for name, got, wanted in (("dataset_id", draft.dataset_id, FOLDER),) if got != wanted
     ]
     if foreign:
         raise SeedRefusal(
@@ -1989,22 +2055,24 @@ async def publish_reports_fallback(
             f"the writes would leave {recipe_id} differing from the committed file in "
             f"{', '.join(differing_before)}, so nothing was written"
         )
-    check_seeded_recipe(recipe.model_copy(update={"pipeline": draft.pipeline}), ontology, scheme)
-    if draft.pipeline is not None:
-        unrunnable = pipeline_run_violations(draft.pipeline)
-        if unrunnable:
-            raise SeedRefusal(
-                "the pipeline cannot be published, as the route refuses it: "
-                f"{'; '.join(unrunnable)}"
-            )
+    pipeline = starting_pipeline(source_location)
+    check_seeded_recipe(recipe.model_copy(update={"pipeline": pipeline}), ontology, scheme)
+    unrunnable = pipeline_run_violations(pipeline)
+    if unrunnable:
+        raise SeedRefusal(
+            f"the pipeline cannot be published, as the route refuses it: {'; '.join(unrunnable)}"
+        )
     await store.update_draft(
         recipe_id,
         principal,
+        label=recipe.label,
+        source_location=source_location,
         connector_profile=fields["connector_profile"],
         handling=fields["handling"],
         legal_basis=fields["legal_basis"],
         deduplicate=recipe.deduplicate,
     )
+    await store.update_pipeline(recipe_id, principal, pipeline=pipeline)
     await store.update_row_template(
         recipe_id,
         principal,
@@ -2012,7 +2080,15 @@ async def publish_reports_fallback(
         unmapped_fields=list(recipe.unmapped_fields),
     )
     row = await store.get(recipe_id)
-    differing = row_differences(row, recipe)
+    differing = row_differences(row, recipe) + [
+        name
+        for name, got, wanted in (
+            ("label", row.label, recipe.label),
+            ("source_location", row.source_location, source_location),
+            ("pipeline", row.pipeline, pipeline),
+        )
+        if got != wanted
+    ]
     if differing:
         raise SeedRefusal(
             f"the registry row of {recipe_id} still differs from the committed file in "
@@ -2340,7 +2416,11 @@ async def _seed_into(
         print(line)
     print(
         f"The reports recipe is {draft.status.value} at version {draft.version}"
-        + (", with no row template (Map is not done)." if draft.row_template is None else ".")
+        + (
+            ", with no row template (Map is not done)."
+            if draft.row_template is None
+            else ", its map prepared; Verify and Publish are chapter 4's."
+        )
     )
     print(f"Take a backup now, before anything is rehearsed: {BACKUP_COMMAND}")
     print(f"If a rehearsal reset ever refuses, restore it with: {RESTORE_COMMAND}")
@@ -2447,25 +2527,13 @@ async def _reset(args: argparse.Namespace, root: Path) -> int:
             return is_starting_draft(row, source, args.org_unit)
 
         async def restore_draft() -> None:
-            pipeline = starting_pipeline(source)
-            try:
-                await store.restore_to_draft(
-                    reports_recipe_id(),
-                    created_by=base.id,
-                    owning_unit=args.org_unit,
-                    now=datetime.now(UTC),
-                    pipeline=pipeline,
-                )
-            except StudioRecipeNotFoundError:
-                await store.enter_draft_for_seed(
-                    _recipe(reports_recipe_file()),
-                    source_location=source,
-                    dataset_id=FOLDER,
-                    owning_unit=args.org_unit,
-                    created_by=base.id,
-                    now=datetime.now(UTC),
-                    pipeline=pipeline,
-                )
+            await restore_starting_draft(
+                store,
+                source=source,
+                owning_unit=args.org_unit,
+                created_by=base.id,
+                now=datetime.now(UTC),
+            )
 
         return await reset_live(
             case_id=case_id,
@@ -2488,7 +2556,7 @@ async def _reset(args: argparse.Namespace, root: Path) -> int:
         await resources.close()
 
 
-async def _fallback(args: argparse.Namespace) -> int:
+async def _fallback(args: argparse.Namespace, root: Path) -> int:
     dsn = PostgresConfig.from_env().dsn
     repo_root = recipe_repo_root()
     store = await StudioRecipeStore.connect(dsn)
@@ -2498,6 +2566,7 @@ async def _fallback(args: argparse.Namespace) -> int:
         published = await publish_reports_fallback(
             store,
             principal,
+            source_location=source_of(root, pid_files.REPORTS),
             ontology=load_deployment_ontology(),
             scheme=load_uk_le_scheme(),
             repo_root=repo_root,
@@ -2527,7 +2596,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.mode == "reset":
             return asyncio.run(_reset(args, root))
         if args.mode == "fallback":
-            return asyncio.run(_fallback(args))
+            return asyncio.run(_fallback(args, root))
         if args.mode == "check":
             return asyncio.run(_check(args))
         return asyncio.run(_seed(args, root))

@@ -2,7 +2,7 @@
 // weeks or calendar months in UTC, as the AnalyticsPort suite pins them — never only those with events.
 import { describe, expect, it } from "vitest";
 
-import { periodsOf } from "./packText";
+import { alertLine, periodsOf } from "./packText";
 import { figures } from "./reportsTestKit";
 
 describe("periodsOf", () => {
@@ -23,5 +23,22 @@ describe("periodsOf", () => {
     const f = figures();
     const points = [...f.result.points, { period_start: "2026-06-01T00:00:00Z", series: "card", value: 1 }];
     expect(periodsOf({ ...f, result: { ...f.result, points } })[0]).toBe("2026-06-01");
+  });
+});
+
+// Build order step 18c (the 3 November rehearsal's D10): an alert in a pack read "Typology alert
+// (rapid_movement)": the typology is named as the queue names it, never by its stored key.
+describe("alertLine", () => {
+  const alert = {
+    alert_id: "a1", kind: "typology", severity: "medium", explanation: "x", typology: "rapid_movement",
+    raised_at: "2026-11-03T15:20:00Z", status: "open", match: "inferred",
+  } as unknown as Parameters<typeof alertLine>[0];
+
+  it("names the typology by its label", () => {
+    expect(alertLine(alert)).toBe("Typology alert (Rapid movement) · Medium severity · raised 3 November 2026");
+  });
+
+  it("never shows a stored key, even for a typology the Glass has no label for", () => {
+    expect(alertLine({ ...alert, typology: "new_kind_of_rule" })).not.toContain("new_kind_of_rule");
   });
 });

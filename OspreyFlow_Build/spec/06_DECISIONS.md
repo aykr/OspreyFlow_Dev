@@ -23571,3 +23571,155 @@ with the images every option renders into a compose file),
 `tests/harness/test_update_apply.py::test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update`.
 **Not proved:** the next real release's lock and a bundle made from it, and `--from` on a machine
 whose Docker has never held cosign — the first real release after this change proves them.
+
+### ADR-127, Amendment 45 (3 November 2026) — chapter 4's draft is a real draft the Studio completes (build order step 18c, D4)
+
+The 3 November rehearsal (`REHEARSAL_v5_2026-11-03.md`, D4) found chapter 4 could not be done live. The
+owner's ruling (open question 24): fix the seed's draft, so the Studio completes it in the chapter's slot.
+Decided by the coordinator's worker under that ruling.
+
+- **The pipeline is a whole branch.** `starting_pipeline` is the branch the Studio itself draws for a
+  source (`addSourceChain`): the domain model (NIEM), the source at the reports file, then Profile, Map and
+  Load (`source-profile`, `source-map`, `source-load`). Amendment 23's bare source "reaches no load", which
+  the Studio's save gate (`pipeline_rule_violations`) refuses, so no edit to the draft could be saved and
+  the canvas had no stage to open. **The source node names no file** (its config is the connector alone,
+  as the Studio's own branches are): the runner keeps a node's own `source_location` over the row's
+  (`pipeline_run.run_published_pipeline`), so with the seed's file in the node, chapter 4's corrected
+  upload chosen at Connect passed Verify (which reads the row's file) and the run then read the seed's
+  uncorrected file. Found walking chapter 4 on GOV.UK; `red/s18c_d4_source_node_location.txt`.
+- **The draft holds the committed map; Verify and Publish are chapter 4's.** Making the map live means
+  21 elements each binding six handling columns, 126 bindings before the gates and transforms, which the
+  rehearsal estimated at 15 to 20 minutes against the chapter's 4. So the seed enters the draft with the
+  committed file's `row_template`, `unmapped_fields` and `deduplicate` (`enter_draft_for_seed(...,
+  mapped=True)`), neither verified nor published. Chapter 4 walks the map, runs Verify (one row rejected,
+  the teaching row), corrects that row, publishes and runs. This replaces Amendment 23's "no
+  `row_template` … so Map is not done" for R9. **For the script:** v5's start state ("Profile and Map not
+  done") and step 12 change to "the map prepared, Verify and Publish not done".
+- **The reset restores the draft exactly.** `restore_to_draft(..., from_recipe=, source_location=)` writes
+  the draft from the committed file (its label, what Connect holds, its map) and the starting pipeline,
+  carrying nothing from the latest version. Before, the label (and the marking, source and legal basis)
+  was carried, so a presenter's rename survived the reset and then refused the fallback (D4c, D4d).
+  `is_starting_draft` compares the label, Connect's fields and the map with the file's.
+- **The fallback publishes over whatever the presenter left.** It refuses only a draft in another dataset
+  or not a draft. It writes the file's label, the seed's source location and the starting pipeline back
+  before publishing, so a renamed draft, another file chosen, or a half-added branch neither refuses it nor
+  rides into the published recipe. The unrunnable-pipeline gate applies to the pipeline it publishes.
+- **The reset keeps chapter 9's release.** A released chapter-9 file (batch 2, the visit bookings, the PIN
+  first contacts) still byte for byte the seed's copy in `incoming/` is kept and named ("kept …"); an
+  edited one is removed like any file the seed did not write. Before, a reset (or a recovery mid-demo)
+  took the release back and chapter 9's first load failed with "No such file" until `--release-batch-2`
+  was run again (D4e). This replaces Amendment 23's "removes batch 2 from the listed folder". The chapter
+  9 loads themselves are still reverted.
+- **Chapter 5's figures are unchanged.** Corrected live, the reports load 229 reports, 68 naming people;
+  uncorrected (the fallback, or a run without the correction), 228 and 67 (Amendment 37).
+- **Tests that would fail (rule 12).** `tests/test_seed_pid.py`:
+  `test_the_starting_pipeline_is_a_whole_branch_the_studios_save_gate_accepts`,
+  `test_the_reports_recipe_is_entered_as_the_draft_and_never_as_published` (`mapped`),
+  `test_a_draft_is_at_its_start_only_if_it_is_exactly_the_draft_the_seed_made`,
+  `test_the_reset_restores_the_draft_from_the_committed_file_label_and_all`,
+  `test_the_fallback_publishes_over_a_draft_the_presenter_touched`,
+  `test_the_reset_keeps_chapter_9s_release_and_removes_every_other_file_naming_each`,
+  `test_a_reset_before_any_release_leaves_chapter_9s_files_unreleased`;
+  `tests/services/api/test_studio_recipes_store.py` (live Postgres):
+  `test_a_mapped_first_draft_holds_the_files_map_and_is_neither_verified_nor_published`,
+  `test_a_restore_from_the_file_puts_back_the_label_connect_and_the_map`. Shown red first
+  (`red/s18c_d4_*`). `tests/ingest/test_pid_seed_live.py` is changed to the new contract.
+
+### ADR-128, Amendment 6 (3 November 2026) — add many from a list says how many records it found (build order step 18c, D7)
+
+The 3 November rehearsal's J3 read "40 identifiers read. 37 found. 3 matched nothing you can see. 1
+repeated." and then "36 added". Both were right: `found` counts each identifier that resolved, a repeat
+included (Amendment 1: "three spellings of one number are three read, three found, two repeated, and one
+node"), while the add puts each record in the view once. Nothing was lost; the words did not say so.
+
+- **`records`.** `IdentifierCounts` gains `records`, the different records found (`len(nodes)` of
+  `resolve_identifiers`), of the reader's own view as `found` is (rule 3). Where it is fewer than `found`
+  the count says so: "37 found, naming 36 different records."
+- **After the add.** The box says how many records are in the view ("36 records are in the view."), not
+  "36 added": the delta carries every record found, one already on the canvas included, so "added" was
+  not exact either.
+- **Tests that would fail (rule 12).** `tests/services/api/test_add_by_identifiers.py::
+  test_records_is_how_many_different_records_were_found_and_what_is_added` (and `records` in every counts
+  comparison, live ones included); `apps/workspace/src/search/addFromListApi.test.ts` ("countSentence when
+  two identifiers name one record"); `AddFromList.test.tsx`; the keyboard cases in `keyboard/explore.spec.ts`
+  and `keyboard/shell.spec.ts`. Red first (`red/s18c_d7_*`).
+
+### ADR-111, Amendment 8 (3 November 2026) — the Outcomes figures count every closing reason (build order step 18c, D12)
+
+Found at the 3 November rehearsal: the viewer's Figures read Open, Claimed, True and False only.
+`reports._alert_figures` counted an alert closed as *Duplicate*, *No further action* or *Referred*
+(ADR-133 Amendment 5's closing reasons), or closed with no outcome (a revert takes its alerts back
+that way), as **open**: chapter 10's two closes as *Referred* would read as open alerts.
+
+- `OutcomeCount` gains `duplicate`, `no_further_action`, `referred` and `closed` (closed with none);
+  each closed alert is counted under its own reason, never as open. The feed carries every figure
+  (`reports.OUTCOME_FIGURES`). Still counted as its reader, unchanged (rule 3).
+- The Glass's Outcomes table has a column for each, headed as the close dialog names the reason
+  ("True match", "False positive", "Duplicate", "No further action", "Referred") and "Closed, no
+  outcome".
+- **Tests that would fail (rule 12).** `tests/services/api/test_report_outcomes.py::
+  test_every_closing_reason_has_its_own_figure_and_none_is_open` (red: four closed alerts counted
+  open); `apps/workspace/src/reports/ReportsView.test.tsx` ("gives every closing reason its own column,
+  and one for closed with none"). Red first (`red/s18c_d12_outcomes_*`).
+
+### ADR-098, Amendment 6 (3 November 2026) — a search's chosen node is in the working set, and drawn routes are not "no routes" (build order step 18c, D5)
+
+The 3 November rehearsal's J5: with Vance and Skellion selected, **Show links among these** within 6
+said "No routes within 6 degrees among these", while Find connections said 2 degrees and 5 routes; the
+same for Vance and Dorrance within 3, a pair no route joins, with no "not connected" said either.
+
+- **Why.** Skellion and Dorrance had been put on the canvas from search, and their three-step draws
+  (ADR-070) were large and cancelled. `drawSearchResult` put the chosen node on the canvas by a local
+  add alone, so it was on screen but never in the case's working set. `links_among` keeps only the
+  named ids in the reader's view (ADR-124 decision 3), so one id was left, no pair was searched, and
+  nothing was said about one. The Glass review of 18 October had moved Explore's adds to `/seed` for
+  this reason ("a local add did neither"); a search's pick was not moved.
+- **The fix.** A search's chosen node goes to the working set through `/seed` first (as Explore's do),
+  and the three-step draw follows once it is there (`search/drawSearchResult.ts`).
+- **A node coming back brings its links into the change.** Found re-walking J5 on GOV.UK after the
+  fix above: Skellion was then in the working set, yet *Show links among these* still drew nothing.
+  "Clear view" removes nodes and leaves their links stored with that end absent; Skellion's links from
+  earlier in the session rejoined the view when he came back (`would_add` counts them, a reload drew
+  them: 83 links on the canvas, 86 after a reload), but `_add`'s change carried only what was asked,
+  so the Glass never drew them and `links_among`, finding them stored, added nothing. `_add` now puts
+  those links in the change (`_links_returning_with`), read from the store after the add, both ends
+  stored, filtered for the reader as any change is (rule 3).
+- **Routes already drawn.** `LinksAmongOutcome` gains `connected_pairs`, the pairs a route joins within
+  the degree, counted from the reader's own search as `unconnected_pairs` is (rule 3; the hidden-id
+  cases compare whole outcomes, so a hidden id cannot move it). With nothing added and a pair joined,
+  the notice says "The routes within N degrees among these are already drawn."
+- **Find connections' list.** Two routes through the same people by different links (shared a cell
+  with, or passes items to, then associate of) read alike, as people alone; each route now names its
+  links by their labels (`FindConnectionsPanel`, `routeLinksWords`). They are different routes, so the
+  count (5) stands.
+- **Tests that would fail (rule 12).** `apps/workspace/src/search/drawSearchResult.test.ts` (the node is
+  seeded before the draw); `tests/services/api/working_set/test_links_among.py::
+  test_routes_already_drawn_are_counted_as_joined_pairs_not_as_no_routes`;
+  `tests/services/api/working_set/test_returning_node_brings_its_links.py` (a returning node's link in
+  the change; one the reader may not read is not, the same as no link at all); the hidden-id case in
+  `test_links_among_hides_hidden_ids.py`; `canvas/linksAmong.test.ts`; `FindConnectionsPanel.test.tsx`.
+  Red first (`red/s18c_d5_*`).
+
+### ADR-120, Amendment 19 (3 November 2026) — J7's betweenness on screen is the search's draw, not the plan's set (build order step 18c, D6)
+
+The 3 November rehearsal read J7's principal at **0.780**, the next (Fairlop, `relay_2`) at 0.199, about
+four times smaller; the script quotes about 0.87 and about twenty times. Found 3 November on GOV.UK and
+measured twice, the same both times, before and after this step's fixes.
+
+- **Why it differs.** Amendment 8 decision 5 defines J7's working set as the principal with all his
+  links, then the coordinator's number with all its links; `pid_plan.j7_working_set` builds it (46 nodes,
+  91 links at the Act 1 moment) and the plan's test and the live access test compute 0.8654 on it. The
+  script's click path adds the number by **search**, and choosing a search result draws everything within
+  three links of it (ADR-070, `SEARCH_DRAW_DEPTH = 3`), not its links alone. On GOV.UK that is 64 nodes and
+  116 links (the principal's star is 42 and 83): the number's five links as the plan has them, and beyond
+  them the seized handsets, the other PIN accounts, `+447700900718`, the relays' pictures and more. On that
+  canvas the principal bridges less and the relays more.
+- **Not the data.** The plan's set gives 0.865 today, as on 25 October; step 16 (Amendment 18) changed only
+  times. No figure measured on screen was ever 0.87: `PID_ACTUALS.md`'s 0.87 is the plan's, and every test
+  of it reads the plan's set, never what the clicks make (rule 12: the invariant was stated for a set the
+  screen does not build).
+- **Which is right.** Both, for their sets. For the script as it is clicked, the figures are the screen's:
+  principal **0.78**, then Fairlop **0.20** (about four times smaller), Thackwray 0.16, Penhallow 0.11, the
+  establishment 0.06. Recorded for the coordinator to put in the script; the plan's constant and tests are
+  left as they are (open question: model the search's draw in the plan, or change the click path so the
+  number is added with its links alone).

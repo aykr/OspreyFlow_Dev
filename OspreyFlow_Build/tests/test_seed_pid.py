@@ -31,7 +31,7 @@ mistake would do, and the case that catches it:
   (`test_a_row_that_differs_is_refused_by_name_before_anything_is_committed`);
 - R9 entered as published, or its starting pipeline wrong
   (`test_the_reports_recipe_is_entered_as_the_draft_and_never_as_published`,
-  `test_the_starting_pipeline_is_the_domain_model_and_one_source_at_the_reports_file`);
+  `test_the_starting_pipeline_is_a_whole_branch_the_studios_save_gate_accepts`);
 - the repository the recipes are committed to not being the one the runs read, found only after the
   files and the case were written
   (`test_a_repository_that_the_runs_do_not_read_stops_the_seed_before_any_write`).
@@ -81,9 +81,9 @@ fake that holds the plan as the store would, passing, then failing for the mista
 - the end state (`test_a_reset_reverts_newest_first_then_restores_the_draft_and_the_files`);
 - a new R9 version written when nothing was reverted and R9 is already at its starting draft
   (`test_a_reset_that_reverted_nothing_leaves_a_starting_draft_alone`,
-  `test_a_draft_is_at_its_start_only_if_it_is_a_draft_with_no_mapping_and_the_starting_pipeline`);
+  `test_a_draft_is_at_its_start_only_if_it_is_exactly_the_draft_the_seed_made`);
 - a file the seed did not write left in the listed folder, or removed without being named
-  (`test_the_reset_removes_batch_two_and_every_other_file_naming_each`);
+  (`test_the_reset_keeps_chapter_9s_release_and_removes_every_other_file_naming_each`);
 - what the reset cannot undo, unsaid (`test_the_reset_says_what_it_cannot_undo`).
 
 **The mid-demo commands**
@@ -132,11 +132,13 @@ from services.api.resolution_trigger import submit_post_ingest_resolution_jobs
 from services.api.studio_publish import build_recipe, pack_versions_for, serialise_recipe
 from services.api.studio_recipes import (
     SeededRecipeContentDiffers,
+    StudioRecipeNotFoundError,
     carry_source_declarations,
     check_seeded_recipe,
 )
 from services.ingest.load_revert import Refusal as RevertRefusal
 from services.ingest.load_revert import RevertIncomplete, RevertRefused, RevertResult
+from services.ingest.pipeline import pipeline_rule_violations, pipeline_run_violations
 
 from demo_fixtures import pid_files, pid_monitoring, pid_plan, pid_writes
 from demo_fixtures.datasets import PID
@@ -526,17 +528,35 @@ async def test_the_reports_recipe_is_entered_as_the_draft_and_never_as_published
     assert kw["dataset_id"] == "prison-intelligence" and kw["owning_unit"] == "verify"
     assert kw["created_by"] == seed_pid.ENGINEER_USERNAME
     assert kw["pipeline"] == seed_pid.starting_pipeline(_source(root, pid_files.REPORTS))
+    # Amendment 45: the draft holds the committed map, so chapter 4 walks it rather than making
+    # 126 handling bindings on stage (D4b); Verify and Publish are still not done.
+    assert kw["mapped"] is True
 
 
-def test_the_starting_pipeline_is_the_domain_model_and_one_source_at_the_reports_file() -> None:
+def test_the_starting_pipeline_is_a_whole_branch_the_studios_save_gate_accepts() -> None:
+    """ADR-127 Amendment 45 (build order step 18c, D4a): the draft chapter 4 completes is the branch
+    the Studio itself draws (`addSourceChain`): the domain model, the source at the reports file,
+    then Profile, Map and Load. A bare source "reaches no load", so the Studio's save gate refused
+    every change to the draft and chapter 4 could not be done on it."""
     location = "/ingest/uploaded/prison-intelligence/" + pid_files.REPORTS
     pipeline = seed_pid.starting_pipeline(location)
     kinds = [n.kind for n in pipeline.nodes]
-    assert kinds == [PipelineNodeKind.DOMAIN_MODEL, PipelineNodeKind.SOURCE]
-    domain, source = pipeline.nodes
+    assert kinds == [
+        PipelineNodeKind.DOMAIN_MODEL, PipelineNodeKind.SOURCE, PipelineNodeKind.PROFILE,
+        PipelineNodeKind.MAP, PipelineNodeKind.LOAD,
+    ]  # fmt: skip
+    domain, source, profile, map_, load = pipeline.nodes
     assert domain.config == {"pack": "niem"}
-    assert source.config == {"connector_profile": "generic-csv", "source_location": location}
-    assert [(e.source, e.target) for e in pipeline.edges] == [(domain.id, source.id)]
+    # The source node carries no file of its own: the runner keeps a node's own `source_location`
+    # over the row's (`pipeline_run.run_published_pipeline`), so a file chosen at Connect (chapter
+    # 4's corrected upload) passed Verify, which reads the row's, and the run read the seed's file
+    # (found walking chapter 4 on GOV.UK, 3 November). The row's is the one both read.
+    assert source.config == {"connector_profile": "generic-csv"}
+    assert [(e.source, e.target) for e in pipeline.edges] == [
+        (domain.id, source.id), (source.id, profile.id), (profile.id, map_.id), (map_.id, load.id),
+    ]  # fmt: skip
+    assert pipeline_rule_violations(pipeline) == []
+    assert pipeline_run_violations(pipeline) == []
 
 
 def test_the_recipe_id_comes_from_the_committed_file() -> None:
@@ -1713,7 +1733,8 @@ async def test_a_reset_reverts_newest_first_then_restores_the_draft_and_the_file
         "revert:01C", "restore-draft", "rewrite-reports",
     ]  # fmt: skip
     assert "links-asked" not in world.log, "Amendment 32 withdrew the precheck of every refusal"
-    assert not (seed_pid.listed_folder(_root(tmp_path)) / pid_files.BATCH_2).exists()
+    # Amendment 45: chapter 9's release stands
+    assert (seed_pid.listed_folder(_root(tmp_path)) / pid_files.BATCH_2).exists()
     assert (seed_pid.listed_folder(_root(tmp_path)) / "incoming" / pid_files.BATCH_2).exists()
 
 
@@ -1831,22 +1852,42 @@ async def test_a_revert_that_stopped_part_way_says_so_and_restores_nothing(tmp_p
     assert "analytics store is down" in "\n".join(said)
 
 
-async def test_the_reset_removes_batch_two_and_every_other_file_naming_each(
+async def test_the_reset_keeps_chapter_9s_release_and_removes_every_other_file_naming_each(
+    tmp_path: Path,
+) -> None:
+    """Amendment 45 (D4e): the reset no longer takes back chapter 9's released files, so a reset
+    between rehearsals, or a recovery mid-demo, leaves chapter 9's loads ready. A released file is
+    kept only while it is still the seed's own copy; anything else, an edited release included, is
+    removed and named."""
+    world, said = _ResetWorld(_loads()), []
+    _seed_folder(_root(tmp_path), extra=["corrected_upload.csv", "notes.txt"])
+    listed = seed_pid.listed_folder(_root(tmp_path))
+    (listed / pid_monitoring.PIN_NEW_CONTACTS).write_text("edited after release", encoding="utf-8")
+    await seed_pid.reset_live(**_reset_args(tmp_path, world, said))
+    left = sorted(p.name for p in listed.iterdir() if p.is_file())
+    assert left == sorted(
+        {s.file for s in pid_files.SEED_ORDER} | {pid_monitoring.VISIT_BOOKINGS}
+    )
+    assert (listed / pid_files.BATCH_2).read_text(encoding="utf-8") == "b2"
+    text = "\n".join(said)
+    for name in ("corrected_upload.csv", "notes.txt", pid_monitoring.PIN_NEW_CONTACTS):
+        assert f"removed {name}" in text, name
+    for name in (pid_files.BATCH_2, pid_monitoring.VISIT_BOOKINGS):
+        assert f"removed {name}" not in text, name
+        assert f"kept {name}" in text, name
+    assert (listed / pid_files.REPORTS).read_text(encoding="utf-8") == "fresh"
+
+
+async def test_a_reset_before_any_release_leaves_chapter_9s_files_unreleased(
     tmp_path: Path,
 ) -> None:
     world, said = _ResetWorld(_loads()), []
-    _seed_folder(_root(tmp_path), extra=["corrected_upload.csv", "notes.txt"])
+    _seed_folder(_root(tmp_path), batch_two=False)
     await seed_pid.reset_live(**_reset_args(tmp_path, world, said))
     listed = seed_pid.listed_folder(_root(tmp_path))
-    left = sorted(p.name for p in listed.iterdir() if p.is_file())
-    assert left == sorted({s.file for s in pid_files.SEED_ORDER} - {pid_files.BATCH_2})
-    text = "\n".join(said)
-    for name in (
-        "corrected_upload.csv", "notes.txt", pid_files.BATCH_2,
-        pid_monitoring.VISIT_BOOKINGS, pid_monitoring.PIN_NEW_CONTACTS,
-    ):  # fmt: skip
-        assert f"removed {name}" in text, name
-    assert (listed / pid_files.REPORTS).read_text(encoding="utf-8") == "fresh"
+    for name in seed_pid.CHAPTER_9_FILES:
+        assert not (listed / name).exists(), name
+        assert (listed / "incoming" / name).exists(), name
 
 
 async def test_the_reset_says_what_it_cannot_undo(tmp_path: Path) -> None:
@@ -1892,9 +1933,16 @@ async def test_a_reset_that_reverted_nothing_leaves_a_starting_draft_alone(tmp_p
 
 
 def _starting_row(root: Path, **changes: Any) -> Any:
+    """R9's starting draft as Amendment 45 has it: the committed file's label, Connect and map, the
+    starting pipeline, Verify and Publish not done."""
     source = _source(root, pid_files.REPORTS)
+    recipe = seed_pid._recipe(seed_pid.reports_recipe_file())
+    fields = seed_pid.connect_fields(recipe)
     row = SimpleNamespace(
-        status=StudioRecipeStatus.DRAFT, row_template=None, unmapped_fields=[], deduplicate=None,
+        status=StudioRecipeStatus.DRAFT, label=recipe.label,
+        connector_profile=fields["connector_profile"], handling=fields["handling"],
+        legal_basis=fields["legal_basis"], row_template=recipe.row_template,
+        unmapped_fields=list(recipe.unmapped_fields), deduplicate=recipe.deduplicate,
         pipeline=seed_pid.starting_pipeline(source), source_location=source, owning_unit="verify",
         dataset_id="prison-intelligence",
     )  # fmt: skip
@@ -1903,20 +1951,26 @@ def _starting_row(root: Path, **changes: Any) -> Any:
     return row
 
 
-def test_a_draft_is_at_its_start_only_if_it_is_a_draft_with_no_mapping_and_the_starting_pipeline(
+def test_a_draft_is_at_its_start_only_if_it_is_exactly_the_draft_the_seed_made(
     tmp_path: Path,
 ) -> None:
+    """Amendment 45 (D4d): the label, what Connect holds and the map are part of the start, so a
+    reset that reverted nothing still restores a draft whose label or marking was touched."""
     root = _root(tmp_path)
     source = _source(root, pid_files.REPORTS)
     assert seed_pid.is_starting_draft(_starting_row(root), source, "verify")
-    mapped = seed_pid._recipe(seed_pid.reports_recipe_file()).row_template
+    recipe = seed_pid._recipe(seed_pid.reports_recipe_file())
     other_pipeline = seed_pid.starting_pipeline(source).model_copy(update={"edges": []})
     for change in (
         {"status": StudioRecipeStatus.PUBLISHED},
         {"status": StudioRecipeStatus.FLAGGED},
-        {"row_template": mapped},
-        {"unmapped_fields": [object()]},
-        {"deduplicate": object()},
+        {"label": "Intelligence reports (rehearsal)"},
+        {"legal_basis": "An engineer's own words"},
+        {"handling": {**seed_pid.connect_fields(recipe)["handling"], "handling_code": "C"}},
+        {"connector_profile": "another-profile"},
+        {"row_template": None},
+        {"unmapped_fields": []},
+        {"deduplicate": None},
         {"pipeline": other_pipeline},
         {"pipeline": None},
         {"source_location": "/elsewhere/x.csv"},
@@ -1926,6 +1980,47 @@ def test_a_draft_is_at_its_start_only_if_it_is_a_draft_with_no_mapping_and_the_s
         assert not seed_pid.is_starting_draft(_starting_row(root, **change), source, "verify"), (
             change
         )
+
+
+class _RestoringStore:
+    def __init__(self, *, exists: bool = True) -> None:
+        self.exists, self.calls = exists, []  # type: list[tuple[str, Any, dict[str, Any]]]
+
+    async def restore_to_draft(self, recipe_id: str, **kw: Any) -> None:
+        self.calls.append(("restore", recipe_id, kw))
+        if not self.exists:
+            raise StudioRecipeNotFoundError(recipe_id)
+
+    async def enter_draft_for_seed(self, recipe: Recipe, **kw: Any) -> None:
+        self.calls.append(("enter", recipe, kw))
+
+
+async def test_the_reset_restores_the_draft_from_the_committed_file_label_and_all(
+    tmp_path: Path,
+) -> None:
+    """Amendment 45 (D4d): the restore writes the starting draft exactly, from the committed file,
+    not what the latest version held: a touched label (which then refused the fallback), a changed
+    marking or source, and the map all go back."""
+    source = _source(_root(tmp_path), pid_files.REPORTS)
+    recipe = seed_pid._recipe(seed_pid.reports_recipe_file())
+    store = _RestoringStore()
+    await seed_pid.restore_starting_draft(
+        store, source=source, owning_unit="verify", created_by="engineer-sub", now=NOW
+    )
+    ((kind, recipe_id, kw),) = store.calls
+    assert (kind, recipe_id) == ("restore", recipe.id)
+    assert kw["from_recipe"] == recipe and kw["source_location"] == source
+    assert kw["pipeline"] == seed_pid.starting_pipeline(source)
+    assert kw["created_by"] == "engineer-sub" and kw["owning_unit"] == "verify"
+    # a recipe never entered: the first draft, mapped as the seed enters it
+    store = _RestoringStore(exists=False)
+    await seed_pid.restore_starting_draft(
+        store, source=source, owning_unit="verify", created_by="engineer-sub", now=NOW
+    )
+    assert [c[0] for c in store.calls] == ["restore", "enter"]
+    _, entered, kw = store.calls[1]
+    assert entered == recipe and kw["mapped"] is True and kw["source_location"] == source
+    assert kw["pipeline"] == seed_pid.starting_pipeline(source)
 
 
 # --- the mid-demo commands ------------------------------------------------------------------------
@@ -2024,12 +2119,17 @@ class _FakeRecipeStore:
         update: dict[str, Any] = {"verified_at": None}
         if kw.get("handling") is not None:
             update["handling"] = carry_source_declarations(self.row.handling, kw["handling"])
-        for name in ("connector_profile", "source_location", "legal_basis"):
+        for name in ("label", "connector_profile", "source_location", "legal_basis"):
             if kw.get(name) is not None and name not in self.ignore:
                 update[name] = kw[name]
         if kw.get("deduplicate") is not None:
             update["deduplicate"] = kw["deduplicate"]
         self.row = self.row.model_copy(update=update)
+        return self.row
+
+    async def update_pipeline(self, recipe_id: str, principal: Any, *, pipeline: Any) -> Any:
+        self.log.append(("update_pipeline", pipeline))
+        self.row = self.row.model_copy(update={"pipeline": pipeline, "verified_at": None})
         return self.row
 
     async def update_row_template(self, recipe_id: str, principal: Any, **kw: Any) -> Any:
@@ -2069,8 +2169,11 @@ def _fallback_kwargs(log: list[tuple[str, Any]], tmp_path: Path) -> dict[str, An
 
     return {
         "ontology": ONTOLOGY, "scheme": SCHEME, "repo_root": tmp_path, "commit": commit,
-        "audit": _Audit(log), "now": NOW,
+        "audit": _Audit(log), "now": NOW, "source_location": _FALLBACK_SOURCE,
     }  # fmt: skip
+
+
+_FALLBACK_SOURCE = "/ingest/uploaded/prison-intelligence/" + pid_files.REPORTS
 
 
 async def test_the_fallback_publishes_the_file_as_a_route_would(tmp_path: Path) -> None:
@@ -2086,6 +2189,7 @@ async def test_the_fallback_publishes_the_file_as_a_route_would(tmp_path: Path) 
     names = [n for n, _ in log]
     assert names == [
         "update_draft",
+        "update_pipeline",
         "update_row_template",
         "verified",
         "commit",
@@ -2108,7 +2212,9 @@ async def test_the_fallback_publishes_the_file_as_a_route_would(tmp_path: Path) 
     assert committed_id == "pid-intel-reports" and committed_version == 3
     committed = yaml.safe_load(data)
     assert committed["version"] == 3
-    assert [n["kind"] for n in committed["pipeline"]["nodes"]] == ["domain_model", "source"]
+    assert [n["kind"] for n in committed["pipeline"]["nodes"]] == [
+        "domain_model", "source", "profile", "map", "load",
+    ]  # fmt: skip
     pins = pack_versions_for(out.pipeline, out.row_template, ONTOLOGY)  # type: ignore[arg-type]
     expected = build_recipe(
         out.model_copy(update={"status": StudioRecipeStatus.DRAFT}),
@@ -2129,16 +2235,20 @@ async def test_the_fallback_publishes_the_file_as_a_route_would(tmp_path: Path) 
 
 
 async def test_the_fallback_refuses_a_pipeline_the_runner_cannot_run_before_anything_is_written(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = "/ingest/uploaded/prison-intelligence/" + pid_files.REPORTS
-    bad = seed_pid.starting_pipeline(source).model_copy(update={"nodes": [
-        *seed_pid.starting_pipeline(source).nodes,
+    """The gate is applied to the pipeline the fallback publishes, which is the starting pipeline
+    (Amendment 45), not the one the presenter left."""
+    source = _FALLBACK_SOURCE
+    good = seed_pid.starting_pipeline
+    bad = good(source).model_copy(update={"nodes": [
+        *good(source).nodes,
         PipelineNode(id="x", kind=PipelineNodeKind.EXTRACT, label="Names",
                      config={"library": "not-a-library"}),
     ]})  # fmt: skip
+    monkeypatch.setattr(seed_pid, "starting_pipeline", lambda location: bad)
     log: list[tuple[str, Any]] = []
-    store = _FakeRecipeStore(_draft_row(3, pipeline=bad), log)
+    store = _FakeRecipeStore(_draft_row(3), log)
     with pytest.raises(seed_pid.SeedRefusal, match="not-a-library"):
         await seed_pid.publish_reports_fallback(
             store,
@@ -2857,15 +2967,41 @@ async def test_the_fallback_refuses_a_draft_that_is_not_the_seeds_before_any_wri
             **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
         )
     assert log == [], "nothing was written, committed, verified or audited"
-    log = []
-    store = _FakeRecipeStore(_draft_row(3, label="An engineer's own label"), log)
-    with pytest.raises(seed_pid.SeedRefusal, match="label"):
-        await seed_pid.publish_reports_fallback(
-            store,
-            _persona(),
-            **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
-        )
-    assert log == []
+
+
+async def test_the_fallback_publishes_over_a_draft_the_presenter_touched(tmp_path: Path) -> None:
+    """Amendment 45 (D4c): chapter 4's fallback is for a live mapping that went wrong, so it must
+    publish over whatever the presenter left: a renamed draft, another file chosen, a branch added.
+    Before, a touched label refused it ("is not the one the seed made"), and a pipeline with a stray
+    branch would have been committed as it stood. Only another dataset still refuses."""
+    stray = seed_pid.starting_pipeline("/elsewhere/other.csv")
+    stray = stray.model_copy(update={"nodes": [
+        *seed_pid.starting_pipeline(_FALLBACK_SOURCE).nodes,
+        PipelineNode(id="source-b", kind=PipelineNodeKind.SOURCE, label="A half-made source",
+                     config={}),
+    ]})  # fmt: skip
+    log: list[tuple[str, Any]] = []
+    store = _FakeRecipeStore(
+        _draft_row(
+            3, label="An engineer's own label", source_location="/elsewhere/other.csv",
+            pipeline=stray,
+        ),
+        log,
+    )  # fmt: skip
+    out = await seed_pid.publish_reports_fallback(
+        store,
+        _persona(),
+        **_fallback_kwargs(log, tmp_path),  # type: ignore[arg-type]
+    )
+    recipe = seed_pid._recipe(seed_pid.reports_recipe_file())
+    assert out.status is StudioRecipeStatus.PUBLISHED
+    assert out.label == recipe.label
+    assert out.source_location == _FALLBACK_SOURCE
+    assert out.pipeline == seed_pid.starting_pipeline(_FALLBACK_SOURCE)
+    ((_, (_, _, data)),) = [e for e in log if e[0] == "commit"]
+    committed = yaml.safe_load(data)
+    assert committed["label"] == recipe.label
+    assert len(committed["pipeline"]["nodes"]) == 5
 
 
 async def test_the_fallbacks_audit_entry_records_the_verify_it_did_not_run(tmp_path: Path) -> None:

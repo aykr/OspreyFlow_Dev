@@ -144,3 +144,26 @@ describe("the weekly view's Choose cells control", () => {
     });
   });
 });
+
+// Build order step 18c (the 3 November rehearsal's D20): the timeline opens at 130 pixels, which
+// leaves the weekly grid about 90 for seven rows, so the presenter had to drag it before chapter 3.
+// Choosing the weekly view makes the timeline tall enough to read the grid, and never shrinks one
+// the analyst has made taller.
+describe("the weekly view's height", () => {
+  it("grows a timeline too short for the grid, and leaves a taller one as it is", async () => {
+    const { getLayoutSizes, setTimelineHeight } = await import("../layout/layoutSizes");
+    const { CYCLICAL_TIMELINE_HEIGHT } = await import("./Timeline");
+    setTimelineHeight(130);
+    mount();
+    await waitFor(() => expect(setOption).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
+    expect(getLayoutSizes().timelineHeight).toBe(CYCLICAL_TIMELINE_HEIGHT);
+    expect(CYCLICAL_TIMELINE_HEIGHT).toBeGreaterThanOrEqual(300);
+    cleanup();
+    setTimelineHeight(CYCLICAL_TIMELINE_HEIGHT + 120);
+    mount();
+    await waitFor(() => expect(setOption).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Cyclical" }));
+    expect(getLayoutSizes().timelineHeight).toBe(CYCLICAL_TIMELINE_HEIGHT + 120);
+  });
+});
