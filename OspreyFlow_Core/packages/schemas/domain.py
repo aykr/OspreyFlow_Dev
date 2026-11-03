@@ -1151,13 +1151,20 @@ class WeekCount(BaseModel):
 
 
 class OutcomeCount(BaseModel):
-    """Where one typology's alerts of the period stand: open, claimed, closed true or false."""
+    """Where one typology's alerts of the period stand: open, claimed, closed with each closing
+    reason (ADR-133 Amendment 5), or closed with none (taken back). Build order step 18c: a close
+    as Duplicate, No further action or Referred, or with no outcome, was counted as open."""
 
     typology: str
     open: int = Field(default=0, ge=0)
     claimed: int = Field(default=0, ge=0)
     true_positive: int = Field(default=0, ge=0)
     false_positive: int = Field(default=0, ge=0)
+    duplicate: int = Field(default=0, ge=0)
+    no_further_action: int = Field(default=0, ge=0)
+    referred: int = Field(default=0, ge=0)
+    #: Closed with no outcome: taken back, as a reverted load closes the alerts it raised.
+    closed: int = Field(default=0, ge=0)
 
 
 class LabelledWeekCount(BaseModel):

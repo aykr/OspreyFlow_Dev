@@ -23639,3 +23639,21 @@ node"), while the add puts each record in the view once. Nothing was lost; the w
   comparison, live ones included); `apps/workspace/src/search/addFromListApi.test.ts` ("countSentence when
   two identifiers name one record"); `AddFromList.test.tsx`; the keyboard cases in `keyboard/explore.spec.ts`
   and `keyboard/shell.spec.ts`. Red first (`red/s18c_d7_*`).
+
+### ADR-111, Amendment 8 (3 November 2026) — the Outcomes figures count every closing reason (build order step 18c, D12)
+
+Found at the 3 November rehearsal: the viewer's Figures read Open, Claimed, True and False only.
+`reports._alert_figures` counted an alert closed as *Duplicate*, *No further action* or *Referred*
+(ADR-133 Amendment 5's closing reasons), or closed with no outcome (a revert takes its alerts back
+that way), as **open**: chapter 10's two closes as *Referred* would read as open alerts.
+
+- `OutcomeCount` gains `duplicate`, `no_further_action`, `referred` and `closed` (closed with none);
+  each closed alert is counted under its own reason, never as open. The feed carries every figure
+  (`reports.OUTCOME_FIGURES`). Still counted as its reader, unchanged (rule 3).
+- The Glass's Outcomes table has a column for each, headed as the close dialog names the reason
+  ("True match", "False positive", "Duplicate", "No further action", "Referred") and "Closed, no
+  outcome".
+- **Tests that would fail (rule 12).** `tests/services/api/test_report_outcomes.py::
+  test_every_closing_reason_has_its_own_figure_and_none_is_open` (red: four closed alerts counted
+  open); `apps/workspace/src/reports/ReportsView.test.tsx` ("gives every closing reason its own column,
+  and one for closed with none"). Red first (`red/s18c_d12_outcomes_*`).

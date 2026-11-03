@@ -27,6 +27,8 @@ const FIGURES = {
   outcomes: [
     { typology: "document_verification", open: 1, claimed: 0, true_positive: 0, false_positive: 0 },
     { typology: "kyc_screening", open: 0, claimed: 0, true_positive: 2, false_positive: 0 },
+    { typology: "sentence", open: 0, claimed: 0, true_positive: 0, false_positive: 0, duplicate: 0,
+      no_further_action: 0, referred: 1, closed: 0 },
   ],
   held: null,
   kyc: { customers: 2, verified: 1, unverified: 1,
@@ -74,6 +76,24 @@ describe("the Reports view", () => {
     expect(outcomes.textContent).toContain("Unverified customer");
     expect(screen.getByRole("region", { name: "Open alerts by age" }).textContent).toContain("under a day: 1");
     expect(screen.getByRole("region", { name: "Customers by KYC status" }).textContent).toContain("1 verified, 1 unverified");
+  });
+
+  // Build order step 18c (the 3 November rehearsal's D12): the Outcomes table had Open, Claimed,
+  // True and False only; an alert closed as Referred had no column (and the Conduit counted it open).
+  it("gives every closing reason its own column, and one for closed with none", async () => {
+    serve();
+    place();
+    await screen.findByText("3 alerts in the last 12 weeks");
+    const outcomes = screen.getByRole("table", { name: "Outcomes by typology" });
+    const headings = within(outcomes).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headings).toEqual([
+      "Typology", "Open", "Claimed", "True match", "False positive", "Duplicate", "No further action",
+      "Referred", "Closed, no outcome",
+    ]);
+    const row = within(outcomes).getByRole("row", { name: /Sentence rule/ });
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent)).toEqual([
+      "Sentence rule", "0", "0", "0", "0", "0", "0", "1", "0",
+    ]);
   });
 
   it("draws no KYC card for a case the server sends none for (ADR-126)", async () => {

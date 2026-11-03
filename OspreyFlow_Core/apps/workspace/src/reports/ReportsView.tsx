@@ -4,7 +4,8 @@
 // design tokens. Held rows appear only when the server sends them (Editors and above).
 import { useEffect, useState } from "react";
 
-import type { PoleFigures, ReportFigures } from "../../../../packages/schemas/generated";
+import type { OutcomeCount, PoleFigures, ReportFigures } from "../../../../packages/schemas/generated";
+import { CLOSING_REASONS, type ClosingReason } from "../alerts/closingReasons";
 import { typologyLabel } from "../alerts/names";
 import { utcStampOf } from "../time/utcStamp";
 import { Button, Select } from "../design/primitives";
@@ -12,6 +13,16 @@ import { fetchFeedCsv, fetchReport, type ReportsApi } from "./api";
 
 const PERIODS = [4, 12, 26, 52];
 const CHANNELS = ["--ch-azure", "--ch-ochre", "--ch-jade", "--ch-plum", "--ch-rose", "--ch-cyan", "--ch-indigo", "--ch-moss"];
+/** The Outcomes table's columns: open, claimed, each closing reason as the close dialog says it
+ * (ADR-133 Amendment 5), and closed with none (taken back). Build order step 18c (D12). */
+type OutcomeField = "open" | "claimed" | ClosingReason | "closed";
+const OUTCOME_COLUMNS: ReadonlyArray<readonly [OutcomeField, string]> = [
+  ["open", "Open"],
+  ["claimed", "Claimed"],
+  ...(Object.entries(CLOSING_REASONS) as Array<[ClosingReason, string]>),
+  ["closed", "Closed, no outcome"],
+];
+
 const NUMBER = new Intl.NumberFormat("en-GB");
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -198,20 +209,22 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
                 <thead>
                   <tr>
                     <th>Typology</th>
-                    <th style={{ textAlign: "right" }}>Open</th>
-                    <th style={{ textAlign: "right" }}>Claimed</th>
-                    <th style={{ textAlign: "right" }}>True</th>
-                    <th style={{ textAlign: "right" }}>False</th>
+                    {OUTCOME_COLUMNS.map(([, heading]) => (
+                      <th key={heading} style={{ textAlign: "right" }}>
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {(figures.outcomes ?? []).map((o) => (
                     <tr key={o.typology}>
                       <td>{typologyLabel(o.typology)}</td>
-                      <td style={{ textAlign: "right" }}>{NUMBER.format(o.open ?? 0)}</td>
-                      <td style={{ textAlign: "right" }}>{NUMBER.format(o.claimed ?? 0)}</td>
-                      <td style={{ textAlign: "right" }}>{NUMBER.format(o.true_positive ?? 0)}</td>
-                      <td style={{ textAlign: "right" }}>{NUMBER.format(o.false_positive ?? 0)}</td>
+                      {OUTCOME_COLUMNS.map(([field, heading]) => (
+                        <td key={heading} style={{ textAlign: "right" }}>
+                          {NUMBER.format((o as OutcomeCount)[field] ?? 0)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
