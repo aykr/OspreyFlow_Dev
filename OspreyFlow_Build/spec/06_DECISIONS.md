@@ -23571,3 +23571,52 @@ with the images every option renders into a compose file),
 `tests/harness/test_update_apply.py::test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update`.
 **Not proved:** the next real release's lock and a bundle made from it, and `--from` on a machine
 whose Docker has never held cosign — the first real release after this change proves them.
+
+### ADR-127, Amendment 45 (3 November 2026) — chapter 4's draft is a real draft the Studio completes (build order step 18c, D4)
+
+The 3 November rehearsal (`REHEARSAL_v5_2026-11-03.md`, D4) found chapter 4 could not be done live. The
+owner's ruling (open question 24): fix the seed's draft, so the Studio completes it in the chapter's slot.
+Decided by the coordinator's worker under that ruling.
+
+- **The pipeline is a whole branch.** `starting_pipeline` is the branch the Studio itself draws for a
+  source (`addSourceChain`): the domain model (NIEM), the source at the reports file, then Profile, Map and
+  Load (`source-profile`, `source-map`, `source-load`). Amendment 23's bare source "reaches no load", which
+  the Studio's save gate (`pipeline_rule_violations`) refuses, so no edit to the draft could be saved and
+  the canvas had no stage to open.
+- **The draft holds the committed map; Verify and Publish are chapter 4's.** Making the map live means
+  21 elements each binding six handling columns, 126 bindings before the gates and transforms, which the
+  rehearsal estimated at 15 to 20 minutes against the chapter's 4. So the seed enters the draft with the
+  committed file's `row_template`, `unmapped_fields` and `deduplicate` (`enter_draft_for_seed(...,
+  mapped=True)`), neither verified nor published. Chapter 4 walks the map, runs Verify (one row rejected,
+  the teaching row), corrects that row, publishes and runs. This replaces Amendment 23's "no
+  `row_template` … so Map is not done" for R9. **For the script:** v5's start state ("Profile and Map not
+  done") and step 12 change to "the map prepared, Verify and Publish not done".
+- **The reset restores the draft exactly.** `restore_to_draft(..., from_recipe=, source_location=)` writes
+  the draft from the committed file (its label, what Connect holds, its map) and the starting pipeline,
+  carrying nothing from the latest version. Before, the label (and the marking, source and legal basis)
+  was carried, so a presenter's rename survived the reset and then refused the fallback (D4c, D4d).
+  `is_starting_draft` compares the label, Connect's fields and the map with the file's.
+- **The fallback publishes over whatever the presenter left.** It refuses only a draft in another dataset
+  or not a draft. It writes the file's label, the seed's source location and the starting pipeline back
+  before publishing, so a renamed draft, another file chosen, or a half-added branch neither refuses it nor
+  rides into the published recipe. The unrunnable-pipeline gate applies to the pipeline it publishes.
+- **The reset keeps chapter 9's release.** A released chapter-9 file (batch 2, the visit bookings, the PIN
+  first contacts) still byte for byte the seed's copy in `incoming/` is kept and named ("kept …"); an
+  edited one is removed like any file the seed did not write. Before, a reset (or a recovery mid-demo)
+  took the release back and chapter 9's first load failed with "No such file" until `--release-batch-2`
+  was run again (D4e). This replaces Amendment 23's "removes batch 2 from the listed folder". The chapter
+  9 loads themselves are still reverted.
+- **Chapter 5's figures are unchanged.** Corrected live, the reports load 229 reports, 68 naming people;
+  uncorrected (the fallback, or a run without the correction), 228 and 67 (Amendment 37).
+- **Tests that would fail (rule 12).** `tests/test_seed_pid.py`:
+  `test_the_starting_pipeline_is_a_whole_branch_the_studios_save_gate_accepts`,
+  `test_the_reports_recipe_is_entered_as_the_draft_and_never_as_published` (`mapped`),
+  `test_a_draft_is_at_its_start_only_if_it_is_exactly_the_draft_the_seed_made`,
+  `test_the_reset_restores_the_draft_from_the_committed_file_label_and_all`,
+  `test_the_fallback_publishes_over_a_draft_the_presenter_touched`,
+  `test_the_reset_keeps_chapter_9s_release_and_removes_every_other_file_naming_each`,
+  `test_a_reset_before_any_release_leaves_chapter_9s_files_unreleased`;
+  `tests/services/api/test_studio_recipes_store.py` (live Postgres):
+  `test_a_mapped_first_draft_holds_the_files_map_and_is_neither_verified_nor_published`,
+  `test_a_restore_from_the_file_puts_back_the_label_connect_and_the_map`. Shown red first
+  (`red/s18c_d4_*`). `tests/ingest/test_pid_seed_live.py` is changed to the new contract.

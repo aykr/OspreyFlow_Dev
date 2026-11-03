@@ -904,7 +904,17 @@ first-contacts load). Retire the rule as the case's Author before the next run (
 once). A hotlist entry cannot be removed in the Glass: keep the first rehearsal's and do not add the number
 again. The alert trend counts the week alerts were raised in by the clock, so rehearsals the same week add to
 it. The reset reverts the three loads (and with the first contacts, S1's node, closing S1); it cannot undo
-the hotlist, its alerts and H2's close, the rule, the trends or the pack's items.
+the hotlist, its alerts and H2's close, the rule, the trends or the pack's items. Since 3 November (ADR-127
+Amendment 45) it leaves chapter 9's three files released ("kept …"), so they need not be released again.
+
+**Chapter 4's draft** (ADR-127 Amendment 45, 3 November): the seed, and every reset, leave the *Intelligence
+reports* pipeline as a draft holding the whole branch (source, Profile, Map, Load) and the committed map,
+not verified and not published. Chapter 4 opens it, walks Profile and the map, runs **Verify** (one row
+rejected: the teaching row's number written with a letter O), corrects that row, publishes and runs it, then
+runs *Report incidents*. The reset puts the draft back exactly, its name included. The fallback
+(`--publish-reports-fallback`) publishes the committed file over whatever was left on the draft, a renamed
+draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
+reports and 67 naming people rather than 229 and 68.
 
 ## 9. Related documents
 
