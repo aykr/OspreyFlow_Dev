@@ -38,6 +38,7 @@ from harness.render import render
 
 from schemas.deployment import OspreyConfig
 
+from .deployment_guard import refuse_to_touch_a_real_deployment
 from .tls_fixtures import (
     HOST,
     NAMES,
@@ -262,6 +263,8 @@ def test_the_rendered_proxy_runs_under_compose_with_what_apply_writes(
     }), encoding="utf-8")  # fmt: skip
     config = load_config(config_path)
     folder = tmp_path / "generated" / str(config.deployment.name)
+    # A fresh, random project name; asked all the same, as every teardown here must.
+    refuse_to_touch_a_real_deployment(str(config.deployment.name))
     apply.stage_deployment(config, config_path, folder, realm="osprey", demo_analyst=False,
                            images_from=None, previous_env="", environ={})  # fmt: skip
     project = ["docker", "compose", "--env-file", str(folder / "deployment.env"),
