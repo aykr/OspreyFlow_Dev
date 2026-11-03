@@ -293,11 +293,12 @@ def test_a_blob_without_its_signature_is_refused(tmp_path: Path) -> None:
               "--blob", "a", "--blob", "b", "--blob-signature", "a.json"])  # fmt: skip
 
 
-# ADR-114 Amendment 30: the product's home is `Solirius/ospreyflow`. A checkout cloned from the address
-# the product names as its home (`RELEASES_URL`) accepts a release signed by that repository's own
-# `release.yml` only; one signed by the old home's workflow, `aykr/OspreyFlow`, is refused.
-NEW_HOME = "Solirius/ospreyflow"
-OLD_HOME = "aykr/OspreyFlow"
+# ADR-114 Amendment 31: the product's home is `aykr/OspreyFlow` again; the move to `Solirius/ospreyflow`
+# (Amendment 30) was withdrawn. A checkout cloned from the address the product names as its home
+# (`RELEASES_URL`) accepts a release signed by that repository's own `release.yml` only; one signed by the
+# withdrawn home's workflow, `Solirius/ospreyflow`, is refused.
+HOME = "aykr/OspreyFlow"
+WITHDRAWN_HOME = "Solirius/ospreyflow"
 
 
 def _cosign_holding_a_signature_by(repository: str, tag: str) -> Callable[[Sequence[str]], tuple[int, str]]:
@@ -330,18 +331,18 @@ def _checkout_cloned_from_the_products_home(tmp_path: Path) -> Path:
     return checkout
 
 
-def test_the_products_home_is_the_solirius_repository() -> None:
+def test_the_products_home_is_the_aykr_repository() -> None:
     from harness.render import RELEASES_URL
 
-    assert RELEASES_URL == f"https://github.com/{NEW_HOME}/releases"
+    assert RELEASES_URL == f"https://github.com/{HOME}/releases"
 
 
-def test_a_release_signed_by_the_old_homes_workflow_is_refused(tmp_path: Path) -> None:
+def test_a_release_signed_by_the_withdrawn_homes_workflow_is_refused(tmp_path: Path) -> None:
     from harness.update import real_host
 
     host = real_host(tmp_path / "deployment", _checkout_cloned_from_the_products_home(tmp_path))
-    identity = host.identity("v0.4.2")
+    identity = host.identity("v0.4.3")
     lock = _lock(workspace=D, api=E, ingest=D, ner=E)
     with pytest.raises(SignatureRefused):
-        verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(OLD_HOME, "v0.4.2")))
-    verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(NEW_HOME, "v0.4.2")))
+        verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(WITHDRAWN_HOME, "v0.4.3")))
+    verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(HOME, "v0.4.3")))

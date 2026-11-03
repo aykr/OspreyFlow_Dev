@@ -178,11 +178,11 @@ test_export_ledger_entry_survives_investigation_deletion` (a foreign key on `inv
   (HTTPS, a personal access token held in the macOS Keychain; never put a token in a remote URL).
   `old-origin` is the previous repo, kept for reading, with its push URL set to `DISABLED`. `backup` is
   `github.com/ayankarsolirius/ospreyflow`. Commits are authored as `Ayan`. The owner pushes; you do not.
-- **The product (user) repository (changed 2 November 2026, ADR-114 Amendment 30):** `make
-  publish-user-repo` is pushed to `github.com/Solirius/ospreyflow` (public), not `aykr/OspreyFlow`, which
-  is to be deleted with its `ghcr.io/aykr/` images at the move's Stage 5. Images and the chart are under
-  `ghcr.io/solirius/`; the site is at `https://solirius.github.io/ospreyflow/` (`gh-pages`). The developer
-  repository's `origin` is unchanged.
+- **The product (user) repository:** `make publish-user-repo` is pushed to `github.com/aykr/OspreyFlow`
+  (public); images and the chart are under `ghcr.io/aykr/`; the site is at `https://aykr.github.io/OspreyFlow/`
+  (`gh-pages`). The move to `Solirius/ospreyflow` of 2 November 2026 (ADR-114 Amendment 30) was withdrawn
+  on 3 November (Amendment 31): that organisation does not let its members make packages public or change
+  a repository's visibility. The developer repository's `origin` is unchanged.
 - **Stray `Icon\r` files:** macOS leaves empty files named `Icon` plus a carriage return throughout `.git`
   and elsewhere in the tree, and they come back. In `.git/refs` they make git fail with `bad object
   refs/remotes/origin/Icon?` or refuse to rename a remote. They are harmless to delete; from the repository

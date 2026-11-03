@@ -1,11 +1,10 @@
 #!/bin/sh
-# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendments 28, 29 and 30).
+# Publish the marketing site to the product repository's `gh-pages` branch (ADR-114 Amendments 28, 29 and 31).
 #
-# The product repository is `Solirius/ospreyflow` (Amendment 30), and Pages serves the branch at
-# https://solirius.github.io/ospreyflow/. The site never goes through the product export
-# (`make publish-user-repo`) and never reaches `main`: it goes on a branch of its own, which GitHub Pages
-# serves. (Amendment 28's first reason, that the site names the company, no longer applies since ADR-034
-# Amendment 1; the branch stays as the way the site is published.)
+# The product repository is `aykr/OspreyFlow` (Amendment 31 withdrew Amendment 30's move to
+# `Solirius/ospreyflow`), and Pages serves the branch at https://aykr.github.io/OspreyFlow/. The site never
+# goes through the product export (`make publish-user-repo`) and never reaches `main`: it goes on a branch
+# of its own, which GitHub Pages serves.
 #
 # Only what Pages needs is published: `deploy/index.html`, `deploy/intro-video.html`,
 # `deploy/public-sector.html`, `deploy/monitoring.html`, `deploy/assets/`, `deploy/.nojekyll` and, if
@@ -22,11 +21,11 @@ DEPLOY="$HERE/deploy"
 BRANCH=gh-pages
 
 [ -d "$PRODUCT/.git" ] || { echo "STOP: $PRODUCT is not the product repository's checkout." >&2; exit 1; }
-# Only the product repository's own home: never the old one, which is to be deleted (Amendment 30).
+# Only the product repository's own home: never the withdrawn `Solirius/ospreyflow` (Amendment 31).
 ORIGIN="$(git -C "$PRODUCT" remote get-url origin 2>/dev/null || true)"
 case "$ORIGIN" in
-  https://github.com/Solirius/ospreyflow|https://github.com/Solirius/ospreyflow.git|git@github.com:Solirius/ospreyflow.git) ;;
-  *) echo "STOP: $PRODUCT's origin is '$ORIGIN', not https://github.com/Solirius/ospreyflow.git." >&2; exit 1 ;;
+  https://github.com/aykr/OspreyFlow|https://github.com/aykr/OspreyFlow.git|git@github.com:aykr/OspreyFlow.git) ;;
+  *) echo "STOP: $PRODUCT's origin is '$ORIGIN', not https://github.com/aykr/OspreyFlow.git." >&2; exit 1 ;;
 esac
 for f in index.html intro-video.html public-sector.html monitoring.html .nojekyll; do
   [ -f "$DEPLOY/$f" ] || { echo "STOP: $DEPLOY/$f is missing." >&2; exit 1; }

@@ -434,10 +434,10 @@ def git_sha(repo_root: Path = REPO_ROOT) -> str:
 #: `05_DEPLOYMENT.md` §3/§5/§7's own reference for where a customer checks for a published
 #: release once the digest resolvers above have failed to find one — named here so
 #: `UnpinnedImagesError`'s own message and those sections stay one string apart, not two to drift.
-#: The user repository: `Solirius/ospreyflow` since the move (ADR-114 Amendment 30). A checkout
-#: cloned from it accepts only a release signed by that repository's own `release.yml`
-#: (`harness.signatures`).
-RELEASES_URL = "https://github.com/Solirius/ospreyflow/releases"
+#: The user repository: `aykr/OspreyFlow` (ADR-114 Amendment 21; Amendment 31 withdrew
+#: Amendment 30's move to `Solirius/ospreyflow`). A checkout cloned from it accepts only a release
+#: signed by that repository's own `release.yml` (`harness.signatures`).
+RELEASES_URL = "https://github.com/aykr/OspreyFlow/releases"
 
 
 class UnpinnedImagesError(RuntimeError):

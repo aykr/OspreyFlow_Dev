@@ -11,20 +11,18 @@ The site is five files and a folder:
 | `assets/` | The two new pages' screenshots (about 1 MB, nine JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
-## How it is published: within the repository move (build order step 13)
+## How it is published
 
-The site is **not published until the repository move**, and then with the rest of the product's pages
-(`process/REPO_MOVE_PLAN.md`, Stage 3, step 5). Nothing here is pushed before then.
+The site is the product repository's `gh-pages` branch, served at `https://aykr.github.io/OspreyFlow/`
+(ADR-114 Amendment 31, which withdrew the move to `Solirius/ospreyflow`).
 
-1. Stage 2 (done, 2 November 2026): the home page's `repoUrl` is `https://github.com/Solirius/ospreyflow`,
-   edited in the bundle's template the same way as step 12's edit (below), since the design source is not
-   in this repository.
-2. In Stage 3, `marketing_site/publish_pages.sh` (which stops unless the product checkout's `origin` is
-   `https://github.com/Solirius/ospreyflow.git`) copies `index.html`,
-   `intro-video.html`, `public-sector.html`, `monitoring.html`, `assets/`, `.nojekyll` and, if present,
-   `CNAME` onto the product repository's `gh-pages` branch, and Pages serves them at
-   `https://solirius.github.io/ospreyflow/`.
-3. In Stage 4, check the pages at the new address (the checklist below).
+1. The home page's `repoUrl` is `https://github.com/aykr/OspreyFlow`, edited in the bundle's template the
+   same way as step 12's edit (below), since the design source is not in this repository.
+2. `marketing_site/publish_pages.sh --push` (which stops unless the product checkout's `origin` is
+   `https://github.com/aykr/OspreyFlow.git`) copies `index.html`, `intro-video.html`,
+   `public-sector.html`, `monitoring.html`, `assets/`, `.nojekyll` and, if present, `CNAME` onto the
+   product repository's `gh-pages` branch.
+3. Check the pages at that address (the checklist below).
 
 The new pages link to each other, to `index.html`, to `index.html#start` and to `intro-video.html`
 only. They do not link to the repository, so `repoUrl` is the one place the address changes.
@@ -50,8 +48,7 @@ repository, so the next export from it would undo the edit above. Before exporti
 
 - add the two navigation links and the `#public-sector` section to the design source (copy them from
   the template in this `index.html`);
-- set `repoUrl` to `https://github.com/Solirius/ospreyflow` (the bundle has it since step 13; the design
-  source does not);
+- check `repoUrl` is `https://github.com/aykr/OspreyFlow` (the bundle has it; Amendment 31);
 - run `OspreyFlow_Build/tests/test_website_wording.py` on the new export.
 
 Found in the browser check (step 12), and already in the export before it: the home page asks the
@@ -71,7 +68,7 @@ reading the home page's decoded template, and runs in `make test`.
 
 ## Checklist before going live
 
-- [x] `repoUrl` points to `https://github.com/Solirius/ospreyflow` (step 13, 2 November 2026), and the
+- [x] `repoUrl` points to `https://github.com/aykr/OspreyFlow` (3 November 2026, Amendment 31), and the
       export carries the two navigation links and the `#public-sector` section.
 - [ ] `test_website_wording.py` passes on the files about to be published.
 - [ ] The independent accessibility audit, penetration test and DPIA are still listed as planned. When
