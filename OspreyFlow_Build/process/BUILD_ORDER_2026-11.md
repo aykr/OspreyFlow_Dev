@@ -80,7 +80,7 @@ resumed session starts here.
 | 18a | **Sign-in after a wipe (D2)** (the owner, 3 November: first): `repair-sign-in` sets the Conduit's own client secret from the deployment's settings, as `apply` does, so a wiped or reimported realm can act on its people's behalf again (rules, hotlists, screening) | in progress | Test shown red first; `repair-sign-in` stays safe to repeat; the doctor or System health names the failure if it recurs |
 | 18b | **Windows stay signed in (D1)** (the owner: renew silently): the Glass renews its access token in the background before it expires, so a window lasts as long as the identity provider's session; short tokens kept | not started | Tests shown red first (a token near expiry is renewed without a reload; a failed renewal keeps the screen and asks to sign in again in place); the keyboard and live sign-in suites |
 | 20 | **Self-contained Small** (the owner, 3 November, for a client proof of concept on one VM): Small on one server with every store in containers (no managed services), HTTPS with the organisation's own certificate, reachable by a named test group, sign-in through the organisation's identity provider (OIDC) or local accounts; installable offline (`update --make-bundle`), with the model weights and basemap carried in too. Today Lite answers on `127.0.0.1` only and Small refuses without managed services (admin guide §5.2) | not started | **An ADR drafted for the owner first** (rule 11); then built with tests shown red. Related: a CSV export from the client's pipeline is the PoC's way in (no connector work yet); the PoC loads a subset and measures before national sizing. **The owner, 3 November:** build it regardless of the client's choice; both options (self-contained, and Small with managed services) go to the client's architecture session on Thursday 5 November |
-| 18c | **The rest of the rehearsal's defects** (the owner, 3 November): chapter 4 — the seed's draft pipeline made a real one the Studio can complete live (Profile, Map, Load); D3 the grid's drawing over the map and with weekend cells; D5 J5's degrees and repeated routes; D6 J7's betweenness (0.78 against 0.87: find why); D7 J3's 37 found / 36 added; raw identifiers on screen; the smaller ones in the rehearsal file | not started | Each red first; then retake `CAP-A2-C3` in the deck's framing |
+| 18c | **The rest of the rehearsal's defects** (the owner, 3 November): chapter 4 — the seed's draft pipeline made a real one the Studio can complete live (Profile, Map, Load); D3 the grid's drawing over the map and with weekend cells; D5 J5's degrees and repeated routes; D6 J7's betweenness (0.78 against 0.87: find why); D7 J3's 37 found / 36 added; raw identifiers on screen; the smaller ones in the rehearsal file | not started | Each red first; then retake `CAP-A2-C3` in the deck's framing; re-ask chapter 8's question on Gemini on GOV.UK (the synthetic case only; the key from `~/.ospreyflow/gemini.key`, never printed) and retake `CAP-A2-C8-v5` |
 | 19 | **`PID_DEMO_SETUP_GUIDE.pdf`** rebuilt from its Markdown, after step 18 | not started | Outside git |
 
 ## Waiting on the owner (does not block the run)
@@ -126,7 +126,7 @@ resumed session starts here.
 
 ## Open questions found during the run
 
-24. **From step 18's rehearsal (3 November), for the owner:** D1 — lengthen the access token's life or
+24. **From step 18's rehearsal (3 November), for the owner** — answered 3 November: D1 renew silently (18b); chapter 4 fix the seed's draft (18c); chapter 8 re-asked on Gemini for the slide (18c, GOV.UK, synthetic case only); J7 found in 18c; GOV.UK's seven dangling volumes removed (2 November 19:27, attached to nothing). D1 — lengthen the access token's life or
     renew it silently (a security decision); chapter 4 — present the fallback, do the Map before the
     demo, or a smaller teaching pipeline; keep `CAP-A2-C3-v2`'s Graph framing or retake after D3; keep
     chapter 8's kept answer (qwen2.5:7b, 7.5 min) or ask on a faster engine; J7 — say 0.78 or find why it
@@ -153,7 +153,7 @@ resumed session starts here.
       timeline count the working set (or the canvas's filtered links) instead? A product change, not
       made here.
 
-22. **From step 15 (3 November), for the owner:**
+22. **From step 15 (3 November), for the owner** — answered 3 November: keep the shared hidden-item sentence; Give to listing every grant with no directory is acceptable; the revert and wording were checked live in step 18.
     - A pack item citing an alert a revert took back is hidden with the same sentence as one hidden by
       access ("you may not see something they rest on, or it has since been taken back"). Telling them
       apart needs a graph read beyond the reader's access; or should a revert remove such items from
