@@ -122,7 +122,7 @@ resumed session starts here.
 
 ## Open questions found during the run
 
-23. **From step 16 (3 November), for the owner:**
+23. **From step 16 (3 November), for the owner** — answered 3 November: (a) wipe GOV.UK's stores and reseed the prison case and the Ledger pack; the grid keeps counting the whole case (no product change). The everyday deployment is not wiped (it holds the real Enron case); its prison case keeps the old times until the owner decides.
     - **GOV.UK cannot take the corrected data without a wipe.** The fix changes the times of every
       dated event (ADR-120 Amendment 18), so the case's loads must be replaced, and a reseed skips a
       load that stands. A revert of the PIN-call load is refused: 16 calls from the seized SIMs
