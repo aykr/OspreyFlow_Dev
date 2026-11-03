@@ -25,10 +25,28 @@ from pathlib import Path
 
 import yaml
 
-COSIGN_IMAGE = "ghcr.io/sigstore/cosign/cosign:v2.4.1"
+#: cosign v2.4.1, pinned by its multi-platform index's digest (build order step 20a): the image that
+#: verifies everything else is itself fixed in the code, so neither a registry nor a bundle can
+#: substitute another. Measured 3 November 2026 with `docker buildx imagetools inspect`.
+COSIGN_IMAGE = (
+    "ghcr.io/sigstore/cosign/cosign:v2.4.1"
+    "@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+)
+#: The ID Docker gives that image on each platform a deployment runs on (its configuration's
+#: digest, as the index above names it). `update --from` loads cosign from the bundle and runs it
+#: only if the loaded image's ID is this machine's one here (`harness.bundle`).
+COSIGN_IMAGE_IDS = {
+    "linux/amd64": "sha256:c9a0cefcd8066dc94085506e0d63055d57b50a1f8285169244f1bd06ebedaec9",
+    "linux/arm64": "sha256:6793dd4d518a6b556385e3dee81d02554900a3f386f8b50bbd29bdb4ac6d8829",
+}
 GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
-#: The images this repository builds; every other image in a lock is a third party's.
+#: The images this repository builds that every release's lock names; every other image in a lock
+#: is a third party's, except those below.
 OWNED_SERVICES = ("workspace", "api", "ingest", "ner")
+#: Built and signed by the release too, and checked whenever a lock names them: Superset, which a
+#: release's lock names from build order step 20a on (a lock from before names none).
+OPTIONAL_OWNED_SERVICES = ("superset",)
+SIGNED_SERVICES = OWNED_SERVICES + OPTIONAL_OWNED_SERVICES
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 Run = Callable[[Sequence[str]], tuple[int, str]]
@@ -89,19 +107,27 @@ class Cosign:
 
     def __init__(
         self, run: Run = _subprocess_run, *, binary: str | None = None,
-        docker_args: Sequence[str] = (),
+        docker_args: Sequence[str] = (), image: str = COSIGN_IMAGE,
     ) -> None:  # fmt: skip
         self._run = run
         self._binary = binary
         self._docker_args = tuple(docker_args)
+        self._image = image
+
+    def from_image(self, image: str) -> Cosign:
+        """The same cosign, run from `image` — an image ID `update --from` loaded from the bundle
+        and checked against `COSIGN_IMAGE_IDS` (a binary, when one is set, still wins)."""
+        return Cosign(self._run, binary=self._binary, docker_args=self._docker_args, image=image)
 
     @staticmethod
-    def docker_argv(ref: str, identity: Identity, docker_args: Sequence[str] = ()) -> list[str]:
+    def docker_argv(
+        ref: str, identity: Identity, docker_args: Sequence[str] = (), image: str = COSIGN_IMAGE
+    ) -> list[str]:
         mounts = (
             ["-v", f"{identity.path.parent}:/keys:ro"] if isinstance(identity, PublicKey) else []
         )
         return [
-            "docker", "run", "--rm", *mounts, *docker_args, COSIGN_IMAGE,
+            "docker", "run", "--rm", *mounts, *docker_args, image,
             "verify", *identity.arguments(mounted=True), ref,
         ]  # fmt: skip
 
@@ -109,7 +135,7 @@ class Cosign:
         if self._binary is not None:
             argv = [self._binary, "verify", *identity.arguments(mounted=False), ref]
         else:
-            argv = self.docker_argv(ref, identity, self._docker_args)
+            argv = self.docker_argv(ref, identity, self._docker_args, self._image)
         code, said = self._run(argv)
         return code == 0, said
 
@@ -118,11 +144,11 @@ class Cosign:
         return ["-v", f"{identity.path.parent}:/keys:ro"] if isinstance(identity, PublicKey) else []
 
     @staticmethod
-    def docker_argv_local(saved: Path, identity: Identity) -> list[str]:
+    def docker_argv_local(saved: Path, identity: Identity, image: str = COSIGN_IMAGE) -> list[str]:
         """An image as `cosign save` kept it, verified with no network at all (`update --from`)."""
         return [
             "docker", "run", "--rm", "--network", "none", *Cosign._keys(identity),
-            "-v", f"{saved.parent}:/saved:ro", COSIGN_IMAGE,
+            "-v", f"{saved.parent}:/saved:ro", image,
             "verify", *identity.arguments(mounted=True), "--offline",
             "--local-image", f"/saved/{saved.name}",
         ]  # fmt: skip
@@ -132,7 +158,7 @@ class Cosign:
             argv = [self._binary, "verify", *identity.arguments(mounted=False), "--offline",
                     "--local-image", str(saved)]  # fmt: skip
         else:
-            argv = self.docker_argv_local(saved, identity)
+            argv = self.docker_argv_local(saved, identity, self._image)
         code, said = self._run(argv)
         return code == 0, said
 
@@ -143,7 +169,7 @@ class Cosign:
         else:
             argv = [
                 "docker", "run", "--rm", *self._docker_args, "-v", f"{dest.parent}:/out",
-                COSIGN_IMAGE, "save", "--dir", f"/out/{dest.name}", ref,
+                self._image, "save", "--dir", f"/out/{dest.name}", ref,
             ]  # fmt: skip
         code, said = self._run(argv)
         return code == 0, said
@@ -162,7 +188,7 @@ class Cosign:
             network = ["--network", "none"] if offline else list(self._docker_args)
             argv = [
                 "docker", "run", "--rm", *network, *self._keys(identity),
-                "-v", f"{blob.parent}:/blob:ro", COSIGN_IMAGE,
+                "-v", f"{blob.parent}:/blob:ro", self._image,
                 "verify-blob", *identity.arguments(mounted=True),
                 *(["--offline"] if offline else []),
                 "--bundle", f"/blob/{signature.name}", f"/blob/{blob.name}",
@@ -176,8 +202,9 @@ class Cosign:
 
 
 def owned_references(lock_text: str) -> list[str]:
-    """`repository@digest` of each owned image in a lock, in the lock's order. An owned image with
-    no real digest, or one missing, refuses the release."""
+    """`repository@digest` of each owned image in a lock, in the lock's order (an optional one,
+    Superset, whenever the lock names it). An owned image with no real digest, or one of
+    `OWNED_SERVICES` missing, refuses the release."""
     entries = (yaml.safe_load(lock_text) or {}).get("images") or []
     by_service = {e.get("service"): e for e in entries if isinstance(e, dict)}
     missing = [s for s in OWNED_SERVICES if s not in by_service]
@@ -186,7 +213,7 @@ def owned_references(lock_text: str) -> list[str]:
     refs = []
     for entry in entries:
         service = entry.get("service")
-        if service not in OWNED_SERVICES:
+        if service not in SIGNED_SERVICES:
             continue
         digest = str(entry.get("digest"))
         if not _DIGEST.match(digest):

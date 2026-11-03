@@ -582,3 +582,34 @@ def test_an_install_names_the_release_its_checkout_is_on(tmp_path: Path) -> None
     out = tmp_path / "release.lock"
     assert update.verify_for_install(fake.host(), "v0.5.0", out) == 1
     assert not out.exists()
+
+
+def test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update(
+    tmp_path: Path,
+) -> None:
+    """Build order step 20a: once the release's lock names Superset (an owned image, signed by the
+    release), the update's verification holds its container to the lock's digest too."""
+    directory = tmp_path / "deployment"
+    directory.mkdir()
+    services = {"superset": {"image": f"{REG}/superset@{NEW}"}}
+    (directory / "compose.yaml").write_text(yaml.safe_dump({"services": services}))
+    lock = "# GENERATED\n" + yaml.safe_dump({"images": [
+        {"service": "superset", "repository": f"{REG}/superset", "tag": "x", "digest": NEW,
+         "source": "registry"}]}, sort_keys=False)  # fmt: skip
+
+    def run(argv: Sequence[str]) -> tuple[int, str]:
+        argv = list(argv)
+        if "ps" in argv:
+            return 0, json.dumps({"Service": "superset", "Name": "osprey-superset-1",
+                                  "State": "running", "Health": "healthy"})  # fmt: skip
+        if argv[:2] == ["docker", "inspect"]:
+            return 0, "sha256:" + "c" * 64
+        if argv[:3] == ["docker", "image", "inspect"]:
+            return 0, json.dumps([f"{REG}/superset@{OLD}"])  # still the old image
+        raise AssertionError(argv)
+
+    host = update.Host(run=run, cosign=Cosign(run), identity=lambda _: PublicKey(Path("/k")),
+                       backup=lambda: tmp_path, restore=lambda _: None,
+                       files_up_to_date=lambda: {}, find_release=lambda _: {})  # fmt: skip
+    with pytest.raises(update.UpdateFailed, match="superset runs another image"):
+        update.verify_running(host, directory, lock)

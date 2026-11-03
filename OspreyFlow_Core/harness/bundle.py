@@ -11,6 +11,13 @@ each owned image against the release workflow's identity, and for every image th
 signed lock to what Docker loads — the saved manifest's hash is the digest the lock names, the
 manifest names a configuration, and the loaded image's ID must be that configuration's digest. Only
 then is anything loaded into the deployment.
+
+**cosign travels in the bundle too** (build order step 20a, ADR-114 Amendment 34): the checks above
+run cosign from its image, and a machine with no network that never pulled it could run none of
+them. The bundle carries that image (`docker save`, pulled by the digest `harness.signatures` pins);
+`--from` loads it first and runs it only if its ID is the one pinned in the code for this machine's
+platform, so a bundle cannot bring its own verifier. A bundle from before carries none: the
+machine's own cosign image is used, as before.
 """
 
 from __future__ import annotations
@@ -26,9 +33,11 @@ from typing import Any
 
 import yaml
 
-from harness.signatures import OWNED_SERVICES, Cosign, Identity
+from harness.signatures import COSIGN_IMAGE, COSIGN_IMAGE_IDS, SIGNED_SERVICES, Cosign, Identity
 
 BUNDLE_FORMAT = 1
+#: What the bundle's cosign image is named once loaded; it is run by its checked ID, not this name.
+COSIGN_LOCAL = "ghcr.io/sigstore/cosign/cosign:ospreyflow-bundle"
 Run = Callable[[Sequence[str]], tuple[int, str]]
 
 
@@ -69,6 +78,10 @@ def make_bundle(
         _need(run, ["git", "-C", str(repo), "fetch", "--tags", "origin"], "fetch the release's tag")
         _need(run, ["git", "-C", str(repo), "bundle", "create", str(root / "source.bundle"), tag],
               "bundle the release's source")  # fmt: skip
+        _need(run, ["docker", "pull", COSIGN_IMAGE], f"pull the pinned cosign image {COSIGN_IMAGE}")
+        _need(run, ["docker", "tag", COSIGN_IMAGE, COSIGN_LOCAL], "name the cosign image")
+        _need(run, ["docker", "save", "-o", str(root / "cosign.tar"), COSIGN_LOCAL],
+              "save the cosign image")  # fmt: skip
         (root / "saved").mkdir(exist_ok=True)
         (root / "images").mkdir(exist_ok=True)
         manifest = []
@@ -86,7 +99,12 @@ def make_bundle(
                 "service": entry.get("service"), "repository": repository, "digest": digest,
                 "saved": f"saved/{index}", "tar": f"images/{index}.tar", "local": local,
             })  # fmt: skip
-        (root / "manifest.json").write_text(json.dumps({"images": manifest}), encoding="utf-8")
+        (root / "manifest.json").write_text(
+            json.dumps(
+                {"images": manifest, "cosign": {"tar": "cosign.tar", "local": COSIGN_LOCAL}}
+            ),
+            encoding="utf-8",
+        )
         with tarfile.open(out, "w") as bundle:
             bundle.add(root, arcname=".")
     finally:
@@ -163,19 +181,43 @@ def _manifest_config(layout: Path, digest: str, repository: str, platform: str) 
     return str(manifest["config"]["digest"])
 
 
+def _bundled_cosign(
+    root: Path, carried: dict[str, Any] | None, platform: str, cosign: Cosign, run: Run
+) -> Cosign:
+    """The cosign the bundle carries, loaded and run by its ID once that ID is the one pinned for
+    this platform — refused before it runs otherwise. A bundle carrying none: `cosign` as given."""
+    if carried is None:
+        return cosign
+    pinned = COSIGN_IMAGE_IDS.get(platform)
+    if pinned is None:
+        raise BundleRefused(f"no cosign image is pinned for {platform}; nothing can be verified")
+    local = str(carried["local"])
+    _need(run, ["docker", "load", "-i", str(root / str(carried["tar"]))], "load the cosign image")
+    loaded = _need(run, ["docker", "image", "inspect", "--format", "{{.Id}}", local],
+                   "look at the cosign image").strip()  # fmt: skip
+    if loaded != pinned:
+        raise BundleRefused(
+            f"the bundle's cosign image is not the one pinned for {platform} ({loaded}, not "
+            f"{pinned}); it was not run, and nothing was verified or loaded"
+        )
+    return cosign.from_image(loaded)
+
+
 def check_bundle(
     root: Path, identity: Identity, cosign: Cosign, run: Run
 ) -> dict[str, tuple[str, str]]:
     """Verifies an opened bundle with no network and loads its images: repository → (the local
     reference to run, the image ID it must have)."""
+    platform = _need(
+        run, ["docker", "version", "--format", "{{.Server.Os}}/{{.Server.Arch}}"], "ask Docker"
+    ).strip()
+    contents = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    cosign = _bundled_cosign(root, contents.get("cosign"), platform, cosign, run)
     cosign.verify_blob(
         root / "versions.lock", root / "versions.lock.sigstore.json", identity, offline=True
     )
     lock = (root / "versions.lock").read_text(encoding="utf-8")
-    platform = _need(
-        run, ["docker", "version", "--format", "{{.Server.Os}}/{{.Server.Arch}}"], "ask Docker"
-    ).strip()
-    listed = json.loads((root / "manifest.json").read_text(encoding="utf-8")).get("images") or []
+    listed = contents.get("images") or []
     by_ref = {(str(m["repository"]), str(m["digest"])): m for m in listed}
     chosen: list[tuple[dict[str, Any], str]] = []
     for entry in _entries(lock):
@@ -187,7 +229,7 @@ def check_bundle(
             )
         layout = root / str(item["saved"])
         config = _manifest_config(layout, digest, repository, platform)
-        if entry.get("service") in OWNED_SERVICES:
+        if entry.get("service") in SIGNED_SERVICES:
             ok, said = cosign.verify_local(layout, identity)
             if not ok:
                 last = said.splitlines()[-1] if said else "no answer"

@@ -45,7 +45,7 @@ from harness.release import (
     write_notice,
 )
 from harness.signatures import (
-    OWNED_SERVICES,
+    SIGNED_SERVICES,
     Cosign,
     Identity,
     Keyless,
@@ -249,7 +249,7 @@ def verify_running(
         image = (services.get(name) or {}).get("image", "")
         repository = _repository(str(image))
         if repository not in digests or not any(
-            repository.endswith(f"/{s}") for s in OWNED_SERVICES
+            repository.endswith(f"/{s}") for s in SIGNED_SERVICES
         ):
             continue
         image_id = _ok(

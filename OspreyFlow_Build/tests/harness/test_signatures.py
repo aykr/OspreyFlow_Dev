@@ -9,6 +9,7 @@ the B5c row), against a throwaway registry and key.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -100,6 +101,30 @@ def test_a_release_whose_images_are_all_signed_passes() -> None:
     lock = _lock(workspace=D, api=E, ingest=D, ner=E)
     refs = set(owned_references(lock))
     verify_release(lock, Keyless("acme", "ospreyflow", "v0.5.0"), Cosign(_FakeCosign(refs)))
+
+
+def test_superset_is_checked_like_every_owned_image_once_the_lock_names_it() -> None:
+    """Build order step 20a: the release's lock names Superset (built and signed by the release), so
+    its signature is checked as the other owned images' are — not trusted on the lock's digest
+    alone. A lock that names no Superset (one from before) is not refused for it."""
+    lock = _lock(workspace=D, api=E, ingest=D, ner=E, superset=E, arcadedb=D)
+    assert f"ghcr.io/acme/superset@{E}" in owned_references(lock)
+    unsigned = _FakeCosign(set(owned_references(_lock(workspace=D, api=E, ingest=D, ner=E))))
+    with pytest.raises(SignatureRefused, match="superset"):
+        verify_release(lock, Keyless("acme", "ospreyflow", "v0.5.0"), Cosign(unsigned))
+    assert "superset" not in " ".join(owned_references(_lock(workspace=D, api=E, ingest=D, ner=E)))
+
+
+def test_cosign_is_pinned_by_digest_with_an_image_id_for_each_platform() -> None:
+    """The verifier is fixed in the code (step 20a): by its index's digest, and by the ID Docker
+    gives it on each platform a deployment runs on, which `update --from` checks before running
+    the copy a bundle carries."""
+    from harness.signatures import COSIGN_IMAGE_IDS
+
+    pinned = r"ghcr\.io/sigstore/cosign/cosign:v[\d.]+@sha256:[0-9a-f]{64}"
+    assert re.fullmatch(pinned, COSIGN_IMAGE)
+    assert set(COSIGN_IMAGE_IDS) == {"linux/amd64", "linux/arm64"}
+    assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", i) for i in COSIGN_IMAGE_IDS.values())
 
 
 def test_cosign_runs_from_its_pinned_image_with_a_key_mounted_read_only(tmp_path: Path) -> None:
