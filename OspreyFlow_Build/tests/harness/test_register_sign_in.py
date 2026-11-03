@@ -14,6 +14,7 @@ be told to refuse a password reset, and can be unreachable. Each test names what
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -838,14 +839,18 @@ def test_restoring_the_conduits_secret_is_safe_to_repeat_and_never_printed(
 ) -> None:
     env = _env(tmp_path, f"OSPREY_OIDC_CLIENT_SECRET={CONDUIT_SECRET}")
     first = _register(env)
-    assert "the Conduit's client secret set from the deployment's settings" in first
+    assert "the Conduit's client credential set from the deployment's settings" in first
     puts = sum(1 for verb, path in keycloak.calls if verb == "PUT" and "cid-conduit" in path)
     second = _register(env)
-    assert "the Conduit's client secret already matches the deployment's settings" in second
+    assert "the Conduit's client credential already matches the deployment's settings" in second
     assert sum(1 for verb, path in keycloak.calls if verb == "PUT" and "cid-conduit" in path) == puts
     assert _conduit_can_act(keycloak)
     register_sign_in.print_summary(first + second, env)
     assert CONDUIT_SECRET not in capsys.readouterr().out + json.dumps(first + second)
+    # `ospreyflow` hides every line naming a secret-like word (`cli/ospreyflow/run.py`'s `_SECRET`),
+    # which hid this line on GOV.UK's rebuild: it is worded so the operator sees it.
+    said = [line for line in first + second if "Conduit's client" in line]
+    assert said and not any(re.search(r"(?i)password|secret|token", line) for line in said)
 
 
 def test_a_refused_secret_update_is_named_not_reported_as_done(

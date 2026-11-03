@@ -216,7 +216,7 @@ def ensure_identity(
         )
     else:
         lines.append(
-            f"the Conduit's client secret left as it is: the settings hold no {CONDUIT_SECRET_KEY}"
+            "the Conduit's client credential left as it is: the deployment's settings name none"
         )
     lines.append(
         keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)

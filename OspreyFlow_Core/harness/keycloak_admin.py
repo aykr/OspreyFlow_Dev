@@ -397,13 +397,13 @@ def ensure_conduit_client_secret(*, issuer: str, realm: str, token: str, client_
         if status not in (200, 204):
             # The body is not repeated: it may echo the representation, secret and all.
             raise RealmConfigurationFailed(
-                f"could not set client {client_id!r}'s secret: {status} — the Conduit will not be "
-                "able to act for anyone until it is"
+                f"could not set client {client_id!r}'s credential: {status} — the Conduit will not "
+                "be able to act for anyone until it is"
             )
         changed = True
     if changed:
-        return "the Conduit's client secret set from the deployment's settings"
-    return "the Conduit's client secret already matches the deployment's settings"
+        return "the Conduit's client credential set from the deployment's settings"
+    return "the Conduit's client credential already matches the deployment's settings"
 
 
 def ensure_service_account_roles(*, issuer: str, realm: str, token: str) -> str:
