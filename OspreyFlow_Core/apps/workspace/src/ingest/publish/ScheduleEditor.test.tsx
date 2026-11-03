@@ -131,6 +131,17 @@ describe("the structured schedule", () => {
     expect(screen.getByText(/belongs to no dataset, so it has no folder to watch/)).toBeTruthy();
   });
 
+  // Build order step 15 (DEMO_GUIDE.md §8b): the revert step reads the load id "on the Studio's run",
+  // and the runs list showed none.
+  it("names each run's load, the id a revert takes", async () => {
+    const watched = { ...RUN, run_id: "01RUN", trigger: "watch", slot: null, outcome: "succeeded", file: "week2.csv",
+      rows_read: 13, nodes_created: 0, nodes_referenced: 4, rows_rejected: 0, failure: null, load_id: "01LOAD" };  // prettier-ignore
+    serve(WATCHABLE, [watched]);
+    place();
+    const runs = await screen.findByRole("list", { name: "Runs of this recipe" });
+    expect(within(runs).getByText(/Succeeded: 13 rows read, 0 created.*— load 01LOAD$/)).toBeTruthy();
+  });
+
   it("names the file a watched run took", async () => {
     const watched = { ...RUN, run_id: "w", trigger: "watch", slot: null, outcome: "succeeded", file: "2026-06-02.csv",
       rows_read: 4, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, failure: null };  // prettier-ignore

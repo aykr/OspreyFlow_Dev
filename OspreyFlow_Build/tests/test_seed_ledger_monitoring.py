@@ -81,7 +81,7 @@ def test_the_reset_puts_both_back_and_says_what_it_cannot_undo(tmp_path: Path) -
     assert not (listed / ledger_monitoring.WEEK_2).exists()
     assert (listed / "incoming" / ledger_monitoring.WEEK_2).is_file(), "ready for the next rehearsal"
     assert seed.list_file(tmp_path).read_bytes() == V1.read_bytes()
-    for item in ("scripts.revert_load", "retire them", "their closes", "version 1 again"):
+    for item in ("--revert-load", "retire them", "their closes", "version 1 again"):
         assert item in said, item
 
 

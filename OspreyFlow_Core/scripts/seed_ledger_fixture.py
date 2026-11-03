@@ -159,8 +159,9 @@ def release_list_update(root: Path) -> str:
 
 #: What `--reset-week-2` cannot undo, said every time it runs.
 CANNOT_UNDO = (
-    "the week's load: revert it with `python -m scripts.revert_load <load id> --reverted-by <you>` "
-    "(the load id is on the Studio's run; stop the Conduit first with the DuckDB engine)",
+    "the week's load: revert it with `python -m scripts.seed_internal ledger --revert-load "
+    "<load id> --reverted-by <you> --stop-api` (the load id is at the end of the Studio's run; "
+    "it runs scripts.revert_load inside the deployment, the Conduit stopped for it)",
     "the rules deployed and the hotlist made in the rehearsal: retire them in Monitoring",
     "the alerts the week and the list update raised, and their closes",
     "the list's applied versions: refresh the list after this reset to apply version 1 again (it "

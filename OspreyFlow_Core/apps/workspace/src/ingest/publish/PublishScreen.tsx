@@ -423,7 +423,10 @@ export function PublishScreen({
                 <li key={run.run_id}>
                   {`${new Date(run.slot ?? run.started_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} — ${
                     run.trigger === "schedule" ? "" : `${triggerInWords(run)}: `
-                  }${runInWords(run)}`}
+                  }${runInWords(run)}${
+                    // The load's id, which a revert takes (build order step 15; DEMO_GUIDE.md §8b).
+                    run.load_id ? ` — load ${run.load_id}` : ""
+                  }`}
                 </li>
               ))}
             </ul>

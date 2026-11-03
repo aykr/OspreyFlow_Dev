@@ -22554,3 +22554,34 @@ failing closed (an id it could not ask about is not counted). A deployment with 
 tell and keeps the grants as before. Tests, red first: `test_principal_names.py` (`people`, its
 refusals and its failure), `test_monitoring_routes.py::test_an_alert_is_never_given_to_a_service_account`.
 User guide §7.3 (1.23).
+
+### ADR-127, Amendment 44 (3 November 2026) — the documented revert step, end to end (build order step 15)
+
+**Found in the 2 November rehearsal** (`DEMO_GUIDE.md` §8b, the Operation Ledger week): the Studio's
+run showed no load id; `scripts.revert_load` refused the run's id ("no record"); run on the host it had
+no store settings and would have reached ArcadeDB's default port, 2480 (the everyday deployment's own);
+and a revert discarded 2 nodes of a load the run said created 0.
+
+**What was found for the counts.** The load did write 2 nodes: the `Alert` nodes the case's two rules
+wrote into it after the commit (R1 and C1), which decision 6 makes the load's own and which
+`RecipeRunStore.add_rule_writes` adds to its record's `created_node_ids`. The run's "created" counts
+what the recipe wrote, as the change stream and the enrich stage read it (`studio_publish._fold_rule_writes`).
+Neither count was wrong; the revert said them as one.
+
+**As built.**
+- `LoadRecord.rule_node_ids`: of `created_node_ids`, those the case's rules wrote (before or after the
+  commit), kept apart as well. `LoadReverted.rule_nodes` counts them, and the script says "0 node(s) it
+  loaded and 2 its case's rules wrote (their alerts)". A record written before has none.
+- The revert takes a ledger run's id (`recipe_runs.run_id`, which the Studio lists a run by) as every
+  load that run recorded (`RecipeRunStore.records_of_run`), after a load's id and a pipeline run's
+  prefix. The Studio's *Runs* line ends with "— load <id>".
+- `scripts.revert_load` refuses before opening anything when neither `ARCADEDB_HOST` nor
+  `ARCADEDB_HTTP_PORT` is set, naming `python -m scripts.seed_internal <dataset> --revert-load <id>
+  --reverted-by <you> --stop-api`, which runs it in a one-shot from the Conduit's image on the
+  deployment's network, the Conduit stopped for it and started again, as a seed is.
+
+Tests, red first: `tests/ingest/test_revert_load.py` (a ledger run's id; the rules' nodes counted
+apart; the record keeping them apart), `tests/test_revert_load_script.py` (said apart; no store
+settings refused), `tests/test_seed_internal.py` (the revert inside the deployment; refused without
+`--stop-api`; the command line), `tests/services/api/test_recipe_runs.py` (live: `records_of_run`,
+`rule_node_ids` after the commit), `ScheduleEditor.test.tsx` (the run names its load).

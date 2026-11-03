@@ -75,6 +75,7 @@ CREATE INDEX IF NOT EXISTS loaded_row_keys_fingerprint_idx
 #: a load, not about its elements.
 _ID_LISTS = (
     "created_node_ids",
+    "rule_node_ids",
     "touched_edge_ids",
     "created_edge_ids",
     "merged_edge_ids",
@@ -391,12 +392,14 @@ class RecipeRunStore:
         merged_edge_ids: list[str],
     ) -> None:
         """Adds what an alert raised after a load's commit wrote to that load's record, in the
-        lists the commit-time record keeps (created and merged apart)."""
+        lists the commit-time record keeps (created and merged apart; its nodes in the rules' own
+        list as well)."""
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE recipe_runs SET load_records = ("
                 "SELECT jsonb_agg(CASE WHEN rec->>'load_id' = $2 THEN rec || jsonb_build_object("
                 "'created_node_ids', COALESCE(rec->'created_node_ids', '[]'::jsonb) || $3::jsonb, "
+                "'rule_node_ids', COALESCE(rec->'rule_node_ids', '[]'::jsonb) || $3::jsonb, "
                 "'created_edge_ids', COALESCE(rec->'created_edge_ids', '[]'::jsonb) || $4::jsonb, "
                 "'merged_edge_ids', COALESCE(rec->'merged_edge_ids', '[]'::jsonb) || $5::jsonb, "
                 "'touched_edge_ids', COALESCE(rec->'touched_edge_ids', '[]'::jsonb) "
@@ -445,6 +448,18 @@ class RecipeRunStore:
                 "WHERE load_records IS NOT NULL AND starts_with(rec->>'load_id', $1) "
                 "ORDER BY started_at, rec->>'load_id'",
                 prefix,
+            )
+        return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
+
+    async def records_of_run(self, run_id: str) -> list[LoadRecord]:
+        """The records a run of the ledger holds, by the run's own id (`recipe_runs.run_id`, the id
+        the Studio lists a run by, which is not its load's), oldest first; none for an id that is no
+        run. For the revert (build order step 15)."""
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetch(
+                "SELECT rec FROM recipe_runs, jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND run_id = $1 ORDER BY rec->>'load_id'",
+                run_id,
             )
         return [LoadRecord.model_validate_json(r["rec"]) for r in kept]
 

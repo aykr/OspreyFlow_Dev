@@ -24,6 +24,10 @@ API is published.
 between rehearsals and, like a seed, needs the Conduit stopped (`--stop-api`); `--release-batch-2`
 and `--publish-reports-fallback` are run mid-demo and leave the Conduit running (`_mid_demo`).
 
+**A load's revert** (`--revert-load <load or run id> --reverted-by <you> --stop-api`, build order
+step 15) runs `scripts.revert_load` the same way, inside the deployment's network with the Conduit
+stopped, since on the host it has no store settings.
+
 **The Conduit must be stopped while a seed runs** (DuckDB's exclusive lock). With it running this
 refuses and names `--stop-api`; stopping it is yours to choose, as in `harness.apply`. When it was
 stopped for the seed it is started again afterwards, whether the seed worked or not.
@@ -299,6 +303,7 @@ def seed_internal(
     code_mounts: Sequence[tuple[Path, str]] = (),
     case_domains: Sequence[str] | None = None,
     public_id: str | None = None,
+    revert_load: tuple[str, str] | None = None,
 ) -> list[str]:
     """Return the seed report, one line each. Raises `SeedRefused` before starting anything.
 
@@ -426,6 +431,8 @@ def seed_internal(
         directory = _deployment_dir(repo_root)
     except NothingToRefresh as error:
         raise SeedRefused(str(error)) from error
+    if revert_load is not None:
+        return _revert_load(repo_root, directory, run, api_running, stop_api, *revert_load)
     if spec.data_folder and not (data_root / spec.data_folder).is_dir():
         raise SeedRefused(
             f"the dataset is not provisioned: {data_root / spec.data_folder} is missing"
@@ -552,6 +559,44 @@ def seed_internal(
         sample = DEFAULT_GRAPH_SAMPLE if graph_fraud_rows is None else graph_fraud_rows
         if sample > 0:
             argv += ["--graph-fraud-rows", str(sample)]
+    if running:
+        run([*compose, "stop", "api"])
+    try:
+        output = run(argv)
+    finally:
+        if running:
+            run([*compose, "up", "-d", "--wait", "api"])
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _revert_load(
+    repo_root: Path,
+    directory: Path,
+    run: Callable[[Sequence[str]], str],
+    api_running: Callable[[list[str]], bool],
+    stop_api: bool,
+    load_id: str,
+    reverted_by: str,
+) -> list[str]:
+    """`scripts.revert_load` inside the deployment (build order step 15; `DEMO_GUIDE.md` §8b): run
+    on the host it has no store settings and would reach ArcadeDB's default port, 2480, so it runs
+    here as a seed does, in a one-shot from the Conduit's image on the deployment's own network,
+    with the checkout's code. The Conduit is stopped for it (DuckDB's lock; with ClickHouse a quiet
+    Conduit is advised, `scripts/revert_load.py`) and started again, whether it worked or not.
+    `load_id` is a load's, a branch's, a pipeline run's or a ledger run's id."""
+    compose = _compose(directory / "compose.yaml")
+    running = api_running(compose)
+    if running and not stop_api:
+        raise SeedRefused(
+            "the Conduit is running, and a revert needs it stopped (DuckDB's exclusive lock). "
+            "Run again with --stop-api to stop it for the revert and start it again after; "
+            "stopping it is your choice, so it is not done for you"
+        )
+    argv = [
+        *compose, "run", "--rm", "--no-deps", "--entrypoint", "python",
+        *_checkout_mounts(repo_root), "api",
+        "-m", "scripts.revert_load", load_id, "--reverted-by", reverted_by,
+    ]  # fmt: skip
     if running:
         run([*compose, "stop", "api"])
     try:
@@ -959,7 +1004,21 @@ def main(
             print("--graph-fraud-rows takes a number, or 'all'", file=sys.stderr)
             return 2
         sample = 0 if value[0] == "all" else int(value[0])
+    revert: tuple[str, str] | None = None
+    if "--revert-load" in args:
+        value = args[args.index("--revert-load") + 1 :][:1]
+        who = args[args.index("--reverted-by") + 1 :][:1] if "--reverted-by" in args else []
+        if not value or value[0].startswith("--") or not who or who[0].startswith("--"):
+            print(
+                "--revert-load takes a load's or a run's id, and --reverted-by the person "
+                "reverting it, for example --revert-load 01K... --reverted-by osprey-demo-engineer",
+                file=sys.stderr,
+            )
+            return 2
+        revert = (value[0], who[0])
     takes_a_value = {
+        "--revert-load",
+        "--reverted-by",
         "--vault",
         "--method",
         "--spike-edges",
@@ -1005,7 +1064,8 @@ def main(
             "[--repair-strays | --restore-missing [--apply] [--repair-limit N]] "
             "[--clear-shared-stores --vault ID [--accept-strays N] [--confirm V:E:N]] "
             "[--reset-live | --release-batch-2 | --publish-reports-fallback | --check] "
-            "[--release-week-2 | --release-list-update | --reset-week-2]",
+            "[--release-week-2 | --release-list-update | --reset-week-2] "
+            "[--revert-load ID --reverted-by YOU --stop-api]",
             file=sys.stderr,
         )
         return 2
@@ -1044,6 +1104,7 @@ def main(
             code_mounts=code_mounts,
             case_domains=case_domains,
             public_id=public_id,
+            revert_load=revert,
         )
     except (SeedRefused, SeedFailed) as error:
         print(f"seed: {error}", file=sys.stderr)
@@ -1069,6 +1130,9 @@ def main(
         return 0
     if reset_live:
         print("seed: reset finished; the report above says what it restored and could not undo.")
+        return 0
+    if revert:
+        print("seed: revert finished; the report above says what it took back.")
         return 0
     if release_batch_2 or publish_reports_fallback or check or mid_demo_step:
         print("seed: done; the Conduit was left running.")

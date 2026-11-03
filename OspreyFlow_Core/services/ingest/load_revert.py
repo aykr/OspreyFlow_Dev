@@ -6,7 +6,9 @@ kept apart from the script so it is tested without a command line or a store.
 **What it reads.** The load's `LoadRecord`, in the run ledger, and nothing on the stored elements:
 a merge rewrites an existing element's `load_id` to the merging load's, so the stored `load_id` does
 not say what a load created. A pipeline run's id has no record of its own and means every branch,
-found by the `<run>:` prefix; a branch's id means that branch alone.
+found by the `<run>:` prefix; a branch's id means that branch alone. A ledger run's id (the id the
+Studio lists a run by, `recipe_runs.run_id`, which is not its load's) means every load that run
+recorded (build order step 15).
 
 **What it refuses, before changing anything.** A load with no record; a record without
 `events_stamped` (its events cannot be retracted, and a revert that removed none would leave them
@@ -172,6 +174,9 @@ class LoadReverted:
     #: stamps its own load), left as they are; their ids, for the operator who asks.
     nodes_left_alone: int = 0
     left_alone_node_ids: tuple[str, ...] = ()
+    #: Of `nodes`, those the case's rules wrote into the load (their alerts), said apart from what
+    #: the recipe loaded so the count agrees with the run's "created" (build order step 15).
+    rule_nodes: int = 0
 
 
 @dataclass
@@ -213,6 +218,8 @@ class RevertLedger(Protocol):
     async def load_record(self, load_id: str) -> LoadRecord | None: ...
 
     async def records_with_prefix(self, prefix: str) -> list[LoadRecord]: ...
+
+    async def records_of_run(self, run_id: str) -> list[LoadRecord]: ...
 
     async def releases_of(self, load_id: str) -> list[LoadRecord]: ...
 
@@ -324,14 +331,18 @@ def _refusals_for(
 
 
 async def _targets(load_id: str, ledger: RevertLedger) -> list[LoadRecord]:
-    """The records the id names: the load's own, or else every branch of a pipeline run."""
+    """The records the id names: the load's own, or else every branch of a pipeline run, or else
+    every load of a ledger run."""
     exact = await ledger.load_record(load_id)
     if exact is not None:
         return [exact]
     branches = await ledger.records_with_prefix(f"{load_id}:")
-    if not branches:
+    if branches:
+        return branches
+    of_run = await ledger.records_of_run(load_id)
+    if not of_run:
         raise RevertRefused([Refusal(load_id, "no_record")])
-    return branches
+    return of_run
 
 
 async def _releases(
@@ -631,6 +642,7 @@ async def _revert_one(
         load_id=record.load_id,
         nodes=len(reverting_nodes),
         links=len(record.created_edge_ids),
+        rule_nodes=len(set(reverting_nodes) & set(record.rule_node_ids)),
         nodes_left_alone=len(left_alone),
         left_alone_node_ids=tuple(left_alone),
         **counts,

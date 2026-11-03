@@ -1177,3 +1177,54 @@ def test_the_command_line_takes_one_ledger_step_at_a_time(
     assert seed_internal.main(["ledger", "--release-list-update"]) == 0
     assert seen["mid_demo_step"] == "--release-list-update"
     assert "the Conduit was left running" in capsys.readouterr().out
+
+
+# --- The revert of a load, inside the deployment (build order step 15, DEMO_GUIDE.md §8b) ---------
+
+
+def test_a_revert_runs_inside_the_deployment_with_the_conduit_stopped_and_started_again(
+    repo: Path,
+) -> None:
+    """Run on the host, `scripts.revert_load` had no store settings and would have reached 2480. It
+    runs here as a seed does: a one-shot from the Conduit's image on the deployment's own network,
+    the Conduit stopped for it (DuckDB's lock) and started again."""
+    runner = Runner()
+    seed_internal.seed_internal(
+        "ledger", repo, run=runner, lookup_subs=lambda d: {}, api_running=lambda c: True,
+        stop_api=True, revert_load=("01RUN", "osprey-demo-engineer"),
+    )  # fmt: skip
+    verbs = [next((a for a in c if a in COMPOSE_VERBS), None) for c in runner.calls]
+    assert verbs == ["stop", "run", "up"]
+    call = _seed_call(runner)
+    assert call[:2] == ["docker", "compose"] and "api" in call
+    assert ["run", "--rm", "--no-deps"] == call[call.index("run") : call.index("run") + 3]
+    at = call.index("-m")
+    assert call[at + 1 :] == ["scripts.revert_load", "01RUN", "--reverted-by", "osprey-demo-engineer"]
+    mounts = [call[i + 1] for i, a in enumerate(call) if a == "-v"]
+    assert f"{repo}/scripts:/app/scripts:ro" in mounts and f"{repo}/services:/app/services:ro" in mounts
+
+
+def test_a_revert_with_the_conduit_running_is_refused_without_stop_api(repo: Path) -> None:
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="--stop-api"):
+        seed_internal.seed_internal(
+            "ledger", repo, run=runner, lookup_subs=lambda d: {}, api_running=lambda c: True,
+            revert_load=("01RUN", "osprey-demo-engineer"),
+        )  # fmt: skip
+    assert runner.calls == []
+
+
+def test_the_command_line_takes_a_revert_with_its_reverting_person(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake(dataset: str, **kwargs: object) -> list[str]:
+        seen.update(kwargs, dataset=dataset)
+        return []
+
+    monkeypatch.setattr(seed_internal, "seed_internal", fake)
+    argv = ["ledger", "--revert-load", "01RUN", "--reverted-by", "me", "--stop-api"]
+    assert seed_internal.main(argv) == 0
+    assert seen["dataset"] == "ledger" and seen["revert_load"] == ("01RUN", "me")
+    assert seed_internal.main(["ledger", "--revert-load", "01RUN"]) == 2, "who reverts is required"
