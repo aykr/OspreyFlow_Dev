@@ -124,8 +124,9 @@ PERSONAL_IDENTIFIERS = (
 
 #: The statement the product describes itself with (the owner, 1 November 2026; ADR-034 Amendment 1).
 STATEMENT = (
-    "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection "
-    "platform, developed by Solirius Reply and released under the Apache License 2.0."
+    "OspreyFlow is an open source intelligence mapping platform for crime analysis, "
+    "anti-money-laundering, fraud detection, and event monitoring and alerting, developed by "
+    "Solirius Reply and released under the Apache License 2.0."
 )
 CORE_README = Path(__file__).resolve().parents[2] / "OspreyFlow_Core" / "README.md"
 

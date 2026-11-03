@@ -19,8 +19,9 @@ const PLAIN: WelcomeSettings = { organisationSignIn: null, about: true, links: {
 // The product's statement (the owner, 1 November 2026; ADR-034 Amendment 1), written out here so a
 // change to the component's copy is a failing test, not a silent one.
 const STATEMENT =
-  "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, " +
-  "developed by Solirius Reply and released under the Apache License 2.0.";
+  "OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, " +
+  "fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the " +
+  "Apache License 2.0.";
 
 function card() {
   return within(screen.getByRole("complementary", { name: /^Sign in/ }));

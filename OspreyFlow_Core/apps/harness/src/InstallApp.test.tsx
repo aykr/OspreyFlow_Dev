@@ -83,8 +83,9 @@ describe("InstallApp", () => {
   // above every screen. Written out here so a change to the copy is a failing test.
   it("says what OspreyFlow is above every screen", async () => {
     const statement =
-      "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, " +
-      "developed by Solirius Reply and released under the Apache License 2.0.";
+      "OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, " +
+      "fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the " +
+      "Apache License 2.0.";
     client.getInstallState.mockResolvedValue({ mode: "lite", answers: { mode: "lite" }, packs: [], modes: MODES, home: "/home/ada" });
     render(<InstallApp />);
     await waitFor(() => expect(navNames().length).toBeGreaterThan(0));
