@@ -9,6 +9,13 @@ update. Work not yet in a release is listed under *Unreleased*.
 - **What OspreyFlow says it is**, the same everywhere (README, About, the install page, the sign-in
   page and the website): "an open source intelligence mapping platform for crime analysis,
   anti-money-laundering, fraud detection, and event monitoring and alerting".
+- **An offline update can verify on a machine that has never had cosign.** A bundle made with
+  `ospreyflow update --make-bundle` now carries the cosign image that checks the release's
+  signatures, pinned by digest; `ospreyflow update --from` loads it and runs it only if it is that
+  exact image. Before, a machine with no network that had never pulled cosign could verify nothing.
+- **A release's lock names every image any option can run**, Superset and ClickHouse included, so a
+  deployment with dashboards on can take Superset from a release or a bundle; Superset's signature is
+  checked like the other images OspreyFlow builds.
 
 ## v0.4.4 — 2026-11-03
 

@@ -13011,6 +13011,8 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
     The release is then applied as online, with nothing pulled. *An install from a release pulls the
     signed images* ("Now, after B5d"): when the checkout sits on a release tag, `ospreyflow install`
     verifies the release's images before starting them; a developer checkout keeps building.
+    *(Amendment 34, 3 November 2026: the bundle also carries the cosign image, pinned by digest, and
+    the release's lock names every image any option can run.)*
 11. **The lock is signed too** (found designing B5d): third-party images are trusted only through the
     lock's digests, and a lock in a bundle — or a release asset replaced on GitHub — could be altered
     to name another image. So `release.yml` also signs `versions.lock` itself (`cosign sign-blob`,
@@ -23273,3 +23275,54 @@ The questions as drafted, each with its recommendation:
     its `osprey.yaml` asks for.
 16. **The memory floor for a server:** 30 GiB as Docker reports it? *Recommend yes* (a nominal 32 GB
     server), matching cloud Small's starting size.
+
+### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
+
+Two gaps in Amendment 8 points 4 and 10, found drafting Amendment 33 (its answers 14 and 15, which
+the owner accepted with "fix now"). Mechanics *(mine)*, recorded with the change (rule 11).
+
+1. **The cosign image travels in the bundle.** `update --from` verifies with cosign run from its
+   image (point 5), which no bundle carried, so a machine with no network that never pulled it
+   could verify nothing (Docker tries to pull an image it lacks, and the pull fails). Now:
+   - `harness.signatures.COSIGN_IMAGE` is pinned by digest (cosign v2.4.1's multi-platform index,
+     `sha256:b03690aa…5b31`), and `COSIGN_IMAGE_IDS` pins the ID Docker gives it on linux/amd64 and
+     linux/arm64 (measured 3 November 2026 with `docker buildx imagetools inspect`; the arm64 ID is
+     the one a local pull reports).
+   - `update --make-bundle` pulls cosign by that digest and adds it (`docker save`, `cosign.tar`,
+     named in `manifest.json`); a machine that cannot pull it writes no bundle.
+   - `update --from` loads it first and runs it **by its ID**, only if that ID is the one pinned for
+     the machine's platform; otherwise the bundle is refused before cosign ever runs. The pin lives
+     in the code, so a bundle cannot bring its own verifier. The bundle stays format 1; a bundle from
+     before carries no cosign and the machine's own image is used, as before.
+   - A bundle is made for the platform of the machine that makes it (`docker save` keeps that one
+     platform, for cosign as for every image); bundles for another platform are unit 8's.
+2. **The release's lock names every image any option can run.** It was rendered from the committed
+   `osprey.yaml` alone, which switches dashboards off: v0.4.4's lock names no Superset and no
+   ClickHouse (read from the release, 3 November 2026), so a deployment turning either on could not
+   take it from a release or a bundle. `release.yml` now writes the lock with `harness.release_lock`:
+   every combination of graph store, analytics engine and search backend, with no managed services
+   and with dashboards on. **JanusGraph is left out** while it has no adapter (`NOT_YET_RUNNABLE`;
+   `GraphStore` is declarable before its adapter exists); a deployment still runs only what its own
+   `osprey.yaml` asks for. The Enterprise chart's own images (the workers, ClickHouse Keeper) are
+   not in it: the chart is not installed from the lock or a bundle.
+3. **Superset is checked like the other owned images** whenever a lock names it
+   (`OPTIONAL_OWNED_SERVICES`): the release builds, scans and signs it already; its signature is now
+   verified by the release's own last check, by `update`, `install` on a release, and `--from`, and
+   `update` holds its container to the lock's digest. A lock that names no Superset is not refused
+   for it. The third-party images the lock now adds (ClickHouse) are trusted through the signed
+   lock's digests, as every third-party image is (point 5); the release scans only the images it
+   builds, as before.
+
+**Tests (each shown red first):** `tests/harness/test_bundle.py::test_update_from_verifies_on_a_machine_with_no_cosign_image_and_no_network`
+(a Docker stand-in that refuses every pull as Docker does with no network, and finds an image named
+by digest only if it was pulled so), `::test_a_bundle_whose_cosign_is_another_image_is_refused_before_it_runs`,
+`::test_a_bundle_is_not_made_without_the_pinned_cosign_image`;
+`tests/harness/test_release_lock.py::test_the_release_lock_names_every_image_any_option_runs` (runs
+`release.yml`'s own lock step against the committed `osprey.yaml`, Docker alone stood in, and compares
+with the images every option renders into a compose file),
+`::test_a_graph_store_the_release_leaves_out_is_one_no_deployment_can_run`;
+`tests/harness/test_signatures.py::test_superset_is_checked_like_every_owned_image_once_the_lock_names_it`,
+`::test_cosign_is_pinned_by_digest_with_an_image_id_for_each_platform`;
+`tests/harness/test_update_apply.py::test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update`.
+**Not proved:** the next real release's lock and a bundle made from it, and `--from` on a machine
+whose Docker has never held cosign — the first real release after this change proves them.
