@@ -23695,3 +23695,27 @@ same for Vance and Dorrance within 3, a pair no route joins, with no "not connec
   the change; one the reader may not read is not, the same as no link at all); the hidden-id case in
   `test_links_among_hides_hidden_ids.py`; `canvas/linksAmong.test.ts`; `FindConnectionsPanel.test.tsx`.
   Red first (`red/s18c_d5_*`).
+
+### ADR-120, Amendment 19 (3 November 2026) — J7's betweenness on screen is the search's draw, not the plan's set (build order step 18c, D6)
+
+The 3 November rehearsal read J7's principal at **0.780**, the next (Fairlop, `relay_2`) at 0.199, about
+four times smaller; the script quotes about 0.87 and about twenty times. Found 3 November on GOV.UK and
+measured twice, the same both times, before and after this step's fixes.
+
+- **Why it differs.** Amendment 8 decision 5 defines J7's working set as the principal with all his
+  links, then the coordinator's number with all its links; `pid_plan.j7_working_set` builds it (46 nodes,
+  91 links at the Act 1 moment) and the plan's test and the live access test compute 0.8654 on it. The
+  script's click path adds the number by **search**, and choosing a search result draws everything within
+  three links of it (ADR-070, `SEARCH_DRAW_DEPTH = 3`), not its links alone. On GOV.UK that is 64 nodes and
+  116 links (the principal's star is 42 and 83): the number's five links as the plan has them, and beyond
+  them the seized handsets, the other PIN accounts, `+447700900718`, the relays' pictures and more. On that
+  canvas the principal bridges less and the relays more.
+- **Not the data.** The plan's set gives 0.865 today, as on 25 October; step 16 (Amendment 18) changed only
+  times. No figure measured on screen was ever 0.87: `PID_ACTUALS.md`'s 0.87 is the plan's, and every test
+  of it reads the plan's set, never what the clicks make (rule 12: the invariant was stated for a set the
+  screen does not build).
+- **Which is right.** Both, for their sets. For the script as it is clicked, the figures are the screen's:
+  principal **0.78**, then Fairlop **0.20** (about four times smaller), Thackwray 0.16, Penhallow 0.11, the
+  establishment 0.06. Recorded for the coordinator to put in the script; the plan's constant and tests are
+  left as they are (open question: model the search's draw in the plan, or change the click path so the
+  number is added with its links alone).
