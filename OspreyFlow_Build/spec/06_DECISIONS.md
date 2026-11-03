@@ -13140,6 +13140,8 @@ person cannot open and goes straight to a person's only place.
    install answers name a brokered identity provider, the welcome page's card has one *Sign in*,
    leading to the restyled Keycloak form. With one, *Continue with organisation sign-in* appears and
    goes straight to it (`kc_idp_hint`). Configuring a broker is not built in this phase.
+   *Since ADR-114 Amendment 33 (drop 2), it is: `sign_in.organisation` registers the
+   organisation's OpenID Connect provider in the realm (its "Drop 2 as built").*
 4. **The credential form lives in Keycloak's login theme.** The Glass never takes a password and
    direct grants stay off; the email-or-username form, its validation copy exactly as the handoff's
    README writes it, *Reset your password* and *Check your email* are Keycloak's own pages, restyled
@@ -23371,6 +23373,153 @@ Mac running the owner's deployment, so an `amd64` server with the full stack cou
 the proof stops at the real Caddy, the real Docker Compose bringing up the rendered proxy from the
 staged files, and a client on the machine's own network address reaching the three names over TLS
 with the throwaway CA's certificate. Unit 10 (drop 2) runs the whole of it on a throwaway VM.
+
+#### Drop 2 as built (3 November 2026, build order step 20, branch `step-20-drop2`)
+
+Units 7, 5 and 6. Where this section and the text above differ, this section is what was built.
+
+**Unit 7 — the organisation's identity provider.**
+
+- **Answers and schema.** `sign_in.organisation` takes `alias` (default `org`), `label`, `issuer`
+  (`https://`) and `client_id`; it is refused without `server:`, and a key naming a secret is
+  refused in words pointing at `OSPREY_ORG_SIGN_IN_SECRET`. It becomes
+  `governance.organisation_sign_in` (the alias) and `governance.organisation_provider` (`label`,
+  `issuer`, `client_id`), refused outside `profile: small` and without an alias; the alias is
+  letters, digits, `-` and `_` only, as it is part of the address the organisation registers.
+- **Not in the realm import — corrected.** Decision 4 said the provider is rendered "into the realm".
+  A realm import is read only on Keycloak's first start, and the endpoints are not known until the
+  provider's discovery document is read, so `harness/realm.py` renders the provider's representation
+  (`organisation_provider`, no secret, no endpoints) and its mappers, and
+  `keycloak_admin.ensure_identity_provider` registers them through the admin API: **Keycloak itself
+  reads the discovery document** (`identity-provider/import-config`), so through its own truststore
+  and route out, then the provider is created or updated in place with its client secret, PKCE S256,
+  `client_secret_post`, `syncMode: IMPORT` and `trustEmail: false`. `register_sign_in.ensure_identity`
+  calls it, so `ospreyflow install`, `ospreyflow repair-sign-in` and a restore's registration all put
+  it there; Keycloak never gives the secret back, so it is written each time.
+- **The secret.** `apply` carries `OSPREY_ORG_SIGN_IN_SECRET` from the installer's environment into
+  `deployment.env` (600) and refuses a deployment naming the provider without it, before anything
+  starts; a later `apply` keeps it. To change it, edit `deployment.env` and run `ospreyflow
+  repair-sign-in` (an `apply` keeps the held value, as for every secret). Like the mail password,
+  it reaches every owned service's environment through `env_file`. `cli/ospreyflow/run.py` shows a
+  line that only names the variable.
+- **No role — and what "no clearance" has to be.** The Conduit refuses a token without a clearance
+  and a unit outright (`principal_auth`: "token is missing required claim"), so a person with no
+  attributes at all would be signed in to nothing, not on Home with every place dimmed. A person
+  arriving through the organisation is given, once, by two hardcoded-attribute mappers on the
+  provider (`syncMode: IMPORT`), **`clearance: unassigned` and `org_unit: unassigned`**
+  (`realm.ORGANISATION_ARRIVAL_ATTRIBUTES`) — a clearance no scheme knows, so default-deny
+  (`01_DOMAIN_MODEL.md` §2.2) — and no role and no handling code. Nothing comes from the directory.
+  An administrator's later grant is never taken back by a sign-in (measured: a mapper in `FORCE` mode
+  would).
+- **Truststore.** With `network.tls.ca` on Small, the CA is mounted read-only at
+  `/opt/keycloak/conf/truststores/organisation-ca.pem` and named in `KC_TRUSTSTORE_PATHS`. Measured:
+  Keycloak 26.0 reads that folder by itself, so the mount alone is enough, and without it the
+  discovery is refused (500, `unknown_error`); the registration then says "could not read the
+  organisation's sign-in settings", naming `network.tls.ca`. **Not measured** (no route out from the
+  tests): that Keycloak keeps the JVM's public roots beside it, which Entra ID's chain needs; it is
+  Keycloak's documented behaviour.
+- **The two addresses, confirmed against Keycloak 26.0:** the redirect URI Keycloak sends is exactly
+  `https://id.<host>/realms/osprey/broker/<alias>/endpoint`, and signing out sends the browser to
+  the provider's sign-out with `post_logout_redirect_uri` exactly `…/endpoint/logout_response`.
+  `install` prints both; `doctor --mode small --config install.yaml` prints them too, fails without
+  `OSPREY_ORG_SIGN_IN_SECRET` in the terminal, and warns when the provider's name does not resolve.
+- **The label** names the provider on Keycloak's own pages (its display name). The welcome page's
+  button keeps ADR-115 decision 3's words, *Continue with organisation sign-in* (open question for
+  the owner: show the label there instead).
+- **Rule 13 — corrected.** Decision 4 said the button had no keyboard step; `keyboard/sign-in.spec.ts`
+  already had one (`continue-with-organisation-sign-in`). What had none was the button beside it,
+  *Sign in with an OspreyFlow account*, the first administrator's way in on such a deployment: drop 2
+  adds `sign-in-with-an-account-beside-the-organisation` (Enter reaches Keycloak with no provider
+  hint), and axe scans of the organisation variant in both themes and under GOV.UK.
+
+**Unit 5 — memory.** `harness/profiles.py`'s `store_memory` applies the table (0.4 × M for the
+graph heap, 8 to 31; M ÷ 16 for OpenSearch, 0.5 to 8, `-Xms` = `-Xmx`; M ÷ 32 for PostgreSQL's
+shared buffers, 0.25 to 4, `effective_cache_size` three times), each `resources` override winning.
+`server.memory_gib: auto` is measured once by `install` (Docker's `MemTotal`, whole GiB) and written
+to `resources.memory_gib`; a number is written as given (at least 16).
+
+- **The sizes live in each store's own definition** (ArcadeDB's `ARCADEDB_OPTS_MEMORY` default,
+  OpenSearch's `OPENSEARCH_JAVA_OPTS`, PostgreSQL's `command`), not in `deployment.env`, which every
+  owned service reads whole: a resize by `apply` restarts `arcadedb`, `opensearch` and `postgres`
+  alone. `OSPREY_ARCADEDB_HEAP` still overrides from the shell; a sized deployment no longer writes it
+  to `deployment.env`.
+- **Refused outside a self-contained Small** — corrected: the text above has `resources` both
+  "refused on Lite and Enterprise" and "Lite unchanged unless set"; it is refused on Lite, Enterprise
+  and a Small on managed services (whose cloud sizes them), so every other deployment is unchanged.
+- **The floor:** `PROFILE_FLOORS["small"]` is 30 GiB (Preflight's floor for every Small). Cloud
+  Small's graph heap is unchanged (8 GiB): the unsized heap is now read from Lite's floor rather than
+  the profile's.
+- **Measured, rule 15:** PostgreSQL 16.4 **does not refuse** shared buffers above its container's
+  memory (2 GB in a 512 MB container starts; the memory is reserved, not touched) and refuses only a
+  value the machine cannot map (64 GB: the server never starts); OpenSearch 2.17.1 with a heap above
+  its container is killed for memory (exit 137). So the check that keeps the three within the server
+  is the schema's: **an override giving them more than three quarters of `memory_gib` is refused**
+  (the rule's own values take at most half, from the 30 GiB floor up).
+- **ArcadeDB's page cache** on 26.10.1 (`arcadedb.maxPageRAM`, read from the engine's
+  `GlobalConfiguration`): unset, a quarter of the maximum heap; above 80 % of the heap, halved. It
+  follows the sized heap, so it is not set.
+
+**Unit 6 — backups and update.** `ospreyflow backup` writes to `server.backups`
+(`components.storage.backups`, default `~/OspreyFlow/backups`) on a self-contained Small
+(`backup.default_out_root`), and `update`'s own backup goes there too (read from the deployment's
+`osprey.yaml` copy). `doctor` checks 20 GB free where backups are written, at the nearest folder that
+exists (the figure is mine, not measured). The guide gives the cron line.
+
+- **What a set carries — corrected.** Decision 5 says a set never carries "any secret". The certificate
+  key and `deployment.env` are never in it (`backup.backup_configuration` copies the settings and
+  rendered files by name), but its identity item has always carried the dashboards' client secrets
+  (`harness/identity.py`), and the sets hold the case data. Each set is now made owner-only (700).
+  Keycloak's own database is not dumped, so the organisation's client secret is not in a set.
+- **Host tools on the server:** `backup`, `restore`, `start --build` and every seed now answer the
+  server's own names, with its certificate trusted — `backup` and `restore` from their `osprey.yaml`;
+  `scripts.refresh`'s deployment finder (which `start --build`, `update`'s files and
+  `scripts.seed_internal` all use) from the rendered folder's `osprey.yaml` copy
+  (`site.answer_the_deployment_in`).
+- **Found and fixed on this path:** a Small installed with no demo accounts was given the demo
+  administrator — with the Admin role and a password in `deployment.env` — by `start --build` (whose
+  rebuild registers the sign-in) or a bare `repair-sign-in`; now a Small whose settings hold no demo
+  administrator's password is given none. And a restore lost a person's link to the organisation's
+  provider (the identity export took people, not their links), which Keycloak 26.0 meets with "an
+  account with this email already exists"; the export now carries `federatedIdentities`.
+- **`update`:** nothing else in it refused this mode; its backup now goes to the configured folder and
+  reaches the server's names. Not run end to end here (unit 10).
+
+**What the client does for Entra ID** (the administration guide, section 5a.1, says it to them):
+register a web application with the two printed addresses; make a client secret and hand it over;
+turn on "assignment required" and assign a group of the test users; give the issuer
+(`https://login.microsoftonline.com/<tenant-id>/v2.0`) and the client id; allow the server out to
+`login.microsoftonline.com` on 443. **Entra ID itself is not tested**: there is no tenant. The real
+provider in the tests is a second Keycloak 26.0, which refuses what Entra ID is documented to refuse
+here (a redirect URI not registered exactly, a wrong client secret, a post-logout address not
+registered); Entra-specific behaviour — its claim names (`preferred_username` is the UPN), group
+assignment, conditional access, and the v2.0 issuer's exact form in its tokens — is not proved.
+
+**Tests, each shown red first** (`red/s20d2_*` in the worker's scratchpad). Real Keycloaks, stores or
+browsers are marked ⚑.
+
+| Unit | Test (file :: name) |
+| --- | --- |
+| 7 | `tests/cli/test_answers.py::test_organisation_sign_in_answers_name_the_provider_in_osprey_yaml`, `::test_organisation_sign_in_answers_are_refused_in_words` |
+| 7 | `tests/harness/test_deployment_schema.py::test_the_organisations_provider_is_named_on_a_small_with_its_alias`, `::test_the_organisations_provider_is_refused_on_lite_and_enterprise_in_words`, `::test_the_organisations_provider_is_refused_without_what_keycloak_needs` |
+| 7 | `tests/harness/test_realm.py::test_the_organisations_provider_is_rendered_with_no_secret`, `::test_a_person_from_the_organisation_arrives_with_no_role_and_no_clearance`, `::test_the_addresses_the_organisation_registers_follow_the_identity_address` |
+| 7 | `tests/harness/test_render.py::test_keycloak_trusts_the_organisations_ca_when_one_is_given` |
+| 7 ⚑ | `tests/harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends` (and refused when not registered exactly), `::test_a_person_from_the_organisation_has_no_role_until_an_administrator_grants_one` (the Conduit's own resolver; the grant through `services.api.identity_admin`; shown red by removing the arrival mappers and by `FORCE` mappers), `::test_a_wrong_client_secret_is_refused_by_the_organisation_and_repair_puts_it_back` (shown red by not setting the secret), `::test_repair_sign_in_sets_the_brokers_client_secret_again`, `::test_keycloak_trusts_the_organisations_ca_for_its_back_channel` (a third Keycloak whose truststore holds another CA; shown red by rendering no truststore), `::test_signing_out_returns_through_the_printed_post_logout_address` |
+| 7 ⚑ | `tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route` (every GET route of the Conduit, with a real case and dataset in a throwaway Postgres; shown red by arrival in the case owner's unit) |
+| 7 | `tests/cli/test_doctor.py::test_organisation_sign_in_needs_its_secret_and_says_what_to_register`; `tests/cli/test_install_small_server.py::test_organisation_sign_in_install_prints_what_the_organisation_registers` |
+| 7 ⚑ | `apps/workspace/keyboard/sign-in.spec.ts` "an account beside the organisation's sign-in signs in by keyboard with no provider hint" (`sign-in-with-an-account-beside-the-organisation`; shown red by the hint on both buttons); `apps/workspace/a11y/a11y.spec.ts`'s organisation variant, both themes and GOV.UK (shown red by a low-contrast note) |
+| 5 | `tests/harness/test_profiles.py::test_heaps_follow_the_servers_memory_at_32_64_and_128_gib`, `::test_the_graph_heap_never_exceeds_31_gib`, `::test_opensearch_xms_equals_xmx`, `::test_an_override_in_osprey_yaml_wins`, `::test_lite_without_resources_keeps_todays_values`, `::test_the_sized_heaps_leave_the_reserve`, `::test_the_server_floor_is_thirty_gib`, `::test_stores_sized_beyond_the_server_are_refused_in_words` |
+| 5 | `tests/harness/test_render_memory.py::test_the_rendered_compose_and_env_carry_the_sized_values`, `::test_a_resize_restarts_only_the_stores_concerned` (shown red by the sized heap in `deployment.env`) |
+| 5 ⚑ | `tests/harness/test_render_memory.py::test_postgres_starts_with_the_rendered_settings_and_refuses_an_impossible_one`, `::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory`, `::test_the_graph_store_starts_with_the_rendered_heap` |
+| 5 | `tests/cli/test_install_small_server.py::test_memory_auto_is_measured_once_and_written_to_osprey_yaml` |
+| 6 | `tests/harness/test_backup.py::test_a_self_contained_small_backs_up_to_its_configured_folder`, `::test_backup_main_writes_to_the_configured_folder_reaching_the_servers_names`, `::test_a_backup_never_carries_the_tls_key` (shown red by copying `deployment.env`, and the files `compose.yaml` mounts), `::test_a_backup_set_is_readable_by_its_owner_only` |
+| 6 | `tests/harness/test_host_tools_reach_the_server.py::test_restore_answers_the_servers_names`, `::test_start_build_and_the_seeds_answer_the_servers_names`, `::test_a_lite_deployment_is_answered_as_before` |
+| 6 | `tests/harness/test_update_apply.py::test_update_moves_a_self_contained_small`; `tests/harness/test_register_sign_in.py::test_a_small_without_demo_accounts_is_never_given_them_by_a_repair_or_a_rebuild`; `tests/cli/test_doctor.py::test_disk_is_measured_at_the_backups_folder_too` |
+| 6 ⚑ | `tests/harness/test_organisation_sign_in.py::test_a_restored_person_still_signs_in_through_the_organisation` |
+
+**Not proved in drop 2:** Entra ID itself (above); the whole stack on an `amd64` server — the
+worker's machine is an arm64 Mac running the owner's deployments — which is unit 10's: install with
+`sign_in` against a real provider reachable from the VM, `memory_gib: auto` on the VM's real memory,
+a backup and a restore with a brokered person, and an `update` between two release tags.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
