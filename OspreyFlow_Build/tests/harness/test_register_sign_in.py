@@ -14,6 +14,7 @@ be told to refuse a password reset, and can be unreachable. Each test names what
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +66,13 @@ class FakeKeycloak:
         # ADR-112 Amendment 1: the Conduit's client, its service account, and realm-management's
         # roles — so `register` can bring the account's grants up to date on every refresh.
         # Kept apart from `clients`, which the sign-in tests count.
-        self.system_clients = [{"clientId": "osprey-conduit", "id": "cid-conduit"},
+        # A realm import cannot carry a confidential client's secret, so Keycloak makes its own:
+        # the two Conduit clients start with a secret the deployment's settings do not hold (D2,
+        # step 18's rehearsal, 3 November 2026).
+        self.system_clients = [{"clientId": "osprey-conduit", "id": "cid-conduit",
+                                "secret": "made-by-keycloak-at-import"},
+                               {"clientId": "osprey-unprivileged", "id": "cid-unprivileged",
+                                "secret": "made-by-keycloak-at-import-too"},
                                {"clientId": "realm-management", "id": "cid-rm"}]  # fmt: skip
         self.service_account = {"id": "uid-sa", "username": "service-account-osprey-conduit"}
         self.realm_management_roles = ["impersonation", "view-users", "manage-users", "manage-clients",
@@ -90,6 +97,14 @@ class FakeKeycloak:
             if data["password"] != ADMIN_PASSWORD:
                 return 401, {"error": "invalid_grant"}
             return 200, {"access_token": "admin-token"}
+        if path == "/realms/osprey/protocol/openid-connect/token":
+            # The Conduit's own calls (client credentials, token exchange): Keycloak refuses a
+            # confidential client whose secret is not the one it holds, whatever the grant.
+            held = {c["clientId"]: c.get("secret") for c in self.system_clients}
+            if data.get("client_id") not in held or held[data["client_id"]] != data.get("client_secret"):
+                return 401, {"error": "unauthorized_client",
+                             "error_description": "Invalid client or Invalid client credentials"}
+            return 200, {"access_token": f"token-for-{data['client_id']}"}
         if token != "admin-token":
             return 401, {"error": "no token"}
         if path == "/admin/serverinfo":
@@ -120,7 +135,14 @@ class FakeKeycloak:
                 return 404, {"error": "Could not find client"}
             return 204, ""
         if route.startswith("/clients/cid-") and verb == "PUT":
-            self.clients[route.rsplit("/", 1)[1]] = data
+            identifier = route.rsplit("/", 1)[1]
+            for system in self.system_clients:
+                if system["id"] == identifier:
+                    if data.get("clientId") != system["clientId"]:
+                        return 400, {"error": "clientId cannot be changed"}
+                    system.update(data)
+                    return 204, ""
+            self.clients[identifier] = data
             return 204, ""
         if route == "/clients" and verb == "POST":
             if data["clientId"] in {c["clientId"] for c in self.clients.values()}:
@@ -772,3 +794,77 @@ def test_without_demo_accounts_registration_makes_none_and_writes_nothing(
     assert not keycloak.passwords
     assert env.read_text(encoding="utf-8") == before
     assert "demo" not in capsys.readouterr().out.lower()
+
+
+# --- D2: the Conduit's own client secret after a wipe (step 18a, 3 November 2026) ---
+
+CONDUIT_SECRET = "the-deployments-conduit-secret"
+
+
+def _conduit_can_act(keycloak: FakeKeycloak, client_id: str = "osprey-conduit") -> bool:
+    """What the Conduit does before it can act for anyone: a client-credentials call with the
+    secret its settings hold (`OSPREY_OIDC_CLIENT_SECRET`)."""
+    status, _ = keycloak.call(
+        f"{ISSUER}/realms/osprey/protocol/openid-connect/token",
+        data={"grant_type": "client_credentials", "client_id": client_id,
+              "client_secret": CONDUIT_SECRET},
+        form=True,
+    )  # fmt: skip
+    return status == 200
+
+
+def test_repair_sign_in_gives_a_reimported_realm_the_conduits_secret_again(
+    tmp_path: Path, keycloak: FakeKeycloak
+) -> None:
+    """D2: after GOV.UK's stores were wiped the realm was imported afresh with a secret Keycloak
+    made, so every call the Conduit made for a person was refused (rules' deployer unresolved, a
+    hotlist Stopped, 0 customers re-screened). `apply` sets the secret after the import;
+    `repair-sign-in` did not. It must, from the deployment's own settings, for both clients."""
+    assert not _conduit_can_act(keycloak), "the stand-in refuses a secret it does not hold"
+    _register(_env(tmp_path, f"OSPREY_OIDC_CLIENT_SECRET={CONDUIT_SECRET}"))
+    assert _conduit_can_act(keycloak)
+    assert _conduit_can_act(keycloak, "osprey-unprivileged")
+
+
+def test_the_conduits_secret_is_set_without_demo_accounts_too(keycloak: FakeKeycloak) -> None:
+    """Small's install and a cluster's run `ensure_identity` alone: it carries the repair."""
+    token = keycloak_admin.admin_token(issuer=ISSUER, admin_user="admin", admin_password=ADMIN_PASSWORD)
+    register_sign_in.ensure_identity(issuer=ISSUER, realm="osprey", token=token, config=_config(),
+                                     values={"OSPREY_OIDC_CLIENT_SECRET": CONDUIT_SECRET})  # fmt: skip
+    assert _conduit_can_act(keycloak)
+
+
+def test_restoring_the_conduits_secret_is_safe_to_repeat_and_never_printed(
+    tmp_path: Path, keycloak: FakeKeycloak, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = _env(tmp_path, f"OSPREY_OIDC_CLIENT_SECRET={CONDUIT_SECRET}")
+    first = _register(env)
+    assert "the Conduit's client credential set from the deployment's settings" in first
+    puts = sum(1 for verb, path in keycloak.calls if verb == "PUT" and "cid-conduit" in path)
+    second = _register(env)
+    assert "the Conduit's client credential already matches the deployment's settings" in second
+    assert sum(1 for verb, path in keycloak.calls if verb == "PUT" and "cid-conduit" in path) == puts
+    assert _conduit_can_act(keycloak)
+    register_sign_in.print_summary(first + second, env)
+    assert CONDUIT_SECRET not in capsys.readouterr().out + json.dumps(first + second)
+    # `ospreyflow` hides every line naming a secret-like word (`cli/ospreyflow/run.py`'s `_SECRET`),
+    # which hid this line on GOV.UK's rebuild: it is worded so the operator sees it.
+    said = [line for line in first + second if "Conduit's client" in line]
+    assert said and not any(re.search(r"(?i)password|secret|token", line) for line in said)
+
+
+def test_a_refused_secret_update_is_named_not_reported_as_done(
+    tmp_path: Path, keycloak: FakeKeycloak, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`grant_service_account_roles` once ignored the PUT's answer: a refusal there would leave the
+    realm unable to act while the run said it had finished."""
+    real = keycloak.call
+
+    def refusing(url: str, **kwargs: Any) -> tuple[int, Any]:
+        if kwargs.get("method") == "PUT" and "cid-conduit" in url:
+            return 403, {"error": "forbidden"}
+        return real(url, **kwargs)
+
+    monkeypatch.setattr(keycloak_admin, "_call", refusing)
+    with pytest.raises(RealmConfigurationFailed, match="osprey-conduit"):
+        _register(_env(tmp_path, f"OSPREY_OIDC_CLIENT_SECRET={CONDUIT_SECRET}"))

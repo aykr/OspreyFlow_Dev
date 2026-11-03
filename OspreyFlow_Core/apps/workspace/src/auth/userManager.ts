@@ -3,6 +3,7 @@
 // per the build brief's own instruction to prefer a maintained library over hand-rolling PKCE.
 import { User, UserManager, WebStorageStateStore } from "oidc-client-ts";
 
+import { SIGN_IN_WINDOW_NAME } from "./callbackFrame";
 import { GLASS_CLIENT_ID, oidcAuthority, postLogoutRedirectUri, redirectUri } from "./oidcConfig";
 
 /** The four custom claims `services/api/auth.py` builds a `Principal` from, plus `sub` — exactly
@@ -88,11 +89,16 @@ export function getUserManager(): UserManager {
       post_logout_redirect_uri: postLogoutRedirectUri(),
       response_type: "code",
       scope: "openid",
-      // The Glass drives re-authentication explicitly on a 401 / a failed silent renewal
-      // (`App.tsx`'s own `reauthenticateSilently`), not via this library's background timer — the
-      // ADR's own "preserve state, re-fetch" sequence is the Glass's responsibility, not a thing to
-      // race against an automatic renewal firing mid-sequence.
+      // The library's own timer stays off. The Glass renews in the background itself
+      // (`tokenRenewal.ts`, ADR-050 Amendment 1), ahead of expiry and after a refused call alike,
+      // through one renewal at a time — so no automatic renewal can fire in the middle of another.
       automaticSilentRenew: false,
+      // The silent round's hidden iframe loads the whole workspace bundle before it hands the answer
+      // back (`callbackFrame.ts`); the library's 10 seconds is short for a cold cache.
+      silentRequestTimeoutInSeconds: 20,
+      // The sign-in again in place opens under this name, so the page it comes back to knows it is
+      // only carrying the answer (`callbackFrame.ts`).
+      popupWindowTarget: SIGN_IN_WINDOW_NAME,
       userStore: new WebStorageStateStore({ store: new InMemoryStorage() }),
     });
   }
@@ -113,9 +119,10 @@ export function completeSignInFromRedirect(): Promise<User> {
   return getUserManager().signinRedirectCallback();
 }
 
-/** `prompt=none` against the identity provider's own session cookie — `06_DECISIONS.md` ADR-050's
- * Decision section: "Re-authentication uses a silent `prompt=none` authorization request against
- * the Keycloak session cookie, which keeps the long-lived credential in the IdP's own cookie
+/** The silent renewal (ADR-050 Amendment 1, `tokenRenewal.ts`): `prompt=none` against the identity
+ * provider's own session cookie — `06_DECISIONS.md` ADR-050's Decision section:
+ * "Re-authentication uses a silent `prompt=none` authorization request against the Keycloak session
+ * cookie, which keeps the long-lived credential in the IdP's own cookie
  * rather than in storage the page can read." Resolves to `null` rather than throwing on the
  * expected failure (`login_required` — the IdP's own session has actually expired): the caller's
  * job is to decide what "no silent session" means, not to catch this function's own exception
@@ -123,15 +130,24 @@ export function completeSignInFromRedirect(): Promise<User> {
  * provider said no" distinction ADR-050 carries to the Glass — a network failure here is left to
  * propagate, a `login_required` is not.
  */
-export async function reauthenticateSilently(): Promise<User | null> {
+export async function renewSilently(): Promise<User | null> {
   try {
-    return await getUserManager().signinSilent();
+    // `forceIframeAuth`: always the `prompt=none` round against the identity provider's cookie,
+    // never a refresh token (ADR-050 objection 5's ruling: none is used by the browser), even though
+    // Keycloak puts one in the code exchange's answer.
+    return await getUserManager().signinSilent({ forceIframeAuth: true });
   } catch (error) {
     if (error instanceof Error && error.name === "ErrorResponse") {
       return null;
     }
     throw error;
   }
+}
+
+/** After the identity provider's session has ended: sign in again in a small window of its own, so
+ * the workspace stays as it is behind it (ADR-050 Amendment 1). Opened from the person's own click. */
+export function signInAgainInPlace(): Promise<User> {
+  return getUserManager().signinPopup();
 }
 
 export function signOut(): Promise<void> {

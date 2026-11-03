@@ -46,6 +46,8 @@ from schemas.deployment import OspreyConfig, generated_folder
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
 DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
+#: The Conduit's confidential-client secret, written by `apply` (ADR-114 Amendment 32).
+CONDUIT_SECRET_KEY = "OSPREY_OIDC_CLIENT_SECRET"
 DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
 #: ADR-113 decision 8: the two personas added beside the analyst and the admin.
 DEMO_PERSONA_PASSWORD_KEYS = {
@@ -203,6 +205,19 @@ def ensure_identity(
                 password=values.get("OSPREY_SMTP_PASSWORD"),
             )
         )  # fmt: skip
+    conduit_secret = values.get(CONDUIT_SECRET_KEY)
+    if conduit_secret:
+        # ADR-114 Amendment 32: a wiped or re-imported realm holds a secret Keycloak made, so the
+        # Conduit can act for nobody (rules, hotlists, list screening) until this is set again.
+        lines.append(
+            keycloak_admin.ensure_conduit_client_secret(
+                issuer=issuer, realm=realm, token=token, client_secret=conduit_secret
+            )
+        )
+    else:
+        lines.append(
+            "the Conduit's client credential left as it is: the deployment's settings name none"
+        )
     lines.append(
         keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
     )

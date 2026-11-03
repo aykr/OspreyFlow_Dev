@@ -47,6 +47,8 @@ vi.mock("./auth/userManager", async () => {
     completeSignInFromRedirect: vi.fn(),
     clearRedirectCallbackParams: vi.fn(),
     getUserManager: vi.fn(() => ({ signinRedirect: vi.fn() }) as never),
+    renewSilently: vi.fn(() => new Promise(() => undefined)),
+    signInAgainInPlace: vi.fn(),
     signIn: vi.fn(),
     signOut: vi.fn(),
   };
@@ -472,65 +474,169 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 describe("a stale sign-in is noticed whichever screen's call finds it (3 October 2026)", () => {
   // Seen on the owner's machine: after `make refresh` restarted the identity provider the Ingest
   // Studio and the case menu showed "401" as raw errors while the Glass itself re-signed in, because
-  // only the Glass's own two calls were wired to the re-sign-in.
+  // only the Glass's own two calls were wired to the re-sign-in. Since ADR-050 Amendment 1 (build
+  // order step 18b) the reaction is a silent renewal in the background, never a page redirect.
   const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  const PROFILE = { sub: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] };
+  const inSeconds = (seconds: number) => Math.floor(Date.now() / 1000) + seconds;
 
-  async function signedInWithOntologyLoaded() {
+  /** Signed in as `good-token`; the Conduit refuses `good-token` on the Ingest Studio's call and
+   * accepts `renewed-token`, so what a call carried is what it was answered. */
+  async function signedInWithOntologyLoaded(expiresInSeconds = 300) {
     vi.mocked(userManager.isSignInRedirectCallback).mockReturnValue(true);
     vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
       access_token: "good-token",
-      profile: {
-        sub: "analyst-1",
-        clearance: "OFFICIAL",
-        org_unit: "unit-1",
-        roles: [],
-        receivable_handling_codes: [],
-      },
+      expires_at: inSeconds(expiresInSeconds),
+      profile: PROFILE,
     } as never);
     const signinRedirect = vi.fn();
     vi.mocked(userManager.getUserManager).mockReturnValue({ signinRedirect } as never);
-    const sent: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+    vi.mocked(userManager.signIn).mockReset();
+    const sent: { url: string; authorisation: string | null }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      sent.push(url);
+      const authorisation = new Headers(init?.headers).get("authorization");
+      sent.push({ url, authorisation });
       if (url.endsWith("/v1/ontology")) {
         return new Response(JSON.stringify({ edge_types: [], entity_types: [] }), { status: 200 });
       }
-      if (url.includes("/v1/ingest/recipes")) return new Response(null, { status: 401 });
+      if (url.includes("/v1/ingest/recipes")) {
+        return authorisation === "Bearer renewed-token"
+          ? new Response("[]", { status: 200 })
+          : new Response(null, { status: 401 });
+      }
       return new Promise<Response>(() => undefined);
     });
     render(<App />);
     // The first authenticated call has succeeded once the ontology has been asked for.
-    await vi.waitFor(() => expect(sent.some((u) => u.endsWith("/v1/ontology"))).toBe(true));
+    await vi.waitFor(() => expect(sent.some((u) => u.url.endsWith("/v1/ontology"))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    return signinRedirect;
+    return { signinRedirect, sent };
   }
 
-  test("a 401 on a call no Glass code watches (the Ingest Studio's) starts the silent re-sign-in", async () => {
-    const signinRedirect = await signedInWithOntologyLoaded();
+  const renewed = () => ({ access_token: "renewed-token", expires_at: inSeconds(300), profile: PROFILE }) as never;
+  const recipes = () => fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } });
 
-    await fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } });
+  test("a 401 on a call no Glass code watches (the Ingest Studio's) starts a silent renewal, not a redirect", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
+    const { signinRedirect } = await signedInWithOntologyLoaded();
 
-    await vi.waitFor(() => expect(signinRedirect).toHaveBeenCalledWith({ prompt: "none" }));
+    const response = await recipes();
+
+    expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200); // made once more with the renewed token
+    expect(signinRedirect).not.toHaveBeenCalled();
   });
 
-  test("two refusals at once start one re-sign-in, not two", async () => {
-    const signinRedirect = await signedInWithOntologyLoaded();
-
-    await Promise.all([
-      fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } }),
-      fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } }),
-    ]);
-
-    await vi.waitFor(() => expect(signinRedirect).toHaveBeenCalled());
-    expect(signinRedirect).toHaveBeenCalledTimes(1);
-  });
-
-  test("a 401 for some other token does not sign the analyst out", async () => {
-    const signinRedirect = await signedInWithOntologyLoaded();
+  test("a 401 for some other token does not start a renewal", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
+    await signedInWithOntologyLoaded();
 
     await fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer an-older-token" } });
 
+    expect(vi.mocked(userManager.renewSilently)).not.toHaveBeenCalled();
+  });
+});
+
+describe("windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1)", () => {
+  const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  const PROFILE = { sub: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] };
+  const inSeconds = (seconds: number) => Math.floor(Date.now() / 1000) + seconds;
+  const renewed = () => ({ access_token: "renewed-token", expires_at: inSeconds(300), profile: PROFILE }) as never;
+
+  async function signedIn(expiresInSeconds: number) {
+    vi.mocked(userManager.isSignInRedirectCallback).mockReturnValue(true);
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "good-token",
+      expires_at: inSeconds(expiresInSeconds),
+      profile: PROFILE,
+    } as never);
+    const signinRedirect = vi.fn();
+    vi.mocked(userManager.getUserManager).mockReturnValue({ signinRedirect } as never);
+    vi.mocked(userManager.signIn).mockReset();
+    const sent: { url: string; authorisation: string | null }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const authorisation = new Headers(init?.headers).get("authorization");
+      sent.push({ url, authorisation });
+      if (url.endsWith("/v1/ontology")) {
+        return new Response(JSON.stringify({ edge_types: [], entity_types: [] }), { status: 200 });
+      }
+      if (url.includes("/v1/ingest/recipes")) {
+        return authorisation === "Bearer renewed-token"
+          ? new Response("[]", { status: 200 })
+          : new Response(null, { status: 401 });
+      }
+      return new Promise<Response>(() => undefined);
+    });
+    render(<App />);
+    await vi.waitFor(() => expect(sent.some((u) => u.url.endsWith("/v1/ontology"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return { signinRedirect, sent };
+  }
+
+  const recipes = () => fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } });
+
+  test("a token near expiry is renewed in the background, with no navigation, and the next call carries it", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
+    const { signinRedirect, sent } = await signedIn(2);
+
+    // Nothing is called and nothing refused: the renewal comes of the token's own expiry alone.
+    await vi.waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const response = await recipes();
+    expect(response.status).toBe(200);
+    expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
     expect(signinRedirect).not.toHaveBeenCalled();
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("two triggers at once make one renewal, and both calls are answered with its token", async () => {
+    let finish!: (value: unknown) => void;
+    vi.mocked(userManager.renewSilently)
+      .mockReset()
+      .mockImplementation(() => new Promise((resolve) => (finish = resolve)) as never);
+    await signedIn(300);
+
+    const both = Promise.all([recipes(), recipes()]);
+    await vi.waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalled());
+    finish(renewed());
+    const [a, b] = await both;
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
+  });
+
+  test("a failed renewal leaves the page in place and asks to sign in again there", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(null);
+    vi.mocked(userManager.signInAgainInPlace).mockReset().mockResolvedValue(renewed());
+    const { signinRedirect, sent } = await signedIn(300);
+
+    expect((await recipes()).status).toBe(401);
+
+    const prompt = await screen.findByRole("alertdialog", { name: "Your session has ended" });
+    expect(signinRedirect).not.toHaveBeenCalled();
+    expect(vi.mocked(userManager.signIn)).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull(); // not the sign-in screen
+
+    fireEvent.click(within(prompt).getByRole("button", { name: "Sign in again" }));
+    await vi.waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(vi.mocked(userManager.signInAgainInPlace)).toHaveBeenCalledTimes(1);
+
+    expect((await recipes()).status).toBe(200);
+    expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
+  });
+
+  test("an identity provider that cannot be reached is not said as an ended session", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockRejectedValue(new Error("IFrame timed out without a response"));
+    await signedIn(300);
+
+    await recipes();
+
+    const prompt = await screen.findByRole("alertdialog", { name: "The sign-in service could not be reached" });
+    expect(within(prompt).getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });

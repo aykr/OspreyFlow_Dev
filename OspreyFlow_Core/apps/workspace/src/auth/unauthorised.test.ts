@@ -108,3 +108,81 @@ describe("installUnauthorisedWatch", () => {
     expect(onUnauthorised).not.toHaveBeenCalled();
   });
 });
+
+// ADR-050 Amendment 1 (build order step 18b, rehearsal defect D1): the token is renewed in the
+// background, and every screen keeps the token it was given at sign-in, so a renewal re-renders
+// nothing and no screen reloads what it holds; the watch sends the renewed token in its place.
+describe("installUnauthorisedWatch with a renewed token", () => {
+  function sentAuthorisation(call: unknown[]): string | null {
+    const [input, init] = call as [RequestInfo | URL, RequestInit | undefined];
+    if (input instanceof Request) return input.headers.get("authorization");
+    return new Headers(init?.headers).get("authorization");
+  }
+
+  it("sends the renewed token in place of the one the screen holds, however the headers were given", async () => {
+    const underlying = vi.fn(async () => new Response("{}", { status: 200 }));
+    globalThis.fetch = underlying as unknown as typeof fetch;
+    uninstall = installUnauthorisedWatch({
+      apiBaseUrl: API, getToken: () => "tok", currentToken: () => "renewed", onUnauthorised: vi.fn(),
+    });
+    await fetch(`${API}/a`, bearer());
+    await fetch(`${API}/b`, { headers: new Headers({ authorization: "Bearer tok" }), method: "POST", body: "x" });
+    await fetch(`${API}/c`, { headers: [["Authorization", "Bearer tok"]] });
+    await fetch(new Request(`${API}/d`, { headers: { Authorization: "Bearer tok" } }));
+    expect(underlying.mock.calls.map((call) => sentAuthorisation(call as unknown[]))).toEqual(Array(4).fill("Bearer renewed"));
+  });
+
+  it("never sends the token anywhere but the Conduit", async () => {
+    const underlying = vi.fn(async () => new Response("{}", { status: 200 }));
+    globalThis.fetch = underlying as unknown as typeof fetch;
+    uninstall = installUnauthorisedWatch({
+      apiBaseUrl: API, getToken: () => "tok", currentToken: () => "renewed", onUnauthorised: vi.fn(),
+    });
+    await fetch("http://elsewhere/x", bearer());
+    expect(sentAuthorisation(underlying.mock.calls[0] as unknown[])).toBe("Bearer tok");
+  });
+
+  it("a call refused while a renewal was due is made once more with the renewed token, and the screen sees that answer", async () => {
+    let current = "tok";
+    const underlying = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get("authorization") === "Bearer renewed"
+        ? new Response(JSON.stringify({ ok: true }), { status: 200 })
+        : new Response(null, { status: 401 }),
+    );
+    globalThis.fetch = underlying as unknown as typeof fetch;
+    const onUnauthorised = vi.fn(async () => {
+      current = "renewed";
+      return true;
+    });
+    uninstall = installUnauthorisedWatch({ apiBaseUrl: API, getToken: () => "tok", currentToken: () => current, onUnauthorised });
+
+    const response = await fetch(`${API}/v1/cases`, { ...bearer(), method: "POST", body: JSON.stringify({ a: 1 }) });
+    expect(response.status).toBe(200);
+    expect(onUnauthorised).toHaveBeenCalledTimes(1);
+    expect(underlying).toHaveBeenCalledTimes(2);
+    expect(underlying.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ a: 1 }));
+  });
+
+  it("a call is made once more at most: a second refusal is handed back", async () => {
+    let current = "tok";
+    const underlying = vi.fn(async () => new Response(null, { status: 401 }));
+    globalThis.fetch = underlying as unknown as typeof fetch;
+    const onUnauthorised = vi.fn(async () => {
+      current = current === "tok" ? "renewed" : "renewed-again";
+      return true;
+    });
+    uninstall = installUnauthorisedWatch({ apiBaseUrl: API, getToken: () => "tok", currentToken: () => current, onUnauthorised });
+    const response = await fetch(`${API}/v1/cases`, bearer());
+    expect(response.status).toBe(401);
+    expect(underlying).toHaveBeenCalledTimes(2);
+    expect(onUnauthorised).toHaveBeenCalledTimes(1);
+  });
+
+  it("when no renewed token came, the refusal is handed back as it was and nothing is sent again", async () => {
+    const underlying = vi.fn(async () => new Response(null, { status: 401 }));
+    globalThis.fetch = underlying as unknown as typeof fetch;
+    uninstall = installUnauthorisedWatch({ apiBaseUrl: API, getToken: () => "tok", onUnauthorised: vi.fn(async () => false) });
+    expect((await fetch(`${API}/v1/cases`, bearer())).status).toBe(401);
+    expect(underlying).toHaveBeenCalledTimes(1);
+  });
+});

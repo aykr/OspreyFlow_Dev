@@ -363,27 +363,47 @@ def grant_service_account_roles(
     *, issuer: str, realm: str, admin_user: str, admin_password: str, client_secret: str
 ) -> None:
     token = admin_token(issuer=issuer, admin_user=admin_user, admin_password=admin_password)
+    ensure_conduit_client_secret(
+        issuer=issuer, realm=realm, token=token, client_secret=client_secret
+    )
+    ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
+    ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
 
+
+def ensure_conduit_client_secret(*, issuer: str, realm: str, token: str, client_secret: str) -> str:
+    """The Conduit's two confidential clients hold the secret the deployment's settings record
+    (`OSPREY_OIDC_CLIENT_SECRET`). The rendered realm declares both clients, but a realm import
+    cannot carry their secrets — Keycloak makes its own — so `apply`, a cluster's install and
+    `repair-sign-in` all set it here (ADR-114 Amendment 32: step 18's rehearsal found a wiped
+    deployment whose Conduit could act for nobody, because only `apply` did). Safe to repeat: a
+    client already holding the secret is not rewritten. The secret is never in what it returns."""
     from harness.realm import CONDUIT_CLIENT_ID, UNPRIVILEGED_CLIENT_ID
 
-    # The rendered realm declares both clients but a realm import cannot carry their secrets, so
-    # they are set here from the same apply-time value the env file records.
+    changed = False
     for client_id in (CONDUIT_CLIENT_ID, UNPRIVILEGED_CLIENT_ID):
         status, found = _call(
             f"{issuer}/admin/realms/{realm}/clients?clientId={client_id}", token=token
         )
         if status != 200 or not found:
             raise RealmConfigurationFailed(f"client {client_id!r} not found after realm import")
-        uuid = found[0]["id"]
-        _call(
-            f"{issuer}/admin/realms/{realm}/clients/{uuid}",
+        if found[0].get("secret") == client_secret:
+            continue
+        status, _ = _call(
+            f"{issuer}/admin/realms/{realm}/clients/{found[0]['id']}",
             token=token,
             data={**found[0], "secret": client_secret},
             method="PUT",
         )
-
-    ensure_unmanaged_attributes(issuer=issuer, realm=realm, token=token)
-    ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
+        if status not in (200, 204):
+            # The body is not repeated: it may echo the representation, secret and all.
+            raise RealmConfigurationFailed(
+                f"could not set client {client_id!r}'s credential: {status} — the Conduit will not "
+                "be able to act for anyone until it is"
+            )
+        changed = True
+    if changed:
+        return "the Conduit's client credential set from the deployment's settings"
+    return "the Conduit's client credential already matches the deployment's settings"
 
 
 def ensure_service_account_roles(*, issuer: str, realm: str, token: str) -> str:

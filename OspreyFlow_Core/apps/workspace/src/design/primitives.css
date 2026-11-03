@@ -795,6 +795,18 @@
 .view-over-cap__window label { display: grid; gap: var(--sp-4); font-size: var(--fs-12); color: var(--text-secondary); }
 .view-over-cap__message { margin: var(--sp-12) 0 0; color: var(--text-primary); font-weight: 600; }
 .view-over-cap__reopen { position: fixed; z-index: 20; left: 50%; top: calc(var(--h-canvas-toolbar) + var(--sp-8)); transform: translateX(-50%); }
+/* The token could not be renewed (ADR-050 Amendment 1): asked over the page, in place, above everything
+   else, so the page behind it is kept as it is; shaped as the over-cap dialog is. */
+.session-prompt {
+  position: fixed; z-index: 60; left: 50%; top: var(--sp-40); transform: translateX(-50%);
+  width: var(--w-right-panel-max); max-width: calc(100% - var(--sp-16)); box-sizing: border-box;
+  padding: var(--sp-16); background: var(--surface-raised); border-radius: var(--r-3); box-shadow: var(--overlay-shadow);
+  font-size: var(--fs-13); line-height: var(--lh-13); color: var(--text-primary);
+}
+.session-prompt__title { margin: 0 0 var(--sp-8); font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 700; }
+.session-prompt__body { margin: 0 0 var(--sp-12); color: var(--text-secondary); }
+.session-prompt__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
+.session-prompt__problem { margin: var(--sp-12) 0 0; color: var(--error); font-weight: 600; }
 /* ADR-115 E6 (DESIGN.md §5a): below 1100px the toolbar's "Last change" note gives its room back. */
 .canvas-toolbar__last-change { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
 @media (max-width: 1099px) { .canvas-toolbar__last-change { display: none; } }

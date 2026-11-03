@@ -18,14 +18,17 @@ import {
   clearRedirectCallbackParams,
   completeSignInFromRedirect,
   displayPrincipalFromUser,
-  getUserManager,
   isSignInRedirectCallback,
+  renewSilently,
   signIn,
+  signInAgainInPlace,
   signOut,
   type DisplayPrincipal,
 } from "./auth/userManager";
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
+import { SessionPrompt } from "./auth/SessionPrompt";
+import { createTokenRenewal, type RenewedUser, type TokenRenewal } from "./auth/tokenRenewal";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
@@ -278,6 +281,7 @@ export function App() {
           if (cancelled) return;
           setBearerToken(user.access_token);
           setPrincipal(displayPrincipalFromUser(user));
+          scheduleRenewal(user.expires_at);
           restoreViewStateAfterReauth();
           signedIn = true;
           clearHandoff(sessionStorage);
@@ -352,30 +356,122 @@ export function App() {
     if (bearerToken) unauthenticatedHandledRef.current = false;
   }, [bearerToken]);
 
+  // `06_DECISIONS.md` ADR-050 Amendment 1 (build order step 18b, rehearsal defect D1): the token is
+  // renewed silently in the background before it expires, and after a refused call, through one
+  // renewal at a time (`auth/tokenRenewal.ts`). The screens keep the token given at sign-in
+  // (`bearerToken`), so a renewal changes no state and no screen reloads; the fetch watch below sends
+  // the renewed token in its place. When renewal fails the page stays as it is and asks, in place.
+  const renewedRef = useRef<{ for: string; token: string } | null>(null);
+  const currentToken = useCallback(
+    () =>
+      renewedRef.current && renewedRef.current.for === bearerTokenRef.current
+        ? renewedRef.current.token
+        : bearerTokenRef.current,
+    [],
+  );
+  const [sessionPrompt, setSessionPrompt] = useState<"ended" | "unreachable" | null>(null);
+  const sessionPromptRef = useRef<"ended" | "unreachable" | null>(null);
+  const [sessionPromptBusy, setSessionPromptBusy] = useState(false);
+  const [sessionPromptProblem, setSessionPromptProblem] = useState<string | null>(null);
+  const principalRef = useRef(principal);
+  principalRef.current = principal;
+  const askToSignInAgain = useCallback((why: "ended" | "unreachable" | null) => {
+    sessionPromptRef.current = why;
+    setSessionPrompt(why);
+    setSessionPromptProblem(null);
+  }, []);
+  const adoptRenewedUser = useCallback(
+    (user: RenewedUser) => {
+      const signedIn = principalRef.current;
+      if (signedIn && user.profile.sub && user.profile.sub !== signedIn.sub) {
+        // Somebody else signed in, in the sign-in window: a new sign-in, not a renewal.
+        renewedRef.current = null;
+        setBearerToken(user.access_token);
+        setPrincipal(displayPrincipalFromUser(user as never));
+      } else {
+        renewedRef.current = { for: bearerTokenRef.current, token: user.access_token };
+      }
+      askToSignInAgain(null);
+    },
+    [askToSignInAgain],
+  );
+  const renewalRef = useRef<TokenRenewal | null>(null);
+  const expiresAtRef = useRef<number | undefined>(undefined);
+  function scheduleRenewal(expiresAt: number | undefined): void {
+    expiresAtRef.current = expiresAt;
+    renewalRef.current?.schedule(expiresAt);
+  }
+  useEffect(() => {
+    if (isDevBypass) return;
+    const renewal = createTokenRenewal({
+      renew: renewSilently,
+      onRenewed: (user) => {
+        expiresAtRef.current = user.expires_at;
+        adoptRenewedUser(user);
+      },
+      onEnded: (why) => askToSignInAgain(why),
+    });
+    renewalRef.current = renewal;
+    renewal.schedule(expiresAtRef.current);
+    return () => {
+      renewal.dispose();
+      renewalRef.current = null;
+    };
+  }, [isDevBypass, adoptRenewedUser, askToSignInAgain]);
+
   /** A 401 on the very first authenticated call after sign-in means the token itself was refused
    * (wrong audience, a claim the realm never mapped) — retrying it against the same identity-
    * provider session would only fetch the identical bad token again. A 401 on any later call means
-   * the token merely expired during use, and ADR-050's own silent `prompt=none` round is the right
-   * response. The two need different reactions, and a bare 401 cannot tell them apart on its own —
-   * only "has this session ever produced a usable token" can. */
-  const handleUnauthenticatedResponse = useCallback((): void => {
-    if (isDevBypass) return;
-    // Once per sign-in: several calls refused together must start one re-sign-in, not several.
-    if (unauthenticatedHandledRef.current) return;
-    unauthenticatedHandledRef.current = true;
+   * the token merely expired during use, and is renewed silently (ADR-050 Amendment 1): resolves
+   * `true` when a renewed token is in place, so the refused call can be made once more. The two need
+   * different reactions, and a bare 401 cannot tell them apart on its own — only "has this session
+   * ever produced a usable token" can. */
+  const renewAfterRefusal = useCallback(async (): Promise<boolean> => {
+    if (isDevBypass) return false;
     if (!hasResolvedAPrincipalOnceRef.current) {
+      // Once per sign-in: several calls refused together say it once.
+      if (unauthenticatedHandledRef.current) return false;
+      unauthenticatedHandledRef.current = true;
       setBearerToken("");
       setPrincipal(null);
       setSignInReason(
         "Your sign-in could not be used to reach the workspace. Check with your " +
           "administrator that this deployment's identity provider is configured correctly.",
       );
-      return;
+      return false;
     }
-    setBearerToken("");
-    setPrincipal(null);
-    void getUserManager().signinRedirect({ prompt: "none" });
+    // The person has been asked to sign in again: nothing more is tried until they answer.
+    if (sessionPromptRef.current !== null) return false;
+    const renewal = renewalRef.current;
+    if (!renewal) return false;
+    return (await renewal.renewNow()).kind === "renewed";
   }, [isDevBypass]);
+  const handleUnauthenticatedResponse = useCallback((): void => {
+    void renewAfterRefusal();
+  }, [renewAfterRefusal]);
+
+  const signInAgain = useCallback(async (): Promise<void> => {
+    setSessionPromptBusy(true);
+    setSessionPromptProblem(null);
+    try {
+      const user = await signInAgainInPlace();
+      adoptRenewedUser(user);
+      scheduleRenewal(user.expires_at);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setSessionPromptProblem(
+        /closed/i.test(message)
+          ? "The sign-in window was closed before you had signed in. Sign in again to carry on."
+          : "The sign-in window could not be opened. Allow pop-up windows for this address, then sign in again.",
+      );
+    } finally {
+      setSessionPromptBusy(false);
+    }
+  }, [adoptRenewedUser]);
+  const tryRenewingAgain = useCallback((): void => {
+    askToSignInAgain(null);
+    void renewalRef.current?.renewNow();
+  }, [askToSignInAgain]);
 
   // A 401 from the Conduit on *any* call carrying the signed-in token means the sign-in has gone
   // stale, whichever screen made the call (3 October 2026: the Ingest Studio and the case menu
@@ -386,9 +482,10 @@ export function App() {
     return installUnauthorisedWatch({
       apiBaseUrl: API_BASE_URL,
       getToken: () => bearerTokenRef.current,
-      onUnauthorised: handleUnauthenticatedResponse,
+      currentToken,
+      onUnauthorised: renewAfterRefusal,
     });
-  }, [isDevBypass, handleUnauthenticatedResponse]);
+  }, [isDevBypass, currentToken, renewAfterRefusal]);
 
   // The case picker shown over an open case ("All cases" in the header). It replaces the workspace
   // in the render, it does not unmount `App`, so the sign-in and the per-case state survive.
@@ -919,10 +1016,11 @@ export function App() {
     // merely no longer preferred, so there is no fallback path left to fall back to.
     //
     // `bearerToken` in the dependency array below is `06_DECISIONS.md` ADR-050's own "the delta
-    // WebSocket authenticates on connect and on every reconnect": a token rotation (the silent
-    // `prompt=none` round `handleUnauthenticatedResponse` triggers) tears this effect down and
-    // re-establishes the connection with a freshly minted ticket, rather than an already-open
-    // socket continuing to carry the one it dialled with.
+    // WebSocket authenticates on connect and on every reconnect": a new sign-in tears this effect
+    // down and re-establishes the connection with a freshly minted ticket. A background renewal
+    // (ADR-050 Amendment 1) does not change `bearerToken`, so the open socket, authenticated once at
+    // connect by its single-use ticket, stays open; a new connection's ticket is asked for with the
+    // renewed token (the fetch watch sends it).
     let cancelled = false;
     let client: DeltaClient | null = null;
     void fetch(`${API_BASE_URL}/v1/ws-ticket`, {
@@ -1124,6 +1222,18 @@ export function App() {
     );
   }
 
+  // ADR-050 Amendment 1: over whichever screen is shown, so that screen is kept as it is.
+  const sessionPromptShown =
+    sessionPrompt !== null && bearerToken ? (
+      <SessionPrompt
+        why={sessionPrompt}
+        busy={sessionPromptBusy}
+        problem={sessionPromptProblem}
+        onSignInAgain={() => void signInAgain()}
+        onTryAgain={tryRenewingAgain}
+      />
+    ) : null;
+
   const account =
     !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null;
   const startScreenShown =
@@ -1152,33 +1262,43 @@ export function App() {
           openStudio: () => setView("ingest"),
         })
       : null;
-  if (startScreenShown) return startScreenShown;
+  if (startScreenShown)
+    return (
+      <>
+        {startScreenShown}
+        {sessionPromptShown}
+      </>
+    );
 
   if (browsingCases && (isDevBypass || bearerToken)) {
     return (
-      <CasePicker
-        openCaseId={investigationId}
-        onClose={investigationId ? () => setBrowsingCases(false) : undefined}
-        onStart={() => {
-          setBrowsingCases(false);
-          setStartChoice("start");
-        }}
-        apiBaseUrl={API_BASE_URL}
-        bearerToken={bearerToken}
-        lastCaseId={investigationIdFromSession()}
-        isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
-        // The gate is also where the Studio tile's arrival lands when no case is open yet: the
-        // reload it causes must keep that choice, or the tile opens the Glass (seen 10 Oct 2026).
-        onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
-      />
+      <>
+        <CasePicker
+          openCaseId={investigationId}
+          onClose={investigationId ? () => setBrowsingCases(false) : undefined}
+          onStart={() => {
+            setBrowsingCases(false);
+            setStartChoice("start");
+          }}
+          apiBaseUrl={API_BASE_URL}
+          bearerToken={bearerToken}
+          lastCaseId={investigationIdFromSession()}
+          isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
+          // The gate is also where the Studio tile's arrival lands when no case is open yet: the
+          // reload it causes must keep that choice, or the tile opens the Glass (seen 10 Oct 2026).
+          onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
+        />
+        {sessionPromptShown}
+      </>
     );
   }
 
   if (!investigationId || !ontology || !crossFilterRef.current) {
     return (
-      <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>
-        Loading…
-      </div>
+      <>
+        <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading…</div>
+        {sessionPromptShown}
+      </>
     );
   }
   const crossFilterStore = crossFilterRef.current;
@@ -2033,6 +2153,7 @@ export function App() {
           <Toast message={toast} />
         </div>
       )}
+      {sessionPromptShown}
     </div>
   );
 }

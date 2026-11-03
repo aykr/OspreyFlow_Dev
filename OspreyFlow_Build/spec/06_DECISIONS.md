@@ -6768,6 +6768,78 @@ auth when it should not have been, Keycloak's own default profile-completion wal
 admin-API subject, and two access-control attributes (handling code, `org_unit`) the demo analyst
 needed and did not have. Each is fixed, each has a named test.
 
+### ADR-050, Amendment 1 (3 November 2026) — the token is renewed silently before it expires (build order step 18b)
+
+**Found in the 3 November rehearsal (D1, `REHEARSAL_v5_2026-11-03.md`).** The access token lasts five
+minutes (the realm sets no `accessTokenLifespan`, so Keycloak's 300 s applies) and the Glass never
+renewed it ahead of expiry: `userManager.ts` set `automaticSilentRenew: false`, and the first call after
+expiry answered 401, on which `App.tsx` started a full-page `prompt=none` redirect. Each one lost the
+open tab, the selection, a drawn boundary, the map view and anything typed: 11 in an hour, a prepared
+window that asked for the password at its first use, and a Deploy refused after a 60-second Preview.
+
+**The owner's ruling of 3 November 2026: renew silently in the background before expiry, and keep short
+tokens.** A window then lasts as long as the identity provider's session; its idle and maximum limits
+are not changed.
+
+1. **How it renews: ADR-050's own `prompt=none` round, in a hidden iframe.** No refresh token is used
+   (objection 5's ruling stands): `userManager.renewSilently` asks `oidc-client-ts` for
+   `signinSilent({ forceIframeAuth: true })`. **Third-party cookies do not block it**, because the
+   workspace and the identity provider share a site: one address per app (ADR-114 Amendment 4) puts the
+   identity provider at `id.` under the workspace's own name (`id.ospreyflow.localhost` beside
+   `ospreyflow.localhost`, `id.osprey.example.org` beside `osprey.example.org`), so Keycloak's session
+   cookie is a same-site cookie in the iframe. The identity provider answers to the workspace's one
+   registered address (`redirect_uri`), so the page loaded in the iframe only hands the answer to the
+   window that asked and draws nothing (`auth/callbackFrame.ts`, called first in `main.tsx`). The
+   iframe loads the workspace's bundle, so the silent round may take up to 20 s.
+2. **Why automatic renewal had been off, and why that race cannot happen now.** The comment at
+   `automaticSilentRenew: false` said the library's timer must not fire in the middle of the Glass's own
+   re-authentication after a 401. The library's timer stays off. The Glass's own (`auth/tokenRenewal.ts`)
+   renews a minute before expiry (half-way through a shorter token's life), and every refused call asks
+   the same renewal: **one is in flight at a time**, and each later ask, from the timer or a refused
+   call, is given that renewal's outcome rather than starting another.
+3. **No screen notices a renewal.** The screens keep the token given at sign-in, so a renewal changes no
+   React state, no screen fetches again and nothing typed is replaced; the fetch watch
+   (`auth/unauthorised.ts`) sends the renewed token in its place, to the Conduit only. A call the Conduit
+   refused while a renewal was due is made once more with the renewed token (once at most, and only when
+   its body can be sent again), so the screen sees that answer. The delta WebSocket, authenticated once at
+   connect by its single-use ticket, stays open across a renewal. A person who signs in as somebody else
+   in the sign-in window is a new sign-in, not a renewal.
+4. **When renewal truly fails, the page stays put and asks in place.** No page-level redirect is made on
+   a 401 any more. When the identity provider's session has ended (`login_required`) a prompt over
+   whatever screen is open says "Your session has ended" and offers **Sign in again**, which signs in in a
+   small window of its own (`signinPopup`, opened from the click under the name `callbackFrame.ts`
+   recognises), so the page behind it keeps everything. ADR-044's distinction holds: when the identity
+   provider could not be reached or did not answer, the prompt says "The sign-in service could not be
+   reached" and offers **Try again** before Sign in again. A blocked or closed sign-in window is said, and
+   can be tried again.
+5. **What this means for the identity provider's limits.** Each renewal is a sign-in round at Keycloak,
+   so it counts as activity: while a window is open and its machine awake, the session's idle limit does
+   not end it, and the maximum (Keycloak's default, 10 hours) does. A window closed, or a machine asleep,
+   lets the idle limit run as before. Open question for the owner: renew only after the person has done
+   something since the last renewal, so an unattended open window still reaches the idle limit.
+6. **Not changed, and said so.** Keycloak puts a refresh token in the code exchange's answer (the realm
+   does not switch it off on the Glass's client), and the library holds it in memory with the rest of
+   the signed-in record; the Glass never uses it. Making ADR-050's "no refresh token" literal is a realm
+   change (`use.refresh.tokens: false` on `osprey-glass`, reaching an existing deployment through
+   registration): an open question, not built here. A deployment whose identity provider is on another
+   site (`VITE_OIDC_ISSUER_ORIGIN`) can find the iframe's cookie blocked by a browser that blocks
+   third-party cookies; renewal then fails into the prompt above, never into a silent loss.
+
+**Tests**, shown red first (evidence `s18b_*`): `src/auth/tokenRenewal.test.ts` (renewed a minute
+before expiry with no other call; two triggers at once make one renewal; an ended session and an
+unreachable provider said apart); `src/auth/callbackFrame.test.ts`; `src/auth/unauthorised.test.ts`
+"installUnauthorisedWatch with a renewed token"; `src/App.test.tsx` "windows stay signed in": "a token
+near expiry is renewed in the background, with no navigation, and the next call carries it", "two
+triggers at once make one renewal, and both calls are answered with its token", "a failed renewal leaves
+the page in place and asks to sign in again there" and "an identity provider that cannot be reached is
+not said as an ended session"; and, for rule 13, `keyboard/session-prompt.spec.ts`
+(`SESSION_PROMPT_ACTIONS`).
+
+**Checked live on GOV.UK, 3 November 2026** (`ospreyflow start --build --name govuk`, a real Keycloak
+26.0): a demo analyst's window left idle for 6.5 minutes renewed once, at 240 s, through the hidden
+iframe (`prompt=none`, then the token endpoint), with no main-frame navigation and no 401; the click
+after the idle period was answered 200. The ended-session prompt was not reproduced live.
+
 ## ADR-051 — Sign in first, then show the interfaces the role allows
 
 **Status: Accepted, 29 September 2026, by the owner's ruling (Option C, with E1). Design only: the
@@ -22644,3 +22716,49 @@ apart; the record keeping them apart), `tests/test_revert_load_script.py` (said 
 settings refused), `tests/test_seed_internal.py` (the revert inside the deployment; refused without
 `--stop-api`; the command line), `tests/services/api/test_recipe_runs.py` (live: `records_of_run`,
 `rule_node_ids` after the commit), `ScheduleEditor.test.tsx` (the run names its load).
+
+### ADR-114, Amendment 32 (3 November 2026) — `repair-sign-in` sets the Conduit's own client secret (build order step 18a)
+
+**Found in the 3 November rehearsal (D2, `REHEARSAL_v5_2026-11-03.md`).** After GOV.UK's stores were
+wiped, Keycloak imported the realm afresh. A realm import cannot carry a confidential client's secret,
+so Keycloak made its own for `osprey-conduit` and `osprey-unprivileged`, and every call the Conduit
+makes for a person was refused at the token endpoint (`401`): post-commit rules said "the rule's
+deployer could not be resolved", a hotlist went Stopped, and a list refresh re-screened 0 customers.
+`apply` and a cluster's install set the secret after the import
+(`keycloak_admin.grant_service_account_roles`); `ospreyflow repair-sign-in`
+(`register_sign_in.ensure_identity`, Amendment 22 point 3) did not.
+
+1. **`repair-sign-in` restores the Conduit's client secret.** `ensure_identity` — the step every
+   deployment's registration runs, with or without demo accounts — sets both Conduit clients' secret
+   from the deployment's own `OSPREY_OIDC_CLIENT_SECRET`, through one function,
+   `keycloak_admin.ensure_conduit_client_secret`, which `grant_service_account_roles` now calls too, so
+   `apply`, a cluster's install and `repair-sign-in` cannot set it differently. After a wipe, a restart
+   of an unpersisted Keycloak or a re-import, `ospreyflow repair-sign-in` alone brings the deployment
+   back.
+2. **Safe to repeat, and never printed.** A client already holding the secret is not rewritten ("the
+   Conduit's client credential already matches the deployment's settings"). The secret is never in a
+   line the command prints, and a refused update is named ("could not set client 'osprey-conduit''s
+   credential"), without repeating Keycloak's answer, which may echo it. The PUT's answer was ignored
+   before; it is checked now. Settings without the key are said as such and left alone. The lines say
+   "credential", not "secret": `ospreyflow` hides every line naming a secret-like word
+   (`cli/ospreyflow/run.py`), which hid the first wording on GOV.UK's rebuild.
+3. **Not built: naming the failure where it shows.** When it recurs, a rule still says "the rule's
+   deployer could not be resolved": `resolve_for_owner` collapses the cause, and telling a refused
+   client apart from an unreachable identity provider in every producer is larger than this step. Open
+   question: a System health line, "the Conduit cannot act for people: run `ospreyflow repair-sign-in`",
+   fed by one client-credentials call.
+
+**Tests**, shown red first (evidence `s18a_*`), against a stand-in Keycloak whose realm token endpoint
+refuses a confidential client whose secret is not the one it holds (`unauthorized_client`, as Keycloak
+does; rule 15) and whose imported clients start with a secret Keycloak made:
+`tests/harness/test_register_sign_in.py`
+`test_repair_sign_in_gives_a_reimported_realm_the_conduits_secret_again`,
+`test_the_conduits_secret_is_set_without_demo_accounts_too`,
+`test_restoring_the_conduits_secret_is_safe_to_repeat_and_never_printed` and
+`test_a_refused_secret_update_is_named_not_reported_as_done`.
+
+**Checked live on GOV.UK, 3 November 2026** (evidence `s18a_live.txt`): Keycloak was made to issue fresh
+secrets for both Conduit clients, as an import does; the Conduit's resolution of the rules' deployer
+(`resolve_for_owner_detailed("osprey-demo-admin")`, the call a rule run makes) was then refused with a
+401; one `ospreyflow repair-sign-in --name govuk` said "the Conduit's client credential set from the
+deployment's settings" and the same resolution succeeded; a second run said it already matched.
