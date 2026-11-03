@@ -105,6 +105,7 @@ import type { WorkingSetDelta } from "./workingset/models";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
+import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";
 import type { HistoryStepSummary } from "./workingset/models";
@@ -549,6 +550,9 @@ export function App() {
   // whenever the influencer editor saves (`strengthRead`).
   const [strengthLegend, setStrengthLegend] = useState<StrengthLegend | null>(null);
   const [strengthRead, setStrengthRead] = useState(0);
+  // D9 (build order step 18c): a composition or influencer changed in another window is shown when
+  // the analyst comes back to this one, not only once the legend is reopened.
+  useOnReturn(() => setStrengthRead((n) => n + 1));
   const edgeTypes = useMemo(
     () => caseLinkTypes?.definitions ?? ontologyEdgeTypes,
     [caseLinkTypes, ontologyEdgeTypes],
