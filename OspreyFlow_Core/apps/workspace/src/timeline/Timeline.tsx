@@ -32,6 +32,8 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef, useState } from "react";
 
+import { getLayoutSizes, setTimelineHeight } from "../layout/layoutSizes";
+
 import type {
   Histogram,
   HistogramRequest,
@@ -78,6 +80,10 @@ const HOURLY_INTERVAL_SECONDS = 60 * 60;
 const MONO_FONT = "'IBM Plex Mono', ui-monospace, monospace";
 
 type TimelineMode = "density" | "cyclical";
+
+/** The timeline's height the weekly grid is read at: seven rows and the hour axis (build order step
+ * 18c, D20). Choosing the weekly view raises a shorter timeline to it. */
+export const CYCLICAL_TIMELINE_HEIGHT = 340;
 
 export interface TimelineProps {
   apiBaseUrl: string;
@@ -611,7 +617,12 @@ export function Timeline({
             type="button"
             className="segmented__item"
             aria-pressed={mode === "cyclical"}
-            onClick={() => setMode("cyclical")}
+            onClick={() => {
+              setMode("cyclical");
+              // D20 (build order step 18c): the grid's seven rows need the room; a taller timeline
+              // the analyst set stays as it is.
+              if (getLayoutSizes().timelineHeight < CYCLICAL_TIMELINE_HEIGHT) setTimelineHeight(CYCLICAL_TIMELINE_HEIGHT);
+            }}
           >
             Cyclical
           </button>
