@@ -261,6 +261,15 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
     network = f"osprey-test-idp-{uuid.uuid4().hex[:8]}"
     docker("network", "create", network)
     started: list[Keycloak] = []
+    # `answer_the_deployment_here` changes this process's resolver and trust store; every test
+    # after this module gets them back as they were.
+    patched = pytest.MonkeyPatch()
+    patched.setattr(socket, "getaddrinfo", socket.getaddrinfo)
+    patched.setattr(ssl, "create_default_context", ssl.create_default_context)
+    patched.setattr(ssl, "_create_default_https_context", ssl._create_default_https_context)
+    patched.setattr(site, "_HERE", {})
+    patched.setattr(site, "_TRUSTED", [])
+    patched.setattr(site, "_answered", False)
     try:
         deployment_port = _free_port()
         config = _config(deployment_port, folder, ca)
@@ -312,7 +321,8 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         for keycloak in started:
             docker("rm", "-f", "-v", keycloak.name, check=False)
         docker("network", "rm", network, check=False)
-        site._HERE.pop(ORG_HOST, None)
+        patched.undo()
+        urllib.request.install_opener(None)
 
 
 # ---- the browser, scripted ----------------------------------------------------------------------
