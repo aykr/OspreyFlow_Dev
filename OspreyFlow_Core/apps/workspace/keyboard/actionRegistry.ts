@@ -792,6 +792,16 @@ export const VIEW_OVER_CAP_ACTIONS = defineActionRegistry("VIEW_OVER_CAP_ACTIONS
   "put-the-over-cap-dialog-away-with-escape-by-keyboard",
 ] as const);
 
+/**
+ * The prompt shown in place when the token could not be renewed (ADR-050 Amendment 1, build order
+ * step 18b): sign in again in a window of its own, or, when the sign-in service did not answer, try
+ * again. `session-prompt.spec.ts`.
+ */
+export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIONS", [
+  "sign-in-again-from-the-session-prompt-by-keyboard",
+  "try-again-from-the-session-prompt-by-keyboard",
+] as const);
+
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",

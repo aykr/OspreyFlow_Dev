@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.23** · 2026-11-03 · For OspreyFlow v0.4.4 · Issued
+**Version 1.24** · 2026-11-03 · For OspreyFlow v0.4.4 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.24 | 2026-11-03 | §2: staying signed in — a window renews its sign-in by itself, and when your session has ended it asks you to sign in again where you are, without losing the page. |
 | 1.23 | 2026-11-03 | Rehearsal fixes (build order step 15). §5.12: the Matrix's Strength and Rarity fill in as each answer arrives, read *Working out…* meanwhile, and a refused rarity no longer blanks the strengths. §7.3: *Give to* offers people only, never a service account. §9.1: a pack says some items are *not shown* (you may not see something they rest on, or it has since been taken back, as a reverted load takes back its alerts), no longer "withheld from you"; a close reason that ends with a full stop is not given a second. |
 | 1.22 | 2026-11-02 | Checked against the Glass end to end (build order step 10). §7.1: Monitoring's tabs include **Lists** and **Connection strength**, and say which levels see Held rows and Audit. §5.12: the legend marks the composition, not the rarity measure, as a case override (a case cannot choose the measure). §7.6: the *For* choices as the builder words them (*just me*). |
 | 1.21 | 2026-11-02 | §5.12: shared-attribute rarity is now worked out by the client's own measure (one less a shared value's share of the pairs linked through values of its kind), with the earlier measure still to choose; the two compositions, standard and client parity, and the raw sum on the client's scale; an influencer triggered by a dataset; a case switched to client parity by its Author. §7.6: a strength figure on the client's scale. |
@@ -81,6 +82,13 @@ Your administrator invites you. With email set up, you get a link to choose a pa
 they give you a **one-time code** in person, and you choose your password the first time you sign
 in. If you forget it, ask your administrator to reset your sign-in. Where your organisation's own
 sign-in is set up, the welcome page offers it too.
+
+**Staying signed in**: a window renews its sign-in by itself while it is open, so you can leave it and
+come back to it as you left it. When your session has ended (you have been away for a long time, or
+your administrator has ended it), the window says **Your session has ended** over the page and offers
+**Sign in again**, which signs you in in a small window of its own: the page behind it, with the tab,
+the selection, the map and anything you have typed, stays as it is. If the sign-in service cannot be
+reached, it says so and offers **Try again**.
 
 **Signing out**: the account button at the top right (your name and clearance) has **Sign out**.
 
