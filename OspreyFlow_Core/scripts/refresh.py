@@ -8,7 +8,8 @@ Conduit and the sign-in page each stayed as they were until someone knew which c
 which. This is that sequence, in order:
 
 1. Write the sign-in theme from the design tokens, noting whether it changed.
-2. `docker compose build` the OspreyFlow-owned images. Unchanged layers come from the cache.
+2. `docker compose build --pull` the OspreyFlow-owned images, on freshly pulled bases (build order
+   step 14). Unchanged layers still come from the cache.
 3. `docker compose up -d --wait`, which recreates only the containers whose image changed.
 4. If the theme changed, restart Keycloak (it reads a mounted theme at start) and wait for health.
 5. Register the sign-in accounts again. Keycloak's database is not persisted, so a restart removes
@@ -489,7 +490,7 @@ def refresh(
     compose = _compose(directory / "compose.yaml")
     changed = files_up_to_date(repo_root)
     theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
-    run([*compose, "build"])
+    run([*compose, "build", "--pull"])
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:
         # The proxy reads its routing table at start; `up` recreates the Ollama and API

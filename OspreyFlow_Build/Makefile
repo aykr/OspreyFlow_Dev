@@ -127,7 +127,7 @@ conformance-analytics:
 # 2), the sidecar the Stanza adapter calls; spaCy and transformers join where they are installed.
 conformance-recognise:
 	-docker rm -f osprey-test-ner >/dev/null 2>&1
-	cd $(CORE) && docker build -f services/ner/Dockerfile -t osprey/ner:conformance .
+	cd $(CORE) && docker build --pull -f services/ner/Dockerfile -t osprey/ner:conformance .
 	docker run -d --name osprey-test-ner -p 127.0.0.1:8090:8000 osprey/ner:conformance
 	@for i in $$(seq 1 90); do curl -sf http://127.0.0.1:8090/healthz >/dev/null && break; sleep 2; done
 	$(IN_CORE) OSPREY_RECOGNISER_URL=http://127.0.0.1:8090 \

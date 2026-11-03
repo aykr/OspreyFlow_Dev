@@ -53,7 +53,7 @@ def build_and_scan(sha: str) -> list[str]:
     for service, dockerfile, build_arg_name in SERVICES:
         sha_tag = f"{REGISTRY}/{service}:{sha}"
         latest_tag = f"{REGISTRY}/{service}:latest"
-        cmd = ["docker", "build", "-f", dockerfile]
+        cmd = ["docker", "build", "--pull", "-f", dockerfile]
         if build_arg_name is not None:
             cmd += ["--build-arg", f"{build_arg_name}={sha}"]
         cmd += ["-t", sha_tag, str(REPO_ROOT)]
