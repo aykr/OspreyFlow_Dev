@@ -6,6 +6,21 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.4 — 2026-11-03
+
+- **Architecture in the guides.** The administration guide's "How OspreyFlow is built" now opens
+  with a level 0 diagram (who uses OspreyFlow and what it talks to) and a level 1 diagram naming
+  the technology in every component and what each mode runs on, and a new section, "The
+  interfaces, and what crosses each", gives every interface's direction, protocol, what crosses it
+  and what guards it. The developer guide has the level 0 diagram.
+- **Images built on fresh bases.** Every image build, including `ospreyflow start --build`, now
+  pulls its base image first, so a base's security fixes arrive without waiting for a change of
+  ours.
+- **The Glass is served by nginx 1.30**, the maintained stable line, in place of 1.27, which
+  reached its end of life.
+- Update with `ospreyflow update`; an install from `Solirius/ospreyflow` must reinstall from
+  `https://github.com/aykr/OspreyFlow.git` first (see v0.4.3).
+
 ## v0.4.3 — 2026-11-03
 
 **OspreyFlow stays at `https://github.com/aykr/OspreyFlow`.** The move to `Solirius/ospreyflow`
