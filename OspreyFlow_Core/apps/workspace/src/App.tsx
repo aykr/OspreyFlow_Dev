@@ -571,7 +571,7 @@ export function App() {
   placeableRef.current = placeableTypes(ontologySchema);
   /** ADR-100: an Explore item does what choosing a search result does: draws it and selects it. */
   const pickToStart = (node: Node) => {
-    drawSearchResult(workingSetRef.current.store, node, glassCanvasRef.current);
+    void drawSearchResult((nodes) => seedToCanvas(nodes, []), node, glassCanvasRef.current);
     setSelectedNode(node);
   };
   /** What Explore adds goes to the case's working set through `/seed`, as a found route does, and is
@@ -1343,8 +1343,8 @@ export function App() {
                 return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
               }}
               onSelect={(node) => {
-                drawSearchResult(
-                  workingSetRef.current.store,
+                void drawSearchResult(
+                  (nodes) => seedToCanvas(nodes, []),
                   node,
                   glassCanvasRef.current,
                 );

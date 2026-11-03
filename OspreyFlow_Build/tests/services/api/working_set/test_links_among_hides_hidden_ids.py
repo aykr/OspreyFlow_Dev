@@ -77,6 +77,7 @@ async def test_unconnected_pairs_at_degree_two_count_only_what_the_reader_may_re
         service = WorkingSetService(graph, store, SCHEME)
         outcome = await service.links_among("inv-1", OFFICIAL_READER, ["a", "b", "c", "x"], 2)
         assert outcome.unconnected_pairs == 2, stored  # (a, c) and (b, c)
+        assert outcome.connected_pairs == 1, stored  # (a, b): the hidden x's pairs are not counted
         assert outcome.added == 1
 
 

@@ -217,3 +217,17 @@ def test_a_degree_is_one_to_six_and_above_one_needs_two_to_eight_selected_nodes(
     ):
         with pytest.raises(ValidationError):
             LinksAmongRequest(**wrong)
+
+
+async def test_routes_already_drawn_are_counted_as_joined_pairs_not_as_no_routes() -> None:
+    """Build order step 18c (D5): with every route of a pair already on the canvas, nothing is added,
+    and the answer said "No routes within N degrees". The pairs a route joins are counted, so the
+    Glass can say the routes are drawn."""
+    store, graph, service = _view_graph(CHAIN)
+    await store.add_nodes("inv-1", [_node("a"), _node("b"), _node("c"), _node("d")])
+    await store.add_edges("inv-1", CHAIN)
+
+    outcome = await service.links_among("inv-1", PRINCIPAL, node_ids=["a", "d"], degree=3)
+
+    assert (outcome.added, outcome.added_nodes) == (0, 0)
+    assert (outcome.connected_pairs, outcome.unconnected_pairs) == (1, 0)

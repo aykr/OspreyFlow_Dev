@@ -23657,3 +23657,31 @@ that way), as **open**: chapter 10's two closes as *Referred* would read as open
   test_every_closing_reason_has_its_own_figure_and_none_is_open` (red: four closed alerts counted
   open); `apps/workspace/src/reports/ReportsView.test.tsx` ("gives every closing reason its own column,
   and one for closed with none"). Red first (`red/s18c_d12_outcomes_*`).
+
+### ADR-098, Amendment 6 (3 November 2026) — a search's chosen node is in the working set, and drawn routes are not "no routes" (build order step 18c, D5)
+
+The 3 November rehearsal's J5: with Vance and Skellion selected, **Show links among these** within 6
+said "No routes within 6 degrees among these", while Find connections said 2 degrees and 5 routes; the
+same for Vance and Dorrance within 3, a pair no route joins, with no "not connected" said either.
+
+- **Why.** Skellion and Dorrance had been put on the canvas from search, and their three-step draws
+  (ADR-070) were large and cancelled. `drawSearchResult` put the chosen node on the canvas by a local
+  add alone, so it was on screen but never in the case's working set. `links_among` keeps only the
+  named ids in the reader's view (ADR-124 decision 3), so one id was left, no pair was searched, and
+  nothing was said about one. The Glass review of 18 October had moved Explore's adds to `/seed` for
+  this reason ("a local add did neither"); a search's pick was not moved.
+- **The fix.** A search's chosen node goes to the working set through `/seed` first (as Explore's do),
+  and the three-step draw follows once it is there (`search/drawSearchResult.ts`).
+- **Routes already drawn.** `LinksAmongOutcome` gains `connected_pairs`, the pairs a route joins within
+  the degree, counted from the reader's own search as `unconnected_pairs` is (rule 3; the hidden-id
+  cases compare whole outcomes, so a hidden id cannot move it). With nothing added and a pair joined,
+  the notice says "The routes within N degrees among these are already drawn."
+- **Find connections' list.** Two routes through the same people by different links (shared a cell
+  with, or passes items to, then associate of) read alike, as people alone; each route now names its
+  links by their labels (`FindConnectionsPanel`, `routeLinksWords`). They are different routes, so the
+  count (5) stands.
+- **Tests that would fail (rule 12).** `apps/workspace/src/search/drawSearchResult.test.ts` (the node is
+  seeded before the draw); `tests/services/api/working_set/test_links_among.py::
+  test_routes_already_drawn_are_counted_as_joined_pairs_not_as_no_routes`; the hidden-id case in
+  `test_links_among_hides_hidden_ids.py`; `canvas/linksAmong.test.ts`; `FindConnectionsPanel.test.tsx`.
+  Red first (`red/s18c_d5_*`).

@@ -1109,7 +1109,7 @@ class WorkingSetService:
         among = await self._graph.edges_among(sorted(ids), principal)
         route_nodes: dict[NodeId, Node] = {}
         route_edges: dict[EdgeId, Edge] = {e.id: e for e in among}
-        unconnected = more = 0
+        unconnected = more = connected = 0
         if degree > 1:
             chosen = sorted(ids)
             for i, source in enumerate(chosen):
@@ -1123,6 +1123,7 @@ class WorkingSetService:
                                 route_nodes.update({n.id: n for n in path.nodes})
                                 route_edges.update({e.id: e for e in path.edges})
                             more += routes.more
+                            connected += 1
                             break
                     else:
                         unconnected += 1
@@ -1133,7 +1134,7 @@ class WorkingSetService:
         outcome = await self._add(investigation_id, new_nodes, new, principal)
         return LinksAmongOutcome(
             delta=outcome.delta, added=len(new), added_nodes=len(new_nodes), degree=degree,
-            unconnected_pairs=unconnected, more_routes_pairs=more,
+            unconnected_pairs=unconnected, more_routes_pairs=more, connected_pairs=connected,
         )  # fmt: skip
 
     async def expand_preview(
