@@ -911,7 +911,12 @@ Amendment 45) it leaves chapter 9's three files released ("kept …"), so they n
 reports* pipeline as a draft holding the whole branch (source, Profile, Map, Load) and the committed map,
 not verified and not published. Chapter 4 opens it, walks Profile and the map, runs **Verify** (one row
 rejected: the teaching row's number written with a letter O), corrects that row, publishes and runs it, then
-runs *Report incidents*. The reset puts the draft back exactly, its name included. The fallback
+runs *Report incidents*. The row is corrected by choosing a corrected copy of the file at the source
+(*Open source settings*, **Choose file…**, **Save**; a copy with `07700 900603` for `07700 900 6O3`, made
+before the demo): a value map refuses every value it does not list, so it cannot mend one row. Verify then
+reads 350 reports and rejects none, and the run and Verify read the same file (the source node names none
+of its own). Walked on GOV.UK on 3 November: about 55 seconds of clicks and waits for the reports (40 of
+them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The reset puts the draft back exactly, its name included. The fallback
 (`--publish-reports-fallback`) publishes the committed file over whatever was left on the draft, a renamed
 draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
 reports and 67 naming people rather than 229 and 68.
