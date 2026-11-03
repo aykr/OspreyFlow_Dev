@@ -3667,6 +3667,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 : undefined
             }
             relationship={pendingExpansion.edgeType}
+            edgeTypes={edgeTypesRef.current}
             onChooseType={(edgeType) => {
               const { nodeId, x, y, depth } = pendingExpansion;
               setPendingExpansion(null);

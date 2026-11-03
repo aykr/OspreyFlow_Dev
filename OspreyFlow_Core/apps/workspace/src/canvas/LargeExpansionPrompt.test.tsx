@@ -37,8 +37,12 @@ describe("LargeExpansionPrompt", () => {
     expect(text).toContain("jeff.marsden@enron.com");
     expect(text).toContain("every relationship");
     cleanup();
-    setup({ subject: "jeff.marsden@enron.com", relationship: "COMMUNICATED_WITH" });
-    expect(screen.getByRole("alertdialog").textContent).toContain("by COMMUNICATED_WITH");
+    setup({
+      subject: "jeff.marsden@enron.com",
+      relationship: "COMMUNICATED_WITH",
+      edgeTypes: [{ name: "COMMUNICATED_WITH", label: "Called or messaged" }],
+    });
+    expect(screen.getByRole("alertdialog").textContent).toContain("by called or messaged");
   });
 
   it("says nothing has been added yet when the size could not be counted", () => {
@@ -53,7 +57,7 @@ describe("LargeExpansionPrompt", () => {
 
   it("offers each relationship type with its own count, and passes the choice on", () => {
     const h = setup();
-    fireEvent.click(screen.getByRole("button", { name: /MENTIONED_IN.*12/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Mentioned in.*12/ }));
     expect(h.onChooseType).toHaveBeenCalledWith("MENTIONED_IN");
   });
 
@@ -78,5 +82,24 @@ describe("LargeExpansionPrompt", () => {
       "could not be counted",
     );
     expect(screen.getByRole("button", { name: /Add all/ })).toBeTruthy();
+  });
+
+  // Build order step 18c (the 3 November rehearsal's D10): the offer read "HELD_AT (867)",
+  // "PART_OF (387)": a relationship is named by its label, never the type's stored id (rule 7).
+  it("names each relationship by its label, never its stored id", () => {
+    setup({
+      relationship: "HELD_AT",
+      subject: "Fenwick Moor",
+      options: [
+        { edgeType: "HELD_AT", wouldAdd: 867 },
+        { edgeType: "PART_OF", wouldAdd: 387 },
+      ],
+      edgeTypes: [{ name: "HELD_AT", label: "Held at" }],
+    });
+    const text = screen.getByRole("alertdialog").textContent ?? "";
+    expect(screen.getByRole("button", { name: "Held at (867)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Part of (387)" })).toBeTruthy();
+    expect(text).toContain("by held at");
+    expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]/);
   });
 });

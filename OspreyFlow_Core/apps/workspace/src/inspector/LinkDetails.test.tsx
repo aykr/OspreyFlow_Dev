@@ -179,4 +179,21 @@ describe("LinkDetails and the basis", () => {
     render(<LinkDetails edge={fromRow} {...ends} directed />);
     expect(screen.getByText("calls.csv · row 42")).toBeTruthy();
   });
+
+  it("names a source file by its file name, never the server's path to it (D10)", () => {
+    const fromFile = link({
+      provenance: {
+        state: "asserted",
+        sources: [{
+          document_id: "/var/lib/osprey/ingest/uploaded/prison-intelligence/pid_nomis_cell_shares.csv",
+          locator: "row 0",
+          excerpt_hash: "",
+        }],
+        first_seen: "2001-05-01T00:00:00Z",
+      },
+    } as Partial<Edge>);
+    render(<LinkDetails edge={fromFile} {...ends} directed />);
+    expect(screen.getByText("pid_nomis_cell_shares.csv · row 1")).toBeTruthy();
+    expect(screen.queryByText(/var\/lib/)).toBeNull();
+  });
 });

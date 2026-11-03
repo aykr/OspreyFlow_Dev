@@ -11,7 +11,7 @@ import type { LinkChangeResult } from "./linkChangeApi";
 import { LinkHistory } from "./LinkHistory";
 import { LinkEvents } from "./LinkEvents";
 import { eventsNoun, nounWords } from "./linkEventsApi";
-import { locatorText } from "./sourceLocator";
+import { locatorText, sourceName } from "./sourceLocator";
 import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useEffect, useRef, useState } from "react";
@@ -642,7 +642,7 @@ function NodeView({
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
               {node.provenance.sources.map((source, i) => (
                 <li key={i} className="value">
-                  {source.document_id} · {locatorText(source.locator)}
+                  {sourceName(source.document_id)} · {locatorText(source.locator)}
                 </li>
               ))}
             </ul>

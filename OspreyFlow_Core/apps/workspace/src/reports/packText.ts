@@ -2,6 +2,7 @@
 // the two never say different things (ADR-113 stage 5). Pure: no DOM, no fetch.
 import type { AlertEntitySnapshot, AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
 import { closingReasonLabel } from "../alerts/closingReasons";
+import { TYPOLOGY_LABELS } from "../alerts/names";
 
 const NUMBER = new Intl.NumberFormat("en-GB");
 const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" });
@@ -106,9 +107,11 @@ export function periodsOf(figures: TrendFigures): string[] {
 const SEVERITY_WORD: Record<AlertSnapshot["severity"], string> = { high: "High", medium: "Medium", low: "Low" };
 const KIND_WORD: Record<AlertSnapshot["kind"], string> = { typology: "Typology alert", hotlist: "Hotlist match", monitor: "Monitor match" };
 
-/** "Typology alert (rapid_movement) · High severity · raised 29 September 2026". */
+/** "Typology alert (Rapid movement) · High severity · raised 29 September 2026": the typology by its
+ * label, as the queue names it, never its stored key (build order step 18c, D10). */
 export function alertLine(alert: AlertSnapshot): string {
-  const what = alert.typology ? `${KIND_WORD[alert.kind]} (${alert.typology})` : KIND_WORD[alert.kind];
+  const label = alert.typology ? TYPOLOGY_LABELS[alert.typology] : undefined;
+  const what = label ? `${KIND_WORD[alert.kind]} (${label})` : KIND_WORD[alert.kind];
   return `${what} · ${SEVERITY_WORD[alert.severity]} severity · raised ${formatDay(alert.raised_at)}`;
 }
 
