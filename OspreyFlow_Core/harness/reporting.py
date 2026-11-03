@@ -66,7 +66,7 @@ def reporting_services(
             "restart": "unless-stopped",
             # Built here from `deploy/superset`, or the release's own image beside the Conduit's
             # (the same registry and commit; `release.yml` publishes both).
-            "image": "osprey/superset:local" if building else _beside(api_image, "superset"),
+            "image": "osprey/superset:local" if building else superset_image(api_image),
             "env_file": ["deployment.env"],
             "mem_limit": reporting.superset_memory,
             # No port: reached at `bi.` through the front proxy (ADR-114 Amendment 4).
@@ -88,6 +88,12 @@ def reporting_services(
             }
         services["superset"] = stanza
     return services
+
+
+def superset_image(api_image: str) -> str:
+    """Superset's image as a release publishes it, beside the Conduit's `api_image` (the same
+    registry and commit) — named here once, for the compose file and the release's lock."""
+    return _beside(api_image, "superset")
 
 
 def _beside(api_image: str, service: str) -> str:
