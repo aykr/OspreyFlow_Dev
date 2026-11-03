@@ -8,7 +8,7 @@ The site is five files and a folder:
 | `intro-video.html` | The animated overview, shown in the home page's video carousel. Keep it next to `index.html`. |
 | `public-sector.html` | The UK public sector option: the GOV.UK theme for gov.uk services, designed to meet the GDS Service Standard, for every UK department (build order step 12). Hand-written, no external requests. |
 | `monitoring.html` | Monitoring and alerting (build order step 12). Hand-written, no external requests. |
-| `assets/` | The two new pages' screenshots (about 1 MB, nine JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
+| `assets/` | The two new pages' screenshots (about 1.2 MB, ten JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
 ## How it is published
