@@ -23582,7 +23582,11 @@ Decided by the coordinator's worker under that ruling.
   source (`addSourceChain`): the domain model (NIEM), the source at the reports file, then Profile, Map and
   Load (`source-profile`, `source-map`, `source-load`). Amendment 23's bare source "reaches no load", which
   the Studio's save gate (`pipeline_rule_violations`) refuses, so no edit to the draft could be saved and
-  the canvas had no stage to open.
+  the canvas had no stage to open. **The source node names no file** (its config is the connector alone,
+  as the Studio's own branches are): the runner keeps a node's own `source_location` over the row's
+  (`pipeline_run.run_published_pipeline`), so with the seed's file in the node, chapter 4's corrected
+  upload chosen at Connect passed Verify (which reads the row's file) and the run then read the seed's
+  uncorrected file. Found walking chapter 4 on GOV.UK; `red/s18c_d4_source_node_location.txt`.
 - **The draft holds the committed map; Verify and Publish are chapter 4's.** Making the map live means
   21 elements each binding six handling columns, 126 bindings before the gates and transforms, which the
   rehearsal estimated at 15 to 20 minutes against the chapter's 4. So the seed enters the draft with the

@@ -408,9 +408,15 @@ def source_of(root: Path, file: str) -> str:
 
 def starting_pipeline(source_location: str) -> PipelineGraph:
     """R9's draft pipeline (ADR-127 Amendment 45): the branch the Studio itself draws for a source
-    (`addSourceChain`): a domain model for the NIEM pack, one source at the reports file read
-    through `generic-csv`, then Profile, Map and Load. A bare source "reaches no load", which the
-    Studio's save gate refuses, so chapter 4 could not be done on the draft."""
+    (`addSourceChain`): a domain model for the NIEM pack, one source read through `generic-csv`,
+    then Profile, Map and Load. A bare source "reaches no load", which the Studio's save gate
+    refuses, so chapter 4 could not be done on the draft.
+
+    The source node names no file: the file is the row's (`source_location`, set by the seed and
+    by Connect). The runner keeps a node's own location over the row's, so a node naming the
+    seed's file made a run read it after Connect had chosen another, which Verify had read. The
+    argument is kept so every caller names the draft's file beside its pipeline."""
+    del source_location  # the row's, never the node's (above)
     chain = [
         PipelineNode(
             id="domain",
@@ -422,7 +428,7 @@ def starting_pipeline(source_location: str) -> PipelineGraph:
             id="source",
             kind=PipelineNodeKind.SOURCE,
             label="Intelligence reports",
-            config={"connector_profile": "generic-csv", "source_location": source_location},
+            config={"connector_profile": "generic-csv"},
         ),
         PipelineNode(id="source-profile", kind=PipelineNodeKind.PROFILE, label="Profile"),
         PipelineNode(id="source-map", kind=PipelineNodeKind.MAP, label="Map"),

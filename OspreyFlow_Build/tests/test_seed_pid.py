@@ -547,7 +547,11 @@ def test_the_starting_pipeline_is_a_whole_branch_the_studios_save_gate_accepts()
     ]  # fmt: skip
     domain, source, profile, map_, load = pipeline.nodes
     assert domain.config == {"pack": "niem"}
-    assert source.config == {"connector_profile": "generic-csv", "source_location": location}
+    # The source node carries no file of its own: the runner keeps a node's own `source_location`
+    # over the row's (`pipeline_run.run_published_pipeline`), so a file chosen at Connect (chapter
+    # 4's corrected upload) passed Verify, which reads the row's, and the run read the seed's file
+    # (found walking chapter 4 on GOV.UK, 3 November). The row's is the one both read.
+    assert source.config == {"connector_profile": "generic-csv"}
     assert [(e.source, e.target) for e in pipeline.edges] == [
         (domain.id, source.id), (source.id, profile.id), (profile.id, map_.id), (map_.id, load.id),
     ]  # fmt: skip
