@@ -141,7 +141,7 @@ test("a published pack is read by keyboard, read-only", async ({ page }) => {
   await page.getByRole("button", { name: /Quarter pack/ }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("article", { name: "Note: Handle with care" })).toBeVisible();
-  await expect(page.getByText("Some items of this pack are withheld from you.")).toBeVisible();
+  await expect(page.getByText("Some items of this pack are not shown to you: you may not see something they rest on, or it has since been taken back.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Move down" })).toHaveCount(0);
   registerCovered(REGISTRY, "read-a-published-pack-by-keyboard");
 });

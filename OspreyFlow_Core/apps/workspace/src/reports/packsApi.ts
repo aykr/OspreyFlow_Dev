@@ -16,7 +16,7 @@ import type {
 import type { BlockedItem } from "../export/api";
 import type { ReportsApi } from "./api";
 import { fieldOf, refusal, send } from "./caseHttp";
-import { WITHHELD_ITEMS_SENTENCE } from "./packText";
+import { WITHHELD_REFUSAL_SENTENCE } from "./packText";
 
 const enc = encodeURIComponent;
 
@@ -71,7 +71,7 @@ export async function fetchHistory(api: ReportsApi, packId: string): Promise<Pac
 export async function publishPack(api: ReportsApi, packId: string): Promise<PublishedPack> {
   const reply = await send(api, "POST", `packs/${enc(packId)}/publish`);
   if (reply.status === 409 && fieldOf(reply.body, "error") === "pack_has_withheld_items") {
-    throw new Error(WITHHELD_ITEMS_SENTENCE.replace(/ from you\.$/, " from you, so you cannot publish it."));
+    throw new Error(WITHHELD_REFUSAL_SENTENCE);
   }
   if (!reply.ok) throw refusal(reply, "publish this pack");
   return reply.body as PublishedPack;

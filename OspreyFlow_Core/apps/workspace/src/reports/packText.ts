@@ -20,9 +20,16 @@ export function formatDay(iso: string): string {
   return Number.isNaN(when.getTime()) ? iso : DAY.format(when);
 }
 
-/** That some of the pack's items are withheld from this reader, said once, with no number and never
- * which (ADR-124 decision 9). */
-export const WITHHELD_ITEMS_SENTENCE = "Some items of this pack are withheld from you.";
+/** That some of the pack's items are not shown to this reader, said once, with no number and never
+ * which (ADR-124 decision 9). Two reasons put an item out of sight, and the sentence names both without
+ * saying which applies: the reader may not see something it rests on, or something it cites has since
+ * been taken back for everyone (a load's revert takes back the alerts its rules raised: build order
+ * step 15, where "withheld from you" told an analyst she had been denied her own item). */
+export const WITHHELD_ITEMS_SENTENCE =
+  "Some items of this pack are not shown to you: you may not see something they rest on, or it has since been taken back.";
+
+/** A publication refused because the draft holds such an item. */
+export const WITHHELD_REFUSAL_SENTENCE = "Some items of this pack are not shown to you, so you cannot publish it.";
 
 export const KIND_LABEL: Record<PackItem["kind"], string> = {
   trend: "Trend",
@@ -110,9 +117,13 @@ export function alertLine(alert: AlertSnapshot): string {
 export function alertStatusSentence(alert: AlertSnapshot): string {
   if (alert.status === "open") return "Open: not yet decided when this was added.";
   if (alert.status === "claimed") return "Open, being worked on, when this was added.";
-  const reason = alert.reason ? `: ${alert.reason}` : "";
-  if (alert.outcome) return `Closed as ${closingReasonLabel(alert.outcome)}${reason}.`;
-  return `Closed without an outcome${reason}.`;
+  // The reason as it was typed, ended once: a reason that already ends a sentence ("…through
+  // Crescent.") is not given a second full stop (build order step 15).
+  const typed = (alert.reason ?? "").trim();
+  const reason = typed ? `: ${typed}` : "";
+  const end = /[.!?…]$/.test(typed) ? "" : ".";
+  if (alert.outcome) return `Closed as ${closingReasonLabel(alert.outcome)}${reason}${end}`;
+  return `Closed without an outcome${reason}${end}`;
 }
 
 /** Rule 5: a match no person has confirmed is inferred, and the pack says so. */

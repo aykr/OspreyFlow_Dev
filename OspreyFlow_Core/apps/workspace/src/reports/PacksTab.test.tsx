@@ -58,7 +58,7 @@ describe("a pack's items", () => {
     serve(routes(() => null, PACK, { withheld: true }));
     place();
     await openPack();
-    expect(screen.getByText("Some items of this pack are withheld from you.")).toBeTruthy();
+    expect(screen.getByText("Some items of this pack are not shown to you: you may not see something they rest on, or it has since been taken back.")).toBeTruthy();
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(screen.getByRole("article", { name: `Assessment: ${STATEMENT}` }).textContent).toContain("Marked OFFICIAL-SENSITIVE");
   });
@@ -67,7 +67,7 @@ describe("a pack's items", () => {
     serve(routes());
     place();
     await openPack();
-    expect(screen.queryByText(/withheld from you/)).toBeNull();
+    expect(screen.queryByText(/are not shown to you/)).toBeNull();
   });
 
   it("moves an item down by sending exactly the shown ids, swapped", async () => {
@@ -152,7 +152,7 @@ describe("publishing and withdrawing", () => {
     place();
     await openPack();
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Some items of this pack are withheld from you, so you cannot publish it.");
+    expect((await screen.findByRole("alert")).textContent).toBe("Some items of this pack are not shown to you, so you cannot publish it.");
   });
 
   it("publishes a pack with nothing withheld and says which version", async () => {
