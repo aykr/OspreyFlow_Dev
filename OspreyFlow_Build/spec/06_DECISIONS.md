@@ -22513,3 +22513,75 @@ packages an install cannot pull images or verify their signatures without a toke
 `test_the_home_page_links_to_the_products_home` and
 `test_the_address_check_flags_the_withdrawn_home_inside_the_bundles_template` (red while `repoUrl` named
 `Solirius/ospreyflow`).
+
+### ADR-134, Amendment 2 (3 November 2026) — an item whose alert was taken back, said without "withheld from you" (build order step 15)
+
+**Found in the 2 November rehearsal.** The Operation Ledger pack told the analyst who had added R1
+"Some items of this pack are withheld from you." Nothing was withheld from her on access: the revert of
+the week's load (`DEMO_GUIDE.md` §8b) takes back the `Alert` nodes the case's rules wrote into that
+load (they are in its record, ADR-127 decision 6), R1's among them, and an alert item is shown only
+while every node it cites can be read now (`packs.readable`, decision 1's "checked again as the
+reader"). So the item was rightly not shown, and the sentence gave the wrong reason.
+
+**Read conservatively, without a new read.** Telling the two reasons apart would need a read of the
+graph beyond the reader's access (`GraphPort.stored_writes` is the revert's alone), so the sentence
+says both, as a yes and never which, how many or which reason: "Some items of this pack are not shown
+to you: you may not see something they rest on, or it has since been taken back." A publication
+refused for such an item says "Some items of this pack are not shown to you, so you cannot publish
+it." Nothing else changes: the item is still not shown, to anyone. Tests: `packAlert.test.tsx` "says an
+item is not shown without claiming it is held back from this reader alone" (red first), and
+`test_ledger_monitoring_storyline.py::test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_adder`.
+User guide §9.1 (1.23).
+
+**Also.** A close reason that already ends a sentence is not given a second full stop ("…through
+Crescent.."), `packText.alertStatusSentence`.
+
+**For the owner:** whether an item citing a taken-back alert should instead be said apart (needing a
+read the decision has not allowed), or be taken out of the pack by the revert.
+
+### ADR-133, Amendment 7 (3 November 2026) — an alert is given to people only (build order step 15)
+
+**Found in the 2 November rehearsal.** *Give to* in the Operation Ledger case offered
+`ledger-seed-worker`, the seed's own principal, which holds the case's Author grant because it made the
+case. Stage (a) said "the case's Editors and Authors"; a service account (a dashboard's, ADR-111
+decision 7) or a seed's principal is no one to give an alert to.
+
+**As built.** The assignee list (`GET …/alert-assignees`) and the assignment (`POST …/assign`) take the
+case's Editors and Authors, and the caller, that the identity provider holds as people:
+`PrincipalNameDirectory.people`, from ADR-106's own read of each id (an account that carries no
+`serviceAccountClientId`; an id that is no account, a 404, is no person), under ADR-106 decision 3 and
+failing closed (an id it could not ask about is not counted). A deployment with no directory cannot
+tell and keeps the grants as before. Tests, red first: `test_principal_names.py` (`people`, its
+refusals and its failure), `test_monitoring_routes.py::test_an_alert_is_never_given_to_a_service_account`.
+User guide §7.3 (1.23).
+
+### ADR-127, Amendment 44 (3 November 2026) — the documented revert step, end to end (build order step 15)
+
+**Found in the 2 November rehearsal** (`DEMO_GUIDE.md` §8b, the Operation Ledger week): the Studio's
+run showed no load id; `scripts.revert_load` refused the run's id ("no record"); run on the host it had
+no store settings and would have reached ArcadeDB's default port, 2480 (the everyday deployment's own);
+and a revert discarded 2 nodes of a load the run said created 0.
+
+**What was found for the counts.** The load did write 2 nodes: the `Alert` nodes the case's two rules
+wrote into it after the commit (R1 and C1), which decision 6 makes the load's own and which
+`RecipeRunStore.add_rule_writes` adds to its record's `created_node_ids`. The run's "created" counts
+what the recipe wrote, as the change stream and the enrich stage read it (`studio_publish._fold_rule_writes`).
+Neither count was wrong; the revert said them as one.
+
+**As built.**
+- `LoadRecord.rule_node_ids`: of `created_node_ids`, those the case's rules wrote (before or after the
+  commit), kept apart as well. `LoadReverted.rule_nodes` counts them, and the script says "0 node(s) it
+  loaded and 2 its case's rules wrote (their alerts)". A record written before has none.
+- The revert takes a ledger run's id (`recipe_runs.run_id`, which the Studio lists a run by) as every
+  load that run recorded (`RecipeRunStore.records_of_run`), after a load's id and a pipeline run's
+  prefix. The Studio's *Runs* line ends with "— load <id>".
+- `scripts.revert_load` refuses before opening anything when neither `ARCADEDB_HOST` nor
+  `ARCADEDB_HTTP_PORT` is set, naming `python -m scripts.seed_internal <dataset> --revert-load <id>
+  --reverted-by <you> --stop-api`, which runs it in a one-shot from the Conduit's image on the
+  deployment's network, the Conduit stopped for it and started again, as a seed is.
+
+Tests, red first: `tests/ingest/test_revert_load.py` (a ledger run's id; the rules' nodes counted
+apart; the record keeping them apart), `tests/test_revert_load_script.py` (said apart; no store
+settings refused), `tests/test_seed_internal.py` (the revert inside the deployment; refused without
+`--stop-api`; the command line), `tests/services/api/test_recipe_runs.py` (live: `records_of_run`,
+`rule_node_ids` after the commit), `ScheduleEditor.test.tsx` (the run names its load).

@@ -52,7 +52,7 @@ describe("client parity in words", () => {
     } as unknown as StrengthInfluencer; // prettier-ignore
     expect(triggerWords(byDataset)).toBe("when the link is evidenced in assaults or disorders");
     expect(influencerWords(byDataset)).toBe(
-      "IN_CONFLICT_WITH and a pair linked through a shared value: adds 0.3 to the score before the curve, when the link is evidenced in assaults or disorders",
+      "In conflict with and a pair linked through a shared value: adds 0.3 to the score before the curve, when the link is evidenced in assaults or disorders",
     );
   });
 

@@ -337,6 +337,30 @@ async def test_a_pipeline_runs_branches_are_found_by_the_run_prefix_and_not_by_a
     assert await runs.records_with_prefix(f"{new_id()}:") == []
 
 
+async def test_a_runs_records_are_found_by_its_run_id_and_no_other(runs: RecipeRunStore) -> None:
+    """Build order step 15: the Studio lists a run by its run id, and the revert takes it."""
+    recipe = new_id()
+    run_id, other = await _started(runs, recipe), await _started(runs, recipe)
+    load_id = new_id()
+    await runs.add_record(run_id, _record(load_id, recipe))
+    await runs.add_record(other, _record(new_id(), recipe))
+    assert [r.load_id for r in await runs.records_of_run(run_id)] == [load_id]
+    assert await runs.records_of_run(new_id()) == []
+
+
+async def test_the_nodes_an_alert_after_the_commit_wrote_are_kept_apart_too(
+    runs: RecipeRunStore,
+) -> None:
+    recipe, load_id = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _record(load_id, recipe))
+    await runs.add_rule_writes(run_id, load_id, node_ids=["alert-1"], created_edge_ids=[],
+                               merged_edge_ids=[])  # fmt: skip
+    kept = await runs.load_record(load_id)
+    assert kept is not None
+    assert kept.created_node_ids == ["n1", "n2", "alert-1"] and kept.rule_node_ids == ["alert-1"]
+
+
 async def test_the_releases_of_a_load_are_found_by_released_from(runs: RecipeRunStore) -> None:
     recipe, held, other = new_id(), new_id(), new_id()
     parent = await _started(runs, recipe)

@@ -26,6 +26,9 @@ ISSUED_BEARER = "fixture-issued-token"
 ACCOUNTS: dict[str, dict[str, str]] = {
     "uuid-ayan": {"firstName": "Ayan", "lastName": "Kar", "username": "osprey-demo-analyst"},
     "uuid-bare": {"username": "osprey-admin"},
+    # A client's service account, as Keycloak represents one: an account, but no person.
+    "uuid-dashboard": {"username": "service-account-osprey-dashboard-1",
+                       "serviceAccountClientId": "osprey-dashboard-1"},
 }
 
 
@@ -159,3 +162,52 @@ async def test_nothing_to_resolve_fetches_no_token(idp: tuple[str, _IdpState]) -
     finally:
         await directory.aclose()
     assert state.token_grants == 0
+
+
+# Build order step 15: *Give to* offered the Ledger seed's own principal, `ledger-seed-worker`, which
+# is no account at all. Whom an alert may be given to is a person the identity provider holds.
+async def test_people_are_the_accounts_that_are_persons(idp: tuple[str, _IdpState]) -> None:
+    base, _ = idp
+    directory = PrincipalNameDirectory(_settings(base))
+    try:
+        asked = ["uuid-ayan", "uuid-bare", "uuid-dashboard", "ledger-seed-worker"]
+        found = await directory.people(asked)
+    finally:
+        await directory.aclose()
+    assert found == {"uuid-ayan", "uuid-bare"}
+
+
+async def test_people_fail_closed_when_the_idp_refuses_or_is_unreachable(
+    idp: tuple[str, _IdpState],
+) -> None:
+    base, _ = idp
+    for settings in (_settings(base, secret="wrong"), _settings("http://127.0.0.1:9")):
+        directory = PrincipalNameDirectory(settings)
+        try:
+            assert await directory.people(["uuid-ayan"]) == set()
+        finally:
+            await directory.aclose()
+
+
+async def test_people_without_a_directory_is_no_answer(idp: tuple[str, _IdpState]) -> None:
+    """A deployment with no admin-users URL cannot tell: `None`, and the caller keeps its list."""
+    base, state = idp
+    directory = PrincipalNameDirectory(
+        OidcResolverSettings(oidc_jwks_url=f"{base}/jwks", oidc_admin_users_url=None)
+    )
+    try:
+        assert await directory.people(["uuid-ayan"]) is None
+    finally:
+        await directory.aclose()
+    assert state.users_asked == []
+
+
+async def test_people_and_names_share_one_read_per_id(idp: tuple[str, _IdpState]) -> None:
+    base, state = idp
+    directory = PrincipalNameDirectory(_settings(base))
+    try:
+        await directory.display_names(["uuid-ayan", "uuid-dashboard"])
+        assert await directory.people(["uuid-ayan", "uuid-dashboard"]) == {"uuid-ayan"}
+    finally:
+        await directory.aclose()
+    assert state.users_asked == ["uuid-ayan", "uuid-dashboard"]

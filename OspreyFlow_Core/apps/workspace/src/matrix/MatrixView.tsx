@@ -59,6 +59,8 @@ export interface MatrixViewProps {
 
 const COUNT = new Intl.NumberFormat("en-GB");
 const STRENGTH = new Intl.NumberFormat("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** What a Strength or Rarity cell says while its answer is still being asked for. */
+const WORKING_OUT = "Working out…";
 const NONE: ReadonlySet<string> = new Set();
 
 interface Column<R> {
@@ -374,12 +376,21 @@ export function MatrixView({
     [graph, seq, dimmedNodeIds],
   );
   // ADR-139: each link's strength and its ends' rarity, worked out in the store as the reader each
-  // time the view's links change; until then (or if refused) the columns say so.
-  const [linkValues, setLinkValues] = useState<LinkValues>({});
-  const [valuesProblem, setValuesProblem] = useState<string | null>(null);
+  // time the view's links change. The two are asked for apart and each is shown as it arrives: the
+  // strengths come back in a second or two, while the rarity of a star's every pair can take ten
+  // (measured on the principal's star, build order step 15), and a refused rarity must not take the
+  // strengths with it. Until an answer arrives its column says it is being worked out.
+  const [strengthValues, setStrengthValues] = useState<Readonly<Record<string, number>> | null>(null);
+  const [rarityValues, setRarityValues] = useState<Readonly<Record<string, number>> | null>(null);
+  const [strengthProblem, setStrengthProblem] = useState<string | null>(null);
+  const [rarityProblem, setRarityProblem] = useState<string | null>(null);
   useEffect(() => {
     if (!strength) return;
     let cancelled = false;
+    setStrengthValues(null);
+    setRarityValues(null);
+    setStrengthProblem(null);
+    setRarityProblem(null);
     const pairs = new Map<string, [string, string]>();
     const byPair = new Map<string, string[]>();
     graph.forEachEdge((id, _attrs, source, target) => {
@@ -389,31 +400,45 @@ export function MatrixView({
       byPair.set(key, [...(byPair.get(key) ?? []), id]);
     });
     const { apiBaseUrl, bearerToken, investigationId } = strength;
-    void Promise.all([
-      fetchConnectionStrengths(apiBaseUrl, bearerToken, investigationId),
-      fetchRarity(apiBaseUrl, bearerToken, investigationId, "dataset", [...pairs.values()]),
-    ])
-      .then(([found, rarity]) => {
+    const said = (err: unknown) => (err instanceof Error ? err.message : String(err));
+    void fetchConnectionStrengths(apiBaseUrl, bearerToken, investigationId)
+      .then((found) => {
         if (cancelled) return;
         const strengthById: Record<string, number> = {};
         for (const link of found.links) strengthById[link.edge_id] = link.strength;
+        setStrengthValues(strengthById);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setStrengthValues({});
+        setStrengthProblem(said(err));
+      });
+    void fetchRarity(apiBaseUrl, bearerToken, investigationId, "dataset", [...pairs.values()])
+      .then((rarity) => {
+        if (cancelled) return;
         const rarityById: Record<string, number> = {};
         for (const pair of rarity.pairs) {
           if (pair.score === null || pair.score === undefined) continue;
           const [a, b] = pair.a < pair.b ? [pair.a, pair.b] : [pair.b, pair.a];
           for (const id of byPair.get(`${a}\u0000${b}`) ?? []) rarityById[id] = pair.score;
         }
-        setLinkValues({ strength: strengthById, rarity: rarityById });
-        setValuesProblem(null);
+        setRarityValues(rarityById);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setValuesProblem(err instanceof Error ? err.message : String(err));
+        if (cancelled) return;
+        setRarityValues({});
+        setRarityProblem(said(err));
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, seq, strength?.investigationId]);
+  const linkValues = useMemo<LinkValues>(
+    () => ({ strength: strengthValues ?? undefined, rarity: rarityValues ?? undefined }),
+    [strengthValues, rarityValues],
+  );
+  const valuesProblem = [strengthProblem, rarityProblem].filter((p): p is string => p !== null).join(" ") || null;
   const links = useMemo(
     () => linkRows(graph, edgeTypes, dimmedEdgeIds, linkValues),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -486,14 +511,26 @@ export function MatrixView({
             header: "Strength",
             sortBy: "strength",
             numeric: true,
-            render: (row) => (row.strength === null ? "Not worked out" : STRENGTH.format(row.strength)),
+            render: (row) =>
+              row.strength !== null
+                ? STRENGTH.format(row.strength)
+                : strengthValues === null
+                  ? WORKING_OUT
+                  : "Not worked out",
           },
           {
             key: "rarity",
             header: "Rarity",
             sortBy: "rarity",
             numeric: true,
-            render: (row) => (row.rarity === null ? "None" : STRENGTH.format(row.rarity)),
+            render: (row) =>
+              row.rarity !== null
+                ? STRENGTH.format(row.rarity)
+                : rarityValues === null
+                  ? WORKING_OUT
+                  : rarityProblem !== null
+                    ? "Not worked out"
+                    : "None",
           },
         ] satisfies Column<LinkRow>[])
       : []),

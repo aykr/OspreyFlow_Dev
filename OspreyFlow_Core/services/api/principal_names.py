@@ -12,6 +12,13 @@ minutes per process (decision 4). A 404 — the id is not an account — is an a
 too; a transport failure is not, so one outage does not blank names for the TTL. An unknown id, an
 unreachable identity provider or a deployment with no admin-users URL yields no name and **never a
 failed read**: the caller shows the id, as before ADR-106.
+
+**Who is a person (build order step 15).** The same read says whether an id is a person: an account
+the identity provider holds that is not a client's service account (Keycloak marks one with
+`serviceAccountClientId`). An id that is no account (a seed's own principal, such as
+`ledger-seed-worker`, which holds a grant on the case it made) is no person either. `people` answers
+for the ids a caller already serves, under decision 3's rule, and fails closed: an id it could not
+ask about is not counted a person.
 """
 
 from __future__ import annotations
@@ -44,6 +51,8 @@ class PrincipalNameDirectory:
         #: id -> (name or None for a known non-account, expiry). Transport failures are never
         #: written here.
         self._names: dict[str, tuple[str | None, float]] = {}
+        #: id -> whether it is a person (an account that is no service account), kept with its name.
+        self._persons: dict[str, bool] = {}
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -72,16 +81,30 @@ class PrincipalNameDirectory:
         ids its own authorised response already carries (ADR-106 decision 3)."""
         if not self._configured():
             return {}
+        known = await self._read(ids)
+        return {i: name for i, (name, _) in known.items() if name}
+
+    async def people(self, ids: Iterable[str]) -> set[str] | None:
+        """Of the ids given, those the identity provider holds as people; `None` on a deployment
+        with no directory, which cannot tell. An id that could not be asked about is not a person
+        (fail closed). Under ADR-106 decision 3, as `display_names`."""
+        if not self._configured():
+            return None
+        known = await self._read(ids)
+        return {i for i, (_, person) in known.items() if person}
+
+    async def _read(self, ids: Iterable[str]) -> dict[str, tuple[str | None, bool]]:
+        """Each id's name and whether it is a person, from the cache or the identity provider; an
+        id whose read failed is absent."""
         now = time.monotonic()
-        resolved: dict[str, str] = {}
+        resolved: dict[str, tuple[str | None, bool]] = {}
         to_fetch: list[str] = []
         for principal_id in dict.fromkeys(ids):
             if not principal_id:
                 continue
             cached = self._names.get(principal_id)
             if cached is not None and cached[1] > now:
-                if cached[0]:
-                    resolved[principal_id] = cached[0]
+                resolved[principal_id] = (cached[0], self._persons.get(principal_id, False))
             else:
                 to_fetch.append(principal_id)
         if not to_fetch:
@@ -99,10 +122,14 @@ class PrincipalNameDirectory:
             except httpx.HTTPError:
                 continue
             if response.status_code == 200:
-                name = _display_name(response.json())
+                account = response.json()
+                name = _display_name(account)
+                person = not account.get("serviceAccountClientId")
                 self._names[principal_id] = (name, now + self._ttl)
-                if name:
-                    resolved[principal_id] = name
+                self._persons[principal_id] = person
+                resolved[principal_id] = (name, person)
             elif response.status_code == 404:
                 self._names[principal_id] = (None, now + self._ttl)
+                self._persons[principal_id] = False
+                resolved[principal_id] = (None, False)
         return resolved

@@ -23,6 +23,7 @@ import type {
   InfluencerSetVersion,
   StrengthInfluencer,
 } from "../../../../packages/schemas/generated";
+import { linkTypeName } from "../canvas/linkLabel";
 import { Button, Checkbox, Input, Select } from "../design/primitives";
 import {
   approveInfluencers,
@@ -164,7 +165,7 @@ function InfluencerForm({
                   setLinkTypes((held) => (held.includes(t.name) ? held.filter((x) => x !== t.name) : [...held, t.name]))
                 }
               />
-              {t.label ?? t.name}
+              {linkTypeName(t.name, edgeTypes)}
             </label>
           ))}
         <label className="strength-panel__choice">
@@ -327,7 +328,7 @@ function versionWords(version: InfluencerSetVersion): string {
 export function StrengthPanel(props: StrengthPanelProps) {
   const { apiBaseUrl, bearerToken, investigationId, accountId, canManage, entityTypes, edgeTypes } = props;
   const linkName: LinkName = useCallback(
-    (type: string) => edgeTypes.find((t) => t.name === type)?.label ?? type,
+    (type: string) => linkTypeName(type, edgeTypes),
     [edgeTypes],
   );
   const [found, setFound] = useState<CaseInfluencers | null>(null);

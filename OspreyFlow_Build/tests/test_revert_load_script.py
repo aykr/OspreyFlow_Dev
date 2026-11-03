@@ -287,3 +287,37 @@ def test_the_script_says_a_revert_should_run_with_the_conduit_quiet() -> None:
     assert "Quiesce the Conduit" in doc
     assert "DuckDB engine that is required" in doc
     assert "With ClickHouse it is advised" in doc
+
+
+# --- build order step 15 (DEMO_GUIDE.md §8b) ------------------------------------------------------
+
+
+def test_the_nodes_the_rules_wrote_are_said_apart_so_the_count_agrees_with_the_run() -> None:
+    done = LoadReverted(load_id="load-1", nodes=2, links=2, events=13, geometries=0, held_rows=0,
+                        alerts=2, rule_nodes=2)  # fmt: skip
+    code, text = _run(RevertResult(reverted=[done]))
+    assert code == 0
+    assert "0 node(s) it loaded and 2 its case's rules wrote (their alerts)" in text
+    assert "2 node(s)," not in text
+
+
+@pytest.mark.parametrize("variable", ["ARCADEDB_HOST", "ARCADEDB_HTTP_PORT"])
+def test_with_no_store_settings_it_refuses_before_opening_anything(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], variable: str
+) -> None:
+    """Run on the host it had no store settings, so it would have reached ArcadeDB's default port,
+    2480: the everyday deployment's own. Either setting says where the stores are; neither, and it
+    refuses and names the command that runs it inside the deployment."""
+    for name in ("ARCADEDB_HOST", "ARCADEDB_HTTP_PORT"):
+        monkeypatch.delenv(name, raising=False)
+
+    async def opened(*_: object, **__: object) -> object:
+        raise AssertionError("a store was opened")
+
+    monkeypatch.setattr(script, "open_analytics", opened)
+    assert script.main(["01RUN", "--reverted-by", "operator-1"]) == 64
+    said = capsys.readouterr().out
+    assert "seed_internal" in said and "--revert-load" in said
+    monkeypatch.setenv(variable, "arcadedb" if variable == "ARCADEDB_HOST" else "2491")
+    with pytest.raises(AssertionError, match="a store was opened"):
+        script.main(["01RUN", "--reverted-by", "operator-1"])

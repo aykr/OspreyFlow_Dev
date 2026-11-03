@@ -11,7 +11,14 @@ changes anything. **With the DuckDB engine the analytics file belongs to one pro
 Conduit before running this, or the file cannot be opened. ClickHouse has no such limit.
 
 Exit codes: 0 reverted, 1 refused (nothing was changed), 2 stopped part way (run it again to
-complete it: every step can be repeated), 64 `--show-ids` asked without a principal to read as.
+complete it: every step can be repeated), 64 `--show-ids` asked without a principal to read as, or
+no store settings.
+
+`<load_id>` may also be a ledger run's id, the id the Studio lists a run by (build order step 15).
+**From the host,** run it through `python -m scripts.seed_internal <dataset> --revert-load <id>
+--reverted-by <you> --stop-api`, which runs this inside the deployment's network with the Conduit
+stopped: run here with no store settings (`ARCADEDB_HOST` or `ARCADEDB_HTTP_PORT`) it refuses
+rather than reach whatever answers on ArcadeDB's default port, 2480.
 
 A refusal names its reason and a count. With `--show-ids` it also lists the ids of what the load
 merged into, but only those the `--reverted-by` principal can read, asked of the graph as that
@@ -84,7 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m scripts.revert_load", description="Revert a load, its releases first."
     )
-    parser.add_argument("load_id", help="a load's id, a branch's id, or a pipeline run's id")
+    parser.add_argument(
+        "load_id", help="a load's id, a branch's id, a pipeline run's id, or a ledger run's id"
+    )
     parser.add_argument(
         "--reverted-by", required=True, help="the principal id to record as having reverted it"
     )
@@ -172,8 +181,16 @@ async def run(
         say(str(incomplete))
         return 2
     for done in result.reverted:
+        # What the case's rules wrote into the load (their alerts) is said apart from what the
+        # recipe loaded, so the count agrees with the run's "created" (build order step 15).
+        nodes = (
+            f"{done.nodes - done.rule_nodes} node(s) it loaded and {done.rule_nodes} its case's "
+            "rules wrote (their alerts)"
+            if done.rule_nodes
+            else f"{done.nodes} node(s)"
+        )
         say(
-            f"Reverted {done.load_id}: {done.nodes} node(s), {done.links} link(s), "
+            f"Reverted {done.load_id}: {nodes}, {done.links} link(s), "
             f"{done.events} event(s), {done.geometries} point(s), "
             f"{done.held_rows} held row(s) discarded, {done.alerts} alert(s) closed."
         )
@@ -227,9 +244,25 @@ def build_revert_deps(
     )
 
 
+#: Where the stores are: set inside the deployment's network (its `deployment.env`), never on the
+#: host. With neither, the client would default to `localhost:2480`, which on a machine running an
+#: OspreyFlow deployment is that deployment's own published graph store (build order step 15).
+STORE_SETTINGS = ("ARCADEDB_HOST", "ARCADEDB_HTTP_PORT")
+
+NO_STORE_SETTINGS = (
+    "No store settings: nothing says where this deployment's stores are, and the defaults would "
+    "reach whatever answers on localhost:2480. Run the revert inside the deployment instead, from "
+    "OspreyFlow_Core: python -m scripts.seed_internal <dataset> --revert-load <load or run id> "
+    "--reverted-by <you> --stop-api (OSPREYFLOW_DEPLOYMENT_DIR names a deployment kept by name)."
+)
+
+
 async def _main(args: argparse.Namespace) -> int:
     if args.show_ids and viewer_from(args) is None:
         print("--show-ids needs a principal to read as: give --clearance and --org-unit.")
+        return 64  # before any store is opened
+    if not any(os.environ.get(name) for name in STORE_SETTINGS):
+        print(NO_STORE_SETTINGS)
         return 64  # before any store is opened
     scheme = load_uk_le_scheme()
     dsn = PostgresConfig.from_env().dsn

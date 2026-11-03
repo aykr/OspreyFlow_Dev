@@ -69,7 +69,7 @@ class PackHasWithheldItems(Exception):
     never a count)."""
 
     def __init__(self) -> None:
-        super().__init__("some items in this pack are withheld from you")
+        super().__init__("some items in this pack are not shown to you")
 
 
 class StoredPackItem(PackItem):

@@ -61,7 +61,7 @@ describe("strengthExplanation", () => {
 
   it("says a structural link's fixed strength", () => {
     const lines = strengthExplanation({ ...LINK, fixed: 0.75, heavy: null, applied: [], strength: 0.75, base_weight: 0.75 });
-    expect(lines[0]).toBe("A fixed strength of 0.75 for “IN_CONFLICT_WITH”, whatever its count or age.");
+    expect(lines[0]).toBe("A fixed strength of 0.75 for “In conflict with”, whatever its count or age.");
     expect(ruleWords("3/default")).toBe("weights version 3, the default rule");
   });
 });

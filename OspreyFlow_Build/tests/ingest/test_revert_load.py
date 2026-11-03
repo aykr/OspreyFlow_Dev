@@ -94,8 +94,11 @@ class Ledger:
     record marked reverted. Marking an id it holds no record of is an error, as an `UPDATE` that
     matched no row would be taken for one."""
 
-    def __init__(self, *records: LoadRecord) -> None:
+    def __init__(self, *records: LoadRecord, runs: dict[str, list[str]] | None = None) -> None:
         self.records = {r.load_id: r for r in records}
+        #: A ledger run's id and the load ids of the records it holds (`recipe_runs.run_id`, which
+        #: the Studio lists a run by). An id it holds no run of is no run: nothing found.
+        self.runs = runs or {}
         self.marked: list[tuple[str, str, datetime]] = []
         self.released: list[str] = []
         self.on_release: Callable[[str], None] | None = None
@@ -105,6 +108,9 @@ class Ledger:
 
     async def records_with_prefix(self, prefix: str) -> list[LoadRecord]:
         return [r for i, r in self.records.items() if i.startswith(prefix)]
+
+    async def records_of_run(self, run_id: str) -> list[LoadRecord]:
+        return [self.records[i] for i in self.runs.get(run_id, []) if i in self.records]
 
     async def releases_of(self, load_id: str) -> list[LoadRecord]:
         return [r for r in self.records.values() if r.released_from == load_id]
@@ -345,9 +351,9 @@ async def no_caches() -> None:
 
 
 class World:
-    def __init__(self, *records: LoadRecord) -> None:
+    def __init__(self, *records: LoadRecord, runs: dict[str, list[str]] | None = None) -> None:
         self.steps = Steps()
-        self.ledger = Ledger(*records)
+        self.ledger = Ledger(*records, runs=runs)
         self.graph = Graph(self.steps)
         self.analytics = Analytics(self.steps)
         self.held = Held(self.steps)
@@ -534,6 +540,35 @@ async def test_a_pipeline_runs_id_means_every_branch_and_a_branch_id_that_branch
     result = await every.revert("run1")
     assert sorted(s.load_id for s in result.reverted) == ["run1:src-a", "run1:src-b"]
     assert every.ledger.records["run10:src-a"].reverted_at is None, "run1 is not run10"
+
+
+# Build order step 15 (DEMO_GUIDE.md §8b): the Studio lists a run by its ledger run id, which is not
+# its load's id, and the revert refused it as having no record.
+async def test_a_ledger_runs_id_means_every_load_that_run_recorded() -> None:
+    world = World(
+        _record("01LOAD"), _record("01OTHER"), runs={"01RUN": ["01LOAD"], "01RUN2": ["01OTHER"]}
+    )
+    result = await world.revert("01RUN")
+    assert [s.load_id for s in result.reverted] == ["01LOAD"]
+    assert world.ledger.records["01OTHER"].reverted_at is None
+    refused = World(_record("01LOAD"), runs={"01RUN": ["01LOAD"]})
+    with pytest.raises(RevertRefused) as caught:
+        await refused.revert("01NOSUCHRUN")
+    assert [r.reason for r in caught.value.refusals] == ["no_record"]
+
+
+# Build order step 15: a revert discarded 2 nodes of a load the Studio said created 0. The two were
+# the Alert nodes the case's rules wrote into the load (its record lists them, ADR-127 decision 6);
+# the revert now says them apart, so its count agrees with the run's.
+async def test_the_nodes_the_cases_rules_wrote_are_counted_apart_from_the_loads_own() -> None:
+    record = _record("load-1", created_node_ids=["alert-r1", "alert-c1"],
+                     rule_node_ids=["alert-r1", "alert-c1"])  # fmt: skip
+    result = await World(record).revert("load-1")
+    (done,) = result.reverted
+    assert (done.nodes, done.rule_nodes) == (2, 2)
+    mixed = _record("load-2", created_node_ids=["n1", "alert-r1"], rule_node_ids=["alert-r1"])
+    (done,) = (await World(mixed).revert("load-2")).reverted
+    assert (done.nodes, done.rule_nodes) == (2, 1)
 
 
 async def test_a_pipeline_run_with_one_refusing_branch_is_refused_whole() -> None:
@@ -1168,3 +1203,16 @@ async def test_an_element_re_added_between_the_two_passes_is_removed_by_the_seco
     assert names.index("audit") < names.index("working_sets_again")
     assert result.reverted[0].cases == 2, "both passes' cases are counted"
     assert world.ledger.marked == [("load-1", OPERATOR, NOW)], "marked after the second pass"
+
+
+def test_the_record_keeps_what_the_cases_rules_wrote_apart_as_well() -> None:
+    """Build order step 15: the record lists the rules' nodes among the created ones (the revert
+    takes them back) and apart (so it can say them apart from what the recipe loaded)."""
+    from schemas.ingest import LoadReport
+
+    report = LoadReport(load_id="load-1", recipe_id="r", recipe_version=1,
+                        created_node_ids=[], rule_node_ids=["alert-r1", "alert-c1"])  # fmt: skip
+    record = load_record_from_report(report, source="week2.csv", created_by="eng", started_at=T0,
+                                     now=T0)  # fmt: skip
+    assert record.created_node_ids == ["alert-r1", "alert-c1"]
+    assert record.rule_node_ids == ["alert-r1", "alert-c1"]

@@ -1185,6 +1185,11 @@ class LoadRecord(BaseModel):
     #: The existing nodes the load wrote again (see `LoadReport.merged_node_ids`), and the geometry
     #: refs it inserted that were not already present, so a revert can remove exactly those.
     merged_node_ids: list[NodeId] = Field(default_factory=list)
+    #: Of `created_node_ids`, those the case's rules wrote into the load (an `Alert` and what its
+    #: finding wrote, before or after the commit), kept apart as well so a revert can say them apart
+    #: from what the recipe loaded: the run says "0 created" of a week whose rules raised two alerts
+    #: (build order step 15). A record written before has none, and says them all as loaded.
+    rule_node_ids: list[NodeId] = Field(default_factory=list)
     created_geometry_refs: list[str] = Field(default_factory=list)
     #: True when an extract or enrich stage fed by this load wrote a node, link or point: those are
     #: in no record, so a revert of the load would leave them, and it refuses (Amendment 6).

@@ -45,6 +45,7 @@ def load_record_from_report(
         created_edge_ids=[*report.created_edge_ids, *report.rule_created_edge_ids],
         merged_edge_ids=[*report.merged_edge_ids, *report.rule_merged_edge_ids],
         merged_node_ids=report.merged_node_ids,
+        rule_node_ids=list(report.rule_node_ids),
         released_from=released_from,
         events_stamped=True,
     )

@@ -9,6 +9,7 @@ import type {
   StrengthInfluencer,
   StrengthLegend,
 } from "../../../../packages/schemas/generated";
+import { linkTypeName } from "../canvas/linkLabel";
 
 /** The link-type name an influencer uses for a pair linked through a shared value (ADR-139
  * Amendment 2; `schemas/strength.py`'s `SHARED_VALUE`): the client's `dup_*` rows. */
@@ -52,7 +53,8 @@ export function andList(values: readonly string[]): string {
 
 export type LinkName = (linkType: string) => string;
 
-const AS_IS: LinkName = (t) => t;
+/** With no list of declared types to hand, a type is still named in words, never by its id. */
+const AS_IS: LinkName = (t) => linkTypeName(t, []);
 
 /** What the kind of change does, with its size. */
 export function changeWords(change: AppliedInfluencer["change"], size: number): string {

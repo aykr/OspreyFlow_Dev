@@ -557,6 +557,29 @@ async def test_the_alert_item_is_withheld_from_a_reader_without_the_dataset(scen
         assert shown == [] and withheld is True  # a yes, never a count or a name
 
 
+async def test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_adder(
+    scene: Scene,
+) -> None:
+    """Build order step 15: the rehearsal's pack said "Some items … withheld from you" to the analyst
+    who had added R1. The revert of the week's load takes back the load's own `Alert` nodes (they are
+    in its record, ADR-127 decision 6), R1's among them, so the item cites a node no one may read
+    now: not shown, and said as the yes it always is. The Glass's sentence says this reason as well
+    as access (`packText.WITHHELD_ITEMS_SENTENCE`); here, that the analyst was not denied it on access:
+    before the revert she gets it."""
+    await story(scene)
+    item = await _r1_item(scene)
+    graph = scene.world.graph
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case) == ([item], False)
+    r1 = item.alert
+    assert r1 is not None
+    alert_nodes = [n for n in r1.node_ids if graph.nodes[n].type == "Alert"]
+    assert len(alert_nodes) == 1, "the item cites R1's own Alert node"
+    tx = await graph.begin_transaction()
+    await graph.revert_elements(alert_nodes, [], tx)
+    await graph.commit_transaction(tx)
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case) == ([], True)
+
+
 async def _figures(scene: Scene, reader: Principal) -> Any:
     return await reports.alert_report(
         scene.stores.alerts, scene.world.graph, scene.case, reader, today=datetime.now(UTC).date()

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { packPrintHtml } from "./packExport";
 import { PackItemView } from "./PackItemView";
-import { alertMatchSentence, alertStatusSentence, itemShortTitle, KIND_LABEL } from "./packText";
+import { alertMatchSentence, alertStatusSentence, itemShortTitle, KIND_LABEL, WITHHELD_ITEMS_SENTENCE } from "./packText";
 import { ALERT_ITEM, CLOSED_ALERT_ITEM, manifest } from "./reportsTestKit";
 
 afterEach(cleanup);
@@ -27,6 +27,31 @@ describe("the words an alert item is said in", () => {
     expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "closed", outcome: null, reason: "Taken back with its load" })).toBe(
       "Closed without an outcome: Taken back with its load.",
     );
+  });
+
+  // Build order step 15: the Ledger pack read "…citing the circle through Crescent.." — the close
+  // reason as the analyst typed it ends with a full stop, and the sentence added another.
+  it("never doubles the full stop when the reason already ends a sentence", () => {
+    const closed = { ...CLOSED_ALERT_ITEM.alert!, outcome: "referred" as const };
+    expect(alertStatusSentence({ ...closed, reason: "To the MLRO: citing the circle through Crescent." })).toBe(
+      "Closed as Referred: To the MLRO: citing the circle through Crescent.",
+    );
+    expect(alertStatusSentence({ ...closed, reason: "Is it the same ring?" })).toBe("Closed as Referred: Is it the same ring?");
+    expect(alertStatusSentence({ ...closed, reason: "Sent on!  " })).toBe("Closed as Referred: Sent on!");
+    expect(alertStatusSentence({ ...closed, status: "closed", outcome: null, reason: "Taken back." })).toBe(
+      "Closed without an outcome: Taken back.",
+    );
+  });
+
+  // Build order step 15: the Ledger pack said "Some items … withheld from you" to the analyst who had
+  // added them. Nothing was withheld from her: the revert of the week's load had taken back R1's own
+  // Alert node, which the item cites, so the item is rightly not shown — for a reason the sentence
+  // denied. The sentence says both reasons, and still never which item, how many, or which reason.
+  it("says an item is not shown without claiming it is held back from this reader alone", () => {
+    expect(WITHHELD_ITEMS_SENTENCE).toBe(
+      "Some items of this pack are not shown to you: you may not see something they rest on, or it has since been taken back.",
+    );
+    expect(WITHHELD_ITEMS_SENTENCE).not.toMatch(/\d/);
   });
 
   it("names the item kind and gives it a short title", () => {

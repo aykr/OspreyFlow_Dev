@@ -97,6 +97,32 @@ describe("StrengthPanel", () => {
     expect(screen.queryByText("Installation-wide influencers")).toBeNull();
   });
 
+  // Build order step 15: a link type the case's own list does not declare (the installation-wide
+  // "Direct link" names TRANSACTED in a prison case) was shown as its raw id.
+  it("names a link type by its label, never its id, also one the case does not declare", async () => {
+    serve({ versions: [], defaults: [DIRECT, SOURCE] });
+    const wide = { ...DIRECT, link_types: ["COMMUNICATED_WITH", "TRANSACTED", "VISITED"] };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path === "/v1/investigations/c1/strength-influencers") {
+          const body = legend(false);
+          body.legend.influencers = [{ influencer: wide, layer: "file", version: null }];
+          body.legend.direct_link_types = wide.link_types;
+          return json(200, body);
+        }
+        if (path === "/v1/strength-influencers") return json(200, { versions: [], defaults: [wide] });
+        return json(404, {});
+      }),
+    );
+    panel("reader", false);
+    const list = await screen.findByRole("list", { name: "Influencers in force" });
+    expect(list.textContent).toContain("Communicated with, Transacted and Visited: adds 0.13");
+    expect(screen.getByText(/Direct links: Communicated with, Transacted and Visited\./)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/COMMUNICATED_WITH|TRANSACTED/);
+  });
+
   it("offers a second holder Approve, and sends the approval", async () => {
     const calls = serve({ versions: [PENDING], defaults: [DIRECT, SOURCE] });
     panel("checker", true);

@@ -17,6 +17,7 @@ export type InvestigationId = string | null;
 export type CreatedEdgeIds = EdgeId[];
 export type MergedEdgeIds = EdgeId[];
 export type MergedNodeIds = NodeId[];
+export type RuleNodeIds = NodeId[];
 export type CreatedGeometryRefs = string[];
 export type UncoveredWrites = boolean;
 export type ReleasedFrom = string | null;
@@ -53,6 +54,7 @@ export interface LoadRecord {
   created_edge_ids?: CreatedEdgeIds;
   merged_edge_ids?: MergedEdgeIds;
   merged_node_ids?: MergedNodeIds;
+  rule_node_ids?: RuleNodeIds;
   created_geometry_refs?: CreatedGeometryRefs;
   uncovered_writes?: UncoveredWrites;
   released_from?: ReleasedFrom;

@@ -46,7 +46,7 @@ describe("the Published tab", () => {
   it("shows a chosen pack read-only, with its withheld sentence", async () => {
     place();
     fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
-    expect(await screen.findByText("Some items of this pack are withheld from you.")).toBeTruthy();
+    expect(await screen.findByText("Some items of this pack are not shown to you: you may not see something they rest on, or it has since been taken back.")).toBeTruthy();
     // The pack's own line and the note's banner: two places, each from the server's marking.
     expect(screen.getAllByText("Marked SECRET")).toHaveLength(2);
     expect(screen.getAllByRole("article")).toHaveLength(3);
@@ -68,6 +68,6 @@ describe("the Published tab", () => {
     render(<PublishedTab api={{ apiBaseUrl: "http://x", bearerToken: "t", investigationId: "c1" }} canExport={false} />);
     fireEvent.click(await screen.findByRole("button", { name: /Quarter pack/ }));
     await screen.findAllByRole("article");
-    expect(screen.queryByText(/withheld from you/)).toBeNull();
+    expect(screen.queryByText(/are not shown to you/)).toBeNull();
   });
 });

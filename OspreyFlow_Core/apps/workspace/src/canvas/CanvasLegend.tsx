@@ -27,6 +27,7 @@ import { activePalette } from "../color/palette";
 import { andList, compositionWords, influencerWords, layerWords } from "../strength/words";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
+import { linkTypeName, type NamedType } from "./linkLabel";
 import { describeValueIcon, glyphImageUri } from "./valueIcons";
 
 export interface LegendType {
@@ -98,6 +99,7 @@ export function CanvasLegend({
   valueIcons = [],
   onToggleLink,
   strength = null,
+  edgeTypes = [],
 }: {
   types: readonly LegendType[];
   links?: readonly LegendLink[];
@@ -105,6 +107,9 @@ export function CanvasLegend({
   onToggleLink?: (type: string) => void;
   /** ADR-139: the case's influencers in force, for the strength part. Absent: not shown. */
   strength?: StrengthLegend | null;
+  /** The link types the case declares, to name an influencer's link type that has no link in view by
+   * its label (build order step 15: never the raw id). */
+  edgeTypes?: readonly NamedType[];
 }) {
   const [open, setOpen] = useState(true);
   const [offset, setOffset] = useState<Offset>(remembered);
@@ -168,7 +173,8 @@ export function CanvasLegend({
     remember(start.at);
   };
 
-  const linkLabel = (type: string): string => links.find((l) => l.type === type)?.label ?? type;
+  const linkLabel = (type: string): string =>
+    links.find((l) => l.type === type)?.label ?? linkTypeName(type, edgeTypes);
   if (types.length === 0) return null;
   const sorted = [...types].sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
   const moved = offset.x !== 0 || offset.y !== 0;

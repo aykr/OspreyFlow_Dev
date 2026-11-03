@@ -398,7 +398,7 @@ function LinkView({
             bearerToken={assessment.bearerToken}
             investigationId={assessment.investigationId}
             edge={link.edge}
-            linkName={(type) => (linkEditing ? linkTypeName(type, linkEditing.edgeTypes) : type)}
+            linkName={(type) => linkTypeName(type, linkEditing?.edgeTypes ?? [])}
           />,
         )}
       {/* ADR-080: a link is changed with a reason and its history kept — in a case, for any type
