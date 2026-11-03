@@ -530,3 +530,91 @@ def test_own_ports_are_read_from_composes_own_answer(deployment: Deployment) -> 
     assert apply.own_published_ports(deployment.folder / "compose.yaml") == {80, 443, 2480}
     deployment.compose.running = False
     assert apply.own_published_ports(deployment.folder / "compose.yaml") == set()
+
+
+# ---- ADR-114 Amendment 33 (drop 1): the organisation's certificate on every apply --------------
+
+
+def _own_certificate_install(tmp_path: Path, compose: FakeCompose) -> tuple[Deployment, Path]:
+    """A self-contained Small with its own certificate, installed by the real `apply.main` (stopped,
+    as `Deployment.install` is, at its first compose command)."""
+    from .tls_fixtures import HOST, write_set
+
+    files = write_set(tmp_path / "tls")
+    found = Deployment(tmp_path, compose)
+    found.write_config(
+        profile="small",
+        network={"public_origin": f"https://{HOST}",
+                 "tls": {"certificate": str(files.certificate), "key": str(files.key),
+                         "ca": str(files.ca)}},
+        reporting={"sync": False, "superset": False},
+    )  # fmt: skip
+
+    def refuse(args: list[str], *, stage: str, **_kwargs: object) -> str:
+        raise apply.ApplyFailed(stage, "no Docker in this test")
+
+    before = apply._run
+    apply._run = refuse  # type: ignore[assignment]
+    try:
+        assert apply.main(["--config", str(found.config), "--out-root", str(found.out_root)]) == 1
+    finally:
+        apply._run = before  # type: ignore[assignment]
+    folder = found.out_root / "small"
+    assert (folder / "deployment.env").is_file()
+    compose.calls.clear()
+    return found, folder
+
+
+def test_apply_refuses_and_changes_nothing_when_the_certificate_is_refused(
+    tmp_path: Path, compose: FakeCompose, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from .tls_fixtures import NOW, write_set
+
+    deployment, folder = _own_certificate_install(tmp_path, compose)
+    env = _pairs(folder / "deployment.env")
+    assert env["OSPREY_PROXY_UID"] == str((tmp_path / "tls" / "osprey.key").stat().st_uid)
+    assert len((folder / "tls-fingerprint").read_text(encoding="utf-8").strip()) == 64
+    before = deployment.snapshot()
+    # The certificate expires: replaced by one whose end has passed.
+    import datetime as dt
+
+    write_set(tmp_path / "tls", not_before=NOW - dt.timedelta(days=400),
+              not_after=NOW - dt.timedelta(days=1))  # fmt: skip
+    capsys.readouterr()
+    assert deployment.reapply() == 1
+    said = capsys.readouterr().err
+    assert "certificate" in said and "expired" in said and "nothing was changed" in said
+    assert deployment.snapshot() == before
+    assert compose.ups() == []
+    # A first install with a refused certificate writes no deployment at all.
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    files = write_set(fresh / "tls", mismatched_key=True)
+    config = fresh / "osprey.yaml"
+    config.write_text(yaml.safe_dump({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": str(files.certificate), "key": str(files.key)}},
+    }), encoding="utf-8")  # fmt: skip
+    assert apply.main(["--config", str(config), "--out-root", str(fresh / "generated")]) == 1
+    assert not (fresh / "generated" / "small").exists()
+    assert "does not match" in capsys.readouterr().err
+
+
+def test_a_changed_certificate_restarts_only_the_proxy(
+    tmp_path: Path, compose: FakeCompose
+) -> None:
+    """Renewal: replace the two files, then `ospreyflow apply`. Only the proxy reads them, so only
+    the proxy starts again; an apply with the same files restarts nothing."""
+    from .tls_fixtures import write_set
+
+    deployment, folder = _own_certificate_install(tmp_path, compose)
+    assert deployment.reapply() == 0
+    assert compose.restarted() == set()
+    old = (folder / "tls-fingerprint").read_text(encoding="utf-8")
+    env_before = (folder / "deployment.env").read_text(encoding="utf-8")
+    write_set(tmp_path / "tls")  # a renewed certificate (a new key with it), same paths
+    assert deployment.reapply() == 0
+    assert compose.restarted() == {"proxy"}
+    assert (folder / "tls-fingerprint").read_text(encoding="utf-8") != old
+    assert (folder / "deployment.env").read_text(encoding="utf-8") == env_before

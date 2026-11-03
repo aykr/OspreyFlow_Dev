@@ -60,6 +60,7 @@ import yaml
 from pydantic import ValidationError
 
 from demo_fixtures.datasets import domains_for
+from harness import tls_check
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -90,7 +91,7 @@ from harness.render import (
 )
 from harness.render import write as write_artefacts
 from harness.reporting import reporting_secrets
-from harness.site import answer_localhost_with_loopback, sites
+from harness.site import TLS_FINGERPRINT_FILE, answer_localhost_with_loopback, sites
 from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
@@ -964,6 +965,32 @@ def reapply_main(
     return 0
 
 
+def own_certificate(config: OspreyConfig) -> tuple[str, str] | None:
+    """ADR-114 Amendment 33 decision 3, before anything is rendered: the organisation's certificate
+    checked (`harness.tls_check`), refused in words with nothing changed. Returns its fingerprint
+    and the `deployment.env` lines naming the account that owns the key, which the proxy runs as
+    (so the key can stay `600`); None without `network.tls`."""
+    tls = config.network.tls
+    if tls is None:
+        return None
+    report = tls_check.check_deployment(config)
+    if not report.ok:
+        raise ApplyFailed(
+            "certificate",
+            "the organisation's certificate is refused, so nothing was changed:\n  - "
+            + "\n  - ".join(report.refusals),
+        )
+    for warning in report.warnings:
+        print(f"apply: warning: {warning}", file=sys.stderr)
+    owner = Path(tls.key).stat()
+    lines = (
+        "# The account that owns network.tls.key; the proxy runs as it (ADR-114 Amendment 33).\n"
+        f"OSPREY_PROXY_UID={owner.st_uid}\nOSPREY_PROXY_GID={owner.st_gid}\n"
+    )
+    assert report.fingerprint is not None
+    return report.fingerprint, lines
+
+
 @dataclass
 class Staged:
     """A deployment rendered into its staging folder, and the secrets its `deployment.env` holds
@@ -993,9 +1020,17 @@ def stage_deployment(
     storage path reads the same, ADR-054 Amendment 6), with `deployment.env` written `600` and
     every secret `previous_env` already held put back (ADR-132, the owner's ruling 6). Nothing here
     touches the deployment's own folder."""
+    certificate = own_certificate(config)
     shutil.rmtree(stage, ignore_errors=True)
     env_path = stage / SECRETS_FILE
     rendered = render_deployment(config, stage, images_from=images_from)
+    proxy_lines = ""
+    if certificate is not None:
+        fingerprint, proxy_lines = certificate
+        # ADR-114 Amendment 33 decision 3: a renewed certificate changes this one file, which only
+        # the proxy mounts, so `services_to_restart` starts the proxy alone. Not `deployment.env`:
+        # every owned service reads that whole, and would be restarted with it.
+        (stage / TLS_FINGERPRINT_FILE).write_text(fingerprint + "\n", encoding="utf-8")
     write_config_copy(config_path, stage)
     (stage / "realm.json").write_text(
         render_realm_json(config, demo_analyst=demo_analyst), encoding="utf-8"
@@ -1050,6 +1085,7 @@ def stage_deployment(
         # ADR-111 Amendment 2: the reporting components' secrets, only for what is switched on.
         + reporting_secrets(config)
         + analytics_secret_lines(config)
+        + proxy_lines
         + mail_secret_lines(config, environ)
         + provider_secret_lines(config, environ, previous=previous_env)
         + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
