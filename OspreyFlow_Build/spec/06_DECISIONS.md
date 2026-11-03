@@ -22762,3 +22762,23 @@ secrets for both Conduit clients, as an import does; the Conduit's resolution of
 (`resolve_for_owner_detailed("osprey-demo-admin")`, the call a rule run makes) was then refused with a
 401; one `ospreyflow repair-sign-in --name govuk` said "the Conduit's client credential set from the
 deployment's settings" and the same resolution succeeded; a second run said it already matched.
+
+### ADR-034, Amendment 2 (3 November 2026) — the statement worded as the sign-in page frames it
+
+**The owner's ruling of 3 November 2026.** Amendment 1's statement named three things the product is
+("an open source intelligence mapping, anti-money-laundering and fraud detection platform"), while the
+sign-in page (ADR-115 Amendment 4) leads with intelligence mapping and names what it is for, monitoring
+and alerting among them (the owner's ruling of 1 November that monitoring and alerting is a core
+feature). Every surface now says the one thing:
+
+> OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering,
+> fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the
+> Apache License 2.0.
+
+It is `PRODUCT_STATEMENT` (`apps/workspace/src/welcome/statement.ts`): the README's opening, About, the
+install page, and the website's home page, whose title and heading read "Open Source Intelligence Mapping
+for Crime, AML, Fraud and Monitoring". Everything else in Amendment 1 stands.
+
+**Tests**, shown red on the old wording (evidence `statement_red.txt`): `tests/test_publish_user_repo.py`
+`test_the_real_readme_is_published_with_the_statement`; `tests/test_website_wording.py`
+`test_the_home_page_gives_the_products_statement`; `SignInScreen.test.tsx` and `InstallApp.test.tsx`.

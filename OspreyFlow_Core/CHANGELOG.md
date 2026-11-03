@@ -6,6 +6,10 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **What OspreyFlow says it is**, the same everywhere (README, About, the install page, the sign-in
+  page and the website): "an open source intelligence mapping platform for crime analysis,
+  anti-money-laundering, fraud detection, and event monitoring and alerting".
+
 ## v0.4.4 — 2026-11-03
 
 - **Architecture in the guides.** The administration guide's "How OspreyFlow is built" now opens

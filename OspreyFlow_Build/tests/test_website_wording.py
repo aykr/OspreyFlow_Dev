@@ -196,8 +196,9 @@ def test_the_check_flags_a_check_missing_from_the_bundle(site_copy: Path) -> Non
 
 PRODUCT_REPOSITORY = "https://github.com/aykr/OspreyFlow"
 STATEMENT = (
-    "OspreyFlow is an open source intelligence mapping, anti-money-laundering and fraud detection platform, "
-    "developed by Solirius Reply and released under the Apache License 2.0."
+    "OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, "
+    "fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the "
+    "Apache License 2.0."
 )
 GITHUB_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
