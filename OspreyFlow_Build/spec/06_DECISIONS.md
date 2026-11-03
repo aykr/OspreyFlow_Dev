@@ -23672,6 +23672,14 @@ same for Vance and Dorrance within 3, a pair no route joins, with no "not connec
   this reason ("a local add did neither"); a search's pick was not moved.
 - **The fix.** A search's chosen node goes to the working set through `/seed` first (as Explore's do),
   and the three-step draw follows once it is there (`search/drawSearchResult.ts`).
+- **A node coming back brings its links into the change.** Found re-walking J5 on GOV.UK after the
+  fix above: Skellion was then in the working set, yet *Show links among these* still drew nothing.
+  "Clear view" removes nodes and leaves their links stored with that end absent; Skellion's links from
+  earlier in the session rejoined the view when he came back (`would_add` counts them, a reload drew
+  them: 83 links on the canvas, 86 after a reload), but `_add`'s change carried only what was asked,
+  so the Glass never drew them and `links_among`, finding them stored, added nothing. `_add` now puts
+  those links in the change (`_links_returning_with`), read from the store after the add, both ends
+  stored, filtered for the reader as any change is (rule 3).
 - **Routes already drawn.** `LinksAmongOutcome` gains `connected_pairs`, the pairs a route joins within
   the degree, counted from the reader's own search as `unconnected_pairs` is (rule 3; the hidden-id
   cases compare whole outcomes, so a hidden id cannot move it). With nothing added and a pair joined,
@@ -23682,6 +23690,8 @@ same for Vance and Dorrance within 3, a pair no route joins, with no "not connec
   count (5) stands.
 - **Tests that would fail (rule 12).** `apps/workspace/src/search/drawSearchResult.test.ts` (the node is
   seeded before the draw); `tests/services/api/working_set/test_links_among.py::
-  test_routes_already_drawn_are_counted_as_joined_pairs_not_as_no_routes`; the hidden-id case in
+  test_routes_already_drawn_are_counted_as_joined_pairs_not_as_no_routes`;
+  `tests/services/api/working_set/test_returning_node_brings_its_links.py` (a returning node's link in
+  the change; one the reader may not read is not, the same as no link at all); the hidden-id case in
   `test_links_among_hides_hidden_ids.py`; `canvas/linksAmong.test.ts`; `FindConnectionsPanel.test.tsx`.
   Red first (`red/s18c_d5_*`).

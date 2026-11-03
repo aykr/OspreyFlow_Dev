@@ -31,6 +31,7 @@ request adds, so a stored item the reader may not read moves no figure they are 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections import OrderedDict
@@ -1225,6 +1226,34 @@ class WorkingSetService:
             raise LimitExceededError(breach)
         return new_nodes, new_edges
 
+    async def _links_returning_with(
+        self,
+        investigation_id: str,
+        arriving: Sequence[Node],
+        asked: set[EdgeId],
+        principal: Principal,
+    ) -> list[Edge]:
+        """The stored links a node coming back brings into the view (build order step 18c, D5).
+        Removing a node leaves its links stored with that end absent; once the node is stored
+        again they are in the view (`would_add` counts them against the cap, and a snapshot draws
+        them), so the change sent says so, or the canvas never draws them and `links_among`,
+        finding them stored, adds nothing. Each is read from the store after the add, kept only
+        when both its ends are stored, and filtered for `principal` as any change is (rule 3): a
+        link they may not read, or one to an end they may not read, is not sent."""
+        if not arriving:
+            return []
+        at = await self._store.adjacent_edge_ids(investigation_id, [n.id for n in arriving])
+        ids = sorted({e for es in at.values() for e in es} - asked)
+        if not ids:
+            return []
+        bodies = await asyncio.gather(*(self._store.get_edge(investigation_id, i) for i in ids))
+        links = [e for e in bodies if e is not None]
+        end_ids = sorted({end for e in links for end in (e.source, e.target)})
+        ends = await asyncio.gather(*(self._store.get_node(investigation_id, i) for i in end_ids))
+        known = {n.id: n for n in ends if n is not None}
+        _, visible, _ = self._project([], links, principal, known)
+        return visible
+
     async def _add(
         self,
         investigation_id: str,
@@ -1247,9 +1276,12 @@ class WorkingSetService:
         try:
             await self._store.add_nodes(investigation_id, new_nodes)
             await self._store.add_edges(investigation_id, new_edges)
+            returning = await self._links_returning_with(
+                investigation_id, new_nodes, {e.id for e in edges}, principal
+            )
 
             seq = await self._store.next_seq(investigation_id)
-            delta = DeltaAdd(seq=seq, nodes=list(nodes), edges=list(edges))
+            delta = DeltaAdd(seq=seq, nodes=list(nodes), edges=[*edges, *returning])
             await self._store.append_delta(investigation_id, delta)
         except BaseException:
             if empty_on_failure:
