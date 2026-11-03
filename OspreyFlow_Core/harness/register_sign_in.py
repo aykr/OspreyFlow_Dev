@@ -49,7 +49,7 @@ from harness.site import (
     answer_the_deployment_here,
     deployment_origins,
 )
-from schemas.deployment import OspreyConfig, generated_folder
+from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
 DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
@@ -311,6 +311,17 @@ def deployment_env_path(out_root: Path, folder: str | None, config: OspreyConfig
     return out_root / (folder or generated_folder(config)) / "deployment.env"
 
 
+def _a_small_without_demo_accounts(config: OspreyConfig, env_path: Path) -> bool:
+    """A Small deployment whose settings hold no demo administrator's password: installed with
+    `--no-demo-accounts` (every Small server is), so given none later."""
+    if config.profile is not Profile.SMALL:
+        return False
+    try:
+        return DEMO_ADMIN_PASSWORD_KEY not in _read_env(env_path)
+    except RealmConfigurationFailed:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -330,6 +341,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     env_path = deployment_env_path(args.out_root, args.profile, load_config(args.config))
+    if not args.no_demo_accounts and _a_small_without_demo_accounts(
+        load_config(args.config), env_path
+    ):
+        # ADR-114 Amendment 33 (drop 2): a Small server is installed with no demo account and is
+        # reached over a network; a repair or a rebuild (`start --build`) never adds one.
+        print("This Small deployment has no demo accounts; none is made.")
+        args.no_demo_accounts = True
     answer_localhost_with_loopback()
     # ADR-114 Amendment 33 decision 2: a server's own names, here, with its certificate trusted.
     answer_the_deployment_here(load_config(args.config))

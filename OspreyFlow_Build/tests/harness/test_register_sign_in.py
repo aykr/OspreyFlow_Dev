@@ -868,3 +868,27 @@ def test_a_refused_secret_update_is_named_not_reported_as_done(
     monkeypatch.setattr(keycloak_admin, "_call", refusing)
     with pytest.raises(RealmConfigurationFailed, match="osprey-conduit"):
         _register(_env(tmp_path, f"OSPREY_OIDC_CLIENT_SECRET={CONDUIT_SECRET}"))
+
+
+def test_a_small_without_demo_accounts_is_never_given_them_by_a_repair_or_a_rebuild(
+    tmp_path: Path, keycloak: FakeKeycloak, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-114 Amendment 33 (drop 2): a Small server is installed with no demo account (its first
+    administrator by a one-time code), and is reached over the organisation's network. `ospreyflow
+    repair-sign-in` without `--no-demo-accounts`, and `ospreyflow start --build` (whose rebuild
+    registers the sign-in with no such option), must not then make the demo administrator, whose
+    password would sit in deployment.env: a Small whose settings hold no demo password gets none."""
+    out = tmp_path / "out"
+    (out / "small").mkdir(parents=True)
+    env = _env(out / "small")
+    before = env.read_text(encoding="utf-8")
+    config = tmp_path / "osprey.yaml"
+    config.write_text("profile: small\nnetwork: {public_origin: 'https://osprey.example.org'}\n",
+                      encoding="utf-8")  # fmt: skip
+    code = register_sign_in.main(["--profile", "small", "--out-root", str(out), "--config",
+                                  str(config), "--keycloak-url", ISSUER])  # fmt: skip
+    assert code == 0
+    assert DEMO_ADMIN_SUBJECT not in {u["username"] for u in keycloak.users.values()}
+    assert not keycloak.passwords
+    assert env.read_text(encoding="utf-8") == before
+    assert "no demo account" in capsys.readouterr().out

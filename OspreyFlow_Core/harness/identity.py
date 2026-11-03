@@ -14,7 +14,8 @@ What a real Keycloak 26.0 does, measured on 12 October 2026 before this was writ
   (`serviceAccountClientId`). That id is the subject of the dashboard's token and of its case
   grants, so it travels that way.
 
-So the export takes every person, each dashboard client (`osprey-dashboard-*`) with its secret, and
+So the export takes every person (with any link to the organisation's identity provider, ADR-114
+Amendment 33), each dashboard client (`osprey-dashboard-*`) with its secret, and
 each dashboard's service account; the import first removes what a fresh install made under the same
 names — the install's own demo accounts and any same-named dashboard, which hold nothing yet — and
 then imports. Passwords never travel: Keycloak does not give them out, and the install's own
@@ -64,6 +65,17 @@ def _person(call: Call, admin: str, token: str, record: dict[str, Any]) -> dict[
     groups = _get(call, f"{admin}/users/{record['id']}/groups", token, "groups")
     if groups:
         person["groups"] = [g["path"] for g in groups]
+    # ADR-114 Amendment 33 (drop 2): a person who arrived through the organisation's identity
+    # provider keeps the link to it. Without it, measured on Keycloak 26.0, their next sign-in
+    # stops at "an account with this email already exists".
+    linked = _get(
+        call, f"{admin}/users/{record['id']}/federated-identity", token, "a person's links"
+    )
+    if linked:
+        person["federatedIdentities"] = [
+            {k: link[k] for k in ("identityProvider", "userId", "userName") if k in link}
+            for link in linked
+        ]
     return person
 
 

@@ -543,6 +543,20 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
+def _backup_root(directory: Path, repo: Path) -> Path:
+    """Where the update's backup is written: on Small on a server of your own, the folder
+    `server.backups` named (ADR-114 Amendment 33 decision 5), read from the deployment's own
+    `osprey.yaml` copy; elsewhere the checkout's `backups/`."""
+    copy = directory / "osprey.yaml"
+    if copy.is_file():
+        from schemas.deployment import OspreyConfig, self_contained_small
+
+        config = OspreyConfig.model_validate(yaml.safe_load(copy.read_text(encoding="utf-8")) or {})
+        if self_contained_small(config):
+            return Path(config.components.storage.backups)
+    return repo / "backups"
+
+
 def real_host(
     directory: Path, repo: Path, *, github_api: str = GITHUB_API, repository: str | None = None
 ) -> Host:
@@ -552,7 +566,7 @@ def real_host(
         return _subprocess(argv, cwd=repo)
 
     def backup() -> Path:
-        root = repo / "backups"
+        root = _backup_root(directory, repo)
         before = set(root.iterdir()) if root.is_dir() else set()
         _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name,
                        "--out-root", str(root)], "back up every store")  # fmt: skip

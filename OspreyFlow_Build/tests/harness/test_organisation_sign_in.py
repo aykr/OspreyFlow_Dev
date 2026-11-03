@@ -619,3 +619,28 @@ def test_signing_out_returns_through_the_printed_post_logout_address(stack: Stac
     finally:
         _org_client(stack.org, attributes={"post.logout.redirect.uris": stack.logout,
                                            "pkce.code.challenge.method": "S256"})  # fmt: skip
+
+
+def test_a_restored_person_still_signs_in_through_the_organisation(stack: Stack) -> None:
+    """ADR-114 Amendment 33 decision 5 (drop 2, unit 6): a backup carries the realm's people by
+    their ids (`harness/identity.py`), not Keycloak's database. A person who arrived through the
+    organisation must come back still linked to it — measured on Keycloak 26.0, an account with
+    their email but no link stops their next sign-in at "an account with this email already
+    exists" — and with the roles an administrator gave them."""
+    from harness import identity
+
+    _register(stack)
+    first = sign_in(stack)
+    assert first.tokens is not None, (first.visited, _said(first))
+    subject = _claims(first.tokens["access_token"])["sub"]
+    token = _admin(stack.deployment)
+    exported = identity.export_identity(issuer=stack.deployment.origin, realm="osprey", token=token)
+    (person,) = [p for p in exported["people"] if p["username"] == PERSON["username"]]
+    assert person["federatedIdentities"][0]["identityProvider"] == ALIAS
+    # A restore: the realm made afresh (here, the person removed), then their identity imported.
+    _forget(stack, PERSON["username"])
+    identity.import_identity(issuer=stack.deployment.origin, realm="osprey", token=token,
+                             identity={**exported, "people": [person], "dashboards": []})  # fmt: skip
+    again = sign_in(stack)
+    assert again.tokens is not None, (again.visited, _said(again))
+    assert _claims(again.tokens["access_token"])["sub"] == subject

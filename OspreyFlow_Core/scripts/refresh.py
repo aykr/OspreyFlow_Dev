@@ -64,7 +64,12 @@ from harness.render import (
     render_ollama_pull_script,
     service_images,
 )
-from harness.site import LOOPBACK, answer_localhost_with_loopback, deployment_origins
+from harness.site import (
+    LOOPBACK,
+    answer_localhost_with_loopback,
+    answer_the_deployment_in,
+    deployment_origins,
+)
 
 from schemas.deployment import OspreyConfig, Profile, generated_folder
 
@@ -95,6 +100,15 @@ DEPLOYMENT_DIR_VARIABLE = "OSPREYFLOW_DEPLOYMENT_DIR"
 
 
 def _deployment_dir(repo_root: Path) -> Path:
+    """The rendered deployment a host tool acts on — `start --build`, `update`'s files and every
+    seed find it here — with its names answered on this server (ADR-114 Amendment 33 decision 2),
+    so each of them reaches a server's own names before the organisation's DNS does."""
+    found = _find_deployment_dir(repo_root)
+    answer_the_deployment_in(found)
+    return found
+
+
+def _find_deployment_dir(repo_root: Path) -> Path:
     named = os.environ.get(DEPLOYMENT_DIR_VARIABLE)
     if named:
         chosen = Path(named)
@@ -532,9 +546,11 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
             return 1
         print(json.dumps(changed, sort_keys=True))
         return 0
-    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
+    # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine;
+    # Amendment 33 decision 2: and a server's own names, on this server.
     answer_localhost_with_loopback()
     try:
+        _deployment_dir(repo_root)
         refresh(repo_root)
     except (NothingToRefresh, RefreshFailed) as error:
         print(f"refresh: {error}", file=sys.stderr)

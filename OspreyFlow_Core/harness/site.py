@@ -391,6 +391,18 @@ def answer_the_deployment_here(config: OspreyConfig) -> None:
     _trust([tls.certificate, *([tls.ca] if tls.ca else [])])
 
 
+def answer_the_deployment_in(directory: Path) -> None:
+    """`answer_the_deployment_here` for the rendered deployment in `directory`, from the
+    `osprey.yaml` copy its render writes beside `compose.yaml`; nothing when there is none."""
+    path = directory / "osprey.yaml"
+    if not path.is_file():
+        return
+    import yaml
+
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    answer_the_deployment_here(OspreyConfig.model_validate(loaded))
+
+
 def deployment_origins(env_file: Path) -> tuple[str, str]:
     """`(glass, identity)` as a rendered deployment's `deployment.env` names them — what every tool
     on the host reaches the deployment at. A deployment rendered before B3 names neither, and is
