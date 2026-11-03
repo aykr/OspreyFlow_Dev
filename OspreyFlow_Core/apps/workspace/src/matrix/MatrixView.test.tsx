@@ -233,3 +233,76 @@ describe("MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows betwee
     expect(entities().querySelector("caption")?.textContent).toContain("Rows 1 to 100 of 253.");
   });
 });
+
+// Build order step 15 (the 2 November rehearsal, open question 20): on the principal's star the
+// Strength and Rarity columns read "Not worked out" and "None" on every row while the Inspector showed
+// a strength. Measured on the GOV.UK deployment: the strengths came back in 2 s and the rarity of the
+// star's 79 pairs in 10.5 s, and the Matrix waited for both before showing either, saying "Not worked
+// out" (a verdict, not "still asking") meanwhile; a refused rarity would have blanked the strengths too.
+describe("MatrixView — connection strength and rarity (ADR-139; user guide §5.11, §5.12)", () => {
+  const STRENGTH_PROPS = { apiBaseUrl: "http://conduit", bearerToken: "t", investigationId: "case-1" };
+
+  function reply(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  }
+
+  /** The Conduit's two routes, as the fake answers them: `strength` and `rarity` are each a promise
+   * of the response, so a test decides when (and whether) each arrives. */
+  function conduit(strength: Promise<Response>, rarity: Promise<Response>) {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.endsWith("/connection-strength")) return strength;
+      if (url.endsWith("/rarity")) return rarity;
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  const strengthOf = (row: HTMLElement) => [...row.querySelectorAll("td")].at(-2)!.textContent;
+  const rarityOf = (row: HTMLElement) => [...row.querySelectorAll("td")].at(-1)!.textContent;
+  const linkRow = (name: RegExp) =>
+    within(links()).getAllByRole("row").find((r) => within(r).queryByRole("rowheader", { name }))!;
+
+  // The reader may see l1 only: the Conduit leaves l2 out of its answer (worked out in the adapter as
+  // the reader, rule 3) and gives its pair no score.
+  const STRENGTHS = { links: [{ edge_id: "l1", edge_type: "ASSOCIATE_OF", base_weight: 0.4, strength: 0.62 }], legend: {} };
+  const RARITY = { scope: "dataset", node_values: {}, pairs: [{ a: "p1", b: "p2", score: 0.91 }, { a: "p1", b: "p3", score: null }] };
+
+  it("shows each link's strength as soon as it arrives, without waiting for the rarity", async () => {
+    conduit(Promise.resolve(reply(STRENGTHS)), new Promise<Response>(() => {}));
+    render(<Harness ws={fixture()} strength={STRENGTH_PROPS} />);
+    await vi.waitFor(() => expect(strengthOf(linkRow(/Associate of/))).toBe("0.62"));
+    // Still being asked, and said so: never "None", which reads as an answer.
+    expect(rarityOf(linkRow(/Associate of/))).toBe("Working out…");
+  });
+
+  it("says a value is being worked out while it is, not that it was not worked out", async () => {
+    conduit(new Promise<Response>(() => {}), new Promise<Response>(() => {}));
+    render(<Harness ws={fixture()} strength={STRENGTH_PROPS} />);
+    expect(strengthOf(linkRow(/Associate of/))).toBe("Working out…");
+    expect(rarityOf(linkRow(/Associate of/))).toBe("Working out…");
+  });
+
+  it("keeps the strengths when the rarity is refused, and says why the rarity is missing", async () => {
+    conduit(
+      Promise.resolve(reply(STRENGTHS)),
+      Promise.resolve(reply({ detail: { error: "limit_exceeded", cap_kind: "pairs", cap: 10, would_be: 20 } }, 422)),
+    );
+    render(<Harness ws={fixture()} strength={STRENGTH_PROPS} />);
+    await vi.waitFor(() => expect(strengthOf(linkRow(/Associate of/))).toBe("0.62"));
+    expect(rarityOf(linkRow(/Associate of/))).toBe("Not worked out");
+    expect(screen.getByText(/too many pairs in this view to work out rarity/)).toBeTruthy();
+  });
+
+  it("shows what the Conduit gave for the reader, and nothing for a link it left out (rule 3)", async () => {
+    conduit(Promise.resolve(reply(STRENGTHS)), Promise.resolve(reply(RARITY)));
+    render(<Harness ws={fixture()} strength={STRENGTH_PROPS} />);
+    await vi.waitFor(() => expect(rarityOf(linkRow(/Associate of/))).toBe("0.91"));
+    expect(strengthOf(linkRow(/Associate of/))).toBe("0.62");
+    // Not in the reader's answer: no strength, and no rarity for its pair; no count of anything.
+    expect(strengthOf(linkRow(/^Uses/))).toBe("Not worked out");
+    expect(rarityOf(linkRow(/^Uses/))).toBe("None");
+  });
+});

@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.22** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.23** · 2026-11-03 · For OspreyFlow v0.4.4 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.23 | 2026-11-03 | Rehearsal fixes (build order step 15). §5.12: the Matrix's Strength and Rarity fill in as each answer arrives, read *Working out…* meanwhile, and a refused rarity no longer blanks the strengths. |
 | 1.22 | 2026-11-02 | Checked against the Glass end to end (build order step 10). §7.1: Monitoring's tabs include **Lists** and **Connection strength**, and say which levels see Held rows and Audit. §5.12: the legend marks the composition, not the rarity measure, as a case override (a case cannot choose the measure). §7.6: the *For* choices as the builder words them (*just me*). |
 | 1.21 | 2026-11-02 | §5.12: shared-attribute rarity is now worked out by the client's own measure (one less a shared value's share of the pairs linked through values of its kind), with the earlier measure still to choose; the two compositions, standard and client parity, and the raw sum on the client's scale; an influencer triggered by a dataset; a case switched to client parity by its Author. §7.6: a strength figure on the client's scale. |
 | 1.20 | 2026-11-02 | New §5.12, How connection strength is worked out: a link's strength from its own count and recency, the influencers that change it (direct links, and a boost from a record that evidences the link, such as an assault), shared-attribute rarity, the legend, the two new filters in Metrics, the Matrix's two sorts, the Inspector's explanation, who changes influencers, and why two analysts can see different rarity. §7.6: a rule on connection strength or rarity. |
@@ -515,7 +516,11 @@ compare the two on the same case, and back.
   strength, and a person none of whose links reach it, fade; with rarity, a person whose rarest
   pairing in view is below it fades. Nothing is removed.
 - **The Matrix** (§5.11) gives each link its **Strength** and the **Rarity** of its two ends, and sorts
-  by either.
+  by either. Each column fills in as soon as its answer arrives (the strengths in a second or two, the
+  rarity of a large view's every pair can take longer) and reads **Working out…** until then. A link
+  with no strength you can see reads **Not worked out**; two ends with nothing rare to share (of
+  different kinds, or in no common dataset) read **None**. If the rarity is refused (a view with too
+  many pairs) the strengths still show, and the line above the table says why.
 - **The Inspector** explains a selected link under **Connection strength**: its count against what is
   heavy for its type, when it was last seen, the rule and weights version it was worked out under,
   each influencer that changed it and the kind of record (or the dataset) that evidenced it, and what
