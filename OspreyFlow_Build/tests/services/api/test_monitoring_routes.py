@@ -113,8 +113,20 @@ class _Audit:
 
 
 class _Names:
+    """The identity provider as the directory reads it, refusals included (rule 15): an id that is
+    no account (a seed's own principal, such as `ledger-seed-worker`) is a 404, and a service
+    account (a dashboard's) is an account but no person."""
+
+    SERVICE = "service-account-osprey-dashboard-1"
+
+    def __init__(self, unknown: frozenset[str] = frozenset({"ledger-seed-worker"})) -> None:
+        self.unknown = unknown
+
     async def display_names(self, ids: Any) -> dict[str, str]:
-        return {i: f"Name of {i}" for i in ids}
+        return {i: f"Name of {i}" for i in ids if i not in self.unknown}
+
+    async def people(self, ids: Any) -> set[str]:
+        return {i for i in ids if i not in self.unknown and i != self.SERVICE}
 
 
 @asynccontextmanager
@@ -276,6 +288,27 @@ def test_the_queue_is_the_cases_and_triage_needs_an_editor(
     refused = client.post(f"{base}/{alert.id}/assign", json={"assignee": w.viewer.id})
     assert refused.status_code == 422 and "not a member" in refused.json()["detail"]
     assert [r["action"] for r in w.audit.records][-1] == "alert_assigned"
+
+
+def test_an_alert_is_never_given_to_a_service_account(world: tuple[_World, TestClient]) -> None:
+    """Build order step 15: *Give to* in the Ledger case offered `ledger-seed-worker`, the seed's own
+    principal, which holds the case's Author grant because it made the case. Service accounts are not
+    people: the list is the case's Editors and Authors the identity provider knows as people, and
+    giving an alert to anyone else is refused."""
+    w, client = world
+    seeder, dashboard = "ledger-seed-worker", _Names.SERVICE
+    w.investigations.levels.update({seeder: AccessLevel.AUTHOR, dashboard: AccessLevel.EDITOR})
+    alert = _alert(w, "typology:r1", investigation_id=w.case, typology="structuring",
+                   words="4 movements")  # fmt: skip
+    _save(client, w, alert)
+    w.as_ = w.owner
+    offered = client.get(f"/v1/investigations/{w.case}/alert-assignees")
+    assert offered.status_code == 200
+    assert {a["id"] for a in offered.json()} == {w.owner.id, w.member.id, w.no_right.id}
+    for account in (seeder, dashboard):
+        given = f"{Q.format(case=w.case)}/{alert.id}/assign"
+        refused = client.post(given, json={"assignee": account})
+        assert refused.status_code == 422, account
 
 
 def test_the_queue_shows_every_kind_filters_them_and_withholds_a_hidden_one(

@@ -18,7 +18,7 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.23 | 2026-11-03 | Rehearsal fixes (build order step 15). §5.12: the Matrix's Strength and Rarity fill in as each answer arrives, read *Working out…* meanwhile, and a refused rarity no longer blanks the strengths. |
+| 1.23 | 2026-11-03 | Rehearsal fixes (build order step 15). §5.12: the Matrix's Strength and Rarity fill in as each answer arrives, read *Working out…* meanwhile, and a refused rarity no longer blanks the strengths. §7.3: *Give to* offers people only, never a service account. §9.1: a pack says some items are *not shown* (you may not see something they rest on, or it has since been taken back, as a reverted load takes back its alerts), no longer "withheld from you"; a close reason that ends with a full stop is not given a second. |
 | 1.22 | 2026-11-02 | Checked against the Glass end to end (build order step 10). §7.1: Monitoring's tabs include **Lists** and **Connection strength**, and say which levels see Held rows and Audit. §5.12: the legend marks the composition, not the rarity measure, as a case override (a case cannot choose the measure). §7.6: the *For* choices as the builder words them (*just me*). |
 | 1.21 | 2026-11-02 | §5.12: shared-attribute rarity is now worked out by the client's own measure (one less a shared value's share of the pairs linked through values of its kind), with the earlier measure still to choose; the two compositions, standard and client parity, and the raw sum on the client's scale; an influencer triggered by a dataset; a case switched to client parity by its Author. §7.6: a strength figure on the client's scale. |
 | 1.20 | 2026-11-02 | New §5.12, How connection strength is worked out: a link's strength from its own count and recency, the influencers that change it (direct links, and a boost from a record that evidences the link, such as an assault), shared-attribute rarity, the legend, the two new filters in Metrics, the Matrix's two sorts, the Inspector's explanation, who changes influencers, and why two analysts can see different rarity. §7.6: a rule on connection strength or rarity. |
@@ -651,7 +651,8 @@ Who may see an alert is shown on its row:
 
 Open one to see why it was raised and what it concerns; **Show on the canvas** draws them. **Claim** it
 to work on it (**Release** gives it back). A rule alert can also be **given to** a member of the case:
-choose them by name under **Give to**, then **Give**. An alert shared with a team, or its owner's alone,
+choose them by name under **Give to**, then **Give**. *Give to* lists the case's Editors and Authors who
+are people; an account a service or a loading script uses is never offered. An alert shared with a team, or its owner's alone,
 is claimed by someone who can see it, never given to another person.
 
 **Closing needs a reason, in two parts.** Choose one **closing reason** — **True match**, **False
@@ -930,7 +931,10 @@ earlier copy stays in the pack's history.
 
 An alert item is marked at the highest marking of what it cites, and rests on every node, link and
 transaction it cites. A reader who may not see all of them does not get the item, and is told only
-that some items are withheld, never how many or which. Exporting checks each item again for the
+that some items are not shown, never how many or which. The same sentence covers an item whose alert
+has since been taken back for everyone: reverting the load that raised it (an administrator's task)
+takes back the alert with the load, so its item is not shown to anyone, its adder included. Exporting
+checks each item again for the
 person exporting; someone who may see none of it is refused, and nothing is recorded.
 
 ### 9.2 Alert trends
