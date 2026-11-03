@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import socket
+import ssl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -303,12 +304,17 @@ def render_glass_settings(config: OspreyConfig) -> str:
 
 
 _answered = False
+#: ADR-114 Amendment 33 decision 2: the deployment's own names, answered on this server, by name.
+_HERE: dict[str, str] = {}
+#: Certificate files a host tool trusts beside the system's own (the deployment's, and its CA).
+_TRUSTED: list[str] = []
 
 
-def answer_localhost_with_loopback() -> None:
+def _answer_here() -> None:
     """For this process, `localhost` and every `*.localhost` name resolve to loopback (RFC 6761
-    §6.3), whatever the operating system's resolver does with them — so a host tool reaches the
-    proxy with the name intact in its request. Every other name resolves as before."""
+    §6.3), and each name in `_HERE` to its address, whatever the operating system's resolver does
+    with them — so a host tool reaches the proxy with the name intact in its request. Every other
+    name resolves as before."""
     global _answered
     if _answered and getattr(socket.getaddrinfo, "_osprey_loopback", False):
         return
@@ -318,15 +324,71 @@ def answer_localhost_with_loopback() -> None:
                     flags: int = 0) -> Any:  # fmt: skip
         name = host.decode() if isinstance(host, bytes) else host
         bare = name.lower().rstrip(".") if isinstance(name, str) else ""
-        if bare == "localhost" or bare.endswith(".localhost"):
+        address = _HERE.get(bare)
+        if address is None and (bare == "localhost" or bare.endswith(".localhost")):
+            address = "127.0.0.1"
+        if address is not None:
             number = int(port) if str(port).isdigit() else 0
             kinds = [type] if type else [socket.SOCK_STREAM, socket.SOCK_DGRAM]
-            return [(socket.AF_INET, kind, proto, "", ("127.0.0.1", number)) for kind in kinds]
+            return [(socket.AF_INET, kind, proto, "", (address, number)) for kind in kinds]
         return underlying(host, port, family, type, proto, flags)
 
     getaddrinfo._osprey_loopback = True  # type: ignore[attr-defined]
     socket.getaddrinfo = getaddrinfo
     _answered = True
+
+
+def answer_localhost_with_loopback() -> None:
+    """For this process, `localhost` and every `*.localhost` name resolve to loopback (RFC 6761
+    §6.3), whatever the operating system's resolver does with them — so a host tool reaches the
+    proxy with the name intact in its request. Every other name resolves as before."""
+    _answer_here()
+
+
+def _trust(files: list[str]) -> None:
+    """Every TLS context this process makes trusts `files` beside the system's own store, and
+    accepts a chain that ends at one of them (`VERIFY_X509_PARTIAL_CHAIN`), so the deployment's own
+    certificate is trusted even when its root is in no trust store on this server."""
+    for file in files:
+        if file not in _TRUSTED:
+            _TRUSTED.append(file)
+    if getattr(ssl.create_default_context, "_osprey_trust", False):
+        return
+    underlying = ssl.create_default_context
+
+    def create_default_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        context = underlying(*args, **kwargs)
+        if context.verify_mode != ssl.CERT_NONE:
+            for trusted in _TRUSTED:
+                context.load_verify_locations(cafile=trusted)
+            context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+        return context
+
+    create_default_context._osprey_trust = True  # type: ignore[attr-defined]
+    ssl.create_default_context = create_default_context
+    # `urllib` reaches HTTPS through this one, bound when `ssl` was imported, and its default
+    # opener keeps the context it was made with: dropped, so the next request makes a new one.
+    ssl._create_default_https_context = create_default_context
+    import urllib.request
+
+    urllib.request.install_opener(None)
+
+
+def answer_the_deployment_here(config: OspreyConfig) -> None:
+    """ADR-114 Amendment 33 decision 2: on a Small with the organisation's own certificate, the
+    tools run on the server (`harness.apply`, `harness.register_sign_in`) reach the deployment's
+    names on this server — at `network.listen_address`, else loopback — before the organisation's
+    DNS does, and trust its certificate (and `network.tls.ca`) without the server's own trust store
+    knowing the organisation's CA. Nothing changes for any other deployment."""
+    tls = config.network.tls
+    if config.profile is not Profile.SMALL or tls is None:
+        return
+    host = sites(config).host.lower()
+    address = config.network.listen_address or LOOPBACK
+    for name in (host, f"id.{host}", f"bi.{host}"):
+        _HERE[name] = address
+    _answer_here()
+    _trust([tls.certificate, *([tls.ca] if tls.ca else [])])
 
 
 def deployment_origins(env_file: Path) -> tuple[str, str]:

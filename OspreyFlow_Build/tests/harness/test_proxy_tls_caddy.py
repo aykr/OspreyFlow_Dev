@@ -180,3 +180,50 @@ def test_port_80_only_redirects_against_caddy(tmp_path: Path) -> None:
             assert answer.startswith(first), answer[:300]
             if first.endswith("308"):
                 assert f"Location: https://{host}/realms/osprey" in answer, answer[:300]
+
+
+@pytest.mark.parametrize("with_ca", [True, False])
+def test_host_tools_reach_the_names_on_this_server_trusting_its_certificate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_ca: bool
+) -> None:
+    """Decision 2: the tools the install runs on the server (`harness.apply`'s grants,
+    `register_sign_in`) reach `id.<host>` before the organisation's DNS does, and without the
+    organisation's CA in the server's own trust store: the three names answer on this server, and
+    the deployment's own certificate (and `network.tls.ca`, when given) is trusted. Measured
+    against the real Caddy, with `urllib` as the tools use it; and a name the deployment does not
+    have is not answered."""
+    import urllib.error
+    import urllib.request
+
+    from harness import site
+
+    files = write_set(tmp_path / "tls")
+    caddyfile, proxy = _rendered(files)
+    for name in ("getaddrinfo",):
+        monkeypatch.setattr(socket, name, getattr(socket, name))
+    monkeypatch.setattr(ssl, "create_default_context", ssl.create_default_context)
+    monkeypatch.setattr(ssl, "_create_default_https_context", ssl._create_default_https_context)
+    monkeypatch.setattr(site, "_HERE", {})
+    monkeypatch.setattr(site, "_TRUSTED", [])
+    with caddy(caddyfile, files, tmp_path, user=_user(proxy)) as running:
+        assert wait_until_healthy(running), running.logs()[-1500:]
+        origin = f"https://{HOST}:{running.https_port}"
+        tls = {"certificate": str(files.certificate), "key": str(files.key)}
+        if with_ca:
+            tls["ca"] = str(files.ca)
+        config = OspreyConfig.model_validate({
+            "profile": "small",
+            "network": {"public_origin": origin, "tls": tls},
+        })  # fmt: skip
+        url = f"https://id.{HOST}:{running.https_port}/realms/osprey"
+        with pytest.raises(urllib.error.URLError) as before:
+            urllib.request.urlopen(url, timeout=10)
+        assert not isinstance(before.value, urllib.error.HTTPError)  # never reached Caddy
+        site.answer_the_deployment_here(config)
+        with pytest.raises(urllib.error.HTTPError) as reached:
+            urllib.request.urlopen(url, timeout=10)
+        # TLS verified and the name routed: Keycloak is not running in this test, so 502.
+        assert reached.value.code == 502
+        with pytest.raises(urllib.error.URLError) as other:
+            urllib.request.urlopen(f"https://elsewhere.example.internal:{running.https_port}/", timeout=5)
+        assert not isinstance(other.value, urllib.error.HTTPError)

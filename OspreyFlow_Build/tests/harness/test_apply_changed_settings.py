@@ -127,6 +127,7 @@ def compose(monkeypatch: pytest.MonkeyPatch) -> FakeCompose:
     fake = FakeCompose()
     monkeypatch.setattr(apply, "_run", fake)
     monkeypatch.setattr(apply, "answer_localhost_with_loopback", lambda: None)
+    monkeypatch.setattr(apply, "answer_the_deployment_here", lambda _config: None)
     monkeypatch.setattr(apply, "ALL_CHECKS", [PASSES])
     return fake
 

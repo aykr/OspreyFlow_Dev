@@ -64,7 +64,27 @@ class FakeProbes:
 
     def __init__(self) -> None:
         self.missing: set[str] = set()
-        self.info: dict[str, object] | None = {"MemTotal": 34_000_000_000}
+        self.info: dict[str, object] | None = {
+            "MemTotal": 34_000_000_000,
+            "Architecture": "x86_64",
+            "DockerRootDir": "/var/lib/docker",
+        }
+        #: Free disk by folder, else `disk_gb` (a server's Docker root can be another disk).
+        self.disk_by_path: dict[str, float] = {}
+        #: Ports held on some interface, not necessarily loopback (ADR-114 Amendment 33): the
+        #: loopback probe (`port_free`) does not see them, as the real one does not.
+        self.held_elsewhere: set[int] = set()
+        #: What a server's own probes say (Amendment 33 decision 8); None is "could not tell".
+        self.clock: bool | None = True
+        self.max_map: int | None = 262144
+        self.docker_at_boot: bool | None = True
+        self.python: tuple[int, int] | None = (3, 12)
+        self.root = False
+        self.unresolved: set[str] = set()
+        #: `harness.tls_check`'s exit and output, as the doctor's step receives them.
+        self.certificate_says: tuple[int, str] = (0, "ok: the certificate covers every name\n")
+        #: Each server probe asked, in order, with its subject.
+        self.asked: list[tuple[str, object]] = []
         self.compose: str | None = "Docker Compose version v5.5.1"
         self.disk_gb = 500.0
         self.busy_ports: set[int] = set()
@@ -82,10 +102,39 @@ class FakeProbes:
         return self.compose
 
     def free_disk_gb(self, path: Path) -> float:
-        return self.disk_gb
+        self.asked.append(("disk", str(path)))
+        return self.disk_by_path.get(str(path), self.disk_gb)
 
     def port_free(self, port: int) -> bool:
         return port not in self.busy_ports
+
+    def port_free_everywhere(self, port: int) -> bool | None:
+        self.asked.append(("port-everywhere", port))
+        return port not in self.busy_ports and port not in self.held_elsewhere
+
+    def clock_synchronised(self) -> bool | None:
+        return self.clock
+
+    def max_map_count(self) -> int | None:
+        return self.max_map
+
+    def docker_enabled_at_boot(self) -> bool | None:
+        return self.docker_at_boot
+
+    def python_version(self) -> tuple[int, int] | None:
+        return self.python
+
+    def running_as_root(self) -> bool:
+        return self.root
+
+    def resolves(self, name: str) -> bool:
+        return name not in self.unresolved
+
+    def certificate(
+        self, product: Path, certificate: str, key: str, ca: str | None, names: Sequence[str]
+    ) -> tuple[int, str]:
+        self.asked.append(("certificate", certificate))
+        return self.certificate_says
 
     def ours(self, port: int) -> bool:
         return port in self.ours_ports

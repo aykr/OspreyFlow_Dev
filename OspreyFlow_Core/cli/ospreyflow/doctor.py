@@ -5,16 +5,26 @@ the tests replace.
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 import re
 import shutil
 import socket
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 MIN_MEMORY_GB = 16.0
+#: ADR-114 Amendment 33 decision 6: a Small on a server of your own asks for 30 GiB as Docker
+#: reports it — a nominal 32 GB server, the size cloud Small starts at.
+SERVER_MIN_MEMORY_GIB = 30.0
+#: OpenSearch's own recommendation; it starts single-node without it, so below it is a warning.
+MAX_MAP_COUNT = 262144
+#: The platforms the releases are built for (`.github/workflows/release.yml`).
+RELEASE_ARCHITECTURES = ("x86_64", "amd64")
 MIN_DISK_GB = 60.0
 #: The front proxy's, for the Lite address `http://ospreyflow.localhost` (ADR-114 Amendment 4): the
 #: only port a Lite deployment publishes to other machines.
@@ -32,6 +42,8 @@ def lite_ports(product: Path) -> tuple[int, ...]:
         return LITE_PORTS
     origin = urlsplit(public_origin(product))
     return (origin.port or (443 if origin.scheme == "https" else 80),)
+
+
 _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
 
 
@@ -41,6 +53,29 @@ class Check:
     ok: bool
     says: str
     fix: str = ""
+    #: A warning: said with its fix, but it does not stop an install (ADR-114 Amendment 33).
+    warn: bool = False
+
+
+@dataclass(frozen=True)
+class ServerPlan:
+    """What a Small on a server of your own will publish and serve (ADR-114 Amendment 33): read
+    from the answers file's `server:` section, for the server's own checks."""
+
+    host: str
+    port: int = 443
+    dashboards: bool = True
+    certificate: str | None = None
+    key: str | None = None
+    ca: str | None = None
+    redirect_http: bool = False
+    #: ADR-132: the GOV.UK brand on a name not under gov.uk earns a one-line notice (decision 10).
+    govuk: bool = False
+
+    @property
+    def names(self) -> list[str]:
+        found = [self.host, f"id.{self.host}"]
+        return [*found, f"bi.{self.host}"] if self.dashboards else found
 
 
 class Probes(Protocol):
@@ -51,6 +86,17 @@ class Probes(Protocol):
     def port_free(self, port: int) -> bool: ...
     def ours(self, port: int) -> bool: ...
     def kube_context(self) -> str | None: ...
+    # ADR-114 Amendment 33 decision 8: what a server of your own is asked.
+    def port_free_everywhere(self, port: int) -> bool | None: ...
+    def clock_synchronised(self) -> bool | None: ...
+    def max_map_count(self) -> int | None: ...
+    def docker_enabled_at_boot(self) -> bool | None: ...
+    def python_version(self) -> tuple[int, int] | None: ...
+    def running_as_root(self) -> bool: ...
+    def resolves(self, name: str) -> bool: ...
+    def certificate(
+        self, product: Path, certificate: str, key: str, ca: str | None, names: Sequence[str]
+    ) -> tuple[int, str]: ...
 
 
 class SystemProbes:
@@ -100,6 +146,87 @@ class SystemProbes:
     def port_free(self, port: int) -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             return sock.connect_ex(("127.0.0.1", port)) != 0
+
+    def port_free_everywhere(self, port: int) -> bool | None:
+        """Whether `port` can be had on every interface (ADR-114 Amendment 33): a real bind of the
+        wildcard address, which a listener on any one address of the machine refuses
+        (`EADDRINUSE`). A port below 1024 an ordinary account may not bind (`EACCES`, Linux's
+        default) is asked of `ss` instead; None when neither can tell."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            try:
+                probe.bind(("0.0.0.0", port))  # noqa: S104 - the point is every interface
+            except OSError as error:
+                if error.errno == errno.EADDRINUSE:
+                    return False
+                if error.errno not in (errno.EACCES, errno.EPERM):
+                    return None
+            else:
+                return True
+        listening = self._run(["ss", "-H", "-l", "-t", "-n", f"sport = :{port}"])
+        return None if listening is None else not listening.strip()
+
+    def clock_synchronised(self) -> bool | None:
+        said = self._run(["timedatectl", "show", "--property=NTPSynchronized", "--value"])
+        return None if said is None else said.strip() == "yes"
+
+    def max_map_count(self) -> int | None:
+        try:
+            return int(Path("/proc/sys/vm/max_map_count").read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+
+    def docker_enabled_at_boot(self) -> bool | None:
+        try:
+            done = subprocess.run(
+                ["systemctl", "is-enabled", "docker"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )  # fmt: skip
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return done.stdout.strip() == "enabled"
+
+    def python_version(self) -> tuple[int, int] | None:
+        """The newest of the machine's `python3` and a Python 3.12 or later uv can find."""
+        found: list[tuple[int, int]] = []
+        said = self._run(["python3", "-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
+        if said and re.fullmatch(r"\d+\.\d+", said.strip()):
+            major, minor = said.strip().split(".")
+            found.append((int(major), int(minor)))
+        if self._run(["uv", "python", "find", ">=3.12"]) is not None:
+            found.append((3, 12))
+        return max(found) if found else None
+
+    def running_as_root(self) -> bool:
+        return hasattr(os, "geteuid") and os.geteuid() == 0
+
+    def resolves(self, name: str) -> bool:
+        try:
+            socket.getaddrinfo(name, 443, type=socket.SOCK_STREAM)
+        except OSError:
+            return False
+        return True
+
+    def certificate(
+        self, product: Path, certificate: str, key: str, ca: str | None, names: Sequence[str]
+    ) -> tuple[int, str]:
+        """`harness.tls_check` in the checkout's own environment (the command has PyYAML alone)."""
+        from ospreyflow.home import python_for
+
+        argv = [*python_for(product), "-m", "harness.tls_check",
+                "--certificate", certificate, "--key", key]  # fmt: skip
+        if ca:
+            argv += ["--ca", ca]
+        for name in names:
+            argv += ["--name", name]
+        paths = os.pathsep.join((str(product), str(product / "packages")))
+        try:
+            done = subprocess.run(
+                argv, capture_output=True, text=True, timeout=60, check=False,
+                env={**os.environ, "PYTHONPATH": paths}, cwd=product,
+            )  # fmt: skip
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return 1, f"refused: the certificate could not be checked ({error})"
+        return done.returncode, done.stdout + done.stderr
 
     def ours(self, port: int) -> bool:
         """Whether this deployment's own containers publish `port`."""
@@ -217,14 +344,18 @@ def run_doctor(
     product: Path = Path("."),
     cloud: str | None = None,
     ports: tuple[int, ...] | None = None,
+    server: ServerPlan | None = None,
 ) -> list[Check]:
     """Every check for `mode`, in the order a person should fix them. `ports` are a deployment's
-    own when it is not the checkout's (ADR-138: one installed by name, at an address of its own)."""
+    own when it is not the checkout's (ADR-138: one installed by name, at an address of its own).
+    `server` is a Small on a server of your own (ADR-114 Amendment 33), checked as that server."""
     git = _tool(probes, "git", "git", "Git", "Install Git from https://git-scm.com/downloads.")
     uv = _tool(
         probes, "uv", "uv", "uv",
         "Install uv: https://docs.astral.sh/uv/getting-started/installation/.",
     )  # fmt: skip
+    if mode == "small" and server is not None:
+        return _server_checks(probes, product, server, git, uv)
     if mode == "lite":
         return [
             *_docker_checks(probes, product),
@@ -265,6 +396,201 @@ def run_doctor(
     return [git, uv, *_build_tools(probes, mode, cloud)]
 
 
+def _server_checks(
+    probes: Probes, product: Path, plan: ServerPlan, git: Check, uv: Check
+) -> list[Check]:
+    """ADR-114 Amendment 33 decision 8: a Small on a server of your own, every store in a
+    container, as cloud Small's first boot would have prepared it — checked, not installed."""
+    docker = _docker_checks(probes, product)
+    # Lite's memory and disk are replaced by the server's own (the floor, and Docker's disk).
+    checks = [c for c in docker if c.name not in ("memory", "disk")]
+    at_boot = probes.docker_enabled_at_boot() if probes.which("docker") else None
+    checks.append(
+        Check("docker-at-boot", True, "Docker starts when the server starts.")
+        if at_boot
+        else Check(
+            "docker-at-boot",
+            False,
+            "Docker does not start when the server starts"
+            + (" (systemctl could not say)" if at_boot is None else "")
+            + ", so OspreyFlow would not come back after a restart.",
+            "Run sudo systemctl enable --now docker.",
+        )
+    )
+    info = probes.docker_info()
+    if info is not None:
+        architecture = str(info.get("Architecture") or "unknown")
+        amd64 = architecture in RELEASE_ARCHITECTURES
+        checks.append(
+            Check(
+                "architecture",
+                amd64,
+                f"This server is {architecture}"
+                + ("." if amd64 else "; OspreyFlow's releases are built for linux/amd64 only."),
+                "" if amd64 else "Install on an x86-64 (amd64) server.",
+            )
+        )
+        total = info.get("MemTotal")
+        gibibytes = float(total) / 2**30 if isinstance(total, int | float) else 0.0
+        enough = gibibytes >= SERVER_MIN_MEMORY_GIB
+        checks.append(
+            Check(
+                "memory",
+                enough,
+                f"Docker has {gibibytes:.1f} GiB of memory; a Small server needs at least "
+                f"{SERVER_MIN_MEMORY_GIB:.0f} GiB (a 32 GB server).",
+                "" if enough else "Give the server at least 32 GB of memory.",
+            )
+        )
+        root = Path(str(info.get("DockerRootDir") or "/var/lib/docker"))
+        free = probes.free_disk_gb(root)
+        roomy = free >= MIN_DISK_GB
+        checks.append(
+            Check(
+                "disk",
+                roomy,
+                f"{free:.0f} GB of disk is free where Docker keeps its data ({root}); OspreyFlow "
+                f"needs at least {MIN_DISK_GB:.0f} GB there, plus what you load.",
+                "" if roomy else "Give Docker's data root more space (the server's data disk), "
+                "or move it there (data-root in /etc/docker/daemon.json).",
+            )
+        )  # fmt: skip
+    checks += [git, uv]
+    version = probes.python_version()
+    modern = version is not None and version >= (3, 12)
+    checks.append(
+        Check(
+            "python",
+            modern,
+            f"Python {version[0]}.{version[1]} is available (3.12 or later is needed)."
+            if version is not None
+            else "Python 3.12 or later is not available (3.12 or later is needed).",
+            "" if modern else "Install Python 3.12 (Ubuntu 24.04's own python3 is 3.12), or let "
+            "uv install one: uv python install 3.12.",
+        )
+    )  # fmt: skip
+    synchronised = probes.clock_synchronised()
+    checks.append(
+        Check("clock", True, "The server's clock is synchronised.")
+        if synchronised
+        else Check(
+            "clock",
+            False,
+            "The server's clock is not synchronised"
+            + (" (timedatectl could not say)" if synchronised is None else "")
+            + "; sign-in tokens are checked against the time, so a wrong clock refuses sign-in.",
+            "Turn on time synchronisation: sudo timedatectl set-ntp true (and allow the "
+            "organisation's time server).",
+        )
+    )
+    wanted = [plan.port]
+    if plan.redirect_http or plan.certificate is None:
+        wanted.insert(0, 80)  # the redirect, or the automatic certificate's challenge
+    checks += [_server_port_check(probes, port) for port in wanted]
+    graph = _port_check(probes, 2480)
+    checks.append(
+        Check(graph.name, graph.ok, graph.says.replace("Port 2480", "Port 2480 (the graph "
+              "store's door, on this server only)"), graph.fix)
+    )  # fmt: skip
+    if plan.certificate and plan.key:
+        code, said = probes.certificate(product, plan.certificate, plan.key, plan.ca, plan.names)
+        refused = [line.removeprefix("refused: ") for line in said.splitlines()
+                   if line.startswith("refused: ")]  # fmt: skip
+        warned = [line.removeprefix("warning: ") for line in said.splitlines()
+                  if line.startswith("warning: ")]  # fmt: skip
+        if code == 0:
+            checks.append(
+                Check("certificate", True, f"The certificate covers {', '.join(plan.names)}.")
+            )
+        else:
+            checks.append(
+                Check(
+                    "certificate",
+                    False,
+                    "The certificate is refused: " + ("; ".join(refused) or said.strip()) + ".",
+                    "Fix the files named in server: (section 5a of the administration guide), "
+                    "then run this again.",
+                )
+            )
+        checks += [Check("certificate-expiry", True, w, "", warn=True) for w in warned]
+    count = probes.max_map_count()
+    if count is None or count < MAX_MAP_COUNT:
+        checks.append(
+            Check(
+                "vm-max-map-count",
+                True,
+                f"vm.max_map_count is {count if count is not None else 'unknown'}; OpenSearch asks "
+                f"for {MAX_MAP_COUNT} (it starts on one node without it).",
+                f"Set it: sudo sysctl -w vm.max_map_count={MAX_MAP_COUNT}, and in "
+                "/etc/sysctl.d/99-ospreyflow.conf to keep it.",
+                warn=True,
+            )
+        )
+    else:
+        checks.append(Check("vm-max-map-count", True, f"vm.max_map_count is {count}."))
+    root = probes.running_as_root()
+    checks.append(
+        Check(
+            "account",
+            True,
+            "This is running as root." if root else "This is not running as root.",
+            "Install as a service account in the docker group (which is root-equivalent), not "
+            "as root." if root else "",
+            warn=root,
+        )
+    )  # fmt: skip
+    unresolved = [name for name in plan.names if not probes.resolves(name)]
+    checks.append(
+        Check(
+            "names",
+            True,
+            f"{', '.join(unresolved)} do not resolve from this server."
+            if unresolved
+            else f"{', '.join(plan.names)} resolve from this server.",
+            "Ask for them in the organisation's DNS, pointing at this server; the install's own "
+            "tools reach them on this server without it." if unresolved else "",
+            warn=bool(unresolved),
+        )
+    )  # fmt: skip
+    if plan.govuk and not (plan.host == "gov.uk" or plan.host.endswith(".gov.uk")):
+        checks.append(
+            Check(
+                "govuk-brand",
+                True,
+                "The GOV.UK header and typeface are for services on a gov.uk domain.",
+                "Check with your service owner.",
+                warn=True,
+            )
+        )
+    return checks
+
+
+def _server_port_check(probes: Probes, port: int) -> Check:
+    """A port a server publishes on every interface (ADR-114 Amendment 33 decision 2), asked of
+    every interface — not of loopback, which cannot see a port held on the server's own address."""
+    name = f"port-{port}"
+    free = probes.port_free_everywhere(port)
+    if free:
+        return Check(name, True, f"Port {port} is free on every interface.")
+    if probes.ours(port):
+        return Check(name, True, f"Port {port} is already in use by this deployment.")
+    if free is None:
+        return Check(
+            name,
+            False,
+            f"Could not tell whether port {port} is free on every interface.",
+            f"Check with: sudo ss -ltnp 'sport = :{port}'; stop whatever holds it, then run this "
+            "again.",
+        )
+    return Check(
+        name,
+        False,
+        f"Port {port} is already in use on one of this server's interfaces.",
+        f"Stop whatever is using port {port} (sudo ss -ltnp 'sport = :{port}' names it), then "
+        "run this again.",
+    )
+
+
 def _build_tools(probes: Probes, mode: str, cloud: str | None) -> list[Check]:
     """OpenTofu and the cloud's command line, which build a cloud install from this machine."""
     tofu = _tool(
@@ -294,4 +620,6 @@ def _build_tools(probes: Probes, mode: str, cloud: str | None) -> list[Check]:
 
 
 def format_check(check: Check) -> str:
+    if check.warn:
+        return f"⚠ {check.says} — {check.fix}"
     return f"✔ {check.says}" if check.ok else f"✘ {check.says} — {check.fix}"

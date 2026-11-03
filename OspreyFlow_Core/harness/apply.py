@@ -91,7 +91,12 @@ from harness.render import (
 )
 from harness.render import write as write_artefacts
 from harness.reporting import reporting_secrets
-from harness.site import TLS_FINGERPRINT_FILE, answer_localhost_with_loopback, sites
+from harness.site import (
+    TLS_FINGERPRINT_FILE,
+    answer_localhost_with_loopback,
+    answer_the_deployment_here,
+    sites,
+)
 from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 #: How long any one service gets to become healthy. Generous because the Conduit applies the graph
@@ -1233,8 +1238,10 @@ def main(
     out_dir = args.out_root / generated_folder(config)
     result = ApplyResult(profile=config.profile.value)
     # ADR-114 Amendment 4 decision 7: the deployment's names reach the proxy on this machine
-    # whatever the operating system's resolver does with `*.localhost`.
+    # whatever the operating system's resolver does with `*.localhost`; Amendment 33 decision 2:
+    # and a server's own names, with its own certificate trusted, before the organisation's DNS.
     answer_localhost_with_loopback()
+    answer_the_deployment_here(config)
     if args.keycloak_url is None:
         args.keycloak_url = sites(config).identity
 
