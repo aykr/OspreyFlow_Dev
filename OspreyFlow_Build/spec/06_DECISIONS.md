@@ -22782,3 +22782,494 @@ for Crime, AML, Fraud and Monitoring". Everything else in Amendment 1 stands.
 **Tests**, shown red on the old wording (evidence `statement_red.txt`): `tests/test_publish_user_repo.py`
 `test_the_real_readme_is_published_with_the_statement`; `tests/test_website_wording.py`
 `test_the_home_page_gives_the_products_statement`; `SignInScreen.test.tsx` and `InstallApp.test.tsx`.
+
+### ADR-114, Amendment 33 (3 November 2026) — Small on one server of your own: every store in containers, the organisation's own certificate, its identity provider or local accounts, installed with no outbound internet, sized to the server (build order step 20)
+
+Paths are relative to `OspreyFlow_Core/` unless they start `OspreyFlow_Build/` or `spec/`. Line numbers
+are as of `main` at `4421fd8`.
+
+---
+
+#### Why an amendment to ADR-114, not a new ADR
+
+- **What this changes is ADR-114's own.** Decision 8 defines Small as "one VM plus the cloud's managed
+  services"; decision 6 has Caddy obtain certificates automatically; Amendment 7 owns what reaches
+  out; Amendment 8 point 10 owns the offline bundle; Amendment 10 owns how Small is installed on its
+  server. Every one of those is amended here, and the house has always amended ADR-114 for install
+  and deployment changes (Amendments 10, 22, 30–32).
+- **No new profile.** ADR-011's three profiles stand. The schema already accepts `profile: small` with
+  no `external:` (`packages/schemas/deployment.py:932-990` only refuses external services on Lite and a
+  cluster without them); what refuses it today is the command (`cli/ospreyflow/main.py:581-586`). So
+  this is a new way to install Small, not a new kind of deployment. ADR-138 was a new ADR because
+  starters were a new idea; this is not.
+- **One cross-reference:** ADR-115 decision 3 says "Configuring a broker is not built in this phase"
+  (`spec/06_DECISIONS.md:13140`). Decision 5 below builds it; ADR-115 gains a one-line pointer here.
+
+#### Context
+
+**The owner, 3 November 2026:** build a self-contained Small regardless of the client's choice; both
+options (self-contained, and Small on managed services) go to the client's architecture session on
+Thursday 5 November. The client's need is in `OspreyFlow_presentations/client_poc/MoJ_PNA_PoC_Briefing.md`
+§2: "One Linux VM inside [the client's] network … reachable over HTTPS by a small named test group …
+with a way to bring in a CSV export". §6 of that briefing lists what OspreyFlow cannot do today; this
+amendment closes those rows.
+
+**What is true today:**
+
+| Area | Today | Where |
+| --- | --- | --- |
+| Lite's reach | Every published port bound to `127.0.0.1` (S10) | `harness/site.py:129-139` (`LOOPBACK`, `_bind`); `scripts/refresh.py:384-410` re-binds an older render; `spec/05_DEPLOYMENT.md` §7 |
+| Lite's scheme | Plain HTTP at `http://ospreyflow.localhost`; Caddy's `auto_https off` | `site.py:66-67`; schema default `deployment.py:42` |
+| Small's shape | One cloud server **on managed services**; `install --mode small` without `--cloud` and without `external:` is refused | `cli/ospreyflow/main.py:571-586`; admin guide §5.2; `spec/05_DEPLOYMENT.md` §3a |
+| Small's server build | cloud-init installs `docker.io`, `docker-compose-v2`, `git`, `curl`, `python3`; clones the repository; `install.sh` fetches `uv` from astral.sh; runs `install --mode small` as root in `/opt/ospreyflow` | `deploy/opentofu/small/cloud-init.yaml.tftpl:8-14, 28-33, 69-70`; `install.sh:16-24, 45-46` |
+| Small's certificate | Caddy's automatic HTTPS (Let's Encrypt) — needs public DNS and the internet; publishes 80 and 443 on every interface; Caddy runs as root with a `proxy-data` volume | `site.py:158-162`; `harness/render.py:1109`; admin guide §1 "HTTP or HTTPS" |
+| HTTPS rule | Small and Enterprise must have an `https://` origin; Lite at a gov.uk address refused | `deployment.py:993-1018` |
+| GOV.UK brand | No rule ties `appearance.brand: govuk` to the host; the field's description says "for a service on a gov.uk domain only" | `deployment.py:778-781`; ADR-132 context (`06_DECISIONS.md:20434-20439`) |
+| Sign-in | Keycloak 26.0 in production mode on the deployment's Postgres; `KC_HOSTNAME` = `https://id.<host>`; the Conduit reaches it inside the network over HTTP | `render.py:539`, `render.py:1034-1042`; `harness/apply.py:1043-1049` |
+| Organisation sign-in | `governance.organisation_sign_in` (an alias) shows *Continue with organisation sign-in*; **no broker is configured in the realm** (nothing in `harness/realm.py` writes `identityProviders`); Keycloak joins `egress` when it is set | `deployment.py:519-528`; `render.py:1157-1158`; ADR-115 decision 3 |
+| First administrator | One-time code (`harness/first_admin.py`), no demo accounts, on the server path | `main.py:728-748` |
+| Memory | ArcadeDB `-Xms1G -Xmx8G -XX:+ExitOnOutOfMemoryError` for **every** profile (half the 16 GiB floor), overridable as `OSPREY_ARCADEDB_HEAP`; OpenSearch fixed `-Xms512m -Xmx512m`; PostgreSQL 16.4 with the image's own settings; Valkey `noeviction`, no limit; Superset 2g, report-sync 256m; the Conduit one `uvicorn` process | `harness/profiles.py:49-97`; `render.py:704-737, 753-757, 1120, 1269`; `deployment.py:665-669`; `services/api/Dockerfile:108` |
+| Why the Conduit is one process | DuckDB in-process with an exclusive lock | ADR-114's survey (`06_DECISIONS.md:12242-12243`) |
+| Offline | `update --make-bundle` / `--from` carries the release's notes, signed lock, `git bundle` of the tag, every **locked** image (cosign-saved and docker-saved); verified with no network; **an update only** — it needs an installed deployment on a release (`harness/update.py:357-370`) | `harness/bundle.py:1-14, 51-95, 166-210`; Amendment 8 points 10–11 |
+| What the bundle lacks for a first install | `uv`; the Python wheels for the checkout and the command (`install.sh:45-46` reach PyPI); a Python 3.12 (`pyproject.toml:4`); **the cosign image itself** (`harness/signatures.py:28`, run by `docker run` at `:99-176`, never in the lock); Superset (the release lock is rendered from the committed `osprey.yaml`, which has no `reporting:` so dashboards are off — `release.yml:120-125`, `deployment.py:653-669`); the basemap PMTiles; the model weights (fetched by `ollama-models` / `whisper-models` over `egress`, `render.py:1043-1058, 1143-1164`) | |
+| Backups | `ospreyflow backup` (graph, Postgres, analytics DuckDB, object store, configuration) to `--out-root`; refuses an external Postgres | `harness/backup.py:1-50, 520-535, 636`; admin guide §13 |
+| `doctor` on the server | Runs **Lite's** checks (`doctor_mode = "lite" if on_server`); its port probe *connects* to `127.0.0.1` and so cannot see a port held on another interface; memory floor 16 GB | `main.py:591-593`; `cli/ospreyflow/doctor.py:17, 100-102, 228-234` |
+| Release platform | `linux/amd64` only | `.github/workflows/release.yml:72` |
+
+#### Decisions
+
+##### 1. The mode: `small`, on a server you give it — chosen by a `server:` section in `install.yaml`
+
+- **No new mode or profile.** `ospreyflow install --mode small --config install.yaml`, run **on the
+  server**, with a `server:` section and no `cloud:` and no `external:`, installs a self-contained
+  Small. The profile written is `small` (`answers.py:66`).
+- **Refused in words:** `server:` with `cloud:` ("build a server with `--cloud`, or install onto one
+  you have with `server:`, not both"); `server:` with `external:` ("self-contained means every store
+  in a container; for managed services leave out `server:`"); `server:` on `lite` or `enterprise`;
+  `--mode small` with none of `server:`, `cloud`/`--cloud`, `external:` — the refusal at
+  `main.py:581-586` names all three.
+- **Rejected:** a fourth mode (`--mode server`) or profile — it would contradict ADR-011 and fork
+  every `Profile.SMALL` branch for a deployment whose containers, render and rules are Small's.
+  `self_contained: true` — a boolean that says less than the section it would sit beside.
+- **The answers file** (additions to `answers.py:6-42`; unknown keys refused by name, as now):
+
+```yaml
+mode: small
+server:                                   # Small on a server you provide; every store in a container
+  address: https://osprey.example.internal    # network.public_origin; https:// only
+  certificate: /etc/ospreyflow/tls/osprey.crt # PEM: the server certificate, then its intermediates
+  key: /etc/ospreyflow/tls/osprey.key         # PEM, unencrypted; owned by the installing account, 600
+  ca: /etc/ospreyflow/tls/org-root.pem        # optional: the organisation's root, for the chain check
+  backups: /srv/ospreyflow/backups            # where `ospreyflow backup` writes
+  ingest: /srv/ospreyflow/ingest              # folders.ingest: where the CSV exports are put
+  memory_gib: auto                            # or a number: what the stores are sized to (decision 6)
+  redirect_http: false                        # true publishes 80 only to send people to 443
+sign_in:                                  # optional; without it, local accounts
+  organisation:
+    alias: org                                # governance.organisation_sign_in
+    label: Your organisation account          # the button's words
+    issuer: https://login.microsoftonline.com/<tenant>/v2.0
+    client_id: 00000000-0000-0000-0000-000000000000
+    # the client secret is OSPREY_ORG_SIGN_IN_SECRET in the environment at install, never here
+admin_email: ops@example.internal         # optional: the first administrator's email
+components: {dashboards: false}
+starter: govuk-crime                      # optional, as ADR-138
+```
+
+- **`osprey.yaml` gains** (schema additions, each refused on Lite and Enterprise in words):
+  `network.tls: {certificate, key, ca}` (absolute paths on the server), `network.redirect_http`,
+  `resources: {memory_gib, graph_heap_gib, search_heap_gib, postgres_shared_buffers_gib}` (decision 6),
+  and `governance.organisation_provider: {label, issuer, client_id}` beside the existing alias.
+  `network.tls` absent on Small keeps today's automatic certificate, so a self-contained Small on a
+  public name still works as before.
+- **Not on the guided page (`--gui`) in this amendment.** A server is installed headless; the page
+  stays Lite's and the cloud's.
+
+##### 2. The address and what is published: 443, on the server's interfaces, and nothing else
+
+- **443 only.** The proxy publishes `443` (or the address's own port) on every interface
+  (`0.0.0.0:443:8443`). Port 80 is **not published** unless `redirect_http: true`, and then it only
+  redirects. The graph store's door stays `127.0.0.1:2480` (`site.py:143`, already loopback for every
+  profile). The Conduit's opt-in door (`network.expose_conduit`), which `_bind` publishes on every
+  interface for Small (`site.py:137-145`), is bound to `127.0.0.1` on a self-contained Small.
+- **An optional `network.listen_address`** binds 443 to one interface of a server with several.
+  Default: every interface.
+- **Three names on one address:** `<host>`, `id.<host>`, and `bi.<host>` when dashboards are on
+  (`site.py:39-58`). DNS is the organisation's.
+- **Wildcards — a correction to the briefing's "or one wildcard".** A wildcard covers one label. For
+  `osprey.example.internal`, `*.example.internal` covers `osprey.example.internal` but **not**
+  `id.osprey.example.internal`. The certificate must name `<host>` and either each of `id.<host>` and
+  `bi.<host>` or `*.<host>`. The certificate check (decision 3) refuses anything less, naming the
+  missing name.
+- **Host tools on the server** (`repair-sign-in`, the seeds, `register_sign_in`) reach the
+  deployment's three names at `127.0.0.1`, as `answer_localhost_with_loopback` does for
+  `*.localhost` (`site.py:235-256`), and verify the certificate against `network.tls.ca` when given.
+  So they work before the organisation's DNS does, and without the organisation's CA in the server's
+  own trust store.
+
+##### 3. The certificate: the organisation's own, mounted into Caddy, ACME off, checked before anything starts
+
+- **Caddy serves the files named in `network.tls`**, mounted read-only (`/certs/cert.pem`,
+  `/certs/key.pem`) from where they are; **the key is never copied** into the deployment folder or a
+  backup. Each site block gets `tls /certs/cert.pem /certs/key.pem`.
+- **No certificate management, no outbound from Caddy.** Globally: `admin off`, `persist_config off`
+  (as now, `site.py:62-64`), automatic HTTPS's certificates and redirects off, and `ocsp_stapling off`
+  (otherwise Caddy fetches OCSP for a manual certificate from the CA's responder). The exact global
+  options are measured against Caddy 2.11.4 (`site.py:22`) in unit 2's real-Caddy test; the intent is
+  fixed here: no ACME, no redirect listener, no OCSP fetch, no `proxy-data` volume.
+- **Caddy runs unprivileged:** listening on 8443 (and 8080 for health and the optional redirect)
+  inside the container, as the uid and gid of the account that owns the key (so the key stays `600`),
+  with `XDG_*` in `/tmp` as the plain-HTTP branch already does (`site.py:152-157`). Today's HTTPS
+  branch runs it as root (`site.py:158-162`).
+- **Checked before anything starts** — by a new `harness/tls_check.py` (the harness has `cryptography`,
+  `pyproject.toml:21`; the command depends on PyYAML alone, `answers.py:44-46`, so `doctor` runs it as
+  a step, as it runs other harness modules). Refused, in words, changing nothing: unreadable or
+  non-PEM files; an encrypted key; a key that does not match the certificate; a certificate expired or
+  not yet valid; a name of the three not covered; with `ca`, a chain that does not reach it. Warned:
+  under 30 days left. Run by `doctor`, `install` and every `apply`.
+- **Renewing:** replace the two files, then `ospreyflow apply`. `apply` records the certificate's
+  SHA-256 fingerprint in `deployment.env` (not a secret) and restarts the proxy alone when it changes.
+
+##### 4. Identity: the organisation's identity provider through Keycloak, or local accounts
+
+- **Local accounts (the default).** Exactly today's server path (`main.py:728-748`): no demo
+  accounts, the first administrator by a one-time code — printed once on the terminal, since there is
+  no `--first-admin-code-file` and no secret store — then everyone else invited from the Admin area
+  (ADR-114 decision 12; one-time codes without a mail server, Amendment 5). Brute-force lock-out
+  5 / 15 minutes applies (ADR-115 point 5).
+- **Organisation sign-in (OIDC federation), built now.** `sign_in.organisation` renders an OIDC
+  identity provider into the realm (`harness/realm.py`): discovery from `issuer`, `client_id`,
+  `pkce`, `syncMode: IMPORT`, `trustEmail: false`. **The client secret never enters `realm.json`**: it
+  is read from `OSPREY_ORG_SIGN_IN_SECRET` at install, kept in `deployment.env` (600), and set through
+  Keycloak's admin API after the import — by the same route Amendment 32 gave the Conduit's secret, so
+  `ospreyflow repair-sign-in` sets it again after a re-import.
+- **What the organisation registers** (printed by `install` and `doctor`, and in the guide):
+  - redirect URI: `https://id.<host>/realms/osprey/broker/<alias>/endpoint`
+  - post-logout redirect URI: `https://id.<host>/realms/osprey/broker/<alias>/endpoint/logout_response`
+    (to be confirmed against the pinned Keycloak 26.0 in unit 7)
+  - the app assigned to the named test group only (Entra ID: "assignment required"), so the
+    **organisation decides who may sign in**.
+- **Roles are OspreyFlow's.** A person arriving through the organisation gets an account with **no
+  role and no clearance** until an administrator grants them (Home shows every place dimmed, ADR-115
+  point 7). No group-to-role mapping in this amendment: a clearance must not follow from a directory
+  group the deployment cannot see changed (open question 6).
+- **The organisation's CA in Keycloak:** with `network.tls.ca`, Keycloak's truststore is given it
+  (`KC_TRUSTSTORE_PATHS`), so an identity provider on the organisation's own CA is trusted on the
+  back channel.
+- **Outbound, honestly:** Keycloak talks to the identity provider's token and key endpoints. An
+  internal provider (ADFS, an internal Keycloak) needs only the organisation's network; **Entra ID is
+  on the internet** (`login.microsoftonline.com`), so organisation sign-in with Entra ID needs one
+  narrow allow-listed route (or the organisation's proxy) from Keycloak, even on an otherwise
+  disconnected server. Keycloak is already the only service given `egress` for it (`render.py:1157`).
+- **Rule 13:** *Continue with organisation sign-in* (`apps/workspace/src/auth/SignInScreen.tsx`) has
+  no step in `apps/workspace/keyboard/keyboard.spec.ts`; unit 7 adds one.
+
+##### 5. The stores: exactly Lite's containers and volumes, on the server
+
+- **Containers** (as `service_images` renders them for a deployment with nothing external,
+  `render.py:480-586`): `workspace`, `api`, `ingest`, `ner`, `arcadedb`, `valkey`, `objectstore`
+  (SeaweedFS), `postgres` (16.4) with the one-shot `keycloak-db`, `keycloak`, `opensearch`, `proxy`
+  (Caddy), `ollama` with `ollama-models`, `litellm`, the speech server with `whisper-models`; and
+  `report-sync` and `superset` when dashboards are on. DuckDB inside the Conduit (`analytics_engine:
+  duckdb`).
+- **Volumes:** `osprey-data`, `osprey-staging`, `objectstore-data`, `ollama-models`, `whisper-models`,
+  plus the stores' own (`render.py:1102-1111`); no `proxy-data` (decision 3).
+- **Data on the server's data disk:** Docker's data root on the encrypted data volume the
+  organisation provides (briefing §4.1). `doctor` measures free space **where Docker keeps its data**
+  (`docker info` `DockerRootDir`), not in the checkout (`doctor.py:185`).
+- **Backups to `server.backups`.** `ospreyflow backup` writes there by default (no external Postgres,
+  so `backup.py:520-535` does not refuse). The set never carries the TLS key or any secret (§6.1).
+  The product registers nothing with the operating system (decision 7), so the guide gives a cron line
+  (`0 2 * * * ospreyflow backup`), beside the organisation's disk snapshots. OpenSearch is rebuilt, not
+  restored, as on Lite.
+- **`ospreyflow update` works on it** — unlike cloud Small (admin guide §14), whose backup refuses.
+
+##### 6. Memory: sized to the server, written down, changed by `apply`
+
+- **Measured once, at install:** `server.memory_gib: auto` takes what Docker reports (`docker info`
+  `MemTotal`, already read by `doctor.py:171-173`) and writes the number to `resources.memory_gib` in
+  `osprey.yaml`. The render stays deterministic: it reads the number, never the machine. Resizing is
+  an edit and `ospreyflow apply`.
+- **The arithmetic** (in `harness/profiles.py`, beside today's; **arithmetic, not measurement** — the
+  same caveat that module gives its own figures, `profiles.py:41-43`):
+
+| Setting | Rule from `M` GiB | 32 GiB | 64 GiB | 128 GiB | Today |
+| --- | --- | --- | --- | --- | --- |
+| ArcadeDB `-Xmx` | 0.4 × M, at least 8, at most 31 (above 31 the JVM loses compressed pointers) | 12 | 25 | 31 | 8 (`profiles.py:61, 69-73`) |
+| OpenSearch `-Xms` = `-Xmx` | M ÷ 16, at least 0.5, at most 8 | 2 | 4 | 8 | 0.5 (`render.py:710`) |
+| PostgreSQL `shared_buffers` | M ÷ 32, at least 0.25, at most 4; `effective_cache_size` 3 × that | 1 | 2 | 4 | image default |
+| The Conduit | **one process** — DuckDB's exclusive lock forbids more | 1 | 1 | 1 | 1 (`services/api/Dockerfile:108`) |
+| Valkey, Keycloak, Ollama, Superset, report-sync | unchanged | | | | `render.py:757`; `deployment.py:665-669` |
+
+- **Overrides:** `resources.graph_heap_gib`, `search_heap_gib`, `postgres_shared_buffers_gib` win
+  over the rule. `OSPREY_ARCADEDB_HEAP` keeps working (`render.py:735`).
+- **Lite is unchanged** unless `resources.memory_gib` is set: its values stay today's.
+- **The floor:** `doctor --mode small` on a server asks for 30 GiB as Docker reports it (a nominal
+  32 GB server; ADR-114 Amendment 10 already starts cloud Small at 32 GB, `spec/05_DEPLOYMENT.md`
+  §3a). `harness/profiles.py`'s `small` floor (16 GiB, `profiles.py:53-57`) follows.
+- **ArcadeDB's page cache** is not set by the render today. Unit 5 reads its default on 26.10.1 and
+  records it; it is not sized until it has been measured.
+
+##### 7. No outbound: the bundle carries a first install, not only an update
+
+**Bundle format 2** (`harness/bundle.py:31` becomes 2; format 1 still opens for `update --from`).
+Made on a connected machine with `ospreyflow update --make-bundle <file> --to vX.Y.Z` plus:
+`--for-install`, `--dashboards`, `--basemap <region>`, `--models`. It adds:
+
+| What | Why | Today |
+| --- | --- | --- |
+| `uv` (linux x86_64) and a standalone CPython 3.12 for it | `install.sh:16-24` fetches uv from astral.sh; `pyproject.toml:4` needs ≥ 3.12, and a server's own Python may be older (Amazon Linux 2023's is) | no |
+| `wheels/`: every locked wheel for the checkout and for `cli/` | `install.sh:45-46` (`uv sync`, `uv tool install`) reach PyPI; installed with `--offline --no-index --find-links` | no |
+| the cosign image, by digest | offline verification runs cosign from its image (`signatures.py:28, 121-128`); on a server that never pulled it, `--from` cannot verify anything | **no — a gap in today's `--from` too** |
+| every image the answers need, Superset included | the release lock names only what the committed `osprey.yaml` renders (dashboards off) | partly |
+| the basemap: one region's PMTiles and its glyphs | built today on a connected machine (`scripts/build_local_basemap.py`, `scripts/fetch_basemap_glyphs.py`); tier 1 (OSM, ODbL) only, rule 9 | no |
+| model weights (optional): the pinned Ollama models and the speech model | fetched today by `ollama-models` / `whisper-models` over `egress`; digests pinned in `deployment.py:211-223` | no |
+| `SHA256SUMS` of every member, and the bundle's own SHA-256 printed when made | the anchor for a machine that has nothing yet to verify with | no |
+
+**A first install from a bundle:**
+
+1. On the connected machine, `--make-bundle` verifies the release online (as now, `update.py:476-499`)
+   and prints the bundle's SHA-256. That number travels with the file through the organisation's
+   transfer and scanning route, separately recorded.
+2. On the server: `sh install.sh --from <bundle> --sha256 <sum>` refuses a mismatch before unpacking;
+   puts `uv` and Python in place; clones the checkout from the bundle's `source.bundle` at the tag;
+   installs the wheels and the command offline.
+3. `ospreyflow install --mode small --config install.yaml --from <bundle>`: loads the cosign image,
+   then runs today's offline check (`bundle.py:166-210`: the signed lock, each owned image's
+   signature, the manifest-to-image-ID chain), and starts with `--pull never`.
+4. Weights, when carried, are loaded by a one-shot step on the internal network alone, each blob
+   checked against the pinned manifest id (ADR-020, ADR-095); without them extraction says the model
+   is absent rather than trying to fetch.
+5. Basemap files are copied to `folders.tiles`.
+
+- **What anchors trust, said plainly:** the bundle's SHA-256, checked against the number made on the
+  connected machine, is what lets the server trust the cosign image it then verifies everything else
+  with. The signatures inside are checked as today.
+- **When offline,** `ollama-models` and `whisper-models` are rendered without `egress`. The proxy
+  stays on `egress` because a published port needs it (Amendment 7, measured), but with ACME and OCSP
+  off it never calls out. With no organisation sign-in, no mail and no model provider, **no other
+  service is on `egress`** (`render.py:1143-1164`).
+- **Updates afterwards:** `update --make-bundle` / `update --from`, as now.
+
+##### 8. Operating-system prerequisites: what `ospreyflow doctor --mode small --config install.yaml` checks
+
+Compared with what cloud Small's first boot installs (`cloud-init.yaml.tftpl:8-14, 91`):
+
+| Check | Self-contained `doctor` | cloud-init today |
+| --- | --- | --- |
+| Docker Engine installed and running | yes (`doctor.py:136-154`) | `docker.io`; `systemctl enable --now docker` |
+| Compose v2 or later | yes (`doctor.py:155-170`) | `docker-compose-v2` |
+| Docker enabled at boot | **new**: `systemctl is-enabled docker` | yes |
+| Architecture `amd64` | **new**: releases are `linux/amd64` only | implicit (r6i) |
+| Memory ≥ 30 GiB (as Docker reports) | **new floor** (today 16 GB, `doctor.py:17`) | size chosen |
+| Disk free where Docker keeps data, and at `server.backups` | **changed** (today: the checkout's disk) | — |
+| Port 443 free on **every** interface (and 80 if `redirect_http`) | **changed**: bind `0.0.0.0`; today's probe connects to `127.0.0.1` (`doctor.py:100-102`) | — |
+| Certificate and key (decision 3) | **new** | — (ACME) |
+| Clock synchronised (`timedatectl` `NTPSynchronized=yes`) | **new** — sign-in tokens are time-checked | Ubuntu default |
+| `vm.max_map_count` ≥ 262144 | **new, a warning** (OpenSearch single-node starts without it) | not set |
+| The installing account in the `docker` group, not root | **new, a warning** | runs as root |
+| Git; uv or a bundle | yes (`doctor.py:223-227`) | `git`; uv from astral.sh |
+| Python ≥ 3.12, or a bundle that carries one | **new** | `python3` (24.04's is 3.12) |
+| The three names resolve | **new, a warning** (the users' DNS is not the server's) | Route 53 / Azure DNS |
+
+##### 9. Security posture
+
+- **One door:** 443 on the server's interfaces; 2480 on `127.0.0.1` for the host's own tools; nothing
+  else. Every other container is on the internal `osprey` network (`render.py:1113`).
+- **Egress:** the proxy (to publish; it makes no call), Keycloak only for organisation sign-in or
+  mail, and nothing else unless the administrator configures a model provider or a remote map. Offline,
+  nothing has a working route out regardless.
+- **Secrets:** `deployment.env` 600 (`render.py:1615-1622`, ADR-137 decision 2); the TLS key `600`,
+  mounted read-only, never copied, never in a backup; the organisation's client secret by environment
+  only; `osprey.yaml` holds paths and names, no secret (§2.5).
+- **How this differs from Lite, and why that is acceptable.** Lite's guarantee (S10) is that nobody
+  else can reach it. This one is different by design: **only the named group can reach it, only over
+  TLS with the organisation's certificate, and only a signed-in person with a role sees anything**,
+  enforced in layers — the organisation's network rules (who reaches 443), the certificate, sign-in
+  (the organisation's group assignment, or accounts an administrator made), and OspreyFlow's roles,
+  clearance and handling codes in the adapters (rule 3). That is narrower than cloud Small today,
+  which opens 80 and 443 to the internet (admin guide §5.1).
+- **Docker publishes past the host firewall:** a published port is not filtered by `ufw`'s rules.
+  Who may reach 443 is set in front of the server (a security group, the organisation's firewall) or
+  in the `DOCKER-USER` chain. The guide says so.
+- **The `docker` group is root-equivalent:** the service account is an administrator's account.
+- **Data at rest:** the organisation's encrypted disks. The deployment encrypts nothing with a key of
+  its own (§6.1).
+
+##### 10. The GOV.UK theme on an internal hostname
+
+- **Allowed by the code today:** nothing ties `appearance.brand` to the host; only Lite at a gov.uk
+  address is refused (`deployment.py:1010-1017`).
+- **Against the Service Manual's letter:** ADR-132's context records that a service not on a gov.uk
+  domain "must not" look like GOV.UK (`06_DECISIONS.md:20434-20439`), and the field's own description
+  says "for a service on a gov.uk domain only".
+- **Proposed:** keep it allowed, and have `install` and `doctor` print one line when the brand is
+  `govuk` and the host is not under `gov.uk`: "The GOV.UK header and typeface are for services on a
+  gov.uk domain; check with your service owner." An internal staff tool is not a public GOV.UK service,
+  and the PoC's analysts are to see the look they would get. Open question 5.
+
+##### 11. The way up: same images
+
+- **To Small on managed services:** `ospreyflow backup` here; a Small with `external:` (built with
+  `--cloud`, or on the organisation's own resources); `ospreyflow restore`. **Restoring onto an
+  external Postgres is not built** — `harness/restore.py` has no notion of `external:` — and is a unit
+  of its own when it is needed.
+- **To Enterprise:** the same images in the Helm chart; the move is `spec/05_DEPLOYMENT.md` §4's replay
+  from a backup. An Enterprise inside an organisation will want the organisation's certificate on its
+  load balancer or ingress; that is a later amendment.
+- **Nothing in this amendment changes an image.**
+
+#### Consequences
+
+- Cloud Small, Lite and Enterprise behave exactly as before; every new setting is refused outside a
+  self-contained Small.
+- `update --from` gains the cosign image, which it needs today too.
+- The briefing's §4.3 "or one wildcard" is corrected (decision 2).
+- Organisation sign-in with Entra ID is not possible with **no** outbound at all; it needs one narrow
+  route from Keycloak.
+
+#### Tests (rule 12), each shown red first; rule 15's refusing fixtures marked ⚑
+
+Test files under `OspreyFlow_Build/tests/`. "Real" means the real dependency in a container, as
+`harness/test_proxy_health.py:34-61` already runs Caddy.
+
+| Invariant | Test (file :: name) | Red today because |
+| --- | --- | --- |
+| `server:` and `cloud:` are not both given | `cli/test_answers.py::test_server_and_cloud_together_are_refused_in_words` | no `server:` section |
+| self-contained means no `external:` | `cli/test_answers.py::test_server_with_external_is_refused_in_words` | — |
+| `server:` only for small | `cli/test_answers.py::test_a_server_section_is_refused_for_lite_and_enterprise` | — |
+| the answers make a small `osprey.yaml` with address and paths | `cli/test_answers.py::test_server_answers_make_a_small_osprey_yaml_with_its_address_and_certificate_paths` | — |
+| install on a server without cloud works | `cli/test_install_small_server.py::test_small_on_a_server_with_its_own_certificate_installs_without_cloud` | refused at `main.py:581` |
+| the refusal names all three ways | `cli/test_install_small_server.py::test_small_with_no_server_cloud_or_external_is_refused_naming_all_three` | names two |
+| `network.tls` only on small; absolute paths | `harness/test_deployment_schema.py::test_tls_paths_are_refused_on_lite_and_enterprise_in_words`, `::test_tls_paths_must_be_absolute` | field absent |
+| 443 alone is published | `harness/test_front_proxy.py::test_a_small_with_its_own_certificate_publishes_443_alone_on_every_interface` | 80 published (`site.py:160`) |
+| 80 only with `redirect_http`, and only redirects | `harness/test_front_proxy.py::test_port_80_is_published_only_to_redirect_when_asked` | — |
+| the Conduit's door is on loopback | `harness/test_front_proxy.py::test_the_conduits_door_is_on_loopback_on_a_self_contained_small` | `_bind` gives every interface |
+| the graph door stays on loopback | `harness/test_front_proxy.py::test_the_graph_stores_door_stays_on_loopback_on_a_self_contained_small` | (guard; green) |
+| no ACME, no OCSP, every name served with the given files | `harness/test_front_proxy.py::test_its_own_certificate_turns_acme_and_ocsp_stapling_off`, `::test_every_name_is_served_with_the_given_certificate` | — |
+| Caddy unprivileged | `harness/test_front_proxy.py::test_the_proxy_runs_unprivileged_with_its_own_certificate` | root today |
+| a TLS client trusting only the test CA accepts each name | `harness/test_proxy_tls_caddy.py::test_caddy_serves_the_given_certificate_for_each_name` (real Caddy; real `ssl` client) | — |
+| ⚑ Caddy refuses a mismatched key — and so does our check | `harness/test_proxy_tls_caddy.py::test_caddy_refuses_to_start_with_a_key_that_does_not_match` and `harness/test_tls_check.py::test_every_pair_caddy_refuses_the_check_refuses_too` (the same files to both; Caddy is the fixture) | no check |
+| ⚑ a real TLS client refuses an uncovered name — and so does our check | `harness/test_proxy_tls_caddy.py::test_a_client_refuses_a_name_the_certificate_does_not_cover`; `harness/test_tls_check.py::test_a_certificate_missing_id_or_bi_is_refused_naming_it` | — |
+| the one-level wildcard trap | `harness/test_tls_check.py::test_a_wildcard_for_the_parent_domain_does_not_cover_id_and_is_refused`; `::test_a_wildcard_for_the_host_with_the_host_itself_is_accepted` | — |
+| expired, not yet valid, encrypted key, wrong chain | `harness/test_tls_check.py::test_an_expired_certificate_is_refused_naming_its_end`, `::test_a_certificate_not_yet_valid_is_refused`, `::test_an_encrypted_key_is_refused_in_words`, `::test_a_chain_that_does_not_reach_the_given_ca_is_refused`; `::test_thirty_days_left_is_a_warning_not_a_refusal` | — |
+| nothing starts on a refused certificate | `harness/test_apply_changed_settings.py::test_apply_refuses_and_changes_nothing_when_the_certificate_is_refused` | — |
+| a renewed certificate restarts the proxy alone | `harness/test_apply_changed_settings.py::test_a_changed_certificate_restarts_only_the_proxy` | — |
+| Caddy makes no outbound call | `harness/test_proxy_tls_caddy.py::test_caddy_with_its_own_certificate_starts_and_serves_with_no_route_out` (on an `internal` network; no "obtaining certificate" in its log) | — |
+| doctor's server checks | `cli/test_doctor.py::test_self_contained_small_checks_docker_memory_disk_443_certificate_and_clock`, `::test_port_443_held_on_any_interface_fails`, `::test_memory_below_thirty_gib_fails_for_a_small_server`, `::test_an_unsynchronised_clock_fails_in_words`, `::test_a_machine_that_is_not_amd64_fails_naming_the_release_platform`, `::test_a_low_vm_max_map_count_is_a_warning`, `::test_disk_is_measured_where_docker_keeps_its_data` | port probe connects to loopback; floor 16; others absent |
+| heaps follow the server | `harness/test_profiles.py::test_heaps_follow_the_servers_memory_at_32_64_and_128_gib`, `::test_the_graph_heap_never_exceeds_31_gib`, `::test_opensearch_xms_equals_xmx`, `::test_an_override_in_osprey_yaml_wins`, `::test_lite_without_resources_keeps_todays_values`, `::test_the_sized_heaps_leave_the_reserve` | OpenSearch literal; ArcadeDB from the floor |
+| the render carries them | `harness/test_render_memory.py::test_the_rendered_compose_and_env_carry_the_sized_values` | — |
+| backups go to the configured folder, never with the key | `harness/test_backup.py::test_a_self_contained_small_backs_up_to_its_configured_folder`, `::test_a_backup_never_carries_the_tls_key` | — |
+| update works on it | `harness/test_update_apply.py::test_update_moves_a_self_contained_small` | — |
+| the broker's secret is never in the realm file | `harness/test_realm.py::test_the_organisations_provider_is_rendered_with_no_secret` | no broker |
+| ⚑ the redirect URI printed is the one Keycloak sends | `harness/test_organisation_sign_in.py::test_the_printed_redirect_uri_is_the_one_keycloak_sends` — the organisation is a **second real Keycloak**, which refuses any redirect URI not registered exactly, as Entra ID does | — |
+| ⚑ the organisation's CA is trusted on the back channel | `harness/test_organisation_sign_in.py::test_keycloak_trusts_the_organisations_ca_for_its_back_channel` — the stand-in served over HTTPS by a test CA; real Keycloak refuses it without the truststore | — |
+| no role until granted (rule 4) | `harness/test_organisation_sign_in.py::test_a_person_from_the_organisation_has_no_role_until_an_administrator_grants_one` | — |
+| repair puts the broker's secret back | `harness/test_register_sign_in.py::test_repair_sign_in_sets_the_brokers_client_secret_again` | — |
+| rule 13 | `apps/workspace/keyboard/keyboard.spec.ts` step `continue-with-organisation-sign-in` | none |
+| the bundle carries a first install | `harness/test_bundle.py::test_a_format_2_bundle_carries_uv_python_the_wheels_cosign_and_every_image_the_answers_need`, `::test_an_image_the_answers_need_but_the_bundle_lacks_is_named` | format 1 |
+| cosign is in the bundle | `harness/test_bundle.py::test_a_bundle_without_the_cosign_image_is_refused_when_made` | it never is |
+| the outer checksum anchors it | `cli/test_install_from_bundle.py::test_a_bundle_whose_sha256_differs_is_refused_before_unpacking` | — |
+| ⚑ the wheels install with no index | `cli/test_install_from_bundle.py::test_the_wheels_install_with_uv_offline` — real uv with `--offline --no-index`, which refuses a missing wheel | — |
+| weights checked before use | `harness/test_bundle.py::test_a_carried_model_blob_that_does_not_match_its_pin_is_refused` | — |
+| offline renders no download step on egress | `harness/test_render_egress.py::test_an_offline_install_puts_no_weights_step_on_egress` | both always on egress |
+| ⚑ end to end, with the network refusing | `live/test_self_contained_small_vm.py::test_install_from_a_bundle_with_outbound_dropped` (a throwaway Ubuntu 24.04 VM, `OUTPUT` dropped except the local network, so any hidden fetch fails loudly); `::test_a_lan_client_reaches_443_and_not_80_or_2480`; `::test_the_first_administrator_signs_in_over_https` | — |
+
+The test CA, certificates and keys are generated per test in a temporary folder; none is committed
+(rule 9's spirit, and no key in the repository).
+
+#### Documents to change
+
+- **Administration guide:** §1 (a fourth column or a row split: "Small, on your own server"; the
+  "HTTP or HTTPS" note for the organisation's certificate and 443 only); §2 (a new §2.2a "Small on your
+  own server": the prerequisites table of decision 8); a **new §5a "Installing Small on your own
+  server"** (the answers file, the certificate and the three names, organisation sign-in and the URIs
+  to register, the first administrator, offline from a bundle); §7 (the answers file's `server:` and
+  `sign_in:`); §8 / §8.1 (what is published); §13 (backups to `server.backups`, the cron line); §14
+  (update works on it; offline install and update); §16 (certificate refused; nobody can sign in
+  through the organisation; a LAN client cannot connect — the firewall in front, not `ufw`); Appendix A
+  (`network.tls`, `network.redirect_http`, `network.listen_address`, `resources.*`,
+  `governance.organisation_provider`).
+- **README:** prerequisites per mode; the server install in one paragraph.
+- **`doctor`:** its help and checks (decision 8).
+- **`spec/05_DEPLOYMENT.md`** (rule 11, once accepted): §1's table row for `small`; a new §3a.1;
+  §5's "Airgapped upgrades" bullet (`osprey bundle --images` → what is built); §6.2 for this Small; §7's
+  interfaces bullet.
+- **`spec/06_DECISIONS.md`:** this amendment; a pointer under ADR-115 decision 3; the licence register
+  for carried CPython (PSF-2.0) and uv (MIT / Apache-2.0).
+- **`OspreyFlow_presentations/client_poc/MoJ_PNA_PoC_Briefing.md`:** §4.3's wildcard sentence; §6's
+  rows once built.
+
+#### Build plan
+
+Each unit on its own branch, its tests red first, the whole non-live suite run before handing back,
+merged when green (the build order's guardrails). Effort in working days for one agent.
+
+| # | Unit | Tests (from the table) | Effort |
+| --- | --- | --- | --- |
+| 1 | Answers and schema: `server:`, `sign_in:`, `network.tls`, `redirect_http`, `listen_address`, `resources`; refusals | `test_answers.py`, `test_deployment_schema.py` rows | 0.5 |
+| 2 | The proxy: Caddyfile with the given certificate, ACME and OCSP off, 443 alone, unprivileged, the Conduit's door on loopback | `test_front_proxy.py` rows; `test_proxy_tls_caddy.py` (real Caddy) | 1 |
+| 3 | `harness/tls_check.py`, wired into `doctor`, `install`, `apply`; renewal restarts the proxy | `test_tls_check.py`; `test_apply_changed_settings.py` rows | 0.5 |
+| 4 | Install on the server: lift the refusal, the server path without `external:`, `doctor --mode small` server checks, host tools to loopback with the CA | `test_install_small_server.py`; `test_doctor.py` rows | 1 |
+| 5 | Memory sizing in `profiles.py` and the render; ArcadeDB page-cache default read | `test_profiles.py`, `test_render_memory.py` | 0.5–1 |
+| 6 | Backups to `server.backups`; `update` on it | `test_backup.py`, `test_update_apply.py` rows | 0.5 |
+| 7 | Organisation sign-in: the broker in the realm, its secret by the admin API, the truststore, the printed URIs, the keyboard step | `test_realm.py`, `test_organisation_sign_in.py` (two real Keycloaks), `test_register_sign_in.py`, `keyboard.spec.ts` | 2 |
+| 8 | Bundle format 2 and `install --from`: uv, Python, wheels, cosign, every needed image, basemap, optional weights, the SHA-256 anchor | `test_bundle.py`, `test_install_from_bundle.py`, `test_render_egress.py` rows | 2.5–3 |
+| 9 | Documents (above) and the spec edits | the guide-version and wording tests already in place | 1 |
+| 10 | End to end on a throwaway Ubuntu 24.04 VM: outbound dropped, a LAN client, both brands | `live/test_self_contained_small_vm.py` | 1 |
+| | **Total** | | **≈ 10–12 days** |
+
+Units 1–4 are the path to "it runs on one server with the organisation's certificate". 5 and 6 are
+independent of each other. 7 and 8 are independent of 5 and 6 and of each other. Every unit runs on a
+throwaway VM or temporary stores, never on the owner's deployments (rule 14; "never `ospreyflow
+install` over a running deployment").
+
+#### The owner's answers (3 November 2026)
+
+**Accepted, with every recommendation below, except answer 7:** the organisation's identity provider
+is used **from the start** — for the client's proof of concept, Entra ID through Keycloak's broker
+(decision 4), with the client asked to allow the one outbound route it needs
+(`login.microsoftonline.com`) and to register the application; local accounts only for the first
+administrator. The cosign image missing from the offline bundle and the release lock rendered without
+the dashboards image are fixed at once as their own change (build order step 20a), not inside unit 8.
+Nothing is rushed for the client's session of 5 November: the amendment and the server specification
+go to it; the build follows.
+
+The questions as drafted, each with its recommendation:
+
+1. **Amendment 33 to ADR-114, or a new ADR-140?** *Recommend the amendment* (reasons at the top).
+2. **Port 80:** not published, or published only to redirect? *Recommend not published by default*
+   (the briefing promises "TCP 443 only"); `redirect_http: true` for a client who asks.
+3. **Names:** three names, or the host plus `*.<host>`? *Recommend either, checked by the
+   certificate check*; ask the client for `<host>`, `id.<host>` and `bi.<host>` as SANs, which every
+   internal CA can issue; correct the briefing's "or one wildcard".
+4. **Dashboards in the PoC?** *Recommend off for the first install* (one name fewer, 2 GiB less, and
+   the Superset image is not in today's release lock); on later with `ospreyflow apply`.
+5. **GOV.UK look on a non-gov.uk internal name:** allow with a notice, refuse, or allow silently?
+   *Recommend allow with the one-line notice*, and ask the client whether the internal name sits under
+   a gov.uk domain (which settles it).
+6. **Roles from the organisation's groups?** *Recommend no for now*: an administrator grants roles and
+   clearance; the organisation's app assignment decides who may sign in at all.
+7. **Entra ID and "no outbound":** organisation sign-in with Entra ID needs Keycloak to reach
+   `login.microsoftonline.com`. *Recommend local accounts for the PoC unless the client allow-lists that
+   one route*; build the broker regardless (it serves ADFS and internal providers with no internet).
+8. **Model weights in the bundle?** *Recommend optional (`--models`), left out for this client* (AI is
+   off for the PoC; about 2.2 GB saved); extraction then says the model is absent.
+9. **Basemap region:** *Recommend Great Britain* (the owner's `osm-local-great-britain`), tier 1 only.
+10. **Memory:** measured at install and written down, or re-measured at each `apply`? *Recommend
+    measured once and written down*, so the render stays deterministic and a change is visible in
+    `osprey.yaml`.
+11. **Python on the server:** rely on the server's own, or carry CPython 3.12 in the bundle? *Recommend
+    carry it* — the client's build may be Amazon Linux 2023, whose Python is older than 3.12.
+12. **The account it runs as:** root (as cloud-init does) or a service account in the `docker` group?
+    *Recommend a service account* (`ospreyflow`), the checkout in `/opt/ospreyflow` owned by it; the
+    guide says the `docker` group is root-equivalent.
+13. **Backup schedule:** the product registers nothing with the operating system (decision 7). *Recommend
+    keeping that, with a documented cron line* beside the client's disk snapshots.
+14. **The cosign image missing from bundles** (a gap in today's `update --from` as well): fix within unit
+    8, or at once as its own small change? *Recommend at once*, since it affects every offline update.
+15. **The release lock and optional images:** render the release's `versions.lock` with every optional
+    service on (dashboards), so a bundle can carry them? *Recommend yes*; an install still runs only what
+    its `osprey.yaml` asks for.
+16. **The memory floor for a server:** 30 GiB as Docker reports it? *Recommend yes* (a nominal 32 GB
+    server), matching cloud Small's starting size.
