@@ -11,18 +11,25 @@ from __future__ import annotations
 import json
 import re
 import socket
+import ssl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from schemas.deployment import OspreyConfig, Profile
+from schemas.deployment import OspreyConfig, Profile, self_contained_small
 
 #: Caddy 2.11.4 (Apache-2.0), released 3 June 2026.
 PROXY_IMAGE = "caddy:2.11.4-alpine"
 #: Where Caddy listens inside its container for a plain-HTTP origin: unprivileged, so it runs as
 #: nobody (`05_DEPLOYMENT.md` §7's non-root posture). The published port is the origin's.
 PROXY_HTTP_PORT = 8080
+#: Where Caddy listens for HTTPS with the organisation's own certificate (ADR-114 Amendment 33
+#: decision 3): unprivileged, as the account that owns the key. The published port is the origin's.
+PROXY_HTTPS_PORT = 8443
+#: Where the compose file mounts `network.tls`'s two files into the proxy, read-only.
+CERT_IN_PROXY = "/certs/cert.pem"
+KEY_IN_PROXY = "/certs/key.pem"
 REALM = "osprey"
 
 
@@ -57,6 +64,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     if config.reporting.superset:
         routes.append((f"bi.{names.host}", "superset:8088"))
     plain = names.scheme == "http"
+    own = config.network.tls is not None
     lines = [
         "# Rendered from osprey.yaml's network.public_origin (ADR-114 Amendment 4).",
         "{",
@@ -65,7 +73,19 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     ]
     if plain:
         lines += ["\tauto_https off", f"\thttp_port {PROXY_HTTP_PORT}"]
+    elif own:
+        # ADR-114 Amendment 33 decision 3: the organisation's certificate, given; no certificate
+        # obtained, no redirect listener of Caddy's own, no OCSP fetched from the CA's responder
+        # (measured against Caddy 2.11.4: without `ocsp_stapling off` it asks the responder a
+        # certificate names; without `auto_https off` it adds its own redirects).
+        lines += [
+            "\tauto_https off",
+            "\tocsp_stapling off",
+            f"\thttp_port {PROXY_HTTP_PORT}",
+            f"\thttps_port {PROXY_HTTPS_PORT}",
+        ]
     lines.append("}")
+    given = [f"\ttls {CERT_IN_PROXY} {KEY_IN_PROXY}"] if own else []
     for name, upstream in routes:
         if name == f"id.{names.host}" and config.appearance.brand == "govuk":
             # ADR-132 Amendment 2: the sign-in page's GOV.UK stylesheet and fonts come from the
@@ -73,6 +93,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             lines += [
                 "",
                 f"{names.scheme}://{name} {{",
+                *given,
                 "\thandle /assets/govuk/* {",
                 "\t\treverse_proxy workspace:8080",
                 "\t}",
@@ -82,7 +103,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
                 "}",
             ]
             continue
-        lines += ["", f"{names.scheme}://{name} {{", f"\treverse_proxy {upstream}", "}"]
+        lines += ["", f"{names.scheme}://{name} {{", *given, f"\treverse_proxy {upstream}", "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
     # a network that reaches the internet).
@@ -92,7 +113,13 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     # On HTTPS that is plain HTTP on 80: the health check asks a bare address, which has no
     # certificate, and a name's own plain-HTTP request still goes to HTTPS first (measured against
     # Caddy; `tests/harness/test_proxy_health.py`).
-    catch_all = f":{PROXY_HTTP_PORT}" if plain else "http://:80"
+    if own and config.network.redirect_http:
+        # Amendment 33 decision 2: port 80, when asked, only sends each name to its https://
+        # address (on the origin's own port, if it has one).
+        suffix = "" if names.port == 443 else f":{names.port}"
+        for name, _upstream in routes:
+            lines += ["", f"http://{name} {{", f"\tredir https://{name}{suffix}{{uri}} 308", "}"]
+    catch_all = f":{PROXY_HTTP_PORT}" if plain or own else "http://:80"
     lines += ["", f"{catch_all} {{", "\trespond /healthz 200", "\trespond 404", "}", ""]
     return "\n".join(lines)
 
@@ -142,15 +169,62 @@ def _bind(config: OspreyConfig, mapping: str) -> str:
 def _door_ports(config: OspreyConfig) -> list[str]:
     published = [f"{LOOPBACK}:${{OSPREY_ARCADEDB_PORT:-2480}}:2480"]
     if config.network.expose_conduit:
-        published.append(_bind(config, "${OSPREY_API_PORT:-8000}:8000"))
+        conduit = "${OSPREY_API_PORT:-8000}:8000"
+        # ADR-114 Amendment 33 decision 2: on a Small with every store in a container, 443 is the
+        # one door other machines reach; the Conduit's opt-in door is this server's alone.
+        published.append(
+            f"{LOOPBACK}:{conduit}" if self_contained_small(config) else _bind(config, conduit)
+        )
     return published
+
+
+#: The account that owns `network.tls.key`, which the proxy runs as so the key can stay `600`
+#: (ADR-114 Amendment 33 decision 3). `apply` writes both into `deployment.env` from the key file
+#: itself; the render never reads the machine.
+PROXY_USER = "${OSPREY_PROXY_UID:?}:${OSPREY_PROXY_GID:?}"
+
+
+def _own_certificate_service(config: OspreyConfig, port: int) -> dict[str, Any]:
+    """The proxy with the organisation's certificate: 443 (the origin's port) alone, on every
+    interface or the one `network.listen_address` names; 80 only when `redirect_http` asks; run as
+    the key's owner; the two files mounted read-only; no `proxy-data` volume."""
+    network = config.network
+    assert network.tls is not None
+    listen = f"{network.listen_address}:" if network.listen_address else ""
+    ports = [f"{listen}{port}:{PROXY_HTTPS_PORT}"]
+    if network.redirect_http:
+        ports.append(f"{listen}80:{PROXY_HTTP_PORT}")
+    return {
+        "ports": ports,
+        "user": PROXY_USER,
+        "environment": {
+            "XDG_DATA_HOME": "/tmp/caddy",
+            "XDG_CONFIG_HOME": "/tmp/caddy",
+        },
+        "volumes": [
+            f"{network.tls.certificate}:{CERT_IN_PROXY}:ro",
+            f"{network.tls.key}:{KEY_IN_PROXY}:ro",
+            # `apply` writes the certificate's SHA-256 here: a renewed certificate changes this one
+            # file, which only the proxy mounts, so `ospreyflow apply` restarts the proxy alone.
+            f"./{TLS_FINGERPRINT_FILE}:/certs/fingerprint:ro",
+        ],
+    }
+
+
+#: The file in the deployment's folder that holds the served certificate's SHA-256 fingerprint.
+TLS_FINGERPRINT_FILE = "tls-fingerprint"
 
 
 def proxy_service(config: OspreyConfig) -> dict[str, Any]:
     names = sites(config)
-    if names.scheme == "http":
+    extra: dict[str, Any]
+    if names.scheme == "https" and config.network.tls is not None:
+        extra = _own_certificate_service(config, names.port)
+        ports = extra.pop("ports")
+        health = f"http://127.0.0.1:{PROXY_HTTP_PORT}/healthz"
+    elif names.scheme == "http":
         ports = [_bind(config, f"{names.port}:{PROXY_HTTP_PORT}")]
-        extra: dict[str, Any] = {
+        extra = {
             "user": "65534:65534",
             "environment": {"XDG_DATA_HOME": "/tmp/caddy", "XDG_CONFIG_HOME": "/tmp/caddy"},
         }
@@ -230,12 +304,17 @@ def render_glass_settings(config: OspreyConfig) -> str:
 
 
 _answered = False
+#: ADR-114 Amendment 33 decision 2: the deployment's own names, answered on this server, by name.
+_HERE: dict[str, str] = {}
+#: Certificate files a host tool trusts beside the system's own (the deployment's, and its CA).
+_TRUSTED: list[str] = []
 
 
-def answer_localhost_with_loopback() -> None:
+def _answer_here() -> None:
     """For this process, `localhost` and every `*.localhost` name resolve to loopback (RFC 6761
-    §6.3), whatever the operating system's resolver does with them — so a host tool reaches the
-    proxy with the name intact in its request. Every other name resolves as before."""
+    §6.3), and each name in `_HERE` to its address, whatever the operating system's resolver does
+    with them — so a host tool reaches the proxy with the name intact in its request. Every other
+    name resolves as before."""
     global _answered
     if _answered and getattr(socket.getaddrinfo, "_osprey_loopback", False):
         return
@@ -245,15 +324,71 @@ def answer_localhost_with_loopback() -> None:
                     flags: int = 0) -> Any:  # fmt: skip
         name = host.decode() if isinstance(host, bytes) else host
         bare = name.lower().rstrip(".") if isinstance(name, str) else ""
-        if bare == "localhost" or bare.endswith(".localhost"):
+        address = _HERE.get(bare)
+        if address is None and (bare == "localhost" or bare.endswith(".localhost")):
+            address = "127.0.0.1"
+        if address is not None:
             number = int(port) if str(port).isdigit() else 0
             kinds = [type] if type else [socket.SOCK_STREAM, socket.SOCK_DGRAM]
-            return [(socket.AF_INET, kind, proto, "", ("127.0.0.1", number)) for kind in kinds]
+            return [(socket.AF_INET, kind, proto, "", (address, number)) for kind in kinds]
         return underlying(host, port, family, type, proto, flags)
 
     getaddrinfo._osprey_loopback = True  # type: ignore[attr-defined]
     socket.getaddrinfo = getaddrinfo
     _answered = True
+
+
+def answer_localhost_with_loopback() -> None:
+    """For this process, `localhost` and every `*.localhost` name resolve to loopback (RFC 6761
+    §6.3), whatever the operating system's resolver does with them — so a host tool reaches the
+    proxy with the name intact in its request. Every other name resolves as before."""
+    _answer_here()
+
+
+def _trust(files: list[str]) -> None:
+    """Every TLS context this process makes trusts `files` beside the system's own store, and
+    accepts a chain that ends at one of them (`VERIFY_X509_PARTIAL_CHAIN`), so the deployment's own
+    certificate is trusted even when its root is in no trust store on this server."""
+    for file in files:
+        if file not in _TRUSTED:
+            _TRUSTED.append(file)
+    if getattr(ssl.create_default_context, "_osprey_trust", False):
+        return
+    underlying = ssl.create_default_context
+
+    def create_default_context(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        context = underlying(*args, **kwargs)
+        if context.verify_mode != ssl.CERT_NONE:
+            for trusted in _TRUSTED:
+                context.load_verify_locations(cafile=trusted)
+            context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+        return context
+
+    create_default_context._osprey_trust = True  # type: ignore[attr-defined]
+    ssl.create_default_context = create_default_context
+    # `urllib` reaches HTTPS through this one, bound when `ssl` was imported, and its default
+    # opener keeps the context it was made with: dropped, so the next request makes a new one.
+    ssl._create_default_https_context = create_default_context
+    import urllib.request
+
+    urllib.request.install_opener(None)
+
+
+def answer_the_deployment_here(config: OspreyConfig) -> None:
+    """ADR-114 Amendment 33 decision 2: on a Small with the organisation's own certificate, the
+    tools run on the server (`harness.apply`, `harness.register_sign_in`) reach the deployment's
+    names on this server — at `network.listen_address`, else loopback — before the organisation's
+    DNS does, and trust its certificate (and `network.tls.ca`) without the server's own trust store
+    knowing the organisation's CA. Nothing changes for any other deployment."""
+    tls = config.network.tls
+    if config.profile is not Profile.SMALL or tls is None:
+        return
+    host = sites(config).host.lower()
+    address = config.network.listen_address or LOOPBACK
+    for name in (host, f"id.{host}", f"bi.{host}"):
+        _HERE[name] = address
+    _answer_here()
+    _trust([tls.certificate, *([tls.ca] if tls.ca else [])])
 
 
 def deployment_origins(env_file: Path) -> tuple[str, str]:

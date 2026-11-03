@@ -32,6 +32,15 @@ a person at the prompts and CI install the same way.
       namespace: ospreyflow        #   the Kubernetes namespace
       storage_class: gp3           #   each store's own volumes; the cluster's default when left out
       shared_storage_class: efs-sc #   the volume every Conduit shares: EFS on AWS, Azure Files
+    server:                        # small only (ADR-114 Amendment 33): a server you provide,
+      address: https://osprey.example.internal   # every store in a container; https:// only
+      certificate: /etc/ospreyflow/tls/osprey.crt  # PEM: the certificate, then its intermediates
+      key: /etc/ospreyflow/tls/osprey.key          # PEM, unencrypted, mode 600
+      ca: /etc/ospreyflow/tls/org-root.pem         # optional: the organisation's root
+      ingest: /srv/ospreyflow/ingest   # folders.ingest: where the CSV exports are put
+      redirect_http: false         #   true also publishes 80, only to send people to 443
+      listen_address: 192.0.2.10   #   optional: one interface of the server; default every one
+    admin_email: ops@example.org   # small on a server: the first administrator's email
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
     starter: govuk-crime           # ADR-138: a theme and a domain, pre-filling the answers below
     appearance:                    # the look (appearance.* in osprey.yaml)
@@ -54,6 +63,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -67,8 +77,18 @@ PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 
 _TOP = {
     "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
-    "mail", "external", "cluster", "starter", "appearance", "demo_accounts",
+    "mail", "external", "cluster", "starter", "appearance", "demo_accounts", "server",
+    "admin_email", "sign_in",
 }  # fmt: skip
+#: ADR-114 Amendment 33: `server:`. `backups` and `memory_gib` are its drop 2 (units 5 and 6) and
+#: are refused by name until they are built, as `sign_in:` (unit 7) is.
+_SERVER = {"address", "certificate", "key", "ca", "ingest", "redirect_http", "listen_address"}
+_NOT_YET = {
+    "server.backups": "backups to a folder of their own (ADR-114 Amendment 33 unit 6)",
+    "server.memory_gib": "the stores sized to the server's memory (ADR-114 Amendment 33 unit 5)",
+    "sign_in": "organisation sign-in (ADR-114 Amendment 33 unit 7); without it people sign in "
+    "with accounts an administrator makes",
+}
 _SECTIONS = {
     "components": {"dashboards"},
     "folders": {"ingest", "tiles"},
@@ -114,6 +134,11 @@ class Answers:
     demo_accounts: bool = True
     #: ADR-126 `domains` the demo cases are set to: the starter's domain's, else each seed's own.
     case_domains: tuple[str, ...] | None = None
+    #: ADR-114 Amendment 33: Small on a server of your own — its address, certificate paths and
+    #: options as `osprey.yaml`'s `network` takes them. Empty for every other install.
+    server: dict[str, Any] = field(default_factory=dict)
+    #: The first administrator's email, on a server of your own (a cloud's is `cloud.admin_email`).
+    admin_email: str | None = None
 
 
 def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) -> dict[str, str]:
@@ -191,6 +216,73 @@ def _api_cidrs(value: object) -> tuple[str, ...]:
     return tuple(kept)
 
 
+def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
+    """ADR-114 Amendment 33 decision 1: `server:`, checked and turned into the `network` settings
+    it becomes (`public_origin`, `tls`, `redirect_http`, `listen_address`) and its ingest."""
+    if not isinstance(section, Mapping):
+        raise AnswersRefused(f"server holds settings, not {section!r}")
+    if mode != "small":
+        raise AnswersRefused(
+            f"server: is for the small mode (Small on a server of your own), not {mode}"
+        )
+    later = sorted(set(section) & {"backups", "memory_gib"})
+    if later:
+        key = later[0]
+        raise AnswersRefused(
+            f"server.{key} is not built yet: {_NOT_YET[f'server.{key}']}. Leave it out; nothing "
+            "was installed"
+        )
+    _known("server", section, _SERVER)
+    address = str(section.get("address") or "").strip()
+    if not address:
+        raise AnswersRefused(
+            "server.address is the https:// address people reach the deployment at, for example "
+            "https://osprey.example.internal"
+        )
+    origin = urlsplit(address)
+    if origin.scheme != "https" or not origin.hostname:
+        raise AnswersRefused(
+            f"server.address {address!r} must be an https:// address: a server is reached by "
+            "other people over the organisation's network"
+        )
+    if origin.path not in ("", "/") or origin.query or origin.fragment:
+        raise AnswersRefused(
+            f"server.address {address!r} names the server and its port only, with no path"
+        )
+    network: dict[str, Any] = {"public_origin": address.rstrip("/")}
+    files = {k: section[k] for k in ("certificate", "key", "ca") if section.get(k)}
+    if ("certificate" in files) != ("key" in files):
+        raise AnswersRefused(
+            "server.certificate and server.key are given both or neither: the certificate and its "
+            "key (or neither, for a certificate the front proxy obtains itself)"
+        )
+    if files:
+        tls = {}
+        for key, value in files.items():
+            text = str(value)
+            if not (text.startswith("/") or text.startswith("~")):
+                raise AnswersRefused(
+                    f"server.{key} is a relative path ({text}); give it from / or from ~"
+                )
+            tls[key] = str(_host_path(f"server.{key}", value, home))
+        network["tls"] = tls
+    if "redirect_http" in section:
+        network["redirect_http"] = _boolean("server.redirect_http", section["redirect_http"])
+    if section.get("listen_address") is not None:
+        try:
+            ipaddress.ip_address(str(section["listen_address"]))
+        except ValueError:
+            raise AnswersRefused(
+                f"server.listen_address {section['listen_address']!r} is one IP address of the "
+                "server, for example 192.0.2.10"
+            ) from None
+        network["listen_address"] = str(section["listen_address"])
+    found: dict[str, Any] = {"network": network}
+    if section.get("ingest"):
+        found["ingest"] = _host_path("server.ingest", section["ingest"], home)
+    return found
+
+
 def load_answers(
     raw: Mapping[str, Any] | Path, *, packs: Iterable[str], home: Path | None = None
 ) -> Answers:
@@ -243,6 +335,28 @@ def load_answers(
             "managed services; lite runs its own"
         )
 
+    if "sign_in" in raw:
+        raise AnswersRefused(f"sign_in is not built yet: {_NOT_YET['sign_in']}. Leave it out")
+    server: dict[str, Any] = {}
+    if raw.get("server") is not None:
+        server = _server(raw["server"], str(mode), home)
+        if raw.get("cloud"):
+            raise AnswersRefused(
+                "build a server with --cloud (the cloud: settings), or install onto one you have "
+                "with server:, not both"
+            )
+        if external:
+            raise AnswersRefused(
+                "server: is Small on a server of your own: self-contained means every store in a "
+                "container. For a cloud's managed services (external:), leave out server:"
+            )
+    admin_email = raw.get("admin_email")
+    if admin_email is not None and not server:
+        raise AnswersRefused(
+            "admin_email is for Small on a server of your own (with server:); a cloud's is "
+            "cloud.admin_email"
+        )
+
     cluster = {k: str(v) for k, v in sections["cluster"].items()}
     if cluster and mode != "enterprise":
         raise AnswersRefused(f"cluster settings are for the enterprise mode, not {mode}")
@@ -282,7 +396,9 @@ def load_answers(
         dashboards=_boolean(
             "components.dashboards", sections["components"].get("dashboards", True)
         ),
-        ingest=_host_path("folders.ingest", folders["ingest"], home)
+        ingest=server["ingest"]
+        if "ingest" in server
+        else _host_path("folders.ingest", folders["ingest"], home)
         if "ingest" in folders
         else home / "OspreyFlow" / "ingest",
         tiles=_host_path("folders.tiles", folders["tiles"], home)
@@ -303,6 +419,8 @@ def load_answers(
         appearance=appearance,
         demo_accounts=demo_accounts,
         case_domains=starter.domain.case_domains if starter is not None else None,
+        server=server.get("network", {}),
+        admin_email=str(admin_email) if admin_email is not None else None,
     )
 
 
@@ -348,4 +466,7 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         network["public_origin"] = LITE_ORIGIN
     elif answers.cloud.get("domain"):
         network["public_origin"] = f"https://{answers.cloud['domain']}"
+    if answers.server:
+        # ADR-114 Amendment 33: the server's address, and its own certificate's paths.
+        network.update(copy.deepcopy(answers.server))
     return config

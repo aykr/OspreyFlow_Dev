@@ -41,7 +41,11 @@ from harness.realm import (
     superset_client,
 )
 from harness.render import DEFAULT_CONFIG_PATH, DEFAULT_OUT_ROOT, load_config
-from harness.site import answer_localhost_with_loopback, deployment_origins
+from harness.site import (
+    answer_localhost_with_loopback,
+    answer_the_deployment_here,
+    deployment_origins,
+)
 from schemas.deployment import OspreyConfig, generated_folder
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
@@ -297,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
 
     env_path = deployment_env_path(args.out_root, args.profile, load_config(args.config))
     answer_localhost_with_loopback()
+    # ADR-114 Amendment 33 decision 2: a server's own names, here, with its certificate trusted.
+    answer_the_deployment_here(load_config(args.config))
     if args.no_demo_accounts:
         try:
             lines = _identity_only(

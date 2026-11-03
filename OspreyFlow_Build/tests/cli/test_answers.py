@@ -216,3 +216,104 @@ def test_the_whole_internet_or_a_non_address_is_refused_as_an_api_address(tmp_pa
 def test_api_addresses_are_for_an_enterprise_install(tmp_path: Path) -> None:
     with pytest.raises(AnswersRefused, match="api_cidrs is for the enterprise mode"):
         load_answers(_cloud("small", ["203.0.113.0/24"]), packs=PACKS, home=tmp_path)
+
+
+# ---- ADR-114 Amendment 33 (drop 1): Small on a server of your own, `server:` ---------------------
+
+SERVER = {
+    "address": "https://osprey.example.internal",
+    "certificate": "/etc/ospreyflow/tls/osprey.crt",
+    "key": "/etc/ospreyflow/tls/osprey.key",
+    "ca": "/etc/ospreyflow/tls/org-root.pem",
+    "ingest": "/srv/ospreyflow/ingest",
+}
+
+
+def test_server_and_cloud_together_are_refused_in_words(tmp_path: Path) -> None:
+    """Decision 1: a server is built with `--cloud`, or one you have is installed onto with
+    `server:`, never both."""
+    raw = {"mode": "small", "server": SERVER,
+           "cloud": {"provider": "aws", "region": "eu-west-2", "domain": "osprey.example.org"}}  # fmt: skip
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers(raw, packs=PACKS, home=tmp_path)
+    assert "--cloud" in str(refused.value) and "server:" in str(refused.value)
+    assert "not both" in str(refused.value)
+
+
+def test_server_with_external_is_refused_in_words(tmp_path: Path) -> None:
+    raw = {"mode": "small", "server": SERVER,
+           "external": {"postgres": {"host": "osprey-db.example.org"}}}  # fmt: skip
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers(raw, packs=PACKS, home=tmp_path)
+    words = str(refused.value)
+    assert "self-contained" in words and "every store in a container" in words
+    assert "leave out server:" in words
+
+
+@pytest.mark.parametrize("mode", ["lite", "enterprise"])
+def test_a_server_section_is_refused_for_lite_and_enterprise(tmp_path: Path, mode: str) -> None:
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": mode, "server": SERVER}, packs=PACKS, home=tmp_path)
+    assert "server:" in str(refused.value) and "small" in str(refused.value)
+    assert mode in str(refused.value)
+
+
+def test_server_answers_make_a_small_osprey_yaml_with_its_address_and_certificate_paths(
+    tmp_path: Path,
+) -> None:
+    config = _config({"mode": "small", "server": {**SERVER, "redirect_http": True},
+                      "components": {"dashboards": False}}, tmp_path)  # fmt: skip
+    assert config.profile.value == "small"
+    assert config.network.public_origin == "https://osprey.example.internal"
+    assert config.network.tls is not None
+    assert config.network.tls.certificate == SERVER["certificate"]
+    assert config.network.tls.key == SERVER["key"]
+    assert config.network.tls.ca == SERVER["ca"]
+    assert config.network.redirect_http is True
+    assert config.components.storage.ingest == SERVER["ingest"]
+    assert not config.external.any
+    assert config.reporting.superset is False
+    # Without a CA and without the redirect, neither is written.
+    bare = {k: v for k, v in SERVER.items() if k != "ca"}
+    plain = _config({"mode": "small", "server": bare}, tmp_path)
+    assert plain.network.tls is not None and plain.network.tls.ca is None
+    assert plain.network.redirect_http is False
+
+
+@pytest.mark.parametrize(
+    ("server", "words"),
+    [
+        ({"certificate": "/c.pem", "key": "/k.pem"}, "server.address"),
+        ({"address": "http://osprey.example.internal"}, "https://"),
+        ({"address": "https://osprey.example.internal/glass"}, "no path"),
+        ({"address": "https://osprey.example.internal", "certificate": "/c.pem"}, "both"),
+        ({"address": "https://osprey.example.internal", "certificate": "tls/c.pem",
+          "key": "/k.pem"}, "relative"),  # fmt: skip
+        ({"address": "https://osprey.example.internal", "listen_address": "not-an-ip"},
+         "listen_address"),
+        ({"address": "https://osprey.example.internal", "memory_gib": "auto"}, "not built yet"),
+        ({"address": "https://osprey.example.internal", "backups": "/srv/b"}, "not built yet"),
+        ({"address": "https://osprey.example.internal", "colour": "red"}, "colour"),
+    ],
+)
+def test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting(
+    tmp_path: Path, server: dict[str, object], words: str
+) -> None:
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "small", "server": server}, packs=PACKS, home=tmp_path)
+    assert words in str(refused.value)
+
+
+def test_organisation_sign_in_is_refused_until_it_is_built(tmp_path: Path) -> None:
+    """Drop 1 builds no broker (Amendment 33 unit 7 is drop 2): a `sign_in:` section is refused in
+    words rather than silently ignored, and the first administrator's email is taken."""
+    raw = {"mode": "small", "server": SERVER,
+           "sign_in": {"organisation": {"alias": "org"}}}  # fmt: skip
+    with pytest.raises(AnswersRefused, match="not built yet"):
+        load_answers(raw, packs=PACKS, home=tmp_path)
+    answers = load_answers({"mode": "small", "server": SERVER, "admin_email": "ops@example.internal"},
+                           packs=PACKS, home=tmp_path)  # fmt: skip
+    assert answers.admin_email == "ops@example.internal"
+    with pytest.raises(AnswersRefused, match="admin_email"):
+        load_answers({"mode": "lite", "admin_email": "ops@example.internal"}, packs=PACKS,
+                     home=tmp_path)  # fmt: skip

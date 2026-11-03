@@ -1106,7 +1106,13 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             "ollama-models": {"driver": "local"},
             **({"whisper-models": {"driver": "local"}} if "whisper" in services else {}),
             **({"objectstore-data": {"driver": "local"}} if "objectstore" in services else {}),
-            **({"proxy-data": {"driver": "local"}} if sites(config).scheme == "https" else {}),
+            # ADR-114 Amendment 33 decision 3: with the organisation's certificate nothing is
+            # obtained, so there is nothing for Caddy to keep.
+            **(
+                {"proxy-data": {"driver": "local"}}
+                if sites(config).scheme == "https" and config.network.tls is None
+                else {}
+            ),
             **({"clickhouse-data": {"driver": "local"}} if _uses_clickhouse(config) else {}),
         },
         # ADR-114 Amendment 7: `osprey` has no route out; `egress` only for what needs one.
