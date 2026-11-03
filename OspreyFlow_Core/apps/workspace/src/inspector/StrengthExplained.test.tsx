@@ -64,9 +64,9 @@ describe("StrengthExplained", () => {
     const sent = serve();
     render(<StrengthExplained apiBaseUrl="http://api.invalid" bearerToken="t" investigationId="c1" edge={EDGE} />);
     const lines = await screen.findByRole("list", { name: "What this link's strength rests on" });
-    expect(lines.textContent).toContain("Seen 6 times; 12 is heavy for “SHARED_CELL_WITH”.");
+    expect(lines.textContent).toContain("Seen 6 times; 12 is heavy for “Shared cell with”.");
     expect(lines.textContent).toContain("Last seen on 30 April 2026.");
-    expect(lines.textContent).toContain("weights version 3, the rule for “SHARED_CELL_WITH”");
+    expect(lines.textContent).toContain("weights version 3, the rule for “Shared cell with”");
     expect(lines.textContent).toContain("Direct link (shipped with OspreyFlow), a direct link");
     expect(lines.textContent).toContain("because an Incident you can see evidences it");
     const shared = await screen.findByRole("list", { name: "Shared attributes, rarest first" });

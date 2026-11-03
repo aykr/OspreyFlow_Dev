@@ -3630,6 +3630,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             valueIcons={legendValueIcons}
             onToggleLink={toggleLinkType}
             strength={strengthLegend}
+            edgeTypes={edgeTypes}
           />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>

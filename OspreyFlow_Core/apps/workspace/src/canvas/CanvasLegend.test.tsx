@@ -221,6 +221,33 @@ describe("CanvasLegend's connection strength", () => {
     expect(getByText("Shared-attribute rarity is worked out over what you may see.")).toBeTruthy();
   });
 
+  // Build order step 15 (the 2 November rehearsal): an influencer naming a link type with no link in
+  // view (the shipped "Direct link" names calls and money transfers) showed the raw type id,
+  // COMMUNICATED_WITH, TRANSACTED, beside the labels. A type is named by its label, as everywhere else.
+  it("names every link type by its label, also one with no link in view", () => {
+    const direct = {
+      layer: "file" as const,
+      version: null,
+      influencer: {
+        id: "direct", label: "Direct link", link_types: ["COMMUNICATED_WITH", "TRANSACTED", "VISITED"],
+        change: "add" as const, size: 0.1348, trigger: null,
+      },
+    }; // prettier-ignore
+    const { getByRole, getByText, container } = render(
+      <CanvasLegend
+        types={types}
+        links={links}
+        edgeTypes={[{ name: "COMMUNICATED_WITH", label: "Called or messaged" }]}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        strength={{ ...strength, influencers: [direct], direct_link_types: ["COMMUNICATED_WITH", "TRANSACTED", "VISITED"] } as any}
+      />,
+    );
+    const row = getByRole("list", { name: "Strength influencers" }).textContent ?? "";
+    expect(row).toContain("Called or messaged, Transacted and Visited: adds 0.13");
+    expect(getByText(/Direct links: Called or messaged, Transacted and Visited\./)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/COMMUNICATED_WITH|TRANSACTED|ASSOCIATE_OF/);
+  });
+
   it("shows no strength part without a legend", () => {
     const { queryByRole } = render(<CanvasLegend types={types} links={links} />);
     expect(queryByRole("list", { name: "Strength influencers" })).toBeNull();
