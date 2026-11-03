@@ -4,8 +4,8 @@ OspreyFlow is an open-source intelligence mapping platform for crime analysis, a
 fraud detection, and event monitoring and alerting.
 
 For whoever installs OspreyFlow and looks after it: **Lite** (one computer), **Small** (one cloud
-server on the cloud's managed services) and **Enterprise** (a Kubernetes cluster on the cloud's
-managed services). It describes what is built, and says plainly where something is not yet.
+server on the cloud's managed services, or one server of your own with every store on it) and
+**Enterprise** (a Kubernetes cluster on the cloud's managed services). It describes what is built, and says plainly where something is not yet.
 
 The other guides in this folder are the [user guide](user-guide.md), for analysts, and the
 [developer guide](developer-guide.md), for data engineers. Appendix A, every `osprey.yaml` setting,
@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.28** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
+**Version 1.29** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.29 | 2026-11-03 | Small on your own server (ADR-114 Amendment 33, first part): §1 a fourth column and the organisation's own certificate under "HTTP or HTTPS"; new §2.2a, its prerequisites; §2.4 `ospreyflow doctor --mode small --config install.yaml`; new §5a, installing it — the answers file's `server:`, the three names and the one-label wildcard, what is checked before anything starts, port 443 alone, the first administrator, renewing the certificate, and what is not built yet; §5.2's refusal names all three ways; §7 `server`, `admin_email`, `sign_in`; §8.1 what it publishes; §16 the certificate's refusals and a network that cannot connect. Appendix A: `network.tls`, `network.redirect_http`, `network.listen_address`. |
 | 1.28 | 2026-11-03 | §8: `ospreyflow repair-sign-in` also sets the Conduit's own client secret again, so a deployment whose stores were wiped can act for its people again. §16: rules that say "the rule's deployer could not be resolved", a hotlist that stops, and a list refresh that re-screens no one. |
 | 1.27 | 2026-11-03 | "How OspreyFlow is built": a level 0 diagram (who uses OspreyFlow and what it talks to), a level 1 diagram (every component with the technology it is built on, and what each mode runs on), and a new section, "The interfaces, and what crosses each", giving each interface's direction, protocol, what crosses it and what guards it. |
 | 1.26 | 2026-11-02 | Checked against the code end to end (build order step 10). §10: Ask to search carries the case's handling and datasets, so the analyst's engine choice applies to it as to Ask the case; it no longer always runs on the local engine. |
@@ -128,17 +129,18 @@ language, a source system's identifier or an unfiltered count reach the Glass.
 
 ## 1. Choosing a mode
 
-| | Lite | Small | Enterprise |
-| --- | --- | --- | --- |
-| Where it runs | One computer (a laptop or a workstation) | One cloud server (AWS or Azure) | A Kubernetes cluster (EKS or AKS), three or more nodes |
-| Who looks after the data | You, with `ospreyflow backup` | The cloud: managed PostgreSQL, S3 or Blob, daily backups | The cloud, for its managed services; the graph store in the cluster is not yet backed up (section 13) |
-| Its address | `http://ospreyflow.localhost` | `https://<your domain>` | `https://<your domain>` |
-| First sign-in | Demo accounts, passwords in `deployment.env` | A first administrator, by a one-time code | A first administrator, by a one-time code |
-| Built with | `ospreyflow install --mode lite` | `ospreyflow install --mode small --cloud aws\|azure`, from your own computer | `ospreyflow install --mode enterprise --cloud aws\|azure`, from your own computer, or onto a cluster you already have |
+| | Lite | Small | Small, on your own server | Enterprise |
+| --- | --- | --- | --- | --- |
+| Where it runs | One computer (a laptop or a workstation) | One cloud server (AWS or Azure) | One Linux server you provide, inside your own network | A Kubernetes cluster (EKS or AKS), three or more nodes |
+| Who looks after the data | You, with `ospreyflow backup` | The cloud: managed PostgreSQL, S3 or Blob, daily backups | You: every store is in a container on the server's disk (section 5a) | The cloud, for its managed services; the graph store in the cluster is not yet backed up (section 13) |
+| Its address | `http://ospreyflow.localhost` | `https://<your domain>` | `https://<a name in your network>`, with your organisation's certificate | `https://<your domain>` |
+| First sign-in | Demo accounts, passwords in `deployment.env` | A first administrator, by a one-time code | A first administrator, by a one-time code | A first administrator, by a one-time code |
+| Built with | `ospreyflow install --mode lite` | `ospreyflow install --mode small --cloud aws\|azure`, from your own computer | `ospreyflow install --mode small --config install.yaml` with a `server:` section, on the server | `ospreyflow install --mode enterprise --cloud aws\|azure`, from your own computer, or onto a cluster you already have |
 
 All three run the same product: the same containers, the same Glass, Ingest Studio and Admin area.
 Small swaps the deployment's own PostgreSQL and object store for the cloud's, and gets a real
-domain with HTTPS. Enterprise runs the same services as replicas across the cluster's nodes, the
+domain with HTTPS. Small on your own server keeps every store in a container, as Lite does, and is
+reached over HTTPS with your organisation's own certificate, on port 443 alone. Enterprise runs the same services as replicas across the cluster's nodes, the
 graph store and the analytics database as clusters of their own.
 
 ### HTTP or HTTPS
@@ -161,6 +163,10 @@ graph store and the analytics database as clusters of their own.
   open only for the certificate's challenge and to send a request for your domain on to HTTPS
   (443); any other request on port 80 gets "not found", apart from the proxy's own health check. On
   Enterprise, the cluster's load balancer passes 80 and 443 to the proxy.
+- **Small on your own server serves HTTPS with your organisation's own certificate** (section 5a):
+  the front proxy is given the certificate and key, obtains nothing and calls nothing; it publishes
+  port 443 alone (80 only if you ask, and then only to send people to 443). The certificate is
+  checked before anything starts.
 - **The managed services behind Small and Enterprise are reached over TLS:** PostgreSQL always
   (`sslmode` is `require` at least), the object store always over HTTPS, and the cache and the
   mail server over TLS unless you turn it off (`external.*` and `mail.starttls`, Appendix A).
@@ -331,6 +337,24 @@ On your own computer, from which you build the server:
 
 The server itself needs nothing from you: it installs Docker and OspreyFlow on its first boot.
 
+### 2.2a Small on your own server
+
+On the server itself (section 5a):
+
+- **Linux on `amd64`** (the releases are built for `linux/amd64` only), with at least **32 GB of
+  memory** (30 GiB as Docker reports it) and **60 GB free where Docker keeps its data** — put Docker's
+  data root on the server's data disk;
+- **Docker Engine with the Compose v2 plugin**, enabled at boot (`sudo systemctl enable --now
+  docker`);
+- **Git**, **uv** and **Python 3.12** (Ubuntu 24.04's own; or `uv python install 3.12`);
+- the **clock synchronised** (`timedatectl`), since sign-in checks tokens against it;
+- **port 443 free** on every interface;
+- a **service account** in the `docker` group to install and run it as (not root);
+- from the organisation: the **three names** in its DNS, pointing at the server, and a
+  **certificate** naming them, with its unencrypted key (section 5a);
+- **outbound access** to the releases and their images, or the organisation's mirror of them;
+- recommended: `vm.max_map_count` at least 262144 (for OpenSearch).
+
 ### 2.3 Enterprise
 
 On your own computer:
@@ -350,6 +374,9 @@ it.
 `ospreyflow doctor --mode lite` checks, in the order to fix them: Docker installed, Docker running,
 Compose v2, memory, free disk, Git, uv and port 80. `ospreyflow doctor --mode small --cloud aws`
 (or `azure`) checks Git, uv, OpenTofu and the cloud's command line. `ospreyflow doctor --mode
+small --config install.yaml`, with a `server:` section in the answers, checks the server you are on
+instead (section 5a): Docker, memory, disk, 443, the certificate, the clock and the rest; a warning
+(⚠) says what to change but does not stop an install. `ospreyflow doctor --mode
 enterprise --cloud aws` adds kubectl and Helm (and on Azure kubelogin); without `--cloud` it checks
 kubectl, Helm and that a cluster answers. Each line is a tick, or a cross
 with what to do about it; the exit code is 1 when anything is missing. `install` runs the same
@@ -471,8 +498,90 @@ The server's first boot runs, in effect,
 `ospreyflow install --mode small --config /etc/ospreyflow/install.yaml --yes --force
 --first-admin-code-file <file>` with the passwords in its environment. Run without
 `--first-admin-code-file`, it prints the first administrator's code once instead. `install --mode
-small` without `--cloud` and without the managed services in its answers is refused, saying which
-of the two you meant.
+small` with none of `--cloud`, the managed services in its answers, or a `server:` section (section
+5a) is refused, naming all three.
+
+## 5a. Installing Small on your own server
+
+For an organisation that gives you one Linux server inside its own network, with its own
+certificate: every store runs in a container on that server (no managed services), people reach it
+over HTTPS on port 443 with the organisation's certificate, and nothing else is published. Nothing
+is built in a cloud account. The decision is ADR-114 Amendment 33.
+
+**On the server**, as the service account that will run it (not root; it must be in the `docker`
+group, which is root-equivalent, so it is an administrator's account):
+
+```
+git clone https://github.com/aykr/OspreyFlow.git /opt/ospreyflow
+cd /opt/ospreyflow && sh install.sh
+ospreyflow doctor --mode small --config install.yaml
+ospreyflow install --mode small --config install.yaml --force
+```
+
+(`--force`, because the answers make an `osprey.yaml` that differs from the checkout's own.) The
+server needs outbound access to the releases and their images (or the organisation's mirror of them) for the install;
+installing with no outbound access at all is not built. `install.yaml`:
+
+```yaml
+mode: small
+server:
+  address: https://osprey.example.internal       # https:// only; the names below derive from it
+  certificate: /etc/ospreyflow/tls/osprey.crt     # PEM: the server certificate, then its intermediates
+  key: /etc/ospreyflow/tls/osprey.key             # PEM, unencrypted; owned by the service account, mode 600
+  ca: /etc/ospreyflow/tls/org-root.pem            # optional: the organisation's root
+  ingest: /srv/ospreyflow/ingest                  # where the CSV exports are put
+  redirect_http: false                            # true also publishes 80, only to send people to 443
+  # listen_address: 192.0.2.10                    # optional: one interface of a server with several
+admin_email: ops@example.internal                 # optional: the first administrator's email
+components: {dashboards: false}
+```
+
+**The three names and the certificate.** The deployment answers at `<host>`, `id.<host>` (sign-in)
+and `bi.<host>` (dashboards, when they are on), all on the one address. Ask the organisation's DNS
+to point each at the server, and its CA for a certificate naming them as subject alternative names
+— `osprey.example.internal`, `id.osprey.example.internal` and `bi.osprey.example.internal`, or
+`osprey.example.internal` and `*.osprey.example.internal`. **A wildcard covers one label only:**
+`*.example.internal` covers `osprey.example.internal` but not `id.osprey.example.internal`, so it is
+not enough. The certificate's common name is not read, as browsers do not read it.
+
+**What is checked before anything starts.** `doctor`, `install` and every `apply` check the
+certificate and key and refuse, in words and with nothing changed: a file that cannot be read or is
+not PEM; a key encrypted with a passphrase; a key that does not match the certificate; a
+certificate that has expired or is not yet valid; a name of the deployment's it does not cover;
+and, with `ca`, a chain that does not reach that root (put the intermediates after the server
+certificate). Fewer than 30 days left is a warning. `doctor --mode small --config install.yaml`
+also checks: Docker installed, running and started at boot; Compose v2; an `amd64` server (the
+releases are built for `linux/amd64` only); 30 GiB of memory as Docker reports it (a 32 GB server);
+60 GB free where Docker keeps its data; Git, uv and Python 3.12; the clock synchronised (sign-in
+tokens are checked against it); port 443 free on **every** interface (and 80 with `redirect_http`);
+port 2480 free; and warns for `vm.max_map_count` below 262144, running as root, and names that do
+not yet resolve from the server.
+
+**What it publishes.** Port 443 (the address's own port), on every interface or on `listen_address`;
+port 80 only with `redirect_http: true`, and then it only redirects; the graph store's door, 2480,
+on the server itself (`127.0.0.1`), as is the Conduit's with `network.expose_conduit`. The front
+proxy serves the organisation's certificate, read-only from where it is — the key is never copied
+into the deployment's folder — and obtains no certificate, follows no redirect of its own and fetches
+nothing from the CA. It runs as the account that owns the key, so the key stays `600`.
+
+**Who may reach it** is set in front of the server: the organisation's firewall or security group,
+or the `DOCKER-USER` chain. A port Docker publishes is **not** filtered by `ufw`'s rules.
+
+**The first administrator.** The install makes an account `admin` with the Admin role and the
+highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
+accounts. At their first sign-in they choose their own password, then invite everyone else from the
+Admin area (section 9). The install's own tools reach the three names on the server itself and
+trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
+
+**Renewing the certificate.** Replace the two files (same paths), then run `ospreyflow apply`. It
+checks the new certificate, and only the front proxy is started again.
+
+**Not built yet** (ADR-114 Amendment 33's next drop): sign-in through the organisation's own
+identity provider (`sign_in:` in the answers file is refused until then, and people sign in with
+accounts an administrator makes); the stores sized to the server's memory (`server.memory_gib`);
+backups to a folder of their own (`server.backups`), and `ospreyflow backup` and `update` proven on
+this kind of Small — until then, rely on the organisation's snapshots of the server's disks. The
+guided page (`--gui`) does not install this kind of Small.
 
 ## 6. Installing Enterprise
 
@@ -558,6 +667,9 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `cloud.provider`, `cloud.region`, `cloud.domain`, `cloud.size`, `cloud.dns_zone`, `cloud.admin_email` | Small (section 5) and Enterprise (section 6) |
 | `cloud.api_cidrs` | Enterprise with `--cloud`: the addresses the cluster's API answers (section 6) |
 | `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
+| `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.backups` and `server.memory_gib` are refused as not built yet |
+| `admin_email` | Small on your own server: the first administrator's email |
+| `sign_in` | Sign-in through the organisation's own identity provider: **not built yet**, and refused, so nothing is silently ignored |
 | `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
 | `config` | Use this `osprey.yaml` exactly as it is, instead of `components`, `folders` and `models` |
 | `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
@@ -566,7 +678,8 @@ Every question `install` asks can be answered in this file; unknown settings are
 
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
-Lite and `https://<domain>` for Small and Enterprise.
+Lite, `https://<domain>` for Small and Enterprise, and `server.address` for Small on your own
+server (with `server.certificate`, `key` and `ca` as `network.tls`).
 
 ## 8. Running it
 
@@ -607,7 +720,9 @@ One front proxy is the deployment's only door. Under the address in `network.pub
 Lite publishes port 80 (or its own address's port) and `2480` for the graph store's own tools, both
 on this computer only (`127.0.0.1`): other machines cannot reach a Lite deployment. Small publishes
 80 (for the certificate and the move to HTTPS) and 443 on every network interface, because other
-people reach it. Which of them is plain HTTP and which HTTPS: the note **HTTP or HTTPS** in
+people reach it. Small on your own server publishes 443 alone (80 only with
+`redirect_http`, and then only to redirect), and 2480 and the Conduit's door on the server only
+(section 5a). Which of them is plain HTTP and which HTTPS: the note **HTTP or HTTPS** in
 section 1. The Conduit's own port is published only with `network.expose_conduit: true` — on Lite,
 on this computer only.
 
@@ -1099,6 +1214,8 @@ Admin → Schedules and runs lists every one.
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
 | Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again |
+| `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. Then run the command again |
+| People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |
@@ -1112,7 +1229,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 <!-- options:begin -->
 | Option | Value | Default | What it does |
 | --- | --- | --- | --- |
-| `profile` | `local-lite` \| `small` \| `cluster` | `local-lite` | Which kind of deployment: one machine (local-lite), a cloud server on managed services (small), or a cluster. |
+| `profile` | `local-lite` \| `small` \| `cluster` | `local-lite` | Which kind of deployment: one machine (local-lite), a cloud server on managed services or a server of your own with every store in a container (small), or a cluster. |
 | `components` | section | — | Which stores the deployment runs, and where their data lives. |
 | `components.graph_store` | `arcadedb` \| `janusgraph` | `arcadedb` | The graph store. |
 | `components.analytics_engine` | `duckdb` \| `clickhouse` | `duckdb` | Where events are counted: DuckDB inside the Conduit, or ClickHouse shared by several. |
@@ -1166,6 +1283,12 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `network` | section | — | The address the deployment answers at, and what it publishes. |
 | `network.expose_conduit` | bool | false | Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass. |
 | `network.public_origin` | str | `http://ospreyflow.localhost` | The origin a browser uses to reach the Glass; the identity provider is `id.` and the dashboards `bi.` in front of the same host, with the same scheme and port, and the front proxy publishes that port. `06_DECISIONS.md` ADR-050 objection 2's resolution: the identity-provider realm is rendered from this value at apply time and the Glass's public client is registered with an exact redirect URI and post-logout URI derived from it — no wildcards. Change this to move the deployment to another name or port; nothing else needs to agree with it. |
+| `network.tls` | section or none | none | Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33). |
+| `network.tls.certificate` | str | required | The server certificate, then its intermediates, in PEM: an absolute path. |
+| `network.tls.key` | str | required | The certificate's private key in PEM, unencrypted: an absolute path. Owned by the installing account, mode 600; the front proxy runs as that account to read it. |
+| `network.tls.ca` | str or none | none | Optional: the organisation's root certificate (PEM), an absolute path. With it, the certificate's chain is checked to reach it, and the host's own tools trust it. |
+| `network.redirect_http` | bool | false | Small on a server of your own, with network.tls only: also publish port 80, and only to send people to the https:// address. Default: false — port 443 alone. |
+| `network.listen_address` | str or none | none | Small on a server of your own, with network.tls only: the one address of the server the front proxy publishes on. Default: none — every interface. |
 | `map` | section or none | none | The basemaps the map offers. |
 | `map.default` | str | required | The provider the map opens on, by its id |
 | `map.providers` | list of section | required | One basemap. |

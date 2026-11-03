@@ -15,7 +15,7 @@ someone will improvise one.
 | Profile | Runs on | Graph | OLAP | Models | Orchestration |
 | --- | --- | --- | --- | --- | --- |
 | `local-lite` | One laptop, 16 GB | ArcadeDB | DuckDB | Ollama, CPU or one consumer GPU | Docker Compose |
-| `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a) | ArcadeDB | DuckDB | Ollama | Docker Compose |
+| `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a), or one server of your own with every store in a container (ADR-114 Amendment 33, §3a.1) | ArcadeDB | DuckDB | Ollama | Docker Compose |
 | `cluster` | Kubernetes — EKS or AKS (ADR-114 decision 9, §3b) | ArcadeDB, three Raft replicas | ClickHouse, a replicated pair with Keeper | Ollama in the cluster for now — decision 11's vLLM on a GPU pool is not built; a client's provider through LiteLLM | Kubernetes, from the Helm chart |
 
 The same container images run in all three. Only configuration differs. That is the
@@ -834,6 +834,29 @@ external:
   backups (AWS Backup, RDS snapshots, Azure Backup) protect it, and a dump from inside the server
   would be a second, unscheduled copy no one restores from.
 
+### 3a.1 Small on a server of your own (ADR-114 Amendment 33)
+
+- **Chosen by `server:` in the answers file**, run on the server: `ospreyflow install --mode small
+  --config install.yaml`, no `--cloud`, no `external:`. Profile `small`; every store in a container,
+  as Lite renders them. `server:` with `cloud:` or `external:`, or on Lite or Enterprise, is refused.
+- **The organisation's own certificate** (`network.tls`: `certificate`, `key`, optional `ca`,
+  absolute paths): the front proxy mounts the two files read-only at `/certs`, runs as the uid and
+  gid that own the key (written into `deployment.env` by `apply` as `OSPREY_PROXY_UID`/`GID`), with
+  `auto_https off` and `ocsp_stapling off`, listening on 8443 (and 8080 for health and the optional
+  redirect); no `proxy-data` volume. `harness/tls_check.py` checks the pair before anything starts,
+  on `doctor`, `install` and every `apply`. A renewed certificate is the two files replaced and
+  `ospreyflow apply`: its fingerprint is in the deployment's `tls-fingerprint`, which only the proxy
+  mounts, so only the proxy restarts.
+- **What it publishes:** the origin's port (443) on every interface, or on `network.listen_address`;
+  80 only with `network.redirect_http`, and then only a 308 to each name's `https://` address; the
+  graph store's door and the Conduit's opt-in door on `127.0.0.1`.
+- **`doctor --mode small --config install.yaml`** checks the server itself (Amendment 33 decision 8):
+  Docker running and enabled at boot, Compose v2, `amd64`, 30 GiB, disk where Docker keeps its data,
+  Git, uv, Python 3.12, the clock, 443 free on every interface (a wildcard bind), 2480, the
+  certificate; warns for `vm.max_map_count`, root, unresolved names.
+- **Not yet** (the amendment's second drop): organisation sign-in, memory sizing, backups to
+  `server.backups` and `update` proven on it. A first install with no outbound access is deferred.
+
 ## 3b. Enterprise on Kubernetes (ADR-114 decision 9, Amendments 10, 12 and 13)
 
 `profile: cluster` renders no compose file. `harness.render` writes `deploy/generated/cluster/`:
@@ -1102,6 +1125,9 @@ build stands against the table above:
     `test_preflight.py::test_lites_loopback_ports_from_the_real_render_are_each_checked`.
   - **Small and Enterprise keep publishing 80 and 443 on every interface**, because other people
     reach them (`test_front_proxy.py::test_small_still_publishes_80_and_443_on_every_interface`).
+  - **Small on a server of your own (ADR-114 Amendment 33) publishes 443 alone** — 80 only to
+    redirect, when asked — and its graph and Conduit doors on `127.0.0.1`
+    (`test_front_proxy.py::test_a_small_with_its_own_certificate_publishes_443_alone_on_every_interface`).
   - **Small and Enterprise are HTTPS.** `osprey.yaml` refuses, in words, a `small` or `cluster`
     deployment whose `network.public_origin` is not `https://` — the Lite default included, so a
     cloud profile names its address — and `ospreyflow apply`, the guided page and the Set-up

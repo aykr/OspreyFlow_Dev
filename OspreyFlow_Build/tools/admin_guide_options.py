@@ -94,6 +94,7 @@ SECTIONS = {
     "cluster": "A Kubernetes deployment: its namespace, storage classes and machines.",
     "cluster.hosts": "One machine.",
     "network": "The address the deployment answers at, and what it publishes.",
+    "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
     "map": "The basemaps the map offers.",
     "map.providers": "One basemap.",
     "map.providers.licence": "The basemap's licence.",

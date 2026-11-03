@@ -967,7 +967,8 @@ class OspreyConfig(BaseModel):
         default=Profile.LOCAL_LITE,
         description=(
             "Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud "
-            "server on managed services (small), or a cluster."
+            "server on managed services or a server of your own with every store in a container "
+            "(small), or a cluster."
         ),
     )
     components: ComponentsConfig = Field(default_factory=ComponentsConfig)

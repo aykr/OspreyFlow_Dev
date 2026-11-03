@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "7ca69a684956a5b4a3eba117b29ca76999de8928d28972893c4bdd9612186115",
+    "body": "6c55024d3b8c7fc888b0403fa450b2892fb40d62c16bb6ace0723382da4bc109",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "9a572b0e13c56ad8ec4ee0334dcf04162d7a67f4f129b4c6d6cfa871c324d71b",
-    "source": "0c055eee50fd307526f0254d4c02e418fe28fae97d11d629aff3f84c496cb180",
-    "version": "1.28"
+    "pdf": "c3a25b9d741a113e4d06bdfcf1eac1aaa801ebb2872a707e5dbe38283f0abaf7",
+    "source": "3f351520e39c8f8b88c357cd2238961e56319df915983eec3fcafbd819e5aaf4",
+    "version": "1.29"
   },
   "developer-guide.md": {
     "body": "b358f83033422f43717b0148b857c056f2cd86d88822bd673620d7dd4d7da3a4",

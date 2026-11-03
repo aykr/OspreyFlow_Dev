@@ -1,7 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud server on managed services (small), or a cluster.
+ * Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud server on managed services or a server of your own with every store in a container (small), or a cluster.
  */
 export type Profile = "local-lite" | "small" | "cluster";
 /**

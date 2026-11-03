@@ -81,6 +81,7 @@ architecture each reader needs.
 | --- | --- |
 | **Lite** — one machine | Docker (Docker Desktop on Windows with the WSL 2 back end, and on macOS; Docker Engine with Compose v2 on Linux), set to start when you sign in; 16 GB of memory for Docker (32 GB is comfortable); 60 GB of free disk plus the demo packs you choose; Git; internet for the first install |
 | **Small** — one VM in your cloud | an AWS or Azure account with the permissions the install lists; OpenTofu; that cloud's command line, signed in; a DNS name you control |
+| **Small on your own server** — one Linux VM in your network | the server: `amd64`, 32 GB of memory, 60 GB free where Docker keeps its data, Docker Engine with Compose v2 enabled at boot, Git, uv, Python 3.12, a synchronised clock, port 443 free; from your organisation: three names in its DNS and a certificate naming them, with its key; outbound access to the releases |
 | **Enterprise** — Kubernetes | to build the cluster: an AWS or Azure account, OpenTofu, that cloud's command line signed in (and `kubelogin` on Azure), kubectl, Helm, Git and uv, the addresses you work from, and a DNS name you control; or an EKS or AKS cluster `kubectl` already reaches, with the cloud's managed PostgreSQL, Valkey and object store and a storage class several pods can share (EFS on AWS, Azure Files on Azure). The models run on ordinary nodes for now |
 
 `ospreyflow doctor` checks these for the mode you choose and says what to fix.
@@ -120,7 +121,11 @@ section 11 has the details.
 
 **Small** is built from your own machine: `ospreyflow install --mode small --cloud aws` (or
 `azure`) creates the server and the cloud's managed database and storage with OpenTofu, and the
-server installs OspreyFlow on its first boot. **Enterprise** is built the same way:
+server installs OspreyFlow on its first boot. **Small on your own server** is installed on the
+server itself, with every store in a container and your organisation's own certificate:
+`ospreyflow doctor --mode small --config install.yaml`, then `ospreyflow install --mode small
+--config install.yaml --force`, with a `server:` section naming the address and the certificate's
+files (the administration guide, section 5a). It publishes port 443 alone. **Enterprise** is built the same way:
 `ospreyflow install --mode enterprise --cloud aws` (or `azure`) makes an EKS or AKS cluster and the
 cloud's managed services with OpenTofu (`deploy/opentofu/cluster/`), its API open only to the
 addresses you name in `cloud.api_cidrs`, then installs onto it. Onto a cluster your `kubectl` and

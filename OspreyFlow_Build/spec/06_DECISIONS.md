@@ -22890,7 +22890,8 @@ starter: govuk-crime                      # optional, as ADR-138
 ##### 2. The address and what is published: 443, on the server's interfaces, and nothing else
 
 - **443 only.** The proxy publishes `443` (or the address's own port) on every interface
-  (`0.0.0.0:443:8443`). Port 80 is **not published** unless `redirect_http: true`, and then it only
+  (`443:8443`, as built in drop 1 — Docker's every-interface form, IPv6 included — or
+  `<listen_address>:443:8443`). Port 80 is **not published** unless `redirect_http: true`, and then it only
   redirects. The graph store's door stays `127.0.0.1:2480` (`site.py:143`, already loopback for every
   profile). The Conduit's opt-in door (`network.expose_conduit`), which `_bind` publishes on every
   interface for Small (`site.py:137-145`), is bound to `127.0.0.1` on a self-contained Small.
@@ -22907,7 +22908,11 @@ starter: govuk-crime                      # optional, as ADR-138
   deployment's three names at `127.0.0.1`, as `answer_localhost_with_loopback` does for
   `*.localhost` (`site.py:235-256`), and verify the certificate against `network.tls.ca` when given.
   So they work before the organisation's DNS does, and without the organisation's CA in the server's
-  own trust store.
+  own trust store. *As built in drop 1:* `harness.site.answer_the_deployment_here` answers the three
+  names at `network.listen_address`, else `127.0.0.1`, and trusts the deployment's own certificate
+  file as well as `ca` (`VERIFY_X509_PARTIAL_CHAIN`), so it works without `ca` too; it is called by
+  `harness.apply` (install and grants) and `harness.register_sign_in` (and so `repair-sign-in`).
+  `backup`, `restore`, `start --build` and the seeds are not yet given it (drop 2, unit 6).
 
 ##### 3. The certificate: the organisation's own, mounted into Caddy, ACME off, checked before anything starts
 
@@ -22923,14 +22928,20 @@ starter: govuk-crime                      # optional, as ADR-138
   inside the container, as the uid and gid of the account that owns the key (so the key stays `600`),
   with `XDG_*` in `/tmp` as the plain-HTTP branch already does (`site.py:152-157`). Today's HTTPS
   branch runs it as root (`site.py:158-162`).
-- **Checked before anything starts** — by a new module, harness/tls_check.py (to be written in drop 1; named here without a citation until it exists) (the harness has `cryptography`,
+- **Checked before anything starts** — by a new module, `harness/tls_check.py` (the harness has `cryptography`,
   `pyproject.toml:21`; the command depends on PyYAML alone, `answers.py:44-46`, so `doctor` runs it as
   a step, as it runs other harness modules). Refused, in words, changing nothing: unreadable or
   non-PEM files; an encrypted key; a key that does not match the certificate; a certificate expired or
   not yet valid; a name of the three not covered; with `ca`, a chain that does not reach it. Warned:
   under 30 days left. Run by `doctor`, `install` and every `apply`.
 - **Renewing:** replace the two files, then `ospreyflow apply`. `apply` records the certificate's
-  SHA-256 fingerprint in `deployment.env` (not a secret) and restarts the proxy alone when it changes.
+  SHA-256 fingerprint and restarts the proxy alone when it changes. *Corrected in drop 1:* the
+  fingerprint is written to the deployment's own `tls-fingerprint` file, mounted by the proxy alone —
+  not to `deployment.env`, which every owned service reads whole (`env_file`), so a changed value
+  there would have restarted all of them (`apply.services_to_restart`). The key owner's uid and gid
+  are in `deployment.env` (`OSPREY_PROXY_UID`, `OSPREY_PROXY_GID`), written by `apply` from the key
+  file, so the render still never reads the machine; Compose refuses the proxy without them
+  (`${…:?}`).
 
 ##### 4. Identity: the organisation's identity provider through Keycloak, or local accounts
 
@@ -23282,6 +23293,84 @@ The questions as drafted, each with its recommendation:
     its `osprey.yaml` asks for.
 16. **The memory floor for a server:** 30 GiB as Docker reports it? *Recommend yes* (a nominal 32 GB
     server), matching cloud Small's starting size.
+
+#### Drop 1 as built (3 November 2026, build order step 20, branch `step-20-drop1`)
+
+Units 1–4. Where this section and the text above differ, this section is what was built.
+
+- **Answers.** `server:` takes `address`, `certificate`, `key`, `ca`, `ingest`, `redirect_http`,
+  `listen_address`; `certificate` and `key` both or neither (neither keeps Caddy's automatic
+  certificate, which needs port 80 and a public name). `server.backups` and `server.memory_gib`
+  (units 6 and 5) and a `sign_in:` section (unit 7) are **refused as not built yet**, by name, rather
+  than accepted and ignored. The first administrator's email is a top-level `admin_email`, refused
+  without `server:` (a cloud's stays `cloud.admin_email`).
+- **Schema.** `network.tls` (`TlsFiles`: absolute paths), `network.redirect_http`,
+  `network.listen_address` (an IP address), refused in words on Lite and Enterprise, beside
+  `external:`, and — `redirect_http` and `listen_address` — without `network.tls`.
+  `schemas.deployment.self_contained_small` is Small with no `external:`; on it the Conduit's door is
+  on loopback whether or not `network.tls` is given. `resources` and
+  `governance.organisation_provider` are not added (drop 2).
+- **Caddy, measured against 2.11.4:** the global options are `auto_https off`, `ocsp_stapling off`,
+  `http_port 8080`, `https_port 8443`. A site with `tls <cert> <key>` still serves TLS under
+  `auto_https off`. Without `ocsp_stapling off` Caddy POSTs to an OCSP responder the certificate
+  names (logged as "stapling OCSP"), even on a network with no route out; without `auto_https off` it
+  enables its own HTTP-to-HTTPS redirects. Caddy **refuses to start** with a key that does not match,
+  an encrypted key, a file that is not a key, or a certificate file that is not PEM; it **starts** with
+  a certificate that does not cover a name and serves it, so for names the real client is the
+  fixture: it refuses `id.<host>` behind a parent-domain wildcard, and a name the certificate omits.
+  The health and redirect listener is `:8080`; with `redirect_http`, each name's `http://` block is a
+  `redir https://<name>{uri} 308` and anything else on 80 is 404.
+- **`tls_check`** reads subject alternative names alone (a common name is not a name it covers); its
+  chain check walks the certificate file's own certificates to `ca` by issuer and signature
+  (`verify_directly_issued_by`), not by `cryptography`'s strict path builder, so an organisation's CA
+  is not refused for an extension a web PKI would require. It runs at the start of
+  `apply.stage_deployment` (every install and apply, before anything is rendered); `doctor` and
+  `install` run `python -m harness.tls_check` in the checkout's environment.
+- **`doctor --mode small --config install.yaml`** (a `server:` section switches it to the server's
+  checks): `docker-installed`, `docker-running`, `compose`, `docker-at-boot`, `architecture`,
+  `memory` (30 GiB), `disk` (at `DockerRootDir`), `git`, `uv`, `python` (the machine's `python3`, or
+  one `uv python find '>=3.12'` finds), `clock` (`timedatectl`; cannot tell is a failure), `port-443`
+  (and `port-80` with `redirect_http` or without a certificate) by a wildcard bind — `EACCES` below
+  1024 for an ordinary account falls back to `ss`, and cannot tell is a failure — `port-2480`,
+  `certificate`; warnings (⚠, not failures): `vm-max-map-count`, `account` (root), `names` (not
+  resolving), `certificate-expiry`, `govuk-brand` (decision 10's notice, from `doctor`; `install`
+  prints it among the checks). Disk at `server.backups` is not checked (unit 6). The 16 GiB floor of
+  `harness/profiles.py` and Preflight is unchanged (unit 5).
+- **Install.** `own_server` (Small with `server:`) is refused with `--cloud`; `small` with none of the
+  three is refused naming all three. The path is the cloud first boot's (`_install_on_server`): the
+  `osprey.yaml` written (`--force` on a checkout, whose committed `osprey.yaml` differs), `apply`,
+  `register_sign_in --no-demo-accounts`, `first_admin` (code printed once without
+  `--first-admin-code-file`), then the names to put in DNS and that the firewall in front, not `ufw`,
+  decides who reaches 443.
+
+**Tests, each shown red first** (`red/s20d1_*` in the worker's scratchpad). Real Caddy and a real TLS
+client are marked ⚑.
+
+| Unit | Test (file :: name) |
+| --- | --- |
+| 1 | `tests/cli/test_answers.py::test_server_and_cloud_together_are_refused_in_words`, `::test_server_with_external_is_refused_in_words`, `::test_a_server_section_is_refused_for_lite_and_enterprise`, `::test_server_answers_make_a_small_osprey_yaml_with_its_address_and_certificate_paths`, `::test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting`, `::test_organisation_sign_in_is_refused_until_it_is_built` |
+| 1 | `tests/harness/test_deployment_schema.py::test_tls_paths_are_refused_on_lite_and_enterprise_in_words`, `::test_tls_paths_must_be_absolute`, `::test_the_certificate_and_its_options_belong_to_a_self_contained_small` |
+| 2 | `tests/harness/test_front_proxy.py::test_a_small_with_its_own_certificate_publishes_443_alone_on_every_interface`, `::test_port_80_is_published_only_to_redirect_when_asked`, `::test_the_conduits_door_is_on_loopback_on_a_self_contained_small`, `::test_the_graph_stores_door_stays_on_loopback_on_a_self_contained_small` (a guard; green before), `::test_its_own_certificate_turns_acme_and_ocsp_stapling_off`, `::test_every_name_is_served_with_the_given_certificate`, `::test_the_proxy_runs_unprivileged_with_its_own_certificate` |
+| 2 ⚑ | `tests/harness/test_proxy_tls_caddy.py::test_caddy_serves_the_given_certificate_for_each_name`, `::test_caddy_refuses_to_start_with_a_key_that_does_not_match` (mismatched and encrypted), `::test_a_client_refuses_a_name_the_certificate_does_not_cover`, `::test_caddy_with_its_own_certificate_starts_and_serves_with_no_route_out` (also shown red by removing `ocsp_stapling off`), `::test_port_80_only_redirects_against_caddy`, `::test_the_rendered_proxy_runs_under_compose_with_what_apply_writes` (the staged files under the real Docker Compose, the port on every interface; Compose refuses the proxy without the uid and gid) |
+| 3 | `tests/harness/test_tls_check.py::test_a_certificate_missing_id_or_bi_is_refused_naming_it`, `::test_a_wildcard_for_the_host_with_the_host_itself_is_accepted`, `::test_an_expired_certificate_is_refused_naming_its_end`, `::test_a_certificate_not_yet_valid_is_refused`, `::test_an_encrypted_key_is_refused_in_words`, `::test_a_chain_that_does_not_reach_the_given_ca_is_refused`, `::test_thirty_days_left_is_a_warning_not_a_refusal`, `::test_an_unreadable_file_is_refused_naming_it`, `::test_the_deployments_names_follow_its_address_and_dashboards`, `::test_the_command_line_says_each_refusal_and_exits_non_zero`, `::test_a_good_certificate_passes_with_its_fingerprint` |
+| 3 ⚑ | `tests/harness/test_tls_check.py::test_every_pair_caddy_refuses_the_check_refuses_too` (mismatched, encrypted, not a key, not a certificate — Caddy is the fixture), `::test_a_wildcard_for_the_parent_domain_does_not_cover_id_and_is_refused` (a real client against the real Caddy first; shown red by a wildcard matcher that accepts several labels) |
+| 3 | `tests/harness/test_apply_changed_settings.py::test_apply_refuses_and_changes_nothing_when_the_certificate_is_refused`, `::test_a_changed_certificate_restarts_only_the_proxy` |
+| 4 | `tests/cli/test_install_small_server.py::test_small_on_a_server_with_its_own_certificate_installs_without_cloud`, `::test_small_with_no_server_cloud_or_external_is_refused_naming_all_three`, `::test_server_and_the_cloud_flag_together_are_refused`, `::test_a_refused_certificate_stops_the_install_before_anything_runs` |
+| 4 | `tests/cli/test_doctor.py::test_self_contained_small_checks_docker_memory_disk_443_certificate_and_clock`, `::test_port_443_held_on_any_interface_fails`, `::test_the_real_probe_sees_a_port_held_on_another_interface` (the real socket: a listener on this machine's own non-loopback address, invisible to the loopback probe), `::test_memory_below_thirty_gib_fails_for_a_small_server`, `::test_an_unsynchronised_clock_fails_in_words`, `::test_a_machine_that_is_not_amd64_fails_naming_the_release_platform`, `::test_a_low_vm_max_map_count_is_a_warning`, `::test_disk_is_measured_where_docker_keeps_its_data`, `::test_each_further_server_check_fails_in_words`, `::test_root_and_unresolved_names_are_warnings`, `::test_doctor_reads_the_server_from_the_answers_file` |
+| 4 ⚑ | `tests/harness/test_proxy_tls_caddy.py::test_host_tools_reach_the_names_on_this_server_trusting_its_certificate` (with and without `ca`; `urllib` as the tools use it) |
+
+**Moved to drop 2:** the tests table's rows for units 5–7 and 10 (`test_profiles.py`,
+`test_render_memory.py`, `test_backup.py`, `test_update_apply.py`, `test_realm.py`,
+`test_organisation_sign_in.py`, `test_register_sign_in.py`'s broker row, the keyboard step,
+`live/test_self_contained_small_vm.py`). **Not built at all:** unit 8's rows (`test_bundle.py`'s
+format 2, `test_install_from_bundle.py`, `test_render_egress.py`'s offline row), the owner having
+deferred decision 7.
+
+**Not proved in drop 1:** the whole deployment on a Linux server. The worker's machine is an arm64
+Mac running the owner's deployment, so an `amd64` server with the full stack could not be run there;
+the proof stops at the real Caddy, the real Docker Compose bringing up the rendered proxy from the
+staged files, and a client on the machine's own network address reaching the three names over TLS
+with the throwaway CA's certificate. Unit 10 (drop 2) runs the whole of it on a throwaway VM.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
