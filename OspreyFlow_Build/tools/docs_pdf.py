@@ -115,6 +115,8 @@ hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--sp-
 figure { margin: var(--sp-12) 0 var(--sp-16); break-inside: avoid; }
 figure img { max-width: 100%; max-height: 120mm; border: 1px solid var(--border-subtle);
              border-radius: var(--r-panel); }
+/* A diagram (SVG) may take the page's height: held to a screenshot's 120mm, a tall one prints too small to read. */
+figure img[src$=".svg"] { max-height: 235mm; }
 figcaption { font-size: 9pt; color: var(--text-secondary); margin-top: var(--sp-4); }
 .cover { height: 240mm; display: flex; flex-direction: column; justify-content: center;
          break-after: page; }
