@@ -22644,3 +22644,41 @@ apart; the record keeping them apart), `tests/test_revert_load_script.py` (said 
 settings refused), `tests/test_seed_internal.py` (the revert inside the deployment; refused without
 `--stop-api`; the command line), `tests/services/api/test_recipe_runs.py` (live: `records_of_run`,
 `rule_node_ids` after the commit), `ScheduleEditor.test.tsx` (the run names its load).
+
+### ADR-114, Amendment 32 (3 November 2026) — `repair-sign-in` sets the Conduit's own client secret (build order step 18a)
+
+**Found in the 3 November rehearsal (D2, `REHEARSAL_v5_2026-11-03.md`).** After GOV.UK's stores were
+wiped, Keycloak imported the realm afresh. A realm import cannot carry a confidential client's secret,
+so Keycloak made its own for `osprey-conduit` and `osprey-unprivileged`, and every call the Conduit
+makes for a person was refused at the token endpoint (`401`): post-commit rules said "the rule's
+deployer could not be resolved", a hotlist went Stopped, and a list refresh re-screened 0 customers.
+`apply` and a cluster's install set the secret after the import
+(`keycloak_admin.grant_service_account_roles`); `ospreyflow repair-sign-in`
+(`register_sign_in.ensure_identity`, Amendment 22 point 3) did not.
+
+1. **`repair-sign-in` restores the Conduit's client secret.** `ensure_identity` — the step every
+   deployment's registration runs, with or without demo accounts — sets both Conduit clients' secret
+   from the deployment's own `OSPREY_OIDC_CLIENT_SECRET`, through one function,
+   `keycloak_admin.ensure_conduit_client_secret`, which `grant_service_account_roles` now calls too, so
+   `apply`, a cluster's install and `repair-sign-in` cannot set it differently. After a wipe, a restart
+   of an unpersisted Keycloak or a re-import, `ospreyflow repair-sign-in` alone brings the deployment
+   back.
+2. **Safe to repeat, and never printed.** A client already holding the secret is not rewritten ("the
+   Conduit's client secret already matches the deployment's settings"). The secret is never in a line
+   the command prints, and a refused update is named ("could not set client 'osprey-conduit''s secret"),
+   without repeating Keycloak's answer, which may echo it. The PUT's answer was ignored before; it is
+   checked now. Settings without the key are said as such and left alone.
+3. **Not built: naming the failure where it shows.** When it recurs, a rule still says "the rule's
+   deployer could not be resolved": `resolve_for_owner` collapses the cause, and telling a refused
+   client apart from an unreachable identity provider in every producer is larger than this step. Open
+   question: a System health line, "the Conduit cannot act for people: run `ospreyflow repair-sign-in`",
+   fed by one client-credentials call.
+
+**Tests**, shown red first (evidence `s18a_*`), against a stand-in Keycloak whose realm token endpoint
+refuses a confidential client whose secret is not the one it holds (`unauthorized_client`, as Keycloak
+does; rule 15) and whose imported clients start with a secret Keycloak made:
+`tests/harness/test_register_sign_in.py`
+`test_repair_sign_in_gives_a_reimported_realm_the_conduits_secret_again`,
+`test_the_conduits_secret_is_set_without_demo_accounts_too`,
+`test_restoring_the_conduits_secret_is_safe_to_repeat_and_never_printed` and
+`test_a_refused_secret_update_is_named_not_reported_as_done`.
