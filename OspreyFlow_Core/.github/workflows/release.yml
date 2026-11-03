@@ -118,12 +118,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # Pull mode (no `source_path`): every image locked by the digest the registry holds — the
-      # owned ones just pushed, by this commit's tag — or the render refuses.
+      # owned ones just pushed, by this commit's tag — or the render refuses. Every image any
+      # option can run (Superset, ClickHouse…), not only what the committed answers switch on, so a
+      # deployment that turns one on can take it from the release or a bundle (step 20a).
       - name: The release's versions.lock
         run: |
           export OSPREY_IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
-          PYTHONPATH=.:packages uv run python -m harness.render --config osprey.yaml --out-root release-render
-          cp release-render/*/versions.lock versions.lock
+          PYTHONPATH=.:packages uv run python -m harness.release_lock --config osprey.yaml --out versions.lock
       - uses: sigstore/cosign-installer@v3
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}

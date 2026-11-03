@@ -326,3 +326,181 @@ def test_an_altered_platform_manifest_inside_an_index_fails_its_hash(tmp_path: P
     with pytest.raises(BundleRefused, match="does not match its digest"):
         check_bundle(root, KEY, _cosign()[0], _Docker().run)
 
+
+
+# --- the cosign image travels in the bundle (build order step 20a, ADR-114 Amendment 34) --------
+#
+# `update --from` verifies with cosign run from its image. A machine with no network that never
+# pulled that image could verify nothing: Docker, asked to run an image it does not hold, tries to
+# pull it, and with no network the pull fails. These two machines answer as Docker does — the
+# offline one refuses every pull, and a reference by digest is only found if it was *pulled* by
+# that digest (`docker load` of a `docker save` file records no repository digest), so naming the
+# image by digest after a load would still try to pull.
+
+#: The real cosign v2.4.1, measured 3 November 2026 (`docker buildx imagetools inspect`): its
+#: multi-platform index, and the ID Docker gives its linux/arm64 image (its configuration's digest).
+_REAL_COSIGN_INDEX = "sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+_REAL_COSIGN_ARM64_ID = "sha256:6793dd4d518a6b556385e3dee81d02554900a3f386f8b50bbd29bdb4ac6d8829"
+_COSIGN_REPOSITORY = "ghcr.io/sigstore/cosign/cosign"
+#: Docker's own words when a pull cannot reach the registry (exit 125 from `docker run`).
+_NO_NETWORK = (
+    'docker: Error response from daemon: Get "https://ghcr.io/v2/": dial tcp: lookup ghcr.io: '
+    "no such host\n\nRun 'docker run --help' for more information"
+)
+
+
+class _Machine:
+    """Docker, and cosign inside its image, on one machine. `online`: a pull reaches `registry`
+    (reference -> the image ID it gives); offline, every pull fails as Docker's does."""
+
+    def __init__(
+        self, *, online: bool, registry: dict[str, str] | None = None,
+        platform: str = "linux/arm64", layouts: dict[str, str] | None = None,
+    ) -> None:  # fmt: skip
+        self.online = online
+        self.registry = registry or {}
+        self.platform = platform
+        self.layouts = layouts or {}  # repository@digest -> the service its saved layout holds
+        self.images: dict[str, str] = {}  # a reference Docker resolves locally -> image ID
+        self.ran: list[list[str]] = []  # every `docker run`, as asked
+
+    def _pull(self, ref: str) -> tuple[int, str]:
+        if not self.online or ref not in self.registry:
+            return 1, _NO_NETWORK.replace("docker: ", "")
+        self.images[ref] = self.registry[ref]
+        return 0, f"Status: Downloaded newer image for {ref}"
+
+    def _local(self, ref: str) -> str | None:
+        if ref.startswith("sha256:"):
+            return ref if ref in self.images.values() else None
+        return self.images.get(ref)
+
+    def run(self, argv: Sequence[str]) -> tuple[int, str]:
+        argv = list(argv)
+        if argv[:2] == ["docker", "version"]:
+            return 0, self.platform
+        if argv[:2] == ["docker", "pull"]:
+            return self._pull(argv[-1])
+        if argv[:2] == ["docker", "tag"]:
+            found = self._local(argv[2])
+            if found is None:
+                return 1, f"Error response from daemon: No such image: {argv[2]}"
+            self.images[argv[3]] = found
+            return 0, ""
+        if argv[:2] == ["docker", "save"]:
+            found = self._local(argv[-1])
+            if found is None:
+                return 1, f"Error response from daemon: reference does not exist: {argv[-1]}"
+            Path(argv[argv.index("-o") + 1]).write_text(json.dumps([argv[-1], found]))
+            return 0, ""
+        if argv[:2] == ["docker", "load"]:
+            reference, image_id = json.loads(Path(argv[-1]).read_text())
+            self.images[reference] = image_id
+            return 0, f"Loaded image: {reference}"
+        if argv[:3] == ["docker", "image", "inspect"]:
+            found = self._local(argv[-1])
+            return (0, found) if found else (1, f"Error: No such image: {argv[-1]}")
+        if argv[:2] == ["docker", "run"]:
+            self.ran.append(argv)
+            return self._cosign(argv)
+        if argv[0] == "git":
+            if "bundle" in argv:
+                Path(argv[-2]).write_text("git bundle")
+            return 0, ""
+        raise AssertionError(argv)
+
+    def _cosign(self, argv: list[str]) -> tuple[int, str]:
+        at, mounts = 2, {}
+        while argv[at].startswith("-"):
+            if argv[at] == "--rm":
+                at += 1
+                continue
+            if argv[at] == "-v":
+                host, inside = argv[at + 1].split(":")[:2]
+                mounts[inside] = host
+            at += 2
+        image = argv[at]
+        if self._local(image) is None:
+            code, said = self._pull(image)
+            if code != 0:
+                return 125, f"Unable to find image '{image}' locally\n{_NO_NETWORK}"
+        verb = argv[at + 1]
+        if verb == "save":
+            dest = argv[argv.index("--dir") + 1]
+            for inside, host in mounts.items():
+                dest = dest.replace(inside, host, 1) if dest.startswith(inside) else dest
+            _layout(Path(dest), self.layouts[argv[-1]])
+            return 0, ""
+        return 0, "Verified OK"
+
+
+def _release_on_the_registry(tmp: Path) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
+    """A release as the registry holds it: its lock, and what each reference pulls as."""
+    registry, layouts, rows = {}, {}, []
+    for service in SERVICES:
+        manifest, config = _layout(tmp / "registry" / service, service)
+        ref = f"{_repository(service)}@{manifest}"
+        registry[ref], layouts[ref] = config, service
+        rows.append({"service": service, "repository": _repository(service), "tag": "x",
+                     "digest": manifest, "source": "registry"})  # fmt: skip
+    for ref in (f"{_COSIGN_REPOSITORY}:v2.4.1", f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}",
+                f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"):  # fmt: skip
+        registry[ref] = _REAL_COSIGN_ARM64_ID
+    lock = "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
+    release = {"tag": "v0.5.0", "notes": "- new", "lock": lock, "lock_signature": "{}"}
+    return release, registry, layouts
+
+
+def _made_on_a_connected_machine(tmp: Path) -> Path:
+    release, registry, layouts = _release_on_the_registry(tmp)
+    connected = _Machine(online=True, registry=registry, layouts=layouts)
+    out = tmp / "ospreyflow-v0.5.0.tar"
+    make_bundle(out, release, tmp / "repo", connected.run, Cosign(connected.run),
+                staging=tmp / "staging")  # fmt: skip
+    return out
+
+
+def test_update_from_verifies_on_a_machine_with_no_cosign_image_and_no_network(
+    tmp_path: Path,
+) -> None:
+    """Red before step 20a: the bundle carried no cosign, so the first check (the lock's
+    signature) asked Docker to run an image it did not have, and the pull failed."""
+    out = _made_on_a_connected_machine(tmp_path)
+    offline = _Machine(online=False)
+    opened = open_bundle(out, tmp_path / "opened")
+    images = check_bundle(Path(opened["root"]), KEY, Cosign(offline.run), offline.run)
+    assert set(images) == {_repository(s) for s in SERVICES}
+    # Every check ran from the image the bundle carried, by its ID, with no network.
+    assert offline.ran and all(_REAL_COSIGN_ARM64_ID in argv for argv in offline.ran)
+    assert all(["--network", "none"] == argv[3:5] for argv in offline.ran)
+
+
+def test_a_bundle_whose_cosign_is_another_image_is_refused_before_it_runs(
+    tmp_path: Path,
+) -> None:
+    """The pin is in the code, not the bundle: a cosign image swapped for another is refused
+    before it is run, so nothing is ever 'verified' by it."""
+    out = _made_on_a_connected_machine(tmp_path)
+    opened = Path(open_bundle(out, tmp_path / "opened")["root"])
+    listed = json.loads((opened / "manifest.json").read_text())
+    tar = opened / listed["cosign"]["tar"]
+    reference, _ = json.loads(tar.read_text())
+    tar.write_text(json.dumps([reference, "sha256:" + "e" * 64]))
+    offline = _Machine(online=False)
+    with pytest.raises(BundleRefused, match="cosign"):
+        check_bundle(opened, KEY, Cosign(offline.run), offline.run)
+    assert offline.ran == []
+
+
+def test_a_bundle_is_not_made_without_the_pinned_cosign_image(tmp_path: Path) -> None:
+    """A connected machine that cannot pull cosign by its pinned digest writes no bundle."""
+    release, registry, layouts = _release_on_the_registry(tmp_path)
+    del registry[f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"]
+    del registry[f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}"]
+    connected = _Machine(online=True, registry=registry, layouts=layouts)
+    connected.images[f"{_COSIGN_REPOSITORY}:v2.4.1"] = _REAL_COSIGN_ARM64_ID  # by tag only
+    out = tmp_path / "ospreyflow-v0.5.0.tar"
+    with pytest.raises(BundleRefused, match="cosign"):
+        make_bundle(out, release, tmp_path / "repo", connected.run, Cosign(connected.run),
+                    staging=tmp_path / "staging")  # fmt: skip
+    assert not out.exists()

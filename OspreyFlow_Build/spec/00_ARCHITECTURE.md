@@ -969,7 +969,8 @@ come from the standard library's `zoneinfo`.
 **ADR-114 decision 13 addition (13 October 2026, Amendment 8):** cosign 2.4.1 (Apache-2.0, Sigstore)
 signs the released images keyless in the user repository's `release.yml` and verifies them before
 `ospreyflow update` changes anything; on the host it runs from its image
-`ghcr.io/sigstore/cosign/cosign:v2.4.1`, as OpenTofu does. Nothing of it is in a deployment's images.
+`ghcr.io/sigstore/cosign/cosign:v2.4.1`, pinned by digest, as OpenTofu does; an offline bundle carries
+that image (Amendment 34). Nothing of it is in a deployment's images.
 
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
