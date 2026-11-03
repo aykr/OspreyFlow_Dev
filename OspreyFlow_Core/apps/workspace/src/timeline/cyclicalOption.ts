@@ -90,13 +90,16 @@ export function cyclicalOption({
       nameTextStyle: { color: text, fontSize: 11 },
       data: HOUR_LABELS,
       axisLabel: { color: text, fontSize: 11 },
-      splitArea: { show: true },
+      // No stripes: the heat map fills every cell, and once the option was replaced on a chart that
+      // had drawn it (a choice of cells, the map opened), the stripes were painted over the cells,
+      // washing the grid out in a checkerboard (build order step 18c, D3).
+      splitArea: { show: false },
     },
     yAxis: {
       type: "category" as const,
       data: WEEKDAY_LABELS,
       axisLabel: { color: text, fontSize: 11 },
-      splitArea: { show: true },
+      splitArea: { show: false },
     },
     visualMap: {
       min: 0,
