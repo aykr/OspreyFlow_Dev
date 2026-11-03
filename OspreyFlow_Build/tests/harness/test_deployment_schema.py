@@ -283,3 +283,64 @@ def test_lite_keeps_its_own_addresses(origin: str) -> None:
     assert OspreyConfig.model_validate({"network": {"public_origin": origin}}).profile is Profile.LOCAL_LITE
     govuk = {"brand": "govuk", "service_name": "Intelligence", "organisation": "Ministry of Examples"}
     assert OspreyConfig.model_validate({"network": {"public_origin": origin}, "appearance": govuk})
+
+
+# ---- ADR-114 Amendment 33 (drop 1): the organisation's own certificate -------------------------
+
+_TLS = {"certificate": "/etc/ospreyflow/tls/osprey.crt", "key": "/etc/ospreyflow/tls/osprey.key"}
+
+
+def _small(**network: object) -> dict[str, object]:
+    return {"profile": "small",
+            "network": {"public_origin": "https://osprey.example.internal", **network}}  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("profile", "origin"),
+    [("local-lite", "http://ospreyflow.localhost"), ("cluster", "https://osprey.example.org")],
+)
+@pytest.mark.parametrize(
+    "setting", [{"tls": _TLS}, {"redirect_http": True}, {"listen_address": "192.0.2.10"}]
+)
+def test_tls_paths_are_refused_on_lite_and_enterprise_in_words(
+    profile: str, origin: str, setting: dict[str, object]
+) -> None:
+    raw: dict[str, object] = {"profile": profile, "network": {"public_origin": origin, **setting}}
+    if profile == "cluster":
+        raw["cluster"] = {"shared_storage_class": "efs-sc"}
+        raw["external"] = {"postgres": {"host": "db.example.org"}, "valkey": {"host": "v.example.org"},
+                           "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}  # fmt: skip
+    with pytest.raises(ValidationError) as refused:
+        OspreyConfig.model_validate(raw)
+    words = str(refused.value)
+    assert "Small on a server of your own" in words, words
+    name = next(iter(setting))
+    assert f"network.{name}" in words, words
+
+
+def test_tls_paths_must_be_absolute() -> None:
+    assert OspreyConfig.model_validate(_small(tls=_TLS)).network.tls is not None
+    for relative in ({**_TLS, "certificate": "tls/osprey.crt"}, {**_TLS, "key": "~/osprey.key"},
+                     {**_TLS, "ca": "org-root.pem"}):  # fmt: skip
+        with pytest.raises(ValidationError, match="absolute path"):
+            OspreyConfig.model_validate(_small(tls=relative))
+
+
+def test_the_certificate_and_its_options_belong_to_a_self_contained_small() -> None:
+    """Every new setting is refused outside a self-contained Small (Amendment 33's consequences):
+    with managed services, with no certificate of its own (the redirect and the one interface
+    have no meaning beside Caddy's own certificate, which needs port 80 for its challenge), and a
+    listen address that is not an address."""
+    external = {"postgres": {"host": "db.example.org"}}
+    with pytest.raises(ValidationError, match="every store in a container"):
+        OspreyConfig.model_validate({**_small(tls=_TLS), "external": external})
+    for setting in ({"redirect_http": True}, {"listen_address": "192.0.2.10"}):
+        with pytest.raises(ValidationError, match="network.tls"):
+            OspreyConfig.model_validate(_small(**setting))
+    with pytest.raises(ValidationError, match="listen_address"):
+        OspreyConfig.model_validate(_small(tls=_TLS, listen_address="osprey.example.internal"))
+    chosen = OspreyConfig.model_validate(
+        _small(tls={**_TLS, "ca": "/etc/ospreyflow/tls/org-root.pem"}, redirect_http=True,
+               listen_address="192.0.2.10")
+    )  # fmt: skip
+    assert chosen.network.redirect_http and chosen.network.listen_address == "192.0.2.10"

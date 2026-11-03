@@ -597,6 +597,38 @@ class ClusterConfig(BaseModel):
         return self
 
 
+class TlsFiles(BaseModel):
+    """ADR-114 Amendment 33 decision 3: the organisation's own certificate for a Small on a server
+    of its own. Paths on the server, absolute; the front proxy mounts the two files read-only and
+    the key is never copied (not into the deployment folder, not into a backup). Checked before
+    anything starts by `harness/tls_check.py`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    certificate: str = Field(
+        description="The server certificate, then its intermediates, in PEM: an absolute path."
+    )
+    key: str = Field(
+        description="The certificate's private key in PEM, unencrypted: an absolute path. Owned by "
+        "the installing account, mode 600; the front proxy runs as that account to read it."
+    )
+    ca: str | None = Field(
+        default=None,
+        description="Optional: the organisation's root certificate (PEM), an absolute path. With "
+        "it, the certificate's chain is checked to reach it, and the host's own tools trust it.",
+    )
+
+    @field_validator("certificate", "key", "ca")
+    @classmethod
+    def _absolute(cls, value: str | None, info: ValidationInfo) -> str | None:
+        if value is not None and not value.startswith("/"):
+            raise ValueError(
+                f"network.tls.{info.field_name} {value!r} must be an absolute path on the server "
+                "(from /)"
+            )
+        return value
+
+
 class NetworkConfig(BaseModel):
     """What this deployment publishes to its host.
 
@@ -630,6 +662,30 @@ class NetworkConfig(BaseModel):
             "with an exact redirect URI and post-logout URI derived from it — no wildcards. "
             "Change this to move the deployment to another name or port; nothing else needs to "
             "agree with it."
+        ),
+    )
+
+    tls: TlsFiles | None = Field(
+        default=None,
+        description=(
+            "Small on a server of your own only (ADR-114 Amendment 33): the organisation's own "
+            "certificate and key, served by the front proxy with no certificate management and "
+            "no call out. Default: none — Small's front proxy obtains a certificate itself, which "
+            "needs a public name and the internet."
+        ),
+    )
+    redirect_http: bool = Field(
+        default=False,
+        description=(
+            "Small on a server of your own, with network.tls only: also publish port 80, and only "
+            "to send people to the https:// address. Default: false — port 443 alone."
+        ),
+    )
+    listen_address: str | None = Field(
+        default=None,
+        description=(
+            "Small on a server of your own, with network.tls only: the one address of the server "
+            "the front proxy publishes on. Default: none — every interface."
         ),
     )
 
@@ -1017,6 +1073,56 @@ class OspreyConfig(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _a_certificate_of_its_own_is_for_a_small_on_its_own_server(self) -> OspreyConfig:
+        """ADR-114 Amendment 33 decisions 1–3: the organisation's own certificate, the redirect
+        from port 80 and the one listening address belong to a Small on a server of your own —
+        every store in a container — and are refused anywhere else, in words."""
+        network = self.network
+        given = [
+            name
+            for name, present in (
+                ("network.tls", network.tls is not None),
+                ("network.redirect_http", network.redirect_http),
+                ("network.listen_address", network.listen_address is not None),
+            )
+            if present
+        ]
+        if not given:
+            return self
+        if self.profile is not Profile.SMALL:
+            raise ValueError(
+                f"{', '.join(given)} is for Small on a server of your own (profile: small), not "
+                f"profile: {self.profile.value}"
+            )
+        if self.external.any:
+            raise ValueError(
+                f"{', '.join(given)} is for Small on a server of your own, with every store in a "
+                "container; this one names managed services under external:"
+            )
+        if network.tls is None:
+            raise ValueError(
+                f"{', '.join(given)} goes with network.tls (the organisation's own certificate); "
+                "without it the front proxy obtains its own certificate, which needs port 80 on "
+                "every interface"
+            )
+        if network.listen_address is not None:
+            import ipaddress
+
+            try:
+                ipaddress.ip_address(network.listen_address)
+            except ValueError:
+                raise ValueError(
+                    f"network.listen_address {network.listen_address!r} is not an IP address of "
+                    "the server (for example 192.0.2.10)"
+                ) from None
+        return self
+
+
+def self_contained_small(config: OspreyConfig) -> bool:
+    """ADR-114 Amendment 33 decision 1: Small with every store in a container (no `external:`)."""
+    return config.profile is Profile.SMALL and not config.external.any
+
 
 #: Exported to `generate_ts.py`. `MapConfig` and its own members are already exported by
 #: `schemas/mapconfig.py`'s own `ALL_MODELS` and are deliberately not repeated here — the generator
@@ -1034,6 +1140,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     GovernanceConfig,
     ClusterHost,
     ClusterConfig,
+    TlsFiles,
     NetworkConfig,
     OspreyConfig,
 )
