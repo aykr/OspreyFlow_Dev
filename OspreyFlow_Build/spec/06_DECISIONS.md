@@ -19338,6 +19338,65 @@ data to be marked as official and not secret").
   demo machine, and it showed nothing the demo needs. The engine work it prompted (ADR-127 Amendments 19 to
   21 and 29) stays.
 
+### ADR-120, Amendment 18 (3 November 2026) — a date takes a time of the establishment's day (build order step 16)
+
+**The owner's ruling of 3 November 2026** (open question 20 of `process/BUILD_ORDER_2026-11.md`:
+chapter 3's cyclical grid, "fix the data"). Recorded by the step 16 worker under the owner's
+delegation of 24 October ("Everything"); it amends Amendment 9 decision 1's dates and Amendment 10
+decision 1's windows, and nothing else.
+
+- **The finding.** The timeline's Cyclical view counts every dated event of the case by weekday and
+  hour (UTC), one per edge a load writes with a `temporal.at`. In the 2 November rehearsal one cell,
+  Thursday 11:00, held 38,761 of about 126,000. They were PIN calls: Amendment 10 put a single-call
+  week's call at its window's midpoint, Monday 00:00:00 plus half of 7 days less a second, which is
+  Thursday 11:59:59 (`pid_plan.py`, `_weekly_instants`, the `start + span // 2` branch), and about
+  38,400 of the 100,080 calls are such weeks' calls. The same rule's ends put about 24,000 calls at
+  Monday 00:00:00 and a column at 23:59:59, and Amendment 9's even spread put every counted link's
+  first occurrence at 00:00:00, its last at 23:59:59 and a one-occurrence link at 12:00:00, with a
+  cell share's weekly rows all on one weekday (38% of them on Thursdays). Spans began at 00:00:00.
+  The throw-overs themselves (262, timed in the plan) already had the script's shape; they are 0.2%
+  of what the grid counts.
+- **The rule.** A date the plan holds without a time of day becomes an instant at a time of **the
+  establishment's day**: weights by hour, `DAY_HOUR_WEIGHTS`, and by weekday, `DAY_WEEKDAY_WEIGHTS`,
+  which are the throw-overs' own `HOUR_COUNTS` and `WEEKDAY_COUNTS` (the regime: busiest 08:00 to
+  12:00 and 13:00 to 16:00, when the yards are in use, and at weekends, Sunday most).
+  - **A counted link** (`occurrence_instants`): its first occurrence on `first_seen`, its last on
+    `last_seen` (so its stored interval keeps its days); the i-th of the rest on a day of its own share
+    of the span, half of Amendment 9's step either side of the even spread's point, the day chosen by
+    the weekday weights; then each day's occurrences at distinct, ascending times by the hour weights.
+    One occurrence is on its one date. A date-time in the plan is used as it stands (the throw-overs,
+    the incidents), with Amendment 9's plain even spread between two date-times.
+  - **A PIN call link** (`_weekly_instants`): Amendment 10's weekly counts and week windows are kept,
+    and so the coordinator's December surge. Within a week each call's day is chosen by weekday and
+    hour over the window's days, except that the link's first call is on the first live week's first
+    day and its last on the last live week's last day; then each day's calls at distinct times by hour.
+  - **A span's start** (`span_start`: a custody's `custody_from`, a cell stay's `start`, and the
+    graph port's `PASSES_ITEMS_TO`) is its first date at a time of the day; its end stays the last
+    day's 23:59:59.
+  - **Unchanged:** a carried link's own date (a seized handset's find day at 12:00:00, an incident's
+    date-time), every date a link holds, every count, and every random draw. The placement uses no
+    generator: an offset in [0, 1) hashed from the link's key and the day or week, so nothing else in
+    the plan moves.
+- **Distinctness.** A day's occurrences are placed evenly through its weights from one offset, so a
+  link's instants differ by at least a second up to about 37,000 in one day, and a load's
+  de-duplication key never folds two of them. A link crowded past that still collides, and the plan
+  test's collision check still reports it.
+- **What the grid then shows** (the seed's 125,675 dated events): 66% in the script's hours, the ten
+  busiest cells all in them, weekends 32% and Sundays 18%, Sunday the busiest day; the busiest cell
+  (Sunday 14:00) 2,242, 1.8%; each midnight column about 2%.
+  The throw-overs' own 66%, 34% and 19%, which the script quotes, are unchanged.
+- **Tests.** `tests/scenarios/test_pid_cyclical.py` (new; red first on `main`: Thursday 11:00 held
+  38,759, 30.8%) reads every seed-moment file's rows and its recipe's `temporal.at` column, and fails
+  on a cell above 2.5%, on peak hours under 60%, on a busiest cell outside them, on either midnight
+  column above 3%, and on weekends outside 30% to 38% or a busiest day other than Sunday.
+  `test_occurrence_instants_follow_the_establishments_day` (red against a one-occurrence link at
+  noon). The pinned instants of Amendments 9 and 10 in `test_pid_plan.py` and `test_pid_files.py` were
+  rewritten to this rule: days kept, times no longer 00:00:00 and 23:59:59.
+- **Cost.** A link's stored interval now runs from a time on its first day to a time on its last,
+  not from 00:00:00 to 23:59:59. A timeline window drawn in whole days keeps or drops the same
+  links. The live suites that read a seeded store compare against the same function, so they move
+  with it.
+
 ### ADR-127, Amendment 32 (26 October 2026) — Brief 2's remaining steps, trimmed for the demo
 
 **The owner's rulings of 26 October 2026** ("Trim the tests step", "Simpler reset", "Short

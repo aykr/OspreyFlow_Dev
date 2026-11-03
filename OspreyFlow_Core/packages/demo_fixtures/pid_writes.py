@@ -52,7 +52,7 @@ from .pid_plan import (
     link_instants,
     links_at,
     node_id,
-    start_of,
+    span_start,
 )
 
 CREATED_BY = "pid-generator"
@@ -109,7 +109,7 @@ def _interval(plan: Plan, link: PlanLink) -> Interval | None:
         if link.first_seen is None:
             return None
         last = None if link.last_seen is None else end_of(link.last_seen)
-        return Interval(valid_from=start_of(link.first_seen), valid_to=last)
+        return Interval(valid_from=span_start(link), valid_to=last)
     instants = link_instants(plan, link)
     if not instants:
         return None
