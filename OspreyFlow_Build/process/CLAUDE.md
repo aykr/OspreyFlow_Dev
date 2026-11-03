@@ -181,8 +181,8 @@ assumptions are where this build will go wrong.
 This project has a knowledge graph at the **repository root's** `graphify-out/` (gitignored; the root is the
 parent of `OspreyFlow_Core` and `OspreyFlow_Build`, where Claude Code starts and where the hook guard in
 `.claude/settings.json` looks), with god nodes, community structure, and cross-file relationships. Rebuilt there
-on 4 October 2026 (14,926 nodes); `OspreyFlow_Build/graphify-out/` is the pre-ADR-054 graph with wrong paths,
-not the one in use.
+on 4 October 2026 (14,926 nodes). The pre-ADR-054 copy in `OspreyFlow_Build/graphify-out/`, with wrong paths,
+was removed on 3 November 2026.
 
 **Narrowed 19 September 2026** (`07_BUILD_PLAN.md`'s "Gaps with no owning phase" has the full
 finding): the version of this section below that said "first run `graphify query` for codebase
