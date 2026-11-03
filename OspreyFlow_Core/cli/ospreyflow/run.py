@@ -18,7 +18,7 @@ from typing import Protocol
 _SECRET = re.compile(r"(?i)(password|secret|token|client_secret)")
 #: A variable named, with no value after it, is advice, not a secret (ADR-114 Amendment 8: a
 #: private repository is read with `GITHUB_TOKEN`). Its value, and every other line, stays hidden.
-_NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN)\b(?!\s*[=:])")
+_NAMED_ONLY = re.compile(r"\b(?:GITHUB_TOKEN|GH_TOKEN|OSPREY_ORG_SIGN_IN_SECRET)\b(?!\s*[=:])")
 
 
 class Runner(Protocol):

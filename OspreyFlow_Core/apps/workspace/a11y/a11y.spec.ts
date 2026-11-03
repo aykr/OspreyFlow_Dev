@@ -27,6 +27,19 @@ for (const theme of ["dark", "light"] as const) {
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 
+  // ADR-114 Amendment 33 decision 4 (step 20 drop 2): with the organisation's identity provider
+  // configured the card has a second button, a note and a divider of its own — scanned too.
+  test(`${theme} theme sign-in screen with organisation sign-in has no automated wcag2aa violations`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/keyboard/sign-in-harness.html?organisation=org");
+    if (theme === "light") {
+      await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    }
+    await page.getByRole("button", { name: "Continue with organisation sign-in" }).waitFor();
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+
   // Round 09: the one real screen this file scanned for a general violation sweep was sign-in —
   // `keyboard/harness.html` (the real `GlassCanvas`, the same real screen `keyboard.spec.ts`
   // drives every one of its own real interaction tests against, never a showcase) had no a11y
@@ -71,6 +84,7 @@ for (const theme of ["dark", "light"] as const) {
 // The GOV.UK brand (ADR-132) has no dark theme: it holds the page light, so these scans are light only.
 for (const [name, url] of [
   ["sign-in screen", "/keyboard/sign-in-harness.html?brand=govuk"],
+  ["sign-in screen with organisation sign-in", "/keyboard/sign-in-harness.html?brand=govuk&organisation=org"],
   ["shell", "/keyboard/shell-harness.html?brand=govuk"],
   ["showcase", "/a11y/showcase.html?brand=govuk"],
 ] as const) {

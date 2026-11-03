@@ -375,6 +375,96 @@ def sign_in_rules(config: OspreyConfig) -> dict[str, Any]:
     }
 
 
+#: ADR-114 Amendment 33 decision 4 and the owner's answer 6: what a person arriving through the
+#: organisation's identity provider is given, once, at their first sign-in — a clearance and a unit
+#: no handling scheme knows, so they see nothing (an unrecognised clearance is default-deny,
+#: `01_DOMAIN_MODEL.md` §2.2), and **no role and no handling code**. The Conduit refuses a token
+#: without a clearance and a unit outright (`principal_auth`: "token is missing required claim"),
+#: which would leave the person signed in to nothing at all rather than on Home with every place
+#: dimmed (ADR-115 decision 7); these two values are what make them a signed-in person with no
+#: access. Nothing is taken from the organisation's directory: an administrator grants roles,
+#: clearance, unit and handling codes in the Admin area, and the mapper never runs again for that
+#: person (`syncMode: IMPORT`), so the grant stays.
+ORGANISATION_ARRIVAL_ATTRIBUTES: dict[str, str] = {
+    "clearance": "unassigned",
+    "org_unit": "unassigned",
+}
+
+#: The realm every deployment's people sign in to (`harness.site.REALM`, held here too: that
+#: module imports the renderer).
+_REALM = "osprey"
+
+
+def organisation_redirect_uris(
+    config: OspreyConfig, *, realm_name: str = _REALM
+) -> tuple[str, str]:
+    """What the organisation registers for OspreyFlow's application (Amendment 33 decision 4): the
+    redirect URI Keycloak sends to the organisation's provider, and the post-logout redirect URI,
+    both at the deployment's identity address (`id.<host>`). Measured against Keycloak 26.0 in
+    `tests/harness/test_organisation_sign_in.py`."""
+    from urllib.parse import urlsplit
+
+    origin = urlsplit(config.network.public_origin)
+    identity = f"{origin.scheme}://id.{origin.netloc}"
+    alias = config.governance.organisation_sign_in or ""
+    endpoint = f"{identity}/realms/{realm_name}/broker/{alias}/endpoint"
+    return endpoint, f"{endpoint}/logout_response"
+
+
+def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
+    """The organisation's identity provider as Keycloak's admin API takes it (Amendment 33 decision
+    4): OpenID Connect, PKCE (S256), the client authenticated by a secret posted in the form, the
+    person's account imported once (`syncMode: IMPORT`), the organisation's email not trusted as
+    verified. **No secret and no endpoints:** `harness/keycloak_admin.py`'s
+    `ensure_identity_provider` reads the endpoints from the provider's own discovery document —
+    Keycloak fetches it, through its truststore (`network.tls.ca`) — and sets the client secret
+    from the deployment's settings. None without `governance.organisation_provider`.
+
+    Not in the realm import (`render_realm`): an import is read only on Keycloak's first start, and
+    the endpoints are not known until the discovery document is read. `ospreyflow install` and
+    `ospreyflow repair-sign-in` register it through the admin API instead, each time."""
+    governance = config.governance
+    provider = governance.organisation_provider
+    if provider is None or not governance.organisation_sign_in:
+        return None
+    return {
+        "alias": governance.organisation_sign_in,
+        "displayName": provider.label,
+        "providerId": "oidc",
+        "enabled": True,
+        "trustEmail": False,
+        "storeToken": False,
+        "addReadTokenRoleOnCreate": False,
+        "linkOnly": False,
+        "firstBrokerLoginFlowAlias": "first broker login",
+        "config": {
+            "clientId": provider.client_id,
+            "clientAuthMethod": "client_secret_post",
+            "issuer": provider.issuer,
+            "pkceEnabled": "true",
+            "pkceMethod": "S256",
+            "syncMode": "IMPORT",
+            "defaultScope": "openid profile email",
+            "validateSignature": "true",
+            "useJwksUrl": "true",
+        },
+    }
+
+
+def organisation_provider_mappers(alias: str) -> list[dict[str, Any]]:
+    """`ORGANISATION_ARRIVAL_ATTRIBUTES`, as Keycloak's hardcoded-attribute mappers on the
+    provider, applied once, when the person first arrives."""
+    return [
+        {
+            "name": f"osprey-arrival-{attribute.replace('_', '-')}",
+            "identityProviderAlias": alias,
+            "identityProviderMapper": "hardcoded-attribute-idp-mapper",
+            "config": {"attribute": attribute, "attribute.value": value, "syncMode": "IMPORT"},
+        }
+        for attribute, value in ORGANISATION_ARRIVAL_ATTRIBUTES.items()
+    ]
+
+
 def render_realm(
     config: OspreyConfig, *, realm_name: str = "osprey", demo_analyst: bool = False
 ) -> dict[str, Any]:

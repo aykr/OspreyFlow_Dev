@@ -1491,3 +1491,37 @@ def test_the_conduit_is_told_where_the_recogniser_is_and_does_not_wait_on_it(
     api = compose["services"]["api"]
     assert api["environment"]["OSPREY_RECOGNISER_URL"] == "http://ner:8000"
     assert "ner" not in api["depends_on"]
+
+
+def _own_server(**tls: str) -> OspreyConfig:
+    return OspreyConfig.model_validate({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
+                            "key": "/etc/ospreyflow/tls/osprey.key", **tls}},
+        "governance": {"organisation_sign_in": "org",
+                       "organisation_provider": {"label": "Org", "client_id": "osprey",
+                                                 "issuer": "https://login.example.internal/org"}},
+    })  # fmt: skip
+
+
+def test_keycloak_trusts_the_organisations_ca_when_one_is_given() -> None:
+    """ADR-114 Amendment 33 decision 4: with `network.tls.ca`, Keycloak's truststore is given it
+    (mounted read-only, `KC_TRUSTSTORE_PATHS`), so a provider on the organisation's own CA is
+    trusted on the back channel; Keycloak reaches out for the organisation's sign-in and nothing
+    else does. The real refusal without it is measured in `test_organisation_sign_in.py`."""
+    from harness.render import KEYCLOAK_TRUSTSTORE_PATH, egress_needs
+
+    def keycloak(config: OspreyConfig) -> dict:
+        compose = yaml.safe_load(render(config, resolver=lambda _i: "sha256:" + "0" * 64)
+                                 .artefacts["compose.yaml"])  # fmt: skip
+        return compose["services"]["keycloak"]
+
+    given = keycloak(_own_server(ca="/etc/ospreyflow/tls/org-root.pem"))
+    assert given["environment"]["KC_TRUSTSTORE_PATHS"] == KEYCLOAK_TRUSTSTORE_PATH
+    assert f"/etc/ospreyflow/tls/org-root.pem:{KEYCLOAK_TRUSTSTORE_PATH}:ro" in given["volumes"]
+    assert "egress" in given["networks"]
+    without = keycloak(_own_server())
+    assert "KC_TRUSTSTORE_PATHS" not in without["environment"]
+    assert not any(KEYCLOAK_TRUSTSTORE_PATH in v for v in without["volumes"])
+    assert "keycloak" in egress_needs(_own_server())

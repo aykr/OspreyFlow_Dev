@@ -71,11 +71,27 @@ class ServerPlan:
     redirect_http: bool = False
     #: ADR-132: the GOV.UK brand on a name not under gov.uk earns a one-line notice (decision 10).
     govuk: bool = False
+    #: Decision 5 (drop 2, unit 6): where `ospreyflow backup` writes on this server.
+    backups: str | None = None
+    #: Decision 4 (drop 2, unit 7): the organisation's provider (`alias`, `issuer`), if any, and
+    #: whether its client secret is in this terminal (`OSPREY_ORG_SIGN_IN_SECRET`).
+    organisation: dict[str, str] | None = None
+    organisation_secret_given: bool = False
 
     @property
     def names(self) -> list[str]:
         found = [self.host, f"id.{self.host}"]
         return [*found, f"bi.{self.host}"] if self.dashboards else found
+
+    @property
+    def organisation_uris(self) -> tuple[str, str]:
+        """What the organisation registers: the redirect URI the deployment's Keycloak sends and
+        the post-logout redirect URI (`harness.realm.organisation_redirect_uris`, which a test
+        holds this equal to; measured against Keycloak 26.0)."""
+        port = "" if self.port == 443 else f":{self.port}"
+        alias = (self.organisation or {}).get("alias", "")
+        endpoint = f"https://id.{self.host}{port}/realms/osprey/broker/{alias}/endpoint"
+        return endpoint, f"{endpoint}/logout_response"
 
 
 class Probes(Protocol):
@@ -455,6 +471,8 @@ def _server_checks(
                 "or move it there (data-root in /etc/docker/daemon.json).",
             )
         )  # fmt: skip
+        if plan.backups:
+            checks.append(_backups_disk(probes, Path(plan.backups)))
     checks += [git, uv]
     version = probes.python_version()
     modern = version is not None and version >= (3, 12)
@@ -552,6 +570,8 @@ def _server_checks(
             warn=bool(unresolved),
         )
     )  # fmt: skip
+    if plan.organisation:
+        checks += _organisation_checks(probes, plan)
     if plan.govuk and not (plan.host == "gov.uk" or plan.host.endswith(".gov.uk")):
         checks.append(
             Check(
@@ -559,6 +579,68 @@ def _server_checks(
                 True,
                 "The GOV.UK header and typeface are for services on a gov.uk domain.",
                 "Check with your service owner.",
+                warn=True,
+            )
+        )
+    return checks
+
+
+#: Decision 5: below this much free where backups are written, the doctor stops the install. Each
+#: set is about the size of the deployment's data (the graph, the database dump, the objects); 20 GB
+#: is the doctor's own floor for a first install, not a measured figure.
+MIN_BACKUP_DISK_GB = 20.0
+
+
+def _backups_disk(probes: Probes, folder: Path) -> Check:
+    """Free disk where `ospreyflow backup` writes (decision 5), asked of the nearest folder that
+    exists: the backups folder is made by the first backup."""
+    existing = folder
+    while not existing.exists() and existing != existing.parent:
+        existing = existing.parent
+    free = probes.free_disk_gb(existing)
+    roomy = free >= MIN_BACKUP_DISK_GB
+    return Check(
+        "backups-disk",
+        roomy,
+        f"{free:.0f} GB of disk is free where backups are written ({folder}); each backup is "
+        "about the size of the deployment's data.",
+        "" if roomy else f"Give {folder} at least {MIN_BACKUP_DISK_GB:.0f} GB (a disk of its own "
+        "is best), or name another folder as server.backups.",
+    )  # fmt: skip
+
+
+def _organisation_checks(probes: Probes, plan: ServerPlan) -> list[Check]:
+    """Decision 4: the organisation's identity provider — its client secret in this terminal for
+    the install, the two addresses the organisation registers, and Keycloak's one route out."""
+    from urllib.parse import urlsplit
+
+    assert plan.organisation is not None
+    redirect, logout = plan.organisation_uris
+    registers = (
+        f"The organisation registers OspreyFlow's application with the redirect URI {redirect} "
+        f"and the post-logout redirect URI {logout}, assigned to the people who may sign in."
+    )
+    checks = [
+        Check("organisation-sign-in", True, registers)
+        if plan.organisation_secret_given
+        else Check(
+            "organisation-sign-in",
+            False,
+            registers + " Its client secret is not set in this terminal.",
+            "Set OSPREY_ORG_SIGN_IN_SECRET to the client secret the organisation issued (it is "
+            "kept only in the deployment's own secrets file), then run this again.",
+        )
+    ]
+    provider = urlsplit(plan.organisation.get("issuer", "")).hostname or ""
+    if provider and not probes.resolves(provider):
+        checks.append(
+            Check(
+                "organisation-route",
+                True,
+                f"{provider} does not resolve from this server; Keycloak reads the organisation's "
+                "sign-in from it.",
+                f"Allow this server to reach {provider} on 443 (Entra ID is on the internet: "
+                "login.microsoftonline.com), through the organisation's proxy if it has one.",
                 warn=True,
             )
         )

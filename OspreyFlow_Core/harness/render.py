@@ -53,7 +53,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -1041,6 +1041,19 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 "KC_PROXY_HEADERS": "xforwarded",
                 "KC_HTTP_ENABLED": "true",
             }
+            tls = config.network.tls
+            if config.profile is Profile.SMALL and tls is not None and tls.ca:
+                # ADR-114 Amendment 33 decision 4: the organisation's CA in Keycloak's truststore,
+                # so an identity provider on the organisation's own CA is trusted on the back
+                # channel (its discovery, keys and token endpoint). Keycloak keeps the JVM's own
+                # trusted roots beside it, which a provider on the internet (Entra ID) needs.
+                environment = dict(cast(dict[str, str], service["environment"]))
+                environment["KC_TRUSTSTORE_PATHS"] = KEYCLOAK_TRUSTSTORE_PATH
+                service["environment"] = environment
+                service["volumes"] = [
+                    *cast(list[str], service["volumes"]),
+                    f"{tls.ca}:{KEYCLOAK_TRUSTSTORE_PATH}:ro",
+                ]
         if entry.service == "ollama":
             # ADR-114 Amendment 7: the server that reads case content has no route out; the
             # weights are fetched by `ollama-models` below, into the volume it reads.
@@ -1144,6 +1157,10 @@ def _model_download_step(
     if user is not None:
         step["user"] = user
     return step
+
+
+#: Where Keycloak reads the organisation's CA (`network.tls.ca`), mounted read-only.
+KEYCLOAK_TRUSTSTORE_PATH = "/opt/keycloak/conf/truststores/organisation-ca.pem"
 
 
 def egress_needs(config: OspreyConfig) -> set[str]:

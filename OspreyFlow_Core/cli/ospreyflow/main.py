@@ -29,7 +29,14 @@ import yaml
 from . import demo, starters
 from . import deployments as named
 from . import models as engine_keys
-from .answers import MODES, Answers, AnswersRefused, load_answers, osprey_config
+from .answers import (
+    MODES,
+    ORGANISATION_SECRET_VARIABLE,
+    Answers,
+    AnswersRefused,
+    load_answers,
+    osprey_config,
+)
 from .cloud import build_enterprise, build_small
 from .doctor import Check, Probes, ServerPlan, SystemProbes, format_check, run_doctor
 from .home import (
@@ -376,6 +383,9 @@ def server_plan(answers: Answers) -> ServerPlan | None:
         ca=tls.get("ca"),
         redirect_http=bool(answers.server.get("redirect_http")),
         govuk=answers.appearance.get("brand") == "govuk",
+        backups=str(answers.backups) if answers.backups is not None else None,
+        organisation=dict(answers.organisation) or None,
+        organisation_secret_given=bool(os.environ.get(ORGANISATION_SECRET_VARIABLE)),
     )
 
 
@@ -797,6 +807,14 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
             f"{plan.port} is the only one other machines reach; who may reach it is set in front "
             "of the server (its firewall or security group), not with ufw."
         )
+        if plan.organisation:
+            redirect, logout = plan.organisation_uris
+            print(
+                "For sign-in through the organisation, its identity team registers OspreyFlow's "
+                f"application with the redirect URI {redirect} and the post-logout redirect URI "
+                f"{logout}, assigned to the people who may sign in. A person signing in that way "
+                "has no role until an administrator grants one in Admin, People and roles."
+            )
     return 0
 
 

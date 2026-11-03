@@ -368,3 +368,52 @@ def test_doctor_reads_the_server_from_the_answers_file(
     assert ("certificate", "/etc/ospreyflow/tls/osprey.crt") in rig.probes.asked
     rig.probes.held_elsewhere = {443}
     assert rig("doctor", "--mode", "small", "--config", str(answers)) == 1
+
+
+# ---- ADR-114 Amendment 33 drop 2: the backups folder (unit 6), the organisation's sign-in (unit 7)
+
+
+def test_disk_is_measured_at_the_backups_folder_too(tmp_path: Path) -> None:
+    """Decision 5 and 8: `ospreyflow backup` writes to `server.backups`, so the doctor asks how much
+    is free there — at the nearest folder that exists, as the folder may not yet."""
+    backups = tmp_path / "srv" / "ospreyflow" / "backups"
+    plan = ServerPlan(**{**PLAN.__dict__, "backups": str(backups)})
+    probes = FakeProbes()
+    checks = _server(probes, tmp_path, plan)
+    assert checks["backups-disk"].ok and str(backups) in checks["backups-disk"].says
+    assert ("disk", str(tmp_path)) in probes.asked
+    probes.disk_by_path = {str(tmp_path): 5.0}
+    low = _server(probes, tmp_path, plan)["backups-disk"]
+    assert not low.ok and "5 GB" in low.says and low.fix
+
+
+def test_organisation_sign_in_needs_its_secret_and_says_what_to_register(tmp_path: Path) -> None:
+    """Decision 4: the doctor says the two addresses the organisation registers, refuses to pass
+    without `OSPREY_ORG_SIGN_IN_SECRET` in the terminal, and warns when the provider's name does
+    not resolve from the server (Keycloak's one route out)."""
+    from harness.realm import organisation_redirect_uris
+
+    from schemas.deployment import OspreyConfig
+
+    organisation = {"alias": "org", "issuer": "https://login.microsoftonline.com/t/v2.0"}
+    plan = ServerPlan(**{**PLAN.__dict__, "organisation": organisation,
+                         "organisation_secret_given": True})  # fmt: skip
+    checks = _server(FakeProbes(), tmp_path, plan)
+    config = OspreyConfig.model_validate({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": "/c.pem", "key": "/k.pem"}},
+        "governance": {"organisation_sign_in": "org", "organisation_provider": {
+            "label": "Org", "issuer": organisation["issuer"], "client_id": "c"}},
+    })  # fmt: skip
+    for address in organisation_redirect_uris(config):
+        assert address in checks["organisation-sign-in"].says
+    assert plan.organisation_uris == organisation_redirect_uris(config)
+    assert checks["organisation-sign-in"].ok
+    missing = ServerPlan(**{**plan.__dict__, "organisation_secret_given": False})
+    refused = _server(FakeProbes(), tmp_path, missing)["organisation-sign-in"]
+    assert not refused.ok and "OSPREY_ORG_SIGN_IN_SECRET" in refused.fix
+    probes = FakeProbes()
+    probes.unresolved = {"login.microsoftonline.com"}
+    route = _server(probes, tmp_path, plan)["organisation-route"]
+    assert route.warn and "login.microsoftonline.com" in route.says

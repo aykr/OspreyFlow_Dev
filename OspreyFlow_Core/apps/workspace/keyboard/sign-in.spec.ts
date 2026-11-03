@@ -87,6 +87,22 @@ test("organisation sign-in by keyboard names the organisation's provider to the 
   registerCovered("SIGN_IN_ACTIONS", "continue-with-organisation-sign-in");
 });
 
+// ADR-114 Amendment 33 decision 4: with the organisation's provider configured, the deployment's
+// own accounts — the first administrator's, made by a one-time code — still sign in, by keyboard,
+// and go to Keycloak's own form, with no provider hint.
+test("an account beside the organisation's sign-in signs in by keyboard with no provider hint", async ({ page }) => {
+  await serveIdentityProvider(page);
+  await page.goto("/keyboard/sign-in-harness.html?organisation=org");
+  await tabTo(page, "Sign in with an OspreyFlow account");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(new RegExp(`${AUTHORITY}/protocol/openid-connect/auth`.replace(/\./g, "\\.")));
+  const url = new URL(page.url());
+  expect(url.searchParams.get("client_id")).toBe("osprey-glass");
+  expect(url.searchParams.get("kc_idp_hint")).toBeNull();
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  registerCovered("SIGN_IN_ACTIONS", "sign-in-with-an-account-beside-the-organisation");
+});
+
 test("the welcome page's theme switches by keyboard", async ({ page }) => {
   await page.goto("/keyboard/sign-in-harness.html");
   await tabTo(page, "Light theme");
