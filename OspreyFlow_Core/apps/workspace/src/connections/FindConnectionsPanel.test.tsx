@@ -111,6 +111,7 @@ describe("choosing the two ends", () => {
     expect(screen.getByRole("status").textContent).toBe("Ada and Dee are 3 degrees apart.");
     const group = screen.getByRole("region", { name: "1 route at 3 degrees" });
     expect(within(group).getByText("Ada → Ben → Cy → Dee")).toBeTruthy();
+    expect(within(group).getByText(", by associate of, then associate of, then associate of")).toBeTruthy();
   });
 
   it("takes an end from the node selected on the canvas", async () => {
@@ -183,6 +184,44 @@ describe("the routes, widened one degree at a time", () => {
   it("says a search that did not complete in words", async () => {
     await ready(() => ({ status: 503 }));
     expect(screen.getByRole("alert").textContent).toBe("The search for connections failed (503). Try again.");
+  });
+});
+
+// Build order step 18c (the 3 November rehearsal's D5): Vance and Skellion's five routes at two
+// degrees read as three, two of them twice, because a route was written as its people alone; two
+// routes through the same people by different links are different routes, so each says its links,
+// by their labels (never the stored type id, rule 7).
+describe("routes through the same people by different links", () => {
+  it("each names its links by label, so no two read alike", async () => {
+    const shared = route("a", "x", "d");
+    const passes = {
+      ...route("a", "x", "d"),
+      edges: [
+        { id: "ax-2", type: "PASSES_ITEMS_TO", source: "a", target: "x" },
+        { id: "xd", type: "ASSOCIATE_OF", source: "x", target: "d" },
+      ] as unknown as Edge[],
+    };
+    shared.edges[0] = { id: "ax-1", type: "SHARED_CELL_WITH", source: "a", target: "x" } as unknown as Edge;
+    serve(() => ({ body: { degree: 2, paths: [shared, passes], more: false, searched_to: 2 } }));
+    const given = {
+      ...props(),
+      edgeTypes: [
+        { name: "SHARED_CELL_WITH", label: "Shared a cell with" },
+        { name: "PASSES_ITEMS_TO", label: "Passes items to" },
+        { name: "ASSOCIATE_OF", label: "Associate of" },
+      ],
+    };
+    const { rerender } = render(<FindConnectionsPanel {...given} selected={ADA} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use the selected node as From" }));
+    rerender(<FindConnectionsPanel {...given} selected={DEE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use the selected node as To" }));
+    await find();
+    const items = within(screen.getByRole("region", { name: "2 routes at 2 degrees" })).getAllByRole("listitem");
+    const said = items.map((li) => li.textContent ?? "");
+    expect(said[0]).toContain("Ada → Xan → Dee, by shared a cell with, then associate of");
+    expect(said[1]).toContain("Ada → Xan → Dee, by passes items to, then associate of");
+    expect(new Set(said).size).toBe(2);
+    for (const text of said) expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]/);
   });
 });
 

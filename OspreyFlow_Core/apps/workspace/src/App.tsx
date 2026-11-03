@@ -1951,6 +1951,7 @@ export function App() {
                             onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta)}
                             onMark={(marks) => setDegreeMarks((prev) => new Map([...prev, ...marks]))}
                             onClearMarks={() => setDegreeMarks(new Map())}
+                            edgeTypes={edgeTypes}
                           />
                         ),
                       },
