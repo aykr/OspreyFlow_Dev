@@ -69,10 +69,11 @@ jobs:
       # Scanned first, as the amd64 image, before anything is pushed.
       - name: Build for the scan
         run: |
-          docker buildx build --platform linux/amd64 --load -f ${{ matrix.dockerfile }} \
+          docker buildx build --pull --platform linux/amd64 --load -f ${{ matrix.dockerfile }} \
             -t "${{ steps.name.outputs.image }}:scan" "${{ matrix.context || '.' }}"
       - uses: aquasecurity/trivy-action@v0.24.0
         with:
+          version: v0.76.1
           image-ref: ${{ steps.name.outputs.image }}:scan
           scan-type: image
           scanners: vuln
@@ -85,7 +86,7 @@ jobs:
       - name: Build both platforms and push
         id: push
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 --push \
+          docker buildx build --pull --platform linux/amd64,linux/arm64 --push \
             -f ${{ matrix.dockerfile }} -t "${{ steps.name.outputs.image }}:$GITHUB_SHA" \
             --metadata-file meta.json "${{ matrix.context || '.' }}"
           echo "ref=${{ steps.name.outputs.image }}@$(jq -r '."containerimage.digest"' meta.json)" >> "$GITHUB_OUTPUT"

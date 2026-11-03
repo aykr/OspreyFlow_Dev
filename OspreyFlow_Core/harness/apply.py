@@ -1248,7 +1248,7 @@ def main(
         if args.no_build:
             result.record("build", "skipped (--no-build): using the images already in the daemon")
         else:
-            _run(_compose(compose_file) + ["build"], stage="build")
+            _run(_compose(compose_file) + ["build", "--pull"], stage="build")
             result.record("build", "owned images built from this checkout")
 
         # 4. Up, then a per-service wait that names what did not make it.

@@ -49,7 +49,7 @@ ENV VITE_API_BASE_URL=""
 
 RUN npm run build --workspace apps/workspace
 
-FROM nginx:1.27-alpine
+FROM nginx:1.30-alpine
 
 # Base-image OS packages lag the upstream image's own last-published point
 # release; picking up current Alpine security patches at build time is

@@ -186,7 +186,7 @@ def _docker_build_docs_layer(base_image: ImageRef, docs_site_dir: Path, tag: Ima
     )
     try:
         subprocess.run(
-            ["docker", "build", "-f", str(dockerfile_path), "-t", tag, str(docs_site_dir)],
+            ["docker", "build", "--pull", "-f", str(dockerfile_path), "-t", tag, str(docs_site_dir)],
             check=True,
             timeout=300,
         )

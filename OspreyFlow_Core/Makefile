@@ -35,13 +35,13 @@ trivy:
 # noise, not a gate. A vulnerability in a package we actually chose — a
 # Python dependency, or an OS package with a fix available — still fails.
 trivy-image-ingest:
-	docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+	docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ingest:ci
 
 # services/api's Dockerfile, Phase 3's own — same reasoning as
 # trivy-image-ingest above.
 trivy-image-api:
-	docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
+	docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/api:ci
 
 # apps/workspace's Dockerfile — Phase 4's own, paid at Stage 2 §5a as a
@@ -49,29 +49,29 @@ trivy-image-api:
 # ADR-049). Same reasoning as the two above; the base is Alpine rather than
 # Debian, which changes nothing about the gate.
 trivy-image-workspace:
-	docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+	docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/workspace:ci
 
 # harness/Dockerfile — Stage 2 §5b's own bootstrap image (spec/05_DEPLOYMENT.md §2's "one Docker
 # command"), paid here as a rule-8 repayment the same way apps/workspace's was at Stage 2 §5a.
 trivy-image-harness:
-	docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
+	docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/harness:ci
 
 # The four images the release scans and these checks did not (ADR-111 Amendment 7): v0.4.0's release
 # was the first to meet their findings. Same reasoning as the ones above; Superset builds from its own
 # folder.
 trivy-image-ner:
-	docker build -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+	docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ner:ci
 trivy-image-worker:
-	docker build -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+	docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/worker:ci
 trivy-image-report-sync:
-	docker build -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+	docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/report-sync:ci
 trivy-image-superset:
-	docker build -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+	docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
 
 # Install, start, stop and update the deployment with the `ospreyflow` command (`cli/`; ADR-114):
