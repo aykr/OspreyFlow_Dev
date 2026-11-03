@@ -22500,8 +22500,8 @@ packages an install cannot pull images or verify their signatures without a toke
    published only there.
 4. **`Solirius/ospreyflow` and its `ghcr.io/solirius/` packages are deleted** once v0.4.3 is released
    and checked at `aykr/OspreyFlow`, after a mirror is kept outside git.
-5. **Unchanged:** ADR-034 Amendment 1 (the product's statement naming Solirius Reply, and the personal
-   identifiers the packaging gate refuses). New commits to `aykr/OspreyFlow` are made as the neutral
+5. **Unchanged:** the product's statement naming Solirius Reply, and the personal identifiers the
+   packaging gate refuses. New commits to `aykr/OspreyFlow` are made as the neutral
    identity `OspreyFlow <331628805+ospreyflow@users.noreply.github.com>`; its existing history keeps the
    identity it was published with.
 
