@@ -250,3 +250,86 @@ def test_the_glass_learns_the_deployments_appearance() -> None:
         _render(appearance={"brand": "gov.uk"})
     with pytest.raises(ValueError, match="phase"):
         _render(appearance={"phase": "gamma"})
+
+
+# ---- ADR-114 Amendment 33 (drop 1): Small on a server of your own, its own certificate ----------
+
+_OWN = {"certificate": "/etc/ospreyflow/tls/osprey.crt", "key": "/etc/ospreyflow/tls/osprey.key"}
+_SERVER = "https://osprey.example.internal"
+
+
+def _own(**network: Any) -> dict[str, str]:
+    return _render(_SERVER, profile="small", network={"tls": _OWN, **network})
+
+
+def test_a_small_with_its_own_certificate_publishes_443_alone_on_every_interface() -> None:
+    """Decision 2: 443 on every interface, the graph store's door on loopback, and nothing else —
+    no port 80 (the certificate is not obtained, so there is no challenge to answer)."""
+    proxy = _compose(_own())["proxy"]
+    wide = [m for m in proxy["ports"] if _bound_to_every_interface(m)]
+    assert wide == ["443:8443"], proxy["ports"]
+    assert not any(m.split(":")[-1] in ("80", "8080") for m in proxy["ports"])
+    # One interface of a server with several, when asked.
+    chosen = _compose(_own(listen_address="192.0.2.10"))["proxy"]["ports"]
+    assert "192.0.2.10:443:8443" in chosen and "443:8443" not in chosen
+    # An address on another port publishes that port.
+    other = _render("https://osprey.example.internal:9443", profile="small",
+                    network={"tls": _OWN})  # fmt: skip
+    assert "9443:8443" in _compose(other)["proxy"]["ports"]
+
+
+def test_port_80_is_published_only_to_redirect_when_asked() -> None:
+    assert not any(":8080" in m for m in _compose(_own())["proxy"]["ports"])
+    asked = _own(redirect_http=True)
+    assert "80:8080" in _compose(asked)["proxy"]["ports"]
+    caddyfile = asked["Caddyfile"]
+    # Each name's plain-HTTP request is sent to its https:// address, and nothing more.
+    for name in ("osprey.example.internal", "id.osprey.example.internal",
+                 "bi.osprey.example.internal"):  # fmt: skip
+        block = caddyfile.split(f"http://{name} {{", 1)[1].split("\n}", 1)[0]
+        assert f"redir https://{name}{{uri}} 308" in block, block
+        assert "reverse_proxy" not in block
+    assert "http://osprey.example.internal {" not in _own()["Caddyfile"]
+
+
+def test_the_conduits_door_is_on_loopback_on_a_self_contained_small() -> None:
+    ports = _compose(_own(expose_conduit=True))["proxy"]["ports"]
+    assert "127.0.0.1:${OSPREY_API_PORT:-8000}:8000" in ports, ports
+    assert "${OSPREY_API_PORT:-8000}:8000" not in ports
+
+
+def test_the_graph_stores_door_stays_on_loopback_on_a_self_contained_small() -> None:
+    ports = _compose(_own())["proxy"]["ports"]
+    assert "127.0.0.1:${OSPREY_ARCADEDB_PORT:-2480}:2480" in ports
+
+
+def test_its_own_certificate_turns_acme_and_ocsp_stapling_off() -> None:
+    caddyfile = _own()["Caddyfile"]
+    globals_ = caddyfile.split("{", 1)[1].split("}", 1)[0]
+    for option in ("admin off", "persist_config off", "auto_https off", "ocsp_stapling off",
+                   "https_port 8443", "http_port 8080"):  # fmt: skip
+        assert option in globals_, globals_
+    compose = yaml.safe_load(_own()["compose.yaml"])
+    assert "proxy-data" not in (compose.get("volumes") or {})
+    assert not any("proxy-data" in str(v) for v in compose["services"]["proxy"].get("volumes", []))
+
+
+def test_every_name_is_served_with_the_given_certificate() -> None:
+    artefacts = _own()
+    caddyfile = artefacts["Caddyfile"]
+    for name in ("osprey.example.internal", "id.osprey.example.internal",
+                 "bi.osprey.example.internal"):  # fmt: skip
+        block = caddyfile.split(f"https://{name} {{", 1)[1]
+        assert block.lstrip().startswith("tls /certs/cert.pem /certs/key.pem"), block[:120]
+    volumes = _compose(artefacts)["proxy"]["volumes"]
+    assert "/etc/ospreyflow/tls/osprey.crt:/certs/cert.pem:ro" in volumes
+    assert "/etc/ospreyflow/tls/osprey.key:/certs/key.pem:ro" in volumes
+    # The key is mounted from where it is, never copied into the deployment's folder.
+    assert not any(name.endswith((".key", ".pem", ".crt")) for name in artefacts)
+
+
+def test_the_proxy_runs_unprivileged_with_its_own_certificate() -> None:
+    proxy = _compose(_own())["proxy"]
+    assert proxy["user"] == "${OSPREY_PROXY_UID:?}:${OSPREY_PROXY_GID:?}"
+    assert proxy["environment"]["XDG_DATA_HOME"].startswith("/tmp/")
+    assert proxy["healthcheck"]["test"][-1] == "http://127.0.0.1:8080/healthz"
