@@ -10,6 +10,7 @@ injectable, which is how the tests drive it without Docker.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import getpass
 import json
 import os
@@ -783,6 +784,8 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
 
     Or run by hand on a server of your own (Amendment 33): the same steps, every store in a
     container; without `--first-admin-code-file` the code is printed once, on this terminal."""
+    if answers.memory_gib == "auto":
+        answers = dataclasses.replace(answers, memory_gib=_measured_memory_gib(ctx))
     _write_config(ctx, answers, args.force)
     ctx.step("build and start the deployment", _apply_argv(ctx, args))
     # ADR-114 Amendment 16: the identity provider's settings beyond its realm import — Superset's
@@ -816,6 +819,25 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
                 "has no role until an administrator grants one in Admin, People and roles."
             )
     return 0
+
+
+def _measured_memory_gib(ctx: _Context) -> int:
+    """ADR-114 Amendment 33 decision 6: the memory Docker reports, in whole GiB, measured once, at
+    install, and written to `resources.memory_gib`; the render then reads the number, never the
+    machine."""
+    info = ctx.probes.docker_info() or {}
+    total = info.get("MemTotal")
+    if not isinstance(total, int | float) or total <= 0:
+        raise CommandRefused(
+            "server.memory_gib is auto, and Docker did not say how much memory it has. Give the "
+            "number of GiB instead (for example memory_gib: 64). Nothing was installed."
+        )
+    gibibytes = int(total // 2**30)
+    print(
+        f"The stores are sized to {gibibytes} GiB of memory, as Docker reports it "
+        "(resources.memory_gib in osprey.yaml; change it and run ospreyflow apply to resize)."
+    )
+    return gibibytes
 
 
 def _install_on_cluster(

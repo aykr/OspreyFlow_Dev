@@ -1038,6 +1038,38 @@ class ResourcesConfig(BaseModel):
                           self.postgres_shared_buffers_gib)
         )  # fmt: skip
 
+    @model_validator(mode="after")
+    def _the_stores_fit_the_server(self) -> ResourcesConfig:
+        """An override may not hand the three stores more than three quarters of the server: the
+        rest is Ollama's, Keycloak's, the Conduit's and the operating system's. Measured, the real
+        PostgreSQL does not refuse shared buffers beyond its memory (it reserves them and is
+        killed later), so the check is here. The rule's own values take at most half."""
+        if self.memory_gib is None:
+            return self
+        graph = (
+            self.graph_heap_gib
+            if self.graph_heap_gib is not None
+            else min(max(int(0.4 * self.memory_gib), 8), 31)
+        )
+        search = (
+            self.search_heap_gib
+            if self.search_heap_gib is not None
+            else min(max(self.memory_gib / 16, 0.5), 8)
+        )
+        shared = (
+            self.postgres_shared_buffers_gib
+            if (self.postgres_shared_buffers_gib is not None)
+            else min(max(self.memory_gib / 32, 0.25), 4)
+        )
+        total = graph + search + shared
+        if total > 0.75 * self.memory_gib:
+            raise ValueError(
+                f"resources gives the graph store, OpenSearch and PostgreSQL {total:g} GiB "
+                f"together, more than three quarters of resources.memory_gib ({self.memory_gib} "
+                "GiB); lower the overrides, or give the server more memory"
+            )
+        return self
+
 
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.

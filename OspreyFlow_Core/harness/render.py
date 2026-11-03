@@ -63,7 +63,7 @@ from harness.images import (
     daemon_then_registry_digest_resolver,
     unresolved_digest_resolver,
 )
-from harness.profiles import arcadedb_java_memory_opts
+from harness.profiles import arcadedb_java_memory_opts, postgres_command, store_memory
 from harness.realm import CONDUIT_CLIENT_ID
 from harness.reporting import reporting_env, reporting_services
 from harness.site import (
@@ -1031,6 +1031,25 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
         service.update(_SERVICE_EXTRAS.get(entry.service, {}))
         if entry.service == "proxy":
             service.update(proxy_service(config))
+        if config.resources.any and entry.service in ("arcadedb", "opensearch", "postgres"):
+            # ADR-114 Amendment 33 decision 6: the stores sized to the server, in each store's own
+            # definition — never in `deployment.env`, which every owned service reads whole, so a
+            # resize restarts the three stores alone.
+            sized = store_memory(config.resources)
+            if entry.service == "arcadedb":
+                service["environment"] = {
+                    **cast(dict[str, str], service["environment"]),
+                    "ARCADEDB_OPTS_MEMORY": (
+                        "${OSPREY_ARCADEDB_HEAP:-" + sized.graph_java_opts + "}"
+                    ),
+                }
+            elif entry.service == "opensearch":
+                service["environment"] = {
+                    **cast(dict[str, str], service["environment"]),
+                    "OPENSEARCH_JAVA_OPTS": sized.search_java_opts,
+                }
+            elif (command := postgres_command(sized)) is not None:
+                service["command"] = command
         if entry.service == "keycloak":
             # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
             # the browser's, by name through the proxy, or the services' inside the network.
@@ -1289,7 +1308,13 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_INGEST_ROOT={INGEST_CONTAINER_PATH}",
         # See the `arcadedb` stanza in `_SERVICE_EXTRAS` for why this is explicit rather than left
         # to the JVM's own container ergonomics.
-        f"OSPREY_ARCADEDB_HEAP={arcadedb_java_memory_opts(config.profile.value)}",
+        # A deployment sized to its server (ADR-114 Amendment 33 decision 6) carries its heap in
+        # the graph store's own definition instead, so a resize restarts the stores alone.
+        *(
+            []
+            if config.resources.any
+            else [f"OSPREY_ARCADEDB_HEAP={arcadedb_java_memory_opts('local-lite')}"]
+        ),
         # The analytics DuckDB file, placed *inside* the mounted data root rather than left on
         # `services/api/config.py`'s relative `data/analytics.duckdb` default — which resolves to
         # the container's own working directory, i.e. nowhere that survives the container.
