@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.12** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.13** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.13 | 2026-11-03 | §1: a level 0 diagram, who uses OspreyFlow and what it talks to. The administration guide has the level 1 diagram and every interface. |
 | 1.12 | 2026-11-02 | Checked against the code end to end (build order step 10). §7.6 and §7.7: the tests named are in the developer repository, beside the test suites, not in this one. |
 | 1.11 | 2026-11-02 | §7.6: the client's rarity measure (the default) and the IDF measure, the two compositions, dataset triggers and shared-value influencers, and the port's new parameters. New §7.7, The client's code and OspreyFlow's equivalent: their R function beside OspreyFlow's arithmetic, line by line, a worked synthetic example whose numbers match, the golden parity test, and the row shapes that do not map exactly. |
 | 1.10 | 2026-11-02 | New §7.6, Connection strength: the stored weight's formula, the influencer schema and its resolution order, influencers applied at read time under the reader's access, the rarity query, and shipping influencers in the weights file. §9.1: the strength and rarity routes and the influencers' routes. |
@@ -37,6 +38,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 ---
 
 ## 1. How OspreyFlow is built, for a data engineer
+
+![Level 0: the people who use OspreyFlow, its three tiers joined by four ports, and the identity provider, reporting, data in and the optional outside services beside it](images/architecture/level-0.svg)
+
+The administration guide has the level 1 diagram, with the technology in each component, and
+every interface with what crosses it.
 
 Three tiers; everything that passes between them crosses one of four typed ports:
 

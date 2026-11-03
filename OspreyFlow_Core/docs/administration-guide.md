@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.26** · 2026-11-02 · For OspreyFlow v0.4.1 · Issued
+**Version 1.27** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.27 | 2026-11-03 | "How OspreyFlow is built": a level 0 diagram (who uses OspreyFlow and what it talks to), a level 1 diagram (every component with the technology it is built on, and what each mode runs on), and a new section, "The interfaces, and what crosses each", giving each interface's direction, protocol, what crosses it and what guards it. |
 | 1.26 | 2026-11-02 | Checked against the code end to end (build order step 10). §10: Ask to search carries the case's handling and datasets, so the analyst's engine choice applies to it as to Ask the case; it no longer always runs on the local engine. |
 | 1.25 | 2026-11-02 | §9.2: the right to manage connection-strength influencers, held by the Analyst and Admin roles. §9.6: approving an installation-wide influencer version, a second person's decision; a case's own influencers need none. |
 | 1.24 | 2026-11-02 | §1, "HTTP or HTTPS": Lite now answers on this computer only — every port it publishes is bound to `127.0.0.1`, the Conduit's own port included — so other machines cannot reach it; Small and Enterprise must have an `https://` address, and `osprey.yaml` refuses a plain-HTTP one; a gov.uk address is refused for Lite. §8.1 says the same. |
@@ -56,6 +57,8 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 ## How OspreyFlow is built
 
+![Level 0: the people who use OspreyFlow, its three tiers joined by four ports, and the identity provider, reporting, data in and the optional outside services beside it](images/architecture/level-0.svg)
+
 Three tiers; everything that passes between them crosses one of four typed ports:
 
 | Tier | What it is |
@@ -74,6 +77,11 @@ Three tiers; everything that passes between them crosses one of four typed ports
 Two narrower ports sit beside them: the media store, for content files (an S3-protocol store —
 SeaweedFS or AWS S3 — or Azure Blob), and the recognition port.
 
+The level 1 diagram names the technology in each component. Versions are those the release pins;
+Small and Enterprise use the cloud's managed services where the diagram's last row says.
+
+![Level 1: every component by tier with the technology it is built on, the ports between the Conduit and the Vault, identity, reporting, and what each mode runs on](images/architecture/level-1.svg)
+
 **One door in.** A front proxy (Caddy) is the only published port: 80 on Lite, 80 and 443 with
 automatic HTTPS on Small and Enterprise. Behind it, at the deployment's address, are the Glass;
 sign-in (Keycloak) at `id.`; and dashboards (Superset) at `bi.`.
@@ -88,6 +96,34 @@ services.
 never merged in storage: matching records are linked with a score and shown as one at query time.
 Every read is checked against the reader's clearance, unit and handling codes,
 and a hidden record cannot be detected from a count, a path length or a chart.
+
+### The interfaces, and what crosses each
+
+Each interface has one direction, one owner and one guard. None of them lets a store's own query
+language, a source system's identifier or an unfiltered count reach the Glass.
+
+| Interface | From → to | How | What crosses | Guarded by |
+| --- | --- | --- | --- | --- |
+| **The front door** | Browser → front proxy (Caddy) → the Glass, the Conduit (`/v1`, through the Glass's nginx), sign-in at `id.`, dashboards at `bi.` | HTTPS on 443, with 80 only for the certificate and the move to HTTPS (Small, Enterprise); HTTP on 80, bound to `127.0.0.1` (Lite) | Every request | The only published port; every other container is on an internal network |
+| **Sign-in and token** | The Glass, Superset → identity provider → the Conduit | OpenID Connect, authorisation code with PKCE; a signed JWT access token | Credentials, typed only at the identity provider; then who the person is, their clearance, unit, handling codes and roles | Every token's signature checked against the provider's keys on every call |
+| **Rights** | The Conduit → the Glass (`GET /v1/me/rights`) | REST | What this person may do; the rail and menus follow it | Each route checks its own right, so the Conduit refuses whatever a stale screen offers |
+| **The API** | The Glass → the Conduit (`/v1/…`) | HTTPS, JSON, a bearer token on every call | Searches, working sets, edits, loads, reports, exports | Access control inside each store query; a result too large is refused with `limit_exceeded`, never cut silently |
+| **Live updates** | The Conduit → the Glass | WebSocket `/v1/investigations/{id}/stream`, opened with a one-time ticket that lasts 30 seconds; server-sent events for long-running progress | Changes to the open case; progress | The ticket is the person's own; the same access as the API |
+| **Administration** | The Admin area → the Conduit (`/v1/admin/…`) → the identity provider's admin API | REST | People, roles and access; datasets and their egress; dashboard identities; schedules; health and freshness | Administration rights (`manage_people`, `manage_dashboards`, `administer_system` and others); a dashboard is never given more than its registrar holds |
+| **Case access** | The Share panel → the Conduit (`/v1/investigations/{id}/access`) | REST | Who holds Viewer, Editor or Author on the case, by account id | The case's Author; every change kept in the case's history |
+| **GraphPort** | The Conduit → the graph store (ArcadeDB) | Gremlin over ArcadeDB's HTTP API, on the internal network only | Typed traversals; writes; a load's revert | The person's clearance and handling codes and the case's datasets are part of the traversal itself |
+| **AnalyticsPort** | The Conduit → DuckDB (inside the Conduit) or ClickHouse (HTTP) | In process, or HTTP on the internal network | Event aggregates, trends and histograms; never raw SQL from the Glass | The same filters inside the query; no count includes a record the reader cannot see |
+| **ComputePort** | The Conduit → rustworkx and NetworkX; the Glass → graphology in a Web Worker | In process | Centrality, communities, ownership chains | Computed over what the reader can see only; the two engines are held to the same conformance suite |
+| **ModelPort** | The Conduit → LiteLLM → Ollama, speaches, or a provider you configure | HTTP, OpenAI-compatible | Text, images and audio to extract from, describe, transcribe or embed; what returns is *inferred* until a person confirms it | Each dataset's egress (`none`, `contracted`, `any`) and the handling codes that may be sent (§10) |
+| **Recognition** | The Conduit → the NER sidecar (Stanza) | HTTP on the internal network | Text to tag with names, places and organisations | No route out; what it finds is *inferred* |
+| **Media store** | The Conduit and the ingest container → SeaweedFS, S3 or Azure Blob | The S3 protocol, or Blob's API | Content files, staging, site images, the tile cache | Private, encrypted storage; files reach the Glass only through the Conduit |
+| **Records, cache and search** | The Conduit → PostgreSQL, Valkey, OpenSearch | The internal network (TLS and a token on Enterprise's managed cache) | The Conduit's own records and audit; caches, the job queue and the change stream; text search | Reached only from the deployment's own network |
+| **Ingest** | The Ingest Studio, the ingest folder and connectors → the Conduit → the ingest container | REST; a watched folder | Files and rows, loaded under a published recipe | `edit_pipelines` and `schedule_pipelines`; a run is made as the person who set it; the case's rules judge each load before and after it commits, and hold the rows they refuse |
+| **Reporting feed** | report-sync → the Conduit (`/v1/reports/feed`) | REST, with the dashboard identity's own client credentials | Figures only, counted as that dashboard | The dashboard's own token and the cases it was given; every pull in the export ledger |
+| **Reporting mart** | report-sync → PostgreSQL `osprey_reports` → Superset or another BI tool | SQL, a read-only login | The feed's rows; pull times and failures | A read-only login; never the Conduit's own tables |
+| **Embedded board** | The Glass → the Conduit → Superset | Superset's embedded SDK, with a read-only guest token that lasts five minutes | One board | Given only to a viewer who could count every figure on it |
+| **Updates** | `ospreyflow update` → the repository's releases on GitHub and its images on `ghcr.io` | HTTPS | The list of releases, the release's lock and its images | The release's signature, made by this repository's own release workflow, checked with cosign before anything changes (§14) |
+| **Outside services** | A container on the egress network → model and speech-model downloads, a provider you configure, mail, your organisation's sign-in, online map tiles, the cloud's managed services | HTTPS | Only what the feature needs | A container joins the egress network only when its feature is switched on |
 
 ## 1. Choosing a mode
 
