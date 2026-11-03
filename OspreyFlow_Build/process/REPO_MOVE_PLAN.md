@@ -1,5 +1,10 @@
 # Moving the product repository to Solirius/ospreyflow
 
+> **Withdrawn, 3 November 2026 (ADR-114 Amendment 31).** The Solirius organisation does not let its members
+> make packages public or change a repository's visibility, so the move was reversed: the product stays at
+> `aykr/OspreyFlow` (v0.4.3), and `Solirius/ospreyflow` and its packages are deleted. The plan below is
+> kept as history.
+
 **Status:** planned 1 November 2026, at the owner's request. Runs last, after (owner, 1 November 2026):
 1. the GOV.UK deck work in flight;
 2. alerting and monitoring as a core feature (`ALERTING_MONITORING_PLAN.md`);

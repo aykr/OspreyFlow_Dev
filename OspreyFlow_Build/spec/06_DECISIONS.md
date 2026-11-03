@@ -22477,3 +22477,39 @@ repository, through `harness.update.real_host`'s own identity, against a cosign 
 only the identity its certificate names and refuses any other in cosign's words; red while
 `RELEASES_URL` named `aykr/OspreyFlow`); `tests/test_website_wording.py`
 `test_every_repository_address_on_the_site_is_the_products_new_home`.
+
+### ADR-114, Amendment 31 (3 November 2026) — the move to Solirius/ospreyflow withdrawn
+
+**The owner's ruling of 3 November 2026:** revert to `aykr/OspreyFlow` and delete `Solirius/ospreyflow`.
+Amendment 30 stays as written, as history; this amendment replaces it.
+
+**Why.** The Solirius organisation does not let its members make a package public, or change a
+repository's visibility; only an organisation owner can, and the owner has no such access. With private
+packages an install cannot pull images or verify their signatures without a token, so v0.4.2 at
+`Solirius/ospreyflow` could not be installed as the README describes.
+
+1. **The product repository is `https://github.com/aykr/OspreyFlow` again** (Amendments 21 and 27).
+   `make publish-user-repo`'s output is published there on top of its existing history. Images and the
+   chart stay under `ghcr.io/aykr/`; the site is its `gh-pages` branch at
+   `https://aykr.github.io/OspreyFlow/`, and `marketing_site/publish_pages.sh` stops unless the product
+   checkout's `origin` is `aykr/OspreyFlow`.
+2. **`harness/render.py` `RELEASES_URL` is `https://github.com/aykr/OspreyFlow/releases`.** A checkout
+   cloned from it accepts only that repository's `release.yml` signatures (Amendment 8).
+3. **The release is v0.4.3**, not v0.4.2: v0.4.2 was signed by `Solirius/ospreyflow`'s workflow, so a
+   second v0.4.2 would be two different releases under one name. CHANGELOG's v0.4.2 section says it was
+   published only there.
+4. **`Solirius/ospreyflow` and its `ghcr.io/solirius/` packages are deleted** once v0.4.3 is released
+   and checked at `aykr/OspreyFlow`, after a mirror is kept outside git.
+5. **Unchanged:** the product's statement naming Solirius Reply, and the personal identifiers the
+   packaging gate refuses. New commits to `aykr/OspreyFlow` are made as the neutral
+   identity `OspreyFlow <331628805+ospreyflow@users.noreply.github.com>`; its existing history keeps the
+   identity it was published with.
+
+**Tests**, each shown red first (evidence `s13r_*`): `tests/harness/test_signatures.py`
+`test_the_products_home_is_the_aykr_repository` and
+`test_a_release_signed_by_the_withdrawn_homes_workflow_is_refused` (red while `RELEASES_URL` named
+`Solirius/ospreyflow`); `tests/test_website_wording.py`
+`test_every_repository_address_on_the_site_is_the_products_home`,
+`test_the_home_page_links_to_the_products_home` and
+`test_the_address_check_flags_the_withdrawn_home_inside_the_bundles_template` (red while `repoUrl` named
+`Solirius/ospreyflow`).

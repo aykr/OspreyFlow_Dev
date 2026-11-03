@@ -6,17 +6,27 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.3 — 2026-11-03
+
+**OspreyFlow stays at `https://github.com/aykr/OspreyFlow`.** The move to `Solirius/ospreyflow`
+announced with v0.4.2 has been withdrawn, and that repository, its images and its site are deleted.
+Images and the Enterprise chart stay under `ghcr.io/aykr/`, and the site at
+`https://aykr.github.io/OspreyFlow/`. OspreyFlow is an open source intelligence mapping,
+anti-money-laundering and fraud detection platform, developed by Solirius Reply and released under the
+Apache License 2.0.
+
+- **Installed from `aykr/OspreyFlow` (v0.4.1 or earlier):** `ospreyflow update` brings you to this
+  release; nothing else to do.
+- **Installed from `Solirius/ospreyflow` (v0.4.2):** that install cannot update, because it looks for
+  releases in the deleted repository and accepts only its signatures. Back up anything you need
+  (`ospreyflow backup`), uninstall, and install again from a fresh clone:
+  `git clone https://github.com/aykr/OspreyFlow.git`, then `sh install.sh` (`install.ps1` on Windows).
+
+Everything in v0.4.2 below is in this release.
+
 ## v0.4.2 — 2026-11-02
 
-**Before you update: OspreyFlow has a new home.** This is the first release from
-`https://github.com/Solirius/ospreyflow`. OspreyFlow is an open source intelligence mapping,
-anti-money-laundering and fraud detection platform, developed by Solirius Reply and released under
-the Apache License 2.0. Images and the Enterprise chart are now published under `ghcr.io/solirius/`.
-An install cloned from the old repository, `aykr/OspreyFlow`, does not update to this release: it
-looks for releases in the old repository and accepts only that repository's signatures, and the old
-repository and its images will be deleted. Back up anything you need (`ospreyflow backup`), uninstall, and install again
-from a fresh clone:
-`git clone https://github.com/Solirius/ospreyflow.git`, then `sh install.sh` (`install.ps1` on Windows).
+Published only at `Solirius/ospreyflow`, since withdrawn (see v0.4.3); its changes are in v0.4.3.
 
 - **Monitoring and alerting, a core feature.**
   - One alert queue for every kind of alert, with severity, team, assignment and who claimed each one.
