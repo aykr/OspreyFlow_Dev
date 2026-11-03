@@ -344,3 +344,71 @@ def test_the_certificate_and_its_options_belong_to_a_self_contained_small() -> N
                listen_address="192.0.2.10")
     )  # fmt: skip
     assert chosen.network.redirect_http and chosen.network.listen_address == "192.0.2.10"
+
+
+# ---- ADR-114 Amendment 33 decision 4 (drop 2, unit 7): the organisation's identity provider -------
+
+_PROVIDER = {"label": "Example Organisation account",
+             "issuer": "https://login.example.internal/realms/org", "client_id": "osprey"}  # fmt: skip
+
+
+def _small_with_provider(**governance: object) -> dict[str, object]:
+    return {**_small(tls=_TLS), "governance": {"organisation_sign_in": "org",
+                                                "organisation_provider": _PROVIDER, **governance}}  # fmt: skip
+
+
+def test_the_organisations_provider_is_named_on_a_small_with_its_alias() -> None:
+    config = OspreyConfig.model_validate(_small_with_provider())
+    provider = config.governance.organisation_provider
+    assert provider is not None
+    assert (provider.label, provider.issuer, provider.client_id) == (
+        _PROVIDER["label"], _PROVIDER["issuer"], _PROVIDER["client_id"])  # fmt: skip
+    # It holds no secret: the model has no field for one, and refuses one by name.
+    with pytest.raises(ValidationError, match="client_secret"):
+        OspreyConfig.model_validate(
+            _small_with_provider(organisation_provider={**_PROVIDER, "client_secret": "x"})
+        )
+
+
+@pytest.mark.parametrize(
+    ("profile", "origin"),
+    [("local-lite", "http://ospreyflow.localhost"), ("cluster", "https://osprey.example.org")],
+)
+def test_the_organisations_provider_is_refused_on_lite_and_enterprise_in_words(
+    profile: str, origin: str
+) -> None:
+    raw: dict[str, object] = {
+        "profile": profile, "network": {"public_origin": origin},
+        "governance": {"organisation_sign_in": "org", "organisation_provider": _PROVIDER},
+    }  # fmt: skip
+    if profile == "cluster":
+        raw["cluster"] = {"shared_storage_class": "efs-sc"}
+        raw["external"] = {"postgres": {"host": "db.example.org"}, "valkey": {"host": "v.example.org"},
+                           "object_store": {"endpoint": "s3.example.org", "region": "eu-west-2"}}  # fmt: skip
+    with pytest.raises(ValidationError) as refused:
+        OspreyConfig.model_validate(raw)
+    words = str(refused.value)
+    assert "governance.organisation_provider" in words and "profile: small" in words, words
+
+
+@pytest.mark.parametrize(
+    ("governance", "words"),
+    [
+        ({"organisation_sign_in": None}, "governance.organisation_sign_in"),
+        ({"organisation_sign_in": "org/../x"}, "letters, digits"),
+        ({"organisation_provider": {**_PROVIDER, "issuer": "http://login.example.internal"}},
+         "https://"),
+        ({"organisation_provider": {**_PROVIDER, "issuer": "https://login.example.internal/"}},
+         "end with '/'"),
+        ({"organisation_provider": {**_PROVIDER, "client_id": ""}}, "client_id"),
+    ],
+)
+def test_the_organisations_provider_is_refused_without_what_keycloak_needs(
+    governance: dict[str, object], words: str
+) -> None:
+    """The alias is part of the redirect URI the organisation registers, so it is refused unless it
+    is plain; the issuer is the provider's own address, read over HTTPS for its discovery
+    document."""
+    with pytest.raises(ValidationError) as refused:
+        OspreyConfig.model_validate(_small_with_provider(**governance))
+    assert words in str(refused.value), str(refused.value)

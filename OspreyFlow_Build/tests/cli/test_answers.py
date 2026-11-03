@@ -291,8 +291,9 @@ def test_server_answers_make_a_small_osprey_yaml_with_its_address_and_certificat
           "key": "/k.pem"}, "relative"),  # fmt: skip
         ({"address": "https://osprey.example.internal", "listen_address": "not-an-ip"},
          "listen_address"),
-        ({"address": "https://osprey.example.internal", "memory_gib": "auto"}, "not built yet"),
-        ({"address": "https://osprey.example.internal", "backups": "/srv/b"}, "not built yet"),
+        ({"address": "https://osprey.example.internal", "memory_gib": 8}, "at least 16"),
+        ({"address": "https://osprey.example.internal", "memory_gib": "lots"}, "auto or a number"),
+        ({"address": "https://osprey.example.internal", "backups": "srv/b"}, "relative"),
         ({"address": "https://osprey.example.internal", "colour": "red"}, "colour"),
     ],
 )
@@ -304,16 +305,75 @@ def test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting
     assert words in str(refused.value)
 
 
-def test_organisation_sign_in_is_refused_until_it_is_built(tmp_path: Path) -> None:
-    """Drop 1 builds no broker (Amendment 33 unit 7 is drop 2): a `sign_in:` section is refused in
-    words rather than silently ignored, and the first administrator's email is taken."""
-    raw = {"mode": "small", "server": SERVER,
-           "sign_in": {"organisation": {"alias": "org"}}}  # fmt: skip
-    with pytest.raises(AnswersRefused, match="not built yet"):
-        load_answers(raw, packs=PACKS, home=tmp_path)
+def test_the_first_administrators_email_is_taken_on_a_server(tmp_path: Path) -> None:
     answers = load_answers({"mode": "small", "server": SERVER, "admin_email": "ops@example.internal"},
                            packs=PACKS, home=tmp_path)  # fmt: skip
     assert answers.admin_email == "ops@example.internal"
     with pytest.raises(AnswersRefused, match="admin_email"):
         load_answers({"mode": "lite", "admin_email": "ops@example.internal"}, packs=PACKS,
                      home=tmp_path)  # fmt: skip
+
+
+# ---- ADR-114 Amendment 33 drop 2: sign_in (unit 7), memory (unit 5), backups (unit 6) -------------
+
+ORGANISATION = {"alias": "org", "label": "Example Organisation account",
+                "issuer": "https://login.example.internal/tenant/v2.0", "client_id": "0000-1111"}  # fmt: skip
+
+
+def test_organisation_sign_in_answers_name_the_provider_in_osprey_yaml(tmp_path: Path) -> None:
+    """Decision 4: the provider's alias, label, issuer and client id reach `governance`; the client
+    secret is never an answer (it is `OSPREY_ORG_SIGN_IN_SECRET` at install)."""
+    config = _config({"mode": "small", "server": SERVER,
+                      "sign_in": {"organisation": ORGANISATION}}, tmp_path)  # fmt: skip
+    assert config.governance.organisation_sign_in == "org"
+    provider = config.governance.organisation_provider
+    assert provider is not None
+    assert (provider.label, provider.issuer, provider.client_id) == (
+        ORGANISATION["label"], ORGANISATION["issuer"], ORGANISATION["client_id"])  # fmt: skip
+    # Alias and label have defaults; issuer and client id do not.
+    bare = {"issuer": ORGANISATION["issuer"], "client_id": ORGANISATION["client_id"]}
+    plain = _config({"mode": "small", "server": SERVER, "sign_in": {"organisation": bare}},
+                    tmp_path)  # fmt: skip
+    assert plain.governance.organisation_sign_in == "org"
+    assert plain.governance.organisation_provider is not None
+
+
+@pytest.mark.parametrize(
+    ("raw", "words"),
+    [
+        ({"mode": "small", "server": SERVER,
+          "sign_in": {"organisation": {**ORGANISATION, "client_secret": "s3cr3t"}}},
+         "OSPREY_ORG_SIGN_IN_SECRET"),
+        ({"mode": "small", "server": SERVER,
+          "sign_in": {"organisation": {k: v for k, v in ORGANISATION.items() if k != "issuer"}}},
+         "sign_in.organisation.issuer"),
+        ({"mode": "small", "server": SERVER,
+          "sign_in": {"organisation": {**ORGANISATION, "issuer": "http://login.example.internal"}}},
+         "https://"),
+        ({"mode": "small", "server": SERVER, "sign_in": {"groups": True}}, "groups"),
+        ({"mode": "lite", "sign_in": {"organisation": ORGANISATION}}, "server:"),
+        ({"mode": "small", "external": {"postgres": {"host": "db.example.org"}},
+          "sign_in": {"organisation": ORGANISATION}}, "server:"),
+    ],
+)  # fmt: skip
+def test_organisation_sign_in_answers_are_refused_in_words(
+    tmp_path: Path, raw: dict[str, object], words: str
+) -> None:
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers(raw, packs=PACKS, home=tmp_path)
+    assert words in str(refused.value), str(refused.value)
+    assert "s3cr3t" not in str(refused.value)
+
+
+def test_server_memory_and_backups_reach_osprey_yaml(tmp_path: Path) -> None:
+    """Decisions 5 and 6: `server.backups` is where `ospreyflow backup` writes; a number for
+    `server.memory_gib` is written as `resources.memory_gib` (`auto` is measured by the install)."""
+    config = _config({"mode": "small",
+                      "server": {**SERVER, "memory_gib": 64, "backups": "/srv/ospreyflow/backups"}},
+                     tmp_path)  # fmt: skip
+    assert config.resources.memory_gib == 64
+    assert config.components.storage.backups == "/srv/ospreyflow/backups"
+    answers = load_answers({"mode": "small", "server": {**SERVER, "memory_gib": "auto"}},
+                           packs=PACKS, home=tmp_path)  # fmt: skip
+    assert answers.memory_gib == "auto"
+    assert "resources" not in osprey_config(answers, {})

@@ -40,6 +40,15 @@ a person at the prompts and CI install the same way.
       ingest: /srv/ospreyflow/ingest   # folders.ingest: where the CSV exports are put
       redirect_http: false         #   true also publishes 80, only to send people to 443
       listen_address: 192.0.2.10   #   optional: one interface of the server; default every one
+      backups: /srv/ospreyflow/backups  # where `ospreyflow backup` writes; ~/OspreyFlow/backups
+      memory_gib: auto             #   or a number (GiB): what the stores are sized to
+    sign_in:                       # small on a server, optional; without it, local accounts only
+      organisation:                #   the organisation's OpenID Connect provider (Entra ID, ADFS…)
+        alias: org                 #   in the address the organisation registers; default org
+        label: Example Department account  # its name on the sign-in pages
+        issuer: https://login.microsoftonline.com/<tenant>/v2.0
+        client_id: 00000000-0000-0000-0000-000000000000
+        # its client secret is never an answer: set OSPREY_ORG_SIGN_IN_SECRET for the install
     admin_email: ops@example.org   # small on a server: the first administrator's email
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
     starter: govuk-crime           # ADR-138: a theme and a domain, pre-filling the answers below
@@ -80,15 +89,23 @@ _TOP = {
     "mail", "external", "cluster", "starter", "appearance", "demo_accounts", "server",
     "admin_email", "sign_in",
 }  # fmt: skip
-#: ADR-114 Amendment 33: `server:`. `backups` and `memory_gib` are its drop 2 (units 5 and 6) and
-#: are refused by name until they are built, as `sign_in:` (unit 7) is.
-_SERVER = {"address", "certificate", "key", "ca", "ingest", "redirect_http", "listen_address"}
-_NOT_YET = {
-    "server.backups": "backups to a folder of their own (ADR-114 Amendment 33 unit 6)",
-    "server.memory_gib": "the stores sized to the server's memory (ADR-114 Amendment 33 unit 5)",
-    "sign_in": "organisation sign-in (ADR-114 Amendment 33 unit 7); without it people sign in "
-    "with accounts an administrator makes",
-}
+#: ADR-114 Amendment 33: `server:` (drop 1), with `backups` and `memory_gib` (drop 2, units 5–6).
+_SERVER = {
+    "address", "certificate", "key", "ca", "ingest", "redirect_http", "listen_address",
+    "backups", "memory_gib",
+}  # fmt: skip
+#: Amendment 33 decision 6 and the owner's answer 16: a server is at least a nominal 32 GB one
+#: (30 GiB as Docker reports it is `doctor`'s floor); the sizing rule's own floor is 16.
+MIN_MEMORY_GIB = 16
+#: Amendment 33 decision 4 (drop 2, unit 7): `sign_in.organisation`.
+_SIGN_IN = {"organisation"}
+_ORGANISATION = {"alias", "label", "issuer", "client_id"}
+#: The provider's alias when none is given: part of the address the organisation registers.
+DEFAULT_ORGANISATION_ALIAS = "org"
+DEFAULT_ORGANISATION_LABEL = "Organisation account"
+#: The organisation's client secret: from the installer's environment only (Amendment 33
+#: decision 4).
+ORGANISATION_SECRET_VARIABLE = "OSPREY_ORG_SIGN_IN_SECRET"
 _SECTIONS = {
     "components": {"dashboards"},
     "folders": {"ingest", "tiles"},
@@ -139,6 +156,13 @@ class Answers:
     server: dict[str, Any] = field(default_factory=dict)
     #: The first administrator's email, on a server of your own (a cloud's is `cloud.admin_email`).
     admin_email: str | None = None
+    #: Amendment 33 decision 5: where `ospreyflow backup` writes on a server of your own.
+    backups: Path | None = None
+    #: Amendment 33 decision 6: `"auto"` (measured by the install), a number of GiB, or None.
+    memory_gib: int | str | None = None
+    #: Amendment 33 decision 4: the organisation's identity provider — alias, label, issuer and
+    #: client id, as `governance` takes them. Empty without `sign_in.organisation`.
+    organisation: dict[str, str] = field(default_factory=dict)
 
 
 def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) -> dict[str, str]:
@@ -225,13 +249,6 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
         raise AnswersRefused(
             f"server: is for the small mode (Small on a server of your own), not {mode}"
         )
-    later = sorted(set(section) & {"backups", "memory_gib"})
-    if later:
-        key = later[0]
-        raise AnswersRefused(
-            f"server.{key} is not built yet: {_NOT_YET[f'server.{key}']}. Leave it out; nothing "
-            "was installed"
-        )
     _known("server", section, _SERVER)
     address = str(section.get("address") or "").strip()
     if not address:
@@ -280,7 +297,74 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
     found: dict[str, Any] = {"network": network}
     if section.get("ingest"):
         found["ingest"] = _host_path("server.ingest", section["ingest"], home)
+    if section.get("backups"):
+        found["backups"] = _host_path("server.backups", section["backups"], home)
+    if section.get("memory_gib") is not None:
+        found["memory_gib"] = _memory(section["memory_gib"])
     return found
+
+
+def _memory(value: object) -> int | str:
+    """Amendment 33 decision 6: `auto` (the install measures it once, as Docker reports it) or a
+    whole number of GiB, at least the sizing rule's floor."""
+    if value == "auto":
+        return "auto"
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AnswersRefused(
+            f"server.memory_gib is auto or a number of GiB (for example 64), not {value!r}"
+        )
+    if value < MIN_MEMORY_GIB:
+        raise AnswersRefused(
+            f"server.memory_gib is at least {MIN_MEMORY_GIB} (GiB); a server for this mode has "
+            f"30 or more, as Docker reports it. {value} was given"
+        )
+    return value
+
+
+def _organisation(section: object, server: bool) -> dict[str, str]:
+    """Amendment 33 decision 4: `sign_in.organisation`, the organisation's OpenID Connect provider
+    brokered by Keycloak; for Small on a server of your own only. Its client secret is never an
+    answer."""
+    if not isinstance(section, Mapping):
+        raise AnswersRefused(f"sign_in holds settings, not {section!r}")
+    _known("sign_in", section, _SIGN_IN)
+    if not server:
+        raise AnswersRefused(
+            "sign_in is for Small on a server of your own (with server:); nothing was installed"
+        )
+    organisation = section.get("organisation")
+    if organisation is None:
+        return {}
+    if not isinstance(organisation, Mapping):
+        raise AnswersRefused(f"sign_in.organisation holds settings, not {organisation!r}")
+    if any("secret" in str(key).lower() for key in organisation):
+        raise AnswersRefused(
+            "the organisation's client secret is never written in the answers file: set "
+            f"{ORGANISATION_SECRET_VARIABLE} in this terminal for the install (it is kept only in "
+            "the deployment's own secrets file)"
+        )
+    _known("sign_in.organisation", organisation, _ORGANISATION)
+    chosen = {
+        "alias": str(organisation.get("alias") or DEFAULT_ORGANISATION_ALIAS),
+        "label": str(organisation.get("label") or DEFAULT_ORGANISATION_LABEL),
+    }
+    for key in ("issuer", "client_id"):
+        value = str(organisation.get(key) or "").strip()
+        if not value:
+            raise AnswersRefused(
+                f"sign_in.organisation.{key} is needed: "
+                + ("the provider's issuer, for example "
+                   "https://login.microsoftonline.com/<tenant>/v2.0"
+                   if key == "issuer" else
+                   "the application (client) id the organisation registered for OspreyFlow")
+            )  # fmt: skip
+        chosen[key] = value
+    if not chosen["issuer"].startswith("https://"):
+        raise AnswersRefused(
+            f"sign_in.organisation.issuer {chosen['issuer']!r} must be an https:// address"
+        )
+    chosen["issuer"] = chosen["issuer"].rstrip("/")
+    return chosen
 
 
 def load_answers(
@@ -335,8 +419,6 @@ def load_answers(
             "managed services; lite runs its own"
         )
 
-    if "sign_in" in raw:
-        raise AnswersRefused(f"sign_in is not built yet: {_NOT_YET['sign_in']}. Leave it out")
     server: dict[str, Any] = {}
     if raw.get("server") is not None:
         server = _server(raw["server"], str(mode), home)
@@ -350,6 +432,9 @@ def load_answers(
                 "server: is Small on a server of your own: self-contained means every store in a "
                 "container. For a cloud's managed services (external:), leave out server:"
             )
+    organisation = (
+        _organisation(raw["sign_in"], bool(server)) if raw.get("sign_in") is not None else {}
+    )
     admin_email = raw.get("admin_email")
     if admin_email is not None and not server:
         raise AnswersRefused(
@@ -421,6 +506,9 @@ def load_answers(
         case_domains=starter.domain.case_domains if starter is not None else None,
         server=server.get("network", {}),
         admin_email=str(admin_email) if admin_email is not None else None,
+        backups=server.get("backups", home / "OspreyFlow" / "backups") if server else None,
+        memory_gib=server.get("memory_gib"),
+        organisation=organisation,
     )
 
 
@@ -469,4 +557,17 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
     if answers.server:
         # ADR-114 Amendment 33: the server's address, and its own certificate's paths.
         network.update(copy.deepcopy(answers.server))
+    if answers.backups is not None:
+        # Amendment 33 decision 5: where `ospreyflow backup` writes on this server.
+        storage["backups"] = str(answers.backups)
+    if isinstance(answers.memory_gib, int):
+        # Decision 6: a number given is written as it is; `auto` is measured by the install.
+        config["resources"] = {**(config.get("resources") or {}), "memory_gib": answers.memory_gib}
+    if answers.organisation:
+        # Decision 4: the organisation's provider, by name and address; its secret is never here.
+        governance = config.setdefault("governance", {})
+        governance["organisation_sign_in"] = answers.organisation["alias"]
+        governance["organisation_provider"] = {
+            k: answers.organisation[k] for k in ("label", "issuer", "client_id")
+        }
     return config
