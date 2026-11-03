@@ -60,7 +60,7 @@ test("add many from a list, added from the search box by keyboard, puts the node
   expect(await canvasNodes()).toBe(0);
   await page.getByRole("button", { name: "Add", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "1 added." })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "1 record is in the view." })).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__TOPBAR_CANVAS__!.hasNode("n-listed-1"))).toBe(true);
   expect(await canvasNodes()).toBe(1);
   const asked = await page.evaluate(() => (window as unknown as { __ADD_MANY__: string[] }).__ADD_MANY__);

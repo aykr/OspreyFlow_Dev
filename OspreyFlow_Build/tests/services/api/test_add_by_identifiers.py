@@ -146,7 +146,7 @@ async def test_mixed_kinds_resolve_through_the_access_filtered_lookup() -> None:
     graph = _graph()
     typed = ["Z1234ZZ, QQ123456A\n07700900123 SYN-70417", "Z9999ZZ", "hello"]
     result = await resolve_identifiers(graph, typed, ANALYST)
-    assert result.counts == IdentifierCounts(read=6, found=4, matched_nothing=2, repeated=0)
+    assert result.counts == IdentifierCounts(read=6, found=4, matched_nothing=2, repeated=0, records=4)
     assert [n.id for n in result.nodes] == ["p1", "p2", "e1", "e2"]
     assert ("Person", "prison_number", "Z1234ZZ") in graph.calls
     assert ("Person", "nino", "QQ123456A") in graph.calls
@@ -160,7 +160,7 @@ async def test_three_spellings_of_one_number_count_once() -> None:
         graph, ["+447700900123\n07700 900123\n0044 7700 900123"], ANALYST
     )
     assert [n.id for n in result.nodes] == ["e1"]
-    assert result.counts == IdentifierCounts(read=3, found=3, matched_nothing=0, repeated=2)
+    assert result.counts == IdentifierCounts(read=3, found=3, matched_nothing=0, repeated=2, records=1)
     assert graph.calls == [("Endpoint", "value_normalised", "+447700900123")]
 
 
@@ -172,7 +172,7 @@ async def test_a_repeated_identifier_adds_one_node() -> None:
 
 async def test_a_repeat_of_an_identifier_that_matched_nothing_is_still_repeated() -> None:
     result = await resolve_identifiers(_graph(), ["Z9999ZZ", "Z9999ZZ"], ANALYST)
-    assert result.counts == IdentifierCounts(read=2, found=0, matched_nothing=2, repeated=1)
+    assert result.counts == IdentifierCounts(read=2, found=0, matched_nothing=2, repeated=1, records=0)
 
 
 async def test_a_person_found_by_two_identifiers_is_added_once() -> None:
@@ -180,11 +180,22 @@ async def test_a_person_found_by_two_identifiers_is_added_once() -> None:
     result = await resolve_identifiers(graph, ["Z7777ZZ QQ777777A"], ANALYST)
     assert [n.id for n in result.nodes] == ["p9"]
     assert result.counts.found == 2
+    assert result.counts.records == 1
+
+
+async def test_records_is_how_many_different_records_were_found_and_what_is_added() -> None:
+    """Build order step 18c (the 3 November rehearsal's D7): J3 read "37 found" and then "36
+    added", because `found` counts each identifier that resolved, a repeat included, and the add is
+    of records, once each. `records` says how many different records were found, which is what the
+    add puts in the view."""
+    result = await resolve_identifiers(_graph(), ["Z1234ZZ", "QQ123456A", "z1234zz", "Z9999ZZ"], ANALYST)
+    assert (result.counts.found, result.counts.repeated, result.counts.records) == (3, 1, 2)
+    assert result.counts.records == len(result.nodes)
 
 
 async def test_an_endpoint_of_another_kind_is_not_a_match() -> None:
     result = await resolve_identifiers(_graph(), ["PIN-Z2345ZZ"], ANALYST)
-    assert result.counts == IdentifierCounts(read=1, found=0, matched_nothing=1, repeated=0)
+    assert result.counts == IdentifierCounts(read=1, found=0, matched_nothing=1, repeated=0, records=0)
     assert result.nodes == []
 
 
@@ -199,7 +210,7 @@ async def test_a_hidden_identifier_and_a_made_up_one_give_the_same_counts_and_wo
     assert (
         hidden.counts
         == made_up.counts
-        == IdentifierCounts(read=3, found=2, matched_nothing=1, repeated=0)
+        == IdentifierCounts(read=3, found=2, matched_nothing=1, repeated=0, records=2)
     )
     assert [n.id for n in hidden.nodes] == [n.id for n in made_up.nodes]
     assert [c[:2] for c in hidden_graph.calls] == [c[:2] for c in made_up_graph.calls]
@@ -243,7 +254,7 @@ async def test_an_account_is_found_when_a_pin_handle_holds_the_same_text() -> No
     graph = _Graph(handle, account)
     result = await resolve_identifiers(graph, ["SYN-70417"], ANALYST)
     assert [n.id for n in result.nodes] == ["e-account"]
-    assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0)
+    assert result.counts == IdentifierCounts(read=1, found=1, matched_nothing=0, repeated=0, records=1)
     reversed_order = _Graph(account, handle)
     again = await resolve_identifiers(reversed_order, ["SYN-70417"], ANALYST)
     assert [n.id for n in again.nodes] == ["e-account"]

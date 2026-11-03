@@ -23620,3 +23620,22 @@ Decided by the coordinator's worker under that ruling.
   `test_a_mapped_first_draft_holds_the_files_map_and_is_neither_verified_nor_published`,
   `test_a_restore_from_the_file_puts_back_the_label_connect_and_the_map`. Shown red first
   (`red/s18c_d4_*`). `tests/ingest/test_pid_seed_live.py` is changed to the new contract.
+
+### ADR-128, Amendment 6 (3 November 2026) — add many from a list says how many records it found (build order step 18c, D7)
+
+The 3 November rehearsal's J3 read "40 identifiers read. 37 found. 3 matched nothing you can see. 1
+repeated." and then "36 added". Both were right: `found` counts each identifier that resolved, a repeat
+included (Amendment 1: "three spellings of one number are three read, three found, two repeated, and one
+node"), while the add puts each record in the view once. Nothing was lost; the words did not say so.
+
+- **`records`.** `IdentifierCounts` gains `records`, the different records found (`len(nodes)` of
+  `resolve_identifiers`), of the reader's own view as `found` is (rule 3). Where it is fewer than `found`
+  the count says so: "37 found, naming 36 different records."
+- **After the add.** The box says how many records are in the view ("36 records are in the view."), not
+  "36 added": the delta carries every record found, one already on the canvas included, so "added" was
+  not exact either.
+- **Tests that would fail (rule 12).** `tests/services/api/test_add_by_identifiers.py::
+  test_records_is_how_many_different_records_were_found_and_what_is_added` (and `records` in every counts
+  comparison, live ones included); `apps/workspace/src/search/addFromListApi.test.ts` ("countSentence when
+  two identifiers name one record"); `AddFromList.test.tsx`; the keyboard cases in `keyboard/explore.spec.ts`
+  and `keyboard/shell.spec.ts`. Red first (`red/s18c_d7_*`).

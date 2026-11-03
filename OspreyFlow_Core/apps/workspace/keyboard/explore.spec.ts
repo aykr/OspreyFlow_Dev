@@ -277,7 +277,7 @@ test("a pasted list is counted, then added without its links, by keyboard", asyn
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__EXPLORE__?.deltas)).toEqual([11]);
   expect(asked[1]).toEqual({ identifiers: ["Z1234ZZ 07700900123"], confirm: true, with_links: false });
-  await expect(page.getByText("2 added.")).toBeVisible();
+  await expect(page.getByText("2 records are in the view.")).toBeVisible();
   registerCovered(REGISTRY, "paste-a-list-count-it-and-confirm-the-add-by-keyboard");
 });
 

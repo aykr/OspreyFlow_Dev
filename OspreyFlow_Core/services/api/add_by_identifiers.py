@@ -22,7 +22,8 @@ nodes share the value than a lookup by kind reads and none of the kind was among
 a silent miss, so not "matched nothing"; see `FindLimitExceeded`); `matched_nothing` is `read` less
 `found` less `undecided`;
 `repeated` those that name what an earlier one in the list did (three spellings of one number are
-three read, three found, two repeated, and one node). Nodes are added once.
+three read, three found, two repeated, and one node); `records` the different records found, which
+is what is added. Nodes are added once.
 
 **The limit.** More than `MAX_IDENTIFIERS` after splitting is refused with
 `TooManyIdentifiersError`, carrying how many were given, before any lookup; never truncated
@@ -76,6 +77,10 @@ class IdentifierCounts(BaseModel):
     #: Identifiers a lookup could not decide: more visible nodes share the value than it reads, and
     #: none of the kind wanted was among those read. Not a miss, and not found.
     undecided: int = 0
+    #: How many different records were found (build order step 18c, D7): `found` counts each
+    #: identifier that resolved, a repeat and a second identifier of one record included, and the
+    #: add puts each record in the view once. Of the reader's own view, as `found` is (rule 3).
+    records: int = 0
 
 
 class AddByIdentifiersRequest(BaseModel):
@@ -182,5 +187,6 @@ async def resolve_identifiers(
         matched_nothing=len(readings) - found - undecided,
         repeated=repeated,
         undecided=undecided,
+        records=len(nodes),
     )
     return Resolution(counts=counts, nodes=nodes)

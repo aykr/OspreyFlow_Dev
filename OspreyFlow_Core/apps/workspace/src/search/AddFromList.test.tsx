@@ -114,7 +114,8 @@ describe("the confirm", () => {
     press("Add");
     await waitFor(() => expect(onApplyDelta).toHaveBeenCalledWith(DELTA));
     expect(sent[1]).toEqual({ identifiers: ["Z1234ZZ"], confirm: true, with_links: false });
-    expect((await screen.findByText("3 added.")).getAttribute("role")).toBe("status");
+    // D7: the records put in the view, never a figure that reads as fewer than were found.
+    expect((await screen.findByText("3 records are in the view.")).getAttribute("role")).toBe("status");
     // Done: the count is gone, so a second press cannot add the list twice.
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });

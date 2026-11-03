@@ -94,7 +94,11 @@ export function AddFromList({ apiBaseUrl, bearerToken, investigationId, onApplyD
       setCounts(null);
       setText("");
       if (fileInput.current) fileInput.current.value = "";
-      setSaid(`${new Intl.NumberFormat("en-GB").format(nodes)} added.`);
+      // D7: the records now in the view, each once (one already there is among them), so the
+      // figure never reads as fewer than were found without saying why.
+      setSaid(
+        `${new Intl.NumberFormat("en-GB").format(nodes)} ${nodes === 1 ? "record is" : "records are"} in the view.`,
+      );
     } catch (err: unknown) {
       setProblem(err instanceof AddFromListError ? err.message : "The list could not be added.");
     } finally {
