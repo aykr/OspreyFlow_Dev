@@ -60,7 +60,7 @@ import types
 import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -734,14 +734,15 @@ def _is_picture(entity: Any) -> bool:
 
 
 def _interval(plan: Any, link: Any) -> tuple[datetime, datetime | None] | None:
-    """A link's interval as the files and the store writes hold it: a span from its first date's
-    start to its last date's end (open when it has no last), anything else from its first to its
-    last instant, `link_instants` being the one function that dates an occurrence."""
+    """A link's interval as the files and the store writes hold it: a span from `span_start` (its
+    first date at a time of the establishment's day, ADR-120 Amendment 18) to its last date's end
+    (open when it has no last), anything else from its first to its last instant, `link_instants`
+    being the one function that dates an occurrence."""
     if link.link_type in ("HELD_AT", "PRESENT_AT", "PASSES_ITEMS_TO"):
         if link.first_seen is None:
             return None
         last = None if link.last_seen is None else pid_plan.end_of(link.last_seen)
-        return (pid_plan.start_of(link.first_seen), last)
+        return (pid_plan.span_start(link), last)
     instants = pid_plan.link_instants(plan, link)
     return (min(instants), max(instants)) if instants else None
 
@@ -2005,20 +2006,24 @@ def test_every_link_interval_is_the_one_link_instants_gives(demo: Any) -> None:
         (edge,) = [e for e in edges if e.id == pid_plan.link_id(lk)]
         return edge.interval
 
+    # Since Amendment 18 a date takes a time of the establishment's day, so the interval runs from a
+    # time on the first day (never its 00:00:00) to a time on the last; a span still ends at its
+    # last day's 23:59:59.
+    def on(moment: datetime, day: date) -> bool:
+        return moment.date() == day and moment.time() != time(0, 0)
+
     call = one("COMMUNICATED_WITH", "pin:principal", "number:coordinator")
-    assert (call.valid_from, call.valid_to) == (
-        datetime(2025, 9, 1, tzinfo=UTC), datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
-    )
+    assert on(call.valid_from, date(2025, 9, 1)) and on(call.valid_to, date(2026, 4, 30))
+    assert call.valid_to != datetime(2026, 4, 30, 23, 59, 59, tzinfo=UTC)
     find = one("USES", "relay_1", "handset:find_01")
     noon = datetime(2026, 1, 5, 12, tzinfo=UTC)
     assert (find.valid_from, find.valid_to) == (noon, noon)
     assert one("USES", "principal", "pin:principal") is None
     held = one("HELD_AT", "principal", "est:fenwick-moor")
-    assert held.valid_from == datetime(2024, 6, 3, tzinfo=UTC) and held.valid_to is None
+    assert on(held.valid_from, date(2024, 6, 3)) and held.valid_to is None
     passes = one("PASSES_ITEMS_TO", "principal", "relay_1")
-    assert (passes.valid_from, passes.valid_to) == (
-        datetime(2026, 1, 12, tzinfo=UTC), datetime(2026, 4, 28, 23, 59, 59, tzinfo=UTC)
-    )
+    assert on(passes.valid_from, date(2026, 1, 12))
+    assert passes.valid_to == datetime(2026, 4, 28, 23, 59, 59, tzinfo=UTC)
 
 
 def test_the_written_nodes_and_links_are_declared_in_the_composed_ontology(demo: Any) -> None:

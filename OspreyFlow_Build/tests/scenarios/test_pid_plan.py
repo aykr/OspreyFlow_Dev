@@ -3410,22 +3410,32 @@ def _plan_link(n: int, first: Any, last: Any) -> Any:
 
 
 def test_occurrence_instants_follow_the_one_rule() -> None:
+    """Amendment 9's days, Amendment 18's times: the first on `first_seen`, the last on
+    `last_seen`, the i-th of the rest on a day of its own share of the span (half a step either
+    side of the even spread's point), each at a time of the establishment's day; distinct,
+    ascending, to the second, in UTC, and the same on every call."""
     first, last = date(2026, 1, 10), date(2026, 3, 12)
     start = datetime(2026, 1, 10, tzinfo=UTC)
     end = datetime(2026, 3, 12, 23, 59, 59, tzinfo=UTC)
     span = int((end - start).total_seconds())
     for n in (2, 3, 4, 7, 60):
         got = pid_plan.occurrence_instants(_plan_link(n, first, last))
-        # The first is at `first_seen` 00:00:00Z, the last at `last_seen` 23:59:59Z, and the rest
-        # are evenly spaced and truncated to the second.
-        assert got == [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)], n
-        assert got[0] == start and got[-1] == end
-        assert got == sorted(got) and len(got) == n
+        assert got == pid_plan.occurrence_instants(_plan_link(n, first, last)), n
+        assert got == sorted(got) and len(set(got)) == n, n
+        assert got[0].date() == first and got[-1].date() == last, n
+        step = span / (n - 1)
+        for i, moment in enumerate(got[1:-1], start=1):
+            low = (start + timedelta(seconds=step * (i - 0.5))).date()
+            high = (start + timedelta(seconds=step * (i + 0.5) - 1)).date()
+            assert low <= moment.date() <= high, (n, i, moment)
         assert all(g.utcoffset() == timedelta(0) and g.microsecond == 0 for g in got)
-    # One occurrence: that day at 12:00:00Z (a link of one occurrence has one date).
-    assert pid_plan.occurrence_instants(_plan_link(1, first, first)) == [
-        datetime(2026, 1, 10, 12, tzinfo=UTC)
+    # One occurrence: on its one day (a link of one occurrence has one date), not at a fixed hour.
+    ones = [
+        pid_plan.occurrence_instants(dataclasses.replace(_plan_link(1, first, first), key=f"t{k}"))
+        for k in range(40)
     ]
+    assert all(len(o) == 1 and o[0].date() == first for o in ones)
+    assert len({o[0].hour for o in ones}) > 5
     # A datetime in the plan is used as it is, at either end.
     a = datetime(2026, 2, 3, 7, 30, tzinfo=UTC)
     b = datetime(2026, 2, 3, 9, 45, tzinfo=UTC)
@@ -3433,32 +3443,45 @@ def test_occurrence_instants_follow_the_one_rule() -> None:
     assert pid_plan.occurrence_instants(_plan_link(2, a, b)) == [a, b]
     assert pid_plan.occurrence_instants(_plan_link(3, a, b)) == [a, middle, b]
     assert pid_plan.occurrence_instants(_plan_link(1, a, a)) == [a]
-    # Within one day: 00:00:00, then the truncated half of 86,399 seconds, then 23:59:59.
+    # Within one day: three distinct times of that day, ascending.
     day = date(2026, 2, 3)
     within_a_day = pid_plan.occurrence_instants(_plan_link(3, day, day))
-    assert [i.time().isoformat() for i in within_a_day] == [
-        "00:00:00", "11:59:59", "23:59:59",
-    ]  # fmt: skip
+    assert {i.date() for i in within_a_day} == {day} and len(set(within_a_day)) == 3
+    assert within_a_day == sorted(within_a_day)
     # An undated link has no instants, whatever its count.
     for n in (1, 2, 9):
         assert pid_plan.occurrence_instants(_plan_link(n, None, None)) == []
-    # The function never returns a `datetime` without an offset, and keeps the order of n.
     assert pid_plan.occurrence_instants(_plan_link(5, first, last)) != pid_plan.occurrence_instants(
         _plan_link(6, first, last)
     )
+
+
+def test_occurrence_instants_follow_the_establishments_day() -> None:
+    """Over many links the times follow `DAY_HOUR_WEIGHTS` (Amendment 18): about two thirds in
+    the hours the yards are in use, and no hour holds what the old rule's 00:00:00, 12:00:00 and
+    23:59:59 held. Red against a rule that puts every one-occurrence link at noon."""
+    hours: Counter[int] = Counter()
+    for k in range(3000):
+        link = dataclasses.replace(_plan_link(3, date(2026, 1, 5), date(2026, 1, 25)), key=f"x{k}")
+        hours.update(i.hour for i in pid_plan.occurrence_instants(link))
+        one = dataclasses.replace(_plan_link(1, date(2026, 1, 5), date(2026, 1, 5)), key=f"y{k}")
+        hours.update(i.hour for i in pid_plan.occurrence_instants(one))
+    total = sum(hours.values())
+    weights = pid_plan.DAY_HOUR_WEIGHTS
+    peak = sum(weights[h] for h in (8, 9, 10, 11, 13, 14, 15)) / sum(weights.values())
+    assert abs(sum(hours[h] for h in (8, 9, 10, 11, 13, 14, 15)) / total - peak) < 0.03
+    assert max(hours.values()) / total < 0.12, hours.most_common(3)
 
 
 def test_occurrence_instants_use_the_one_date_given_as_both_ends() -> None:
     """A link with one end dated (the coordinator's ruling): that date is both ends. Catches a
     function that returns nothing, or fails, for a link with only a first or only a last date."""
     day = date(2026, 2, 3)
-    noon = datetime(2026, 2, 3, 12, tzinfo=UTC)
-    whole_day = ["00:00:00", "11:59:59", "23:59:59"]
     for first, last in ((day, None), (None, day)):
-        assert pid_plan.occurrence_instants(_plan_link(1, first, last)) == [noon]
+        (one,) = pid_plan.occurrence_instants(_plan_link(1, first, last))
+        assert one.date() == day
         three = pid_plan.occurrence_instants(_plan_link(3, first, last))
-        assert [i.time().isoformat() for i in three] == whole_day
-        assert {i.date() for i in three} == {day}
+        assert {i.date() for i in three} == {day} and len(set(three)) == 3
     stamp = datetime(2026, 2, 3, 7, 30, tzinfo=UTC)
     assert pid_plan.occurrence_instants(_plan_link(2, stamp, None)) == [stamp, stamp]
     assert pid_plan.occurrence_instants(_plan_link(2, None, stamp)) == [stamp, stamp]
@@ -3714,7 +3737,8 @@ def _date_problems(
     """The dates in the rows are the plan's, by the one function `pid_plan.link_instants`: an own
     counted link's rows are its instants (a call link's follow its weekly counts), a carried link's
     rows all hold its one date (a date-time as it is, a day at 12:00:00Z), a span's two columns are
-    its first day 00:00:00Z and its last day 23:59:59Z (or empty where open), and an undated
+    `span_start` (on its first day, at a time of the establishment's day, Amendment 18) and its last
+    day 23:59:59Z (or empty where open), and an undated
     link's shape holds no date column. `keys` limits the links looked at."""
     out: list[str] = []
     for lk in view.all_links:
@@ -3738,7 +3762,9 @@ def _date_problems(
         if lk.link_type in ("HELD_AT", "PRESENT_AT"):
             low, high = cols
             want_end = "" if lk.last_seen is None else _iso(_end_of(lk.last_seen))
-            if cells[low] != [_iso(_start_of(lk.first_seen))] or cells[high] != [want_end]:
+            want_start = _iso(pid_plan.span_start(lk))
+            on_first_day = want_start[:10] == _iso(_start_of(lk.first_seen))[:10]
+            if cells[low] != [want_start] or not on_first_day or cells[high] != [want_end]:
                 out.append(f"{lk.key} {lk.link_type}: span {cells[low]} {cells[high]}")
             continue
         (col,) = cols
@@ -3957,8 +3983,9 @@ def test_the_rows_dates_are_the_shared_instants_spans_and_constants(
         (scale, scale_scan, shapes_of["scale"]),
     ):
         assert _date_problems(view, shapes, scan, _carriers(view)) == []
-    # The principal's calls to the coordinator: 201 of them, the first on the first day at
-    # 00:00:00Z and the last on the cut-off at 23:59:59Z, whatever the weeks hold.
+    # The principal's calls to the coordinator: 201 of them, the first on the first day and the
+    # last on the cut-off, whatever the weeks hold (since Amendment 18 at times of the day, not at
+    # 00:00:00Z and 23:59:59Z).
     (call,) = [
         lk for lk in demo.all_links
         if (lk.link_type, lk.source, lk.target)
@@ -3966,8 +3993,8 @@ def test_the_rows_dates_are_the_shared_instants_spans_and_constants(
     ]  # fmt: skip
     cells = demo_scan.dates[(call.key, "call_start")]
     assert len(cells) == call.occurrences == 201
-    assert min(cells) == "2025-09-01T00:00:00+00:00"
-    assert max(cells) == "2026-04-30T23:59:59+00:00"
+    assert min(cells)[:10] == "2025-09-01" and min(cells) != "2025-09-01T00:00:00+00:00"
+    assert max(cells)[:10] == "2026-04-30" and max(cells) != "2026-04-30T23:59:59+00:00"
     assert all(c <= "2026-04-30T23:59:59+00:00" for c in cells)
     # Spans: a closed custody carries both ends, an open one an empty `end`.
     spans = [lk for lk in demo.all_links if lk.link_type in ("HELD_AT", "PRESENT_AT")]
@@ -4359,14 +4386,18 @@ def test_the_rows_weekly_call_counts_equal_the_aggregates(demo: View, demo_scan:
         link = calls[(aggregate.pin, aggregate.number)]
         cells = demo_scan.dates[(link.key, "call_start")]
         assert _weekly(cells) == list(aggregate.weekly), (aggregate.pin, aggregate.number)
-        # The first call is at `first_seen` 00:00:00Z, the last at `last_seen` 23:59:59Z, none
-        # after the cut-off.
-        assert min(cells) == _iso(_start_of(link.first_seen)), link.key
-        assert max(cells) == _iso(_end_of(link.last_seen)), link.key
+        # The first call is on `first_seen`, the last on `last_seen` (Amendment 18: at times of the
+        # day), none after the cut-off, and no two calls of a link at the same second.
+        assert min(cells)[:10] == _iso(_start_of(link.first_seen))[:10], link.key
+        assert max(cells)[:10] == _iso(_end_of(link.last_seen))[:10], link.key
         assert max(cells) <= "2026-04-30T23:59:59+00:00"
+        assert len(set(cells)) == len(cells), link.key
     # Every call lies within its own week's window (Monday 00:00:00 to Sunday 23:59:59, cut to the
-    # link's first and last day), and a single-call week in between sits at the window's midpoint.
+    # link's first and last day), and a single-call week in between is placed by the
+    # establishment's day, not at the window's midpoint (Amendment 18: the midpoint put about
+    # 38,000 calls at Thursday 11:59:59).
     midpoints = 0
+    single: Counter[tuple[int, int]] = Counter()
     for aggregate in demo.plan.calls:
         link = calls[(aggregate.pin, aggregate.number)]
         live = [w for w, n in enumerate(aggregate.weekly) if n]
@@ -4381,15 +4412,16 @@ def test_the_rows_weekly_call_counts_equal_the_aggregates(demo: View, demo_scan:
             high = min(monday + timedelta(days=7) - timedelta(seconds=1), _end_of(link.last_seen))
             assert all(low <= m <= high for m in moments), (link.key, week)
             if len(moments) == 1 and live[0] < week < live[-1]:
-                assert moments[0] == low + timedelta(seconds=int((high - low).total_seconds()) // 2)
+                single[(moments[0].weekday(), moments[0].hour)] += 1
                 midpoints += 1
     assert midpoints > 20, "the unidentified number's fortnightly calls are single-call weeks"
-    # The first call of a single-call first week is at the start, of a single-call last week at
-    # the end: the link's first and last calls take precedence over the midpoint.
+    assert len(single) > 100 and max(single.values()) / midpoints < 0.05, single.most_common(3)
+    # The first call of a single-call first week is on its first day, of a single-call last week
+    # on its last: the link's first and last calls keep the link's interval to its days.
     unidentified = calls[("pin:principal", "number:unidentified")]
     cells = sorted(demo_scan.dates[(unidentified.key, "call_start")])
-    assert cells[0] == _iso(_start_of(unidentified.first_seen))
-    assert cells[-1] == _iso(_end_of(unidentified.last_seen))
+    assert cells[0][:10] == _iso(_start_of(unidentified.first_seen))[:10]
+    assert cells[-1][:10] == _iso(_end_of(unidentified.last_seen))[:10]
     # The coordinator's December surge survives: one call a fortnight, then nine a week.
     principal = next(
         c for c in demo.plan.calls if (c.pin, c.number) == ("pin:principal", "number:coordinator")
@@ -4409,11 +4441,11 @@ def test_link_instants_is_the_one_function_for_own_and_carried_links(demo: View)
     carried = _carriers(demo)
     own = next(lk for lk in demo.all_links if lk.link_type == "VISITED" and lk.occurrences > 2)
     assert pid_plan.link_instants(plan, own) == pid_plan.occurrence_instants(own)
-    # A call link: its calls week by week, n of them, first and last at the ends.
+    # A call link: its calls week by week, n of them, first and last on the end days.
     call = _call_links(demo)[("pin:principal", "number:coordinator")]
     got = pid_plan.link_instants(plan, call)
     assert len(got) == call.occurrences == 201 and got == sorted(got)
-    assert got[0] == _start_of(call.first_seen) and got[-1] == _end_of(call.last_seen)
+    assert got[0].date() == call.first_seen and got[-1].date() == call.last_seen
     assert got != pid_plan.occurrence_instants(call)
     # A carried dated link: the constant of its rows, once per carrying row; an incident's date-time
     # as it is, a handset's found day at 12:00:00Z.
@@ -4737,9 +4769,11 @@ def test_a_cell_shares_week_start_cells_are_its_instants_not_mondays(
         mondays = [_iso(first + timedelta(days=7 * i)) for i in range(lk.occurrences)]
         if lk.occurrences >= 2:
             assert sorted(cells) != mondays, f"{lk.key}: a Monday every seven days"
-    # The cast's one-week share (the principal and cellmate_3): one cell, 6 January 2025 at noon.
+    # The cast's one-week share (the principal and cellmate_3): one cell, on 6 January 2025, at a
+    # time of the establishment's day (Amendment 18; before it, noon).
     (one,) = [lk for lk in shares if {lk.source, lk.target} == {"principal", "cellmate_3"}]
-    assert demo_scan.dates[(one.key, "week_start")] == ["2025-01-06T12:00:00+00:00"]
+    (cell,) = demo_scan.dates[(one.key, "week_start")]
+    assert cell[:10] == "2025-01-06" and cell == _iso(pid_plan.link_instants(demo.plan, one)[0])
     # Shown able to fail: the rows written as Mondays, a week apart from the first day, go red; so
     # does the one-week share written at midnight.
     many = next(lk for lk in shares if lk.occurrences >= 4)

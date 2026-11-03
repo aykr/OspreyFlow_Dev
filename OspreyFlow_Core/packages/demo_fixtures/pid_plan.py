@@ -55,11 +55,12 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+from bisect import bisect_right
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
-from functools import cached_property
+from functools import cache, cached_property
 from typing import Any, Literal
 
 from .pid_names import FORENAMES, STAFF_NAMES, SURNAMES
@@ -2614,12 +2615,84 @@ def _noon_of(value: date | datetime) -> datetime:
     return datetime(value.year, value.month, value.day, 12, tzinfo=UTC)
 
 
+#: The establishment's day (Amendment 18 of ADR-120): the weights by which a date the plan holds
+#: without a time of day becomes an instant. They are the throw-overs' own hours and weekdays, the
+#: regime's: busiest when the yards are in use (08:00 to 12:00 and 13:00 to 16:00) and at weekends.
+#: A date is never moved; only its time of day is chosen.
+DAY_HOUR_WEIGHTS: Mapping[int, int] = HOUR_COUNTS
+#: Used where the day is free as well (a PIN call link's calls within their week).
+DAY_WEEKDAY_WEIGHTS: Mapping[int, int] = WEEKDAY_COUNTS
+
+
+def _offset(*parts: object) -> float:
+    """A number in [0, 1) fixed by `parts`: no draw from any generator, so nothing else moves."""
+    digest = hashlib.blake2b("|".join(map(str, parts)).encode(), digest_size=8).digest()
+    return int.from_bytes(digest, "big") / 2**64
+
+
+@cache
+def _day_slots(first_weekday: int, days: int, by_weekday: bool) -> tuple[tuple[int, ...], ...]:
+    """The hour slots of `days` whole days from `first_weekday`: (day index, hour, weight,
+    cumulative weight to the slot's end)."""
+    slots: list[tuple[int, ...]] = []
+    total = 0
+    for d in range(days):
+        weekday = (first_weekday + d) % 7
+        for hour in range(24):
+            weight = DAY_HOUR_WEIGHTS[hour] * (DAY_WEEKDAY_WEIGHTS[weekday] if by_weekday else 1)
+            total += weight
+            slots.append((d, hour, weight, total))
+    return tuple(slots)
+
+
+def _times_in(first: date, last: date, n: int, *parts: object, by_weekday: bool) -> list[datetime]:
+    """`n` distinct instants, ascending, over the whole days `first` to `last`, placed by the
+    establishment's day: the i-th at the quantile `(offset + i/n) mod 1` of the day's weights (by
+    hour, and by weekday where `by_weekday`), the offset fixed by `parts`, to the second. Over many
+    links the instants follow the weights; no day outside the window is used."""
+    if n <= 0:
+        return []
+    slots = _day_slots(first.weekday(), (last - first).days + 1, by_weekday)
+    ends = [s[3] for s in slots]
+    total = ends[-1]
+    phi = _offset(*parts)
+    out: list[datetime] = []
+    for i in range(n):
+        x = ((phi + i / n) % 1.0) * total
+        j = min(bisect_right(ends, x), len(slots) - 1)
+        d, hour, weight, end = slots[j]
+        second = min(3599, int((x - (end - weight)) / weight * 3600))
+        day = first + timedelta(days=d)
+        out.append(datetime(day.year, day.month, day.day, hour, second // 60, second % 60,
+                            tzinfo=UTC))  # fmt: skip
+    return sorted(out)
+
+
+def _day_of(value: date | datetime) -> date:
+    return value.date() if isinstance(value, datetime) else value
+
+
+def span_start(link: PlanLink) -> datetime:
+    """A span's start (a custody's `custody_from`, a cell stay's `start`): a date-time in the plan
+    as it stands, a date at a time of the establishment's day (Amendment 18). Its end stays the
+    last day's 23:59:59."""
+    assert link.first_seen is not None
+    if isinstance(link.first_seen, datetime):
+        return link.first_seen
+    return _times_in(link.first_seen, link.first_seen, 1, link.key, "from", by_weekday=False)[0]
+
+
 def occurrence_instants(link: PlanLink) -> list[datetime]:
     """The instant of each of a link's occurrences, one rule for the files, the store writes and the
-    plan test: n = `occurrences`; the first at `first_seen` 00:00:00Z, the last at `last_seen`
-    23:59:59Z, the rest evenly spaced and truncated to the second; one occurrence is that day at
-    12:00:00Z (the plan gives it one date); a date-time in the plan is used as it is; a link with
-    one end dated uses it for both; an undated link has none."""
+    plan test: n = `occurrences`; the first on `first_seen`, the last on `last_seen`; the i-th of
+    the rest on a day within its own share of the span, chosen by the establishment's weekdays
+    (Amendment 9's even spread from `first_seen` 00:00:00Z to `last_seen` 23:59:59Z puts it at the
+    share's middle; the share runs half a step either side); then each day's occurrences at times
+    of the establishment's day by hour (Amendment 18), spread evenly through its weights from one
+    offset, so they are distinct (up to about 37,000 in a day) and ascending. One occurrence is on
+    its one day (the plan gives it one date). A date-time in the plan is used as it is (the plain
+    even spread between the two as they stand); a link with one end dated uses it for both; an
+    undated link has none."""
     first, last = link.first_seen, link.last_seen
     if first is None and last is None:
         return []
@@ -2627,39 +2700,55 @@ def occurrence_instants(link: PlanLink) -> list[datetime]:
     last = last if last is not None else first
     assert first is not None and last is not None
     n = link.occurrences
+    timed = isinstance(first, datetime) or isinstance(last, datetime)
     if n == 1:
-        return [_noon_of(first)]
+        if timed:
+            return [_noon_of(first)]
+        return _times_in(first, first, 1, link.key, first, by_weekday=False)
     start, end = _start_of(first), _end_of(last)
     span = int((end - start).total_seconds())
-    return [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)]
+    if timed:
+        return [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)]
+    step = span / (n - 1)
+    per_day: Counter[date] = Counter([first, last])
+    for i in range(1, n - 1):
+        lo = (start + timedelta(seconds=step * (i - 0.5))).date()
+        hi = (start + timedelta(seconds=step * (i + 0.5) - 1)).date()
+        if lo != hi:
+            lo = _times_in(lo, hi, 1, link.key, i, by_weekday=True)[0].date()
+        per_day[lo] += 1
+    out: list[datetime] = []
+    for day in sorted(per_day):
+        out += _times_in(day, day, per_day[day], link.key, day, by_weekday=False)
+    return out
 
 
 def _weekly_instants(link: PlanLink, weekly: Sequence[int]) -> list[datetime]:
-    """A PIN call link's calls week by week (Amendment 10 decision 1): week k runs from its Monday
-    00:00:00 to its Sunday 23:59:59 UTC, the first live week from the link's `first_seen`
-    00:00:00 and the last from its `last_seen` 23:59:59 at the latest; a week's n >= 2 calls sit at
-    `start + i (end - start) / (n - 1)` truncated to the second; a single call sits at the window's
-    midpoint, except that the link's first call is at the first live week's start and its last at
-    the last live week's end."""
+    """A PIN call link's calls week by week (Amendment 10 decision 1, as Amendment 18 places them):
+    week k runs from its Monday to its Sunday (UTC), the first live week from the link's
+    `first_seen` and the last to its `last_seen` at the latest; a week's calls take times of the
+    establishment's day: each call's day is chosen by weekday and hour over the days of its window,
+    except that the link's first call is on the first live week's first day and its last call on
+    the last live week's last day, so the stored interval runs from `first_seen` to `last_seen`;
+    then each day's calls take distinct times by hour, as `occurrence_instants` places them."""
     assert link.first_seen is not None and link.last_seen is not None
+    first_seen, last_seen = _day_of(link.first_seen), _day_of(link.last_seen)
     live = [w for w, n in enumerate(weekly) if n]
     out: list[datetime] = []
     for week in live:
-        monday = _start_of(CALL_START + timedelta(days=7 * week))
-        start = max(monday, _start_of(link.first_seen))
-        end = min(monday + timedelta(days=7) - timedelta(seconds=1), _end_of(link.last_seen))
-        span = int((end - start).total_seconds())
+        monday = CALL_START + timedelta(days=7 * week)
+        start = max(monday, first_seen)
+        end = min(monday + timedelta(days=6), last_seen)
         n = weekly[week]
-        if n == 1:
-            if week == live[0]:
-                at = start
-            elif week == live[-1]:
-                at = end
-            else:
-                at = start + timedelta(seconds=span // 2)
-            out.append(at)
-        else:
-            out += [start + timedelta(seconds=span * i // (n - 1)) for i in range(n)]
+        per_day: Counter[date] = Counter()
+        if week == live[0]:
+            per_day[start] += 1
+        if week == live[-1] and per_day.total() < n:
+            per_day[end] += 1
+        placed = _times_in(start, end, n - per_day.total(), link.key, week, by_weekday=True)
+        per_day.update(moment.date() for moment in placed)
+        for day in sorted(per_day):
+            out += _times_in(day, day, per_day[day], link.key, day, by_weekday=False)
     return out
 
 
@@ -2950,7 +3039,7 @@ def _fill_link(
     span = _SPAN_COLUMNS.get(shape.link_type)
     if span is not None:
         assert link.first_seen is not None
-        values[span[0]] = _start_of(link.first_seen).isoformat()
+        values[span[0]] = span_start(link).isoformat()
         values[span[1]] = "" if link.last_seen is None else _end_of(link.last_seen).isoformat()
     elif not owner:
         values[dates[0]] = link_instants(index.plan, link)[0].isoformat()
