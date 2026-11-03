@@ -82,6 +82,9 @@ class FakeKeycloak:
                                             for c, names in mapped.items() if c != "realm"}}  # fmt: skip
         if verb == "GET" and path.startswith("/users/") and path.endswith("/groups"):
             return 200, []
+        if verb == "GET" and path.startswith("/users/") and path.endswith("/federated-identity"):
+            # Links to an identity provider (ADR-114 Amendment 33): none in these realms.
+            return 200, []
         if verb == "GET" and path.startswith("/users/"):
             uid = path.split("/")[2]
             return (200, self._public(self.users[uid])) if uid in in_realm else (404, {})

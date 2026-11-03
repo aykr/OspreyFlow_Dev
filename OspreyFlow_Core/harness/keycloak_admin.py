@@ -488,3 +488,92 @@ def set_demo_admin_password(
     set_user_password(
         issuer=issuer, realm=realm, token=token, username=DEMO_ADMIN_SUBJECT, password=password
     )
+
+
+def ensure_identity_provider(
+    *,
+    issuer: str,
+    realm: str,
+    token: str,
+    provider: dict[str, Any],
+    mappers: list[dict[str, Any]],
+    client_secret: str,
+) -> str:
+    """The organisation's identity provider in the realm (ADR-114 Amendment 33 decision 4), made or
+    brought up to date: its endpoints read from its own discovery document **by Keycloak** — so
+    through Keycloak's truststore (`network.tls.ca`) and its route out, exactly as every later call
+    to the provider is made — its client secret set from the deployment's settings, and the
+    mappers that give a person arriving through it no role and no clearance.
+
+    Safe to repeat: the provider is updated in place (Keycloak never gives the secret back, so it
+    is written each time, as the mail server's password is), and a mapper already as rendered is
+    left alone. The secret is never in a line this returns or an error it raises; Keycloak's own
+    answer is not repeated where it may echo the representation."""
+    alias = provider["alias"]
+    discovery = f"{provider['config']['issuer']}/.well-known/openid-configuration"
+    base = f"{issuer}/admin/realms/{realm}/identity-provider"
+    status, discovered = _call(
+        f"{base}/import-config", token=token, data={"providerId": "oidc", "fromUrl": discovery}
+    )
+    if status != 200 or not isinstance(discovered, dict) or "authorizationUrl" not in discovered:
+        said = (
+            discovered.get("errorMessage") or discovered.get("error")
+            if isinstance(discovered, dict)
+            else None
+        )
+        raise RealmConfigurationFailed(
+            f"Keycloak could not read the organisation's sign-in settings from {discovery} "
+            f"({status}{': ' + str(said) if said else ''}). Check sign_in.organisation.issuer, "
+            "that "
+            "Keycloak can reach the provider (the one route out it needs), and — for a provider "
+            "on the organisation's own certificate authority — network.tls.ca"
+        )
+    wanted = {
+        **provider,
+        "config": {**discovered, **provider["config"], "clientSecret": client_secret},
+    }
+    status, existing = _call(f"{base}/instances/{alias}", token=token)
+    if status == 200 and isinstance(existing, dict):
+        status, _body = _call(
+            f"{base}/instances/{alias}",
+            token=token,
+            data={
+                **existing,
+                **wanted,
+                "config": {**existing.get("config", {}), **wanted["config"]},
+            },
+            method="PUT",
+        )
+        done = "brought up to date"
+    else:
+        status, _body = _call(f"{base}/instances", token=token, data=wanted)
+        done = "registered"
+    if status not in (200, 201, 204):
+        raise RealmConfigurationFailed(
+            f"Keycloak refused the organisation's sign-in {alias!r} ({status}); nothing of its "
+            "answer is repeated here, as it may carry the client credential"
+        )
+    status, held = _call(f"{base}/instances/{alias}/mappers", token=token)
+    by_name = {m.get("name"): m for m in held} if status == 200 and isinstance(held, list) else {}
+    for mapper in mappers:
+        current = by_name.get(mapper["name"])
+        if current is None:
+            status, body = _call(f"{base}/instances/{alias}/mappers", token=token, data=mapper)
+        elif current.get("config") != mapper["config"]:
+            status, body = _call(
+                f"{base}/instances/{alias}/mappers/{current['id']}",
+                token=token,
+                data={**current, **mapper},
+                method="PUT",
+            )
+        else:
+            continue
+        if status not in (200, 201, 204):
+            raise RealmConfigurationFailed(
+                f"Keycloak refused the organisation's sign-in mapper {mapper['name']!r}: "
+                f"{status} {body}"
+            )
+    return (
+        f"organisation sign-in {alias}: {done}, its client credential set from the deployment's "
+        "settings; people arriving through it have no role until an administrator grants one"
+    )

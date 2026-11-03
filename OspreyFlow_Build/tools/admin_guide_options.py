@@ -95,6 +95,10 @@ SECTIONS = {
     "cluster.hosts": "One machine.",
     "network": "The address the deployment answers at, and what it publishes.",
     "network.tls": "Small on a server of your own: the organisation's certificate (ADR-114 Amendment 33).",
+    "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
+    "provider, brokered by Keycloak; its client secret is never here (section 5a.1).",
+    "resources": "Small on a server of your own: the stores sized to the server's memory "
+    "(section 5a.2).",
     "map": "The basemaps the map offers.",
     "map.providers": "One basemap.",
     "map.providers.licence": "The basemap's licence.",

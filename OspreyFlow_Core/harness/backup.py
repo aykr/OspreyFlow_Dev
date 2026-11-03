@@ -82,8 +82,12 @@ from harness.render import (
     git_sha,
     load_config,
 )
-from harness.site import answer_localhost_with_loopback, deployment_origins
-from schemas.deployment import generated_folder
+from harness.site import (
+    answer_localhost_with_loopback,
+    answer_the_deployment_here,
+    deployment_origins,
+)
+from schemas.deployment import OspreyConfig, generated_folder, self_contained_small
 
 #: The realm the deployment's people live in (`harness/realm.py`).
 REALM = "osprey"
@@ -94,6 +98,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #: repository-local default for a `local-lite` machine; the rendered `OSPREY_BACKUP_ROOT` is what a
 #: real deployment uses, and `--out-root` is how an operator points at it.
 DEFAULT_BACKUP_ROOT = REPO_ROOT / "backups"
+
+
+def default_out_root(config: OspreyConfig) -> Path:
+    """Where a backup set is written when `--out-root` is not given: on Small on a server of your
+    own, the folder `server.backups` named (`components.storage.backups`, ADR-114 Amendment 33
+    decision 5); elsewhere the checkout's `backups/`, as before."""
+    if self_contained_small(config):
+        return Path(config.components.storage.backups)
+    return DEFAULT_BACKUP_ROOT
+
 
 #: The files that make a restore reproducible rather than merely possible. Each is copied verbatim
 #: and checksummed; `harness/restore.py` compares the ontology and handling scheme against the
@@ -507,6 +521,41 @@ AUDIT_DISPOSITION: dict[str, Any] = {
 }
 
 
+def new_set_folder(out_root: Path, profile: str) -> Path:
+    """A new set's folder under `out_root`, readable by its owner only: it holds the case data and
+    the people's identities with the dashboards' client secrets (ADR-114 Amendment 33 decision 5
+    puts it in a folder of its own on a server)."""
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = out_root / f"{stamp}-{profile}-{git_sha()}"
+    target.mkdir(parents=True, exist_ok=False)
+    target.chmod(0o700)
+    return target
+
+
+def backup_configuration(compose_file: Path, target: Path) -> list[tuple[str, Path]]:
+    """The deployment's settings and rendered files, by name: `CONFIGURATION_SOURCES`, then the
+    rendered `compose.yaml` and `realm.json`. **Only these:** never `deployment.env` (its secrets
+    are the deployment's own, §6.1), and never the organisation's certificate or key, which the
+    proxy mounts from where they are and the set only names, in `compose.yaml` (ADR-114 Amendment
+    33 decision 5)."""
+    written: list[tuple[str, Path]] = []
+    for relative, source in CONFIGURATION_SOURCES:
+        if not source.exists():
+            raise BackupFailed("configuration", f"{source} does not exist")
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        written.append(("configuration", destination))
+    for name in ("compose.yaml", "realm.json"):
+        rendered = compose_file.parent / name
+        if rendered.exists():
+            destination = target / "config" / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(rendered, destination)
+            written.append(("configuration", destination))
+    return written
+
+
 def run_backup(
     *,
     compose_file: Path,
@@ -549,9 +598,7 @@ def run_backup(
         )
     quiesced = not _conduit_is_running(compose_file)
 
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = out_root / f"{stamp}-{profile}-{git_sha()}"
-    target.mkdir(parents=True, exist_ok=False)
+    target = new_set_folder(out_root, profile)
 
     written: list[tuple[str, Path]] = []
     written.append(
@@ -585,20 +632,7 @@ def run_backup(
     )
     if recipes is not None:
         written.append(("recipes", recipes))
-    for relative, source in CONFIGURATION_SOURCES:
-        if not source.exists():
-            raise BackupFailed("configuration", f"{source} does not exist")
-        destination = target / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-        written.append(("configuration", destination))
-    for name in ("compose.yaml", "realm.json"):
-        rendered = compose_file.parent / name
-        if rendered.exists():
-            destination = target / "config" / name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(rendered, destination)
-            written.append(("configuration", destination))
+    written.extend(backup_configuration(compose_file, target))
 
     entries = []
     for item, path in written:
@@ -633,7 +667,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--profile", default=None)
-    parser.add_argument("--out-root", type=Path, default=DEFAULT_BACKUP_ROOT)
+    parser.add_argument(
+        "--out-root",
+        type=Path,
+        default=None,
+        help="where the set is written; default: server.backups on Small on a server of your "
+        "own, else the checkout's backups/",
+    )
     parser.add_argument("--generated-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument("--database", default="ospreyflow")
     parser.add_argument(
@@ -649,6 +689,10 @@ def main(argv: list[str] | None = None) -> int:
     # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
     answer_localhost_with_loopback()
     config = load_config(args.config)
+    # ADR-114 Amendment 33 decision 2: on a server, its own names here, its certificate trusted
+    # (the identity export reaches the deployment's identity provider).
+    answer_the_deployment_here(config)
+    out_root = args.out_root or default_out_root(config)
     # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
     profile = args.profile or generated_folder(config)
     compose_file = args.generated_root / profile / "compose.yaml"
@@ -663,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         target = run_backup(
             compose_file=compose_file,
-            out_root=args.out_root,
+            out_root=out_root,
             profile=profile,
             database=args.database,
             analytics_container_path=f"{config.components.storage.data}/analytics.duckdb",

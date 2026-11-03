@@ -368,3 +368,81 @@ def test_the_four_demo_personas_are_distinct_and_see_the_same_cases() -> None:
         attrs = users[name]["attributes"]
         assert (attrs["clearance"], attrs["org_unit"], attrs["receivable_handling_codes"]) == (["OFFICIAL"], ["verify"], ["P"])
         assert users[name]["email"].endswith("@ospreyflow.invalid") and users[name]["firstName"] == "Demo"
+
+
+# ---- ADR-114 Amendment 33 decision 4 (drop 2, unit 7): the organisation's identity provider -------
+
+_ORGANISATION = {
+    "profile": "small",
+    "network": {"public_origin": "https://osprey.example.internal",
+                "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
+                        "key": "/etc/ospreyflow/tls/osprey.key"}},
+    "governance": {"organisation_sign_in": "org",
+                   "organisation_provider": {"label": "Example Organisation account",
+                                             "issuer": "https://login.example.internal/realms/org",
+                                             "client_id": "osprey-broker"}},
+}  # fmt: skip
+
+
+def test_the_organisations_provider_is_rendered_with_no_secret() -> None:
+    """Decision 4: OIDC, PKCE, imported once (`syncMode: IMPORT`), the email not trusted, and no
+    client secret anywhere in what is rendered — it is set through Keycloak's admin API from the
+    deployment's own settings (as Amendment 32 does for the Conduit's)."""
+    import json
+
+    from harness.realm import organisation_provider, render_realm_json
+
+    config = OspreyConfig.model_validate(_ORGANISATION)
+    provider = organisation_provider(config)
+    assert provider is not None
+    assert provider["alias"] == "org" and provider["providerId"] == "oidc"
+    assert provider["displayName"] == "Example Organisation account"
+    assert provider["trustEmail"] is False and provider["enabled"] is True
+    settings = provider["config"]
+    assert settings["clientId"] == "osprey-broker"
+    assert settings["issuer"] == "https://login.example.internal/realms/org"
+    assert (settings["pkceEnabled"], settings["pkceMethod"]) == ("true", "S256")
+    assert settings["syncMode"] == "IMPORT"
+    assert settings["validateSignature"] == "true"
+    # The client is authenticated by a secret posted in the form, and that secret is in none of it.
+    assert settings["clientAuthMethod"] == "client_secret_post"
+    rendered = json.dumps(provider) + render_realm_json(config)
+    assert "clientSecret" not in rendered
+    assert "identityProviders" not in render_realm_json(config)
+    # Without a provider there is nothing to render.
+    assert organisation_provider(_config()) is None
+
+
+def test_a_person_from_the_organisation_arrives_with_no_role_and_no_clearance() -> None:
+    """The owner's answer 6: no group-to-role mapping. A person arriving through the organisation
+    is given, once, a clearance and a unit no handling scheme knows (default-deny, `01_DOMAIN_MODEL`
+    §2.2) and no role and no handling code, until an administrator grants them. The Conduit needs a
+    clearance and a unit in every token (`principal_auth`), so these are what it is given; nothing
+    is taken from the organisation's directory."""
+    from harness.realm import (
+        ORGANISATION_ARRIVAL_ATTRIBUTES,
+        organisation_provider_mappers,
+    )
+
+    mappers = organisation_provider_mappers("org")
+    assert {m["config"]["attribute"]: m["config"]["attribute.value"] for m in mappers} == (
+        ORGANISATION_ARRIVAL_ATTRIBUTES
+    )
+    assert set(ORGANISATION_ARRIVAL_ATTRIBUTES) == {"clearance", "org_unit"}
+    for mapper in mappers:
+        assert mapper["identityProviderMapper"] == "hardcoded-attribute-idp-mapper"
+        assert mapper["identityProviderAlias"] == "org"
+        # Applied when the person first arrives, never again: an administrator's grant stays.
+        assert mapper["config"]["syncMode"] == "IMPORT"
+    assert not any(m["config"]["attribute"] in ("roles", "receivable_handling_codes")
+                   for m in mappers)  # fmt: skip
+
+
+def test_the_addresses_the_organisation_registers_follow_the_identity_address() -> None:
+    from harness.realm import organisation_redirect_uris
+
+    config = OspreyConfig.model_validate(_ORGANISATION)
+    assert organisation_redirect_uris(config) == (
+        "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint",
+        "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint/logout_response",
+    )

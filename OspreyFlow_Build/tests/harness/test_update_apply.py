@@ -613,3 +613,39 @@ def test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update
                        files_up_to_date=lambda: {}, find_release=lambda _: {})  # fmt: skip
     with pytest.raises(update.UpdateFailed, match="superset runs another image"):
         update.verify_running(host, directory, lock)
+
+
+# ---- ADR-114 Amendment 33 decision 5 (drop 2, unit 6): update on Small on a server of your own ---
+
+
+def test_update_moves_a_self_contained_small(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`ospreyflow update` works on a self-contained Small (unlike cloud Small, whose backup
+    refuses its managed database): its backup is taken by `harness.backup` into the folder
+    `server.backups` names (`components.storage.backups`), and the update goes on from there."""
+    directory = tmp_path / "deploy" / "generated" / "small"
+    directory.mkdir(parents=True)
+    backups = tmp_path / "srv-backups"
+    (directory / "osprey.yaml").write_text(yaml.safe_dump({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
+                            "key": "/etc/ospreyflow/tls/osprey.key"}},
+        "components": {"storage": {"backups": str(backups)}},
+    }))  # fmt: skip
+    ran: list[list[str]] = []
+
+    def subprocess_(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+        ran.append(list(argv))
+        if "harness.backup" in argv:
+            out = Path(argv[argv.index("--out-root") + 1])
+            (out / "20261103T000000Z-small-abc").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(update, "_subprocess", subprocess_)
+    host = update.real_host(directory, tmp_path)
+    made = host.backup()
+    assert made.parent == backups
+    (argv,) = [a for a in ran if "harness.backup" in a]
+    assert argv[argv.index("--out-root") + 1] == str(backups)

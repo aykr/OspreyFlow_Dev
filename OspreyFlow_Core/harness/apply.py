@@ -193,6 +193,26 @@ def mail_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
     return f"OSPREY_SMTP_PASSWORD={password}\n"
 
 
+def organisation_secret_lines(config: OspreyConfig, environ: Mapping[str, str]) -> str:
+    """The organisation's client secret for its identity provider (ADR-114 Amendment 33 decision
+    4), carried from the installer's environment into the deployment's secrets file — never into
+    `osprey.yaml` or the realm document, never printed. A deployment naming the provider, installed
+    without it, stops here, before anything starts. Once kept, a later `apply` keeps it
+    (`keep_existing_secrets`)."""
+    if config.governance.organisation_provider is None:
+        return ""
+    secret = environ.get("OSPREY_ORG_SIGN_IN_SECRET", "")
+    if not secret:
+        raise ApplyFailed(
+            "render",
+            "governance.organisation_provider names the organisation's sign-in, and "
+            "OSPREY_ORG_SIGN_IN_SECRET is not set. Set it in this terminal to the client secret "
+            "the organisation issued (it is kept only in the deployment's own secrets file) and "
+            "run the install again. Nothing was installed.",
+        )
+    return f"OSPREY_ORG_SIGN_IN_SECRET={secret}\n"
+
+
 class SeedOrderingRefused(ApplyFailed):
     """§2.4's ordering guard, refusing rather than working around. See the module docstring."""
 
@@ -1092,6 +1112,7 @@ def stage_deployment(
         + analytics_secret_lines(config)
         + proxy_lines
         + mail_secret_lines(config, environ)
+        + organisation_secret_lines(config, environ)
         + provider_secret_lines(config, environ, previous=previous_env)
         + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
         # Postgres and the object stores: the deployment's own, or the cloud's (05 §3a).

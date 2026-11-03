@@ -112,3 +112,50 @@ def test_a_refused_certificate_stops_the_install_before_anything_runs(
     assert "✘" in out and "does not match" in out and "Nothing was installed" in out
     assert rig.runner.calls == []
     assert (rig.product / "osprey.yaml").read_text(encoding="utf-8") == before
+
+
+# ---- ADR-114 Amendment 33 drop 2: memory measured once (unit 5), organisation sign-in (unit 7) -----
+
+
+def test_memory_auto_is_measured_once_and_written_to_osprey_yaml(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Decision 6: `server.memory_gib: auto` takes what Docker reports, once, at install, and writes
+    the number to `resources.memory_gib`, so the render reads a number and never the machine."""
+    rig.probes.info = {**(rig.probes.info or {}), "MemTotal": 68_719_476_736}  # 64 GiB
+    server = {**SERVER_ANSWERS["server"], "memory_gib": "auto"}  # type: ignore[dict-item]
+    answers = _answers(tmp_path, {**SERVER_ANSWERS, "server": server})
+    assert rig("install", "--mode", "small", "--config", str(answers), "--force") == 0
+    assert rig.config()["resources"] == {"memory_gib": 64}
+    assert "64 GiB" in capsys.readouterr().out
+    # A number given is written as it is, and Docker is not asked.
+    rig.probes.info = {**(rig.probes.info or {}), "MemTotal": 1}
+    given = _answers(tmp_path, {**SERVER_ANSWERS,
+                                "server": {**SERVER_ANSWERS["server"], "memory_gib": 48}})  # type: ignore[dict-item]  # fmt: skip
+    assert rig("install", "--mode", "small", "--config", str(given), "--force") == 1  # memory floor
+    rig.probes.info = {**(rig.probes.info or {}), "MemTotal": 34_000_000_000}
+    assert rig("install", "--mode", "small", "--config", str(given), "--force") == 0
+    assert rig.config()["resources"] == {"memory_gib": 48}
+
+
+def test_organisation_sign_in_install_prints_what_the_organisation_registers(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 4: the provider reaches `osprey.yaml` by name and address; the install stops at the
+    doctor without its secret in the terminal, and with it prints the two addresses to register."""
+    organisation = {"alias": "org", "label": "Example Organisation account",
+                    "issuer": "https://login.example.internal/realms/org", "client_id": "osprey"}  # fmt: skip
+    answers = _answers(tmp_path, {**SERVER_ANSWERS, "sign_in": {"organisation": organisation}})
+    monkeypatch.delenv("OSPREY_ORG_SIGN_IN_SECRET", raising=False)
+    assert rig("install", "--mode", "small", "--config", str(answers), "--force") == 1
+    assert "OSPREY_ORG_SIGN_IN_SECRET" in capsys.readouterr().out
+    assert rig.runner.argvs() == []
+    monkeypatch.setenv("OSPREY_ORG_SIGN_IN_SECRET", "a-test-value")
+    assert rig("install", "--mode", "small", "--config", str(answers), "--force") == 0
+    governance = rig.config()["governance"]
+    assert governance["organisation_sign_in"] == "org"  # type: ignore[index]
+    assert governance["organisation_provider"]["issuer"] == organisation["issuer"]  # type: ignore[index]
+    out = capsys.readouterr().out
+    endpoint = "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint"
+    assert endpoint in out and f"{endpoint}/logout_response" in out
+    assert "a-test-value" not in out

@@ -412,3 +412,68 @@ def test_each_right_is_refused_without_it_and_needs_the_case_level_too(
                 client, route, case, _token(key, "rights-outsider", [f"right:{right}"])
             ) in (403, 404), (name, right)
     assert len(checked) >= 25, f"only {len(checked)} rights reached a case route"
+
+
+def test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-114 Amendment 33 decision 4 and the owner's answer 6 (rules 3 and 4): a person signed in
+    through the organisation's identity provider arrives with exactly the claims the realm's
+    arrival mappers give (`harness.realm.ORGANISATION_ARRIVAL_ATTRIBUTES`; the real Keycloak's
+    token is shown to carry them in `tests/harness/test_organisation_sign_in.py`) — no role, no
+    handling code, a clearance and a unit no scheme knows. On every read route of the Conduit, with
+    a real case in the store, they are refused (403, or 404 for a case they cannot see), or answered
+    with nothing: an empty list, never a count."""
+    from harness.realm import ORGANISATION_ARRIVAL_ATTRIBUTES
+
+    key, _ = keypair
+    case = asyncio.run(_case("rights-member"))
+    claims = default_claims(sub="from-the-organisation", roles=[], receivable_handling_codes=[],
+                            **ORGANISATION_ARRIVAL_ATTRIBUTES)  # fmt: skip
+    claims.pop("roles")
+    headers = {"Authorization": f"Bearer {sign_token(key, claims)}"}
+    answered: dict[str, object] = {}
+    reads = 0
+    with TestClient(__import__("services.api.app", fromlist=["app"]).app) as client:
+        for name, route in sorted(_routes().items()):
+            if "GET" not in route.methods:
+                continue
+            reads += 1
+            path = route.path.replace("{investigation_id}", case)
+            for number in ("{z}", "{x}", "{y}"):
+                path = path.replace(number, "0")
+            path = re.sub(r"\{[a-z_]+(:path)?\}", "x", path)
+            response = client.get(path, headers=headers)
+            if response.status_code in (403, 404):
+                continue
+            # A route that answers must answer with nothing of the deployment's.
+            assert response.status_code == 200, (name, path, response.status_code, response.text)
+            answered[name] = response.json()
+    assert reads >= 40, f"only {reads} read routes reached"
+    unexpected = answered.keys() - REFERENCE_CATALOGUES - EMPTY_FOR_NO_ROLE
+    assert not unexpected, {name: str(answered[name])[:300] for name in unexpected}
+    # The case and its dataset exist (made above); this person is shown neither, nor any right.
+    for name in EMPTY_FOR_NO_ROLE:
+        assert name in answered and _holds_nothing(answered[name]), (name, answered.get(name))
+
+
+#: Read routes any signed-in person may call (`ROUTE_RIGHTS` `None`, ADR-112) that hold the
+#: product's own reference catalogues — the handling scheme, the ontology, the yardstick, the
+#: basemaps, the connectors, domain packs and transforms offered, the model engines, the API's own
+#: description, liveness and readiness — and nothing of any case.
+REFERENCE_CATALOGUES = frozenset({
+    "get_handling_scheme_route", "get_map_providers_route", "get_ontology_route",
+    "get_yardstick_route", "list_connectors", "list_domain_packs", "list_transforms",
+    "model_engines_route", "openapi_document_route", "liveness_route", "readiness_route",
+})  # fmt: skip
+#: Read routes any signed-in person may call that hold the deployment's data — its cases, its
+#: datasets and the person's own rights — and answer this person with none.
+EMPTY_FOR_NO_ROLE = frozenset({"list_investigations", "list_datasets_route", "my_rights_route"})
+
+
+def _holds_nothing(body: object) -> bool:
+    if isinstance(body, list):
+        return body == []
+    if isinstance(body, dict):
+        return all(_holds_nothing(v) for v in body.values() if isinstance(v, (list, dict)))
+    return True

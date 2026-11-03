@@ -45,14 +45,23 @@ rather than allowed to read as a requirement.
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from schemas.deployment import ResourcesConfig
+
 #: `05_DEPLOYMENT.md` §1 ("One laptop, 16 GB") and §3 ("If Preflight finds less than 16 GB").
 LOCAL_LITE_FLOOR_BYTES = 16 * 1024**3
 
-#: Every profile's own memory floor. `small` and `cluster` share `local-lite`'s number because the
-#: specification gives no larger one for them, not because it has been checked against either.
+#: Every profile's own memory floor. `cluster` shares `local-lite`'s number because the
+#: specification gives no larger one for it, not because it has been checked against it. `small` is
+#: a nominal 32 GB server, 30 GiB as Docker reports it (ADR-114 Amendment 33 decision 6 and the
+#: owner's answer 16; cloud Small starts at 32 GB, Amendment 10) — the doctor's floor too.
 PROFILE_FLOORS: dict[str, int] = {
     "local-lite": LOCAL_LITE_FLOOR_BYTES,
-    "small": 16 * 1024**3,
+    "small": 30 * 1024**3,
     "cluster": 16 * 1024**3,
 }
 
@@ -95,3 +104,96 @@ def arcadedb_java_memory_opts(profile: str = "local-lite") -> str:
         f"-Xmx{arcadedb_heap_gib(profile)}G "
         "-XX:+ExitOnOutOfMemoryError"
     )
+
+
+# ---- the stores sized to the server (ADR-114 Amendment 33 decision 6) ---------------------------
+#
+# **Arithmetic, not measurement** — the caveat this module gives its own figures above. The rule
+# is the amendment's table: from the memory `M` GiB the server has (as Docker reports it, measured
+# once at install and written to `resources.memory_gib`), the graph store's heap 0.4 × M (8 to 31:
+# above 31 the JVM loses compressed object pointers), OpenSearch's heap M ÷ 16 (0.5 to 8, `-Xms` =
+# `-Xmx`), PostgreSQL's shared buffers M ÷ 32 (0.25 to 4) and its effective cache three times that.
+# Each override in `resources` wins. ArcadeDB's page cache is not set: on 26.10.1 it is a quarter of
+# the maximum heap unless set (`arcadedb.maxPageRAM`, read from the engine), so it follows.
+
+
+@dataclass(frozen=True)
+class StoreMemory:
+    """What the render gives the three stores."""
+
+    graph_heap_gib: int
+    search_heap_mib: int
+    #: None: the image's own settings (an unsized deployment, as before).
+    postgres_shared_buffers_mib: int | None
+    postgres_effective_cache_mib: int | None
+
+    @property
+    def graph_java_opts(self) -> str:
+        return (
+            f"-Xms{ARCADEDB_INITIAL_HEAP_GIB}G -Xmx{self.graph_heap_gib}G "
+            "-XX:+ExitOnOutOfMemoryError"
+        )
+
+    @property
+    def search_java_opts(self) -> str:
+        return f"-Xms{self.search_heap_mib}m -Xmx{self.search_heap_mib}m"
+
+
+#: Every store as it was before sizing (decision 6: "Lite is unchanged").
+LITE_STORE_MEMORY = StoreMemory(
+    graph_heap_gib=int(LOCAL_LITE_FLOOR_BYTES * ARCADEDB_HEAP_FRACTION_OF_FLOOR / 1024**3),
+    search_heap_mib=512,
+    postgres_shared_buffers_mib=None,
+    postgres_effective_cache_mib=None,
+)
+
+
+def _between(value: float, low: float, high: float) -> float:
+    return min(max(value, low), high)
+
+
+def store_memory(resources: ResourcesConfig) -> StoreMemory:
+    """The stores' memory for `resources`: the rule from `memory_gib`, each override winning, and
+    today's values for anything neither names."""
+    memory = resources.memory_gib
+    graph = (
+        resources.graph_heap_gib
+        if resources.graph_heap_gib is not None
+        else int(_between(math.floor(0.4 * memory), 8, 31))
+        if memory is not None
+        else LITE_STORE_MEMORY.graph_heap_gib
+    )
+    search_gib = (
+        resources.search_heap_gib
+        if resources.search_heap_gib is not None
+        else _between(memory / 16, 0.5, 8)
+        if memory is not None
+        else LITE_STORE_MEMORY.search_heap_mib / 1024
+    )
+    shared_gib = (
+        resources.postgres_shared_buffers_gib
+        if resources.postgres_shared_buffers_gib is not None
+        else _between(memory / 32, 0.25, 4)
+        if memory is not None
+        else None
+    )
+    shared = int(shared_gib * 1024) if shared_gib is not None else None
+    return StoreMemory(
+        graph_heap_gib=graph,
+        search_heap_mib=int(search_gib * 1024),
+        postgres_shared_buffers_mib=shared,
+        postgres_effective_cache_mib=3 * shared if shared is not None else None,
+    )
+
+
+def postgres_command(memory: StoreMemory) -> list[str] | None:
+    """PostgreSQL's server command with the sized settings, or None for the image's own."""
+    if memory.postgres_shared_buffers_mib is None:
+        return None
+    return [
+        "postgres",
+        "-c",
+        f"shared_buffers={memory.postgres_shared_buffers_mib}MB",
+        "-c",
+        f"effective_cache_size={memory.postgres_effective_cache_mib}MB",
+    ]

@@ -492,6 +492,47 @@ class ModelsConfig(BaseModel):
         return self
 
 
+class OrganisationProvider(BaseModel):
+    """ADR-114 Amendment 33 decision 4: the organisation's own identity provider (OpenID Connect —
+    Entra ID, ADFS, an internal Keycloak), brokered by the deployment's Keycloak. Names and
+    addresses only: the client secret is `OSPREY_ORG_SIGN_IN_SECRET` in the installer's
+    environment, kept in `deployment.env` and set through Keycloak's admin API, never here
+    (`05_DEPLOYMENT.md` §2.5). A person arriving through it gets no role and no clearance until an
+    administrator grants them (the owner's answer 6: no group-to-role mapping)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(
+        min_length=1,
+        description="The provider's name as people know it, shown on the identity provider's own "
+        "sign-in pages (for example 'Example Department account').",
+    )
+    issuer: str = Field(
+        description="The provider's issuer, an https:// address; its discovery document is read "
+        "from <issuer>/.well-known/openid-configuration (for Entra ID, "
+        "https://login.microsoftonline.com/<tenant>/v2.0).",
+    )
+    client_id: str = Field(
+        min_length=1,
+        description="The application (client) id the organisation registered for OspreyFlow.",
+    )
+
+    @field_validator("issuer")
+    @classmethod
+    def _issuer_is_https(cls, value: str) -> str:
+        if not value.startswith("https://"):
+            raise ValueError(
+                f"governance.organisation_provider.issuer {value!r} must be an https:// address: "
+                "the provider's keys and tokens are read from it"
+            )
+        if value.endswith("/"):
+            raise ValueError(
+                f"governance.organisation_provider.issuer {value!r} must not end with '/': it is "
+                "compared exactly with the issuer in the provider's tokens"
+            )
+        return value
+
+
 class GovernanceConfig(BaseModel):
     """`05_DEPLOYMENT.md` §2.1's Governance screen: "Identity provider, handling scheme, ontology.
     Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default
@@ -522,6 +563,15 @@ class GovernanceConfig(BaseModel):
             "The alias of an organisation's own identity provider brokered by Keycloak. When set, "
             "the welcome page offers *Continue with organisation sign-in*, which goes straight to "
             "it (ADR-115 decision 3). Default: none — one *Sign in* to the OspreyFlow form."
+        ),
+    )
+    organisation_provider: OrganisationProvider | None = Field(
+        default=None,
+        description=(
+            "Small on a server of your own only (ADR-114 Amendment 33 decision 4): the "
+            "organisation's identity provider that `organisation_sign_in` names, which `ospreyflow "
+            "install` and `ospreyflow repair-sign-in` register in Keycloak. Default: none — "
+            "people sign in with accounts an administrator makes."
         ),
     )
     marking: str | None = Field(
@@ -953,6 +1003,74 @@ class ExternalConfig(BaseModel):
         return any((self.postgres, self.object_store, self.media, self.valkey, self.search))
 
 
+class ResourcesConfig(BaseModel):
+    """ADR-114 Amendment 33 decision 6: the stores sized to the server's memory. `memory_gib` is
+    measured once, at install (`server.memory_gib: auto`), and written here, so the render reads a
+    number and never the machine; resizing is an edit and `ospreyflow apply`. The three overrides
+    win over the rule (`harness/profiles.py`). Unset, every store keeps today's values."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_gib: int | None = Field(
+        default=None,
+        ge=16,
+        description="The memory the stores are sized to, in GiB (as Docker reports it). Default: "
+        "none — the stores keep their fixed sizes.",
+    )
+    graph_heap_gib: int | None = Field(
+        default=None, ge=1, le=31,
+        description="Overrides the graph store's heap (-Xmx), in GiB; at most 31.",
+    )  # fmt: skip
+    search_heap_gib: float | None = Field(
+        default=None, ge=0.5, le=31,
+        description="Overrides OpenSearch's heap (-Xms and -Xmx), in GiB.",
+    )  # fmt: skip
+    postgres_shared_buffers_gib: float | None = Field(
+        default=None, ge=0.125,
+        description="Overrides PostgreSQL's shared_buffers, in GiB.",
+    )  # fmt: skip
+
+    @property
+    def any(self) -> bool:
+        return any(
+            value is not None
+            for value in (self.memory_gib, self.graph_heap_gib, self.search_heap_gib,
+                          self.postgres_shared_buffers_gib)
+        )  # fmt: skip
+
+    @model_validator(mode="after")
+    def _the_stores_fit_the_server(self) -> ResourcesConfig:
+        """An override may not hand the three stores more than three quarters of the server: the
+        rest is Ollama's, Keycloak's, the Conduit's and the operating system's. Measured, the real
+        PostgreSQL does not refuse shared buffers beyond its memory (it reserves them and is
+        killed later), so the check is here. The rule's own values take at most half."""
+        if self.memory_gib is None:
+            return self
+        graph = (
+            self.graph_heap_gib
+            if self.graph_heap_gib is not None
+            else min(max(int(0.4 * self.memory_gib), 8), 31)
+        )
+        search = (
+            self.search_heap_gib
+            if self.search_heap_gib is not None
+            else min(max(self.memory_gib / 16, 0.5), 8)
+        )
+        shared = (
+            self.postgres_shared_buffers_gib
+            if (self.postgres_shared_buffers_gib is not None)
+            else min(max(self.memory_gib / 32, 0.25), 4)
+        )
+        total = graph + search + shared
+        if total > 0.75 * self.memory_gib:
+            raise ValueError(
+                f"resources gives the graph store, OpenSearch and PostgreSQL {total:g} GiB "
+                f"together, more than three quarters of resources.memory_gib ({self.memory_gib} "
+                "GiB); lower the overrides, or give the server more memory"
+            )
+        return self
+
+
 class OspreyConfig(BaseModel):
     """The whole of `osprey.yaml`.
 
@@ -984,6 +1102,7 @@ class OspreyConfig(BaseModel):
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
+    resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
 
     @model_validator(mode="after")
     def _external_services_belong_to_a_cloud(self) -> OspreyConfig:
@@ -1119,6 +1238,53 @@ class OspreyConfig(BaseModel):
                 ) from None
         return self
 
+    @model_validator(mode="after")
+    def _the_organisations_provider_and_memory_belong_to_a_small(self) -> OspreyConfig:
+        """ADR-114 Amendment 33 decisions 4 and 6: the organisation's identity provider and the
+        stores sized to the server are Small's; each is refused on Lite and Enterprise in words."""
+        _check_organisation_provider(self)
+        if self.resources.any and not self_contained_small(self):
+            where = (
+                "a Small on managed services, whose cloud sizes them"
+                if self.profile is Profile.SMALL
+                else f"profile: {self.profile.value}"
+            )
+            raise ValueError(
+                "resources (the stores sized to the server's memory) is for Small on a server of "
+                f"your own, every store in a container, not {where}"
+            )
+        return self
+
+
+#: A Keycloak identity-provider alias is part of the redirect URI the organisation registers
+#: (`/realms/osprey/broker/<alias>/endpoint`), so it is kept plain.
+_ALIAS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def _check_organisation_provider(config: OspreyConfig) -> None:
+    """ADR-114 Amendment 33 decision 4: the organisation's identity provider belongs to a Small (it
+    is refused on Lite and Enterprise, in words), and goes with the alias the welcome page's
+    *Continue with organisation sign-in* names."""
+    governance = config.governance
+    if governance.organisation_provider is None:
+        return
+    if config.profile is not Profile.SMALL:
+        raise ValueError(
+            "governance.organisation_provider is for Small (profile: small), on a server of your "
+            f"own, not profile: {config.profile.value}"
+        )
+    alias = governance.organisation_sign_in
+    if not alias:
+        raise ValueError(
+            "governance.organisation_provider goes with governance.organisation_sign_in, the "
+            "alias the welcome page's organisation sign-in names (for example: org)"
+        )
+    if not _ALIAS.match(alias):
+        raise ValueError(
+            f"governance.organisation_sign_in {alias!r} is part of the address the organisation "
+            "registers, so it is letters, digits, '-' and '_' only (for example: org)"
+        )
+
 
 def self_contained_small(config: OspreyConfig) -> bool:
     """ADR-114 Amendment 33 decision 1: Small with every store in a container (no `external:`)."""
@@ -1138,11 +1304,13 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ExternalConfig,
     ComponentsConfig,
     ModelsConfig,
+    OrganisationProvider,
     GovernanceConfig,
     ClusterHost,
     ClusterConfig,
     TlsFiles,
     NetworkConfig,
+    ResourcesConfig,
     OspreyConfig,
 )
 

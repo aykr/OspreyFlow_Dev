@@ -347,6 +347,9 @@ export const SIGN_IN_ACTIONS = defineActionRegistry("SIGN_IN_ACTIONS", [
   "submit-sign-in",
   // ADR-115 E2: the welcome page.
   "continue-with-organisation-sign-in",
+  // ADR-114 Amendment 33 decision 4: beside the organisation's sign-in, the deployment's own
+  // accounts (the first administrator's among them) sign in without the provider hint.
+  "sign-in-with-an-account-beside-the-organisation",
   "switch-the-welcome-theme",
 ] as const);
 

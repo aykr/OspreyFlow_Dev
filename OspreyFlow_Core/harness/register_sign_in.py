@@ -36,6 +36,9 @@ from harness.realm import (
     SUPERSET_CLIENT_ID,
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
+    organisation_provider,
+    organisation_provider_mappers,
+    organisation_redirect_uris,
     render_realm,
     sign_in_rules,
     superset_client,
@@ -46,12 +49,15 @@ from harness.site import (
     answer_the_deployment_here,
     deployment_origins,
 )
-from schemas.deployment import OspreyConfig, generated_folder
+from schemas.deployment import OspreyConfig, Profile, generated_folder
 
 ADMIN_PASSWORD_KEY = "OSPREY_KEYCLOAK_ADMIN_PASSWORD"
 DEMO_ANALYST_PASSWORD_KEY = "OSPREY_DEMO_ANALYST_PASSWORD"
 #: The Conduit's confidential-client secret, written by `apply` (ADR-114 Amendment 32).
 CONDUIT_SECRET_KEY = "OSPREY_OIDC_CLIENT_SECRET"
+#: The organisation's client secret for its identity provider (ADR-114 Amendment 33 decision 4),
+#: from the installer's environment, kept in `deployment.env` by `apply`.
+ORGANISATION_SECRET_KEY = "OSPREY_ORG_SIGN_IN_SECRET"
 DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
 #: ADR-113 decision 8: the two personas added beside the analyst and the admin.
 DEMO_PERSONA_PASSWORD_KEYS = {
@@ -236,6 +242,30 @@ def ensure_identity(
                 client={**superset_client(origin), "secret": superset_secret},
             )
         )  # fmt: skip
+    provider = organisation_provider(config)
+    if provider is not None:
+        # ADR-114 Amendment 33 decision 4: the organisation's identity provider, its secret set
+        # from the deployment's settings — again after a wipe or a re-import, which lose it.
+        organisation_secret = values.get(ORGANISATION_SECRET_KEY)
+        if organisation_secret:
+            lines.append(
+                keycloak_admin.ensure_identity_provider(
+                    issuer=issuer, realm=realm, token=token, provider=provider,
+                    mappers=organisation_provider_mappers(provider["alias"]),
+                    client_secret=organisation_secret,
+                )
+            )  # fmt: skip
+            redirect, logout = organisation_redirect_uris(config, realm_name=realm)
+            lines.append(
+                f"the organisation registers: redirect URI {redirect}; post-logout redirect URI "
+                f"{logout}"
+            )
+        else:
+            lines.append(
+                f"organisation sign-in {provider['alias']} left as it is: the deployment's "
+                f"settings hold no client credential for it ({ORGANISATION_SECRET_KEY}). Add "
+                "it to deployment.env, then run ospreyflow repair-sign-in --no-demo-accounts"
+            )
     for retired in RETIRED_CLIENT_IDS:
         outcome = keycloak_admin.remove_client(
             issuer=issuer, realm=realm, token=token, client_id=retired
@@ -281,6 +311,17 @@ def deployment_env_path(out_root: Path, folder: str | None, config: OspreyConfig
     return out_root / (folder or generated_folder(config)) / "deployment.env"
 
 
+def _a_small_without_demo_accounts(config: OspreyConfig, env_path: Path) -> bool:
+    """A Small deployment whose settings hold no demo administrator's password: installed with
+    `--no-demo-accounts` (every Small server is), so given none later."""
+    if config.profile is not Profile.SMALL:
+        return False
+    try:
+        return DEMO_ADMIN_PASSWORD_KEY not in _read_env(env_path)
+    except RealmConfigurationFailed:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -300,6 +341,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     env_path = deployment_env_path(args.out_root, args.profile, load_config(args.config))
+    if not args.no_demo_accounts and _a_small_without_demo_accounts(
+        load_config(args.config), env_path
+    ):
+        # ADR-114 Amendment 33 (drop 2): a Small server is installed with no demo account and is
+        # reached over a network; a repair or a rebuild (`start --build`) never adds one.
+        print("This Small deployment has no demo accounts; none is made.")
+        args.no_demo_accounts = True
     answer_localhost_with_loopback()
     # ADR-114 Amendment 33 decision 2: a server's own names, here, with its certificate trusted.
     answer_the_deployment_here(load_config(args.config))

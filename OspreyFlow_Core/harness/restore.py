@@ -87,7 +87,11 @@ from harness.render import (
     RECIPE_REPO_DIRNAME,
     load_config,
 )
-from harness.site import answer_localhost_with_loopback, deployment_origins
+from harness.site import (
+    answer_localhost_with_loopback,
+    answer_the_deployment_here,
+    deployment_origins,
+)
 from schemas.deployment import generated_folder
 
 #: Measured on `local-lite` against the seeded HMP + Fixture Corp set and recorded in
@@ -629,6 +633,8 @@ def main(argv: list[str] | None = None) -> int:
     # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
     answer_localhost_with_loopback()
     config = load_config(args.config)
+    # ADR-114 Amendment 33 decision 2: on a server, its own names here, its certificate trusted.
+    answer_the_deployment_here(config)
     # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
     profile = args.profile or generated_folder(config)
     compose_file = args.generated_root / profile / "compose.yaml"

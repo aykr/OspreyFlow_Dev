@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.29** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
+**Version 1.30** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.30 | 2026-11-03 | Small on your own server, second part (ADR-114 Amendment 33 drop 2): §2.2a the backups folder and what the organisation's sign-in needs; §5a the answers file's `server.backups`, `server.memory_gib` and `sign_in`, and the doctor's new checks; new §5a.1 sign-in through the organisation's identity provider (Entra ID: the application, its two addresses, its client secret, assignment, the route out; no role until an administrator grants one); new §5a.2 memory sized to the server; new §5a.3 backups to `server.backups` with a cron line; §7 the answers' settings; §8 `repair-sign-in` restores the organisation's sign-in and gives a Small no demo accounts; §13 and §14 backup and `update` on this kind of Small; §16 the organisation's sign-in and the backups folder. Appendix A: `governance.organisation_provider`, `resources`. |
 | 1.29 | 2026-11-03 | Small on your own server (ADR-114 Amendment 33, first part): §1 a fourth column and the organisation's own certificate under "HTTP or HTTPS"; new §2.2a, its prerequisites; §2.4 `ospreyflow doctor --mode small --config install.yaml`; new §5a, installing it — the answers file's `server:`, the three names and the one-label wildcard, what is checked before anything starts, port 443 alone, the first administrator, renewing the certificate, and what is not built yet; §5.2's refusal names all three ways; §7 `server`, `admin_email`, `sign_in`; §8.1 what it publishes; §16 the certificate's refusals and a network that cannot connect. Appendix A: `network.tls`, `network.redirect_http`, `network.listen_address`. |
 | 1.28 | 2026-11-03 | §8: `ospreyflow repair-sign-in` also sets the Conduit's own client secret again, so a deployment whose stores were wiped can act for its people again. §16: rules that say "the rule's deployer could not be resolved", a hotlist that stops, and a list refresh that re-screens no one. |
 | 1.27 | 2026-11-03 | "How OspreyFlow is built": a level 0 diagram (who uses OspreyFlow and what it talks to), a level 1 diagram (every component with the technology it is built on, and what each mode runs on), and a new section, "The interfaces, and what crosses each", giving each interface's direction, protocol, what crosses it and what guards it. |
@@ -353,6 +354,12 @@ On the server itself (section 5a):
 - from the organisation: the **three names** in its DNS, pointing at the server, and a
   **certificate** naming them, with its unencrypted key (section 5a);
 - **outbound access** to the releases and their images, or the organisation's mirror of them;
+- a **folder for backups** (`server.backups`), with room for several sets, ideally on a disk of
+  its own;
+- for sign-in through the organisation's identity provider (section 5a): OspreyFlow's application
+  **registered with it** (the install prints the two addresses), a **group of the people** who may
+  sign in assigned to it, and **outbound access from the server to the provider** — for Entra ID,
+  `login.microsoftonline.com` on 443 (or through the organisation's proxy);
 - recommended: `vm.max_map_count` at least 262144 (for OpenSearch).
 
 ### 2.3 Enterprise
@@ -532,6 +539,15 @@ server:
   ingest: /srv/ospreyflow/ingest                  # where the CSV exports are put
   redirect_http: false                            # true also publishes 80, only to send people to 443
   # listen_address: 192.0.2.10                    # optional: one interface of a server with several
+  backups: /srv/ospreyflow/backups                # where `ospreyflow backup` writes
+  memory_gib: auto                                # or a number of GiB: what the stores are sized to
+sign_in:                                          # optional: the organisation's identity provider
+  organisation:
+    alias: org                                    # part of the address the organisation registers
+    label: Example Department account             # its name on the sign-in pages
+    issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
+    client_id: 00000000-0000-0000-0000-000000000000
+    # its client secret is never written here: OSPREY_ORG_SIGN_IN_SECRET in the terminal
 admin_email: ops@example.internal                 # optional: the first administrator's email
 components: {dashboards: false}
 ```
@@ -554,8 +570,10 @@ also checks: Docker installed, running and started at boot; Compose v2; an `amd6
 releases are built for `linux/amd64` only); 30 GiB of memory as Docker reports it (a 32 GB server);
 60 GB free where Docker keeps its data; Git, uv and Python 3.12; the clock synchronised (sign-in
 tokens are checked against it); port 443 free on **every** interface (and 80 with `redirect_http`);
-port 2480 free; and warns for `vm.max_map_count` below 262144, running as root, and names that do
-not yet resolve from the server.
+port 2480 free; 20 GB free where backups are written (`server.backups`); with `sign_in`, that
+`OSPREY_ORG_SIGN_IN_SECRET` is set (it also prints the two addresses the organisation registers);
+and warns for `vm.max_map_count` below 262144, running as root, names that do not yet resolve from
+the server, and an identity provider whose name does not resolve from it.
 
 **What it publishes.** Port 443 (the address's own port), on every interface or on `listen_address`;
 port 80 only with `redirect_http: true`, and then it only redirects; the graph store's door, 2480,
@@ -576,12 +594,84 @@ trust the deployment's certificate (and `ca`), so they work before the organisat
 **Renewing the certificate.** Replace the two files (same paths), then run `ospreyflow apply`. It
 checks the new certificate, and only the front proxy is started again.
 
-**Not built yet** (ADR-114 Amendment 33's next drop): sign-in through the organisation's own
-identity provider (`sign_in:` in the answers file is refused until then, and people sign in with
-accounts an administrator makes); the stores sized to the server's memory (`server.memory_gib`);
-backups to a folder of their own (`server.backups`), and `ospreyflow backup` and `update` proven on
-this kind of Small — until then, rely on the organisation's snapshots of the server's disks. The
-guided page (`--gui`) does not install this kind of Small.
+### 5a.1 Sign-in through the organisation's identity provider
+
+With `sign_in.organisation` in the answers, people sign in with their organisation's own account —
+Microsoft Entra ID, ADFS, or any OpenID Connect provider — through OspreyFlow's identity provider
+(Keycloak), which brokers it. The welcome page then offers **Continue with organisation sign-in**
+first, which goes straight to the organisation's sign-in page, and **Sign in with an OspreyFlow
+account** beside it, for the accounts an administrator makes (the first administrator's among them).
+Without `sign_in`, there is the one **Sign in**, for those accounts alone.
+
+**What the organisation does first** — for Entra ID, in its admin centre's *App registrations*:
+
+1. Register an application for OspreyFlow, a *web* application, and give it the **redirect URI**
+   the install prints (and `ospreyflow doctor --mode small --config install.yaml` prints before it):
+   `https://id.<host>/realms/osprey/broker/<alias>/endpoint` — exactly, with no slash added. Set its
+   **front-channel logout / post-logout redirect URI** to the same address followed by
+   `/logout_response`.
+2. Make a **client secret** for it, and hand it over by the organisation's own secure route. It is
+   never written in the answers file or `osprey.yaml`: set it in the terminal for the install,
+   `export OSPREY_ORG_SIGN_IN_SECRET=…`; it is kept only in the deployment's `deployment.env`
+   (mode 600), and the install refuses to start without it.
+3. Turn on **assignment required** and assign the application to the **group of people** who may
+   sign in: the organisation decides who may sign in at all.
+4. Give the install the **issuer** (Entra ID: `https://login.microsoftonline.com/<tenant-id>/v2.0`)
+   and the application's **client id**.
+5. Allow the **server to reach the provider** on 443 — Entra ID is on the internet, at
+   `login.microsoftonline.com` — directly or through the organisation's proxy. Nothing else on the
+   server reaches out for sign-in, and only the identity provider does.
+
+**Roles are OspreyFlow's.** Someone signing in through the organisation for the first time arrives
+with **no role, no handling code, and a clearance and unit of `unassigned`** that see nothing: Home
+shows every place dimmed until an administrator grants them. Nothing is taken from the
+organisation's directory — no group becomes a role. An administrator finds them in Admin → People
+and roles once they have signed in, and sets their roles, then their access (clearance, unit,
+handling codes); a later sign-in never takes those back.
+
+**The organisation's own certificate authority.** With `server.ca`, the identity provider trusts
+it as well as the usual public authorities, so a provider on the organisation's own certificates
+(ADFS, an internal Keycloak) is trusted too.
+
+**After a wipe or a restore**, `ospreyflow repair-sign-in` registers the organisation's provider
+again, with its client secret from `deployment.env` — safe to run again, and it prints no secret.
+To change the secret, put the new one in `deployment.env` (`OSPREY_ORG_SIGN_IN_SECRET=`), then run
+`ospreyflow repair-sign-in`. A Small deployment is never given demo accounts by `repair-sign-in` or
+`start --build`.
+
+### 5a.2 Memory
+
+`server.memory_gib: auto` reads how much memory Docker has, once, at install, and writes it to
+`osprey.yaml` as `resources.memory_gib`; the stores are sized to it (appendix A's `resources`):
+
+| Memory | Graph store's heap | OpenSearch's heap | PostgreSQL's shared buffers |
+| --- | --- | --- | --- |
+| 32 GB | 12 GiB | 2 GiB | 1 GiB |
+| 64 GB | 25 GiB | 4 GiB | 2 GiB |
+| 128 GB | 31 GiB | 8 GiB | 4 GiB |
+
+The three take at most half the server, leaving the rest to the model server, the identity provider,
+the Conduit and the operating system. To resize, change `resources.memory_gib` (or one of its
+overrides, `graph_heap_gib`, `search_heap_gib`, `postgres_shared_buffers_gib`) and run
+`ospreyflow apply`: only the three stores are started again. An override that would give the three
+more than three quarters of the server is refused.
+
+### 5a.3 Backups
+
+`ospreyflow backup` writes each set to `server.backups` (default `~/OspreyFlow/backups`), readable
+by its owner only. A set never holds the certificate's key or `deployment.env`; it does hold the
+case data and the people's identities. Nothing is registered with the operating system, so schedule
+it with the service account's own crontab (`crontab -e`), beside the organisation's snapshots of the
+server's disks:
+
+```
+0 2 * * * cd /opt/ospreyflow && ~/.local/bin/ospreyflow backup >> ~/ospreyflow-backup.log 2>&1
+```
+
+Old sets are not removed: remove them by hand, or with the organisation's own retention. Restoring
+and updating are as for Lite (sections 13 and 14).
+
+The guided page (`--gui`) does not install this kind of Small.
 
 ## 6. Installing Enterprise
 
@@ -667,9 +757,9 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `cloud.provider`, `cloud.region`, `cloud.domain`, `cloud.size`, `cloud.dns_zone`, `cloud.admin_email` | Small (section 5) and Enterprise (section 6) |
 | `cloud.api_cidrs` | Enterprise with `--cloud`: the addresses the cluster's API answers (section 6) |
 | `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
-| `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.backups` and `server.memory_gib` are refused as not built yet |
+| `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address`, `server.backups`, `server.memory_gib` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.backups` is where backups are written (default `~/OspreyFlow/backups`); `server.memory_gib` is `auto` or a number of GiB, at least 16 (section 5a.2) |
 | `admin_email` | Small on your own server: the first administrator's email |
-| `sign_in` | Sign-in through the organisation's own identity provider: **not built yet**, and refused, so nothing is silently ignored |
+| `sign_in.organisation`: `alias`, `label`, `issuer`, `client_id` | Small on your own server: sign-in through the organisation's identity provider (section 5a.1). `alias` defaults to `org`; `issuer` is `https://`. Its client secret is never here — `OSPREY_ORG_SIGN_IN_SECRET` in the terminal — and a setting naming a secret is refused |
 | `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
 | `config` | Use this `osprey.yaml` exactly as it is, instead of `components`, `folders` and `models` |
 | `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
@@ -679,7 +769,9 @@ Every question `install` asks can be answered in this file; unknown settings are
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
 Lite, `https://<domain>` for Small and Enterprise, and `server.address` for Small on your own
-server (with `server.certificate`, `key` and `ca` as `network.tls`).
+server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.backups` as
+`components.storage.backups`, `server.memory_gib` as `resources.memory_gib`, and
+`sign_in.organisation` as `governance.organisation_sign_in` and `governance.organisation_provider`).
 
 ## 8. Running it
 
@@ -694,7 +786,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`).
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
-| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`), and the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds; safe to run again, and prints no secret |
+| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, and the organisation's identity provider with its client secret (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
@@ -1145,6 +1237,13 @@ restored: the deployment's own are kept.
 server's daily backup. `ospreyflow backup` refuses a deployment on a managed database, saying so;
 restore from the cloud's console.
 
+**Small on your own server.** As Lite, every store in the set, written to `server.backups`
+(section 5a.3), each set readable by its owner only; the certificate's key and `deployment.env` are
+never in it. Schedule it with a cron line, for example
+`0 2 * * * cd /opt/ospreyflow && ~/.local/bin/ospreyflow backup`. A person who signs in through the
+organisation's identity provider is restored still linked to it. OpenSearch is rebuilt, not
+restored, as on Lite.
+
 **Enterprise.** The cloud protects its managed services as for Small. **The graph store and the
 analytics database run in the cluster, and nothing backs them up yet**: `ospreyflow backup` drives
 a Compose deployment and does not reach a cluster. Until it does, take snapshots of their volumes
@@ -1165,6 +1264,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Lite, installed from a release tag | `ospreyflow update` (below) |
 | Lite, built from the checkout (`--build`, or a checkout on no release tag) | `git pull`, then `ospreyflow start --build`. `update` refuses this install, saying so |
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
+| Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `server.backups` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
 
 **Checking for a newer release.** The deployment never calls out to look. Run
@@ -1215,6 +1315,9 @@ Admin → Schedules and runs lists every one.
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
 | Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again |
 | `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. Then run the command again |
+| Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
+| Someone signed in through the organisation and sees nothing | As intended until an administrator grants them roles and access in Admin → People and roles (section 5a.1) |
+| `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
@@ -1270,6 +1373,10 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |
 | `governance.ontology` | str | `default` | The ontology the deployment starts from. |
 | `governance.organisation_sign_in` | str or none | none | The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it. Default: none — one *Sign in* to the OspreyFlow form. |
+| `governance.organisation_provider` | section or none | none | Small on a server of your own: the organisation's identity provider, brokered by Keycloak; its client secret is never here (section 5a.1). |
+| `governance.organisation_provider.label` | str | required | The provider's name as people know it, shown on the identity provider's own sign-in pages (for example 'Example Department account'). |
+| `governance.organisation_provider.issuer` | str | required | The provider's issuer, an https:// address; its discovery document is read from <issuer>/.well-known/openid-configuration (for Entra ID, https://login.microsoftonline.com/<tenant>/v2.0). |
+| `governance.organisation_provider.client_id` | str | required | The application (client) id the organisation registered for OspreyFlow. |
 | `governance.marking` | str or none | none | The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher. One of the handling scheme's classifications. Default: the scheme's lowest. |
 | `governance.real_data_exceptions` | str | `config/real_data_exceptions.yaml` | A path to the gitignored list, never its contents. |
 | `cluster` | section | — | A Kubernetes deployment: its namespace, storage classes and machines. |
@@ -1368,4 +1475,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `external.valkey.tls` | bool | true | Whether it is reached over TLS |
 | `external.search` | section or none | none | A cloud's managed OpenSearch (cluster on AWS only). |
 | `external.search.url` | str | required | The domain's HTTPS address |
+| `resources` | section | — | Small on a server of your own: the stores sized to the server's memory (section 5a.2). |
+| `resources.memory_gib` | int or none | none | The memory the stores are sized to, in GiB (as Docker reports it). Default: none — the stores keep their fixed sizes. |
+| `resources.graph_heap_gib` | int or none | none | Overrides the graph store's heap (-Xmx), in GiB; at most 31. |
+| `resources.search_heap_gib` | float or none | none | Overrides OpenSearch's heap (-Xms and -Xmx), in GiB. |
+| `resources.postgres_shared_buffers_gib` | float or none | none | Overrides PostgreSQL's shared_buffers, in GiB. |
 <!-- options:end -->
