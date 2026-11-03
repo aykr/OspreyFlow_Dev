@@ -22923,7 +22923,7 @@ starter: govuk-crime                      # optional, as ADR-138
   inside the container, as the uid and gid of the account that owns the key (so the key stays `600`),
   with `XDG_*` in `/tmp` as the plain-HTTP branch already does (`site.py:152-157`). Today's HTTPS
   branch runs it as root (`site.py:158-162`).
-- **Checked before anything starts** — by a new `harness/tls_check.py` (the harness has `cryptography`,
+- **Checked before anything starts** — by a new module, harness/tls_check.py (to be written in drop 1; named here without a citation until it exists) (the harness has `cryptography`,
   `pyproject.toml:21`; the command depends on PyYAML alone, `answers.py:44-46`, so `doctor` runs it as
   a step, as it runs other harness modules). Refused, in words, changing nothing: unreadable or
   non-PEM files; an encrypted key; a key that does not match the certificate; a certificate expired or
@@ -23211,7 +23211,7 @@ merged when green (the build order's guardrails). Effort in working days for one
 | --- | --- | --- | --- |
 | 1 | Answers and schema: `server:`, `sign_in:`, `network.tls`, `redirect_http`, `listen_address`, `resources`; refusals | `test_answers.py`, `test_deployment_schema.py` rows | 0.5 |
 | 2 | The proxy: Caddyfile with the given certificate, ACME and OCSP off, 443 alone, unprivileged, the Conduit's door on loopback | `test_front_proxy.py` rows; `test_proxy_tls_caddy.py` (real Caddy) | 1 |
-| 3 | `harness/tls_check.py`, wired into `doctor`, `install`, `apply`; renewal restarts the proxy | `test_tls_check.py`; `test_apply_changed_settings.py` rows | 0.5 |
+| 3 | harness/tls_check.py (new), wired into `doctor`, `install`, `apply`; renewal restarts the proxy | `test_tls_check.py`; `test_apply_changed_settings.py` rows | 0.5 |
 | 4 | Install on the server: lift the refusal, the server path without `external:`, `doctor --mode small` server checks, host tools to loopback with the CA | `test_install_small_server.py`; `test_doctor.py` rows | 1 |
 | 5 | Memory sizing in `profiles.py` and the render; ArcadeDB page-cache default read | `test_profiles.py`, `test_render_memory.py` | 0.5–1 |
 | 6 | Backups to `server.backups`; `update` on it | `test_backup.py`, `test_update_apply.py` rows | 0.5 |
@@ -23236,6 +23236,13 @@ administrator. The cosign image missing from the offline bundle and the release 
 the dashboards image are fixed at once as their own change (build order step 20a), not inside unit 8.
 Nothing is rushed for the client's session of 5 November: the amendment and the server specification
 go to it; the build follows.
+
+**Later the same day, the owner:** the build goes in drops, and **drop 3 is removed**: decision 7 (a bundle
+that carries a first install with no outbound internet, build unit 8) is **deferred**, kept here as the
+design should a client need it, and not built. A server for this mode needs outbound access to the
+releases (an allow-list) or the organisation's own mirror of them; an update with no network still
+works from today's bundle, which now carries cosign (Amendment 34). The end-to-end check on a throwaway
+server (unit 10) runs at the end of drop 2, with outbound access allowed.
 
 The questions as drafted, each with its recommendation:
 
