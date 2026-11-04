@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.47** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.48** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.48 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 35; build order step 26): the stores keep their data in named volumes. §8 `uninstall --keep-data` now keeps data a later install finds; §13 where each store's data is kept, what a backup reads, and OpenSearch; §14 the one-time move of an existing deployment's data, its words, and what a failed move does to an update; new §14.1 removing the old volumes; §16 a move that is refused. |
 | 1.47 | 2026-11-04 | The owner's ruling (ADR-127 Amendment 46; build order step 25): §1a and §11, the Prison Intelligence pack handles post-ingest resolution itself — an install that chooses it writes `components.post_ingest_resolution: false`, and `ospreyflow demo add prison-intelligence` refuses, in words, while it is on. |
 | 1.46 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33; build order step 25): §5a and §7, `server.certificate` and `server.key` are required, and an answers file without them is refused in words; the doctor no longer checks port 80 for a certificate the proxy would obtain itself. |
 | 1.45 | 2026-11-04 | Found on the first server (ADR-114 Amendment 33; build order step 25): §4 and §5a, the install waits for the extraction model to download, says so with its size, and only then says it is installed. |
@@ -933,7 +934,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
-| `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched |
+| `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, and the next install of the same deployment finds them; without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched. (Before the stores had named volumes, section 13, a reinstall did not find the stores' data) |
 
 Every command takes `--name <name>` to act on a deployment kept by name, or `--name default` for the
 checkout's own (section 1a.1). Every service restarts itself if it stops; nothing is registered with
@@ -1398,12 +1399,27 @@ restore from the cloud's console.
 (section 5a.3), each set readable by its owner only; the certificate's key and `deployment.env` are
 never in it. Schedule it with a cron line, for example
 `0 2 * * * cd /opt/ospreyflow && ~/.local/bin/ospreyflow backup`. A person who signs in through the
-organisation's identity provider is restored still linked to it. OpenSearch is rebuilt, not
-restored, as on Lite.
+organisation's identity provider is restored still linked to it. OpenSearch is not in the set, as
+on Lite (below).
 
 **A fresh deployment** has no published recipes and no analytics events yet: its first set records
 them as **empty** (the manifest's `empty` list, and the backup's last lines say so), and a restore
-of it restores nothing for them. **A backup that fails** removes the set it had started, and says
+of it restores nothing for them. **Where the stores keep their data** (Lite, and Small on your own server). In Docker named volumes
+of the deployment's own: `<project>_postgres-data` (every PostgreSQL database — the Conduit's
+records, the accounts, the audit log), `<project>_arcadedb-databases` and `<project>_arcadedb-config`
+(the graph and its server's settings), `<project>_valkey-data` (the working sets and job queues),
+`<project>_opensearch-data`, beside `<project>_osprey-data`, `<project>_osprey-staging` and
+`<project>_objectstore-data`. `<project>` is `osprey-local-lite`, `osprey-small`, or the
+`deployment.name` you gave; `docker volume ls` lists them. They outlive a stopped, recreated or
+removed container, so a restart, `ospreyflow apply`, an update and `uninstall --keep-data` keep them;
+`ospreyflow uninstall` without `--keep-data` removes them. A deployment installed with v0.4.10 or
+earlier kept PostgreSQL, ArcadeDB and Valkey in unnamed volumes and OpenSearch inside its container;
+its data is moved into the named volumes once (section 14). A backup reads each store through its own
+running server, so it is the same wherever the data is kept. **Not in a backup:** Valkey's working
+sets and queues, and OpenSearch, which holds no index of OspreyFlow's yet — so there is nothing of it
+to restore or rebuild, and a restore starts it empty.
+
+**A backup that fails** removes the set it had started, and says
 so, so no half-written set is left beside the good ones. If it cannot remove all of it, it says what
 it could not remove, renames the set `<set>.incomplete` with a file `INCOMPLETE` in it, and
 `ospreyflow restore` refuses it; remove it as root (`sudo rm -rf <set>.incomplete`).
@@ -1461,6 +1477,54 @@ that can read it first; without one the check cannot answer, and says so.
 
 An update moves forward only.
 
+**The stores' one-time move to named volumes.** A deployment installed with v0.4.10 or earlier keeps
+its PostgreSQL, ArcadeDB and Valkey data in unnamed volumes, and OpenSearch's inside its container
+(section 13). The first `ospreyflow update` after that — after its backup and before anything
+starts — moves the data into the stores' named volumes, once; so does the first `ospreyflow start`,
+`start --build`, `apply` or `install` that brings such a deployment up from a newer checkout. The
+deployment is stopped while it moves: each store is started alone on its old data and asked what it
+holds, its data is copied with its own image keeping every owner and permission, the copy is checked
+file by file against the original, and the store is started on its named volume and must hold the
+same as before. It says, for example:
+
+```
+The stores' data moves to named volumes, once: postgres, arcadedb, valkey, opensearch. The deployment is stopped while it moves; the old volumes are kept.
+  postgres: the databases keycloak, osprey, postgres, superset.
+  postgres: copying /var/lib/postgresql/data from 3f9c…e1 to osprey-small_postgres-data…
+  postgres: /var/lib/postgresql/data copied and checked (2114 entries, the same owners, modes and contents).
+  …
+  opensearch: holds no index of its own, so nothing is copied; it starts on its named volume empty.
+  postgres: started on its named volume with the databases keycloak, osprey, postgres, superset, as before.
+  …
+The stores now keep their data in named volumes.
+The old volumes are left in place: 3f9c…e1, 7a20…4b, c51d…90, 0be8…7f. Once the deployment works as before, remove them with:
+  docker volume rm 3f9c…e1 7a20…4b c51d…90 0be8…7f
+```
+
+Run again, it does nothing. It needs room for a second copy of the stores' data on the disk where
+Docker keeps its volumes (`ospreyflow doctor` shows that disk). **If the move fails**, it says why and
+removes nothing: before any store has started on its named volume, the named volumes it filled are
+removed and each store's data is where it was; an update then rolls back to the previous release on
+that data, with nothing restored ("rolled back to … on its own data, which was never moved"), and
+`start` or `apply` leave the deployment stopped until the same command is run again. If a store had
+already started on its named volume, an update rolls back as for any other failure (the backup
+restored) and removes the named volumes it made; the old volumes are kept either way.
+
+### 14.1 Removing the old store volumes
+
+After the move, each store's old volume is left as it was — a long hexadecimal name — and nothing
+uses it. Check the deployment first: sign in, open a case, and take a backup (`ospreyflow backup`,
+section 13). Then remove the volumes the move named, with the command it printed:
+
+```
+docker volume rm <name> <name> …
+```
+
+Docker refuses to remove a volume a container still uses, so nothing in use can be removed this way.
+If the move's words are lost, `docker volume ls --filter dangling=true` lists the volumes no
+container uses; this deployment's are among them, but so may be other programs', so do not remove
+them all (`docker volume prune` would). Until they are removed they cost only disk.
+
 ## 15. Scheduled and watched pipelines
 
 A published pipeline can run on a **schedule** (hourly, daily, on weekdays or weekly at a time, in a
@@ -1493,6 +1557,8 @@ Admin → Schedules and runs lists every one.
 | Ask on the local engine fails after the extraction model was changed (the GPU switched on, or `models.extraction`) | `ospreyflow apply` fetches the newly chosen model, and waits for it, before anything that uses it starts again; if the download fails it stops with nothing changed, saying "the model download (ollama-models) did not finish": `ospreyflow logs ollama-models` says why, then run `ospreyflow apply` again. With v0.4.8 or earlier, `apply` never fetched it: `docker compose --env-file <deployment>/deployment.env -f <deployment>/compose.yaml up -d --force-recreate --no-deps ollama-models` fetches it (the 14b is about 9 GB) |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
+| `start`, `apply`, `install` or `update` says "the stores' data could not be moved to named volumes" | Nothing was removed (section 14). "both its current volume … and the named volume … hold data": the named volume is left from an earlier attempt — look at it, and remove it (`docker volume rm <name>`) only if it holds nothing you need; then run the command again. "holds the indexes …": OpenSearch holds an index OspreyFlow did not write, which would not survive the move; snapshot or remove it first. "No space left on device": free room for a second copy of the stores' data where Docker keeps its volumes. "is not the same as the original": the copy did not keep an owner or a permission; say so, with the line it names |
+| Old unnamed volumes after the move | Expected: section 14.1 says how to remove them once the deployment works as before |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |
 
 ---

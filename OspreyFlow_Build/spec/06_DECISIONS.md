@@ -24272,20 +24272,35 @@ migration, before a client's data goes on a server.** Mechanics *(mine)*, record
 6. **Not changed, recorded:** Valkey is not in the backup set (its working sets and queues), as
    before; a backup restores into an empty Valkey.
 
-**Tests** (each shown red first; the Docker stand-in models what the real Docker and PostgreSQL
-refuse): `tests/harness/test_store_volumes.py` —
-`test_the_stand_in_keeps_an_anonymous_volume_for_an_existing_container_and_gives_a_new_one_an_empty_one`,
-`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`,
-`test_every_store_has_its_named_volume_on_lite_and_small` (the render; **rule 12: the test that fails
-if a store loses its named volume**), `test_a_store_left_off_its_named_volume_is_found_by_the_render_test`,
-`test_the_move_keeps_every_stores_data_with_owners_and_modes`, `test_a_second_move_does_nothing`,
+**Tests** (each shown red first; the Docker stand-in models what the real Docker, Compose and
+PostgreSQL refuse). `tests/harness/test_store_volumes.py` — the stand-in pinned:
+`test_the_stand_in_keeps_anonymous_volumes_on_recreate_and_not_for_a_new_container`,
+`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`; the render:
+`test_every_store_has_its_named_volume_on_lite_and_small` (**rule 12: the test that fails if a store
+loses its named volume**; its paths are written out in the test, not read from the renderer's table),
+`test_a_store_left_off_its_named_volume_is_found_by_the_render_test` (the check shown red with a row
+taken out), `test_the_named_volumes_are_the_amendments_names`,
+`test_a_store_the_deployment_does_not_run_gets_no_volume`,
+`test_the_cluster_translation_is_unchanged_by_the_named_volumes`; the move:
+`test_the_move_keeps_every_stores_data_with_owners_and_modes`,
+`test_after_the_move_a_new_container_keeps_the_data`, `test_a_second_move_does_nothing`,
+`test_a_new_install_has_nothing_to_move`,
 `test_a_copy_that_loses_the_top_folders_owner_is_refused_before_postgres_sees_it`,
 `test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one`,
 `test_opensearch_with_an_index_of_its_own_is_not_moved`,
-`test_a_named_volume_already_holding_data_is_not_overwritten`;
-`tests/harness/test_update_apply.py::test_a_failed_move_rolls_the_update_back_on_its_untouched_data`,
-`::test_an_update_moves_the_stores_after_its_backup_and_before_it_starts`;
-`tests/test_refresh.py::test_start_build_moves_the_stores_before_it_starts_them`;
-`tests/cli/test_lifecycle.py` (`start` and `switch` run the move before `up`, and a refused move
-brings nothing up). **Not proved here:** the move against real Docker and real images — proved on
-the test server (update, then stop/start, backup, restore) before a client's data.
+`test_a_named_volume_already_holding_data_is_not_overwritten`,
+`test_a_store_that_answers_differently_on_its_named_volume_fails_after_starting`,
+`test_the_command_says_what_failed_and_exits_one`. The wiring:
+`tests/harness/test_update_apply.py::test_an_update_moves_the_stores_after_its_backup_and_before_it_starts`,
+`::test_a_failed_move_rolls_the_update_back_on_its_untouched_data`,
+`::test_a_move_that_failed_after_a_store_started_restores_the_backup_and_removes_its_volumes`;
+`tests/test_refresh.py::test_the_stores_named_volumes_reach_a_deployment_rendered_before_them`,
+`::test_start_build_moves_the_stores_before_it_starts_them`;
+`tests/harness/test_apply_changed_settings.py::test_apply_moves_the_stores_before_it_starts_anything_and_then_starts_it_all`,
+`::test_a_refused_move_starts_nothing`; `tests/cli/test_lifecycle.py` (`start` and `switch` run the
+move before `up`; `::test_a_start_whose_stores_cannot_be_moved_brings_nothing_up`). The move is off
+for every other test (`tests/conftest.py`), so none reaches the machine's own Docker. The copy and
+listing scripts were also run against real files on macOS with GNU `stat` and `sha256sum` shimmed: a
+copy is listed identical, and a top folder whose mode changed is not. **Not proved here:** the move
+against real Docker and the real images — proved on the test server (update, then stop/start,
+backup, restore) before a client's data.

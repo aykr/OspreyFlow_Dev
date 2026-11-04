@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.22** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.23** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.23 | 2026-11-04 | New §9.5, where the stores keep their data in a Lite or Small `compose.yaml` (ADR-114 Amendment 35): each store's named volume, what stays on its image's unnamed volumes, the one-time move (`harness/store_volumes.py`) and the tests that fail if a store loses its volume. |
 | 1.22 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.21 | 2026-11-04 | §9.4: the `ollama` service keeps the model loaded on a GPU (`OLLAMA_KEEP_ALIVE=-1`). |
 | 1.20 | 2026-11-04 | Describes v0.4.9. No change to its content. |
@@ -768,3 +769,45 @@ programs on `PATH`); and `tests/cli/test_answers.py`'s `test_server_gpu_*`.
 guided page (`ospreyflow install --gui`) is the whole schema written out with its defaults, so it
 names `models.extraction: qwen2.5:7b-instruct`. On a GPU it then keeps the 7b until that line is
 removed. Changing what the page writes is not part of the amendment.
+
+### 9.5 Where the stores keep their data
+
+For whoever works on OspreyFlow itself. The decision is ADR-114 Amendment 35; the administration
+guide's §13 and §14 say what an administrator sees.
+
+**The volumes.** `harness.render` gives each store of a Lite or Small `compose.yaml` a named volume,
+declared under the file's top-level `volumes:` (so Docker names it `<project>_<volume>`), from
+`harness.render.STORE_VOLUMES`:
+
+| Service | Volume | Mounted at |
+| --- | --- | --- |
+| `postgres` | `postgres-data` | `/var/lib/postgresql/data` |
+| `arcadedb` | `arcadedb-databases` | `/home/arcadedb/databases` |
+| `arcadedb` | `arcadedb-config` | `/home/arcadedb/config` |
+| `valkey` | `valkey-data` | `/data` |
+| `opensearch` | `opensearch-data` | `/usr/share/opensearch/data` |
+
+beside `osprey-data` and `osprey-staging` (the Conduit), `objectstore-data`, `ollama-models`,
+`whisper-models`, and `clickhouse-data` or `proxy-data` where rendered. ArcadeDB's `backups/`, `log/`
+and `replication/`, the `keycloak-db` step's PostgreSQL path, and Caddy's `/config` and `/data` with
+the organisation's certificate stay on their images' unnamed volumes: nothing in them is needed after
+a restart. The volumes are added to the compose document alone (`name_the_stores`), so the cluster's
+translation of the same services keeps its own claims (`harness/cluster.py`'s `CLAIMS`). A store a
+deployment does not run gets no volume.
+
+**The one-time move.** A deployment rendered before kept the stores on unnamed volumes and
+OpenSearch inside its container. `scripts.refresh`'s `_stores_named` adds the volumes to its
+`compose.yaml` (`update` and `start --build` take their files from it), and `harness.store_volumes`
+moves the data before the next `up` — wherever `harness.ingest_uploads` runs: `harness.apply`,
+`scripts.refresh`, the `ospreyflow` command's `start` and `switch`, and `harness.update` after its
+backup and pull. It copies with the store's own image by ID, checks both sides entry by entry
+(owner, group, mode, kind, SHA-256), and compares each store's databases (or Valkey's keys that do
+not expire) before and after; it never removes the old volume. In the test suite it is off
+(`tests/conftest.py`); its own tests turn it on against a Docker stand-in.
+
+**The tests that fail if this breaks.** `tests/harness/test_store_volumes.py`:
+`test_every_store_has_its_named_volume_on_lite_and_small` (a store left on an unnamed volume),
+`test_the_move_keeps_every_stores_data_with_owners_and_modes`, `test_a_second_move_does_nothing`,
+`test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one`, and the stand-in's own
+`test_the_stand_in_keeps_anonymous_volumes_on_recreate_and_not_for_a_new_container` and
+`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`.
