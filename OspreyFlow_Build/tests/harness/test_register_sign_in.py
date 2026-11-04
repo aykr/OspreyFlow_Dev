@@ -73,7 +73,16 @@ class FakeKeycloak:
                                 "secret": "made-by-keycloak-at-import"},
                                {"clientId": "osprey-unprivileged", "id": "cid-unprivileged",
                                 "secret": "made-by-keycloak-at-import-too"},
-                               {"clientId": "realm-management", "id": "cid-rm"}]  # fmt: skip
+                               {"clientId": "realm-management", "id": "cid-rm"},
+                               # The Glass's public client as a realm imported before step 28 holds
+                               # it: no `use.refresh.tokens`, which Keycloak reads as "true".
+                               {"clientId": "osprey-glass", "id": "cid-glass", "publicClient": True,
+                                "redirectUris": ["http://localhost:9999/"],
+                                "webOrigins": ["http://localhost:9999"],
+                                "attributes": {
+                                    "pkce.code.challenge.method": "S256",
+                                    "post.logout.redirect.uris": "http://localhost:9999",
+                                }}]  # fmt: skip
         self.service_account = {"id": "uid-sa", "username": "service-account-osprey-conduit"}
         self.realm_management_roles = ["impersonation", "view-users", "manage-users", "manage-clients",
                                        "query-users", "realm-admin"]  # fmt: skip
@@ -97,6 +106,23 @@ class FakeKeycloak:
             if data["password"] != ADMIN_PASSWORD:
                 return 401, {"error": "invalid_grant"}
             return 200, {"access_token": "admin-token"}
+        if path == "/realms/osprey/protocol/openid-connect/token" and (
+            data.get("grant_type") == "authorization_code"
+        ):
+            # The Glass's code exchange (a public client: no secret). Keycloak 26 puts a refresh
+            # token in every code exchange's answer unless the client's `use.refresh.tokens`
+            # attribute is "false" (Advanced -> OpenID Connect Compatibility Modes); an absent
+            # attribute is "true". A confidential client sending no secret is refused.
+            found = [c for c in [*self.clients.values(), *self.system_clients]
+                     if c["clientId"] == data.get("client_id")]  # fmt: skip
+            if not found or not found[0].get("publicClient"):
+                return 401, {"error": "unauthorized_client",
+                             "error_description": "Invalid client or Invalid client credentials"}
+            answer = {"access_token": "glass-access", "id_token": "glass-id"}
+            attributes = found[0].get("attributes") or {}
+            if attributes.get("use.refresh.tokens", "true") != "false":
+                answer["refresh_token"] = "glass-refresh"
+            return 200, answer
         if path == "/realms/osprey/protocol/openid-connect/token":
             # The Conduit's own calls (client credentials, token exchange): Keycloak refuses a
             # confidential client whose secret is not the one it holds, whatever the grant.
@@ -892,3 +918,73 @@ def test_a_small_without_demo_accounts_is_never_given_them_by_a_repair_or_a_rebu
     assert not keycloak.passwords
     assert env.read_text(encoding="utf-8") == before
     assert "no demo account" in capsys.readouterr().out
+
+
+# --- ADR-050 Amendment 2 (build order step 28 (c)): no refresh token for the Glass ---
+
+
+def _glass_code_exchange(keycloak: FakeKeycloak) -> dict[str, Any]:
+    """The Glass's own code exchange (`oidc-client-ts`, a public client with PKCE), as Keycloak
+    answers it."""
+    status, answer = keycloak.call(
+        f"{ISSUER}/realms/osprey/protocol/openid-connect/token",
+        data={"grant_type": "authorization_code", "client_id": "osprey-glass", "code": "c",
+              "redirect_uri": "http://localhost:9999/", "code_verifier": "v"},
+        form=True,
+    )  # fmt: skip
+    assert status == 200, answer
+    return dict(answer)
+
+
+def test_a_fresh_realm_gives_the_glass_no_refresh_token_and_leaves_the_conduits_clients_alone() -> (
+    None
+):
+    """ADR-050's "no refresh token", made literal at the realm: the Glass's public client carries
+    `use.refresh.tokens: false`. The Conduit's two confidential clients (client credentials and
+    token exchange) are not given it."""
+    clients = {c["clientId"]: c for c in render_realm(_config())["clients"]}
+    assert clients["osprey-glass"]["attributes"]["use.refresh.tokens"] == "false"
+    for other in ("osprey-conduit", "osprey-unprivileged", "osprey-harness"):
+        assert "use.refresh.tokens" not in (clients[other].get("attributes") or {}), other
+
+
+def test_repair_sign_in_stops_an_existing_realm_giving_the_glass_a_refresh_token(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """A realm imported before step 28 keeps its Glass client as it was (an import is read only on
+    Keycloak's first start), so `repair-sign-in` and every install must set the attribute there."""
+    assert "refresh_token" in _glass_code_exchange(keycloak), "given, as Keycloak gives one"
+    others = [c for c in keycloak.system_clients if c["clientId"] != "osprey-glass"]
+    conduit_before = json.dumps(others, sort_keys=True)
+    lines = _register(_env(tmp_path))
+    assert "refresh_token" not in _glass_code_exchange(keycloak)
+    (glass,) = [c for c in keycloak.system_clients if c["clientId"] == "osprey-glass"]
+    # What it held is kept: PKCE, and the post-logout address brought to the deployment's own.
+    assert glass["attributes"]["pkce.code.challenge.method"] == "S256"
+    assert any("osprey-glass" in line for line in lines), lines
+    assert json.dumps(others, sort_keys=True) == conduit_before, "the Conduit's clients unchanged"
+
+
+def test_turning_off_the_glass_refresh_token_is_safe_to_repeat_and_reaches_a_small_too(
+    keycloak: FakeKeycloak,
+) -> None:
+    """`ensure_identity` alone (Small's install, a cluster's, `repair-sign-in --no-demo-accounts`)
+    carries it, and a second run writes nothing to the Glass's client."""
+    token = keycloak_admin.admin_token(
+        issuer=ISSUER, admin_user="admin", admin_password=ADMIN_PASSWORD
+    )
+
+    def identity() -> list[str]:
+        return register_sign_in.ensure_identity(
+            issuer=ISSUER, realm="osprey", token=token, config=_config(), values={}
+        )
+
+    def puts() -> int:
+        return sum(1 for verb, path in keycloak.calls if (verb, path[-9:]) == ("PUT", "cid-glass"))
+
+    identity()
+    assert "refresh_token" not in _glass_code_exchange(keycloak)
+    before = puts()
+    lines = identity()
+    assert puts() == before
+    assert "sign-in client osprey-glass: already registered" in lines

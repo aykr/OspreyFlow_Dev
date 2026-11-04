@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import re
 import secrets
-from typing import Any
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import httpx
 
@@ -44,6 +47,28 @@ _PRINCIPAL_CLAIMS = (("clearance", False), ("org_unit", False),
 
 class IdentityAdminRefused(Exception):
     """The identity provider refused or could not be reached; said in words, never swallowed."""
+
+
+class ConduitCredentialRefused(IdentityAdminRefused):
+    """The identity provider answered and refused the Conduit's own client credential (ADR-114
+    Amendment 36): after a wipe or a re-import the realm holds a secret Keycloak made (step 18a's
+    D2), and the Conduit can act for nobody until `ospreyflow repair-sign-in` sets it again."""
+
+
+#: How long Admin -> System keeps the answer to "can the Conduit act for people?" (ADR-114
+#: Amendment 36): one token request per half minute at most, however often the screen is asked.
+CREDENTIAL_CHECK_SECONDS = 30.0
+
+
+@dataclass(frozen=True)
+class CredentialCheck:
+    """Whether the identity provider grants the Conduit's own client credential: `accepted`,
+    `refused` (it answered no) or `unreachable` (it did not answer). `detail` is in words and never
+    carries the secret or the identity provider's answer."""
+
+    state: Literal["accepted", "refused", "unreachable"]
+    millis: int
+    detail: str | None
 
 
 class UnknownRoleError(ValueError):
@@ -118,6 +143,8 @@ class IdentityAdmin:
         #: ADR-114 Amendment 5: the deployment has a mail server, so a person with an address is
         #: signed in by the identity provider's own emailed link; anyone else by a one-time code.
         self._by_email = by_email
+        self._clock: Callable[[], float] = time.monotonic
+        self._credential: tuple[float, CredentialCheck] | None = None
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -141,8 +168,16 @@ class IdentityAdmin:
             )
         except httpx.HTTPError as e:
             raise IdentityAdminRefused(f"the identity provider could not be reached: {e}") from e
+        if response.status_code in (400, 401):
+            # Keycloak 26: 401 `unauthorized_client` for a client it holds with another secret, 401
+            # `invalid_client` for one it does not hold. Its answer is not repeated.
+            raise ConduitCredentialRefused(
+                "the identity provider refused the Conduit's credentials"
+            )
         if response.status_code != 200:
-            raise IdentityAdminRefused("the identity provider refused the Conduit's credentials")
+            raise IdentityAdminRefused(
+                f"the identity provider did not answer the Conduit ({response.status_code})"
+            )
         return str(response.json()["access_token"])
 
     async def _call(
@@ -166,6 +201,25 @@ class IdentityAdmin:
     async def reachable(self) -> None:
         """Raises `IdentityAdminRefused` unless the identity provider grants the Conduit a token."""
         await self._token()
+
+    async def credential_check(self) -> CredentialCheck:
+        """Can the Conduit act for people? (ADR-114 Amendment 36, Admin -> System.) One
+        client-credentials request, its answer kept for `CREDENTIAL_CHECK_SECONDS`."""
+        now = self._clock()
+        if self._credential is not None and now - self._credential[0] < CREDENTIAL_CHECK_SECONDS:
+            return self._credential[1]
+        started = time.monotonic()
+        state: Literal["accepted", "refused", "unreachable"]
+        try:
+            await self._token()
+            state, detail = "accepted", None
+        except ConduitCredentialRefused:
+            state, detail = "refused", "the identity provider refused the Conduit's credentials"
+        except IdentityAdminRefused:
+            state, detail = "unreachable", "the identity provider did not answer"
+        check = CredentialCheck(state, int((time.monotonic() - started) * 1000), detail)
+        self._credential = (now, check)
+        return check
 
     # --- people -------------------------------------------------------------------------------
 

@@ -50,6 +50,30 @@ update. Work not yet in a release is listed under *Unreleased*.
   case's datasets come back empty, and a model engine's reason for being unavailable names none.
   Nothing changes for anyone with a role. Home says *No cases to show* rather than drawing an empty
   table.
+- **The organisation's sign-in button names the provider.** Where `sign_in.organisation.label` is
+  given, the welcome page reads *Continue with* and that name (for example *Continue with Example
+  Department account*); without a label it still reads *Continue with organisation sign-in*.
+- **A window left alone no longer keeps its sign-in alive.** A window renews its sign-in only after
+  the person has pressed a key, clicked or scrolled since the last renewal. Each renewal counted as
+  activity at the identity provider, so an open window nobody touched stayed signed in for up to
+  10 hours; it now reaches the identity provider's idle limit (30 minutes by default), and the
+  person is asked to sign in again when they come back, the page kept. Their first action renews at
+  once, so someone working is never interrupted.
+- **No refresh token for the workspace.** The workspace's sign-in client is given no refresh token
+  (it never used one: its renewal asks the identity provider's own session). `ospreyflow
+  repair-sign-in` switches it off on an existing deployment.
+- **System health says when the Conduit cannot act for people.** After a wipe or a re-import, when
+  the identity provider refuses the Conduit's own credential (rules, hotlists and list screening
+  then fail), Admin → System's new *Acting for people* line says "The Conduit cannot act for people:
+  run `ospreyflow repair-sign-in`", and Home says it too. Checked at most once every 30 seconds,
+  and never shows the secret.
+- **An organisation arrival whose email an account already holds is told so.** Someone signing in
+  through the organisation for the first time, whose email an OspreyFlow account already holds, met
+  the identity provider's own "Account already exists" page, which offered to join the two. They
+  are now told, in OspreyFlow's words on the sign-in page, that the address already belongs to an
+  OspreyFlow account and to sign in with it or ask their administrator. Nothing is made, and the
+  accounts are never joined by email: an organisation's email is not proof of owning the account.
+  `ospreyflow repair-sign-in` puts this in place on an existing deployment.
 
 ## v0.4.10 — 2026-11-04
 

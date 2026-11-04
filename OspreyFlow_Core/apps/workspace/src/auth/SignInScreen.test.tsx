@@ -15,7 +15,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-theme");
 });
 
-const PLAIN: WelcomeSettings = { organisationSignIn: null, about: true, links: {}, version: "c01833b" };
+const PLAIN: WelcomeSettings = { organisationSignIn: null, organisationLabel: null, about: true, links: {}, version: "c01833b" };
 // The product's statement (the owner, 1 November 2026; ADR-034 Amendment 1), written out here so a
 // change to the component's copy is a failing test, not a silent one.
 const STATEMENT =
@@ -74,6 +74,26 @@ describe("the welcome page", () => {
     fireEvent.click(card().getByRole("button", { name: "Continue with organisation sign-in" }));
     expect(signIn).toHaveBeenLastCalledWith("acme-entra");
     expect(card().getByRole("button", { name: "Opening your organisation's sign-in page…" })).toBeTruthy();
+  });
+
+  // ADR-115 Amendment 5 (build order step 28 (a)): the button names the provider by its label.
+  it("names the organisation's provider on its button when the deployment gives its label", () => {
+    const signIn = vi.fn();
+    render(
+      <SignInScreen
+        welcome={{ ...PLAIN, organisationSignIn: "org", organisationLabel: "Example Department account" }}
+        onSignIn={signIn}
+      />,
+    );
+    expect(card().queryByRole("button", { name: "Continue with organisation sign-in" })).toBeNull();
+    fireEvent.click(card().getByRole("button", { name: "Continue with Example Department account" }));
+    expect(signIn).toHaveBeenLastCalledWith("org");
+    expect(card().getByRole("button", { name: "Opening your organisation's sign-in page…" })).toBeTruthy();
+  });
+
+  it("keeps the plain words when there is no label", () => {
+    render(<SignInScreen welcome={{ ...PLAIN, organisationSignIn: "org", organisationLabel: null }} onSignIn={vi.fn()} />);
+    expect(card().getByRole("button", { name: "Continue with organisation sign-in" })).toBeTruthy();
   });
 
   it("says which place a hand-off is signing in to", () => {

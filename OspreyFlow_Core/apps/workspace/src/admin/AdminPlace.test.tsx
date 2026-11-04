@@ -50,6 +50,26 @@ describe("the Admin area", () => {
     expect(await screen.findByText("not answering: unreachable")).toBeTruthy();
   });
 
+  // ADR-114 Amendment 36 (build order step 28 (d)): a part that answered and is wrong says what to do.
+  it("says when the Conduit cannot act for people, and what to run, in place of 'not answering'", async () => {
+    serve((path) =>
+      path === "system"
+        ? json(200, {
+            version: "1.2",
+            components: [
+              { name: "Identity provider", ok: true, millis: 12, detail: null, notice: null },
+              { name: "Acting for people", ok: false, millis: 12, detail: "the identity provider refused the Conduit's credentials",
+                notice: "The Conduit cannot act for people: run `ospreyflow repair-sign-in`" },
+            ],
+          })
+        : null,
+    );
+    place(["administer_system"]);
+    const line = await screen.findByText("The Conduit cannot act for people: run `ospreyflow repair-sign-in`");
+    expect(line).toBeTruthy();
+    expect(screen.queryByText(/not answering/)).toBeNull();
+  });
+
   it("saves a person's roles whole, keeping their other grants", async () => {
     const sent = serve();
     place(["manage_people"]);

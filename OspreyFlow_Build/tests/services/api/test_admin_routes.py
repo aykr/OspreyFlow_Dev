@@ -91,6 +91,15 @@ class _Identity:
                                                                clearance=clearance, org_unit=org_unit), secret="s")  # fmt: skip
 
 
+    # ADR-114 Amendment 36: the Conduit's own credential, as Keycloak answered it.
+    credential = "accepted"
+
+    async def credential_check(self) -> Any:
+        from services.api.identity_admin import CredentialCheck
+
+        return CredentialCheck(state=self.credential, millis=7, detail=None)
+
+
 class _Freshness:
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime
@@ -358,3 +367,74 @@ def test_a_damaged_notice_reads_as_never_checked_and_the_screen_still_answers(
     (tmp_path / "update.json").write_text('{"latest": 5')
     monkeypatch.setenv("OSPREY_STATE_DIR", str(tmp_path))
     assert _system(client, monkeypatch).json()["update"] is None
+
+
+# --- ADR-114 Amendment 36 (build order step 28 (d)): the Conduit cannot act for people ---
+
+REPAIR = "The Conduit cannot act for people: run `ospreyflow repair-sign-in`"
+
+
+def _system_as(client: Any, monkeypatch: pytest.MonkeyPatch, who: Principal) -> Any:
+    from services.api import readiness as readiness_module
+
+    async def ready() -> object:
+        return readiness_module.Readiness(ready=True, models=[])
+
+    monkeypatch.setattr(readiness_module, "deployment_readiness", ready)
+    app.dependency_overrides[get_graph] = _Fine
+    app.dependency_overrides[get_investigations] = _Fine
+    app.dependency_overrides[get_valkey] = _Fine
+    _as(who)
+    return client.get("/v1/admin/system")
+
+
+def test_a_refused_credential_says_what_to_run_and_the_identity_provider_still_answered(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D2 (step 18a): after a wipe the realm holds a secret Keycloak made, and every rule, hotlist
+    and screening run is refused. Admin -> System now says so, and what to run."""
+    client.identity.credential = "refused"
+    response = _system_as(client, monkeypatch, ADMIN)
+    assert response.status_code == 200, response.text
+    by_name = {c["name"]: c for c in response.json()["components"]}
+    acting = by_name["Acting for people"]
+    assert acting["ok"] is False and acting["notice"] == REPAIR
+    assert by_name["Identity provider"]["ok"] is True, "Keycloak answered: it refused"
+
+
+def test_an_accepted_credential_raises_no_notice_and_an_unreachable_one_is_not_called_refused(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    by_name = {c["name"]: c for c in _system_as(client, monkeypatch, ADMIN).json()["components"]}
+    acting = by_name["Acting for people"]
+    assert acting["ok"] is True and acting["notice"] is None
+    client.identity.credential = "unreachable"
+    by_name = {c["name"]: c for c in _system_as(client, monkeypatch, ADMIN).json()["components"]}
+    assert by_name["Identity provider"]["ok"] is False
+    assert by_name["Acting for people"]["ok"] is False
+    assert "repair-sign-in" not in (by_name["Acting for people"]["notice"] or "")
+
+
+def _roles_with_and_without_the_right() -> list[tuple[str, bool]]:
+    from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, Right
+
+    every = {**ROLE_RIGHTS, **LEGACY_ROLE_RIGHTS}
+    return [(role, Right.ADMINISTER_SYSTEM in rights) for role, rights in every.items()] + [
+        ("", False), ("right:administer_system", True), ("right:manage_people", False)]  # fmt: skip
+
+
+@pytest.mark.parametrize(("role", "sees"), _roles_with_and_without_the_right())
+def test_only_a_role_that_sees_system_health_sees_the_credential_line(
+    client: Any, monkeypatch: pytest.MonkeyPatch, role: str, sees: bool
+) -> None:
+    """Rule 4: the line is System health's, behind `administer_system` as the screen is — every role
+    the rights tables know, a single-right grant, and a person with no role."""
+    client.identity.credential = "refused"
+    who = Principal(id="p-1", clearance="SECRET", org_unit="verify", roles=[role] if role else [])
+    response = _system_as(client, monkeypatch, who)
+    if sees:
+        assert response.status_code == 200, response.text
+        assert REPAIR in response.text
+    else:
+        assert response.status_code == 403, response.text
+        assert "repair-sign-in" not in response.text and "Acting for people" not in response.text

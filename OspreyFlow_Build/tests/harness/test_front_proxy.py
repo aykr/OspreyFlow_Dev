@@ -162,6 +162,8 @@ def test_the_glass_learns_its_identity_provider_at_run_time() -> None:
         # ADR-115 decisions 3 and 8: no organisation sign-in until one is configured; About on, and
         # no footer link the deployment has not given.
         "organisation_sign_in": None,
+        # ADR-115 Amendment 5: and so no provider's label for its button.
+        "organisation_label": None,
         "welcome": {"about": True, "links": {}},
         # ADR-132: the OspreyFlow brand unless the deployment names another.
         "appearance": {

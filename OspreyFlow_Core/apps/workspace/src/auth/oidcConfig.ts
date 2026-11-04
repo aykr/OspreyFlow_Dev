@@ -46,6 +46,8 @@ interface DeploymentSettings {
 export interface WelcomeSettingsRead {
   /** The alias of an organisation's brokered identity provider, or `null` for none. */
   organisationSignIn: string | null;
+  /** The provider as people know it (ADR-115 Amendment 5), which its button names; `null` for none. */
+  organisationLabel: string | null;
   about: boolean;
   /** The deploying organisation's own documents, each only when given. */
   links: Partial<Record<WelcomeLink, string>>;
@@ -55,7 +57,13 @@ export interface WelcomeSettingsRead {
 
 export type WelcomeLink = "account_help" | "accessibility" | "privacy" | "service_status";
 const WELCOME_LINKS: readonly WelcomeLink[] = ["account_help", "accessibility", "privacy", "service_status"];
-const PLAIN_WELCOME: WelcomeSettingsRead = { organisationSignIn: null, about: true, links: {}, version: null };
+const PLAIN_WELCOME: WelcomeSettingsRead = {
+  organisationSignIn: null,
+  organisationLabel: null,
+  about: true,
+  links: {},
+  version: null,
+};
 
 function readWelcome(body: Record<string, unknown>): WelcomeSettingsRead {
   const welcome = (typeof body.welcome === "object" && body.welcome) as { about?: unknown; links?: unknown } | false;
@@ -69,6 +77,10 @@ function readWelcome(body: Record<string, unknown>): WelcomeSettingsRead {
   return {
     organisationSignIn:
       typeof body.organisation_sign_in === "string" && body.organisation_sign_in ? body.organisation_sign_in : null,
+    organisationLabel:
+      typeof body.organisation_label === "string" && body.organisation_label.trim()
+        ? body.organisation_label.trim()
+        : null,
     about: welcome ? welcome.about !== false : true,
     links,
     version: typeof body.version === "string" && body.version ? body.version : null,
@@ -90,6 +102,7 @@ export async function loadDeploymentSettings(
       realm?: unknown;
       marking?: unknown;
       organisation_sign_in?: unknown;
+      organisation_label?: unknown;
       welcome?: unknown;
       appearance?: unknown;
       version?: unknown;

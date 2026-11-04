@@ -298,11 +298,21 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
         "attributes": {
             "pkce.code.challenge.method": "S256",
             "post.logout.redirect.uris": origin,
+            # ADR-050 Amendment 2 (build order step 28 (c)): ADR-050's "no refresh token", made
+            # literal. Keycloak otherwise puts one in every code exchange's answer, which the
+            # Glass never used: its renewal is the `prompt=none` round (Amendment 1), not a
+            # refresh grant. An existing realm is given it by `register_sign_in.ensure_identity`.
+            "use.refresh.tokens": "false",
         },
         "redirectUris": [redirect_uri],
         "webOrigins": [origin],
         "protocolMappers": [*_claim_mappers(), _audience_mapper()],
     }
+
+
+def glass_client(config: OspreyConfig) -> dict[str, Any]:
+    """The Glass's client as the realm renders it, for registration on a realm already running."""
+    return _glass_client(config)
 
 
 def _loopback_public_client(client_id: str, origin: str, redirect_uri: str) -> dict[str, Any]:
@@ -394,6 +404,66 @@ ORGANISATION_ARRIVAL_ATTRIBUTES: dict[str, str] = {
 #: module imports the renderer).
 _REALM = "osprey"
 
+#: ADR-114 Amendment 33, "Step 28 (e)": what Keycloak runs the first time a person arrives through
+#: the organisation's provider, in place of its own *first broker login*. That one stops a person
+#: whose email an OspreyFlow account already holds at its raw "Account already exists" page, which
+#: offers to join the two. This one makes a new account when the email is not held, and otherwise
+#: refuses, in OspreyFlow's words (`ACCOUNT_EXISTS_MESSAGE`, in the login theme). It never joins
+#: accounts by email, and the provider's email is not trusted (`trustEmail: false`): joining by
+#: email hands the OspreyFlow account to whoever the organisation's directory gives that address.
+ORGANISATION_FIRST_SIGN_IN_FLOW = "osprey organisation first sign-in"
+#: The login theme's message key for the refusal (`harness/keycloak_theme.py`).
+ACCOUNT_EXISTS_MESSAGE = "ospreyAccountExistsMessage"
+
+
+def organisation_first_sign_in_flow() -> dict[str, Any]:
+    """The flow, as `keycloak_admin.ensure_first_sign_in_flow` makes it: each step's authenticator
+    or sub-flow, its requirement and its settings. Keycloak ignores the ALTERNATIVE steps of a level
+    that holds a REQUIRED one, so the choice sits in a sub-flow of its own, as in Keycloak's flow;
+    *Deny Access* may only be REQUIRED, so it sits in a sub-flow too.
+
+    - *Review Profile*, as Keycloak's own flow has it: asks only for what the provider did not give.
+    - *Create User If Unique*: a new account, joined to the organisation, unless the email (or the
+      user name) is already held — then it steps aside.
+    - *Deny Access*, with the theme's words: nothing is made and nothing joined."""
+    return {
+        "alias": ORGANISATION_FIRST_SIGN_IN_FLOW,
+        "description": "OspreyFlow: a person's first sign-in through the organisation's provider. "
+        "A new account unless the email is already held; then refused, in words. Never joins "
+        "accounts by email.",
+        "steps": [
+            {
+                "provider": "idp-review-profile",
+                "requirement": "REQUIRED",
+                "config": {
+                    "alias": "osprey organisation review profile",
+                    "config": {"update.profile.on.first.login": "missing"},
+                },
+            },
+            {
+                "flow": "osprey organisation new account",
+                "requirement": "REQUIRED",
+                "steps": [
+                    {"provider": "idp-create-user-if-unique", "requirement": "ALTERNATIVE"},
+                    {
+                        "flow": "osprey organisation account exists",
+                        "requirement": "ALTERNATIVE",
+                        "steps": [
+                            {
+                                "provider": "deny-access-authenticator",
+                                "requirement": "REQUIRED",
+                                "config": {
+                                    "alias": "osprey organisation account exists",
+                                    "config": {"denyErrorMessage": ACCOUNT_EXISTS_MESSAGE},
+                                },
+                            }
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+
 
 def organisation_redirect_uris(
     config: OspreyConfig, *, realm_name: str = _REALM
@@ -415,7 +485,9 @@ def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
     """The organisation's identity provider as Keycloak's admin API takes it (Amendment 33 decision
     4): OpenID Connect, PKCE (S256), the client authenticated by a secret posted in the form, the
     person's account imported once (`syncMode: IMPORT`), the organisation's email not trusted as
-    verified. **No secret and no endpoints:** `harness/keycloak_admin.py`'s
+    verified, and a first sign-in that never joins accounts by email
+    (`ORGANISATION_FIRST_SIGN_IN_FLOW`, which must exist before the provider names it).
+    **No secret and no endpoints:** `harness/keycloak_admin.py`'s
     `ensure_identity_provider` reads the endpoints from the provider's own discovery document —
     Keycloak fetches it, through its truststore (`network.tls.ca`) — and sets the client secret
     from the deployment's settings. None without `governance.organisation_provider`.
@@ -436,7 +508,7 @@ def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
         "storeToken": False,
         "addReadTokenRoleOnCreate": False,
         "linkOnly": False,
-        "firstBrokerLoginFlowAlias": "first broker login",
+        "firstBrokerLoginFlowAlias": ORGANISATION_FIRST_SIGN_IN_FLOW,
         "config": {
             "clientId": provider.client_id,
             "clientAuthMethod": "client_secret_post",

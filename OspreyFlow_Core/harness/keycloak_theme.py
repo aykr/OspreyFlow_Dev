@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TypedDict
 
-from harness.realm import LOGIN_THEME_NAME, REALM_DISPLAY_NAME
+from harness.realm import ACCOUNT_EXISTS_MESSAGE, LOGIN_THEME_NAME, REALM_DISPLAY_NAME
 from harness.render import REPO_ROOT, make_shared_folder, write_shared
 from harness.theme_script import read_theme_script
 from schemas.deployment import AppearanceConfig, OspreyConfig
@@ -102,6 +102,15 @@ _REFUSED = {
     "typos, or ask your OspreyFlow administrator to reset your sign-in. Five failed attempts lock "
     "the account for 15 minutes.",
 }
+#: ADR-114 Amendment 33, "Step 28 (e)": what a person arriving through the organisation's provider
+#: is told when an OspreyFlow account already holds their email (`realm.ACCOUNT_EXISTS_MESSAGE`,
+#: shown by the first sign-in flow's *Deny Access*). Nothing was made or joined. Under GOV.UK the
+#: product's name goes, as on every other line here.
+_ACCOUNT_EXISTS = (
+    "This email address already belongs to an OspreyFlow account, so your organisation account has "
+    "not been joined to it. Sign in to that account with its username and password instead, or ask "
+    "your OspreyFlow administrator."
+)
 #: Never says whether the account exists; the reset link lives as long as the realm says (1800s).
 #: Keycloak does not give the message what was typed, so "what you entered" stands for it.
 _SENT = (
@@ -408,7 +417,10 @@ def render_login_theme(
         base = base.replace(f"loginTitleHtml={_WORDMARK_HTML}\n", f"loginTitleHtml={title}\n")
         base = base.replace("For OspreyFlow accounts only.", "For this service's accounts only.")
     messages = (
-        base + f"invalidUserMessage={_REFUSED[reset_by_email]}\n" + f"emailSentMessage={_SENT}\n"
+        base
+        + f"invalidUserMessage={_REFUSED[reset_by_email]}\n"
+        + f"emailSentMessage={_SENT}\n"
+        + f"{ACCOUNT_EXISTS_MESSAGE}={_ACCOUNT_EXISTS}\n"
     )
     if govuk:
         # The page is the service's, not OspreyFlow's: the words name no product

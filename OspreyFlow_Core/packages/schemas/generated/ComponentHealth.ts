@@ -4,6 +4,7 @@ export type Name = string;
 export type Ok = boolean;
 export type Millis = number;
 export type Detail = string | null;
+export type Notice = string | null;
 
 /**
  * One part of the running deployment, asked just now: whether it answered, and how fast.
@@ -13,5 +14,6 @@ export interface ComponentHealth {
   ok: Ok;
   millis: Millis;
   detail?: Detail;
+  notice?: Notice;
   [k: string]: unknown;
 }

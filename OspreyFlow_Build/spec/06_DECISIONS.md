@@ -6817,11 +6817,13 @@ are not changed.
    not end it, and the maximum (Keycloak's default, 10 hours) does. A window closed, or a machine asleep,
    lets the idle limit run as before. Open question for the owner: renew only after the person has done
    something since the last renewal, so an unattended open window still reaches the idle limit.
+   **Answered by the owner, 4 November 2026: yes (Amendment 2 (b)).**
 6. **Not changed, and said so.** Keycloak puts a refresh token in the code exchange's answer (the realm
    does not switch it off on the Glass's client), and the library holds it in memory with the rest of
    the signed-in record; the Glass never uses it. Making ADR-050's "no refresh token" literal is a realm
    change (`use.refresh.tokens: false` on `osprey-glass`, reaching an existing deployment through
-   registration): an open question, not built here. A deployment whose identity provider is on another
+   registration): an open question, not built here. **Answered by the owner, 4 November 2026: set it
+   (Amendment 2 (c)).** A deployment whose identity provider is on another
    site (`VITE_OIDC_ISSUER_ORIGIN`) can find the iframe's cookie blocked by a browser that blocks
    third-party cookies; renewal then fails into the prompt above, never into a silent loss.
 
@@ -23650,6 +23652,10 @@ Units 7, 5 and 6. Where this section and the text above differ, this section is 
 - **The label** names the provider on Keycloak's own pages (its display name). The welcome page's
   button keeps ADR-115 decision 3's words, *Continue with organisation sign-in* (open question for
   the owner: show the label there instead).
+  **Answered by the owner, 4 November 2026: show it** — the button reads *Continue with <label>*
+  (ADR-115 Amendment 5).
+- **An arrival whose email an account already holds** — corrected by step 28 (e) below: the
+  provider no longer names Keycloak's *first broker login*.
 - **Rule 13 — corrected.** Decision 4 said the button had no keyboard step; `keyboard/sign-in.spec.ts`
   already had one (`continue-with-organisation-sign-in`). What had none was the button beside it,
   *Sign in with an OspreyFlow account*, the first administrator's way in on such a deployment: drop 2
@@ -23973,6 +23979,69 @@ The owner's rulings of 4 November 2026 on open questions 27 and 30.
   was told "or neither, for a certificate the front proxy obtains itself"). No existing test relied
   on the fallback; `test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting`'s
   certificate-without-key case still finds "both" in the new words.
+
+#### Step 28 (e) (4 November 2026): an arrival whose email an OspreyFlow account already holds
+
+**Found in drop 2** (open question 28): someone arriving through the organisation's provider whose
+email an OspreyFlow account already holds — an administrator invited them by that address before
+the organisation's sign-in was set up, say — met Keycloak's raw "Account already exists" page. That
+page is Keycloak's *first broker login* flow, which the provider named (`firstBrokerLoginFlowAlias:
+first broker login`): it offers to join the two accounts, by a link mailed to the account's address
+or by the account's password.
+
+**The owner's ruling, 4 November 2026:** link automatically only if that is safe; otherwise say it
+in OspreyFlow's words. **Decided (mine, within that ruling): never join by email; refuse in words.**
+
+1. **Why not join automatically.** Joining on the email the organisation's token carries (Keycloak's
+   `trustEmail: true` with an *Automatically set existing user* step) gives the OspreyFlow account,
+   its roles and its clearance to whoever the organisation's directory gives that address. That is
+   safe only where the provider's email is verified and cannot be set by the person or by another
+   tenant, and Entra ID — the client's provider — does not promise it: its `email` claim is not a
+   verified, immutable identifier (Microsoft's own guidance is not to authorise on it; the "nOAuth"
+   account takeovers of 2023 were exactly this join). An OspreyFlow deployment cannot check the
+   organisation's directory, so it cannot know when the claim is safe. **The alternative, recorded
+   for the owner:** where an organisation does verify every address and wants the join, a
+   deployment setting could switch the provider to `trustEmail: true` and an auto-link step; that
+   is a decision the organisation's security officer signs, not a default, and it is not built.
+2. **Why not Keycloak's own join either.** Its flow's join is safer (it proves the mailbox, or the
+   account's password), but an invited account has no password yet, a deployment with no mail
+   server cannot send the link, and the page is Keycloak's, not OspreyFlow's — the person cannot
+   tell what is being asked of them.
+3. **What is built.** `harness/realm.py`'s `organisation_first_sign_in_flow` (`osprey organisation
+   first sign-in`): *Review Profile* as Keycloak's own flow has it (only what the provider did not
+   give); then a sub-flow, REQUIRED, of two alternatives — *Create User If Unique* (a new account,
+   joined to the organisation, unless the email or user name is held, when it steps aside) and a
+   sub-flow holding *Deny Access*, REQUIRED, whose message is the login theme's
+   `ospreyAccountExistsMessage`. Two sub-flows because Keycloak ignores the alternatives of a level
+   holding a required step, and *Deny Access* may only be required. The provider names it
+   (`firstBrokerLoginFlowAlias`), `trustEmail` stays false, and no step joins or confirms a join.
+   `keycloak_admin.ensure_first_sign_in_flow` makes it through the admin API before the provider is
+   registered — from `register_sign_in.ensure_identity`, so `ospreyflow install`, `ospreyflow
+   repair-sign-in` and a restore all do — and puts back a step someone changed by hand; safe to
+   repeat (a flow as rendered is not written). A refusal is named and stops the registration, so
+   the provider is never left naming a flow that is not there. Only a deployment with the
+   organisation's provider gets it.
+4. **What the person reads** (the login theme; under GOV.UK without the product's name): "This
+   email address already belongs to an OspreyFlow account, so your organisation account has not
+   been joined to it. Sign in to that account with its username and password instead, or ask your
+   OspreyFlow administrator." Nothing is made and nothing joined; signing in with the OspreyFlow
+   account still works. **What the administrator can do:** keep that account (the person signs in
+   with it), or, for the organisation's sign-in, remove it in the identity provider's own console
+   and let the person arrive again (roles granted again). The Admin area has no join and no
+   removal of a person: an open question for the owner, not built.
+5. **Tests**, red first (`s28e_*`): `tests/harness/test_organisation_first_sign_in.py`, against a
+   stand-in that runs a first-broker-login flow as Keycloak's `DefaultAuthenticationFlow` does and
+   refuses as its admin API does (the module's docstring lists both):
+   `::test_the_stand_in_shows_keycloaks_raw_page_under_its_own_first_broker_login`,
+   `::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined` (red:
+   "Account already exists"), `::test_an_arrival_whose_email_nobody_holds_gets_a_new_account_as_before`,
+   `::test_the_provider_trusts_no_email_and_no_step_joins_accounts`,
+   `::test_the_flow_is_made_once_and_a_second_run_writes_nothing`, `::test_a_flow_changed_by_hand_is_put_back`,
+   `::test_a_refused_flow_is_named_and_the_provider_is_not_left_pointing_at_nothing`,
+   `::test_a_deployment_without_the_organisations_provider_gets_no_flow`,
+   `::test_the_sign_in_page_says_what_happened_and_what_to_do` (both brands). Against two real
+   Keycloak 26.0, the login theme mounted as compose mounts it:
+   `tests/harness/test_organisation_sign_in.py::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined`.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
@@ -24438,3 +24507,154 @@ move against real Docker and the real images — `docker commit` of Valkey's con
 of each store on its named volume — and the Keycloak restart against a real Keycloak: proved on a
 throwaway copy of the server's deployment (a second Compose project made from a backup) before a
 client's data.
+
+### ADR-050, Amendment 2 (4 November 2026) — no refresh token for the Glass; renewal only after the person has done something (build order step 28 (b) and (c))
+
+**The owner's rulings of 4 November 2026** on Amendment 1's two open questions (points 5 and 6;
+open question 25 of `process/BUILD_ORDER_2026-11.md`).
+
+**(b) Renew only after the person has done something since the last renewal or sign-in.** Each
+renewal is a `prompt=none` round at Keycloak, which counts as activity on its session, so an open,
+awake, unattended window reached only the session's maximum (Keycloak's default, 10 hours), never
+its idle limit (the realm sets neither, so Keycloak's 30 minutes applies).
+
+1. **What counts as activity** (`auth/tokenRenewal.ts`, `ACTIVITY_EVENTS`): a key press
+   (`keydown`), a pointer press (`pointerdown`, which covers touch and pen) and a wheel turn
+   (`wheel`) anywhere in the page. Deliberately not a pointer merely moving (a resting mouse
+   jitters), focus, or the tab becoming visible. `watchActivity` listens on `window` in the capture
+   phase (a handler that stops an event cannot hide it) and passively (no scroll waits on it); the
+   listener only sets a flag, so it costs nothing on a busy canvas.
+2. **When a renewal is made.** Activity is counted from the last renewal's start or the last
+   sign-in (`schedule`, which a sign-in calls). At the renewal's time (a minute before expiry, as
+   Amendment 1 point 2), it renews only if there has been activity; otherwise nothing is asked and
+   the token is left to lapse. A call the Conduit refuses (`App.tsx`'s `renewAfterRefusal`) renews
+   only on the same condition (`renewIfActive`), so a screen's own poll cannot keep the session
+   alive either; it answers 401 to that screen, as an expired token always did. **The person's
+   first action after a lapse renews at once** (`noteActivity`), and a call that action makes joins
+   that renewal and is made again with its token (Amendment 1 point 3). If the identity provider's
+   idle limit passed meanwhile, that renewal answers `login_required` and the session prompt asks in
+   place, the page kept (Amendment 1 point 4). *Try again* on the prompt asks outright
+   (`renewNow`), whatever the activity. One renewal is in flight at a time, as before.
+3. **What this means.** A window that nobody touches now ends at the identity provider's idle
+   limit, measured from the last renewal before the person stopped (so up to the idle limit plus one
+   token's life, about 35 minutes with Keycloak's defaults); a person working keeps their window to
+   the maximum, as before. No screen reloads, at any point. Nothing else in the Glass, the realm or
+   the Conduit changes.
+
+**Tests**, red first (`s28b_*`): `src/auth/tokenRenewal.test.ts` "renewal only after the person has
+done something" — an idle window does not renew (red: renewed 15 times in an idle hour); activity
+after the token has lapsed renews at once; activity is counted from the last renewal; activity before
+a sign-in does not count after it; a refused call while idle is not renewed, after activity it is;
+*Try again* renews outright; an ended session is asked once — and "watchActivity" (the three events
+and not a moving pointer; passive, capture phase); Amendment 1's cases now with the person active.
+`src/App.test.tsx` "windows stay signed in": "an unattended window lets its token lapse: no renewal,
+and nothing asked" and "a call refused while nobody is there is not renewed; the person's first key
+press renews, and their call is answered" (red: the refused call renewed). No Glass action is added,
+so no keyboard step (rule 13); `keyboard/session-prompt.spec.ts` is unchanged.
+
+**(c) `use.refresh.tokens: false` on `osprey-glass`, so ADR-050's "no refresh token" is literally
+true.**
+
+1. **The realm.** `harness/realm.py`'s `_glass_client` renders the attribute
+   `"use.refresh.tokens": "false"`. Keycloak 26 then leaves the refresh token out of the Glass's
+   code exchange; without it, Keycloak puts one in every answer (an absent attribute is read as
+   "true"). Only the Glass's client carries it: the Conduit's two confidential clients
+   (`osprey-conduit`, `osprey-unprivileged`) use client credentials and token exchange, which this
+   attribute does not govern, and they are left as they were; the harness and Superset clients too.
+2. **An existing deployment.** A realm import is read only on Keycloak's first start, so a realm
+   imported before this keeps Keycloak's default. `register_sign_in.ensure_identity` — run by
+   `ospreyflow repair-sign-in` (with or without `--no-demo-accounts`), `apply`, every install and a
+   cluster's — now registers the Glass's client through `keycloak_admin.ensure_client`, which brings
+   `use.refresh.tokens` into line where the rendered client names it, beside the addresses it
+   already brought up to date. Safe to repeat: a client already as rendered is not written.
+3. **Silent renewal does not need one.** `userManager.renewSilently` asks `oidc-client-ts` for
+   `signinSilent({ forceIframeAuth: true })`: the `prompt=none` authorisation request against
+   Keycloak's session cookie, then a code exchange (Amendment 1 point 1). No refresh grant is made
+   anywhere in the Glass, so nothing it does changes; the library simply holds no refresh token in
+   memory any more.
+
+**Tests**, red first (`s28c_*`): `tests/harness/test_register_sign_in.py` — its stand-in Keycloak
+now answers the Glass's code exchange as Keycloak 26 does, with a refresh token unless the client's
+attribute is "false", and refuses a confidential client sending no secret:
+`::test_a_fresh_realm_gives_the_glass_no_refresh_token_and_leaves_the_conduits_clients_alone`,
+`::test_repair_sign_in_stops_an_existing_realm_giving_the_glass_a_refresh_token` (and the Conduit's
+clients byte-identical after), `::test_turning_off_the_glass_refresh_token_is_safe_to_repeat_and_reaches_a_small_too`.
+Against a real Keycloak 26.0: `tests/harness/test_organisation_sign_in.py::test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older_realm`
+(the attribute set back to "true", a refresh token seen, registration run, none seen, the person
+still signed in).
+
+### ADR-115, Amendment 5 (4 November 2026) — the organisation's button names the provider (build order step 28 (a))
+
+**The owner's ruling of 4 November 2026** (open question 28): the welcome page's organisation
+button names the provider as people know it. Decision 3's words stay where there is nothing to name.
+
+1. **The words.** With a label, the button reads *Continue with <label>* — for example *Continue
+   with Example Department account*; without one, *Continue with organisation sign-in*, as before.
+   The busy text (*Opening your organisation's sign-in page…*), the note under it and the second
+   button are unchanged. Under GOV.UK the same.
+2. **Where the label comes from.** The answers file's `sign_in.organisation.label`, kept as
+   `governance.organisation_provider.label` (ADR-114 Amendment 33 decision 4) — the same name
+   Keycloak shows on its own pages. `harness.site.render_glass_settings` writes it into the Glass's
+   `/deployment.json` as `organisation_label` (`harness.site.organisation_label`: only with
+   `organisation_sign_in` set, trimmed, none when empty), and `oidcConfig.readWelcome` reads it as
+   `organisationLabel` (words only; anything else is no label). A deployment that names an alias
+   brokered by hand (`governance.organisation_sign_in` without `organisation_provider`, as on Lite)
+   has no label and keeps the plain words. Nothing else on the page changes; the label is the
+   deployment's own text, rendered as text.
+3. **The sign-in page** (Keycloak's, in the OspreyFlow theme) is reached by `kc_idp_hint`, which goes
+   straight to the organisation, so it is not shown on this path; where it is (the second button),
+   Keycloak lists the provider under its display name, which is already the label (drop 2).
+
+**Tests**, red first (`s28a_*`): `tests/harness/test_welcome_settings.py` (the label reaches
+`/deployment.json`; none for an alias brokered by hand or without organisation sign-in);
+`src/auth/oidcConfig.test.ts` "the deployment's welcome settings" (read, and no label for an
+absent, empty, blank or non-text value); `src/auth/SignInScreen.test.tsx` "names the organisation's
+provider on its button when the deployment gives its label" and "keeps the plain words when there is
+no label"; rule 13: `keyboard/sign-in.spec.ts` "organisation sign-in named by its label goes to that
+provider by keyboard" (`continue-with-the-organisations-named-provider`), shown red against the old
+wording.
+
+### ADR-114, Amendment 36 (4 November 2026) — System health says when the Conduit cannot act for people (build order step 28 (d))
+
+**The owner's ruling of 4 November 2026** (open question 25): a System health line for step 18a's D2
+— the Conduit's own client credential refused by the identity provider after a wipe or a re-import
+(Amendment 32), when every rule, hotlist and list screening run is refused while the screens look
+well.
+
+1. **The line.** Admin → System gains **Acting for people**: green when the identity provider grants
+   the Conduit's client credential; when it refuses, red with **"The Conduit cannot act for people:
+   run `ospreyflow repair-sign-in`"**; when the identity provider did not answer, red with "Not
+   known: the identity provider did not answer" (an outage is not a refusal, ADR-044). The
+   **Identity provider** line is now green when Keycloak answered, refused or not — before, a
+   refused credential showed it as "not answering", which it was not.
+2. **The check** (`services/api/identity_admin.py`, `IdentityAdmin.credential_check`): one
+   client-credentials request with the Conduit's own settings — the request the Conduit makes before
+   acting for anyone — read as *accepted* (200), *refused* (400 or 401: Keycloak 26 answers 401
+   `unauthorized_client` for a client it holds with another secret, `invalid_client` for one it does
+   not hold) or *unreachable* (no answer, or any other status). **Cheap and cached:** it is the one
+   request the System screen already made for the Identity provider line, now answering both, and its
+   answer is kept for 30 seconds (`CREDENTIAL_CHECK_SECONDS`), so *Ask again* and Home's figures make
+   at most one request per half minute; after `repair-sign-in`, the line is green within that.
+   **Never the secret:** the line's words are fixed, and neither the secret nor Keycloak's answer is
+   repeated (`IdentityAdminRefused`'s words, as before).
+3. **The Glass.** `ComponentHealth` gains `notice`: what to do, in words, which Admin → System shows in
+   place of "not answering: …" (a part that answered and is wrong is not a part that did not
+   answer). Home's administration figures say the notice beside "N of M services healthy", and its
+   picture of the services says "needs attention" for that line.
+4. **Who sees it.** The line is part of `GET /v1/admin/system`, behind `administer_system` like the
+   rest of the screen (ADR-112): the Admin role and a single `right:administer_system` grant; no
+   other role, and no person without a role.
+
+**Tests**, red first (`s28d_*`): `tests/services/api/test_identity_admin.py` (its stand-in now refuses
+as Keycloak 26.0 does: `unauthorized_client` for the held client with another secret,
+`invalid_client` for an unknown one) `::test_the_conduits_credential_is_said_accepted_refused_or_not_known`
+(the secret in no field) and `::test_the_credential_check_is_asked_at_most_once_in_thirty_seconds`;
+`tests/services/api/test_admin_routes.py::test_a_refused_credential_says_what_to_run_and_the_identity_provider_still_answered`,
+`::test_an_accepted_credential_raises_no_notice_and_an_unreachable_one_is_not_called_refused`, and,
+rule 4, `::test_only_a_role_that_sees_system_health_sees_the_credential_line` over every role of both
+rights tables, a single-right grant, another single right and no role (shown red with the route's
+right check removed: 9 failed); `src/admin/AdminPlace.test.tsx` "says when the Conduit cannot act for
+people, and what to run, in place of 'not answering'"; `src/home/homeData.test.ts` "says what a part
+needs done, beside the count". No Glass action is added (rule 13). **Not proved here:** the line
+against a real Keycloak after a real wipe; the stand-in's two answers are Keycloak 26.0's as recorded
+in step 18a's live check on GOV.UK and the drop 2 tests.

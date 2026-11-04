@@ -29,6 +29,7 @@ from harness.realm import (
     DEMO_ANALYST_SUBJECT,
     DEMO_ENGINEER_SUBJECT,
     DEMO_REPORT_VIEWER_SUBJECT,
+    GLASS_CLIENT_ID,
     HARNESS_CLIENT_ID,
     LOGIN_THEME_NAME,
     REALM_DISPLAY_NAME,
@@ -36,6 +37,8 @@ from harness.realm import (
     SUPERSET_CLIENT_ID,
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
+    glass_client,
+    organisation_first_sign_in_flow,
     organisation_provider,
     organisation_provider_mappers,
     organisation_redirect_uris,
@@ -231,6 +234,14 @@ def ensure_identity(
     lines.append(
         keycloak_admin.ensure_service_account_roles(issuer=issuer, realm=realm, token=token)
     )
+    # ADR-050 Amendment 2: the Glass's client gives no refresh token — on a realm imported before
+    # the rendered client said so too. Its addresses are brought to the deployment's own as well.
+    lines.append(
+        f"sign-in client {GLASS_CLIENT_ID}: "
+        + keycloak_admin.ensure_client(
+            issuer=issuer, realm=realm, token=token, client=glass_client(config)
+        )
+    )
     superset_secret = values.get("SUPERSET_OIDC_CLIENT_SECRET")
     if superset_secret:
         # ADR-111 Amendment 2: Superset's sign-in, only when the deployment runs Superset.
@@ -248,6 +259,14 @@ def ensure_identity(
         # from the deployment's settings — again after a wipe or a re-import, which lose it.
         organisation_secret = values.get(ORGANISATION_SECRET_KEY)
         if organisation_secret:
+            # Step 28 (e): the first sign-in the provider names, made before it names it — an
+            # arrival whose email an account already holds is refused in words, never joined.
+            lines.append(
+                keycloak_admin.ensure_first_sign_in_flow(
+                    issuer=issuer, realm=realm, token=token,
+                    flow=organisation_first_sign_in_flow(),
+                )
+            )  # fmt: skip
             lines.append(
                 keycloak_admin.ensure_identity_provider(
                     issuer=issuer, realm=realm, token=token, provider=provider,

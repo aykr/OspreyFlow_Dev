@@ -10732,6 +10732,13 @@ async def resume_schedule_route(
     return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
 
 
+#: ADR-114 Amendment 36: Admin -> System's words for the Conduit's own credential.
+CREDENTIAL_NOTICES = {
+    "refused": "The Conduit cannot act for people: run `ospreyflow repair-sign-in`",
+    "unreachable": "Not known: the identity provider did not answer",
+}
+
+
 @app.get("/v1/admin/system", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def system_status_route(
     principal: PrincipalDep,
@@ -10760,13 +10767,22 @@ async def system_status_route(
             raise RuntimeError(found.problem or "a model is not yet present")
 
     nobody = principal.model_copy(update={"datasets": []})
+    # ADR-114 Amendment 36: one client-credentials request (kept half a minute) answers both the
+    # identity provider's line and whether the Conduit can act for people; a refusal is Keycloak
+    # answering, so the identity provider's line stays green and the next line says what to run.
+    credential = await identity_admin.credential_check()
     components = [
         await check("Graph store", lambda: graph.type_counts(nobody)),
         await check("Case and rule stores (Postgres)", lambda: investigations.list_for(principal)),
         await check("Working-set cache (Valkey)", lambda: valkey.ping()),
         await check("Model server", models),
-        await check("Identity provider", identity_admin.reachable),
-    ]
+        ComponentHealth(name="Identity provider", ok=credential.state != "unreachable",
+                        millis=credential.millis,
+                        detail=credential.detail if credential.state == "unreachable" else None),
+        ComponentHealth(name="Acting for people", ok=credential.state == "accepted",
+                        millis=credential.millis, detail=credential.detail,
+                        notice=CREDENTIAL_NOTICES.get(credential.state)),
+    ]  # fmt: skip
     # ADR-114 decision 11, ADR-135: each role's model and where it runs, each engine and whether
     # its key is present, from names only — never a key.
     statuses, engines, notice = model_status(model_routes)

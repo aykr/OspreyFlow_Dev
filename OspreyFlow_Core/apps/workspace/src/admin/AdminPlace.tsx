@@ -604,7 +604,10 @@ function System({ api }: { api: AdminApi }) {
             <li key={c.name} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
               <span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: `var(${c.ok ? "--success" : "--error"})` }} />
               <span className="value">{c.name}</span>
-              <span className="label">{c.ok ? `answered in ${c.millis} ms` : `not answering: ${c.detail ?? "no reason given"}`}</span>
+              {/* ADR-114 Amendment 36: a part that answered and is wrong says what to do, not "not answering". */}
+              <span className="label">
+                {c.ok ? `answered in ${c.millis} ms` : (c.notice ?? `not answering: ${c.detail ?? "no reason given"}`)}
+              </span>
             </li>
           ))}
         </ul>
