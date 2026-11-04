@@ -23894,6 +23894,25 @@ The owner's rulings of 4 November 2026 on open questions 27 and 30.
   wiring removed: the install moved past `up` with the model volume empty) and
   `::test_an_install_whose_model_download_is_refused_fails_and_says_so` (red: the install returned 0).
 
+- **(b) `server:` is refused without the organisation's certificate and key.** Decision 3 kept a
+  fallback: an answers file giving neither `server.certificate` nor `server.key` installed a Small
+  whose front proxy obtained a certificate itself (Caddy's automatic ACME), which needs port 80 on
+  every interface and a public name — what a server inside an organisation's network does not
+  have. **Defined:** `cli/ospreyflow/answers.py`'s `_server` refuses a `server:` missing either, in
+  words naming both answers and the administration guide's §5a, with nothing installed; it is
+  checked after the section's other settings, so one wrong in itself is still named first. The
+  fallback's own paths are gone: the doctor's `ServerPlan` takes the certificate and key as
+  required, its certificate check always runs, and port 80 is checked only with `redirect_http`
+  (it was also checked for the automatic certificate's challenge). **Kept:** `server` never reaches
+  the schema (the answers turn it into `network.*`), so `network.tls` stays optional there, and the
+  front proxy's automatic certificate stays in `harness.site.render_caddyfile` for a cloud's Small
+  (`external:`), which obtains one for its public domain; Lite is plain HTTP and unchanged. Tests:
+  `tests/cli/test_answers.py::test_a_server_without_its_certificate_and_key_is_refused_in_words`
+  (neither, the certificate alone, the key alone — shown red: neither was accepted, and one alone
+  was told "or neither, for a certificate the front proxy obtains itself"). No existing test relied
+  on the fallback; `test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting`'s
+  certificate-without-key case still finds "both" in the new words.
+
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
 Two gaps in Amendment 8 points 4 and 10, found drafting Amendment 33 (its answers 14 and 15, which

@@ -397,13 +397,13 @@ def server_plan(answers: Answers) -> ServerPlan | None:
     from urllib.parse import urlsplit
 
     origin = urlsplit(answers.server["public_origin"])
-    tls = answers.server.get("tls") or {}
+    tls = answers.server["tls"]
     return ServerPlan(
         host=origin.hostname or "",
         port=origin.port or 443,
         dashboards=answers.dashboards,
-        certificate=tls.get("certificate"),
-        key=tls.get("key"),
+        certificate=tls["certificate"],
+        key=tls["key"],
         ca=tls.get("ca"),
         redirect_http=bool(answers.server.get("redirect_http")),
         govuk=answers.appearance.get("brand") == "govuk",

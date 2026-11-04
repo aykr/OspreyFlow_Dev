@@ -34,8 +34,8 @@ a person at the prompts and CI install the same way.
       shared_storage_class: efs-sc #   the volume every Conduit shares: EFS on AWS, Azure Files
     server:                        # small only (ADR-114 Amendment 33): a server you provide,
       address: https://osprey.example.internal   # every store in a container; https:// only
-      certificate: /etc/ospreyflow/tls/osprey.crt  # PEM: the certificate, then its intermediates
-      key: /etc/ospreyflow/tls/osprey.key          # PEM, unencrypted, mode 600
+      certificate: /etc/ospreyflow/tls/osprey.crt  # required; PEM, then intermediates
+      key: /etc/ospreyflow/tls/osprey.key          # required. PEM, unencrypted, mode 600
       ca: /etc/ospreyflow/tls/org-root.pem         # optional: the organisation's root
       ingest: /srv/ospreyflow/ingest   # folders.ingest: where the CSV exports are put
       redirect_http: false         #   true also publishes 80, only to send people to 443
@@ -274,21 +274,15 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
         )
     network: dict[str, Any] = {"public_origin": address.rstrip("/")}
     files = {k: section[k] for k in ("certificate", "key", "ca") if section.get(k)}
-    if ("certificate" in files) != ("key" in files):
-        raise AnswersRefused(
-            "server.certificate and server.key are given both or neither: the certificate and its "
-            "key (or neither, for a certificate the front proxy obtains itself)"
-        )
-    if files:
-        tls = {}
-        for key, value in files.items():
-            text = str(value)
-            if not (text.startswith("/") or text.startswith("~")):
-                raise AnswersRefused(
-                    f"server.{key} is a relative path ({text}); give it from / or from ~"
-                )
-            tls[key] = str(_host_path(f"server.{key}", value, home))
-        network["tls"] = tls
+    tls = {}
+    for key, value in files.items():
+        text = str(value)
+        if not (text.startswith("/") or text.startswith("~")):
+            raise AnswersRefused(
+                f"server.{key} is a relative path ({text}); give it from / or from ~"
+            )
+        tls[key] = str(_host_path(f"server.{key}", value, home))
+    network["tls"] = tls
     if "redirect_http" in section:
         network["redirect_http"] = _boolean("server.redirect_http", section["redirect_http"])
     if section.get("listen_address") is not None:
@@ -314,6 +308,19 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
                 f"{section['gpu']!r}"
             )
         found["gpu"] = section["gpu"]
+    # Build order step 25 (b), the owner's ruling of 4 November 2026: the organisation's own
+    # certificate, always. Without it the front proxy once fell back to obtaining a certificate
+    # itself, which needs port 80 and a public name; a server inside the organisation has neither.
+    # Checked last, so a setting that is wrong in itself is named first.
+    absent = [f"server.{k}" for k in ("certificate", "key") if k not in files]
+    if absent:
+        raise AnswersRefused(
+            f"{' and '.join(absent)} {'is' if len(absent) == 1 else 'are'} missing: a server of "
+            "your own serves the organisation's own certificate, so give both server.certificate "
+            "(PEM: the certificate, then its intermediates) and server.key (PEM, unencrypted, mode "
+            "600) — section 5a of the administration guide says what the certificate must name. "
+            "Nothing was installed"
+        )
     return found
 
 

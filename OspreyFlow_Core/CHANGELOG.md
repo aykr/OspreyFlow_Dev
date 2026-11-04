@@ -12,6 +12,11 @@ update. Work not yet in a release is listed under *Unreleased*.
   downloading, and its size, waits until it is downloaded and its digest checked, and only then
   says it is installed. A refused download stops the install, naming `ospreyflow logs
   ollama-models`.
+- **A server of your own needs its certificate and key.** An answers file whose `server:` gives
+  no `certificate` or no `key` is now refused, in words naming both and section 5a of the
+  administration guide, before anything is installed. It used to fall back to a certificate the
+  front proxy obtains itself, which needs port 80 and a public name a server inside an
+  organisation's network does not have. A cloud's server is unchanged.
 
 ## v0.4.10 — 2026-11-04
 
