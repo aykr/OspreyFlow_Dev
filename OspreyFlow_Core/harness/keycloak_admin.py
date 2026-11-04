@@ -623,9 +623,9 @@ def ensure_first_sign_in_flow(*, issuer: str, realm: str, token: str, flow: dict
     def matches(execution: dict[str, Any], step: dict[str, Any]) -> bool:
         if "flow" in step:
             return bool(execution.get("authenticationFlow")) and (
-                execution.get("displayName") == step["flow"]
+                str(execution.get("displayName")) == step["flow"]
             )
-        return execution.get("providerId") == step["provider"]
+        return bool(execution.get("providerId") == step["provider"])
 
     def ensure_steps(parent: str, steps: list[dict[str, Any]]) -> None:
         quoted = urllib.parse.quote(parent, safe="")
