@@ -574,7 +574,7 @@ class QuestionsService:
                 else None
             ),
         )
-        labels = {d.id: d.name for d in await self._datasets.of_case(investigation_id)}
+        labels = {d.id: d.name for d in await self._datasets.of_case(investigation_id, principal)}
         brief = write_brief(scope, labels)
         _fits(documents_chars, len(brief.text))
         months, event_handlings, event_scopes = await self._events_per_month(

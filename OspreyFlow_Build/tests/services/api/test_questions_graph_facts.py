@@ -66,8 +66,8 @@ from schemas.analytics import (
 from schemas.domain import Edge, Handling, Interval, Node, Principal, ProvenanceState
 
 from .test_document_reader import _document
+from .test_email_extraction import ANALYST as _ASKER
 from .test_email_extraction import (
-    ANALYST,
     ONTOLOGY,
     TEXT,
     FixedModel,
@@ -78,6 +78,10 @@ from .test_email_extraction import (
 )
 from .working_set.fakes import FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
+
+#: The asker holds the analyst role, as the route requires (`ask_model`): a person with no role is
+#: told no dataset's name (ADR-099 Amendment 11), so the brief's `dataset:` line would not name it.
+ANALYST = _ASKER.model_copy(update={"roles": ["analyst"]})
 
 CLEARED = Principal(id="analyst-3", clearance="SECRET", org_unit="unit-1")
 

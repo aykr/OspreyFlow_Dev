@@ -186,7 +186,8 @@ async def test_a_store_loaded_before_adr_099_is_given_its_datasets(store: _Store
     assert await store.datasets.ids_of_case(FIXTURE_CASE.id) == ["fixture-corp"]
     assert await store.datasets.ids_of_case(BRANCH.id) == ["fixture-corp"]
     assert await store.datasets.ids_of_case(HMP_CASE.id) == ["hmp"]
-    (own,) = await store.datasets.of_case(SCRATCH.id)
+    analyst = EVERYONE.model_copy(update={"roles": ["analyst"]})  # ADR-099 Amendment 11
+    (own,) = await store.datasets.of_case(SCRATCH.id, analyst)
     assert own.name == "Scratch" and own.owning_unit == "unit-1"
 
     # Marked by hand on the Enron canvas: now in the Enron case's dataset, in the graph and in the
