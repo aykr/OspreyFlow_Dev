@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import tarfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -197,24 +198,24 @@ def test_a_bundle_missing_a_lock_image_is_refused(tmp_path: Path) -> None:
 class _Connected:
     """A machine that reaches the registry: cosign save and docker save write their files."""
 
-    def __init__(self) -> None:
+    def __init__(self, published: dict[str, Path]) -> None:
         self.asked: list[list[str]] = []
-        self.configs: dict[str, str] = {}
+        self.published = published  # repository@digest -> its layout on the registry
 
     def run(self, argv: Sequence[str]) -> tuple[int, str]:
         argv = list(argv)
         self.asked.append(argv)
         if "save" in argv and "--dir" in argv:  # cosign save
             out = Path(argv[argv.index("--dir") + 1].replace("/out", str(self.out)))
-            service = argv[-1].split("@")[0].rsplit("/", 1)[1]
-            manifest, config = _layout(out, service)
-            self.configs[argv[-1]] = config
+            shutil.copytree(self.published[argv[-1]], out)
             return 0, ""
         if argv[:2] == ["docker", "save"]:
             Path(argv[argv.index("-o") + 1]).write_text(json.dumps([argv[-1], "id"]))
             return 0, ""
         if argv[:2] in (["docker", "pull"], ["docker", "tag"]):
             return 0, ""
+        if argv[:3] == ["docker", "image", "inspect"]:
+            return 0, "linux/amd64"
         if argv[0] == "git":
             if "bundle" in argv:
                 Path(argv[-2]).write_text("git bundle")
@@ -223,10 +224,12 @@ class _Connected:
 
 
 def test_a_bundle_holds_the_release_its_source_and_every_image_twice(tmp_path: Path) -> None:
-    connected = _Connected()
+    published = {s: _layout(tmp_path / "registry" / s, s)[0] for s in SERVICES}
+    connected = _Connected({f"{_repository(s)}@{d}": tmp_path / "registry" / s
+                            for s, d in published.items()})  # fmt: skip
     lock = "# GENERATED\n" + yaml.safe_dump({"images": [
-        {"service": s, "repository": _repository(s), "tag": "x", "digest": "sha256:" + str(i) * 64,
-         "source": "registry"} for i, s in enumerate(SERVICES, 1)]}, sort_keys=False)  # fmt: skip
+        {"service": s, "repository": _repository(s), "tag": "x", "digest": published[s],
+         "source": "registry"} for s in SERVICES]}, sort_keys=False)  # fmt: skip
     release = {"tag": "v0.5.0", "notes": "- new", "lock": lock, "lock_signature": "{}"}
     out = tmp_path / "ospreyflow-v0.5.0.tar"
 
@@ -332,42 +335,79 @@ def test_an_altered_platform_manifest_inside_an_index_fails_its_hash(tmp_path: P
 #
 # `update --from` verifies with cosign run from its image. A machine with no network that never
 # pulled that image could verify nothing: Docker, asked to run an image it does not hold, tries to
-# pull it, and with no network the pull fails. These two machines answer as Docker does — the
-# offline one refuses every pull, and a reference by digest is only found if it was *pulled* by
-# that digest (`docker load` of a `docker save` file records no repository digest), so naming the
-# image by digest after a load would still try to pull.
+# pull it, and with no network the pull fails. These machines answer as Docker does — the offline
+# one refuses every pull, and a reference by digest is only found if it was *pulled* by that digest
+# (`docker load` of a `docker save` file records no repository digest), so naming the image by
+# digest after a load would still try to pull.
+#
+# **Every image a release names is published for several platforms** (measured 4 November 2026
+# with `docker buildx imagetools inspect --raw` on v0.4.9's lock: all sixteen are indexes holding
+# linux/amd64 and linux/arm64, the owned ones beside two attestation manifests), and is locked by
+# its index's digest. The registry here publishes each the same way: a pull of the index gives the
+# platform asked for, or the daemon's own; a pull of one platform's manifest gives exactly that
+# image, and Docker refuses it with `--platform` naming another.
 
-#: The real cosign v2.4.1, measured 3 November 2026 (`docker buildx imagetools inspect`): its
-#: multi-platform index, and the ID Docker gives its linux/arm64 image (its configuration's digest).
+#: The real cosign v2.4.1, measured 3 and 4 November 2026 (`docker buildx imagetools inspect
+#: --raw`): its multi-platform index, each platform's manifest in it, and the ID Docker gives each
+#: platform's image (its configuration's digest).
 _REAL_COSIGN_INDEX = "sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
-_REAL_COSIGN_ARM64_ID = "sha256:6793dd4d518a6b556385e3dee81d02554900a3f386f8b50bbd29bdb4ac6d8829"
+_REAL_COSIGN_MANIFESTS = {
+    "linux/amd64": "sha256:dc905e434d9d7f0a5cff8e76abdfae02be313cfa5f3eac6e89209d9bd52e3b92",
+    "linux/arm64": "sha256:b74da950a9b069fbdba58fcf66e899952a190fff2a943dbf30e55279d70274d4",
+}
+_REAL_COSIGN_IDS = {
+    "linux/amd64": "sha256:c9a0cefcd8066dc94085506e0d63055d57b50a1f8285169244f1bd06ebedaec9",
+    "linux/arm64": "sha256:6793dd4d518a6b556385e3dee81d02554900a3f386f8b50bbd29bdb4ac6d8829",
+}
+_REAL_COSIGN_ARM64_ID = _REAL_COSIGN_IDS["linux/arm64"]
 _COSIGN_REPOSITORY = "ghcr.io/sigstore/cosign/cosign"
 #: Docker's own words when a pull cannot reach the registry (exit 125 from `docker run`).
 _NO_NETWORK = (
     'docker: Error response from daemon: Get "https://ghcr.io/v2/": dial tcp: lookup ghcr.io: '
     "no such host\n\nRun 'docker run --help' for more information"
 )
+BOTH = ("linux/amd64", "linux/arm64")
 
 
 class _Machine:
     """Docker, and cosign inside its image, on one machine. `online`: a pull reaches `registry`
-    (reference -> the image ID it gives); offline, every pull fails as Docker's does."""
+    (a reference -> the image ID it gives, or for an index, platform -> image ID); offline, every
+    pull fails as Docker's does. `platforms`: each image ID's platform."""
 
     def __init__(
-        self, *, online: bool, registry: dict[str, str] | None = None,
-        platform: str = "linux/arm64", layouts: dict[str, str] | None = None,
+        self, *, online: bool, registry: dict[str, Any] | None = None,
+        platform: str = "linux/arm64", layouts: dict[str, Path] | None = None,
+        platforms: dict[str, str] | None = None,
     ) -> None:  # fmt: skip
         self.online = online
         self.registry = registry or {}
         self.platform = platform
-        self.layouts = layouts or {}  # repository@digest -> the service its saved layout holds
+        self.layouts = layouts or {}  # repository@digest -> its layout on the registry
+        self.platforms = dict(platforms or {})  # image ID -> its platform
         self.images: dict[str, str] = {}  # a reference Docker resolves locally -> image ID
         self.ran: list[list[str]] = []  # every `docker run`, as asked
+        self.pulled: list[list[str]] = []  # every `docker pull`, as asked
+        self.checks_platform = True  # Docker refuses a manifest of another platform than asked
 
-    def _pull(self, ref: str) -> tuple[int, str]:
+    def _pull(self, ref: str, wanted: str | None = None) -> tuple[int, str]:
         if not self.online or ref not in self.registry:
             return 1, _NO_NETWORK.replace("docker: ", "")
-        self.images[ref] = self.registry[ref]
+        target = self.registry[ref]
+        if isinstance(target, dict):  # an index
+            if ref in self.images:
+                # The Mac's case: the daemon already holds this reference (its own platform's
+                # image, from running the release); Docker says it is up to date and keeps it.
+                return 0, f"Status: Image is up to date for {ref}"
+            image_id = target.get(wanted or self.platform)
+            if image_id is None:
+                return 1, f"no matching manifest for {wanted or self.platform} in the manifest list"
+        else:  # one platform's manifest: exactly that image, whatever the daemon's platform
+            image_id = target
+            actual = self.platforms.get(image_id)
+            if self.checks_platform and wanted and actual and actual != wanted:
+                return 1, (f"image with reference {ref} was found but does not match the "
+                           f"specified platform: wanted {wanted}, actual: {actual}")  # fmt: skip
+        self.images[ref] = image_id
         return 0, f"Status: Downloaded newer image for {ref}"
 
     def _local(self, ref: str) -> str | None:
@@ -380,7 +420,9 @@ class _Machine:
         if argv[:2] == ["docker", "version"]:
             return 0, self.platform
         if argv[:2] == ["docker", "pull"]:
-            return self._pull(argv[-1])
+            self.pulled.append(argv)
+            wanted = argv[argv.index("--platform") + 1] if "--platform" in argv else None
+            return self._pull(argv[-1], wanted)
         if argv[:2] == ["docker", "tag"]:
             found = self._local(argv[2])
             if found is None:
@@ -399,7 +441,12 @@ class _Machine:
             return 0, f"Loaded image: {reference}"
         if argv[:3] == ["docker", "image", "inspect"]:
             found = self._local(argv[-1])
-            return (0, found) if found else (1, f"Error: No such image: {argv[-1]}")
+            if found is None:
+                return 1, f"Error: No such image: {argv[-1]}"
+            asked = argv[argv.index("--format") + 1]
+            if "{{.Os}}" in asked:
+                return 0, self.platforms.get(found, self.platform)
+            return 0, found
         if argv[:2] == ["docker", "run"]:
             self.ran.append(argv)
             return self._cosign(argv)
@@ -425,39 +472,113 @@ class _Machine:
             if code != 0:
                 return 125, f"Unable to find image '{image}' locally\n{_NO_NETWORK}"
         verb = argv[at + 1]
-        if verb == "save":
+        if verb == "save":  # `cosign save` copies the registry's layout: every platform, signed
             dest = argv[argv.index("--dir") + 1]
             for inside, host in mounts.items():
                 dest = dest.replace(inside, host, 1) if dest.startswith(inside) else dest
-            _layout(Path(dest), self.layouts[argv[-1]])
+            shutil.copytree(self.layouts[argv[-1]], Path(dest))
             return 0, ""
         return 0, "Verified OK"
 
 
-def _release_on_the_registry(tmp: Path) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
-    """A release as the registry holds it: its lock, and what each reference pulls as."""
-    registry, layouts, rows = {}, {}, []
-    for service in SERVICES:
-        manifest, config = _layout(tmp / "registry" / service, service)
-        ref = f"{_repository(service)}@{manifest}"
-        registry[ref], layouts[ref] = config, service
-        rows.append({"service": service, "repository": _repository(service), "tag": "x",
-                     "digest": manifest, "source": "registry"})  # fmt: skip
-    for ref in (f"{_COSIGN_REPOSITORY}:v2.4.1", f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}",
-                f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"):  # fmt: skip
-        registry[ref] = _REAL_COSIGN_ARM64_ID
-    lock = "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
-    release = {"tag": "v0.5.0", "notes": "- new", "lock": lock, "lock_signature": "{}"}
-    return release, registry, layouts
+def _published(layout: Path, service: str, platforms: Sequence[str]) -> tuple[str, dict[str, Any]]:
+    """An image as the registry publishes it, for `platforms`: its index's digest, and each
+    platform's (manifest digest, configuration digest)."""
+    children, made = [], {}
+    for platform in platforms:
+        os_name, _, arch = platform.partition("/")
+        config = _blob(layout, json.dumps({"service": service, "os": os_name,
+                                           "architecture": arch}).encode())  # fmt: skip
+        manifest = _blob(layout, json.dumps({"schemaVersion": 2,
+                                             "config": {"digest": config}}).encode())  # fmt: skip
+        children.append({"digest": manifest, "platform": {"os": os_name, "architecture": arch}})
+        made[platform] = (manifest, config)
+    # As buildx publishes it: an attestation manifest beside each platform's image.
+    children.append({"digest": "sha256:" + "a" * 64,
+                     "platform": {"os": "unknown", "architecture": "unknown"}})  # fmt: skip
+    index = _blob(layout, json.dumps({
+        "mediaType": "application/vnd.oci.image.index.v1+json", "manifests": children,
+    }).encode())  # fmt: skip
+    (layout / "oci-layout").write_text('{"imageLayoutVersion": "1.0.0"}')
+    (layout / "index.json").write_text(json.dumps({"manifests": [
+        {"digest": index, "annotations": {"kind": "dev.cosignproject.cosign/image"}},
+        {"digest": "sha256:" + "0" * 64, "annotations": {"kind": "dev.cosignproject.cosign/sigs"}},
+    ]}))  # fmt: skip
+    return index, made
+
+
+class _Release:
+    """A release as the registry holds it, and what each reference pulls as."""
+
+    def __init__(self, tmp: Path, platforms: dict[str, Sequence[str]] | None = None) -> None:
+        self.registry: dict[str, Any] = {}
+        self.layouts: dict[str, Path] = {}
+        self.platforms: dict[str, str] = {}  # image ID -> platform
+        self.configs: dict[str, dict[str, str]] = {}  # service -> platform -> image ID
+        self.indexes: dict[str, str] = {}  # service -> the index's digest the lock names
+        self.manifests: dict[str, dict[str, str]] = {}  # service -> platform -> its manifest
+        rows = []
+        for service in SERVICES:
+            published = (platforms or {}).get(service, BOTH)
+            index, made = _published(tmp / "registry" / service, service, published)
+            repository = _repository(service)
+            ref = f"{repository}@{index}"
+            self.registry[ref] = {p: config for p, (_, config) in made.items()}
+            self.layouts[ref] = tmp / "registry" / service
+            self.indexes[service] = index
+            self.configs[service] = {}
+            self.manifests[service] = {p: manifest for p, (manifest, _) in made.items()}
+            for platform, (manifest, config) in made.items():
+                self.registry[f"{repository}@{manifest}"] = config
+                self.platforms[config] = platform
+                self.configs[service][platform] = config
+            rows.append({"service": service, "repository": repository, "tag": "x",
+                         "digest": index, "source": "registry"})  # fmt: skip
+        cosign_index = dict(_REAL_COSIGN_IDS)
+        for ref in (f"{_COSIGN_REPOSITORY}:v2.4.1", f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}",
+                    f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"):  # fmt: skip
+            self.registry[ref] = cosign_index
+        for platform, manifest in _REAL_COSIGN_MANIFESTS.items():
+            self.registry[f"{_COSIGN_REPOSITORY}@{manifest}"] = _REAL_COSIGN_IDS[platform]
+            self.platforms[_REAL_COSIGN_IDS[platform]] = platform
+        lock = "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
+        self.release = {"tag": "v0.5.0", "notes": "- new", "lock": lock, "lock_signature": "{}"}
+
+    def machine(self, *, online: bool, platform: str) -> _Machine:
+        return _Machine(online=online, registry=self.registry, platform=platform,
+                        layouts=self.layouts, platforms=self.platforms)  # fmt: skip
+
+    def mac(self) -> _Machine:
+        """The owner's Apple-silicon Mac, which has run this release: Docker holds the arm64
+        image under every reference the release names, cosign's own among them."""
+        mac = self.machine(online=True, platform="linux/arm64")
+        for ref, target in self.registry.items():
+            if isinstance(target, dict):
+                mac.images[ref] = target["linux/arm64"]
+        return mac
+
+
+def _make(tmp: Path, release: _Release, machine: _Machine, **platform: str) -> Path:
+    out = tmp / "ospreyflow-v0.5.0.tar"
+    make_bundle(out, release.release, tmp / "repo", machine.run, Cosign(machine.run),
+                staging=tmp / "staging", **platform)  # fmt: skip
+    return out
+
+
+def _carried(tmp: Path, out: Path) -> tuple[Path, dict[str, str]]:
+    """An opened bundle, and the image ID each of its image files loads as (cosign's too)."""
+    root = Path(open_bundle(out, tmp / "opened")["root"])
+    listed = json.loads((root / "manifest.json").read_text())
+    ids = {str(item["service"]): json.loads((root / item["tar"]).read_text())[1]
+           for item in listed["images"]}  # fmt: skip
+    ids["cosign"] = json.loads((root / listed["cosign"]["tar"]).read_text())[1]
+    return root, ids
 
 
 def _made_on_a_connected_machine(tmp: Path) -> Path:
-    release, registry, layouts = _release_on_the_registry(tmp)
-    connected = _Machine(online=True, registry=registry, layouts=layouts)
-    out = tmp / "ospreyflow-v0.5.0.tar"
-    make_bundle(out, release, tmp / "repo", connected.run, Cosign(connected.run),
-                staging=tmp / "staging")  # fmt: skip
-    return out
+    release = _Release(tmp)
+    return _make(tmp, release, release.machine(online=True, platform="linux/arm64"),
+                 platform="linux/arm64")  # fmt: skip
 
 
 def test_update_from_verifies_on_a_machine_with_no_cosign_image_and_no_network(
@@ -494,13 +615,137 @@ def test_a_bundle_whose_cosign_is_another_image_is_refused_before_it_runs(
 
 def test_a_bundle_is_not_made_without_the_pinned_cosign_image(tmp_path: Path) -> None:
     """A connected machine that cannot pull cosign by its pinned digest writes no bundle."""
-    release, registry, layouts = _release_on_the_registry(tmp_path)
-    del registry[f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"]
-    del registry[f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}"]
-    connected = _Machine(online=True, registry=registry, layouts=layouts)
+    release = _Release(tmp_path)
+    for manifest in _REAL_COSIGN_MANIFESTS.values():
+        del release.registry[f"{_COSIGN_REPOSITORY}@{manifest}"]
+    del release.registry[f"{_COSIGN_REPOSITORY}:v2.4.1@{_REAL_COSIGN_INDEX}"]
+    del release.registry[f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_INDEX}"]
+    connected = release.machine(online=True, platform="linux/arm64")
     connected.images[f"{_COSIGN_REPOSITORY}:v2.4.1"] = _REAL_COSIGN_ARM64_ID  # by tag only
-    out = tmp_path / "ospreyflow-v0.5.0.tar"
     with pytest.raises(BundleRefused, match="cosign"):
-        make_bundle(out, release, tmp_path / "repo", connected.run, Cosign(connected.run),
-                    staging=tmp_path / "staging")  # fmt: skip
-    assert not out.exists()
+        _make(tmp_path, release, connected, platform="linux/arm64")
+    assert not (tmp_path / "ospreyflow-v0.5.0.tar").exists()
+
+
+# --- a bundle for another platform (build order step 29, the owner's ruling of 4 November) -------
+#
+# A bundle made on the owner's Apple-silicon Mac carried the Mac's images, and an amd64 server's
+# `update --from` refused it. `--platform` (default linux/amd64, the platform releases are run on)
+# saves the given platform's images from any machine: each is pulled by the manifest digest its
+# signed index names for that platform, never by the index, whose reference the Mac's daemon
+# already answers with its own arm64 image.
+
+
+def test_a_bundle_made_on_the_mac_carries_amd64_by_default(tmp_path: Path) -> None:
+    """Red before step 29: every image, and cosign's, was the Mac's arm64 copy."""
+    release = _Release(tmp_path)
+    out = _make(tmp_path, release, release.mac())
+    root, ids = _carried(tmp_path, out)
+    assert ids.pop("cosign") == _REAL_COSIGN_IDS["linux/amd64"]
+    assert ids == {s: release.configs[s]["linux/amd64"] for s in SERVICES}
+    assert json.loads((root / "manifest.json").read_text())["platform"] == "linux/amd64"
+
+
+def test_the_mac_s_amd64_bundle_verifies_and_loads_on_an_amd64_server(tmp_path: Path) -> None:
+    release = _Release(tmp_path)
+    out = _make(tmp_path, release, release.mac(), platform="linux/amd64")
+    server = _Machine(online=False, platform="linux/amd64")
+    root = Path(open_bundle(out, tmp_path / "opened")["root"])
+    images = check_bundle(root, KEY, Cosign(server.run), server.run)
+    assert {repository: config for repository, (_, config) in images.items()} == {
+        _repository(s): release.configs[s]["linux/amd64"] for s in SERVICES
+    }
+    assert server.ran and all(_REAL_COSIGN_IDS["linux/amd64"] in argv for argv in server.ran)
+
+
+def test_each_image_is_pulled_by_its_platform_manifest_not_by_its_index(tmp_path: Path) -> None:
+    """`docker pull --platform` of the index is not enough: the Mac answers it with the arm64
+    image it holds. The pull names the platform's own manifest, which only that image has."""
+    release = _Release(tmp_path)
+    mac = release.mac()
+    _make(tmp_path, release, mac, platform="linux/amd64")
+    pulled = {argv[-1] for argv in mac.pulled}
+    for service in SERVICES:
+        assert f"{_repository(service)}@{release.indexes[service]}" not in pulled
+    assert f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_MANIFESTS['linux/amd64']}" in pulled
+    assert all(argv[2:4] == ["--platform", "linux/amd64"] for argv in mac.pulled)
+
+
+def test_a_bundle_for_arm64_is_made_on_an_amd64_machine(tmp_path: Path) -> None:
+    """The release publishes both platforms, so either may be asked for from either."""
+    release = _Release(tmp_path)
+    out = _make(tmp_path, release, release.machine(online=True, platform="linux/amd64"),
+                platform="linux/arm64")  # fmt: skip
+    _, ids = _carried(tmp_path, out)
+    assert ids.pop("cosign") == _REAL_COSIGN_IDS["linux/arm64"]
+    assert ids == {s: release.configs[s]["linux/arm64"] for s in SERVICES}
+
+
+def test_a_bundle_for_another_platform_is_refused_on_this_one_in_words(tmp_path: Path) -> None:
+    release = _Release(tmp_path)
+    out = _make(tmp_path, release, release.mac(), platform="linux/arm64")
+    server = _Machine(online=False, platform="linux/amd64")
+    root = Path(open_bundle(out, tmp_path / "opened")["root"])
+    with pytest.raises(BundleRefused) as refused:
+        check_bundle(root, KEY, Cosign(server.run), server.run)
+    said = str(refused.value)
+    assert "linux/arm64" in said and "linux/amd64" in said
+    assert "--platform linux/amd64" in said
+    assert server.ran == [] and server.images == {}
+
+
+def test_a_platform_no_release_is_built_for_is_refused_before_anything_is_pulled(
+    tmp_path: Path,
+) -> None:
+    release = _Release(tmp_path)
+    mac = release.mac()
+    with pytest.raises(BundleRefused) as refused:
+        _make(tmp_path, release, mac, platform="linux/s390x")
+    said = str(refused.value)
+    assert "linux/s390x" in said and "linux/amd64" in said and "linux/arm64" in said
+    assert mac.pulled == [] and mac.ran == []
+    assert not (tmp_path / "ospreyflow-v0.5.0.tar").exists()
+
+
+def test_an_image_not_published_for_the_platform_is_refused_naming_what_it_has(
+    tmp_path: Path,
+) -> None:
+    release = _Release(tmp_path, platforms={"arcadedb": ("linux/arm64",)})
+    with pytest.raises(BundleRefused) as refused:
+        _make(tmp_path, release, release.mac(), platform="linux/amd64")
+    said = str(refused.value)
+    assert "arcadedata/arcadedb" in said and "linux/amd64" in said and "linux/arm64" in said
+    assert "unknown" not in said  # an attestation manifest is not a platform
+    assert not (tmp_path / "ospreyflow-v0.5.0.tar").exists()
+
+
+def test_an_image_docker_holds_for_another_platform_is_never_saved(tmp_path: Path) -> None:
+    """The last check before each save: Docker is asked what platform the named image is. A
+    Docker that does not check `--platform` against a manifest pulled by digest, answering the
+    amd64 manifest with the arm64 image, is caught there and no bundle is written."""
+    release = _Release(tmp_path)
+    mac = release.mac()
+    mac.checks_platform = False
+    amd64 = f"{REG}/api@{release.manifests['api']['linux/amd64']}"
+    release.registry[amd64] = release.configs["api"]["linux/arm64"]
+    with pytest.raises(BundleRefused, match=f"{REG}/api.*linux/arm64.*not linux/amd64"):
+        _make(tmp_path, release, mac, platform="linux/amd64")
+    assert not (tmp_path / "ospreyflow-v0.5.0.tar").exists()
+
+
+def test_the_platforms_offered_are_the_ones_the_release_workflow_builds() -> None:
+    """`--platform` offers what `release.yml` publishes, and a cosign is pinned for each."""
+    from harness.bundle import RELEASE_PLATFORMS
+    from harness.signatures import COSIGN_IMAGE_IDS, COSIGN_PLATFORM_IMAGES
+
+    workflow = Path(__file__).resolve().parents[3] / "OspreyFlow_Core/.github/workflows/release.yml"
+    built = [
+        line.split("--platform", 1)[1].split()[0]
+        for line in workflow.read_text(encoding="utf-8").splitlines()
+        if "buildx build" in line and "--push" in line
+    ]
+    assert len(built) == 1, built
+    assert tuple(built[0].split(",")) == RELEASE_PLATFORMS
+    assert set(COSIGN_PLATFORM_IMAGES) == set(COSIGN_IMAGE_IDS) == set(RELEASE_PLATFORMS)
+    for platform, ref in COSIGN_PLATFORM_IMAGES.items():
+        assert ref == f"{_COSIGN_REPOSITORY}@{_REAL_COSIGN_MANIFESTS[platform]}"
