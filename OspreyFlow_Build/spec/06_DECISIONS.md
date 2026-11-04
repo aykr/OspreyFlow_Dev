@@ -21161,6 +21161,55 @@ per-dataset egress (build order step 2d).
   - a key it receives appears in no log line and in no response body;
   - the page shows "key set" afterwards.
 
+### Amendment 1 (4 November 2026): the local engine on an NVIDIA GPU — ACCEPTED
+
+Accepted by the owner on 4 November 2026, as drafted.
+
+**The owner, 4 November 2026**, on the first Small-on-a-server test machine (an RTX 5060 Ti, 16 GB):
+"this server has GPU so can you install a LLM that will be better responsive than the local-lite",
+then, from options, **add GPU support to the product** (not a server-only override): an answer, off by
+default; the local engine on the GPU; the doctor checks what the GPU needs; the larger extraction
+model by default on a GPU. Gemini and the other engines are unchanged.
+
+**Why.** The local engine runs on the CPU only. Ollama is never given a device, so a server with a
+GPU answers as slowly as a laptop: chapter 8's question took 7.5 minutes on the local model in the
+3 November rehearsal and 25.8 s on Gemini. Material whose handling code may not be sent anywhere
+(ADR-114 Amendment 6 point 4, ADR-136 decision 3) can only ever run locally, so a slow local engine
+is the one a sensitive deployment cannot route around.
+
+**Decision.**
+
+1. **`resources.gpu`** in `osprey.yaml`: `none` (the default) or `nvidia`. The answers file's
+   `server.gpu` sets it for Small on a server (Amendment 33's `server:`); Lite on a Linux computer may
+   set it in `osprey.yaml` and run `ospreyflow apply`. Refused in words for Small or Enterprise in a
+   cloud (`cloud:`), whose servers ADR-114 sizes without a GPU, and on macOS and Windows, where Docker
+   Desktop gives a container no NVIDIA GPU.
+2. **Rendered.** With `nvidia`, the `ollama` service alone reserves every NVIDIA GPU
+   (`deploy.resources.reservations.devices`: driver `nvidia`, count `all`, capability `gpu`). Nothing
+   else changes: the same pinned Ollama image (it carries CUDA), the same pinned weights, the same
+   gateway. The other model containers (vision, embeddings, transcription) stay as they are; vision
+   and embeddings run in the same Ollama and so also use the GPU.
+3. **The extraction model.** With `nvidia` and `models.extraction` not named, the extraction model
+   (which also answers Ask the case and Ask to search on the local engine) is
+   `qwen2.5:14b-instruct`, already pinned by digest (ADR-095); without a GPU it stays
+   `qwen2.5:7b-instruct`. Naming `models.extraction` always wins.
+4. **Checked before anything starts** (`doctor`, `install`, `apply`, with `nvidia`), refused in words
+   with nothing changed: `nvidia-smi` answers (the driver is installed); Docker can run a container
+   on the GPU (the NVIDIA Container Toolkit is installed and configured: `docker info` lists the
+   `nvidia` runtime or a CDI device); and, for the 14b model, at least 12 GiB of GPU memory (a
+   warning naming the 7b model otherwise). `doctor` prints the GPU's name and memory.
+5. **Measured, not assumed.** Unit 4 of the build records the time to answer chapter 8's question
+   on the test server with the GPU, against the CPU figure, in the administration guide.
+
+**Built in four units, each red first:** (1) the schema and the answers (`resources.gpu`,
+`server.gpu`, the refusals); (2) the render (the reservation, the 14b default); (3) the doctor's checks,
+against a stand-in that refuses as a server without the toolkit does (rule 15); (4) on the test server,
+end to end, with the toolkit installed, and the guides (admin §2.2a, §5a, Appendix A; user guide's
+"Which engine answered").
+
+**Cost.** One more answer and three checks. A server with a GPU still needs the NVIDIA driver and
+the Container Toolkit installed by its administrator; OspreyFlow checks them and installs neither.
+
 ## ADR-136 — Egress decided per dataset as well as by handling code, and keys marked as under a privacy contract — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings: "Per-dataset egress" (from options), and "for
