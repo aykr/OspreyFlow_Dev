@@ -418,6 +418,22 @@ def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path
     return destination
 
 
+#: How Docker refuses a `cp` from a path the container does not have: the daemon's words since
+#: Engine 1.13 ("Could not find the file <path> in container <name>"), and the client's older ones.
+#: Matched on these alone, so a container that is not running still fails the backup.
+_NOTHING_TO_COPY = ("could not find the file", "no such container:path")
+
+
+def found_nothing_to_copy(copied: subprocess.CompletedProcess[str]) -> bool:
+    """Whether a failed `docker compose cp` failed only because the path is absent: on a fresh
+    deployment the analytics file and the recipes repository do not exist yet, which is an empty
+    item, not a failed backup (ADR-114 Amendment 33, as found on the first server, 4 November
+    2026). This looked for "not exist", which Docker never says, so the first backup of a fresh
+    Small failed on 'recipes'."""
+    said = f"{copied.stderr or ''}{copied.stdout or ''}".lower()
+    return any(words in said for words in _NOTHING_TO_COPY)
+
+
 def backup_analytics(compose_file: Path, destination: Path, *, container_path: str) -> Path | None:
     """The analytics DuckDB file. Returns `None` when there is none yet, which is not an error.
 
@@ -433,7 +449,7 @@ def backup_analytics(compose_file: Path, destination: Path, *, container_path: s
         check=False,
     )
     if listing.returncode != 0:
-        if "not exist" in (listing.stderr + listing.stdout).lower():
+        if found_nothing_to_copy(listing):
             return None
         raise BackupFailed("analytics", (listing.stderr or listing.stdout).strip()[:400])
     return destination
@@ -460,7 +476,7 @@ def backup_recipes(
         check=False,
     )
     if copied.returncode != 0:
-        if "not exist" in (copied.stderr + copied.stdout).lower():
+        if found_nothing_to_copy(copied):
             return None
         raise BackupFailed("recipes", (copied.stderr or copied.stdout).strip()[:400])
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -599,8 +615,35 @@ def run_backup(
     quiesced = not _conduit_is_running(compose_file)
 
     target = new_set_folder(out_root, profile)
+    try:
+        return _take_set(
+            compose_file, target, profile=profile, database=database,
+            analytics_container_path=analytics_container_path, quiesced=quiesced,
+        )  # fmt: skip
+    except BaseException as failure:
+        # A set is good only once its manifest is written, and `restore` refuses a folder without
+        # one; but a half-written folder beside the good sets is still one a person can take for a
+        # set, so it is removed (as found on the first server, 4 November 2026).
+        shutil.rmtree(target, ignore_errors=True)
+        if isinstance(failure, BackupFailed):
+            raise BackupFailed(
+                failure.item,
+                f"{failure.detail}\nThe partial set {target} was removed; nothing was kept.",
+            ) from failure
+        raise
 
+
+def _take_set(
+    compose_file: Path,
+    target: Path,
+    *,
+    profile: str,
+    database: str,
+    analytics_container_path: str,
+    quiesced: bool,
+) -> Path:
     written: list[tuple[str, Path]] = []
+    empty: list[str] = []
     written.append(
         (
             "graph",
@@ -624,6 +667,8 @@ def run_backup(
     )
     if analytics is not None:
         written.append(("analytics", analytics))
+    else:
+        empty.append("analytics")
     recipes = backup_recipes(
         compose_file,
         target / "recipes" / "recipes.tar.gz",
@@ -632,6 +677,8 @@ def run_backup(
     )
     if recipes is not None:
         written.append(("recipes", recipes))
+    else:
+        empty.append("recipes")
     written.extend(backup_configuration(compose_file, target))
 
     entries = []
@@ -650,6 +697,9 @@ def run_backup(
         "schema_versions": schema_versions(),
         "audit_disposition": AUDIT_DISPOSITION,
         "files": [entry.__dict__ for entry in sorted(entries, key=lambda e: e.path)],
+        # Items the deployment did not have yet, so the set holds nothing for them: a restore
+        # leaves them as the fresh deployment has them, and says so.
+        "empty": sorted(empty),
     }
     (target / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -727,6 +777,8 @@ def main(argv: list[str] | None = None) -> int:
     for entry in manifest["files"]:
         print(f"  {entry['item']:<13} {entry['path']:<34} {entry['bytes']:>12,} bytes")
     print(f"  {'total':<13} {len(manifest['files']):>2} file(s){'':<26}{total:>12,} bytes")
+    for item in manifest["empty"]:
+        print(f"  {item:<13} empty: this deployment has none yet, so the set holds none")
     if not manifest["quiesced"]:
         print(
             "\n  Taken with the Conduit running. The graph store and the analytics database were "

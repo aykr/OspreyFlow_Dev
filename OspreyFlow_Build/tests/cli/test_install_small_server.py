@@ -12,7 +12,10 @@ What a mistake would do, and the case that catches it:
 - `server:` beside `--cloud` built in the cloud anyway —
   `test_server_and_the_cloud_flag_together_are_refused`;
 - the install going ahead past a refused certificate or a machine that cannot run it —
-  `test_a_refused_certificate_stops_the_install_before_anything_runs`.
+  `test_a_refused_certificate_stops_the_install_before_anything_runs`;
+- the answers' `demo_packs` accepted and silently not loaded (as found on the first server, 4
+  November 2026), or loaded before the first administrator who becomes their Author exists —
+  `test_the_chosen_demo_packs_load_after_the_first_administrator_exists`.
 """
 
 from __future__ import annotations
@@ -112,6 +115,22 @@ def test_a_refused_certificate_stops_the_install_before_anything_runs(
     assert "✘" in out and "does not match" in out and "Nothing was installed" in out
     assert rig.runner.calls == []
     assert (rig.product / "osprey.yaml").read_text(encoding="utf-8") == before
+
+
+def test_the_chosen_demo_packs_load_after_the_first_administrator_exists(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """The answers' `demo_packs` load as Lite's do, each into its own case, once the stack is up
+    and the first administrator — the case's Author on a deployment with no demo accounts — is
+    made. Before 4 November 2026 the server install never read them, and said nothing."""
+    answers = _answers(tmp_path, {**SERVER_ANSWERS, "demo_packs": ["operation-ledger", "hmp"]})
+    assert rig("install", "--mode", "small", "--config", str(answers), "--force") == 0
+    names = [" ".join(argv) for argv in rig.runner.argvs()]
+    seeds = [c.argv[c.argv.index("scripts.seed_internal") + 1] for c in
+             rig.runner.with_word("scripts.seed_internal")]  # fmt: skip
+    assert seeds == ["ledger", "hmp"]
+    first_seed = names.index(next(n for n in names if "seed_internal" in n))
+    assert first_seed > names.index(next(n for n in names if "harness.first_admin" in n))
 
 
 # ---- ADR-114 Amendment 33 drop 2: memory measured once (unit 5), organisation sign-in (unit 7) -----

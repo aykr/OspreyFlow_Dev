@@ -696,12 +696,7 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
             "register the sign-in",
             [*ctx.python, "-m", "harness.register_sign_in", *ctx.named_args()],
         )
-    for pack in answers.demo_packs:
-        file = answers.paysim_file if pack == "paysim" else None
-        demo.add_pack(
-            ctx.product, ctx.run, ctx.env, pack, file,
-            case_domains=answers.case_domains, deployment_env=ctx.named_env(),
-        )  # fmt: skip
+    _add_demo_packs(ctx, answers)
 
     print()
     print(f"OspreyFlow is installed. Open it at {ctx.origin()}")
@@ -718,6 +713,16 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     name = f" --name {ctx.target.name}" if ctx.target.named else ""
     print(f"Look after it with: ospreyflow status{name}, ospreyflow open{name}")
     return 0
+
+
+def _add_demo_packs(ctx: _Context, answers: Answers) -> None:
+    """The answers' demo packs, each into its own case, in the order given."""
+    for pack in answers.demo_packs:
+        file = answers.paysim_file if pack == "paysim" else None
+        demo.add_pack(
+            ctx.product, ctx.run, ctx.env, pack, file,
+            case_domains=answers.case_domains, deployment_env=ctx.named_env(),
+        )  # fmt: skip
 
 
 def _docker_projects(ctx: _Context) -> dict[str, list[Path]]:
@@ -825,6 +830,10 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
     if args.first_admin_code_file is not None:
         admin += ["--code-file", str(args.first_admin_code_file)]
     ctx.step("make the first administrator", admin)
+    # As Lite's, once the stack and the first administrator exist: with no demo accounts the
+    # administrator is each case's Author (as found on the first server, 4 November 2026, when the
+    # answer was accepted here and never loaded).
+    _add_demo_packs(ctx, answers)
     print()
     print(f"OspreyFlow is installed. It answers at {public_origin(ctx.product)}")
     plan = server_plan(answers)

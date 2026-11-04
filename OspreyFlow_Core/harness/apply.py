@@ -88,6 +88,7 @@ from harness.render import (
     render_litellm_config,
     write_config_copy,
     write_private,
+    write_shared,
 )
 from harness.render import write as write_artefacts
 from harness.reporting import reporting_secrets
@@ -1055,15 +1056,16 @@ def stage_deployment(
         # ADR-114 Amendment 33 decision 3: a renewed certificate changes this one file, which only
         # the proxy mounts, so `services_to_restart` starts the proxy alone. Not `deployment.env`:
         # every owned service reads that whole, and would be restarted with it.
-        (stage / TLS_FINGERPRINT_FILE).write_text(fingerprint + "\n", encoding="utf-8")
+        write_shared(stage / TLS_FINGERPRINT_FILE, fingerprint + "\n")
     write_config_copy(config_path, stage)
-    (stage / "realm.json").write_text(
-        render_realm_json(config, demo_analyst=demo_analyst), encoding="utf-8"
-    )
+    # Every file a container mounts is written readable by any account, whatever the umask
+    # (`write_shared`): Keycloak runs as uid 1000, not the installer. The realm holds no secret —
+    # its clients' secrets and every password are set later through the admin API.
+    write_shared(stage / "realm.json", render_realm_json(config, demo_analyst=demo_analyst))
     # Round 13cda — the LiteLLM proxy's routing table, written the same way and for the same
     # reason as the realm above: a generated *service config*, mounted by the compose file,
     # rather than one of `05_DEPLOYMENT.md` §2.1's four operator-facing artefacts.
-    (stage / "litellm.yaml").write_text(render_litellm_config(config), encoding="utf-8")
+    write_shared(stage / "litellm.yaml", render_litellm_config(config))
     # The sign-in page's look, beside the compose file that mounts it
     # (harness/keycloak_theme.py).
     write_login_theme(stage, **login_theme_options(config))

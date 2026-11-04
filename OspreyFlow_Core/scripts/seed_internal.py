@@ -18,7 +18,11 @@ reachable (and only known) there, so nothing here handles a password. The checko
 The case the data goes into is made by the seed itself, named, and shared with the two demo accounts
 by their identity-provider subjects (the Conduit's principal ids): the demo administrator as Author,
 the demo analyst as Editor. Those subjects are read from Keycloak here, on the host, where its admin
-API is published.
+API is published. **A deployment with no demo accounts** (a Small, administration guide §5a) shares
+it with its first administrator, `admin`, as Author, with no Editor, in the administrator's own unit
+— a case of another unit is never listed, whatever its grants — and the Prison Intelligence
+Dataset's loads are run as the administrator, there being no demo engineer (ADR-114 Amendment 33, as
+found on the first server, 4 November 2026: every pack had been refused there).
 
 **The Prison Intelligence Dataset's three steps** (ADR-127 Amendment 23): `--reset-live` restores it
 between rehearsals and, like a seed, needs the Conduit stopped (`--stop-api`); `--release-batch-2`
@@ -48,6 +52,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from harness.apply import _compose
+from harness.first_admin import FIRST_ADMIN_USERNAME
 from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
@@ -204,6 +209,69 @@ def _run_as_args(subs: Mapping[str, str]) -> list[str]:
     return ["--run-as", subs[DEMO_ENGINEER_SUBJECT]] if DEMO_ENGINEER_SUBJECT in subs else []
 
 
+@dataclass(frozen=True)
+class Sharing:
+    """Whom a seeded case is shared with, in which unit, and whom a pipeline load runs as."""
+
+    grants: tuple[str, ...]
+    unit: str
+    run_as: tuple[str, ...]
+    #: Said after the seed, when the case's Author needs something more to open it.
+    note: str | None = None
+
+
+#: Said when the first administrator is the case's Author: the Admin role carries no right to
+#: investigate (`schemas.rights.ADMIN`), so the case is listed but its graph is not opened with it.
+ADMIN_AUTHOR_NOTE = (
+    "{username}, the first administrator, is its Author (there are no demo accounts). The Admin "
+    "role does not open a case's graph: give {username} — or an analyst you invite into the unit "
+    "'{unit}' — the Analyst role in Admin, People and roles, then open the case or share it from "
+    "there."
+)
+
+
+def _sharing(
+    directory: Path,
+    subs: Mapping[str, str],
+    lookup_unit: Callable[[Path, str], str],
+    *,
+    required: bool,
+) -> Sharing:
+    """The demo accounts where they exist, as before; else the first administrator, in their own
+    unit. With neither, a seed is refused (a case nobody can open), and a mid-demo step, which makes
+    no case, keeps the demo unit and the engineer's username, as a local stack always has."""
+    demo = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name in subs]
+    if len(demo) == 2:
+        return Sharing(
+            grants=(f"{subs[DEMO_ADMIN_SUBJECT]}=author", f"{subs[DEMO_ANALYST_SUBJECT]}=editor"),
+            unit=DEMO_UNIT,
+            run_as=tuple(_run_as_args(subs)),
+        )
+    if not demo and FIRST_ADMIN_USERNAME in subs:
+        unit = lookup_unit(directory, FIRST_ADMIN_USERNAME)
+        return Sharing(
+            grants=(f"{subs[FIRST_ADMIN_USERNAME]}=author",),
+            unit=unit,
+            run_as=("--run-as", subs[FIRST_ADMIN_USERNAME]),
+            note=ADMIN_AUTHOR_NOTE.format(username=FIRST_ADMIN_USERNAME, unit=unit),
+        )
+    if not required:
+        return Sharing(grants=(), unit=DEMO_UNIT, run_as=tuple(_run_as_args(subs)))
+    if demo:
+        missing = [n for n in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if n not in subs]
+        raise SeedRefused(
+            f"{', '.join(missing)} not found in the identity provider, so the case could not be "
+            "shared with it. Run `ospreyflow repair-sign-in` and try again"
+        )
+    raise SeedRefused(
+        f"neither the demo accounts ({DEMO_ADMIN_SUBJECT}, {DEMO_ANALYST_SUBJECT}) nor the first "
+        f"administrator ({FIRST_ADMIN_USERNAME}) is in the identity provider, so the case could "
+        "not be shared with anyone who could open it; nothing was started. On a deployment with "
+        "demo accounts run `ospreyflow repair-sign-in`; on one without them, make the first "
+        "administrator (`python -m harness.first_admin --deployment <its folder>`) and try again"
+    )
+
+
 def _run(argv: Sequence[str]) -> str:
     """Run a command, showing each line of its output as it arrives (a seed takes minutes, and a
     silent one looks hung), and return everything it printed."""
@@ -254,7 +322,7 @@ def _lookup_subs(directory: Path) -> dict[str, str]:
     )
     found: dict[str, str] = {}
     for username in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT, DEMO_ENGINEER_SUBJECT,
-                     DEMO_REPORT_VIEWER_SUBJECT):  # fmt: skip
+                     DEMO_REPORT_VIEWER_SUBJECT, FIRST_ADMIN_USERNAME):  # fmt: skip
         try:
             found[username] = keycloak_admin.user_id(
                 issuer=issuer, realm="osprey", token=token, username=username
@@ -264,12 +332,36 @@ def _lookup_subs(directory: Path) -> dict[str, str]:
     return found
 
 
+def _lookup_unit(directory: Path, username: str) -> str:
+    """The unit an account belongs to (its `org_unit` attribute), from the published Keycloak admin
+    API, so the case is made where that account will see it."""
+    from harness import keycloak_admin
+    from harness.register_sign_in import ADMIN_PASSWORD_KEY, _read_env
+
+    values = _read_env(directory / "deployment.env")
+    issuer = _identity_origin(directory / "deployment.env")
+    token = keycloak_admin.admin_token(
+        issuer=issuer, admin_user="admin", admin_password=values[ADMIN_PASSWORD_KEY]
+    )
+    status, found = keycloak_admin._call(
+        f"{issuer}/admin/realms/osprey/users?username={username}&exact=true", token=token
+    )
+    units = (found[0].get("attributes") or {}).get("org_unit") if status == 200 and found else None
+    if not units:
+        raise SeedRefused(
+            f"{username} has no unit in the identity provider, so the case could not be made "
+            f"where {username} would see it. Set one in Admin, People and roles and try again"
+        )
+    return str(units[0])
+
+
 def seed_internal(
     dataset: str,
     repo_root: Path = REPO_ROOT,
     *,
     run: Callable[[Sequence[str]], str] = _run,
     lookup_subs: Callable[[Path], dict[str, str]] = _lookup_subs,
+    lookup_unit: Callable[[Path, str], str] = _lookup_unit,
     api_running: Callable[[list[str]], bool] = _api_running,
     stop_api: bool = False,
     permitted: Callable[[str, str], bool] = _permitted,
@@ -439,15 +531,17 @@ def seed_internal(
         )
     if mid_demo_step is not None:
         return _mid_demo(
-            spec, repo_root, directory, run, lookup_subs(directory), mid_demo_step, code_mounts
-        )
+            spec, repo_root, directory, run,
+            _sharing(directory, lookup_subs(directory), lookup_unit, required=False),
+            mid_demo_step, code_mounts,
+        )  # fmt: skip
     if release_batch_2 or publish_reports_fallback or check:
         return _mid_demo(
             spec,
             repo_root,
             directory,
             run,
-            lookup_subs(directory),
+            _sharing(directory, lookup_subs(directory), lookup_unit, required=False),
             "--release-batch-2"
             if release_batch_2
             else "--check"
@@ -481,12 +575,7 @@ def seed_internal(
             repo_root, directory, run, api_running, stop_api, vault or "", confirm, accept_strays
         )
     subs = lookup_subs(directory)
-    missing = [name for name in (DEMO_ADMIN_SUBJECT, DEMO_ANALYST_SUBJECT) if name not in subs]
-    if missing:
-        raise SeedRefused(
-            f"{', '.join(missing)} not found in the identity provider, so the case could not be "
-            "shared with it. Run `ospreyflow repair-sign-in` and try again"
-        )
+    sharing = _sharing(directory, subs, lookup_unit, required=True)
 
     compose = _compose(directory / "compose.yaml")
     running = api_running(compose)
@@ -514,12 +603,9 @@ def seed_internal(
         "--case-name",
         spec.case_name,
         "--org-unit",
-        DEMO_UNIT,
-        *(_run_as_args(subs) if spec.rehearsal else []),
-        "--grant",
-        f"{subs[DEMO_ADMIN_SUBJECT]}=author",
-        "--grant",
-        f"{subs[DEMO_ANALYST_SUBJECT]}=editor",
+        sharing.unit,
+        *(sharing.run_as if spec.rehearsal else ()),
+        *(word for grant in sharing.grants for word in ("--grant", grant)),
     ]
     # ADR-113 decision 8: the engineer edits and the report viewer reads each seeded *synthetic*
     # case — where those personas exist (a deployment registered before them seeds without them).
@@ -566,7 +652,11 @@ def seed_internal(
     finally:
         if running:
             run([*compose, "up", "-d", "--wait", "api"])
-    return [line.strip() for line in output.splitlines() if line.strip()]
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if sharing.note is not None:
+        print(sharing.note, flush=True)
+        lines.append(sharing.note)
+    return lines
 
 
 def _revert_load(
@@ -676,7 +766,7 @@ def _mid_demo(
     repo_root: Path,
     directory: Path,
     run: Callable[[Sequence[str]], str],
-    subs: Mapping[str, str],
+    sharing: Sharing,
     flag: str,
     code_mounts: Sequence[tuple[Path, str]] = (),
 ) -> list[str]:
@@ -701,8 +791,8 @@ def _mid_demo(
         spec.script,
         flag,
         "--org-unit",
-        DEMO_UNIT,
-        *_run_as_args(subs),
+        sharing.unit,
+        *sharing.run_as,
     ]
     if flag == "--check":
         # It reads the case, so it is told which (it makes none, and shares none).

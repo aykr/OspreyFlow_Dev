@@ -123,6 +123,9 @@ class DryRun:
     items: dict[str, int]
     audit_statement: str
     quiesced: bool
+    #: Items the deployment did not have when the set was taken (a fresh deployment's recipes
+    #: repository, say): nothing is restored for them, and the dry run says so.
+    empty: tuple[str, ...] = ()
 
     def render(self) -> str:
         lines = [
@@ -132,6 +135,10 @@ class DryRun:
         ]
         for item, size in sorted(self.items.items()):
             lines.append(f"    {item:<13} {size:>12,} bytes")
+        if self.empty:
+            lines.append(
+                f"    {', '.join(self.empty)}: empty when the set was taken; nothing to restore"
+            )
         lines += [
             "",
             f"  projected   about {self.projected_seconds:.0f}s on a local-lite-sized machine.",
@@ -201,6 +208,7 @@ def dry_run_for(directory: Path, manifest: dict[str, Any]) -> DryRun:
         items=items,
         audit_statement=manifest["audit_disposition"]["statement"],
         quiesced=bool(manifest["quiesced"]),
+        empty=tuple(manifest.get("empty", ())),
     )
 
 

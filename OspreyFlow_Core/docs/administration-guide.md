@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.34** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
+**Version 1.35** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.35 | 2026-11-04 | Found installing Small on the first server of its own (ADR-114 Amendment 33): §1a and §11 a demo pack on a deployment with no demo accounts — its case's Author is the first administrator, in their own unit, with no Editor, and the Admin role does not open a case's graph until someone holds the Analyst role; §5a the answers' `demo_packs` load after the first administrator exists, the installing account's umask does not matter, and `ca` must be readable by every account; §13 a fresh deployment's first backup, its empty items, and a failed backup leaving no partial set; §16 an unreadable CA. |
 | 1.34 | 2026-11-04 | The local engine on an NVIDIA GPU (ADR-135 Amendment 1): §2.2a the NVIDIA driver and Container Toolkit, installed by the server's administrator; §2.4 and §5a the doctor's GPU checks; §5a the answers file's `server.gpu`; new §5a.4, what the GPU changes (the model server alone reserves it; the 14b extraction model unless one is named), what is checked before anything starts, and Lite on a Linux computer; §7 `server.gpu`; §16 a refused GPU. Appendix A: `resources.gpu`, and `models.extraction`'s default on a GPU. |
 | 1.33 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.32 | 2026-11-04 | §5a: a `DOCKER-USER` rule that matches only arriving connections (`--ctdir ORIGINAL`), found on the first Linux server. |
@@ -227,6 +228,12 @@ ticked, to change if you wish.
 
 **In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
 `appearance.organisation` and `appearance.phase`.
+
+**On a deployment with no demo accounts** — Small, on a cloud server or your own — a starter's demo
+packs still load, each into its own case, with the first administrator (`admin`) as its Author, in
+the administrator's own unit, and no Editor. The Admin role does not open a case's graph: give
+`admin`, or an analyst you invite into that unit, the Analyst role in Admin, People and roles
+(section 9.2), then open the case or share it from there.
 
 ### 1a.1 Several deployments side by side
 
@@ -612,7 +619,15 @@ The chain is emptied when Docker restarts, so put the rule in a unit that runs a
 **The first administrator.** The install makes an account `admin` with the Admin role and the
 highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
-Admin area (section 9). The install's own tools reach the three names on the server itself and
+Admin area (section 9). The answers' `demo_packs` are loaded after the administrator is made, each
+into its own case with `admin` as its Author (section 1a says what that means for opening it).
+
+**The installing account's umask.** A server hardened to `umask 077` or `027` is fine: every file
+the deployment's containers read from its folder is written readable by every account whatever the
+umask, and `deployment.env`, which holds the secrets, stays readable by its owner alone. The
+organisation's root, `ca`, is mounted into the identity provider, which runs as another account:
+`doctor`, `install` and `apply` refuse one that not every account can read (`chmod 644` it; it holds
+no secret). The key stays `600`. The install's own tools reach the three names on the server itself and
 trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
 
 **Renewing the certificate.** Replace the two files (same paths), then run `ospreyflow apply`. It
@@ -1217,7 +1232,9 @@ set to its domain's packs. A **public dataset** of your own choosing, such as a 
 dataset, is added with `ospreyflow demo add public` (section 1a.2).
 
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
-<id>`. Each loads into its own case, with the installing administrator as Author. Adding **HMP**
+<id>`. Each loads into its own case, with the installing administrator as Author: the demo
+administrator where there are demo accounts (the demo analyst its Editor), and otherwise the first
+administrator, `admin`, in their own unit, with no Editor (section 1a). Adding **HMP**
 again is safe: a deployment that loaded it before v0.2.0 gains only its prison network, in the same
 case, and one that already has the network is left as it is. **PaySim** is a
 download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pass it with
@@ -1319,6 +1336,11 @@ never in it. Schedule it with a cron line, for example
 organisation's identity provider is restored still linked to it. OpenSearch is rebuilt, not
 restored, as on Lite.
 
+**A fresh deployment** has no published recipes and no analytics events yet: its first set records
+them as **empty** (the manifest's `empty` list, and the backup's last lines say so), and a restore
+of it restores nothing for them. **A backup that fails** removes the set it had started, and says
+so, so no half-written set is left beside the good ones.
+
 **Enterprise.** The cloud protects its managed services as for Small. **The graph store and the
 analytics database run in the cluster, and nothing backs them up yet**: `ospreyflow backup` drives
 a Compose deployment and does not reach a cluster. Until it does, take snapshots of their volumes
@@ -1389,7 +1411,7 @@ Admin → Schedules and runs lists every one.
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
 | Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again |
-| `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. Then run the command again |
+| `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. "the identity provider … cannot" read the root: `chmod 644` the `ca` file. Then run the command again |
 | Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
 | Someone signed in through the organisation and sees nothing | As intended until an administrator grants them roles and access in Admin → People and roles (section 5a.1) |
 | `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |

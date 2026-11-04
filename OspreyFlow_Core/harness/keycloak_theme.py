@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from harness.realm import LOGIN_THEME_NAME, REALM_DISPLAY_NAME
-from harness.render import REPO_ROOT
+from harness.render import REPO_ROOT, make_shared_folder, write_shared
 from harness.theme_script import read_theme_script
 from schemas.deployment import AppearanceConfig, OspreyConfig
 
@@ -467,7 +467,8 @@ def write_login_theme(
     )
     for name, content in sorted(rendered.items()):
         target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        # Keycloak (uid 1000) walks and reads the mounted theme, whatever the installer's umask.
+        make_shared_folder(target.parent, under=out_dir)
+        write_shared(target, content)
         written.append(target)
     return written

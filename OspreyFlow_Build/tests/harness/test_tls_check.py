@@ -22,6 +22,8 @@ What a mistake would do, and the case that catches it:
   `test_an_expired_certificate_is_refused_naming_its_end`,
   `test_a_certificate_not_yet_valid_is_refused`, `test_an_encrypted_key_is_refused_in_words`;
 - a chain the organisation's browsers will not trust — `test_a_chain_that_does_not_reach_the_given_ca_is_refused`;
+- the organisation's CA unreadable by Keycloak, which mounts it —
+  `test_a_ca_file_keycloak_cannot_read_is_refused_in_words`;
 - a certificate near its end refused, so a deployment cannot be applied the week before renewal —
   `test_thirty_days_left_is_a_warning_not_a_refusal`.
 """
@@ -234,6 +236,22 @@ def test_a_chain_that_does_not_reach_the_given_ca_is_refused(tmp_path: Path) -> 
     assert not lone.ok and "intermediate" in " ".join(lone.refusals)
     # With no CA given, the chain is not checked.
     assert tls_check.check(folder / "osprey.crt", folder / "osprey.key", NAMES, None).ok
+
+
+def test_a_ca_file_keycloak_cannot_read_is_refused_in_words(tmp_path: Path) -> None:
+    """Keycloak mounts `network.tls.ca` into its truststore and runs as uid 1000, not the installing
+    account, so it reads the file only through the "other" bits. Found on the first server (4
+    November 2026, ADR-114 Amendment 33): under a strict umask Keycloak could not read what the
+    install wrote; a CA left `600` fails the same way, so the check refuses it before anything
+    starts. The key is different: the proxy runs as its owner, so `600` is right for it."""
+    files = write_set(tmp_path)
+    assert _check(files).ok
+    for mode in (0o600, 0o640):
+        files.ca.chmod(mode)
+        refusals = " ".join(_check(files).refusals)
+        assert f"{files.ca} is mode {mode:o}" in refusals and f"chmod 644 {files.ca}" in refusals
+    files.ca.chmod(0o444)
+    assert _check(files).ok
 
 
 def test_thirty_days_left_is_a_warning_not_a_refusal(tmp_path: Path) -> None:
