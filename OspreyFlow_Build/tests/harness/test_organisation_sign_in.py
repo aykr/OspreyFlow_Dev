@@ -654,3 +654,37 @@ def test_a_restored_person_still_signs_in_through_the_organisation(stack: Stack)
     again = sign_in(stack)
     assert again.tokens is not None, (again.visited, _said(again))
     assert _claims(again.tokens["access_token"])["sub"] == subject
+
+
+def _glass_refresh_tokens(stack: Stack, value: str) -> None:
+    """Set the Glass's `use.refresh.tokens` on the running realm, as a realm imported before ADR-050
+    Amendment 2 holds it ("true", Keycloak's default)."""
+    token = _admin(stack.deployment)
+    base = f"{stack.deployment.origin}/admin/realms/osprey/clients"
+    status, found = keycloak_admin._call(f"{base}?clientId={GLASS_CLIENT_ID}", token=token)
+    assert status == 200 and found, (status, found)
+    glass = found[0]
+    status, body = keycloak_admin._call(
+        f"{base}/{glass['id']}", token=token, method="PUT",
+        data={**glass, "attributes": {**glass.get("attributes", {}), "use.refresh.tokens": value}},
+    )  # fmt: skip
+    assert status in (200, 204), (status, body)
+
+
+def test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older_realm(
+    stack: Stack,
+) -> None:
+    """ADR-050 Amendment 2 (build order step 28 (c)), against Keycloak 26.0: with the attribute at
+    Keycloak's default the Glass's code exchange carries a refresh token; after `repair-sign-in`'s
+    registration it carries none, and the person is still signed in."""
+    _register(stack)
+    _glass_refresh_tokens(stack, "true")
+    before = sign_in(stack)
+    assert before.tokens is not None, (before.visited, _said(before))
+    assert "refresh_token" in before.tokens, "Keycloak's default, which the realm must turn off"
+    lines = _register(stack)
+    assert any(GLASS_CLIENT_ID in line for line in lines), lines
+    after = sign_in(stack)
+    assert after.tokens is not None, (after.visited, _said(after))
+    assert "refresh_token" not in after.tokens
+    assert _principal(stack, after.tokens["access_token"]).id

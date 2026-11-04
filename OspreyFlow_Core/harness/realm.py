@@ -298,11 +298,21 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
         "attributes": {
             "pkce.code.challenge.method": "S256",
             "post.logout.redirect.uris": origin,
+            # ADR-050 Amendment 2 (build order step 28 (c)): ADR-050's "no refresh token", made
+            # literal. Keycloak otherwise puts one in every code exchange's answer, which the
+            # Glass never used: its renewal is the `prompt=none` round (Amendment 1), not a
+            # refresh grant. An existing realm is given it by `register_sign_in.ensure_identity`.
+            "use.refresh.tokens": "false",
         },
         "redirectUris": [redirect_uri],
         "webOrigins": [origin],
         "protocolMappers": [*_claim_mappers(), _audience_mapper()],
     }
+
+
+def glass_client(config: OspreyConfig) -> dict[str, Any]:
+    """The Glass's client as the realm renders it, for registration on a realm already running."""
+    return _glass_client(config)
 
 
 def _loopback_public_client(client_id: str, origin: str, redirect_uri: str) -> dict[str, Any]:

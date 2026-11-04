@@ -99,14 +99,16 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
     """Create a client unless it exists. Keycloak's 409 for a duplicate is the expected answer on
     a second run, not a failure. An existing client keeps everything it has except the addresses it
     redirects to, which are brought up to date: they are exact-match, so a client registered at an
-    address that has since moved would fail at Keycloak's own error page."""
+    address that has since moved would fail at Keycloak's own error page. `use.refresh.tokens` is
+    brought into line too, where the rendered client names it (the Glass's, ADR-050 Amendment 2):
+    a realm imported before it keeps Keycloak's default, which gives a refresh token."""
     status, found = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={client['clientId']}", token=token
     )
     if status == 200 and found:
         existing = found[0]
         attributes = {**existing.get("attributes", {})}
-        for key in ("post.logout.redirect.uris",):
+        for key in ("post.logout.redirect.uris", "use.refresh.tokens"):
             if key in client.get("attributes", {}):
                 attributes[key] = client["attributes"][key]
         wanted = {

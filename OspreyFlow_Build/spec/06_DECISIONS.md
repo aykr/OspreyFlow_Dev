@@ -6817,11 +6817,13 @@ are not changed.
    not end it, and the maximum (Keycloak's default, 10 hours) does. A window closed, or a machine asleep,
    lets the idle limit run as before. Open question for the owner: renew only after the person has done
    something since the last renewal, so an unattended open window still reaches the idle limit.
+   **Answered by the owner, 4 November 2026: yes (Amendment 2 (b)).**
 6. **Not changed, and said so.** Keycloak puts a refresh token in the code exchange's answer (the realm
    does not switch it off on the Glass's client), and the library holds it in memory with the rest of
    the signed-in record; the Glass never uses it. Making ADR-050's "no refresh token" literal is a realm
    change (`use.refresh.tokens: false` on `osprey-glass`, reaching an existing deployment through
-   registration): an open question, not built here. A deployment whose identity provider is on another
+   registration): an open question, not built here. **Answered by the owner, 4 November 2026: set it
+   (Amendment 2 (c)).** A deployment whose identity provider is on another
    site (`VITE_OIDC_ISSUER_ORIGIN`) can find the iframe's cookie blocked by a browser that blocks
    third-party cookies; renewal then fails into the prompt above, never into a silent loss.
 
@@ -24438,3 +24440,39 @@ move against real Docker and the real images — `docker commit` of Valkey's con
 of each store on its named volume — and the Keycloak restart against a real Keycloak: proved on a
 throwaway copy of the server's deployment (a second Compose project made from a backup) before a
 client's data.
+
+### ADR-050, Amendment 2 (4 November 2026) — no refresh token for the Glass; renewal only after the person has done something (build order step 28 (b) and (c))
+
+**The owner's rulings of 4 November 2026** on Amendment 1's two open questions (points 5 and 6;
+open question 25 of `process/BUILD_ORDER_2026-11.md`).
+
+**(c) `use.refresh.tokens: false` on `osprey-glass`, so ADR-050's "no refresh token" is literally
+true.**
+
+1. **The realm.** `harness/realm.py`'s `_glass_client` renders the attribute
+   `"use.refresh.tokens": "false"`. Keycloak 26 then leaves the refresh token out of the Glass's
+   code exchange; without it, Keycloak puts one in every answer (an absent attribute is read as
+   "true"). Only the Glass's client carries it: the Conduit's two confidential clients
+   (`osprey-conduit`, `osprey-unprivileged`) use client credentials and token exchange, which this
+   attribute does not govern, and they are left as they were; the harness and Superset clients too.
+2. **An existing deployment.** A realm import is read only on Keycloak's first start, so a realm
+   imported before this keeps Keycloak's default. `register_sign_in.ensure_identity` — run by
+   `ospreyflow repair-sign-in` (with or without `--no-demo-accounts`), `apply`, every install and a
+   cluster's — now registers the Glass's client through `keycloak_admin.ensure_client`, which brings
+   `use.refresh.tokens` into line where the rendered client names it, beside the addresses it
+   already brought up to date. Safe to repeat: a client already as rendered is not written.
+3. **Silent renewal does not need one.** `userManager.renewSilently` asks `oidc-client-ts` for
+   `signinSilent({ forceIframeAuth: true })`: the `prompt=none` authorisation request against
+   Keycloak's session cookie, then a code exchange (Amendment 1 point 1). No refresh grant is made
+   anywhere in the Glass, so nothing it does changes; the library simply holds no refresh token in
+   memory any more.
+
+**Tests**, red first (`s28c_*`): `tests/harness/test_register_sign_in.py` — its stand-in Keycloak
+now answers the Glass's code exchange as Keycloak 26 does, with a refresh token unless the client's
+attribute is "false", and refuses a confidential client sending no secret:
+`::test_a_fresh_realm_gives_the_glass_no_refresh_token_and_leaves_the_conduits_clients_alone`,
+`::test_repair_sign_in_stops_an_existing_realm_giving_the_glass_a_refresh_token` (and the Conduit's
+clients byte-identical after), `::test_turning_off_the_glass_refresh_token_is_safe_to_repeat_and_reaches_a_small_too`.
+Against a real Keycloak 26.0: `tests/harness/test_organisation_sign_in.py::test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older_realm`
+(the attribute set back to "true", a refresh token seen, registration run, none seen, the person
+still signed in).
