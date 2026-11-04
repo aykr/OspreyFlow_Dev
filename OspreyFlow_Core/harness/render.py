@@ -145,7 +145,7 @@ def render_ollama_pull_script(config: OspreyConfig) -> str:
     pulled and digest-verified the same way (`06_DECISIONS.md` ADR-095 decision 1). The developer
     stack and CI keep pulling the small pinned models only; `test_deployment_models.py` holds the
     rendered script to exactly that."""
-    model = config.models.extraction
+    model = config.extraction_model
     line = f"pull_and_verify {model} {EXTRACTION_MODELS[model]}\n"
     return _OLLAMA_PULL_SCRIPT.replace("wait\n", line + "wait\n")
 
@@ -262,7 +262,7 @@ def render_litellm_config(config: OspreyConfig) -> str:
     ADR-020 pins the model weights themselves, verified at the `ollama` service's own startup.
     This file only wires names to backends, so the pin stays in one place.
     """
-    extraction = config.models.extraction
+    extraction = config.extraction_model
     table = yaml.safe_load(_local_model_table(config, extraction))
     table["model_list"] += provider_model_entries(config)
     return yaml.safe_dump(table, sort_keys=False)
@@ -1084,6 +1084,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # ...-partial ...: no such file or directory", a user's install, 15 October 2026). It
             # never pulls, so it never needs to prune.
             service["environment"] = {"OLLAMA_NOPRUNE": "1"}
+            if config.resources.gpu == "nvidia":
+                # ADR-135 Amendment 1 decision 2: this server alone reserves every NVIDIA GPU; the
+                # same pinned image carries CUDA. `ollama-models` only downloads, so it has none.
+                service["deploy"] = {"resources": {"reservations": {"devices": [
+                    {"driver": "nvidia", "count": "all", "capabilities": ["gpu"]}
+                ]}}}  # fmt: skip
             services["ollama-models"] = _model_download_step(
                 str(service["image"]),
                 volume="ollama-models:/root/.ollama",
@@ -1331,7 +1337,7 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_REAL_DATA_EXCEPTIONS={config.governance.real_data_exceptions}",
         f"OSPREY_MODELS_LOCAL_ONLY={'true' if config.models.local_only else 'false'}",
         # ADR-095: the models the Conduit uses for analysts' work, chosen on the Models screen.
-        f"OSPREY_EXTRACTION_MODEL={config.models.extraction}",
+        f"OSPREY_EXTRACTION_MODEL={config.extraction_model}",
         f"OSPREY_VISION_MODEL={config.models.vision}",
         f"OSPREY_TRANSCRIPTION_MODEL={config.models.transcription}",
         f"OSPREY_EMBEDDING_MODEL={config.models.embedding}",

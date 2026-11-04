@@ -21,6 +21,26 @@ import yaml
 from ospreyflow.main import main
 
 PACKS_OUTPUT = "hmp\nfixture-corp\noperation-ledger\npaysim\n"
+
+#: ADR-135 Amendment 1: `docker info`'s runtimes on a Linux server without the NVIDIA Container
+#: Toolkit (Docker Engine 28; each also carries a `status` of runtime features, left out here) —
+#: and with it, once `nvidia-ctk runtime configure --runtime=docker` has registered its runtime.
+RUNTIMES_WITHOUT_TOOLKIT: dict[str, object] = {
+    "io.containerd.runc.v2": {"path": "runc"},
+    "runc": {"path": "runc"},
+}
+RUNTIMES_WITH_TOOLKIT: dict[str, object] = {
+    **RUNTIMES_WITHOUT_TOOLKIT,
+    "nvidia": {"path": "nvidia-container-runtime"},
+}
+#: What `nvidia-smi` prints, exit 9, where the driver is installed but not loaded (or not at all,
+#: with its tools left behind).
+NVIDIA_SMI_NO_DRIVER = (
+    "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that "
+    "the latest NVIDIA driver is installed and running.\n"
+)
+#: The test server's own GPU (4 November 2026): name, memory.total in MiB, driver_version.
+TEST_SERVER_GPU = ("NVIDIA GeForce RTX 5060 Ti", 16311, "595.99.02")
 BASE_CONFIG = {
     "profile": "local-lite",
     "components": {"storage": {"data": "/var/lib/osprey/data"}},
@@ -68,6 +88,7 @@ class FakeProbes:
             "MemTotal": 34_000_000_000,
             "Architecture": "x86_64",
             "DockerRootDir": "/var/lib/docker",
+            "Runtimes": dict(RUNTIMES_WITH_TOOLKIT),
         }
         #: Free disk by folder, else `disk_gb` (a server's Docker root can be another disk).
         self.disk_by_path: dict[str, float] = {}
@@ -91,6 +112,12 @@ class FakeProbes:
         self.ours_ports: set[int] = set()
         #: The cluster `kubectl` reaches (its context), or None (ADR-114 Amendment 16).
         self.kube: str | None = "osprey-test-context"
+        #: ADR-135 Amendment 1: a Linux server with the test server's GPU, its driver loaded and
+        #: the toolkit's runtime registered. `nvidia-smi` in `missing` is no driver installed.
+        self.system_name = "Linux"
+        self.gpus: list[tuple[str, int, str]] = [TEST_SERVER_GPU]
+        self.driver_loaded = True
+        self.nvidia_asked: list[list[str]] = []
 
     def which(self, tool: str) -> str | None:
         return None if tool in self.missing else f"/usr/bin/{tool}"
@@ -141,6 +168,31 @@ class FakeProbes:
 
     def kube_context(self) -> str | None:
         return self.kube
+
+    def system(self) -> str:
+        return self.system_name
+
+    def nvidia_smi(self, arguments: Sequence[str]) -> tuple[int, str] | None:
+        """As the real `nvidia-smi` answers: not there, the driver's refusal (exit 9), a field it
+        does not know (exit 2), or one line per GPU, with units unless `nounits` is asked for."""
+        self.nvidia_asked.append(list(arguments))
+        if "nvidia-smi" in self.missing:
+            return None
+        if not self.driver_loaded:
+            return 9, NVIDIA_SMI_NO_DRIVER
+        query = next((a.split("=", 1)[1] for a in arguments if a.startswith("--query-gpu=")), "")
+        form = next((a.split("=", 1)[1] for a in arguments if a.startswith("--format=")), "")
+        known = {"name", "memory.total", "driver_version"}
+        for name in query.split(","):
+            if name not in known:
+                return 2, f'Field "{name}" is not a valid field to query.\n'
+        units = "nounits" not in form.split(",")
+        lines = []
+        for name, memory, driver in self.gpus:
+            values = {"name": name, "memory.total": f"{memory} MiB" if units else str(memory),
+                      "driver_version": driver}  # fmt: skip
+            lines.append(", ".join(values[f] for f in query.split(",")))
+        return 0, "".join(f"{line}\n" for line in lines)
 
 
 @dataclass

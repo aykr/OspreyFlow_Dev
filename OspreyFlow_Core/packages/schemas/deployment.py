@@ -221,6 +221,8 @@ EMBEDDING_MODELS: dict[str, str] = {"all-minilm:22m-l6-v2-fp16": "1b226e2802db"}
 TRANSCRIPTION_MODELS: tuple[str, ...] = ("Systran/faster-whisper-tiny.en",)
 
 ExtractionModel = Literal["qwen2.5:7b-instruct", "qwen2.5:14b-instruct"]
+#: ADR-135 Amendment 1 decision 3: the extraction model on an NVIDIA GPU when none is named.
+GPU_EXTRACTION_MODEL: ExtractionModel = "qwen2.5:14b-instruct"
 VisionModel = Literal["moondream:1.8b-v2-q4_K_M"]
 EmbeddingModel = Literal["all-minilm:22m-l6-v2-fp16"]
 TranscriptionModel = Literal["Systran/faster-whisper-tiny.en"]
@@ -407,7 +409,8 @@ class ModelsConfig(BaseModel):
     extraction: ExtractionModel = Field(
         default="qwen2.5:7b-instruct",
         description="ADR-095: the local model that extracts entities from text. Default: "
-        "qwen2.5:7b-instruct, the model the product ships with.",
+        "qwen2.5:7b-instruct, the model the product ships with; with resources.gpu: nvidia and "
+        "this not named, qwen2.5:14b-instruct (ADR-135 Amendment 1).",
     )
     vision: VisionModel = Field(
         default="moondream:1.8b-v2-q4_K_M",
@@ -1029,9 +1032,19 @@ class ResourcesConfig(BaseModel):
         default=None, ge=0.125,
         description="Overrides PostgreSQL's shared_buffers, in GiB.",
     )  # fmt: skip
+    #: ADR-135 Amendment 1: the local engine on the server's NVIDIA GPU. It sizes nothing, so it is
+    #: not one of `any`'s settings, and Lite on a Linux computer may set it too.
+    gpu: Literal["none", "nvidia"] = Field(
+        default="none",
+        description="Default: none — the local engine runs on the CPU. nvidia: the ollama service "
+        "reserves every NVIDIA GPU, and the extraction model is qwen2.5:14b-instruct unless "
+        "models.extraction names one. The NVIDIA driver and Container Toolkit are the "
+        "administrator's to install.",
+    )
 
     @property
     def any(self) -> bool:
+        """Whether the stores are sized to the server (Small's alone); `gpu` is not part of it."""
         return any(
             value is not None
             for value in (self.memory_gib, self.graph_heap_gib, self.search_heap_gib,
@@ -1254,6 +1267,35 @@ class OspreyConfig(BaseModel):
                 f"your own, every store in a container, not {where}"
             )
         return self
+
+    @model_validator(mode="after")
+    def _a_gpu_is_not_a_clouds(self) -> OspreyConfig:
+        """ADR-135 Amendment 1 decision 1: the local engine on an NVIDIA GPU is for Lite on a Linux
+        computer or Small on a server of your own. A cloud's servers are sized without a GPU
+        (ADR-114), so it is refused there in words. macOS and Windows, whose Docker Desktop gives a
+        container no NVIDIA GPU, are refused by the doctor, which reads the machine."""
+        if self.resources.gpu == "nvidia" and (
+            self.profile is Profile.CLUSTER or self.external.any
+        ):
+            where = (
+                "Enterprise" if self.profile is Profile.CLUSTER else "a Small on managed services"
+            )
+            raise ValueError(
+                "resources.gpu: nvidia is for Lite on a Linux computer or Small on a server of "
+                f"your own, not {where}: a cloud's servers are sized without a GPU"
+            )
+        return self
+
+    @property
+    def extraction_model(self) -> str:
+        """ADR-135 Amendment 1 decision 3: the extraction model the deployment runs. Named in
+        `models.extraction`, that one always; else `qwen2.5:14b-instruct` on an NVIDIA GPU and the
+        shipped `qwen2.5:7b-instruct` without one. "Named" is the key being in the file
+        (`model_fields_set`), not its value, so a GPU deployment that names the 7b keeps it. The
+        render, the pull and `start --build` read this, never `models.extraction` itself."""
+        if "extraction" in self.models.model_fields_set or self.resources.gpu != "nvidia":
+            return self.models.extraction
+        return GPU_EXTRACTION_MODEL
 
 
 #: A Keycloak identity-provider alias is part of the redirect URI the organisation registers

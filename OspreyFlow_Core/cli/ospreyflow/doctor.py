@@ -8,11 +8,12 @@ from __future__ import annotations
 import errno
 import json
 import os
+import platform
 import re
 import shutil
 import socket
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -45,6 +46,42 @@ def lite_ports(product: Path) -> tuple[int, ...]:
 
 
 _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
+
+#: ADR-135 Amendment 1 decision 3: the extraction model on an NVIDIA GPU when `osprey.yaml` names
+#: none (`schemas.deployment.GPU_EXTRACTION_MODEL`; `test_gpu.py` holds the two to each other).
+GPU_EXTRACTION_MODEL = "qwen2.5:14b-instruct"
+SMALLER_EXTRACTION_MODEL = "qwen2.5:7b-instruct"
+#: Decision 4: the GPU memory the 14b asks for; below it, a warning naming the 7b.
+MIN_GPU_MEMORY_GIB = 12
+#: One line per GPU — its name, its memory in MiB and the driver's version — as the test server's
+#: answered: `NVIDIA GeForce RTX 5060 Ti, 16311, 595.99.02`.
+NVIDIA_SMI_QUERY = ("--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits")
+#: A CDI device the NVIDIA Container Toolkit generates (`nvidia-ctk cdi generate`).
+_CDI_NVIDIA = "nvidia.com/gpu"
+_SYSTEMS = {"Darwin": "macOS", "Windows": "Windows"}
+_DRIVER_FIX = (
+    "Install the NVIDIA driver for this GPU (on Ubuntu: sudo ubuntu-drivers install), restart the "
+    "server, and check that nvidia-smi lists the GPU (section 2.2a of the administration guide)."
+)
+
+
+@dataclass(frozen=True)
+class GpuPlan:
+    """ADR-135 Amendment 1: the local engine on an NVIDIA GPU, and the extraction model it will run
+    there (the 14b, unless `osprey.yaml` names another)."""
+
+    extraction: str = GPU_EXTRACTION_MODEL
+
+
+def gpu_plan(config: Mapping[str, object]) -> GpuPlan | None:
+    """What an `osprey.yaml` (as plain data) asks of the GPU, or None for none. The command reads
+    the file itself, depending on PyYAML alone; `OspreyConfig.extraction_model` is the same rule."""
+    resources = config.get("resources")
+    if not isinstance(resources, Mapping) or resources.get("gpu") != "nvidia":
+        return None
+    models = config.get("models")
+    named = models.get("extraction") if isinstance(models, Mapping) else None
+    return GpuPlan(str(named) if named else GPU_EXTRACTION_MODEL)
 
 
 @dataclass(frozen=True)
@@ -113,6 +150,9 @@ class Probes(Protocol):
     def certificate(
         self, product: Path, certificate: str, key: str, ca: str | None, names: Sequence[str]
     ) -> tuple[int, str]: ...
+    # ADR-135 Amendment 1 decision 4: what a GPU's checks ask.
+    def system(self) -> str: ...
+    def nvidia_smi(self, arguments: Sequence[str]) -> tuple[int, str] | None: ...
 
 
 class SystemProbes:
@@ -244,6 +284,24 @@ class SystemProbes:
             return 1, f"refused: the certificate could not be checked ({error})"
         return done.returncode, done.stdout + done.stderr
 
+    def system(self) -> str:
+        """The operating system, as Python names it: Linux, Darwin (macOS) or Windows."""
+        return platform.system()
+
+    def nvidia_smi(self, arguments: Sequence[str]) -> tuple[int, str] | None:
+        """`nvidia-smi` asked `arguments`: its exit and all it printed, or None where it is not
+        installed. A failure is kept, not dropped: without its driver it says so (exit 9)."""
+        program = shutil.which("nvidia-smi")
+        if program is None:
+            return None
+        try:
+            done = subprocess.run(
+                [program, *arguments], capture_output=True, text=True, timeout=30, check=False
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return 1, str(error)
+        return done.returncode, done.stdout + done.stderr
+
     def ours(self, port: int) -> bool:
         """Whether this deployment's own containers publish `port`."""
         if not self._compose:
@@ -361,10 +419,28 @@ def run_doctor(
     cloud: str | None = None,
     ports: tuple[int, ...] | None = None,
     server: ServerPlan | None = None,
+    gpu: GpuPlan | None = None,
 ) -> list[Check]:
     """Every check for `mode`, in the order a person should fix them. `ports` are a deployment's
     own when it is not the checkout's (ADR-138: one installed by name, at an address of its own).
-    `server` is a Small on a server of your own (ADR-114 Amendment 33), checked as that server."""
+    `server` is a Small on a server of your own (ADR-114 Amendment 33), checked as that server.
+    `gpu` is the local engine on an NVIDIA GPU (ADR-135 Amendment 1), checked after the rest."""
+    checks = _mode_checks(mode, probes, product=product, cloud=cloud, ports=ports, server=server)
+    if gpu is not None and (mode == "lite" or server is not None):
+        # A cloud's servers have no GPU: the answers and the schema refuse one there.
+        checks += gpu_checks(probes, gpu)
+    return checks
+
+
+def _mode_checks(
+    mode: str,
+    probes: Probes,
+    *,
+    product: Path,
+    cloud: str | None,
+    ports: tuple[int, ...] | None,
+    server: ServerPlan | None,
+) -> list[Check]:
     git = _tool(probes, "git", "git", "Git", "Install Git from https://git-scm.com/downloads.")
     uv = _tool(
         probes, "uv", "uv", "uv",
@@ -699,6 +775,116 @@ def _build_tools(probes: Probes, mode: str, cloud: str | None) -> list[Check]:
             "Install it and sign in to your account.",
         )
     return [tofu, cli]
+
+
+def gpu_checks(probes: Probes, plan: GpuPlan) -> list[Check]:
+    """ADR-135 Amendment 1 decision 4: before anything starts on the GPU — a Linux machine; the
+    NVIDIA driver (`nvidia-smi` answers, and names the GPU and its memory); Docker able to run a
+    container on it (the Container Toolkit's `nvidia` runtime, or a CDI device); and, for the 14b,
+    12 GiB of GPU memory, below which it is a warning naming the 7b. OspreyFlow installs neither the
+    driver nor the toolkit."""
+    system = probes.system()
+    if system != "Linux":
+        name = _SYSTEMS.get(system, system)
+        return [
+            Check(
+                "gpu-host",
+                False,
+                f"The local engine on an NVIDIA GPU needs Linux, and this computer runs {name}: "
+                "Docker Desktop gives a container no NVIDIA GPU.",
+                "Install on a Linux server or computer with the GPU, or set the GPU to none "
+                "(server.gpu in the answers, resources.gpu in osprey.yaml).",
+            )
+        ]
+    checks: list[Check] = []
+    said = probes.nvidia_smi(NVIDIA_SMI_QUERY)
+    gpus: list[tuple[str, float, str]] = []
+    if said is None:
+        checks.append(
+            Check("gpu", False, "nvidia-smi is not installed, so the NVIDIA driver is not.",
+                  _DRIVER_FIX)
+        )  # fmt: skip
+    elif said[0] != 0:
+        first = next((line.strip() for line in said[1].splitlines() if line.strip()), "")
+        checks.append(
+            Check(
+                "gpu",
+                False,
+                f"nvidia-smi does not answer (exit {said[0]}): {first or 'it printed nothing'}",
+                "The driver is not loaded: restart the server after installing it, or install "
+                "the driver for this GPU (on Ubuntu: sudo ubuntu-drivers install), then check "
+                "that nvidia-smi lists the GPU.",
+            )
+        )
+    else:
+        for line in said[1].splitlines():
+            fields = [f.strip() for f in line.split(",")]
+            if len(fields) == 3 and fields[1].isdigit():
+                gpus.append((fields[0], int(fields[1]) / 1024, fields[2]))
+        if gpus:
+            listed = "; ".join(f"{name}, {gib:.1f} GiB" for name, gib, _ in gpus)
+            checks.append(Check("gpu", True, f"The NVIDIA GPU is {listed} (driver {gpus[0][2]})."))
+        else:
+            checks.append(
+                Check("gpu", False, f"nvidia-smi lists no GPU ({said[1].strip() or 'nothing'}).",
+                      _DRIVER_FIX)
+            )  # fmt: skip
+    checks.append(_gpu_docker_check(probes))
+    if gpus and plan.extraction == GPU_EXTRACTION_MODEL:
+        total = sum(gib for _, gib, _ in gpus)
+        enough = total >= MIN_GPU_MEMORY_GIB
+        checks.append(
+            Check(
+                "gpu-memory",
+                True,
+                f"The GPU has {total:.1f} GiB of memory; {GPU_EXTRACTION_MODEL} asks for at least "
+                f"{MIN_GPU_MEMORY_GIB} GiB" + ("." if enough else ", so it would run partly on "
+                "the CPU."),
+                "" if enough else f"Name the smaller model, which runs on this GPU: "
+                f"models.extraction: {SMALLER_EXTRACTION_MODEL} in osprey.yaml (then ospreyflow "
+                "apply).",
+                warn=not enough,
+            )
+        )  # fmt: skip
+    return checks
+
+
+def _gpu_docker_check(probes: Probes) -> Check:
+    """Docker can run a container on the GPU: `docker info` lists the Container Toolkit's `nvidia`
+    runtime (`nvidia-ctk runtime configure`), or an NVIDIA CDI device (`nvidia-ctk cdi generate`,
+    which Docker 28 lists as a discovered device)."""
+    info = probes.docker_info()
+    if info is None:
+        return Check(
+            "gpu-docker",
+            False,
+            "Docker did not answer, so whether it can run a container on the GPU is not known.",
+            "Start Docker and run this again.",
+        )
+    runtimes = info.get("Runtimes")
+    names = sorted(runtimes) if isinstance(runtimes, Mapping) else []
+    if "nvidia" in names:
+        return Check("gpu-docker", True, "Docker can run a container on the GPU (the nvidia "
+                     "runtime of the NVIDIA Container Toolkit).")  # fmt: skip
+    devices = info.get("DiscoveredDevices")
+    for device in devices if isinstance(devices, list) else []:
+        found = str(device.get("ID", "")) if isinstance(device, Mapping) else ""
+        if found.startswith(_CDI_NVIDIA):
+            return Check(
+                "gpu-docker",
+                True,
+                f"Docker can run a container on the GPU (the CDI device {found}).",
+            )
+    return Check(
+        "gpu-docker",
+        False,
+        f"Docker cannot run a container on the GPU: it lists no nvidia runtime (only "
+        f"{', '.join(names) or 'none'}) and no NVIDIA CDI device, so the NVIDIA Container Toolkit "
+        "is not installed or not configured.",
+        "Install the NVIDIA Container Toolkit, then run sudo nvidia-ctk runtime configure "
+        "--runtime=docker and sudo systemctl restart docker (section 2.2a of the administration "
+        "guide).",
+    )
 
 
 def format_check(check: Check) -> str:
