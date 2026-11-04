@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.31** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
+**Version 1.32** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.32 | 2026-11-04 | §5a: a `DOCKER-USER` rule that matches only arriving connections (`--ctdir ORIGINAL`), found on the first Linux server. |
 | 1.31 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.30 | 2026-11-03 | Small on your own server, second part (ADR-114 Amendment 33 drop 2): §2.2a the backups folder and what the organisation's sign-in needs; §5a the answers file's `server.backups`, `server.memory_gib` and `sign_in`, and the doctor's new checks; new §5a.1 sign-in through the organisation's identity provider (Entra ID: the application, its two addresses, its client secret, assignment, the route out; no role until an administrator grants one); new §5a.2 memory sized to the server; new §5a.3 backups to `server.backups` with a cron line; §7 the answers' settings; §8 `repair-sign-in` restores the organisation's sign-in and gives a Small no demo accounts; §13 and §14 backup and `update` on this kind of Small; §16 the organisation's sign-in and the backups folder. Appendix A: `governance.organisation_provider`, `resources`. |
 | 1.29 | 2026-11-03 | Small on your own server (ADR-114 Amendment 33, first part): §1 a fourth column and the organisation's own certificate under "HTTP or HTTPS"; new §2.2a, its prerequisites; §2.4 `ospreyflow doctor --mode small --config install.yaml`; new §5a, installing it — the answers file's `server:`, the three names and the one-label wildcard, what is checked before anything starts, port 443 alone, the first administrator, renewing the certificate, and what is not built yet; §5.2's refusal names all three ways; §7 `server`, `admin_email`, `sign_in`; §8.1 what it publishes; §16 the certificate's refusals and a network that cannot connect. Appendix A: `network.tls`, `network.redirect_http`, `network.listen_address`. |
@@ -585,6 +586,18 @@ nothing from the CA. It runs as the account that owns the key, so the key stays 
 
 **Who may reach it** is set in front of the server: the organisation's firewall or security group,
 or the `DOCKER-USER` chain. A port Docker publishes is **not** filtered by `ufw`'s rules.
+In the `DOCKER-USER` chain, match only connections that **arrive** at 443, with `--ctdir ORIGINAL`;
+without it the rule also drops the replies to the server's own outbound HTTPS (to the releases, the
+images and cosign's transparency log), and the install fails with a time-out. For example, to let
+one network reach the service through the interface `eth0`:
+
+```
+iptables -I DOCKER-USER -i eth0 -p tcp -m conntrack --ctdir ORIGINAL --ctorigdstport 443 \
+  ! -s 192.0.2.0/24 -j DROP
+```
+
+The chain is emptied when Docker restarts, so put the rule in a unit that runs after
+`docker.service`.
 
 **The first administrator.** The install makes an account `admin` with the Admin role and the
 highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
