@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.30** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
+**Version 1.31** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.31 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.30 | 2026-11-03 | Small on your own server, second part (ADR-114 Amendment 33 drop 2): §2.2a the backups folder and what the organisation's sign-in needs; §5a the answers file's `server.backups`, `server.memory_gib` and `sign_in`, and the doctor's new checks; new §5a.1 sign-in through the organisation's identity provider (Entra ID: the application, its two addresses, its client secret, assignment, the route out; no role until an administrator grants one); new §5a.2 memory sized to the server; new §5a.3 backups to `server.backups` with a cron line; §7 the answers' settings; §8 `repair-sign-in` restores the organisation's sign-in and gives a Small no demo accounts; §13 and §14 backup and `update` on this kind of Small; §16 the organisation's sign-in and the backups folder. Appendix A: `governance.organisation_provider`, `resources`. |
 | 1.29 | 2026-11-03 | Small on your own server (ADR-114 Amendment 33, first part): §1 a fourth column and the organisation's own certificate under "HTTP or HTTPS"; new §2.2a, its prerequisites; §2.4 `ospreyflow doctor --mode small --config install.yaml`; new §5a, installing it — the answers file's `server:`, the three names and the one-label wildcard, what is checked before anything starts, port 443 alone, the first administrator, renewing the certificate, and what is not built yet; §5.2's refusal names all three ways; §7 `server`, `admin_email`, `sign_in`; §8.1 what it publishes; §16 the certificate's refusals and a network that cannot connect. Appendix A: `network.tls`, `network.redirect_http`, `network.listen_address`. |
 | 1.28 | 2026-11-03 | §8: `ospreyflow repair-sign-in` also sets the Conduit's own client secret again, so a deployment whose stores were wiped can act for its people again. §16: rules that say "the rule's deployer could not be resolved", a hotlist that stops, and a list refresh that re-screens no one. |
