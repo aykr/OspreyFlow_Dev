@@ -148,6 +148,7 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
 
   const facts = (place: StartPlace) => (summary ? (place === "glass" ? summary.glass : place === "ingest" ? summary.studio : summary.admin) : null);
   const attention = summary ? summary.attention.filter((a) => allowed.has(a.place)) : [];
+  const noCases = summary !== null && summary.recent.length === 0;
   const current = TIPS[((tip % TIPS.length) + TIPS.length) % TIPS.length]!;
 
   return (
@@ -240,25 +241,31 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
               <div className="home-section__head">
                 <h2 id="recent-cases">Recent cases</h2>
               </div>
-              <table className="home-cases" aria-labelledby="recent-cases">
-                <thead>
-                  <tr><th scope="col">Case</th><th scope="col">Your level</th><th scope="col" className="numeric">Entities</th><th scope="col">Created</th></tr>
-                </thead>
-                <tbody>
-                  {(summary?.recent ?? []).slice(0, 6).map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        {allowed.has("glass") ? (
-                          <button type="button" className="home-cases__open" onClick={() => onOpenCase(c.id, "glass")}>{c.name}</button>
-                        ) : c.name}
-                      </td>
-                      <td>{c.level}</td>
-                      <td className="numeric"><span className="value">{c.entities === null ? "—" : c.entities.toLocaleString("en-GB")}</span></td>
-                      <td><span className="value">{whenLabel(c.created, now)}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* ADR-099 Amendment 11: a person with no role, or no case yet, is told so in words rather
+                  than shown an empty table. */}
+              {noCases ? (
+                <p className="home-section__empty">No cases to show.</p>
+              ) : (
+                <table className="home-cases" aria-labelledby="recent-cases">
+                  <thead>
+                    <tr><th scope="col">Case</th><th scope="col">Your level</th><th scope="col" className="numeric">Entities</th><th scope="col">Created</th></tr>
+                  </thead>
+                  <tbody>
+                    {(summary?.recent ?? []).slice(0, 6).map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          {allowed.has("glass") ? (
+                            <button type="button" className="home-cases__open" onClick={() => onOpenCase(c.id, "glass")}>{c.name}</button>
+                          ) : c.name}
+                        </td>
+                        <td>{c.level}</td>
+                        <td className="numeric"><span className="value">{c.entities === null ? "—" : c.entities.toLocaleString("en-GB")}</span></td>
+                        <td><span className="value">{whenLabel(c.created, now)}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </section>
           </div>
 
