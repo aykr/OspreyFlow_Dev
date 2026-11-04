@@ -24727,3 +24727,91 @@ people, and what to run, in place of 'not answering'"; `src/home/homeData.test.t
 needs done, beside the count". No Glass action is added (rule 13). **Not proved here:** the line
 against a real Keycloak after a real wipe; the stand-in's two answers are Keycloak 26.0's as recorded
 in step 18a's live check on GOV.UK and the drop 2 tests.
+
+### ADR-091, Amendment 1 (4 November 2026) — no Type ID, and no raw identifier in the Inspector or the Studio's Map (build order step 30)
+
+Status: accepted 4 November 2026 (the owner's ruling on open question 29, after the 3 November
+rehearsal showed "Type ID SHARED_CELL_WITH", a node's store id and a Location's `site_ref`
+"pid:est1:wing:F" in the Inspector, and link-type keys such as `HELD_AT` in the Studio's Map;
+`CLAUDE.md` rule 7).
+
+1. **Decision 4 is withdrawn.** A type's key is shown nowhere; the Inspector's *Type ID* row is gone,
+   and a link reads only by its display name (decisions 1 and 2).
+2. **The Inspector shows no store id and no internal reference.** No node id row. A property is named
+   as a person reads it, by the rule decision 2 gives a link type (`prison_number` reads "Prison
+   number"). Left out of a node's properties, and of what several selected nodes share: every `*_ref`
+   (the ontology's category of deployment-internal references, `default.yaml` v8 — `site_ref`,
+   `org_ref`, `incident_ref`, `establishment_ref` — and `geometry_ref`/`object_ref`, which point into
+   the analytics and object stores) and the stores' own keys `event_id`, `message_id` and `rule_id`
+   (`apps/workspace/src/inspector/propertyNames.ts`). They stay on the node: search, the label choice
+   and the map still read them; they are only not shown. A link's end that is not on the canvas is
+   named "an entity not in this view", never by its id (`LinkDetails.endName`, also the events list's).
+3. **The Studio's Map names a link type by its display name** in the list of the template's links, the
+   form that makes one, a link's settings and on the canvas; the key stays the value each select sends
+   and the template stores.
+4. **No "copy identifier" action.** No ADR provides one for engineers, so none is added; a key a
+   person needs (a recipe's link type) is in the committed recipe.
+5. **Also named, not shown raw:** a held row's source file by its file name, as build order step 18c
+   named the Inspector's sources. A pipeline run's answer no longer carries each branch's
+   `source_location` (the server's path) back to the Glass, which never showed it
+   (`BranchRunReportView`; ADR-127 Amendment 47).
+6. **Not changed, and why.** ADR-106 decision 5 still shows a principal's id where the directory gives
+   no name (a recipe's publisher, a pack's, an alert's assignee), and a pattern's pinned node is
+   labelled by its type and id because a saved pattern keeps no name (`patterns/store.ts`); both need
+   their own decision, put to the owner. Load ids stay on the Publish screen's runs: a revert takes one
+   (build order step 15). Entity type names (`Location`) and a recipe's entity refs are words, not ids.
+
+**Tests**, red first (`red/s30a_red.txt`): `src/inspector/Inspector.rawIdentifiers.test.tsx` (a PID
+Location, a person, a Document, a link with one end off the canvas, two selected — each fails if a
+store id, `site_ref`, a `*_ref` value, a store key, a property key, a type key or a server path is in
+the Inspector's text); `src/ingest/map/MapScreen.rawIdentifiers.test.tsx` (the list, the form, the
+link's settings, every `aria-label` and `title`, the canvas's edge label; a declared label wins);
+`src/alerts/HeldRowsPanel.test.tsx` "names the source file by its file name". Five earlier unit
+expectations and the keyboard walkthrough `keyboard/pipeline-studio.spec.ts` moved from keys to
+names (59 passed against its harness). No action is added (rule 13).
+
+### ADR-127, Amendment 47 (4 November 2026) — Verify and Run read the same file (build order step 30)
+
+Status: accepted 4 November 2026 (the owner's ruling on open question 29: "Run uses exactly the file
+Verify checked, and says so if it changed"; `spec/09_INGEST_STUDIO.md` §5 has the rule).
+
+**Found** walking chapter 4 on GOV.UK (3 November; Amendment 45): a file chosen at Connect passed
+Verify, which read the draft's own `source_location`, and the run loaded the seed's file, which the
+pipeline's source node named — `pipeline_run.run_published_pipeline` reads a node's own location
+first. Amendment 45 removed the seed's node location; the defect stayed for any pipeline whose source
+names its own file (the Studio's source settings write one), and a file named for a run was silently
+not read for such a pipeline at all.
+
+**Decision.**
+
+1. **One answer to "which files does a run read".** `services/api/run_source.files_a_run_reads`: one
+   file per source branch in the runner's order (the node's own, else the run's, else the recipe's),
+   or the one file of a recipe with no pipeline. The runner and Verify both use it.
+2. **Verify reads those files** (each branch's, in order) and records each with the SHA-256 of its
+   bytes in `studio_recipes.verified_sources` (JSONB, cleared whenever `verified_at` is). It records
+   nothing when no Verify ran (a seed's `mark_verified`, Amendment 34).
+3. **Run now refuses, rather than loading the checked file.** Before anything is read into a store,
+   the case's run route hashes the files the run would read; if a version has a record and they are
+   not those files byte for byte, or the run names a file Verify did not check, the answer is 409
+   `source_changed_since_verify`, in words naming files by their file names, asking for Verify again.
+   Refusing is the clearer of the two the owner offered: quietly loading the checked file would load
+   something other than what the person last chose, with nothing on screen to say so. The Studio's Run
+   panel no longer takes a file.
+4. **Not held to it:** a version no Verify recorded (published before this, or by a seed), which runs
+   as before; scheduled and watched runs (ADR-110), which read each new export by design; a release of
+   held rows. Verify on a published recipe records the file as it now is.
+5. **Window.** The run hashes the file, then reads it; a file replaced in the moment between is not
+   caught. Closing it means hashing the bytes the run parses, a change to the shared reader.
+
+**Tests**, red first (`red/s30b_red.txt`): `tests/services/api/test_verify_and_run_read_one_file.py`,
+through the Verify, Publish and Run routes, recording the file at the branch's read
+(`pipeline_run.run_published_recipe`): `::test_a_run_naming_another_file_than_verify_checked_is_refused_in_words`
+(the owner's A, Verify, B, Run; red: the run loaded A, the named B ignored),
+`::test_a_file_changed_since_verify_is_refused_until_verify_runs_again`,
+`::test_verify_reads_the_file_the_run_will_read_when_the_source_node_names_its_own` (red: Verify read
+1 row, the run's file has 2), `::test_a_run_reads_exactly_the_file_verify_checked` (and its answer
+carries no server path), `::test_a_recipe_verify_never_recorded_runs_as_before`;
+`src/ingest/publish/PublishScreen.test.tsx` "offers no other file to run on, and says why a changed
+source is refused". The route tests' store stand-in now clears `verified_at` on every edit, as the
+real store does (rule 15); `tests/services/api/test_studio_recipes_store.py::test_verify_records_the_files_it_read_and_an_edit_clears_them`
+is the live-Postgres case, **not run here** (no Postgres on 55433 in this session).

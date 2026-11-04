@@ -1374,9 +1374,11 @@ and `.../candidates/{id}/accept`). An email opened in the Inspector's Emails sec
 "Communicated with · 3 emails": the type's `label` where the ontology declares one, otherwise its
 name in sentence case (COMMUNICATED_WITH reads "Communicated with"), and the count as emails where the
 link is between email addresses (the same rule as *Show emails*), records otherwise. A type's name in
-capitals is shown in one place only, the Inspector's *Type ID* row; the link menu's title, the
-node menu's *Show links* entries, the change form's type list, the change history and the edge
-overlay all use the display name. The caption is built only for a link that is labelled, so an
+capitals is shown nowhere (ADR-091 Amendment 1, which withdrew the Inspector's *Type ID* row); the
+link menu's title, the node menu's *Show links* entries, the change form's type list, the change
+history, the edge overlay and the Studio's Map all use the display name. The Inspector shows no store
+id and no internal reference (`*_ref`, `event_id`, `message_id`, `rule_id`), and names a property as a
+person reads it (`Inspector.rawIdentifiers.test.tsx`). The caption is built only for a link that is labelled, so an
 unlabelled link costs the frame nothing. Tests: `src/canvas/linkLabel.test.ts` and the caption cases
 in `src/canvas/nodeAttributes.test.ts` (shown red with the old "TYPE (n)" label).
 

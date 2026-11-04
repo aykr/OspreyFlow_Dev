@@ -6,6 +6,19 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **Run now runs on exactly the file Verify checked.** Verify now reads the file a run will read
+  (a pipeline's source that names its own file included; it used to read the file chosen at
+  Connect, so a file could pass Verify while the run loaded another) and records it with a hash of
+  its contents. *Run now* checks that file first and, if it has changed since Verify or another
+  file is named, loads nothing and says so in words, asking for Verify again. The Studio's Run
+  panel no longer takes a file. A recipe published before this, or by a demonstration pack's seed,
+  runs as before; scheduled and watched runs are unchanged. A run's answer no longer carries the
+  server's path to the file it read.
+- **No identifiers meant for a machine in the Inspector or the Studio's Map.** The Inspector no
+  longer shows a node's id, a link's Type ID, or internal references such as a place's site
+  reference, and names properties as a person reads them ("Prison number"); a link's end that is
+  not on the canvas is named in words. The Map names link types by their labels ("Held at"), not
+  their keys. Held rows name their source file by its file name.
 - **An offline bundle for another platform.** `ospreyflow update --make-bundle FILE` now carries
   the `linux/amd64` images, the platform a release is run on, whatever the machine making it runs
   on; `--platform linux/arm64` carries the other platform a release is built for, and any other is
