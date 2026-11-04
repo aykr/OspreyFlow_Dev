@@ -40,6 +40,15 @@ COSIGN_IMAGE_IDS = {
     "linux/amd64": "sha256:c9a0cefcd8066dc94085506e0d63055d57b50a1f8285169244f1bd06ebedaec9",
     "linux/arm64": "sha256:6793dd4d518a6b556385e3dee81d02554900a3f386f8b50bbd29bdb4ac6d8829",
 }
+#: Each platform's own manifest in that index (build order step 29; measured 4 November 2026 with
+#: `docker buildx imagetools inspect --raw`, each naming the configuration above). A bundle for
+#: another platform pulls cosign by this digest: a pull of the index gives the machine's own.
+COSIGN_PLATFORM_IMAGES = {
+    "linux/amd64": "ghcr.io/sigstore/cosign/cosign"
+    "@sha256:dc905e434d9d7f0a5cff8e76abdfae02be313cfa5f3eac6e89209d9bd52e3b92",
+    "linux/arm64": "ghcr.io/sigstore/cosign/cosign"
+    "@sha256:b74da950a9b069fbdba58fcf66e899952a190fff2a943dbf30e55279d70274d4",
+}
 GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
 #: The images this repository builds that every release's lock names; every other image in a lock
 #: is a third party's, except those below.

@@ -662,6 +662,48 @@ def test_a_bundle_of_a_verified_release_is_written_and_named(
     assert "ospreyflow update --from" in said and out.name in said
 
 
+def test_a_bundle_is_made_for_linux_amd64_unless_another_platform_is_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Build order step 29: the platform reaches the writer, linux/amd64 by default."""
+    fake = _Host(tmp_path)
+    asked: list[str] = []
+
+    def write(path: Path, *_: Any, platform: str) -> Path:
+        asked.append(platform)
+        return path
+
+    out = tmp_path / "ospreyflow-v0.5.0.tar"
+    assert update.make_bundle_for(fake.repo, fake.host(), out, to="v0.5.0", write=write) == 0
+    assert "for linux/amd64" in capsys.readouterr().out
+    assert update.make_bundle_for(fake.repo, fake.host(), out, to="v0.5.0", write=write,
+                                  platform="linux/arm64") == 0  # fmt: skip
+    assert asked == ["linux/amd64", "linux/arm64"]
+
+
+def test_a_bundle_for_a_platform_no_release_is_built_for_is_refused_before_any_lookup(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    host = fake.host()
+    looked: list[Any] = []
+    host.find_release = lambda tag: looked.append(tag) or {}  # type: ignore[func-returns-value]
+    out = tmp_path / "ospreyflow-v0.5.0.tar"
+    code = update.make_bundle_for(fake.repo, host, out, to=None, platform="linux/arm/v7",
+                                  write=lambda *a, **k: out)  # fmt: skip
+    said = capsys.readouterr().err
+    assert code == 1 and looked == []
+    assert "linux/arm/v7" in said and "linux/amd64 and linux/arm64" in said
+
+
+def test_platform_without_make_bundle_is_refused(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        update.main(["--deployment", "/nowhere", "--platform", "linux/amd64", "--from", "x.tar"])
+    assert stopped.value.code == 2
+    # Its own words, not argparse's "unrecognized arguments" (whose usage line names it too).
+    assert "so it goes with --make-bundle FILE" in capsys.readouterr().err
+
+
 # --- an install from a release (Amendment 8 point 10, B5e) --------------------------------------
 
 

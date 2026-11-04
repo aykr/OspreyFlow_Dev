@@ -515,23 +515,27 @@ def make_bundle_for(
     *,
     to: str | None,
     write: Callable[..., Path] | None = None,
+    platform: str | None = None,
 ) -> int:
     """`update --make-bundle` (Amendment 8 point 10): a release verified online, written to one
-    file for a deployment that cannot reach GitHub or a registry."""
-    from harness.bundle import BundleRefused, make_bundle
+    file for a deployment that cannot reach GitHub or a registry — with `platform`'s images
+    (build order step 29; `linux/amd64` if not given), whatever this machine's own platform."""
+    from harness.bundle import DEFAULT_PLATFORM, BundleRefused, bundle_platform, make_bundle
 
     try:
+        platform = bundle_platform(platform or DEFAULT_PLATFORM)
         release = host.find_release(to)
         tag = release["tag"]
         verify_lock(host.cosign, release["lock"], release.get("lock_signature", ""),
                     host.identity(tag))  # fmt: skip
         verify_release(release["lock"], host.identity(tag), host.cosign)
-        (write or make_bundle)(out, release, repo, host.run, host.cosign)
+        (write or make_bundle)(out, release, repo, host.run, host.cosign, platform=platform)
     except (ReleaseRefused, SignatureRefused, BundleRefused) as refused:
         print(f"ospreyflow: {refused}. No bundle was written.", file=sys.stderr)
         return 1
     print(
-        f"Wrote {out} ({tag}). On the machine to update, run: ospreyflow update --from {out.name}"
+        f"Wrote {out} ({tag}, for {platform}). On a {platform} machine to update, run: "
+        f"ospreyflow update --from {out.name}"
     )
     return 0
 
@@ -701,6 +705,11 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
         "--make-bundle", type=Path, metavar="FILE",
         help="write the release, verified, to one file for a machine that cannot reach GitHub",
     )  # fmt: skip
+    parser.add_argument(
+        "--platform", metavar="OS/ARCH",
+        help="with --make-bundle: the platform whose images the bundle carries, from any machine "
+        "(linux/amd64 if not given; a release is built for linux/amd64 and linux/arm64)",
+    )  # fmt: skip
     parser.add_argument("--from", dest="bundle", type=Path, metavar="FILE",
                         help="update from a file --make-bundle wrote, with no network")  # fmt: skip
     parser.add_argument(
@@ -709,6 +718,8 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
     parser.add_argument("--verify-install", metavar="TAG", help=argparse.SUPPRESS)
     parser.add_argument("--lock-out", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.platform is not None and args.make_bundle is None:
+        parser.error("--platform names a bundle's platform, so it goes with --make-bundle FILE")
     if args.check:
         return check(args.deployment, repo_root, github_api=args.github_api)
     host = real_host(
@@ -718,7 +729,9 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
         out = args.lock_out or Path(".install/release.lock")
         return verify_for_install(host, args.verify_install, out)
     if args.make_bundle is not None:
-        return make_bundle_for(repo_root, host, args.make_bundle.resolve(), to=args.to)
+        return make_bundle_for(
+            repo_root, host, args.make_bundle.resolve(), to=args.to, platform=args.platform
+        )
 
     def confirm(question: str) -> bool:
         if args.yes:
