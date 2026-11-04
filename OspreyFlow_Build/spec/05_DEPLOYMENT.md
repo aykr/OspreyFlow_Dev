@@ -15,7 +15,7 @@ someone will improvise one.
 | Profile | Runs on | Graph | OLAP | Models | Orchestration |
 | --- | --- | --- | --- | --- | --- |
 | `local-lite` | One laptop, 16 GB | ArcadeDB | DuckDB | Ollama, CPU or one consumer GPU | Docker Compose |
-| `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a), or one server of your own with every store in a container (ADR-114 Amendment 33, §3a.1) | ArcadeDB | DuckDB | Ollama | Docker Compose |
+| `small` | One cloud server on the cloud's managed services (ADR-114 decision 8, §3a), or one server of your own with every store in a container (ADR-114 Amendment 33, §3a.1) | ArcadeDB | DuckDB | Ollama, CPU, or an NVIDIA GPU on a server of your own (§3a.1) | Docker Compose |
 | `cluster` | Kubernetes — EKS or AKS (ADR-114 decision 9, §3b) | ArcadeDB, three Raft replicas | ClickHouse, a replicated pair with Keeper | Ollama in the cluster for now — decision 11's vLLM on a GPU pool is not built; a client's provider through LiteLLM | Kubernetes, from the Helm chart |
 
 The same container images run in all three. Only configuration differs. That is the
@@ -228,8 +228,9 @@ would have agreed with whatever the code did.
 `04_VAULT_BACKEND.md` §4's LiteLLM proxy and Ollama are both rendered, and Ollama pulls and
 digest-verifies its models (ADR-020) on a persistent volume: the three pinned ones, and the
 deployment's own extraction model (`models.extraction`, ADR-095: `qwen2.5:7b-instruct` by default,
-4.68 GB; 8.99 GB for the 14b). The deployment deliberately does **not wait** for that pull: on a slow
-link it is several gigabytes, and gating readiness on it
+4.68 GB; 8.99 GB for the 14b, which is the default with `resources.gpu: nvidia`, §3a.1). The
+deployment deliberately does **not wait** for that pull: on a slow link it is several gigabytes, and
+gating readiness on it
 made a CI gate ten times slower — measured, Floor A 9m40s → 1h43m, because the test suite applies
 ten deployments and destroys the model volume each time.
 
@@ -698,7 +699,9 @@ checkout with no release yet, never the customer-facing remedy (§5, §7).
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
 in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
-faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest. Since 6 October 2026 also `ner`,
+faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest. With
+`resources.gpu: nvidia` on a Linux computer, Ollama alone reserves the NVIDIA GPU (§3a.1). Since
+6 October 2026 also `ner`,
 the fast named-entity recogniser (ADR-098 decision 2): Stanza 1.10.1 on the CPU with its English model in
 the image (about 1.2 GB on disk, under 1 GB of RAM), on the internal network only; the Conduit is told
 `OSPREY_RECOGNISER_URL` and does not wait on it, so without it only *Extract entities* is unavailable.
@@ -854,8 +857,24 @@ external:
   Docker running and enabled at boot, Compose v2, `amd64`, 30 GiB, disk where Docker keeps its data,
   Git, uv, Python 3.12, the clock, 443 free on every interface (a wildcard bind), 2480, the
   certificate; warns for `vm.max_map_count`, root, unresolved names.
-- **Not yet** (the amendment's second drop): organisation sign-in, memory sizing, backups to
-  `server.backups` and `update` proven on it. A first install with no outbound access is deferred.
+- **`resources.memory_gib`** (drop 2): `server.memory_gib: auto` reads the memory Docker reports,
+  once, at install, and writes it to `osprey.yaml`; the graph store's heap, OpenSearch's heap and
+  PostgreSQL's shared buffers are sized from it, and a resize starts only those three again.
+- **`resources.gpu`** (`06_DECISIONS.md` ADR-135 Amendment 1): `none` (the default) or `nvidia`, set
+  by the answers' `server.gpu`; Lite on a Linux computer may set it in `osprey.yaml` (it sizes
+  nothing, so unlike the stores' sizing it is not Small's alone). Refused by the schema for
+  `cluster` and for a Small with `external:`. With `nvidia`, the compose file gives the `ollama`
+  service alone a device reservation — `deploy.resources.reservations.devices`: driver
+  `nvidia`, count `all`, capabilities `[gpu]` — and nothing else changes: the same pinned Ollama
+  image, which carries CUDA, the same weights and the same gateway. `ollama-models` only downloads,
+  so it reserves none. Vision and embeddings run in the same Ollama and so use the GPU too; the
+  `whisper` and `ner` containers stay on the CPU. The extraction model is `qwen2.5:14b-instruct`
+  unless `models.extraction` is in `osprey.yaml` (`OspreyConfig.extraction_model`). `doctor`,
+  `install` and `apply` check, before anything starts, a Linux host, `nvidia-smi` answering, and
+  Docker listing the NVIDIA Container Toolkit's `nvidia` runtime or an NVIDIA CDI device; for the
+  14b, less than 12 GiB of GPU memory in total is a warning. OspreyFlow installs neither the driver
+  nor the toolkit.
+- **Not yet:** a first install with no outbound access is deferred.
 
 ## 3b. Enterprise on Kubernetes (ADR-114 decision 9, Amendments 10, 12 and 13)
 

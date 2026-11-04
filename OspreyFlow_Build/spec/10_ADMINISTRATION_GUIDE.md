@@ -340,11 +340,11 @@ What happens:
    database password (and on Azure the storage key) with **its own cloud identity**, installs onto
    the managed services, and gets its HTTPS certificate. The command waits — up to 45 minutes — until
    `https://<domain>` answers. The server's own log is `/var/log/ospreyflow-first-boot.log`.
-5. **The first administrator.** The server makes an account `admin` holding the Admin role and the
-   highest clearance, with a **one-time code** instead of a password, and leaves the code in the
-   cloud's secret store. The command reads it, **shows it once**, and deletes it from the store. At
-   their first sign-in the administrator chooses their own password. Then they invite everyone
-   else from the Admin area (section 9).
+5. **The first administrator.** The server makes an account `admin` holding the Admin and Analyst
+   roles and the highest clearance, with a **one-time code** instead of a password, and leaves the
+   code in the cloud's secret store. The command reads it, **shows it once**, and deletes it from
+   the store. At their first sign-in the administrator chooses their own password. Then they invite
+   everyone else from the Admin area (section 9).
 
 ### 5.1 What is made in your account
 
@@ -447,8 +447,8 @@ nothing from the CA. It runs as the account that owns the key, so the key stays 
 **Who may reach it** is set in front of the server: the organisation's firewall or security group,
 or the `DOCKER-USER` chain. A port Docker publishes is **not** filtered by `ufw`'s rules.
 
-**The first administrator.** The install makes an account `admin` with the Admin role and the
-highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
+**The first administrator.** The install makes an account `admin` with the Admin and Analyst roles
+and the highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
 Admin area (section 9). The install's own tools reach the three names on the server itself and
 trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
@@ -796,6 +796,12 @@ holding its right:
 
 A single right can be given on its own. **Nobody can be given more than the person giving it
 holds** — clearance included — which is why the first administrator holds the highest clearance.
+
+**The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
+**Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin
+role alone does not open a case's graph, and the first administrator is the Author of every demo
+pack's case there. An `admin` made by v0.4.6 or earlier holds Admin alone: add the Analyst role in
+People and roles.
 
 ### 9.3 Inviting someone
 
