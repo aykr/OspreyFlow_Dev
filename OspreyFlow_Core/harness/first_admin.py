@@ -12,6 +12,10 @@ deletes it. It is made with Keycloak's own admin tool inside its container (`KCA
 their own (B4's ceiling), so a first administrator below the top would cap every account the
 deployment ever has.
 
+**Roles:** Admin and Analyst, from the start, whether or not demo packs load (the owner's ruling of
+4 November 2026, ADR-114 Amendment 33). The Admin role alone has no right to investigate
+(`schemas.rights.ADMIN`), so a case the first administrator authors would be listed but not open.
+
     python -m harness.first_admin --deployment deploy/generated/small --code-file /run/…/code
 """
 
@@ -38,6 +42,11 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 #: deployment with no demo accounts makes this account its case's Author (`scripts.seed_internal`).
 FIRST_ADMIN_USERNAME = "admin"
 
+#: The first administrator's roles, by the names `schemas.rights.ROLE_RIGHTS` gives them: Admin,
+#: and Analyst so that the cases they author open (ADR-114 Amendment 33, the owner's ruling of
+#: 4 November 2026).
+FIRST_ADMIN_ROLES = (ADMIN_ROLE, "analyst")
+
 
 def one_time_code() -> str:
     letters = "".join(secrets.choice(CODE_ALPHABET) for _ in range(16))
@@ -55,7 +64,7 @@ def first_administrator(
             "clearance": [scheme.classification[-1]],
             "org_unit": ["administration"],
             "receivable_handling_codes": list(scheme.handling_codes),
-            "roles": [ADMIN_ROLE],
+            "roles": list(FIRST_ADMIN_ROLES),
         },
         "requiredActions": ["UPDATE_PASSWORD"],
         "credentials": [{"type": "password", "value": code, "temporary": True}],

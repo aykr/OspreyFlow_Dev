@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.15** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
+**Version 1.16** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.16 | 2026-11-04 | New §9.4, the local engine on an NVIDIA GPU (ADR-135 Amendment 1): `resources.gpu`, how the render gives Ollama the GPU, `OspreyConfig.extraction_model` and the 14b default, the doctor's GPU checks and their tests, and a saved `osprey.yaml` keeping the 7b. |
 | 1.15 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.14 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.13 | 2026-11-03 | §1: a level 0 diagram, who uses OspreyFlow and what it talks to. The administration guide has the level 1 diagram and every interface. |
@@ -695,3 +696,62 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `ospreyflow demo list`, `ospreyflow demo add <id>` | The synthetic demo packs, each loaded into its own case |
 | `python -m scripts.seed_ingest_folder` | Writes the demo packs' synthetic source files into the ingest folder |
 | `python -m scripts.load_screening_list <file.yaml>` | Loads or replaces a screening list (section 8) |
+
+### 9.4 The local engine on an NVIDIA GPU
+
+For whoever works on OspreyFlow itself. The decision is ADR-135 Amendment 1; the administration
+guide's §5a.4 says how an administrator turns it on.
+
+**The setting.** `resources.gpu` in `osprey.yaml` is `none` (the default) or `nvidia`. The answers
+file's `server.gpu` writes it for Small on a server of your own; Lite on a Linux computer may set it
+in `osprey.yaml`. The schema refuses `nvidia` for Enterprise and for a Small with `external:`
+(`OspreyConfig._a_gpu_is_not_a_clouds`, in `packages/schemas/deployment.py`).
+
+**How the render gives Ollama the GPU.** With `nvidia`, `harness.render` gives the `ollama` service
+alone a device reservation in `compose.yaml`:
+
+```yaml
+deploy:
+  resources:
+    reservations:
+      devices:
+        - {driver: nvidia, count: all, capabilities: [gpu]}
+```
+
+Nothing else changes: the same pinned Ollama image (it carries CUDA), the same pinned weights and
+the same gateway. `ollama-models` only downloads the weights, so it reserves nothing. Image
+description and embeddings run in the same Ollama, so they use the GPU too; transcription does not.
+With `none`, the render is byte for byte what it was with no setting.
+
+**The extraction model.** `OspreyConfig.extraction_model` decides it. If `models.extraction` is in
+`osprey.yaml`, that model, always (the key being there counts, not its value: `model_fields_set`).
+Otherwise `qwen2.5:14b-instruct` with `resources.gpu: nvidia`, and `qwen2.5:7b-instruct` without.
+The extraction model also answers Ask the case and Ask to search on the local engine. The render's
+model pull, the gateway's routing table, the Conduit's `OSPREY_EXTRACTION_MODEL`, and the update
+`start --build` makes to them (`scripts/refresh.py`) all read this one property, so they cannot
+disagree.
+
+**The doctor's checks** (`cli/ospreyflow/doctor.py`, `gpu_checks`). Each refuses in words, with
+nothing changed; `doctor` runs them, `install` runs them before anything is written, and `apply`
+before the harness runs:
+
+| Check | What it reads | Refused or warned when |
+| --- | --- | --- |
+| `gpu-host` | The operating system | It is not Linux: Docker Desktop on macOS and Windows gives a container no NVIDIA GPU |
+| `gpu` | `nvidia-smi`: each GPU's name, memory and driver | `nvidia-smi` is not installed, does not answer, or lists no GPU |
+| `gpu-docker` | `docker info`: `Runtimes` and `DiscoveredDevices` | Neither the `nvidia` runtime nor a CDI device whose id begins `nvidia.com/gpu` is listed |
+| `gpu-memory` | The total memory of every GPU listed | Under 12 GiB with the 14b: a warning naming the 7b, which does not stop an install |
+
+OspreyFlow installs neither the NVIDIA driver nor the Container Toolkit.
+
+**Its tests** are in the developer repository: `tests/harness/test_gpu_render.py` (the refusals,
+the reservation on `ollama` alone, the 14b default and a named model winning, the pull, the route
+and the Conduit agreeing, `start --build`, and `gpu: none` rendering as no setting);
+`tests/cli/test_gpu.py` (each check against stand-ins that refuse as `nvidia-smi` and `docker info`
+do, an install and an `apply` refused with nothing changed, and the real probe against stand-in
+programs on `PATH`); and `tests/cli/test_answers.py`'s `test_server_gpu_*`.
+
+**A saved `osprey.yaml` keeps the 7b.** An `osprey.yaml` saved by the setup harness or by the
+guided page (`ospreyflow install --gui`) is the whole schema written out with its defaults, so it
+names `models.extraction: qwen2.5:7b-instruct`. On a GPU it then keeps the 7b until that line is
+removed. Changing what the page writes is not part of the amendment.

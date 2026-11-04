@@ -220,13 +220,11 @@ class Sharing:
     note: str | None = None
 
 
-#: Said when the first administrator is the case's Author: the Admin role carries no right to
-#: investigate (`schemas.rights.ADMIN`), so the case is listed but its graph is not opened with it.
+#: Said when the first administrator is the case's Author. They hold the Analyst role as well as
+#: Admin from the start (`harness.first_admin.FIRST_ADMIN_ROLES`), so the case opens for them.
 ADMIN_AUTHOR_NOTE = (
-    "{username}, the first administrator, is its Author (there are no demo accounts). The Admin "
-    "role does not open a case's graph: give {username} — or an analyst you invite into the unit "
-    "'{unit}' — the Analyst role in Admin, People and roles, then open the case or share it from "
-    "there."
+    "{username}, the first administrator, is its Author, in the unit '{unit}' (there are no "
+    "demo accounts)."
 )
 
 

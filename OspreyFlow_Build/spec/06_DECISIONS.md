@@ -23644,14 +23644,30 @@ v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service 
   account and not the other the seed is refused as before; with neither the demo accounts nor the
   first administrator it is refused in words, naming both remedies. **No pack needs a role only the
   demo accounts give to load; but the Admin role carries no right to investigate** (`schemas.rights.
-  ADMIN`), so the administrator sees the case listed and cannot open its graph until someone holds
-  the Analyst role: the seed says so after it loads ("give admin — or an analyst you invite into the
-  unit — the Analyst role in Admin, People and roles"). Whether the first administrator should hold
-  the Analyst role from the start is the owner's decision, not taken here. Test:
+  ADMIN`), so an administrator holding Admin alone would see the case listed and could not open its
+  graph. As built on 4 November the seed said so after it loaded, and left the question to the
+  owner. **The owner's ruling, 4 November 2026: the first administrator is made with both the Admin
+  and the Analyst roles, always, whether or not demo packs load.** `harness.first_admin.
+  FIRST_ADMIN_ROLES` is `("osprey-admin", "analyst")`, and every path that makes the account uses it:
+  `harness.first_admin` (Small on a server of your own, and a cloud server's first boot, which runs
+  the same install) and `harness.cluster_install` (Enterprise). Nothing else makes or reconciles
+  that account: `repair-sign-in` with `--no-demo-accounts` sets the realm's settings, clients and
+  the organisation's provider and never a person's account (`register_sign_in.ensure_identity`), and
+  a restore puts back each person as the backup holds them. So **an account made before the ruling
+  keeps Admin alone** until an administrator adds Analyst in Admin, People and roles. The seed now
+  says only who the Author is and in which unit; its advice to grant the Analyst role is gone. Tests:
   `tests/test_seed_without_demo_accounts.py` (a stand-in Keycloak over HTTP answering as Keycloak 26
   does for a realm with `admin` and no demo account: a token only for the right password, 401
   without a bearer token, an empty list for an account that is not there, a substring search without
-  `exact=true`), all six synthetic packs.
+  `exact=true`; it holds the account exactly as `harness.first_admin` makes it, without the
+  credentials Keycloak never returns), all six synthetic packs, and
+  `test_the_first_administrator_can_open_the_case_they_author`, which reads the Author's roles from
+  the stand-in and needs `investigate` among their rights;
+  `tests/harness/test_first_admin.py::test_the_account_the_install_makes_holds_admin_and_analyst`
+  (a `kcadm.sh` stand-in that keeps the account as sent and refuses a second "Conflict detected",
+  exit 1, as Keycloak 26's does) and `test_the_first_administrator_can_open_the_cases_they_author`;
+  `tests/harness/test_cluster_install.py::test_the_first_administrator_holds_admin_and_analyst`.
+  Each was shown red with Admin alone.
 - **The first backup failed.** `ospreyflow backup` on a fresh deployment failed on 'recipes' with
   Docker's own refusal — "Could not find the file /var/lib/osprey/data/recipes in container
   osprey-small-api-1" — and left its half-written set folder behind. The recipes repository does not

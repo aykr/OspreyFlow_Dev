@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.27** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
+**Version 1.28** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.28 | 2026-11-04 | §6: on a deployment whose own model has an NVIDIA GPU (ADR-135 Amendment 1), it answers much faster and is the larger qwen2.5:14b-instruct, as its "Answered by" line shows. |
 | 1.27 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.26 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.25 | 2026-11-03 | Rehearsal fixes (build order step 18c). §5.2: **Show links among these** within a number of degrees says when the routes are already drawn; a node put back on the canvas brings back its links. §5.5: a search result chosen goes into the case before it is drawn, so a large draw you cancel leaves the node in the case. §5.4: **Cyclical** makes the timeline tall enough to read the grid; the grid draws correctly with cells chosen or the map open. §5.5: *Add many from a list* says how many different records were found ("37 found, naming 36 different records") and how many records are in the view after adding. §5.8: each route names its links, so two routes through the same people read apart. §5.6: a source file is named by its file name. A large expansion names relationships by their labels. §5.12: the strength legend is read again when you come back to the window. §9: the Figures' **Outcomes** has a column for every closing reason (True match, False positive, Duplicate, No further action, Referred) and one for closed with no outcome; an alert closed as Referred is no longer counted open. Ask the case names the person who asked at once. |
@@ -622,6 +623,12 @@ choice applies there too: your question is about the case, so it goes under the 
 from the case's datasets, through the same two checks as Ask the case. It reaches the engine you chose
 only when the case's material, as you see it, may leave the deployment and every dataset of the case
 allows that engine; otherwise the deployment's own model answers, and its line says so.
+
+**On a deployment with a GPU.** Where your administrator has given the deployment's own model an
+NVIDIA graphics card (GPU), that model answers much faster than on a computer's processors alone,
+and it is a larger one: its line then reads "(qwen2.5:14b-instruct)" instead of
+"(qwen2.5:7b-instruct)", unless your administrator chose the smaller model. Nothing else changes:
+the same material stays in the deployment, and the same checks decide which engine answers.
 
 To ask in words for a pattern rather than an answer, use **Ask to search** in the query builder (section
 5.10).

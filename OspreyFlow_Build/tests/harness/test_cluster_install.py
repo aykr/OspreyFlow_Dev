@@ -19,6 +19,7 @@ import pytest
 import yaml
 from harness import cluster_install
 from harness.cluster_install import ClusterInstallFailed, install
+from schemas.rights import Right, rights_for
 
 CONFIG = {
     "profile": "cluster",
@@ -127,6 +128,16 @@ def test_a_fresh_install_makes_everything_in_order(tmp_path: Path) -> None:
     # The identity step had the Secret and the rendered environment together.
     assert seen[0]["OSPREY_KEYCLOAK_ADMIN_PASSWORD"] == kube.secret["OSPREY_KEYCLOAK_ADMIN_PASSWORD"]  # type: ignore[index]
     assert seen[0]["ARCADEDB_HA"] == "true"
+
+
+def test_the_first_administrator_holds_admin_and_analyst(tmp_path: Path) -> None:
+    """The owner's ruling of 4 November 2026 (ADR-114 Amendment 33): the Admin role alone cannot
+    open a case, so the first administrator is made with the Analyst role too."""
+    kube = FakeKube()
+    _install(tmp_path, kube)
+    (user,) = [json.loads(stdin or "") for argv, stdin in kube.calls if "exec" in argv]
+    assert sorted(user["attributes"]["roles"]) == ["analyst", "osprey-admin"]
+    assert Right.INVESTIGATE in rights_for(user["attributes"]["roles"])
 
 
 def test_the_secret_holds_every_key_the_workloads_read(tmp_path: Path) -> None:

@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.35** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
+**Version 1.36** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.36 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33): the first administrator holds the Admin and the Analyst roles from the start, whether or not demo packs load, so the cases they author open for them. §1a and §11 no longer ask anyone to give them the Analyst role; §5 and §5a say which roles the account is made with; §9.2 says so too, and that an `admin` made by v0.4.6 or earlier needs the Analyst role added. |
 | 1.35 | 2026-11-04 | Found installing Small on the first server of its own (ADR-114 Amendment 33): §1a and §11 a demo pack on a deployment with no demo accounts — its case's Author is the first administrator, in their own unit, with no Editor, and the Admin role does not open a case's graph until someone holds the Analyst role; §5a the answers' `demo_packs` load after the first administrator exists, the installing account's umask does not matter, and `ca` must be readable by every account; §13 a fresh deployment's first backup, its empty items, and a failed backup leaving no partial set; §16 an unreadable CA. |
 | 1.34 | 2026-11-04 | The local engine on an NVIDIA GPU (ADR-135 Amendment 1): §2.2a the NVIDIA driver and Container Toolkit, installed by the server's administrator; §2.4 and §5a the doctor's GPU checks; §5a the answers file's `server.gpu`; new §5a.4, what the GPU changes (the model server alone reserves it; the 14b extraction model unless one is named), what is checked before anything starts, and Lite on a Linux computer; §7 `server.gpu`; §16 a refused GPU. Appendix A: `resources.gpu`, and `models.extraction`'s default on a GPU. |
 | 1.33 | 2026-11-04 | Describes v0.4.6. No change to its content. |
@@ -231,9 +232,8 @@ ticked, to change if you wish.
 
 **On a deployment with no demo accounts** — Small, on a cloud server or your own — a starter's demo
 packs still load, each into its own case, with the first administrator (`admin`) as its Author, in
-the administrator's own unit, and no Editor. The Admin role does not open a case's graph: give
-`admin`, or an analyst you invite into that unit, the Analyst role in Admin, People and roles
-(section 9.2), then open the case or share it from there.
+the administrator's own unit, and no Editor. The first administrator holds the Analyst role as well
+as Admin (section 9.2), so the case opens for them; they can share it from there.
 
 ### 1a.1 Several deployments side by side
 
@@ -497,11 +497,11 @@ What happens:
    database password (and on Azure the storage key) with **its own cloud identity**, installs onto
    the managed services, and gets its HTTPS certificate. The command waits — up to 45 minutes — until
    `https://<domain>` answers. The server's own log is `/var/log/ospreyflow-first-boot.log`.
-5. **The first administrator.** The server makes an account `admin` holding the Admin role and the
-   highest clearance, with a **one-time code** instead of a password, and leaves the code in the
-   cloud's secret store. The command reads it, **shows it once**, and deletes it from the store. At
-   their first sign-in the administrator chooses their own password. Then they invite everyone
-   else from the Admin area (section 9).
+5. **The first administrator.** The server makes an account `admin` holding the Admin and Analyst
+   roles and the highest clearance, with a **one-time code** instead of a password, and leaves the
+   code in the cloud's secret store. The command reads it, **shows it once**, and deletes it from
+   the store. At their first sign-in the administrator chooses their own password. Then they invite
+   everyone else from the Admin area (section 9).
 
 ### 5.1 What is made in your account
 
@@ -616,8 +616,8 @@ iptables -I DOCKER-USER -i eth0 -p tcp -m conntrack --ctdir ORIGINAL --ctorigdst
 The chain is emptied when Docker restarts, so put the rule in a unit that runs after
 `docker.service`.
 
-**The first administrator.** The install makes an account `admin` with the Admin role and the
-highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
+**The first administrator.** The install makes an account `admin` with the Admin and Analyst roles
+and the highest clearance, and prints its **one-time code once**, on the terminal; there are no demo
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
 Admin area (section 9). The answers' `demo_packs` are loaded after the administrator is made, each
 into its own case with `admin` as its Author (section 1a says what that means for opening it).
@@ -979,6 +979,12 @@ holding its right:
 A single right can be given on its own. **Nobody can be given more than the person giving it
 holds** — clearance included — which is why the first administrator holds the highest clearance.
 
+**The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
+**Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin
+role alone does not open a case's graph, and the first administrator is the Author of every demo
+pack's case there. An `admin` made by v0.4.6 or earlier holds Admin alone: add the Analyst role in
+People and roles.
+
 ### 9.3 Inviting someone
 
 **Invite** asks for a sign-in name, their name, optionally an email, a clearance, a unit, handling
@@ -1234,7 +1240,8 @@ dataset, is added with `ospreyflow demo add public` (section 1a.2).
 Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `ospreyflow demo add
 <id>`. Each loads into its own case, with the installing administrator as Author: the demo
 administrator where there are demo accounts (the demo analyst its Editor), and otherwise the first
-administrator, `admin`, in their own unit, with no Editor (section 1a). Adding **HMP**
+administrator, `admin`, in their own unit, with no Editor (section 1a); they hold the Analyst role
+as well as Admin, so the case opens for them. Adding **HMP**
 again is safe: a deployment that loaded it before v0.2.0 gains only its prison network, in the same
 case, and one that already has the network is left as it is. **PaySim** is a
 download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pass it with
