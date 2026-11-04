@@ -38,6 +38,7 @@ from harness.realm import (
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
     glass_client,
+    organisation_first_sign_in_flow,
     organisation_provider,
     organisation_provider_mappers,
     organisation_redirect_uris,
@@ -258,6 +259,14 @@ def ensure_identity(
         # from the deployment's settings — again after a wipe or a re-import, which lose it.
         organisation_secret = values.get(ORGANISATION_SECRET_KEY)
         if organisation_secret:
+            # Step 28 (e): the first sign-in the provider names, made before it names it — an
+            # arrival whose email an account already holds is refused in words, never joined.
+            lines.append(
+                keycloak_admin.ensure_first_sign_in_flow(
+                    issuer=issuer, realm=realm, token=token,
+                    flow=organisation_first_sign_in_flow(),
+                )
+            )  # fmt: skip
             lines.append(
                 keycloak_admin.ensure_identity_provider(
                     issuer=issuer, realm=realm, token=token, provider=provider,

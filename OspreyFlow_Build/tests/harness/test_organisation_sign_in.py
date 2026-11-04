@@ -52,10 +52,12 @@ import pytest
 import yaml
 from harness import keycloak_admin, site
 from harness.keycloak_admin import RealmConfigurationFailed
+from harness.keycloak_theme import THEME_DIRECTORY, THEME_NAME, write_login_theme
 from harness.realm import (
     CONDUIT_CLIENT_ID,
     GLASS_CLIENT_ID,
     ORGANISATION_ARRIVAL_ATTRIBUTES,
+    ORGANISATION_FIRST_SIGN_IN_FLOW,
     organisation_redirect_uris,
     render_realm_json,
 )
@@ -277,6 +279,10 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         realm_file = folder / "realm.json"
         realm_file.write_text(render_realm_json(config), encoding="utf-8")
         realm_file.chmod(0o644)
+        # The OspreyFlow login theme, mounted as the rendered compose file mounts it, so a page the
+        # deployment's Keycloak stops at says the theme's words (step 28 (e)).
+        write_login_theme(folder)
+        theme = f"{folder / THEME_DIRECTORY / THEME_NAME}:/opt/keycloak/themes/{THEME_NAME}:ro"
 
         def org() -> Keycloak:
             return _start_keycloak(network, host=ORG_HOST, folder=folder, certificate=org_cert,
@@ -289,7 +295,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
                 network, host=f"id.{HOST}", folder=folder, certificate=folder / "osprey.crt",
                 key=folder / "osprey.key", extra_args=["--import-realm"],
                 environment=environment,
-                volumes=[*volumes, f"{realm_file}:/opt/keycloak/data/import/realm.json:ro"],
+                volumes=[*volumes, f"{realm_file}:/opt/keycloak/data/import/realm.json:ro", theme],
                 command=["start-dev", "--features=token-exchange"], port=port,
             )  # fmt: skip
 
@@ -688,3 +694,65 @@ def test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older
     assert after.tokens is not None, (after.visited, _said(after))
     assert "refresh_token" not in after.tokens
     assert _principal(stack, after.tokens["access_token"]).id
+
+
+def _invite(stack: Stack, username: str, email: str) -> None:
+    """An OspreyFlow account as Admin -> People's invitation makes one (`identity_admin.invite`):
+    the email unverified, a password still to be set."""
+    token = _admin(stack.deployment)
+    status, body = keycloak_admin._call(
+        f"{stack.deployment.origin}/admin/realms/osprey/users", token=token,
+        data={"username": username, "email": email, "emailVerified": False, "enabled": True,
+              "firstName": "Pat", "lastName": "Local", "requiredActions": ["UPDATE_PASSWORD"],
+              "attributes": {"clearance": ["OFFICIAL"], "org_unit": ["unit-1"]}},
+    )  # fmt: skip
+    assert status == 201, (status, body)
+
+
+def _links(stack: Stack, username: str) -> list[Any]:
+    token = _admin(stack.deployment)
+    base = f"{stack.deployment.origin}/admin/realms/osprey/users"
+    status, found = keycloak_admin._call(f"{base}?username={username}&exact=true", token=token)
+    assert status == 200 and found, (status, found)
+    status, links = keycloak_admin._call(f"{base}/{found[0]['id']}/federated-identity", token=token)
+    assert status == 200, (status, links)
+    return list(links)
+
+
+def test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined(
+    stack: Stack,
+) -> None:
+    """ADR-114 Amendment 33, "Step 28 (e)", against Keycloak 26.0: Keycloak's own first broker login
+    stops the person at "Account already exists" (measured in drop 2); the deployment's own flow
+    refuses them on the OspreyFlow sign-in page, in its words, makes no account and joins none."""
+    lines = _register(stack)
+    assert any("first sign-in" in line for line in lines), lines
+    _forget(stack, PERSON["username"])
+    _forget(stack, "pat.local")
+    _invite(stack, "pat.local", PERSON["email"])
+    try:
+        refused = sign_in(stack)
+        assert refused.tokens is None, refused.visited
+        said = _said(refused)
+        assert "already belongs to an OspreyFlow account" in said, said
+        assert "Account already exists" not in said, said
+        token = _admin(stack.deployment)
+        status, found = keycloak_admin._call(
+            f"{stack.deployment.origin}/admin/realms/osprey/users?username={PERSON['username']}"
+            "&exact=true", token=token,
+        )  # fmt: skip
+        assert status == 200 and found == [], "no second account was made"
+        assert _links(stack, "pat.local") == [], "the invited account was not joined"
+        # A second registration changes nothing, and the provider names the flow.
+        _register(stack)
+        status, provider = keycloak_admin._call(
+            f"{stack.deployment.origin}/admin/realms/osprey/identity-provider/instances/{ALIAS}",
+            token=token,
+        )
+        assert provider["firstBrokerLoginFlowAlias"] == ORGANISATION_FIRST_SIGN_IN_FLOW
+        assert provider["trustEmail"] is False
+    finally:
+        _forget(stack, "pat.local")
+    # The same person, with no account holding their email, arrives as before.
+    arrived = sign_in(stack)
+    assert arrived.tokens is not None, (arrived.visited, _said(arrived))

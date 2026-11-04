@@ -23652,6 +23652,8 @@ Units 7, 5 and 6. Where this section and the text above differ, this section is 
 - **The label** names the provider on Keycloak's own pages (its display name). The welcome page's
   button keeps ADR-115 decision 3's words, *Continue with organisation sign-in* (open question for
   the owner: show the label there instead).
+- **An arrival whose email an account already holds** — corrected by step 28 (e) below: the
+  provider no longer names Keycloak's *first broker login*.
 - **Rule 13 — corrected.** Decision 4 said the button had no keyboard step; `keyboard/sign-in.spec.ts`
   already had one (`continue-with-organisation-sign-in`). What had none was the button beside it,
   *Sign in with an OspreyFlow account*, the first administrator's way in on such a deployment: drop 2
@@ -23975,6 +23977,69 @@ The owner's rulings of 4 November 2026 on open questions 27 and 30.
   was told "or neither, for a certificate the front proxy obtains itself"). No existing test relied
   on the fallback; `test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting`'s
   certificate-without-key case still finds "both" in the new words.
+
+#### Step 28 (e) (4 November 2026): an arrival whose email an OspreyFlow account already holds
+
+**Found in drop 2** (open question 28): someone arriving through the organisation's provider whose
+email an OspreyFlow account already holds — an administrator invited them by that address before
+the organisation's sign-in was set up, say — met Keycloak's raw "Account already exists" page. That
+page is Keycloak's *first broker login* flow, which the provider named (`firstBrokerLoginFlowAlias:
+first broker login`): it offers to join the two accounts, by a link mailed to the account's address
+or by the account's password.
+
+**The owner's ruling, 4 November 2026:** link automatically only if that is safe; otherwise say it
+in OspreyFlow's words. **Decided (mine, within that ruling): never join by email; refuse in words.**
+
+1. **Why not join automatically.** Joining on the email the organisation's token carries (Keycloak's
+   `trustEmail: true` with an *Automatically set existing user* step) gives the OspreyFlow account,
+   its roles and its clearance to whoever the organisation's directory gives that address. That is
+   safe only where the provider's email is verified and cannot be set by the person or by another
+   tenant, and Entra ID — the client's provider — does not promise it: its `email` claim is not a
+   verified, immutable identifier (Microsoft's own guidance is not to authorise on it; the "nOAuth"
+   account takeovers of 2023 were exactly this join). An OspreyFlow deployment cannot check the
+   organisation's directory, so it cannot know when the claim is safe. **The alternative, recorded
+   for the owner:** where an organisation does verify every address and wants the join, a
+   deployment setting could switch the provider to `trustEmail: true` and an auto-link step; that
+   is a decision the organisation's security officer signs, not a default, and it is not built.
+2. **Why not Keycloak's own join either.** Its flow's join is safer (it proves the mailbox, or the
+   account's password), but an invited account has no password yet, a deployment with no mail
+   server cannot send the link, and the page is Keycloak's, not OspreyFlow's — the person cannot
+   tell what is being asked of them.
+3. **What is built.** `harness/realm.py`'s `organisation_first_sign_in_flow` (`osprey organisation
+   first sign-in`): *Review Profile* as Keycloak's own flow has it (only what the provider did not
+   give); then a sub-flow, REQUIRED, of two alternatives — *Create User If Unique* (a new account,
+   joined to the organisation, unless the email or user name is held, when it steps aside) and a
+   sub-flow holding *Deny Access*, REQUIRED, whose message is the login theme's
+   `ospreyAccountExistsMessage`. Two sub-flows because Keycloak ignores the alternatives of a level
+   holding a required step, and *Deny Access* may only be required. The provider names it
+   (`firstBrokerLoginFlowAlias`), `trustEmail` stays false, and no step joins or confirms a join.
+   `keycloak_admin.ensure_first_sign_in_flow` makes it through the admin API before the provider is
+   registered — from `register_sign_in.ensure_identity`, so `ospreyflow install`, `ospreyflow
+   repair-sign-in` and a restore all do — and puts back a step someone changed by hand; safe to
+   repeat (a flow as rendered is not written). A refusal is named and stops the registration, so
+   the provider is never left naming a flow that is not there. Only a deployment with the
+   organisation's provider gets it.
+4. **What the person reads** (the login theme; under GOV.UK without the product's name): "This
+   email address already belongs to an OspreyFlow account, so your organisation account has not
+   been joined to it. Sign in to that account with its username and password instead, or ask your
+   OspreyFlow administrator." Nothing is made and nothing joined; signing in with the OspreyFlow
+   account still works. **What the administrator can do:** keep that account (the person signs in
+   with it), or, for the organisation's sign-in, remove it in the identity provider's own console
+   and let the person arrive again (roles granted again). The Admin area has no join and no
+   removal of a person: an open question for the owner, not built.
+5. **Tests**, red first (`s28e_*`): `tests/harness/test_organisation_first_sign_in.py`, against a
+   stand-in that runs a first-broker-login flow as Keycloak's `DefaultAuthenticationFlow` does and
+   refuses as its admin API does (the module's docstring lists both):
+   `::test_the_stand_in_shows_keycloaks_raw_page_under_its_own_first_broker_login`,
+   `::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined` (red:
+   "Account already exists"), `::test_an_arrival_whose_email_nobody_holds_gets_a_new_account_as_before`,
+   `::test_the_provider_trusts_no_email_and_no_step_joins_accounts`,
+   `::test_the_flow_is_made_once_and_a_second_run_writes_nothing`, `::test_a_flow_changed_by_hand_is_put_back`,
+   `::test_a_refused_flow_is_named_and_the_provider_is_not_left_pointing_at_nothing`,
+   `::test_a_deployment_without_the_organisations_provider_gets_no_flow`,
+   `::test_the_sign_in_page_says_what_happened_and_what_to_do` (both brands). Against two real
+   Keycloak 26.0, the login theme mounted as compose mounts it:
+   `tests/harness/test_organisation_sign_in.py::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined`.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
