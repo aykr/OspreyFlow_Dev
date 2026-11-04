@@ -1166,6 +1166,17 @@ that can read it first; without one the check cannot answer, and says so.
 - **Without internet**: on a machine with it, `ospreyflow update --make-bundle <file> --to
   vX.Y.Z` writes the release, verified, to one file; carry it over and run
   `ospreyflow update --from <file>`, which checks it again with no network.
+  - **A bundle carries one platform's images**: `linux/amd64` unless `--platform` names another,
+    whatever the machine making it runs on, so a bundle made on an Apple-silicon Mac is for an
+    amd64 server as it stands. A release is built for `linux/amd64` and `linux/arm64`; for an arm64
+    server, add `--platform linux/arm64`. Any other platform is refused before anything is
+    fetched, and says which platforms a release has.
+  - `--from` refuses a bundle for another platform than its machine's before it checks or loads
+    anything, and says what to run instead, for example: "this bundle carries the images for
+    linux/arm64, and this machine is linux/amd64; nothing was verified or loaded. Make one for it
+    on any machine that reaches the release: ospreyflow update --make-bundle FILE --platform
+    linux/amd64". A bundle made before this version names no platform: it carries the platform of
+    the machine that made it, and on another it is refused when its cosign image is checked.
 
 An update moves forward only.
 
@@ -1252,6 +1263,7 @@ Admin → Schedules and runs lists every one.
 | `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | `doctor`, `install` or `apply` refuses the GPU | Each reason is named, and nothing was changed: install the NVIDIA driver and restart until `nvidia-smi` lists the GPU; install the NVIDIA Container Toolkit and run `sudo nvidia-ctk runtime configure --runtime=docker` and `sudo systemctl restart docker`; on macOS or Windows, set the GPU to `none` (section 5a.4) |
+| `ospreyflow update --from` says "this bundle carries the images for linux/arm64, and this machine is linux/amd64", or "the bundle's cosign image is not the one pinned for linux/amd64" | The bundle was made for another platform: the second words are a bundle made with v0.4.10 or earlier, before `--platform`, which carried the platform of the machine that made it (an Apple-silicon Mac's is arm64). Nothing was verified or loaded. Make it again with `ospreyflow update --make-bundle <file> --platform linux/amd64` (the default) on any machine that reaches the release (section 14) |
 | `ospreyflow demo add` or an upload fails with "Permission denied: '/var/lib/osprey/ingest/uploaded/…'", or `install`, `apply`, `start` or `update` says "the Conduit (uid 10001) cannot write …/uploaded" | Linux only: the Conduit's upload folder in `server.ingest` (Lite: `components.storage.ingest`) is not its own. A deployment installed or updated with v0.4.8 or earlier has it so: run `ospreyflow apply` or `ospreyflow start` once with a later version, which gives the folder over (section 5a). When giving it over fails, the command names Docker's reason; or give it over yourself, `sudo chown 10001:10001 <server.ingest>/uploaded`, and run the command again |
 | `ospreyflow backup` fails with "Permission denied" on a file under `.objects-staging`, or a folder named `….incomplete` is left where backups are written | Linux, v0.4.8 or earlier, once the object store holds files: the object store's copy belonged to the Conduit's user. Update, then back up again. Remove what was left as root (`sudo rm -rf <folder>`); a folder with an `INCOMPLETE` file in it is not a backup, and `restore` refuses it (section 13) |
 | Ask on the local engine fails after the extraction model was changed (the GPU switched on, or `models.extraction`) | `ospreyflow apply` fetches the newly chosen model, and waits for it, before anything that uses it starts again; if the download fails it stops with nothing changed, saying "the model download (ollama-models) did not finish": `ospreyflow logs ollama-models` says why, then run `ospreyflow apply` again. With v0.4.8 or earlier, `apply` never fetched it: `docker compose --env-file <deployment>/deployment.env -f <deployment>/compose.yaml up -d --force-recreate --no-deps ollama-models` fetches it (the 14b is about 9 GB) |

@@ -13014,7 +13014,8 @@ Amendment 6 point 1 settled the policy; these are the mechanics it leaves open, 
     signed images* ("Now, after B5d"): when the checkout sits on a release tag, `ospreyflow install`
     verifies the release's images before starting them; a developer checkout keeps building.
     *(Amendment 34, 3 November 2026: the bundle also carries the cosign image, pinned by digest, and
-    the release's lock names every image any option can run.)*
+    the release's lock names every image any option can run; 4 November 2026, build order step 29:
+    `--platform`, the images of a named platform, `linux/amd64` by default.)*
 11. **The lock is signed too** (found designing B5d): third-party images are trusted only through the
     lock's digests, and a lock in a bundle — or a release asset replaced on GitHub — could be altered
     to name another image. So `release.yml` also signs `versions.lock` itself (`cosign sign-blob`,
@@ -24063,6 +24064,7 @@ the owner accepted with "fix now"). Mechanics *(mine)*, recorded with the change
      before carries no cosign and the machine's own image is used, as before.
    - A bundle is made for the platform of the machine that makes it (`docker save` keeps that one
      platform, for cosign as for every image); bundles for another platform are unit 8's.
+     *(Superseded by "A bundle for another platform" below, 4 November 2026: `--platform`.)*
 2. **The release's lock names every image any option can run.** It was rendered from the committed
    `osprey.yaml` alone, which switches dashboards off: v0.4.4's lock names no Superset and no
    ClickHouse (read from the release, 3 November 2026), so a deployment turning either on could not
@@ -24093,6 +24095,73 @@ with the images every option renders into a compose file),
 `tests/harness/test_update_apply.py::test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update`.
 **Not proved:** the next real release's lock and a bundle made from it, and `--from` on a machine
 whose Docker has never held cosign — the first real release after this change proves them.
+
+**A bundle for another platform (build order step 29, the owner's ruling of 4 November 2026; open
+question 26).** A bundle made on the owner's Apple-silicon Mac carried arm64 images, cosign's
+among them, and an amd64 server's `update --from` refused it. Ruling: `ospreyflow update
+--make-bundle FILE --platform OS/ARCH` saves the given platform's images from any machine; the
+default is `linux/amd64`, the usual target. Mechanics *(mine)*, recorded with the change (rule 11):
+
+- **What a release has, measured** (4 November 2026, `docker buildx imagetools inspect --raw` on
+  each of v0.4.9's sixteen locked digests): every one is an OCI index (OpenSearch's a Docker
+  manifest list) holding `linux/amd64` and `linux/arm64`, the owned ones beside two attestation
+  manifests; `release.yml` builds the owned images with `--platform linux/amd64,linux/arm64`. So
+  `--platform` takes either (`harness.bundle.RELEASE_PLATFORMS`, held to `release.yml` by a test),
+  and any other is refused in words naming the two, before anything is fetched. An image whose index
+  lacks the asked platform is refused naming the platforms it has.
+- **Pulled by the platform's own manifest digest, never by the index.** `docker pull --platform` of
+  an index reference is not enough: a daemon that already holds the index's reference (a Mac that
+  has run the release holds its arm64 image under it) can answer "up to date" with that image, and
+  what `docker save` writes for an index reference differs between Docker's image stores and
+  versions. `docker save --platform` needs Docker 28 or later and the containerd image store, so it
+  was not chosen. Instead each image is pulled as `repository@<the platform's manifest digest>`,
+  read from the index that `cosign save` has just written into the bundle, each hash checked — the
+  same index `update --from` follows on the target — so the pulled image is exactly the one the
+  target verifies, on any Docker. `--platform` is passed too, so a Docker that checks refuses a
+  mismatch itself, and before each save Docker is asked the named image's `{{.Os}}/{{.Architecture}}`;
+  any other platform refuses the bundle, which is not written.
+- **cosign's own image is the platform's too**: `harness.signatures.COSIGN_PLATFORM_IMAGES` pins
+  cosign v2.4.1's `linux/amd64` and `linux/arm64` manifests in its pinned index (`dc905e43…3b92` and
+  `b74da950…74d4`, measured 4 November 2026, whose configurations are the two `COSIGN_IMAGE_IDS`),
+  pulled and checked the same way. The cosign that *runs* `cosign save` on the making machine is
+  still that machine's own, from the index.
+- **The signatures still verify offline.** `release.yml` signs each owned image's index digest
+  (`cosign sign` on `repository@<index>`, without `--recursive`): the registry holds a signature for
+  the index (`api:sha256-6aedca8d….sig` for v0.4.9's API) and none for its amd64 manifest
+  (`sha256-5f08c0c0….sig`: not found). A signature over the index therefore does **not** verify
+  against a platform's manifest on its own, and needs not: the bundle keeps `cosign save` of the
+  index (the index, its signature and every platform's manifest), `--from` verifies the index's
+  signature with `--offline --local-image` as before, then follows the index to the machine's
+  platform's manifest by hash, to its configuration, to the loaded image's ID. The `docker save`
+  file is the platform's alone; the chain names it.
+- **`--from` checks the platform first.** `manifest.json` names the bundle's `platform` (still
+  format 1; an older bundle names none and is refused later, at its cosign image, as before). A
+  bundle for another platform than the machine's is refused before cosign is loaded or anything
+  verified, in words naming both and the command to make the right one.
+- **Not changed:** `cosign save` keeps every platform the index names, so a bundle carries every
+  platform's layers in `saved/` beside the one platform's `docker save` files (postgres's index
+  names eight). Trimming `saved/` to the index, its signatures and one platform's manifest would
+  make a bundle smaller (by how much is not measured); it is not done here.
+
+**Tests (each shown red first, against a Docker stand-in that holds the arm64 image under every
+index reference, as the owner's Mac does, and answers a pull by manifest digest with exactly that
+image):** `tests/harness/test_bundle.py::test_a_bundle_made_on_the_mac_carries_amd64_by_default`
+(red before: cosign and every image the Mac's arm64), `::test_the_mac_s_amd64_bundle_verifies_and_loads_on_an_amd64_server`,
+`::test_each_image_is_pulled_by_its_platform_manifest_not_by_its_index`,
+`::test_a_bundle_for_arm64_is_made_on_an_amd64_machine`,
+`::test_a_bundle_for_another_platform_is_refused_on_this_one_in_words`,
+`::test_a_platform_no_release_is_built_for_is_refused_before_anything_is_pulled`,
+`::test_an_image_not_published_for_the_platform_is_refused_naming_what_it_has`,
+`::test_an_image_docker_holds_for_another_platform_is_never_saved`,
+`::test_the_platforms_offered_are_the_ones_the_release_workflow_builds`;
+`tests/harness/test_update_apply.py::test_a_bundle_is_made_for_linux_amd64_unless_another_platform_is_named`,
+`::test_a_bundle_for_a_platform_no_release_is_built_for_is_refused_before_any_lookup`,
+`::test_platform_without_make_bundle_is_refused`. Each was also shown red against its own planted
+defect (an index pull, no platform check before a save, cosign pulled by its index, no platform
+check in `--from`, an amd64-only platform list, the platform not passed on, no early refusal).
+**Not proved:** a real bundle made on the Mac with `--platform linux/amd64` and applied with
+`update --from` on the amd64 test server; no real `docker pull`, `save` or `load` was run for
+this change.
 
 ### ADR-127, Amendment 45 (3 November 2026) — chapter 4's draft is a real draft the Studio completes (build order step 18c, D4)
 

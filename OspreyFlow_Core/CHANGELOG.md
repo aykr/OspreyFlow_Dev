@@ -6,6 +6,14 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **An offline bundle for another platform.** `ospreyflow update --make-bundle FILE` now carries
+  the `linux/amd64` images, the platform a release is run on, whatever the machine making it runs
+  on; `--platform linux/arm64` carries the other platform a release is built for, and any other is
+  refused. A bundle made on an Apple-silicon Mac used to carry the Mac's own arm64 images, and an
+  amd64 server's `update --from` refused it. Each image is now pulled by the manifest its signed
+  index names for the platform, and Docker is asked its platform before it is saved; cosign's own
+  image is the platform's too. `update --from` refuses a bundle for another platform than its
+  machine's, in words, before anything is checked or loaded.
 - **An install is ready only once its extraction model is in.** A fresh install said it was ready
   while the model server was still downloading the extraction model (the 14b on a GPU is about
   9 GB), and Ask answered "not found" for a minute or two. The install now says which model is
