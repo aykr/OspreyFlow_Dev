@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "788a9643f219728165978a7cc284ed51b8a83f408a10ae7f10ebaf99a2144f35",
+    "body": "4136180b92ab9f12db4b4a42b2fc66145435099202403301a0ad4d639673fae6",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,12 +12,12 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "a7e1330c712fe05c36ad0de86f3d69b37ad70c33e4a338b2a8ab853f68f183bc",
-    "source": "301ef94fdbed368afab51bf6e23edf7ba5feec1049d7ea16774285f492105c65",
-    "version": "1.48"
+    "pdf": "07146dea1d89848e587b71e1bf92dba790a52d7ce6ecd6228cbdac3593dd0d83",
+    "source": "7159d33285f82284bb9e8089ade40a27590f57e4a47e06b8de2791ac73b006ad",
+    "version": "1.49"
   },
   "developer-guide.md": {
-    "body": "3c8fac7165ec73a972982deef32d061f0149117c855a4900b152105d93cfc483",
+    "body": "a9aecc00b01360eeeb041e479c8947220a94e427c8d847b78031b5d3daeb5897",
     "images": {
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
@@ -35,9 +35,9 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "9d94c0a34e479494245361115ecdb85b208b8897dfef31ac0d24c796e6f164fd",
-    "source": "814e3ac3ac36e911366dc9b4768bc95f1825a99ba9135e3533ddca7e55d31212",
-    "version": "1.23"
+    "pdf": "5a088b37fa24c1b9650ce7ac0be869ab40cb1b53d9b91699b502ca8d153fa765",
+    "source": "a02678806e6875764211b465a0bc8ff9c9e35c3b8c161ac42eb46a169e458cae",
+    "version": "1.24"
   },
   "user-guide.md": {
     "body": "1e417f5fa290d5522ae1f860aefa7ee54a6945e4041cbd4306c7d265f6a4c5c8",
