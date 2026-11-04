@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.20** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
+**Version 1.21** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.21 | 2026-11-04 | §9.4: the `ollama` service keeps the model loaded on a GPU (`OLLAMA_KEEP_ALIVE=-1`). |
 | 1.20 | 2026-11-04 | Describes v0.4.9. No change to its content. |
 | 1.19 | 2026-11-04 | §9.4, as measured on the first server (ADR-135 Amendment 1): the `ollama` service's flash attention and q8_0 KV cache on a GPU, with the measured times, and the doctor's 14 GiB for the 14b (was 12). |
 | 1.18 | 2026-11-04 | Describes v0.4.8. No change to its content. |
@@ -724,7 +725,7 @@ deploy:
 
 It also gives the `ollama` service `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0`, beside
 its `OLLAMA_NOPRUNE=1`: the KV cache held at q8_0, which needs flash attention, is what fits the 14b
-at its 32k context on a 16 GB card. As measured, 4 November 2026, on the first server (RTX 5060 Ti,
+at its 32k context on a 16 GB card. It also keeps the model loaded (`OLLAMA_KEEP_ALIVE=-1`; tested by `test_on_a_gpu_the_model_stays_loaded`). As measured, 4 November 2026, on the first server (RTX 5060 Ti,
 16 GB): without them Ollama reported `18 GB, 15%/85% CPU/GPU` and an answer of about 120 tokens took
 9–11 s; with them `14 GB, 100% GPU` (12.0 GiB per `nvidia-smi`) and 3.3–3.6 s. The 7b on the CPU
 took 17.3 s. Nothing else changes: the same pinned Ollama image (it carries CUDA), the same pinned

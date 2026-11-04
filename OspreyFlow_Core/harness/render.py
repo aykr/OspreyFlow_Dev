@@ -1093,11 +1093,14 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 # As measured, 4 November 2026 (Amendment 1): the 14b at its 32k context held the
                 # KV cache at full precision and ran 15%/85% CPU/GPU (18 GB, 9-11 s an answer);
                 # with the cache at q8_0, which needs flash attention, it ran 100% on a 16 GB card
-                # (14 GB, 3.3-3.6 s). Without a GPU nothing changes.
+                # (14 GB, 3.3-3.6 s). An idle model was unloaded after five minutes, and the next
+                # question waited 56 s for it to load again: on a GPU it stays loaded (the owner,
+                # 4 November). Without a GPU nothing changes.
                 service["environment"] = {
                     **cast(dict[str, str], service["environment"]),
                     "OLLAMA_FLASH_ATTENTION": "1",
                     "OLLAMA_KV_CACHE_TYPE": "q8_0",
+                    "OLLAMA_KEEP_ALIVE": "-1",
                 }
             services["ollama-models"] = _model_download_step(
                 str(service["image"]),

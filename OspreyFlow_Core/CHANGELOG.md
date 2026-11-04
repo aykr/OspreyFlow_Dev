@@ -6,6 +6,10 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **On a GPU the model stays loaded.** The first question after a few idle minutes no longer
+  waits about a minute for the model to load into the GPU again (`OLLAMA_KEEP_ALIVE=-1`, with
+  `resources.gpu: nvidia` only).
+
 ## v0.4.9 — 2026-11-04
 
 - **No service-name band under the GOV.UK header.** Under the GOV.UK theme the band that named the
