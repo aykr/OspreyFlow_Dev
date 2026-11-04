@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.28** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
+**Version 1.29** · 2026-11-04 · For OspreyFlow v0.4.7 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.29 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.28 | 2026-11-04 | §6: on a deployment whose own model has an NVIDIA GPU (ADR-135 Amendment 1), it answers much faster and is the larger qwen2.5:14b-instruct, as its "Answered by" line shows. |
 | 1.27 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.26 | 2026-11-04 | Describes v0.4.5. No change to its content. |

@@ -6,6 +6,8 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.7 — 2026-11-04
+
 - **Installing on a hardened server works.** On a server whose installing account has a strict
   umask (077, or a CIS-hardened 027), the identity provider could not read its own settings and the
   install stopped at "build and start the deployment". Every file a service reads from the
@@ -31,6 +33,7 @@ update. Work not yet in a release is listed under *Unreleased*.
 - **The first backup of a new deployment works.** `ospreyflow backup` failed on 'recipes' before
   any recipe had been published, and left a half-written set behind. Items a new deployment does
   not have yet are now recorded as empty, and a backup that fails removes what it had started.
+- Update with `ospreyflow update`.
 
 ## v0.4.6 — 2026-11-04
 
