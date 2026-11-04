@@ -44,6 +44,12 @@ update. Work not yet in a release is listed under *Unreleased*.
 - **A restore starts the identity provider again before it brings the accounts back.** A Keycloak
   left running while its database was replaced refused the restore ("could not authenticate to
   Keycloak: 500").
+- **No role, no dataset list.** A person given a unit before a role — someone arriving through the
+  organisation's sign-in, say — was shown that unit's list of datasets by name (never their data).
+  A person holding no role is now told no dataset's name or id anywhere: the unit's list and a
+  case's datasets come back empty, and a model engine's reason for being unavailable names none.
+  Nothing changes for anyone with a role. Home says *No cases to show* rather than drawing an empty
+  table.
 
 ## v0.4.10 — 2026-11-04
 

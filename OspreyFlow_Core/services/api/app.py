@@ -2629,7 +2629,7 @@ async def create_investigation(
     name = (body.name if body is not None else None) or DEFAULT_CASE_NAME
     named = body.dataset_ids if body is not None else None
     if named:
-        own = {d.id for d in await datasets.list_for_unit(principal.org_unit)}
+        own = {d.id for d in await datasets.list_for(principal)}
         if not set(named) <= own:
             raise DatasetRefusedError("not every dataset is one of this unit's")
     investigation = await investigations.create(
@@ -2650,8 +2650,9 @@ async def create_investigation(
 
 @app.get("/v1/datasets")
 async def list_datasets_route(principal: PrincipalDep, datasets: DatasetsDep) -> list[Dataset]:
-    """The datasets of the caller's unit, for a new case to name (ADR-099)."""
-    return await datasets.list_for_unit(principal.org_unit)
+    """The datasets of the caller's unit, for a new case to name (ADR-099); none to a caller holding
+    no right (Amendment 11: the store's query answers them nothing)."""
+    return await datasets.list_for(principal)
 
 
 @app.post(
@@ -2675,10 +2676,10 @@ async def create_dataset_route(
 
 @app.get("/v1/investigations/{investigation_id}/datasets")
 async def case_datasets_route(
-    investigation: InvestigationViewerDep, datasets: DatasetsDep
+    investigation: InvestigationViewerDep, principal: PrincipalDep, datasets: DatasetsDep
 ) -> list[Dataset]:
-    """The datasets this case reads (ADR-099)."""
-    return await datasets.of_case(investigation.id)
+    """The datasets this case reads (ADR-099); none to a caller holding no right (Amendment 11)."""
+    return await datasets.of_case(investigation.id, principal)
 
 
 @app.put(
@@ -2748,7 +2749,7 @@ async def list_investigations(
             dataset_ids=[d.id for d in reads],
         )
         for case, level in await investigations.list_for(principal)
-        for reads in [await datasets.of_case(case.id)]
+        for reads in [await datasets.of_case(case.id, principal)]
     ]
 
 
@@ -11759,14 +11760,21 @@ async def model_engines_route(principal: PrincipalDep, routes: ModelRoutesDep) -
 
 @app.get("/v1/investigations/{investigation_id}/models/engines")
 async def case_model_engines_route(
-    investigation: InvestigationViewerDep, routes: ModelRoutesDep, datasets: DatasetsDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    routes: ModelRoutesDep,
+    datasets: DatasetsDep,
 ) -> OfferedEngines:
     """ADR-136 decision 3: the engines offered, as for `GET /v1/models/engines`, with each one's
     contract mark, and an engine the case's data may not reach listed unavailable with the reason in
     words. The case's datasets are read from the store, as the routing reads them for Ask the case;
     a Viewer of the case may ask (anyone else is told the case is not there). Each request is still
-    decided by the route, by its own handling code and datasets."""
-    case_datasets = await datasets.ids_of_case(investigation.id)
+    decided by the route, by its own handling code and datasets.
+
+    ADR-099 Amendment 11: the datasets are those the store names to the caller, so a caller holding
+    no right is given the reason for data not known — no name, and no count. For anyone else that is
+    every dataset of the case (`investigation_datasets` refers only to registered datasets)."""
+    case_datasets = [d.id for d in await datasets.of_case(investigation.id, principal)]
     held = await datasets.egress_of(case_datasets)
     return OfferedEngines(engines=routes.offered(case_datasets, held))
 

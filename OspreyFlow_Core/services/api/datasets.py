@@ -21,6 +21,16 @@ take a suffix instead ("Branch of Enron (2)").
 to any enabled provider. It is `none` until an administrator changes it in the Admin area (each
 change audited by the route), a dataset made before ADR-136 included: the column is added with that
 default. The routing reads it (`model_routing.RoutedModel`); a dataset it cannot find is `none`.
+
+**No role, no list (ADR-099 Amendment 11; the owner, 4 November 2026).** A person holding no right
+(`rights_for(roles)` empty: no role, or only roles this deployment does not know) reads no dataset's
+name or id, though an administrator has given them a unit, or an Author a case level, before a role.
+The rule is here, in the one place every dataset's name is read from, as a condition of the query
+itself (rule 3): `list_for` and `of_case` take the reader, and the reader's holding a right is part
+of the `WHERE` clause, so no row is fetched for them. The answer is the same empty list whatever
+the unit or case holds, so it says nothing of what exists. `list_all` and `egress_of` take no
+reader: the first is the Admin area's (`administer_system`, refused before any query), the second
+the model routing's, behind its own rights.
 """
 
 from __future__ import annotations
@@ -35,6 +45,7 @@ from pydantic import BaseModel, Field
 from conduit_common.identity import new_id
 from schemas.admin import DatasetEgress
 from schemas.domain import Principal
+from schemas.rights import rights_for
 
 MAX_DATASET_NAME = 200
 
@@ -57,6 +68,12 @@ class CaseDatasetsRequest(BaseModel):
     dataset_ids: list[str] = Field(min_length=1, max_length=100)
 
 
+def reads_dataset_names(reader: Principal) -> bool:
+    """ADR-099 Amendment 11: whether `reader` may be told any dataset's name — only while holding a
+    right. A person with no role, or with only roles this deployment does not know, may not."""
+    return bool(rights_for(reader.roles))
+
+
 class DatasetRefusedError(Exception):
     """A case was given no dataset, or one that is not of the principal's unit (or not at all):
     one answer for both, so the refusal does not say whether another unit holds it."""
@@ -68,8 +85,10 @@ class DatasetStore(Protocol):
     ) -> Dataset: ...
     async def known(self, dataset_ids: Sequence[str]) -> set[str]: ...
     async def register(self, dataset: Dataset) -> Dataset: ...
-    async def list_for_unit(self, unit: str) -> list[Dataset]: ...
-    async def of_case(self, investigation_id: str) -> list[Dataset]: ...
+    #: ADR-099 Amendment 11: both name datasets, so both take the reader and name none to a reader
+    #: holding no right (`reads_dataset_names`).
+    async def list_for(self, reader: Principal) -> list[Dataset]: ...
+    async def of_case(self, investigation_id: str, reader: Principal) -> list[Dataset]: ...
     async def ids_of_case(self, investigation_id: str) -> list[str]: ...
     async def set_for_case(
         self, investigation_id: str, dataset_ids: Sequence[str], principal: Principal
@@ -161,13 +180,16 @@ class InMemoryDatasetStore:
     async def known(self, dataset_ids: Sequence[str]) -> set[str]:
         return {d for d in dataset_ids if d in self.datasets}
 
-    async def list_for_unit(self, unit: str) -> list[Dataset]:
+    async def list_for(self, reader: Principal) -> list[Dataset]:
+        named = reads_dataset_names(reader)
         return sorted(
-            (d for d in self.datasets.values() if d.owning_unit == unit), key=lambda d: d.name
+            (d for d in self.datasets.values() if named and d.owning_unit == reader.org_unit),
+            key=lambda d: d.name,
         )
 
-    async def of_case(self, investigation_id: str) -> list[Dataset]:
-        return [self.datasets[i] for i in self.cases.get(investigation_id, [])]
+    async def of_case(self, investigation_id: str, reader: Principal) -> list[Dataset]:
+        named = reads_dataset_names(reader)
+        return [self.datasets[i] for i in self.cases.get(investigation_id, []) if named]
 
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         return list(self.cases.get(investigation_id, []))
@@ -181,7 +203,7 @@ class InMemoryDatasetStore:
             if held is None or held.owning_unit != principal.org_unit:
                 raise DatasetRefusedError(dataset_id)
         self.cases[investigation_id] = ordered
-        return await self.of_case(investigation_id)
+        return await self.of_case(investigation_id, principal)
 
     async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None:
         self.cases[to_investigation_id] = list(self.cases.get(from_investigation_id, []))
@@ -336,21 +358,24 @@ class PostgresDatasetStore:
             )
         return {r["id"] for r in rows}
 
-    async def list_for_unit(self, unit: str) -> list[Dataset]:
+    async def list_for(self, reader: Principal) -> list[Dataset]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT {_COLUMNS} FROM datasets d WHERE d.owning_unit = $1 ORDER BY d.name",
-                unit,
+                f"SELECT {_COLUMNS} FROM datasets d WHERE d.owning_unit = $1 AND $2::boolean "
+                "ORDER BY d.name",
+                reader.org_unit,
+                reads_dataset_names(reader),
             )
         return [Dataset(**dict(r)) for r in rows]
 
-    async def of_case(self, investigation_id: str) -> list[Dataset]:
+    async def of_case(self, investigation_id: str, reader: Principal) -> list[Dataset]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM investigation_datasets c "
                 "JOIN datasets d ON d.id = c.dataset_id "
-                "WHERE c.investigation_id = $1 ORDER BY c.position",
+                "WHERE c.investigation_id = $1 AND $2::boolean ORDER BY c.position",
                 investigation_id,
+                reads_dataset_names(reader),
             )
         return [Dataset(**dict(r)) for r in rows]
 
@@ -383,7 +408,7 @@ class PostgresDatasetStore:
                 "VALUES ($1, $2, $3)",
                 [(investigation_id, d, i) for i, d in enumerate(ordered)],
             )
-        return await self.of_case(investigation_id)
+        return await self.of_case(investigation_id, principal)
 
     async def list_all(self) -> list[Dataset]:
         async with self._pool.acquire() as conn:
@@ -438,4 +463,5 @@ __all__: Sequence[str] = (
     "InMemoryDatasetStore",
     "PostgresDatasetStore",
     "UnknownDatasetEgressError",
+    "reads_dataset_names",
 )

@@ -521,7 +521,9 @@ with **no role, no handling code, and a clearance and unit of `unassigned`** tha
 shows every place dimmed until an administrator grants them. Nothing is taken from the
 organisation's directory — no group becomes a role. An administrator finds them in Admin → People
 and roles once they have signed in, and sets their roles, then their access (clearance, unit,
-handling codes); a later sign-in never takes those back.
+handling codes); a later sign-in never takes those back. **No role, no list:** until they hold a
+role they are told no dataset's name, even if their unit is set first — the unit's dataset list and
+a case's datasets come back empty (section 9.2).
 
 **The organisation's own certificate authority.** With `server.ca`, the identity provider trusts
 it as well as the usual public authorities, so a provider on the organisation's own certificates
@@ -838,6 +840,13 @@ holding its right:
 
 A single right can be given on its own. **Nobody can be given more than the person giving it
 holds** — clearance included — which is why the first administrator holds the highest clearance.
+
+**Someone with no role sees no datasets.** A person holding no role (or only a role this deployment
+does not know) is told no dataset's name or id anywhere: the list a new case chooses from and the
+datasets a case reads come back empty, and a model engine's reason for being unavailable names none,
+whatever unit or case level they have been given. Home shows them every place dimmed with the role each needs,
+and *No cases to show* when they hold no case. A single right given on its own counts as a role here.
+Set their roles first, or straight after their access, and they see what that role allows.
 
 **The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
 **Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin

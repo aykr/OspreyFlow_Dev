@@ -94,6 +94,19 @@ describe("Home", () => {
     expect(cases.getByText("68").className).toContain("value");
   });
 
+  it("shows a person with no role every place gated, and nothing to show in words, not an error", () => {
+    // ADR-099 Amendment 11 and ADR-114 Amendment 33: an arrival through the organisation's sign-in,
+    // or anyone given a unit before a role. The Conduit names them no dataset; Home says so plainly.
+    const empty: HomeSummary = { ...SUMMARY, glass: [], studio: [], admin: [], attention: [], recent: [], services: [], held: 0 };
+    home([], { person: { ...PERSON, roles: [] }, summary: empty });
+    expect(screen.getByText(/Your roles: none yet\./)).toBeTruthy();
+    expect(panel("Glass").getByText("You need the Analyst role for this. Ask an administrator to add it.")).toBeTruthy();
+    for (const name of ["Glass", "Ingest Studio", "Admin area"]) expect(panel(name).queryByRole("button")).toBeNull();
+    expect(screen.getByText("Nothing needs you now.")).toBeTruthy();
+    expect(screen.getByText("No cases to show.")).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "Recent cases" })).toBeNull();
+  });
+
   it("shows only the attention rows of places the person can use", () => {
     home(["edit_pipelines"]);
     expect(screen.queryByText("KYC screening alert in Operation Ledger")).toBeNull();
