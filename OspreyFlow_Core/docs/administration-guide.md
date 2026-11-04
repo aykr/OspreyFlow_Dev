@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.41** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
+**Version 1.42** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.42 | 2026-11-04 | Describes v0.4.9. No change to its content. |
 | 1.41 | 2026-11-04 | The owner's ruling (ADR-132 Amendment 5): §1a, the GOV.UK service's name is shown in the page title on every page, the sign-in page's included; no band under the GOV.UK header names it any more. Appendix A: `appearance` and `appearance.service_name` say the same. |
 | 1.40 | 2026-11-04 | As measured and found on the first server (ADR-135 Amendment 1, ADR-114 Amendment 33): §5a.4 the model server's KV cache at q8_0 with flash attention on a GPU, the measured times, the doctor's 14 GiB for the 14b (was 12), and `apply` fetching a newly chosen model; §13 the object store copied as the account that runs the backup, and a failed backup's set it cannot remove marked incomplete; §16 a backup refused with "Permission denied", and Ask failing after the extraction model changed. |
 | 1.39 | 2026-11-04 | Found on the first server (ADR-114 Amendment 33): §5a the Ingest Studio's upload folder, given to the Conduit's user (uid 10001) before anything starts, and never writable by every account; §16 an upload or a demo pack refused with "Permission denied" on Linux. |

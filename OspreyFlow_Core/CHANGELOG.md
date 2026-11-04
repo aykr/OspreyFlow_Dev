@@ -6,6 +6,8 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.9 — 2026-11-04
+
 - **No service-name band under the GOV.UK header.** Under the GOV.UK theme the band that named the
   service below the GOV.UK header is gone, on the workspace, the start and welcome pages and the
   sign-in page alike, so the workspace gets that height back (the owner's ruling, ADR-132
@@ -37,6 +39,8 @@ update. Work not yet in a release is listed under *Unreleased*.
   account that runs the backup. A failed backup that cannot remove its partial set says so, renames
   it `<set>.incomplete` with an `INCOMPLETE` file in it, and `ospreyflow restore` refuses it. A
   partial set left by v0.4.8 or earlier has to be removed as root (`sudo rm -rf <set>`).
+- Update with `ospreyflow update`. On a Linux server updating from v0.4.8 or earlier, run
+  `ospreyflow apply` once afterwards, so the Conduit is given its upload folder.
 
 ## v0.4.8 — 2026-11-04
 
