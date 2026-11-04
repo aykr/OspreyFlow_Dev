@@ -93,8 +93,10 @@ map:
 
 def _fake_resolver(image: ImageRef) -> str | None:
     """Deterministic and total — every image resolves, so byte-stability is a property of the
-    renderer rather than of whatever this machine happens to have pulled."""
-    return "sha256:" + f"{abs(hash(image)):064x}"[:64]
+    renderer rather than of whatever this machine happens to have pulled. An image pinned by digest
+    resolves to that digest, as Docker answers it."""
+    _, _, pinned = image.partition("@")
+    return pinned or "sha256:" + f"{abs(hash(image)):064x}"[:64]
 
 
 #: Round 07: every existing test in this file predates the build/pull split and exercises the
@@ -176,7 +178,13 @@ def test_versions_lock_names_every_image_in_the_compose_file_with_a_digest(
     lock = yaml.safe_load(rendered.artefacts["versions.lock"])
 
     compose_images = {service["image"] for service in compose["services"].values()}
-    lock_images = {f"{row['repository']}:{row['tag']}" for row in lock["images"]}
+    # An image pinned by digest alone has no tag, and is named by its digest.
+    lock_images = {
+        f"{row['repository']}:{row['tag']}"
+        if row["tag"]
+        else f"{row['repository']}@{row['digest']}"
+        for row in lock["images"]
+    }
 
     assert compose_images == lock_images, "versions.lock and compose.yaml name different images"
     assert compose_images, "the compose file declares no images at all"

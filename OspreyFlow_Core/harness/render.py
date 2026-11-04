@@ -1380,6 +1380,17 @@ def _render_env(config: OspreyConfig) -> str:
     return _comment_block(_BANNER, "#") + "\n".join(lines) + "\n"
 
 
+def _repository_and_tag(image: str) -> tuple[str, str]:
+    """`ghcr.io/acme/api:abc` is (`ghcr.io/acme/api`, `abc`); `ollama/ollama@sha256:…`, pinned by
+    digest alone, is (`ollama/ollama`, ``); a registry's port (`localhost:5000/…`) is not a tag.
+    Splitting at the first colon wrote `ollama/ollama@sha256` as a repository (v0.4.4 and v0.4.5's
+    locks), which `update --make-bundle` could not pull."""
+    name = image.partition("@")[0]
+    head, slash, last = name.rpartition("/")
+    base, _, tag = last.partition(":")
+    return f"{head}{slash}{base}", tag
+
+
 def _render_versions_lock(
     images: Sequence[ServiceImage],
     resolver: DigestResolver,
@@ -1411,8 +1422,8 @@ def _render_versions_lock(
             entries.append(
                 {
                     "service": entry.service,
-                    "repository": entry.image.partition(":")[0],
-                    "tag": entry.image.partition(":")[2],
+                    "repository": _repository_and_tag(entry.image)[0],
+                    "tag": _repository_and_tag(entry.image)[1],
                     "digest": "local-build",
                     "source": "local-build",
                     "built_from_git_sha": sha,
@@ -1429,7 +1440,7 @@ def _render_versions_lock(
             unresolved.append(entry.image)
             digest = "unresolved"
             source = "unresolved"
-        repository, _, tag = entry.image.partition(":")
+        repository, tag = _repository_and_tag(entry.image)
         entries.append(
             {
                 "service": entry.service,
