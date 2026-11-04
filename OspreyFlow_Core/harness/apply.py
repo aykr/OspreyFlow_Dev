@@ -281,10 +281,12 @@ def uploads_ready(compose_file: Path) -> str:
         raise ApplyFailed("uploads", str(refused)) from refused
 
 
-def stores_moved(compose_file: Path) -> store_volumes.Moved:
+def stores_moved(compose_file: Path, held: store_volumes.FilesHeld) -> store_volumes.Moved:
     """`harness.store_volumes.move` through this module's own runner, before an `up` (ADR-114
     Amendment 35): a deployment rendered before the stores had named volumes has their data moved
-    into them once; otherwise it only looks."""
+    into them once; otherwise it only looks. `held`: the deployment's files as they were before
+    this run wrote them, put back when the move is refused (Amendment 35 point 7), so the compose
+    file never names volumes the stores' data is not in."""
 
     def run(argv: Sequence[str]) -> tuple[int, str]:
         try:
@@ -295,7 +297,8 @@ def stores_moved(compose_file: Path) -> store_volumes.Moved:
     try:
         return store_volumes.move(compose_file, run=run)
     except store_volumes.StoresNotMoved as failed:
-        raise ApplyFailed("stores", failed.words()) from failed
+        held.put_back()
+        raise ApplyFailed("stores", failed.words(files_put_back=True)) from failed
 
 
 def compose_services(compose_file: Path) -> list[str]:
@@ -1037,6 +1040,8 @@ def reapply(
         # and waited on, before anything that uses it starts again. From the staged files, so a
         # refused download changes nothing and the next apply sees the same change.
         _fetch_models(model_downloads.commands(compose_file), stage / "compose.yaml")
+        # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
+        held = store_volumes.FilesHeld(out_dir)
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
         move_into_place(stage, out_dir)
@@ -1047,7 +1052,7 @@ def reapply(
     uploads_ready(compose_file)
     # ADR-114 Amendment 35: the stores' data moved into their named volumes once; the move stops
     # the whole deployment, so all of it is started again afterwards.
-    moved = stores_moved(compose_file)
+    moved = stores_moved(compose_file, held)
     if restart or removed:
         _run(
             _compose(compose_file)
@@ -1385,6 +1390,8 @@ def main(
         # is touched (ADR-132, ruling 6).
         try:
             preflight(PreflightContext(config=config, out_dir=stage))
+            # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
+            held = store_volumes.FilesHeld(out_dir)
             move_into_place(stage, out_dir)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1411,7 +1418,7 @@ def main(
 
         # 3c. A deployment rendered before the stores had named volumes (ADR-114 Amendment 35):
         # their data moved into them once, before anything starts on them.
-        moved = stores_moved(compose_file)
+        moved = stores_moved(compose_file, held)
         if moved.services:
             result.record("stores", f"moved to named volumes: {', '.join(moved.services)}")
 

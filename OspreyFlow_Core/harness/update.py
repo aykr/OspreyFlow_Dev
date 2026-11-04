@@ -9,9 +9,9 @@ back: the old commit and files put back, the stores emptied and the backup resto
 version verified — or, if that fails too, exactly where things stand is said.
 
 Between the pull and the start, a deployment whose stores' data is not yet in their named volumes
-has it moved there once (`harness.store_volumes`, ADR-114 Amendment 35). A move that fails before
-any store has started on a named volume rolls back without emptying anything: the old version
-starts on its own data, which never left its volumes.
+has it moved there once (`harness.store_volumes`, ADR-114 Amendment 35). A move that fails rolls
+back without emptying anything: the move never replaces a container of the deployment's, so the old
+version starts on its own data, which never left where it was.
 
 `--check` asks the user repository's GitHub releases from the machine this runs on and writes the
 notice the Conduit reads (`state/update.json`); the deployment itself never calls out. The version
@@ -430,6 +430,7 @@ def apply_update(
     point = _keep_rollback_point(directory, current, commit)
     compose = _compose_argv(directory)
     up = [*compose, "up", "-d", "--wait", *([] if prepared.pull else ["--pull", "never"])]
+    moved = store_volumes.Moved()
     try:
         _ok(host, ["git", "-C", str(repo), "checkout", "--quiet", tag], "check out the release")
         pulls_before = model_downloads.commands(directory / "compose.yaml")
@@ -465,19 +466,18 @@ def apply_update(
     except store_volumes.StoresNotMoved as failed:
         print(
             f"ospreyflow: the update to {tag} failed at 'move the stores to named volumes': "
-            f"{failed.words(again=False)}",
+            f"{failed.words(rollback=True)}",
             file=sys.stderr,
         )
-        if not failed.started:
-            # Nothing was started on a named volume: the old version's data never left its volumes.
-            return _roll_back_untouched(host, directory, repo, point, commit, backup, current)
-        return _roll_back(host, directory, repo, point, commit, backup, current, made=failed.made)
+        # The move never replaces a container of the deployment's: the old version's data never
+        # left where it was.
+        return _roll_back_untouched(host, directory, repo, point, commit, backup, current)
     except UpdateFailed as failed:
         print(
             f"ospreyflow: the update to {tag} failed at '{failed.step}': {failed.why}",
             file=sys.stderr,
         )
-        return _roll_back(host, directory, repo, point, commit, backup, current)
+        return _roll_back(host, directory, repo, point, commit, backup, current, made=moved.made)
     notice = read_notice(directory / "state")
     if notice is not None:
         latest = notice.get("latest")
@@ -590,8 +590,9 @@ def _roll_back(
         # A backup restores into an empty deployment (harness.restore): the stores are emptied only
         # now, with the old images back and the backup on disk.
         _ok(host, [*compose, "down", "-v"], "empty the stores")
-        # ADR-114 Amendment 35 point 4: the named volumes a failed move filled, which the old
-        # compose file does not declare and `down -v` leaves; the backup is what is restored.
+        # ADR-114 Amendment 35 point 4: the named volumes a move filled before a later step failed,
+        # which the old compose file does not declare and `down -v` leaves; the backup is what is
+        # restored.
         store_volumes.remove_made(host.run, made)
         _ok(host, [*compose, "up", "-d", "--wait"], "start the old version")
         host.restore(backup)

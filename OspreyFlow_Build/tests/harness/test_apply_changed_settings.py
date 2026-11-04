@@ -882,17 +882,44 @@ def test_apply_moves_the_stores_before_it_starts_anything_and_then_starts_it_all
     assert everything[everything.index("up") :] == ["up", "-d", "--wait"]
 
 
-def test_a_refused_move_starts_nothing(
+def _without_store_volumes(compose_file: Path) -> None:
+    """The deployment as rendered up to v0.4.10: the stores on their images' anonymous volumes."""
+    from harness.render import STORE_VOLUMES
+
+    text = compose_file.read_text(encoding="utf-8")
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    for row in STORE_VOLUMES:
+        service = document["services"].get(row.service)
+        if service is None:
+            continue
+        service["volumes"] = [v for v in service.get("volumes", []) if not v.startswith(row.volume)]
+        if not service["volumes"]:
+            del service["volumes"]
+        document["volumes"].pop(row.volume, None)
+    compose_file.write_text(banner + yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+
+
+def test_a_refused_move_starts_nothing_and_puts_back_every_file(
     deployment: Deployment, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """ADR-114 Amendment 35 point 7, as found on the first server: `ospreyflow apply` refused the
+    move but had already written the compose file naming the stores' new volumes, so the next
+    `start` brought them up empty. Every file is put back as it was — bytes and mode — and the
+    next `start`, whose own move then finds nothing to move, recreates no store."""
     from harness import store_volumes
 
+    _without_store_volumes(deployment.folder / "compose.yaml")
+    deployment.compose.as_installed(deployment.folder / "compose.yaml")
+    before = {p: (b, mode) for p, (b, _t, mode) in deployment.snapshot().items()}
+
     def refuse(compose_file: Path, **kwargs: Any) -> store_volumes.Moved:
-        raise store_volumes.StoresNotMoved("postgres: No space left on device", started=False)
+        assert b"postgres-data:" in compose_file.read_bytes(), "the move sees the named volumes"
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
 
     monkeypatch.setattr(apply.store_volumes, "move", refuse)
     deployment.write_config(GEMINI)
-    with pytest.raises(apply.ApplyFailed, match="No space left on device"):
+    with pytest.raises(apply.ApplyFailed, match="No space left on device") as refused:
         apply.reapply(
             deployment.config,
             deployment.out_root,
@@ -900,3 +927,10 @@ def test_a_refused_move_starts_nothing(
             ask_secret=None,
         )
     assert deployment.compose.ups() == []
+    assert {p: (b, mode) for p, (b, _t, mode) in deployment.snapshot().items()} == before
+    assert "the deployment's files are as they were" in refused.value.detail
+    # `ospreyflow start`: its `up`, on the compose file as it was, recreates no store.
+    compose_file = deployment.folder / "compose.yaml"
+    deployment.compose([*apply._compose(compose_file), "up", "-d", "--wait"], stage="up")
+    stores = {"postgres", "arcadedb", "valkey", "opensearch"}
+    assert not [e for e in deployment.compose.events if e.removeprefix("started ") in stores]

@@ -13,6 +13,17 @@ its own; PostgreSQL will not start on a data directory that is not its user's or
 `0700`/`0750`; the named volume is real state the move has to find empty; and a copy can lose the
 top folder's owner, as a copy that is not told to keep it does. The first two are pinned by their
 own tests, so the stand-in cannot drift from them without failing here.
+
+**As found on the first server, a second time (4 November 2026; Amendment 35 point 7).** The
+stand-in had given Valkey's image a `VOLUME /data`, as Redis's has; the server's `docker inspect`
+showed Valkey 8.0 with **no mount at all**, its data in its container's layer, and the move refused
+every deployment there. The stand-in now has Valkey's data in its layer, lost when its container is
+replaced — `test_the_stand_in_valkey_keeps_its_data_in_its_container`. And a refused `apply` left
+the compose file naming the new volumes, so `start` brought the stores up on fresh, empty ones, as
+Compose makes a named volume that does not exist —
+`test_the_stand_in_compose_gives_a_named_volume_that_is_not_there_empty`, and the refusals driven
+through the real `start --build` then `start` —
+`test_a_refused_move_leaves_the_files_as_they_were_and_start_runs_on_the_old_data`.
 """
 
 from __future__ import annotations
@@ -154,7 +165,8 @@ Tree = dict[str, Entry]
 
 PROJECT = "osprey-test"
 
-#: Each image's `VOLUME` lines, as the real images declare them; OpenSearch's declares none.
+#: Each image's `VOLUME` lines, as the real images declare them; OpenSearch's and Valkey 8.0's
+#: declare none (Valkey's measured on the first server: `docker inspect` showed it with no mount).
 IMAGES: dict[str, dict[str, Any]] = {
     "postgres:16.4": {"id": "sha256:pg", "volumes": ["/var/lib/postgresql/data"]},
     "arcadedata/arcadedb:26.10.1": {
@@ -167,7 +179,7 @@ IMAGES: dict[str, dict[str, Any]] = {
             "/home/arcadedb/replication",
         ],
     },  # fmt: skip
-    "valkey/valkey:8.0": {"id": "sha256:valkey", "volumes": ["/data"]},
+    "valkey/valkey:8.0": {"id": "sha256:valkey", "volumes": []},
     "opensearchproject/opensearch:2.17.1": {"id": "sha256:search", "volumes": []},
     "osprey/api:local": {"id": "sha256:api", "volumes": []},
 }
@@ -176,6 +188,23 @@ SERVICE_OF_IMAGE = {
     "sha256:search": "opensearch", "sha256:api": "api",
 }  # fmt: skip
 OPENSEARCH_DATA = "/usr/share/opensearch/data"
+#: The image each store's service runs, whatever the compose file spells it (the real render pins
+#: by digest); any other service runs an image with no `VOLUME` and no data of its own here.
+IMAGE_OF_SERVICE = {
+    "postgres": "postgres:16.4", "arcadedb": "arcadedata/arcadedb:26.10.1",
+    "valkey": "valkey/valkey:8.0", "opensearch": "opensearchproject/opensearch:2.17.1",
+    "api": "osprey/api:local",
+}  # fmt: skip
+#: Where each store keeps what it initialises at its first start.
+DATA_PATHS = {
+    "postgres": ["/var/lib/postgresql/data"], "arcadedb": ["/home/arcadedb/databases"],
+    "valkey": ["/data"], "opensearch": [OPENSEARCH_DATA],
+}  # fmt: skip
+
+
+def _image_spec(service: str) -> dict[str, Any]:
+    known = IMAGE_OF_SERVICE.get(service)
+    return IMAGES[known] if known else {"id": f"sha256:{service}", "volumes": []}
 
 
 @dataclass
@@ -187,6 +216,7 @@ class Container:
     config: str  # what Compose would compare: the service's stanza as written
     layer: dict[str, Tree] = field(default_factory=dict)
     running: bool = False
+    oneoff: bool = False  # made by `compose run`, not the service's own
 
 
 class FakeDocker:
@@ -204,8 +234,11 @@ class FakeDocker:
         self.containers: dict[str, Container] = {}
         self.calls: list[list[str]] = []
         self.counter = 0
-        #: Knobs: a copy that stops part way; a copy that loses the top folder's owner and mode.
-        self.fail_copy = False
+        #: Images committed from a container: its service and its layer, as it was.
+        self.committed: dict[str, dict[str, Any]] = {}
+        #: Knobs: a copy that stops part way (every copy, or one service's); a copy that loses the
+        #: top folder's owner and mode.
+        self.fail_copy: bool | str = False
         self.lose_top_owner = False
 
     # The world -----------------------------------------------------------------------------------
@@ -221,7 +254,7 @@ class FakeDocker:
         return name
 
     def container_of(self, service: str) -> Container:
-        found = [c for c in self.containers.values() if c.service == service]
+        found = [c for c in self.containers.values() if c.service == service and not c.oneoff]
         assert len(found) == 1, f"{service}: {len(found)} containers"
         return found[0]
 
@@ -257,10 +290,7 @@ class FakeDocker:
         return None
 
     def _start(self, container: Container) -> tuple[int, str]:
-        for path in ([OPENSEARCH_DATA] if container.service == "opensearch" else
-                     IMAGES_BY_ID[container.image]["volumes"]):  # fmt: skip
-            if container.service == "arcadedb" and path != "/home/arcadedb/databases":
-                continue
+        for path in DATA_PATHS.get(container.service, []):
             self._initialise(container.service, self.tree(container, path))
         refused = self._refusal(container)
         if refused:
@@ -275,30 +305,36 @@ class FakeDocker:
         path = Path(argv[argv.index("-f") + 1])
         return yaml.safe_load(path.read_text(encoding="utf-8"))
 
+    def _mounts(self, project: str, stanza: dict[str, Any]) -> dict[str, tuple[str, str]]:
+        """The stanza's own mounts. **A named volume that is not there is made, empty**, as Compose
+        makes it: what put the stores on fresh volumes on the first server."""
+        mounts: dict[str, tuple[str, str]] = {}
+        for mount in stanza.get("volumes") or []:
+            source, _, rest = str(mount).partition(":")
+            destination = rest.split(":")[0]
+            if source.startswith(("/", ".")):
+                mounts[destination] = ("bind", source)
+            else:
+                full = f"{project}_{source}"
+                self.volumes.setdefault(full, {})
+                mounts[destination] = ("volume", full)
+        return mounts
+
     def _up(self, document: dict[str, Any], names: list[str]) -> tuple[int, str]:
         project = document["name"]
         for name in names or list(document["services"]):
             stanza = document["services"][name]
-            image = IMAGES[stanza["image"]]["id"]
+            image = _image_spec(name)["id"]
             config = json.dumps(stanza, sort_keys=True)
-            current = [c for c in self.containers.values() if c.service == name]
+            current = [c for c in self.containers.values() if c.service == name and not c.oneoff]
             old = current[0] if current else None
             if old is not None and old.config == config:
                 code, said = self._start(old)
                 if code:
                     return code, said
                 continue
-            mounts: dict[str, tuple[str, str]] = {}
-            for mount in stanza.get("volumes") or []:
-                source, _, rest = str(mount).partition(":")
-                destination = rest.split(":")[0]
-                if source.startswith("/"):
-                    mounts[destination] = ("bind", source)
-                else:
-                    full = f"{project}_{source}"
-                    self.volumes.setdefault(full, {})
-                    mounts[destination] = ("volume", full)
-            for path in IMAGES_BY_ID[image]["volumes"]:
+            mounts = self._mounts(project, stanza)
+            for path in IMAGES_BY_ID.get(image, {"volumes": []})["volumes"]:
                 if path in mounts:
                     continue
                 kept = old.mounts.get(path) if old is not None else None
@@ -315,15 +351,36 @@ class FakeDocker:
                 return code, said
         return 0, ""
 
+    def _compose_run(self, document: dict[str, Any], argv: list[str]) -> tuple[int, str]:
+        """`compose run -d --no-deps --name N service`: a new container of the service's own
+        definition, apart from the service's own (fresh anonymous volumes, no carry-over)."""
+        name, service = argv[argv.index("--name") + 1], argv[-1]
+        if name in self.containers:
+            return 1, f'Conflict. The container name "/{name}" is already in use'
+        stanza = document["services"][service]
+        spec = _image_spec(service)
+        mounts = self._mounts(document["name"], stanza)
+        for path in spec["volumes"]:
+            mounts.setdefault(path, ("volume", self._fresh_volume()))
+        container = Container(name, service, spec["id"], mounts,
+                              json.dumps(stanza, sort_keys=True), oneoff=True)  # fmt: skip
+        self.containers[name] = container
+        return self._start(container)
+
     def compose(self, argv: list[str]) -> tuple[int, str]:
         document = self._compose_document(argv)
-        if "up" in argv:
+        verb = argv[argv.index("-f") + 2]
+        if verb == "up":
             names = [a for a in argv[argv.index("up") + 1 :] if not a.startswith("-")
                      and a != "never"]  # fmt: skip
             return self._up(document, names)
-        if "down" in argv:
+        if verb == "run":
+            return self._compose_run(document, argv)
+        if verb == "down":
             for container in list(self.containers.values()):
                 del self.containers[container.id]
+            return 0, ""
+        if verb == "build":
             return 0, ""
         raise AssertionError(f"unexpected compose call: {argv}")
 
@@ -339,9 +396,12 @@ class FakeDocker:
         if verb == "ps":
             filters = [argv[i + 1] for i, a in enumerate(argv) if a == "--filter"]
             service = next((f.rsplit("=", 1)[1] for f in filters if ".service=" in f), None)
+            oneoff = next((f.rsplit("=", 1)[1] for f in filters if ".oneoff=" in f), None)
             found = [
                 c.id for c in self.containers.values()
-                if (service is None or c.service == service) and ("-a" in argv or c.running)
+                if (service is None or c.service == service)
+                and (oneoff is None or str(c.oneoff) == oneoff)
+                and ("-a" in argv or c.running)
             ]  # fmt: skip
             return 0, "\n".join(found)
         if verb == "inspect":
@@ -357,10 +417,34 @@ class FakeDocker:
         if verb == "start":
             return self._start(self.containers[argv[2]])
         if verb == "stop":
+            missing = [name for name in argv[2:] if name not in self.containers]
             for name in argv[2:]:
-                self.containers[name].running = False
-            return 0, ""
+                if name in self.containers:
+                    self.containers[name].running = False
+            return (1, f"No such container: {missing[0]}") if missing else (0, "")
+        if verb == "rm":
+            name = argv[-1]
+            gone = self.containers.pop(name, None)
+            if gone is None:
+                return 1, f"No such container: {name}"
+            if "-v" in argv:  # its anonymous volumes go with it
+                for kind, source in gone.mounts.values():
+                    if kind == "volume" and source in self.anonymous:
+                        self.volumes.pop(source, None)
+            return 0, name
+        if verb == "commit":
+            container = self.containers[argv[2]]
+            self.committed[argv[3]] = {
+                "service": container.service,
+                "layer": {path: {p: Entry(**vars(e)) for p, e in tree.items()}
+                          for path, tree in container.layer.items()},
+            }  # fmt: skip
+            return 0, "sha256:committed"
+        if verb == "image" and argv[2] == "rm":
+            return (0, "") if self.committed.pop(argv[3], None) else (1, "No such image")
         if verb == "exec":
+            if argv[2] not in self.containers:
+                return 1, f"No such container: {argv[2]}"
             return self._exec(self.containers[argv[2]], argv[-1])
         if verb == "run":
             return self._run(argv)
@@ -416,17 +500,30 @@ class FakeDocker:
                 else:
                     mounts[destination] = self.volumes.setdefault(source, {})
         script = argv[argv.index("-c") + 1]
-        assert argv[argv.index("-c") - 1] in IMAGES_BY_ID, "a one-shot runs a store's image by ID"
+        image = argv[argv.index("-c") - 1]
+        committed = self.committed.get(image)
+        assert image in IMAGES_BY_ID or committed is not None, (
+            "a one-shot runs a store's image by ID, or one committed from its container"
+        )
+        service = committed["service"] if committed else SERVICE_OF_IMAGE.get(image)
+
+        def folder(path: str) -> Tree:
+            """A path in the one-shot: a mount, or else the image's own layer (an image committed
+            from a container has that container's; any other has nothing there)."""
+            if path in mounts:
+                return mounts[path]
+            return committed["layer"].get(path, {}) if committed else {}
+
         if script == "ls -A /to":
             return 0, "\n".join(p for p in mounts["/to"] if p != ".")
         if script == store_volumes._LISTING:
-            return 0, _listing(mounts["/v"])
+            return 0, _listing(folder(argv[-1]))
         if script == store_volumes._COPY:
-            source, target = mounts["/from"], mounts["/to"]
+            source, target = folder(argv[-1]), mounts["/to"]
             if [p for p in target if p != "."]:
                 return 3, "the named volume is not empty"
             items = sorted(source.items())
-            if self.fail_copy:
+            if self.fail_copy is True or self.fail_copy == service:
                 for path, entry in items[: len(items) // 2]:
                     target[path] = Entry(**vars(entry))
                 return 1, "cp: error writing '/to/base/1/1259': No space left on device"
@@ -530,13 +627,17 @@ def _figures(docker: FakeDocker) -> dict[str, str]:
 
 
 def _old_volumes(docker: FakeDocker) -> dict[str, str]:
-    """The anonymous volume each store's data is in now."""
+    """The anonymous volume each store's data is in now (Valkey's is in its container)."""
     return {
         "postgres": docker.container_of("postgres").mounts["/var/lib/postgresql/data"][1],
         "arcadedb": docker.container_of("arcadedb").mounts["/home/arcadedb/databases"][1],
         "arcadedb-config": docker.container_of("arcadedb").mounts["/home/arcadedb/config"][1],
-        "valkey": docker.container_of("valkey").mounts["/data"][1],
     }
+
+
+def _up(docker: FakeDocker, compose_file: Path) -> None:
+    """The caller's own `up`, after the move."""
+    assert docker([*_compose_argv(compose_file), "up", "-d", "--wait"])[0] == 0
 
 
 def _quiet(_words: str) -> None:
@@ -593,6 +694,42 @@ def test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_
     assert docker(["docker", "start", postgres.id])[0] == 0
 
 
+def test_the_stand_in_valkey_keeps_its_data_in_its_container(tmp_path: Path) -> None:
+    """Valkey 8.0's image declares no `VOLUME` (the first server's `docker inspect`: no mount):
+    `/data` is in the container's own layer, kept across a stop and start, and gone when the
+    container is replaced."""
+    compose_file = _write_compose(tmp_path, named=False)
+    docker = FakeDocker(compose_file)
+    _up(docker, compose_file)
+    _seed(docker)
+    valkey = docker.container_of("valkey")
+    assert "/data" not in valkey.mounts
+    before = _figures(docker)["valkey"]
+    docker(["docker", "stop", valkey.id])
+    docker(["docker", "start", valkey.id])
+    assert _figures(docker)["valkey"] == before
+    docker([*_compose_argv(compose_file), "down"])
+    _up(docker, compose_file)
+    assert _figures(docker)["valkey"] == "# Keyspace\n"  # a new container, empty
+
+
+def test_the_stand_in_compose_gives_a_named_volume_that_is_not_there_empty(
+    old_deployment: tuple[FakeDocker, Path],
+) -> None:
+    """What put the stores on empty volumes on the first server: the compose file naming the
+    volumes, and an `up` with no move before it. Compose makes each, empty, and the stores start
+    on it — PostgreSQL a fresh cluster — with their data left where it was."""
+    docker, compose_file = old_deployment
+    old = _old_volumes(docker)
+    _up(docker, compose_file)
+    assert docker.container_of("postgres").mounts["/var/lib/postgresql/data"] == (
+        "volume", f"{PROJECT}_postgres-data",
+    )  # fmt: skip
+    assert _figures(docker)["postgres"] == "postgres"
+    assert _figures(docker)["valkey"] == "# Keyspace\n"
+    assert "./base/osprey" in docker.volumes[old["postgres"]]
+
+
 # The move ---------------------------------------------------------------------------------------
 
 
@@ -602,10 +739,18 @@ def test_the_move_keeps_every_stores_data_with_owners_and_modes(
     docker, compose_file = old_deployment
     before, old = _figures(docker), _old_volumes(docker)
     original = {k: _listing(docker.volumes[v]) for k, v in old.items()}
+    original["valkey"] = _listing(docker.container_of("valkey").layer["/data"])
     said: list[str] = []
     moved = store_volumes.move(compose_file, run=docker, say=said.append, sleep=lambda _s: None)
 
     assert moved.services == ["postgres", "arcadedb", "valkey", "opensearch"]
+    # The move replaced none of the deployment's containers: the caller's `up` does.
+    assert docker.container_of("postgres").mounts["/var/lib/postgresql/data"] == (
+        "volume", old["postgres"],
+    )  # fmt: skip
+    assert not [c for c in docker.containers.values() if c.oneoff], "the containers apart removed"
+    assert docker.committed == {}, "the image committed from Valkey's container removed"
+    _up(docker, compose_file)
     for service, path, volume in (
         ("postgres", "/var/lib/postgresql/data", "postgres-data"),
         ("arcadedb", "/home/arcadedb/databases", "arcadedb-databases"),
@@ -614,14 +759,15 @@ def test_the_move_keeps_every_stores_data_with_owners_and_modes(
         ("opensearch", OPENSEARCH_DATA, "opensearch-data"),
     ):
         assert docker.container_of(service).mounts[path] == ("volume", f"{PROJECT}_{volume}")
-    docker([*_compose_argv(compose_file), "up", "-d", "--wait"])
     assert _figures(docker) == before
     assert _listing(docker.volumes[f"{PROJECT}_postgres-data"]) == original["postgres"]
     assert _listing(docker.volumes[f"{PROJECT}_arcadedb-config"]) == original["arcadedb-config"]
+    assert _listing(docker.volumes[f"{PROJECT}_valkey-data"]) == original["valkey"]
     # The old volumes are left, with their data, and named in the words with how to remove them.
     for name in old.values():
         assert name in docker.volumes and name in moved.left
     assert f"docker volume rm {' '.join(moved.left)}" in "\n".join(said)
+    assert "valkey: copying /data from valkey's container" in "\n".join(said)
 
 
 def test_after_the_move_a_new_container_keeps_the_data(
@@ -632,14 +778,16 @@ def test_after_the_move_a_new_container_keeps_the_data(
     docker, compose_file = old_deployment
     before = _figures(docker)
     store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
+    _up(docker, compose_file)
     docker([*_compose_argv(compose_file), "down"])
-    docker([*_compose_argv(compose_file), "up", "-d", "--wait"])
+    _up(docker, compose_file)
     assert _figures(docker) == before
 
 
 def test_a_second_move_does_nothing(old_deployment: tuple[FakeDocker, Path]) -> None:
     docker, compose_file = old_deployment
     store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
+    _up(docker, compose_file)
     docker.calls.clear()
     said: list[str] = []
     moved = store_volumes.move(compose_file, run=docker, say=said.append, sleep=lambda _s: None)
@@ -665,7 +813,7 @@ def test_a_copy_that_loses_the_top_folders_owner_is_refused_before_postgres_sees
     docker.lose_top_owner = True
     with pytest.raises(store_volumes.StoresNotMoved) as refused:
         store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
-    assert not refused.value.started
+    assert refused.value.stopped
     assert "is not the same as the original" in refused.value.why
     assert f"{PROJECT}_postgres-data" not in docker.volumes
     assert docker.container_of("postgres").mounts["/var/lib/postgresql/data"] == (
@@ -683,7 +831,6 @@ def test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one(
     docker.fail_copy = True
     with pytest.raises(store_volumes.StoresNotMoved) as refused:
         store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
-    assert not refused.value.started and refused.value.made == []
     assert "No space left on device" in refused.value.why
     assert old["postgres"] in refused.value.words()
     assert _listing(docker.volumes[old["postgres"]]) == original
@@ -698,7 +845,26 @@ def test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one(
     # And the next try moves it.
     _write_compose(compose_file.parent, named=True)
     store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
-    docker([*_compose_argv(compose_file), "up", "-d", "--wait"])
+    _up(docker, compose_file)
+    assert _figures(docker) == before
+
+
+def test_valkeys_copy_from_its_container_that_fails_leaves_it_there_and_removes_the_rest(
+    old_deployment: tuple[FakeDocker, Path],
+) -> None:
+    """Valkey's data, in its container, copied after the volumes' copies: a copy of it that fails
+    removes every named volume the move filled, and the committed image, and leaves Valkey's own
+    container — and its data — as they were."""
+    docker, compose_file = old_deployment
+    before = _figures(docker)
+    docker.fail_copy = "valkey"
+    with pytest.raises(store_volumes.StoresNotMoved) as refused:
+        store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
+    assert "valkey's container" in refused.value.words()
+    assert docker.committed == {}
+    assert not [n for n in docker.volumes if n.startswith(f"{PROJECT}_") and "osprey-data" not in n]
+    old_compose = _write_compose(compose_file.parent, named=False)
+    _up(docker, old_compose)
     assert _figures(docker) == before
 
 
@@ -728,11 +894,12 @@ def test_a_named_volume_already_holding_data_is_not_overwritten(
                    for call in docker.calls)  # fmt: skip
 
 
-def test_a_store_that_answers_differently_on_its_named_volume_fails_after_starting(
+def test_a_store_that_answers_differently_on_its_named_volume_is_refused_and_nothing_is_left(
     old_deployment: tuple[FakeDocker, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Started on the named volume and another figure: `started` is set, so `update` restores its
-    backup, and the old volume is named."""
+    """Started on its named volume, apart, with another figure: refused like any other failure —
+    the deployment's own containers were never replaced, so the old version's `up` (or `update`'s
+    rollback) finds every store on its data, and the named volumes the move filled are gone."""
     docker, compose_file = old_deployment
     real = docker._exec
     seen: dict[str, int] = {}
@@ -746,11 +913,16 @@ def test_a_store_that_answers_differently_on_its_named_volume_fails_after_starti
         return code, said
 
     monkeypatch.setattr(docker, "_exec", drifting)
+    before = _figures(docker)
+    seen.clear()
     with pytest.raises(store_volumes.StoresNotMoved) as refused:
         store_volumes.move(compose_file, run=docker, say=_quiet, sleep=lambda _s: None)
-    assert refused.value.started
-    assert f"{PROJECT}_arcadedb-databases" in refused.value.made
     assert "no databases" in refused.value.why
+    assert not [n for n in docker.volumes if n.startswith(f"{PROJECT}_") and "osprey-data" not in n]
+    assert not [c for c in docker.containers.values() if c.oneoff]
+    monkeypatch.setattr(docker, "_exec", real)
+    _up(docker, _write_compose(compose_file.parent, named=False))
+    assert _figures(docker) == before
 
 
 def test_the_command_says_what_failed_and_exits_one(
@@ -764,3 +936,92 @@ def test_the_command_says_what_failed_and_exits_one(
     assert store_volumes.main([str(compose_file)]) == 1
     err = capsys.readouterr().err
     assert "could not be moved to named volumes" in err and "The deployment is stopped" in err
+
+
+# A refused move, through the real `start --build`, then `start` -----------------------------------
+
+
+TOKENS = ":root { --brass: #c08a34; }\n"
+
+
+def _old_rendered_deployment(repo: Path) -> Path:
+    """A real `local-lite` render, as v0.4.10 left it: the stores with no named volume."""
+    from harness.keycloak_theme import write_login_theme
+
+    out = repo / "deploy" / "generated" / "local-lite"
+    out.mkdir(parents=True)
+    for name, text in render(OspreyConfig(), allow_unpinned=True).artefacts.items():
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        (out / name).write_text(text, encoding="utf-8")
+    (out / "deployment.env").write_text(
+        (out / "deployment.env").read_text(encoding="utf-8") + "OSPREY_ARCADEDB_PASSWORD=pw\n",
+        encoding="utf-8",
+    )
+    tokens = repo / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens.parent.mkdir(parents=True)
+    tokens.write_text(TOKENS, encoding="utf-8")
+    write_login_theme(out, tokens_css=TOKENS)
+    text = (out / "compose.yaml").read_text(encoding="utf-8")
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    for service, paths in STORE_PATHS.items():
+        stanza = document["services"][service]
+        stanza["volumes"] = [v for v in stanza.get("volumes", []) if v.split(":")[1] not in paths]
+        if not stanza["volumes"]:
+            del stanza["volumes"]
+    for volume in store_volumes.VOLUME_NAMES:
+        document["volumes"].pop(volume, None)
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False),
+                                      encoding="utf-8")  # fmt: skip
+    return out
+
+
+def _files(out: Path) -> dict[Path, tuple[bytes, int]]:
+    return {p: (p.read_bytes(), p.stat().st_mode) for p in out.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("refusal", ["valkey", "copy", "opensearch"])
+def test_a_refused_move_leaves_the_files_as_they_were_and_start_runs_on_the_old_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: str
+) -> None:
+    """**ADR-114 Amendment 35 point 7, as found on the first server.** The move refused (there,
+    Valkey's data in its container), but the compose file already named the new volumes, and a
+    plain `start` brought the stores up on them, empty: PostgreSQL said `relation "investigations"
+    does not exist`. Driven through the real `start --build` (`scripts.refresh`, which re-renders
+    the compose file as `apply` does), refused three ways — Valkey's copy from its container, a
+    volume's copy, OpenSearch holding an index of its own — then the command's `start` (the move's
+    own command, then `up`): every file is as it was, byte for byte, and the stores come up on
+    their old data."""
+    from harness import ingest_uploads
+    from scripts import refresh
+
+    monkeypatch.setattr(ingest_uploads, "DOCKER_ENFORCES_OWNERSHIP", False)
+    out = _old_rendered_deployment(tmp_path)
+    compose_file = out / "compose.yaml"
+    docker = FakeDocker(compose_file)
+    _up(docker, compose_file)
+    _seed(docker, index="someones-index" if refusal == "opensearch" else None)
+    docker.fail_copy = {"valkey": "valkey", "copy": True}.get(refusal, False)
+    before, files = _figures(docker), _files(out)
+    old = _old_volumes(docker)
+
+    def run(argv: Sequence[str]) -> None:
+        code, said = docker(argv)
+        if code != 0:
+            raise refresh.RefreshFailed(said)
+
+    with pytest.raises(refresh.RefreshFailed) as refused:
+        refresh.refresh(tmp_path, run=run, register=lambda _argv: 0, docker=docker)
+    assert _files(out) == files, "every file of the deployment's as it was"
+    words = str(refused.value)
+    assert "Nothing was removed" in words and "the deployment's files are as they were" in words
+    assert "ospreyflow start starts it on that data" in words
+
+    # `ospreyflow start`: the move's own command (nothing to move now), then `up`.
+    docker.fail_copy = False
+    monkeypatch.setattr(store_volumes, "_subprocess", docker)
+    assert store_volumes.main([str(compose_file)]) == 0
+    _up(docker, compose_file)
+    assert _figures(docker) == before
+    assert _old_volumes(docker) == old
+    assert _files(out) == files

@@ -31,7 +31,8 @@ Glass's `/deployment.json` (`glass.json`, no secret in it) is written as the che
 
 Before its `up`, a deployment whose stores' data is not yet in their named volumes has the
 volumes added to `compose.yaml` and the data moved there once (`harness.store_volumes`, ADR-114
-Amendment 35); the old volumes are kept.
+Amendment 35); the old volumes are kept. A refused move puts every file this wrote back as it was
+(Amendment 35 point 7), so the next `start` runs on the old data, never on empty named volumes.
 
 What it never does, on purpose: render the deployment again (that mints new secrets for stores that
 keep the old ones), remove a volume, force a container to be recreated, or seed. First-time set-up
@@ -597,6 +598,7 @@ def refresh(
     directory = _deployment_dir(repo_root)
     compose = _compose(directory / "compose.yaml")
     pulls_before = model_downloads.commands(directory / "compose.yaml")
+    held = store_volumes.FilesHeld(directory)
     changed = files_up_to_date(repo_root)
     theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
     run([*compose, "build", "--pull"])
@@ -606,7 +608,8 @@ def refresh(
     try:
         store_volumes.move(directory / "compose.yaml", run=docker or store_volumes._subprocess)
     except store_volumes.StoresNotMoved as failed:
-        raise RefreshFailed(failed.words()) from failed
+        held.put_back()
+        raise RefreshFailed(failed.words(files_put_back=True)) from failed
     # Defect 9 (ADR-114 Amendment 33): `up` alone would start `ollama-models` again for its changed
     # command, but start the gateway and the Conduit on the new model beside it, before it is there.
     steps = model_downloads.steps_to_fetch(pulls_before, directory / "compose.yaml")

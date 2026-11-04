@@ -853,10 +853,36 @@ def test_start_build_moves_the_stores_before_it_starts_them(
     assert order == ["build", "move", "up"]
 
     def refuse(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
-        raise store_volumes.StoresNotMoved("postgres: No space left on device", started=False)
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
 
     monkeypatch.setattr(refresh.store_volumes, "move", refuse)
     again = Recorder()
     with pytest.raises(refresh.RefreshFailed, match="No space left on device"):
         refresh.refresh(repo, run=again, register=Registrar())
     assert not any("up" in c for c in again.calls)
+
+
+def test_a_refused_move_puts_back_every_file_start_build_wrote(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 35 point 7, as found on the first server: a refused move left the compose
+    file naming the stores' new volumes, so the next `start` brought them up empty beside their
+    data. Every file is put back byte for byte, the compose file included, and the words say so.
+    (`tests/harness/test_store_volumes.py` drives the same through its Docker stand-in, and the
+    next `start` with it.)"""
+    from harness import store_volumes
+
+    out = _rendered(repo)
+    _without_store_volumes(out)
+    before = {p: p.read_bytes() for p in out.rglob("*") if p.is_file()}
+
+    def refuse(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
+        assert b"postgres-data:" in compose_file.read_bytes(), "the move sees the named volumes"
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+
+    monkeypatch.setattr(refresh.store_volumes, "move", refuse)
+    with pytest.raises(refresh.RefreshFailed) as refused:
+        refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert {p: p.read_bytes() for p in out.rglob("*") if p.is_file()} == before
+    assert "the deployment's files are as they were" in str(refused.value)
+    assert "ospreyflow start starts it on that data" in str(refused.value)
