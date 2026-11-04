@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.13** · 2026-11-03 · For OspreyFlow v0.4.3 · Issued
+**Version 1.14** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.14 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.13 | 2026-11-03 | §1: a level 0 diagram, who uses OspreyFlow and what it talks to. The administration guide has the level 1 diagram and every interface. |
 | 1.12 | 2026-11-02 | Checked against the code end to end (build order step 10). §7.6 and §7.7: the tests named are in the developer repository, beside the test suites, not in this one. |
 | 1.11 | 2026-11-02 | §7.6: the client's rarity measure (the default) and the IDF measure, the two compositions, dataset triggers and shared-value influencers, and the port's new parameters. New §7.7, The client's code and OspreyFlow's equivalent: their R function beside OspreyFlow's arithmetic, line by line, a worked synthetic example whose numbers match, the golden parity test, and the row shapes that do not map exactly. |

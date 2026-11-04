@@ -6,6 +6,18 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.5 — 2026-11-04
+
+- **Small on a server of your own.** Small can now run on one Linux server with every store in a
+  container, without managed cloud services: HTTPS with your organisation's own certificate (checked
+  before anything starts, by `ospreyflow doctor` and on each renewal), sign-in through your
+  organisation's identity provider (OIDC, such as Entra ID) or local accounts, the stores sized to
+  the server's memory, and backups to a folder you choose. Answer the new `server:` section and run
+  `ospreyflow install --mode small`; the administration guide's section 5a has the steps.
+- **Staying signed in.** A window renews its sign-in by itself before it expires. When your session
+  has ended, it asks you to sign in again where you are, without losing the page.
+- **`ospreyflow repair-sign-in`** also sets the Conduit's own client secret again, so a deployment
+  whose stores were wiped can act for its people again.
 - **What OspreyFlow says it is**, the same everywhere (README, About, the install page, the sign-in
   page and the website): "an open source intelligence mapping platform for crime analysis,
   anti-money-laundering, fraud detection, and event monitoring and alerting".
@@ -16,6 +28,21 @@ update. Work not yet in a release is listed under *Unreleased*.
 - **A release's lock names every image any option can run**, Superset and ClickHouse included, so a
   deployment with dashboards on can take Superset from a release or a bundle; Superset's signature is
   checked like the other images OspreyFlow builds.
+- **Fixes from the demo rehearsal.**
+  - Connections: each route names its links, so routes through the same people read apart; a node
+    put back on the canvas brings back its links; a search result chosen joins the working set
+    before it is drawn.
+  - Add from a list says how many different records were found and how many are in the view.
+  - The timeline's weekly grid draws no stripes over its cells, and choosing it makes the timeline
+    tall enough.
+  - The reports' Outcomes figures count every closing reason.
+  - Relationships, typologies and source files are named as a person reads them, never by a key.
+  - The Connection strength legend is read again when you return to the window; the Matrix shows
+    each strength as it arrives.
+  - An alert can be given to people only, never to a service account.
+  - The Prison Intelligence demo's chapter 4 draft is a whole, mapped branch the Studio completes.
+- Update with `ospreyflow update`; an install from `Solirius/ospreyflow` must reinstall from
+  `https://github.com/aykr/OspreyFlow.git` first (see v0.4.3).
 
 ## v0.4.4 — 2026-11-03
 
