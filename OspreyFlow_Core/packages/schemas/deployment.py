@@ -221,6 +221,8 @@ EMBEDDING_MODELS: dict[str, str] = {"all-minilm:22m-l6-v2-fp16": "1b226e2802db"}
 TRANSCRIPTION_MODELS: tuple[str, ...] = ("Systran/faster-whisper-tiny.en",)
 
 ExtractionModel = Literal["qwen2.5:7b-instruct", "qwen2.5:14b-instruct"]
+#: ADR-135 Amendment 1 decision 3: the extraction model on an NVIDIA GPU when none is named.
+GPU_EXTRACTION_MODEL: ExtractionModel = "qwen2.5:14b-instruct"
 VisionModel = Literal["moondream:1.8b-v2-q4_K_M"]
 EmbeddingModel = Literal["all-minilm:22m-l6-v2-fp16"]
 TranscriptionModel = Literal["Systran/faster-whisper-tiny.en"]
@@ -1282,6 +1284,17 @@ class OspreyConfig(BaseModel):
                 f"your own, not {where}: a cloud's servers are sized without a GPU"
             )
         return self
+
+    @property
+    def extraction_model(self) -> str:
+        """ADR-135 Amendment 1 decision 3: the extraction model the deployment runs. Named in
+        `models.extraction`, that one always; else `qwen2.5:14b-instruct` on an NVIDIA GPU and the
+        shipped `qwen2.5:7b-instruct` without one. "Named" is the key being in the file
+        (`model_fields_set`), not its value, so a GPU deployment that names the 7b keeps it. The
+        render, the pull and `start --build` read this, never `models.extraction` itself."""
+        if "extraction" in self.models.model_fields_set or self.resources.gpu != "nvidia":
+            return self.models.extraction
+        return GPU_EXTRACTION_MODEL
 
 
 #: A Keycloak identity-provider alias is part of the redirect URI the organisation registers

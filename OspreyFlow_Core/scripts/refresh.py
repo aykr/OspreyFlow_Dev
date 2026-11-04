@@ -209,7 +209,7 @@ def _models_up_to_date(directory: Path) -> bool:
     lines = env_path.read_text(encoding="utf-8").splitlines()
     models = config.models
     wanted = [
-        f"OSPREY_EXTRACTION_MODEL={models.extraction}",
+        f"OSPREY_EXTRACTION_MODEL={config.extraction_model}",
         f"OSPREY_VISION_MODEL={models.vision}",
         f"OSPREY_TRANSCRIPTION_MODEL={models.transcription}",
         f"OSPREY_EMBEDDING_MODEL={models.embedding}",
