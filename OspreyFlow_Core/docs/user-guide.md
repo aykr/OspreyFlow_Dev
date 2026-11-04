@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.32** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
+**Version 1.33** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.33 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.32 | 2026-11-04 | Describes v0.4.9. No change to its content. |
 | 1.31 | 2026-11-04 | The owner's ruling (ADR-132 Amendment 5): §4, under the GOV.UK theme the service's name is in the browser tab's title; the band under the GOV.UK header that named it is gone, giving the workspace its height back. |
 | 1.30 | 2026-11-04 | Describes v0.4.8. No change to its content. |

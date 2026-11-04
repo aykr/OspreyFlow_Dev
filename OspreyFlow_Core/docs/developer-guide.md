@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.21** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
+**Version 1.22** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.22 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.21 | 2026-11-04 | §9.4: the `ollama` service keeps the model loaded on a GPU (`OLLAMA_KEEP_ALIVE=-1`). |
 | 1.20 | 2026-11-04 | Describes v0.4.9. No change to its content. |
 | 1.19 | 2026-11-04 | §9.4, as measured on the first server (ADR-135 Amendment 1): the `ollama` service's flash attention and q8_0 KV cache on a GPU, with the measured times, and the doctor's 14 GiB for the 14b (was 12). |

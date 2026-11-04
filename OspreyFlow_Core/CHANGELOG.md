@@ -6,9 +6,13 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.10 — 2026-11-04
+
 - **On a GPU the model stays loaded.** The first question after a few idle minutes no longer
   waits about a minute for the model to load into the GPU again (`OLLAMA_KEEP_ALIVE=-1`, with
   `resources.gpu: nvidia` only).
+- Update with `ospreyflow update`, then `ospreyflow apply` on a deployment with a GPU, so the model
+  server is started again with the setting.
 
 ## v0.4.9 — 2026-11-04
 

@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "196df72a60c1c1dfcaa9195b3bd3f9fee9307e86615119ceb2e7a4004152981b",
-    "source": "349f16b505ffb41551a6ef9377afa9382318f3e324590037ed7c42ab5c41d2d7",
-    "version": "1.43"
+    "pdf": "c3b14876e1b6dc49edf009ea7786ad813735dc25b88a5a1578460e80316cd441",
+    "source": "44af981e132e60b29131ffe6218139bf382eed053cd607c3aadb001b7779127c",
+    "version": "1.44"
   },
   "developer-guide.md": {
     "body": "55e96766ce268cf3c58df999c1e245c2ee9f48390352cb3649660dfc89424686",
@@ -35,9 +35,9 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "705424d343726618985d41cd9a704f4d78f9bf233417d463041f89661a1f71c7",
-    "source": "4da6482d58b5b3fd75667e47292669847ec489321d2fa6a598879751d8ef8e7e",
-    "version": "1.21"
+    "pdf": "86f933c4d4142bf53d310a77605c4610487b0483a56323b58c4547b3eab722c8",
+    "source": "0fa2d6e2fcbc48608ebd30f05112b0e972ab816536b159ccc8365c0eca5ddb06",
+    "version": "1.22"
   },
   "user-guide.md": {
     "body": "1e417f5fa290d5522ae1f860aefa7ee54a6945e4041cbd4306c7d265f6a4c5c8",
@@ -69,8 +69,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "9b822342bff38d67439334bcf2c550a05b8b06f3e3f089b67ab01350f30d3d71",
-    "source": "dd04fc9cbfb7342ea9da45efd1d0adf776247caedb7e05635114bbf9a4eab6d0",
-    "version": "1.32"
+    "pdf": "d1168f85798899a4a31678afb3a7f3b985f9b123ccb0a7d4e608b4542b13398a",
+    "source": "2c6dda214a9cac302cbed0230b1df0fefa09093da155772723bc2c49648c32dc",
+    "version": "1.33"
   }
 }
