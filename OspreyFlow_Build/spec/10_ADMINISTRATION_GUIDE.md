@@ -576,20 +576,29 @@ model, which also answers Ask the case and Ask to search on the local engine, be
 `qwen2.5:14b-instruct` (about 9 GB, downloaded once) instead of `qwen2.5:7b-instruct`, unless
 `osprey.yaml` names one under `models.extraction`, which always wins. An `osprey.yaml` saved by the
 guided page (`--gui`) names every model, `models.extraction: qwen2.5:7b-instruct` among them, so it
-keeps the 7b on the GPU until that line is removed. Without a GPU nothing changes.
+keeps the 7b on the GPU until that line is removed. On the GPU the model server also keeps its
+working memory for a question at reduced precision (`OLLAMA_FLASH_ATTENTION=1` and
+`OLLAMA_KV_CACHE_TYPE=q8_0`), which is what fits the 14b, with the long context it is given, wholly
+on a 16 GB card. Without a GPU nothing changes.
+
+**As measured, 4 November 2026**, on the first server (an RTX 5060 Ti, 16 GB), the same question
+through the product's own route: the 14b on the GPU without those two settings used 18 GB, ran 15%
+on the processors and 85% on the GPU, and took 9–11 s an answer of about 120 tokens; with them it
+used 14 GB, ran wholly on the GPU (12.0 GiB, per `nvidia-smi`), and took 3.3–3.6 s. The 7b on the
+processors took 17.3 s.
 
 **What is checked before anything starts.** `doctor`, `install` and `apply` refuse, in words and
 with nothing changed: a computer that is not Linux; `nvidia-smi` not installed, or not answering
 ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver": install the
 driver, or restart after installing it); and Docker listing neither the toolkit's `nvidia` runtime
-nor an NVIDIA CDI device (`docker info`). With the 14b model, less than 12 GiB of GPU memory is a
+nor an NVIDIA CDI device (`docker info`). With the 14b model, less than 14 GiB of GPU memory is a
 warning naming the 7b: set `models.extraction: qwen2.5:7b-instruct` in `osprey.yaml` and run
 `ospreyflow apply`. The doctor names the GPU, its memory and its driver, for example:
 
 ```
 ✔ The NVIDIA GPU is NVIDIA GeForce RTX 5060 Ti, 15.9 GiB (driver 595.99.02).
 ✔ Docker can run a container on the GPU (the nvidia runtime of the NVIDIA Container Toolkit).
-✔ The GPU has 15.9 GiB of memory; qwen2.5:14b-instruct asks for at least 12 GiB.
+✔ The GPU has 15.9 GiB of memory; qwen2.5:14b-instruct asks for at least 14 GiB.
 ```
 
 To turn it off, set `resources.gpu: none` in `osprey.yaml` and run `ospreyflow apply`.

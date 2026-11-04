@@ -21244,6 +21244,33 @@ is not left in conversation (rule 11):
   probe against stand-in programs on `PATH`); `tests/test_admin_guide.py`'s
   `test_every_server_setting_is_in_the_guide`, which the answers-file case did not cover.
 
+**As measured, 4 November 2026 (v0.4.8 on the first server: Ubuntu 24.04, amd64, RTX 5060 Ti
+16 GB, Small on its own server).** Measured on the product's own route, the same prompt each time:
+the Conduit's container calling LiteLLM, which calls Ollama with the rendered `num_ctx` of 32768.
+
+- The 14b on the GPU as v0.4.8 rendered it: Ollama reported `18 GB, 15%/85% CPU/GPU, CONTEXT
+  32768`; each answer of about 120 tokens took 9–11 s.
+- With `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` on the `ollama` service:
+  `14 GB, 100% GPU`, 3.3–3.6 s; 12.0 GiB used, per `nvidia-smi`.
+- For reference, the 7b on the CPU: 17.3 s.
+
+**The owner's ruling, 4 November 2026: decisions 2 and 4 are amended.**
+
+- **Decision 2, amended.** With `nvidia`, the `ollama` service is also given
+  `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` (beside its `OLLAMA_NOPRUNE=1`). The KV
+  cache held at q8_0 (which needs flash attention) is what fits the 14b at its 32k context on a 16 GB
+  card. `ollama-models` only downloads and gets neither. Without a GPU nothing changes, and a
+  deployment without one still renders byte for byte as before.
+- **Decision 4, amended.** For the 14b the doctor asks for **at least 14 GiB** of GPU memory (the
+  measured need at 32k with q8_0), not 12; below that it is the same warning naming the 7b. The
+  total is compared against 14 × 1024 MiB.
+- **Tests that would fail if it were broken** (each shown red first):
+  `tests/harness/test_gpu_render.py`'s
+  `test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention` (the two variables on
+  `ollama` with a GPU, on neither `ollama-models` nor a deployment without one, whose byte-for-byte
+  case still passes); `tests/cli/test_gpu.py`'s
+  `test_a_gpu_below_fourteen_gib_is_a_warning_naming_the_7b` (an 8 GiB and a 12 GiB card both warn).
+
 ## ADR-136 — Egress decided per dataset as well as by handling code, and keys marked as under a privacy contract — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings: "Per-dataset egress" (from options), and "for
