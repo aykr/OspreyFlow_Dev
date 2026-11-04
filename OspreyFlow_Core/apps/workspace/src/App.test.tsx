@@ -521,6 +521,9 @@ describe("a stale sign-in is noticed whichever screen's call finds it (3 October
     vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
     const { signinRedirect } = await signedInWithOntologyLoaded();
 
+    // The person's own click in the Studio made the call (ADR-050 Amendment 2: a call refused while
+    // nobody has done anything is not renewed, `windows stay signed in` below).
+    fireEvent.pointerDown(window);
     const response = await recipes();
 
     expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1);
