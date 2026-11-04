@@ -37,7 +37,7 @@ export interface SignInScreenProps {
   welcome?: WelcomeSettings;
 }
 
-const PLAIN: WelcomeSettings = { organisationSignIn: null, about: true, links: {}, version: null };
+const PLAIN: WelcomeSettings = { organisationSignIn: null, organisationLabel: null, about: true, links: {}, version: null };
 
 const CAPABILITIES = [
   { name: "Network analysis", icon: "M4 4.5L11.5 6M4 4.5L6 12M11.5 6L6 12M3 3h2v3H3zM10.5 5h2v2h-2zM5 11h2v2H5z",
@@ -83,6 +83,8 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
   Pick<SignInScreenProps, "reason" | "intent"> & { welcome: WelcomeSettings }) {  // prettier-ignore
   const [opening, setOpening] = useState<"organisation" | "account" | null>(null);
   const organisation = welcome.organisationSignIn;
+  // ADR-115 Amendment 5: the button names the provider as people know it, where the deployment says.
+  const continueWith = welcome.organisationLabel ? `Continue with ${welcome.organisationLabel}` : "Continue with organisation sign-in";
   const help = welcome.links.account_help;
   // ADR-132 Amendment 4: under GOV.UK the card is plain and names no product (ruling 7).
   const govuk = currentBrand() === "govuk";
@@ -117,7 +119,7 @@ function SignInCard({ reason, intent, onSignIn, welcome }: Required<Pick<SignInS
           <>
             <button type="button" className="btn btn--primary welcome-card__primary" disabled={opening !== null}
                     onClick={() => start("organisation")}>
-              {opening === "organisation" ? "Opening your organisation's sign-in page…" : "Continue with organisation sign-in"}
+              {opening === "organisation" ? "Opening your organisation's sign-in page…" : continueWith}
             </button>
             {!govuk && <p className="welcome-card__note">Your password is entered only on your organisation's sign-in page.</p>}
             <div className="welcome-card__divider"><span>{govuk ? "or" : "or use an OspreyFlow account"}</span></div>

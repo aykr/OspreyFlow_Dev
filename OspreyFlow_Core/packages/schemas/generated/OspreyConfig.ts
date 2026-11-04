@@ -109,11 +109,11 @@ export type HandlingScheme = string;
  */
 export type Ontology = string;
 /**
- * The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it (ADR-115 decision 3). Default: none — one *Sign in* to the OspreyFlow form.
+ * The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in* (*Continue with <label>* when `organisation_provider` names one), which goes straight to it (ADR-115 decision 3, Amendment 5). Default: none — one *Sign in* to the OspreyFlow form.
  */
 export type OrganisationSignIn = string | null;
 /**
- * The provider's name as people know it, shown on the identity provider's own sign-in pages (for example 'Example Department account').
+ * The provider's name as people know it, shown on the welcome page's button (Continue with <label>) and on the identity provider's own sign-in pages (for example 'Example Department account').
  */
 export type Label1 = string;
 /**

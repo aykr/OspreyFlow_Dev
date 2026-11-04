@@ -88,6 +88,8 @@ describe("the deployment's welcome settings", () => {
           identity_provider: "http://id.osprey.test",
           realm: "osprey",
           organisation_sign_in: "acme-entra",
+          // ADR-115 Amendment 5: the provider's name, as the answers gave it.
+          organisation_label: "Example Department account",
           welcome: {
             about: false,
             // A known name with a script address, and an unknown name: neither is ever a link.
@@ -99,6 +101,7 @@ describe("the deployment's welcome settings", () => {
     );
     expect(deploymentWelcome()).toEqual({
       organisationSignIn: "acme-entra",
+      organisationLabel: "Example Department account",
       about: false,
       links: { privacy: "https://privacy.test/" },
       version: "c01833b",
@@ -107,7 +110,26 @@ describe("the deployment's welcome settings", () => {
 
   it("are the plain page where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
-    expect(deploymentWelcome()).toEqual({ organisationSignIn: null, about: true, links: {}, version: null });
+    expect(deploymentWelcome()).toEqual({
+      organisationSignIn: null,
+      organisationLabel: null,
+      about: true,
+      links: {},
+      version: null,
+    });
+  });
+
+  it("read no label where the deployment gives none, or one that is not words", async () => {
+    for (const label of [undefined, "", 42, "   "]) {
+      resetDeploymentSettings();
+      await loadDeploymentSettings(
+        answering(
+          200,
+          JSON.stringify({ identity_provider: "http://id.osprey.test", organisation_sign_in: "org", organisation_label: label }),
+        ),
+      );
+      expect(deploymentWelcome().organisationLabel).toBeNull();
+    }
   });
 });
 

@@ -275,6 +275,17 @@ def deployment_version() -> str:
     return git_sha()[:7]
 
 
+def organisation_label(config: OspreyConfig) -> str | None:
+    """The organisation's provider as people know it (`sign_in.organisation.label`, kept as
+    `governance.organisation_provider.label`), which the welcome page's button names: *Continue
+    with <label>* (ADR-115 Amendment 5). None without organisation sign-in, or for an alias brokered
+    by hand, which has no label; the button then keeps ADR-115 decision 3's words."""
+    governance = config.governance
+    if not governance.organisation_sign_in or governance.organisation_provider is None:
+        return None
+    return governance.organisation_provider.label.strip() or None
+
+
 def render_glass_settings(config: OspreyConfig) -> str:
     """What the Glass reads at start (`/deployment.json`): where its identity provider is, the
     marking it shows before any case data is on screen, the welcome page's settings and the
@@ -295,6 +306,8 @@ def render_glass_settings(config: OspreyConfig) -> str:
         "realm": REALM,
         "marking": marking_floor(config),
         "organisation_sign_in": config.governance.organisation_sign_in,
+        # ADR-115 Amendment 5: the welcome page's button names the provider by its label.
+        "organisation_label": organisation_label(config),
         "welcome": {"about": welcome.about, "links": links},
         # ADR-132: the deployment's brand and what its page title, GOV.UK footer and banner name.
         "appearance": config.appearance.model_dump(),

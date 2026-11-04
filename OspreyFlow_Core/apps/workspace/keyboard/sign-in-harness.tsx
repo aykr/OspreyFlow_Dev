@@ -14,15 +14,18 @@ import { SignInScreen } from "../src/auth/SignInScreen";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { signIn } from "../src/auth/userManager";
 
-// ADR-115 E2: `?organisation=<alias>` stands for a deployment naming a brokered provider.
-const organisation = new URLSearchParams(location.search).get("organisation");
+// ADR-115 E2: `?organisation=<alias>` stands for a deployment naming a brokered provider, and
+// (ADR-115 Amendment 5) `&label=<name>` for the provider's label, which its button names.
+const query = new URLSearchParams(location.search);
+const organisation = query.get("organisation");
+const organisationLabel = query.get("label");
 
 function Harness() {
   return (
     <SignInScreen
       reason={null}
       marking="OFFICIAL"
-      welcome={{ organisationSignIn: organisation, about: true, links: {}, version: "c01833b" }}
+      welcome={{ organisationSignIn: organisation, organisationLabel, about: true, links: {}, version: "c01833b" }}
       onSignIn={(organisationProvider) => void signIn(organisationProvider)}
     />
   );

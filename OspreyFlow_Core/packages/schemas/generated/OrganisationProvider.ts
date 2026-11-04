@@ -1,7 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 /**
- * The provider's name as people know it, shown on the identity provider's own sign-in pages (for example 'Example Department account').
+ * The provider's name as people know it, shown on the welcome page's button (Continue with <label>) and on the identity provider's own sign-in pages (for example 'Example Department account').
  */
 export type Label = string;
 /**

@@ -23652,6 +23652,8 @@ Units 7, 5 and 6. Where this section and the text above differ, this section is 
 - **The label** names the provider on Keycloak's own pages (its display name). The welcome page's
   button keeps ADR-115 decision 3's words, *Continue with organisation sign-in* (open question for
   the owner: show the label there instead).
+  **Answered by the owner, 4 November 2026: show it** — the button reads *Continue with <label>*
+  (ADR-115 Amendment 5).
 - **An arrival whose email an account already holds** — corrected by step 28 (e) below: the
   provider no longer names Keycloak's *first broker login*.
 - **Rule 13 — corrected.** Decision 4 said the button had no keyboard step; `keyboard/sign-in.spec.ts`
@@ -24541,3 +24543,34 @@ clients byte-identical after), `::test_turning_off_the_glass_refresh_token_is_sa
 Against a real Keycloak 26.0: `tests/harness/test_organisation_sign_in.py::test_the_glass_is_given_no_refresh_token_and_repair_turns_it_off_on_an_older_realm`
 (the attribute set back to "true", a refresh token seen, registration run, none seen, the person
 still signed in).
+
+### ADR-115, Amendment 5 (4 November 2026) — the organisation's button names the provider (build order step 28 (a))
+
+**The owner's ruling of 4 November 2026** (open question 28): the welcome page's organisation
+button names the provider as people know it. Decision 3's words stay where there is nothing to name.
+
+1. **The words.** With a label, the button reads *Continue with <label>* — for example *Continue
+   with Example Department account*; without one, *Continue with organisation sign-in*, as before.
+   The busy text (*Opening your organisation's sign-in page…*), the note under it and the second
+   button are unchanged. Under GOV.UK the same.
+2. **Where the label comes from.** The answers file's `sign_in.organisation.label`, kept as
+   `governance.organisation_provider.label` (ADR-114 Amendment 33 decision 4) — the same name
+   Keycloak shows on its own pages. `harness.site.render_glass_settings` writes it into the Glass's
+   `/deployment.json` as `organisation_label` (`harness.site.organisation_label`: only with
+   `organisation_sign_in` set, trimmed, none when empty), and `oidcConfig.readWelcome` reads it as
+   `organisationLabel` (words only; anything else is no label). A deployment that names an alias
+   brokered by hand (`governance.organisation_sign_in` without `organisation_provider`, as on Lite)
+   has no label and keeps the plain words. Nothing else on the page changes; the label is the
+   deployment's own text, rendered as text.
+3. **The sign-in page** (Keycloak's, in the OspreyFlow theme) is reached by `kc_idp_hint`, which goes
+   straight to the organisation, so it is not shown on this path; where it is (the second button),
+   Keycloak lists the provider under its display name, which is already the label (drop 2).
+
+**Tests**, red first (`s28a_*`): `tests/harness/test_welcome_settings.py` (the label reaches
+`/deployment.json`; none for an alias brokered by hand or without organisation sign-in);
+`src/auth/oidcConfig.test.ts` "the deployment's welcome settings" (read, and no label for an
+absent, empty, blank or non-text value); `src/auth/SignInScreen.test.tsx` "names the organisation's
+provider on its button when the deployment gives its label" and "keeps the plain words when there is
+no label"; rule 13: `keyboard/sign-in.spec.ts` "organisation sign-in named by its label goes to that
+provider by keyboard" (`continue-with-the-organisations-named-provider`), shown red against the old
+wording.

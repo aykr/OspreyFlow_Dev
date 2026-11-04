@@ -87,6 +87,21 @@ test("organisation sign-in by keyboard names the organisation's provider to the 
   registerCovered("SIGN_IN_ACTIONS", "continue-with-organisation-sign-in");
 });
 
+// ADR-115 Amendment 5 (build order step 28 (a)): with the provider's label given, the button names
+// it — and Enter still goes straight to that provider.
+test("organisation sign-in named by its label goes to that provider by keyboard", async ({ page }) => {
+  await serveIdentityProvider(page);
+  await page.goto("/keyboard/sign-in-harness.html?organisation=org&label=Example%20Department%20account");
+  await expect(page.getByRole("button", { name: "Continue with organisation sign-in", exact: true })).toHaveCount(0);
+  await tabTo(page, "Continue with Example Department account");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(new RegExp(`${AUTHORITY}/protocol/openid-connect/auth`.replace(/\./g, "\\.")));
+  const url = new URL(page.url());
+  expect(url.searchParams.get("kc_idp_hint")).toBe("org");
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  registerCovered("SIGN_IN_ACTIONS", "continue-with-the-organisations-named-provider");
+});
+
 // ADR-114 Amendment 33 decision 4: with the organisation's provider configured, the deployment's
 // own accounts — the first administrator's, made by a one-time code — still sign in, by keyboard,
 // and go to Keycloak's own form, with no provider hint.
