@@ -453,6 +453,15 @@ accounts. At their first sign-in they choose their own password, then invite eve
 Admin area (section 9). The install's own tools reach the three names on the server itself and
 trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
 
+**The upload folder.** Files an analyst uploads in the Ingest Studio, and the demo packs' own
+files, are written to `uploaded/` inside `server.ingest` by the Conduit, which runs as uid 10001.
+Before anything starts, `install`, `apply`, `start` and `update` make that folder and, when uid
+10001 cannot write it, give it to `10001:10001` with a short-lived container of the Conduit's own
+image, so the service account needs no root for it. It is never made writable by every account, and
+an arrangement of your own that already lets uid 10001 write (its group, and mode `2775`, say) is
+left as it is. If it cannot be given over, the command says why and starts nothing (section 16).
+Lite on a Linux computer does the same.
+
 **Renewing the certificate.** Replace the two files (same paths), then run `ospreyflow apply`. It
 checks the new certificate, and only the front proxy is started again.
 
@@ -1093,6 +1102,7 @@ Admin → Schedules and runs lists every one.
 | `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | `doctor`, `install` or `apply` refuses the GPU | Each reason is named, and nothing was changed: install the NVIDIA driver and restart until `nvidia-smi` lists the GPU; install the NVIDIA Container Toolkit and run `sudo nvidia-ctk runtime configure --runtime=docker` and `sudo systemctl restart docker`; on macOS or Windows, set the GPU to `none` (section 5a.4) |
+| `ospreyflow demo add` or an upload fails with "Permission denied: '/var/lib/osprey/ingest/uploaded/…'", or `install`, `apply`, `start` or `update` says "the Conduit (uid 10001) cannot write …/uploaded" | Linux only: the Conduit's upload folder in `server.ingest` (Lite: `components.storage.ingest`) is not its own. A deployment installed or updated with v0.4.8 or earlier has it so: run `ospreyflow apply` or `ospreyflow start` once with a later version, which gives the folder over (section 5a). When giving it over fails, the command names Docker's reason; or give it over yourself, `sudo chown 10001:10001 <server.ingest>/uploaded`, and run the command again |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |

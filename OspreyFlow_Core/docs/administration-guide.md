@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.38** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
+**Version 1.39** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.39 | 2026-11-04 | Found on the first server (ADR-114 Amendment 33): §5a the Ingest Studio's upload folder, given to the Conduit's user (uid 10001) before anything starts, and never writable by every account; §16 an upload or a demo pack refused with "Permission denied" on Linux. |
 | 1.38 | 2026-11-04 | Describes v0.4.8. No change to its content. |
 | 1.37 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.36 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33): the first administrator holds the Admin and the Analyst roles from the start, whether or not demo packs load, so the cases they author open for them. §1a and §11 no longer ask anyone to give them the Analyst role; §5 and §5a say which roles the account is made with; §9.2 says so too, and that an `admin` made by v0.4.6 or earlier needs the Analyst role added. |
@@ -631,6 +632,15 @@ organisation's root, `ca`, is mounted into the identity provider, which runs as 
 `doctor`, `install` and `apply` refuse one that not every account can read (`chmod 644` it; it holds
 no secret). The key stays `600`. The install's own tools reach the three names on the server itself and
 trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
+
+**The upload folder.** Files an analyst uploads in the Ingest Studio, and the demo packs' own
+files, are written to `uploaded/` inside `server.ingest` by the Conduit, which runs as uid 10001.
+Before anything starts, `install`, `apply`, `start` and `update` make that folder and, when uid
+10001 cannot write it, give it to `10001:10001` with a short-lived container of the Conduit's own
+image, so the service account needs no root for it. It is never made writable by every account, and
+an arrangement of your own that already lets uid 10001 write (its group, and mode `2775`, say) is
+left as it is. If it cannot be given over, the command says why and starts nothing (section 16).
+Lite on a Linux computer does the same.
 
 **Renewing the certificate.** Replace the two files (same paths), then run `ospreyflow apply`. It
 checks the new certificate, and only the front proxy is started again.
@@ -1426,6 +1436,7 @@ Admin → Schedules and runs lists every one.
 | `doctor` says too little disk where backups are written | Give `server.backups` more room, or name another folder; remove old sets |
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | `doctor`, `install` or `apply` refuses the GPU | Each reason is named, and nothing was changed: install the NVIDIA driver and restart until `nvidia-smi` lists the GPU; install the NVIDIA Container Toolkit and run `sudo nvidia-ctk runtime configure --runtime=docker` and `sudo systemctl restart docker`; on macOS or Windows, set the GPU to `none` (section 5a.4) |
+| `ospreyflow demo add` or an upload fails with "Permission denied: '/var/lib/osprey/ingest/uploaded/…'", or `install`, `apply`, `start` or `update` says "the Conduit (uid 10001) cannot write …/uploaded" | Linux only: the Conduit's upload folder in `server.ingest` (Lite: `components.storage.ingest`) is not its own. A deployment installed or updated with v0.4.8 or earlier has it so: run `ospreyflow apply` or `ospreyflow start` once with a later version, which gives the folder over (section 5a). When giving it over fails, the command names Docker's reason; or give it over yourself, `sudo chown 10001:10001 <server.ingest>/uploaded`, and run the command again |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |
