@@ -67,7 +67,9 @@ def _stand_ins(bin_dir: Path) -> None:
         "    image = sys.argv[4]\n"
         "if image is None:\n"
         "    sys.exit(1)\n"
-        "digest = 'sha256:' + hashlib.sha256(image.encode()).hexdigest()\n"
+        # Docker answers an image pinned by digest with that same digest, never another.
+        "pinned = image.partition('@')[2]\n"
+        "digest = pinned or 'sha256:' + hashlib.sha256(image.encode()).hexdigest()\n"
         "if sys.argv[1] == 'image':\n"
         "    print(image.split('@')[0].rsplit(':', 1)[0] + '@' + digest)\n"
         "else:\n"
@@ -104,7 +106,12 @@ def _lock_as_the_release_writes_it(tmp_path: Path) -> dict[str, str]:
     )  # fmt: skip
     assert done.returncode == 0, done.stdout + done.stderr
     lock = yaml.safe_load((checkout / "versions.lock").read_text(encoding="utf-8"))
-    return {f"{e['repository']}:{e['tag']}": str(e["digest"]) for e in lock["images"]}
+    return {
+        f"{e['repository']}:{e['tag']}" if e["tag"] else f"{e['repository']}@{e['digest']}": str(
+            e["digest"]
+        )
+        for e in lock["images"]
+    }
 
 
 def _runnable_graph_stores() -> list[GraphStore]:
@@ -150,3 +157,42 @@ def test_a_graph_store_the_release_leaves_out_is_one_no_deployment_can_run() -> 
     from harness.release_lock import NOT_YET_RUNNABLE
 
     assert set(NOT_YET_RUNNABLE) == set(GraphStore) - set(_runnable_graph_stores())
+
+
+def _pinned_or_hashed(ref: str) -> str:
+    """A registry's answer: a digest-pinned image is that digest; any other, a stable stand-in."""
+    _, _, pinned = ref.partition("@")
+    return pinned or _resolver(ref)
+
+
+def test_every_lock_entry_names_a_reference_docker_can_pull() -> None:
+    """Red before 4 November: an image pinned by digest alone (`ollama/ollama@sha256:…`) was split
+    at its first colon, so the lock said `repository: ollama/ollama@sha256`, and `update
+    --make-bundle` asked Docker for `ollama/ollama@sha256@sha256:…` (`harness/bundle.py` joins
+    `repository@digest`), which no registry serves. Checked in v0.4.4's and v0.4.5's locks."""
+    from harness.release_lock import release_images, render_release_lock
+
+    base = OspreyConfig.model_validate(yaml.safe_load(_committed_config_text()) or {})
+    lock = yaml.safe_load(render_release_lock(base, _pinned_or_hashed))
+    by_digest_alone = [
+        e for e in lock["images"] if e["service"] in ("ollama", "litellm", "whisper")
+    ]
+    assert by_digest_alone, "the committed answers pin some images by digest alone"
+    for entry in lock["images"]:
+        repository = str(entry["repository"])
+        assert "@" not in repository, entry
+        assert ":" not in repository.rsplit("/", 1)[-1], entry
+    for entry in by_digest_alone:
+        assert entry["tag"] == ""
+        assert f"{entry['repository']}@{entry['digest']}" in {i.image for i in release_images(base)}
+
+
+def test_a_registry_port_is_not_read_as_a_tag() -> None:
+    from harness.render import _repository_and_tag
+
+    assert _repository_and_tag("localhost:5000/acme/api:abc") == ("localhost:5000/acme/api", "abc")
+    assert _repository_and_tag("localhost:5000/acme/api@sha256:00") == (
+        "localhost:5000/acme/api",
+        "",
+    )
+    assert _repository_and_tag("postgres:16-alpine") == ("postgres", "16-alpine")
