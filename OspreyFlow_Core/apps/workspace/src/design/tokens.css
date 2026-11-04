@@ -214,8 +214,8 @@
   padding-left: max(var(--govuk-gutter), calc((100% - 960px) / 2));
   padding-right: max(var(--govuk-gutter), calc((100% - 960px) / 2));
 }
-/* GOV.UK's own header, service navigation and footer keep GOV.UK's link styling: no Glass border. */
-[data-brand="govuk"] :is(.govuk-header, .govuk-service-navigation, .govuk-footer, .govuk-phase-banner) a { border-bottom: 0; }
+/* GOV.UK's own header, phase banner and footer keep GOV.UK's link styling: no Glass border. */
+[data-brand="govuk"] :is(.govuk-header, .govuk-footer, .govuk-phase-banner) a { border-bottom: 0; }
 
 html, body { margin:0; padding:0; }
 

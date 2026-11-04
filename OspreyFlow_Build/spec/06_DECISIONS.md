@@ -20750,6 +20750,54 @@ and so is the name; the GOV.UK header's own logo link and service name are spoke
 `src/shell/brandButton.test.tsx` — both bars, both brands, the name's first word is the visible label
 word for word; shown red ("OspreyFlow" against "Osprey"). GDS finding F6 and remediation A3 are closed.
 
+### ADR-132, Amendment 5 (4 November 2026) — no service-name band under the GOV.UK header
+
+Status: accepted, the owner's ruling. Shown the GOV.UK-themed workspace, the owner said: "this band
+is too thick and it reduces the workspace a lot, can you remove the Beta and Prison Intelligence
+bands". Of three options put — move the name into the GOV.UK header, hide the band on the workspace
+only, or remove it everywhere — the owner chose **remove it everywhere**.
+
+Context. Decision 9 drew GOV.UK Frontend's `service-navigation` component under the GOV.UK header,
+naming `appearance.service_name`; Amendment 2 drew the same band on the sign-in page at `id.`, and
+Amendment 4 point 4 kept it there. Together with the phase banner it took two rows off the top of
+every page, and the workspace, sized to the window less what stands above it, lost that height. The
+phase banner ("Beta") is already a setting: `appearance.phase: none` draws none (decision 8), so it
+is not changed here.
+
+Decision.
+
+1. **No service-name band anywhere**: not on the workspace, the start and welcome pages, the Admin
+   area, nor the sign-in page. `GovukHeader` is the GOV.UK header and nothing else, and takes no
+   service name; `govuk_chrome.js`'s copy of it has no band; `tokens.css` has no rule for one. This
+   replaces decision 9's "the service navigation naming `appearance.service_name`" and Amendment 4
+   point 4.
+2. **The service's name stays in the page title**, GOV.UK's form "<service> – GOV.UK" (falling back
+   to the organisation, then "OspreyFlow", as before). On the Glass the frame sets it (`BrandFrame`,
+   moved there from `main.tsx` so a test sees it set by the real frame); on the sign-in page
+   `govuk_chrome.js` now sets it too, as text. Before this amendment the sign-in page's tab carried
+   Keycloak's own title, built from the realm's display name ("OspreyFlow"), not the service's —
+   read from the theme, not checked against a running Keycloak; the script's title is set in the
+   page whatever Keycloak's template writes. Elsewhere the name is unchanged: the install
+   still requires it, and the guided page and the command still ask for it.
+3. **Keycloak's own title above the sign-in card stays hidden** under GOV.UK, as on the Glass's
+   sign-in page, which shows no visible service name either. Amendment 2 point 7's reason ("the
+   service navigation already names the service") is replaced by this one.
+4. The GOV.UK Design System shows the service name in the service navigation; leaving it out is a
+   departure from its pattern, taken for the workspace's height, and one a service assessment may
+   ask about.
+
+Tests that would fail if the band came back, each shown red against the code before this change:
+`src/brand/govuk/GovukHeader.test.tsx`'s "draws no service-name band and no link but the logo's"
+and "leaves no style for the band in tokens.css"; `src/brand/BrandFrame.test.tsx`'s "draws no
+service-name band, and names the service in the page title" (also the title's wiring);
+`src/brand/govuk/govukChrome.test.tsx` (the sign-in page's copy of the header);
+`tests/keycloak_theme/govuk_sign_in.test.mjs`'s "no service-name band is drawn, and the page title
+names the service", "without a service name the title falls back as the Glass's does" and "a
+service name is text, never markup"; `tests/harness/test_keycloak_theme_govuk.py`'s
+`test_under_govuk_the_chrome_draws_no_service_name_band`. `keyboard/shell.spec.ts` has the same
+check in a browser ("no service-name band is drawn, and the page title names the service"), and its
+Tab-order case no longer expects the name between the header and the Glass.
+
 ## ADR-133 — Monitoring: rules written as sentences, from templates, previewed before they run — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings (below). Proposed the same day.

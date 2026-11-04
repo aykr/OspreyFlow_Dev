@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -12,23 +15,28 @@ afterEach(() => {
 
 describe("GovukHeader", () => {
   it("renders nothing under the OspreyFlow brand", () => {
-    const { container } = render(<GovukHeader serviceName="Case Finder" />);
+    const { container } = render(<GovukHeader />);
     expect(container.firstChild).toBeNull();
   });
 
-  it("links the GOV.UK logo to gov.uk and the service name to the home page", () => {
+  it("links the GOV.UK logo to gov.uk", () => {
     applyBrand("govuk");
-    render(<GovukHeader serviceName="Case Finder" />);
+    render(<GovukHeader />);
     expect(screen.getByRole("link", { name: /GOV\.UK/ }).getAttribute("href")).toBe("https://www.gov.uk/");
-    expect(screen.getByRole("link", { name: "Case Finder" }).getAttribute("href")).toBe("/");
-    expect(screen.getByRole("region", { name: "Service information" })).toBeTruthy();
   });
 
-  it("omits the service navigation without a service name", () => {
+  // ADR-132 Amendment 5 (the owner's ruling of 4 November 2026): no service-name band under the
+  // header. The header is the GOV.UK logo and nothing else; the name is in the page title.
+  it("draws no service-name band and no link but the logo's", () => {
     applyBrand("govuk");
-    render(<GovukHeader serviceName={null} />);
+    const { container } = render(<GovukHeader />);
+    expect(container.querySelector(".govuk-service-navigation")).toBeNull();
     expect(screen.queryByRole("region", { name: "Service information" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Service information" })).toBeNull();
-    expect(screen.getByRole("link", { name: /GOV\.UK/ })).toBeTruthy();
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("leaves no style for the band in tokens.css", () => {
+    const tokens = readFileSync(join(__dirname, "../../design/tokens.css"), "utf-8");
+    expect(tokens).not.toContain("govuk-service-navigation");
   });
 });

@@ -3,9 +3,10 @@
 Under `appearance.brand: govuk` the login theme imports GOV.UK Frontend's stylesheet from the
 deployment's own origin, marks the page `data-brand="govuk"` (so the brand block in `tokens.css`
 re-themes it), shows the service's name rather than the OspreyFlow wordmark, and adds the GOV.UK
-header and footer. The front proxy serves `/assets/govuk/` on the `id.` name from the Glass, so the
-stylesheet and its fonts are same-origin. Under the OspreyFlow brand nothing changes: the cases
-below hold the theme and the routing table to what they were.
+header and footer. Amendment 5 (4 November 2026): no service-name band under the header; the chrome
+script names the service in the page title instead. The front proxy serves `/assets/govuk/` on the
+`id.` name from the Glass, so the stylesheet and its fonts are same-origin. Under the OspreyFlow
+brand nothing changes: the cases below hold the theme and the routing table to what they were.
 """
 
 from __future__ import annotations
@@ -75,6 +76,15 @@ def test_a_service_name_is_escaped_where_keycloak_prints_it_unescaped() -> None:
     assert "loginTitleHtml=&lt;b&gt;Prison&lt;/b&gt; &amp; Probation\n" in messages
 
 
+def test_under_govuk_the_chrome_draws_no_service_name_band() -> None:
+    """ADR-132 Amendment 5, the owner's ruling of 4 November 2026: the band is removed everywhere.
+    The script that ships in the theme carries no band to draw; the name it is given is for the page
+    title (`govuk_sign_in.test.mjs` runs the script and checks the title)."""
+    chrome = render_login_theme(TOKENS, appearance=GOVUK, glass_origin=GLASS)[GOVUK_CHROME_SCRIPT]
+    assert "govuk-service-navigation" not in chrome
+    assert "document.title" in chrome
+
+
 def _config(appearance: dict[str, object] | None = None) -> OspreyConfig:
     raw: dict[str, object] = {"network": {"public_origin": GLASS}}
     if appearance:
@@ -95,8 +105,9 @@ def test_under_the_ospreyflow_brand_the_routing_table_is_unchanged() -> None:
 
 
 def test_under_govuk_the_words_name_no_product_and_the_title_is_not_repeated() -> None:
-    """The service navigation names the service; Keycloak's own title above the card would say it a
-    second time, and the messages would name OspreyFlow on a GOV.UK service."""
+    """Keycloak's own title above the card stays hidden, as on the Glass's sign-in page, which names
+    the service only in the page title since Amendment 5; the messages name no product on a GOV.UK
+    service."""
     for reset_by_email in (True, False):
         theme = render_login_theme(
             TOKENS, reset_by_email=reset_by_email, appearance=GOVUK, glass_origin=GLASS

@@ -296,7 +296,7 @@ def render_glass_settings(config: OspreyConfig) -> str:
         "marking": marking_floor(config),
         "organisation_sign_in": config.governance.organisation_sign_in,
         "welcome": {"about": welcome.about, "links": links},
-        # ADR-132: the deployment's brand and what its GOV.UK header, footer and banner name.
+        # ADR-132: the deployment's brand and what its page title, GOV.UK footer and banner name.
         "appearance": config.appearance.model_dump(),
         "version": deployment_version(),
     }

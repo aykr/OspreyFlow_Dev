@@ -154,7 +154,7 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
     <div className="home">
       {marking && <ClassificationStrip marking={marking} />}
       <header className="home-header">
-        {/* ADR-132: under GOV.UK the GOV.UK header above names the service; no OspreyFlow mark. */}
+        {/* ADR-132: under GOV.UK the GOV.UK header stands above and the page title names the service; no OspreyFlow mark. */}
         {currentBrand() !== "govuk" && (
           <>
             <MeshMark size={24} />

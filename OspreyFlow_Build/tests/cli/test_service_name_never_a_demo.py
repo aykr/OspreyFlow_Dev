@@ -1,8 +1,9 @@
 """Step 9d finding 3: the GOV.UK header's `appearance.service_name` read "Prison Intelligence" on
-every case of the GOV.UK deployment, the Ledger's included. The header names the service the whole
-deployment is, and a deployment holds many cases; so nothing the product offers or writes may name
-one demo case. That deployment's own `osprey.yaml` says so because its owner wrote it so (open
-question 16); this holds everything else to it.
+every case of the GOV.UK deployment, the Ledger's included. The name (in the page title since
+ADR-132 Amendment 5 removed the header's band) is the service the whole deployment is, and a
+deployment holds many cases; so nothing the product offers or writes may name one demo case. That
+deployment's own `osprey.yaml` says so because its owner wrote it so (open question 16); this holds
+everything else to it.
 
 Every place a service name comes from in the product, and the case that catches a demo's name there:
 - a starter's name, offered by the command and the guided page alike (`starters.DOMAINS`,

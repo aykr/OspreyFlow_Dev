@@ -193,7 +193,7 @@ def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) ->
         offered = starter.domain.service_name if starter is not None else None
         example = f" (this starter offers {offered!r})" if offered else ""
         raise AnswersRefused(
-            "a GOV.UK service is named in its header, and no service name was given: give "
+            "a GOV.UK service is named in its page title, and no service name was given: give "
             f"appearance.service_name, or --service-name{example}. Name the service the whole "
             "deployment is, since it holds many cases, not one case. Nothing was installed"
         )

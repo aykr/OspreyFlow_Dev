@@ -1,4 +1,4 @@
-// Shell harness: the brand frame (skip link, GOV.UK header, service navigation, phase banner, footer)
+// Shell harness: the brand frame (skip link, GOV.UK header, phase banner, footer)
 // around the classification strip and the top bar, for `shell.spec.ts` and the GOV.UK scans (ADR-132).
 import { createRoot } from "react-dom/client";
 

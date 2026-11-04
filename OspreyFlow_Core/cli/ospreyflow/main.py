@@ -238,7 +238,7 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--list-starters", action="store_true", help="list the starters; install nothing"
     )
-    install.add_argument("--service-name", help="GOV.UK: the service's name in its header")
+    install.add_argument("--service-name", help="GOV.UK: the service's name, in the page title")
     install.add_argument("--organisation", help="GOV.UK: the organisation in its footer")
     install.add_argument("--phase", choices=starters.PHASES, help="GOV.UK: the phase banner")
     install.add_argument(
@@ -435,7 +435,7 @@ def _prompted_answers(
             # phase. The name offered names the whole service, never one case (step 9d finding 3).
             raw["appearance"] = {
                 "service_name": flags.get("service_name")
-                or ctx.ask("The service's name (GOV.UK header)", starter.domain.service_name or ""),
+                or ctx.ask("The service's name (page title)", starter.domain.service_name or ""),
                 "organisation": flags.get("organisation")
                 or ctx.ask("The organisation (GOV.UK footer)", ""),
                 "phase": flags.get("phase")

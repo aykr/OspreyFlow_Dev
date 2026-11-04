@@ -129,7 +129,8 @@ describe("Home", () => {
   });
 });
 
-// ADR-132: under GOV.UK the GOV.UK header above names the service, so Home draws no OspreyFlow mark.
+// ADR-132: under GOV.UK the GOV.UK header stands above and the page title names the service, so Home
+// draws no OspreyFlow mark.
 describe("Home under the GOV.UK brand", () => {
   afterEach(() => applyBrand("ospreyflow"));
 

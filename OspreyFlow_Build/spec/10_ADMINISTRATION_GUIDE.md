@@ -66,9 +66,9 @@ ospreyflow install --mode lite --starter govuk-blank --service-name "<your servi
 **The GOV.UK theme** asks for the service's name, organisation and phase (`--service-name`,
 `--organisation`, `--phase alpha|beta|live|none`; the phase offered first is `beta`). Without a
 service name the install is refused, in words, before anything is changed. **Name the service, not a
-case:** the GOV.UK header shows the name on every page of every case, so the names offered above
-describe the whole deployment; "Prison Intelligence" in the header of the Ledger's case is the
-mistake this avoids. `blank` offers no name: a real service names itself.
+case:** the name is the page title (the browser tab's "<name> – GOV.UK") on every page of every
+case, so the names offered above describe the whole deployment; "Prison Intelligence" over the
+Ledger's case is the mistake this avoids. `blank` offers no name: a real service names itself.
 
 **On the guided page** (`ospreyflow install --gui`, section 4.1) the starter is on the first screen,
 Mode, under **Starter (optional)**; a GOV.UK starter shows the service's name (filled in with the
@@ -1253,9 +1253,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `deployment` | section | — | Which deployment this is, on a machine that runs more than one. |
 | `deployment.name` | str or none | none | Names this deployment's Compose project, its volumes and its rendered folder, so a second deployment on the same machine shares none of them. |
 | `deployment.graph_port` | int or none | none | The port on this machine (127.0.0.1 only) the graph store's own tools reach it at. A deployment installed beside another with ospreyflow install --name is given one of its own, so the two share no port. |
-| `appearance` | section | — | How every page looks: the deployment's brand, and what a GOV.UK header names. |
+| `appearance` | section | — | How every page looks: the deployment's brand, and what its page title names. |
 | `appearance.brand` | `ospreyflow` \| `govuk` | `ospreyflow` | The GOV.UK look, for a service on a gov.uk domain only. |
-| `appearance.service_name` | str or none | none | The service's name in the GOV.UK header and the page title. |
+| `appearance.service_name` | str or none | none | The service's name, in the page title. |
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |

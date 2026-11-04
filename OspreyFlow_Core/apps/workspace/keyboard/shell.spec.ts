@@ -153,7 +153,8 @@ for (const brand of ["ospreyflow", "govuk"] as const) {
   });
 }
 
-test("govuk: the header, the service name, the Glass and the footer are reached by Tab in that order", async ({ page }) => {
+// ADR-132 Amendment 5 (4 November 2026): no service-name band, so the Glass follows the header.
+test("govuk: the header, the Glass and the footer are reached by Tab in that order", async ({ page }) => {
   await page.goto("/keyboard/shell-harness.html?brand=govuk");
   await page.getByRole("link", { name: "Skip to main content" }).waitFor({ state: "attached" });
   const names: string[] = [];
@@ -170,10 +171,9 @@ test("govuk: the header, the service name, the Glass and the footer are reached 
   const at = (match: (n: string) => boolean, from: number) => names.findIndex((n, i) => i >= from && match(n));
   const header = at((n) => n.includes("GOV.UK"), 1);
   expect(header).toBeGreaterThan(0);
-  const service = at((n) => n === "Prison Intelligence", header + 1);
-  expect(service).toBeGreaterThan(header);
-  const glass = at((n) => n === "Workspace control", service + 1);
-  expect(glass).toBeGreaterThan(service);
+  expect(names).not.toContain("Prison Intelligence");
+  const glass = at((n) => n === "Workspace control", header + 1);
+  expect(glass).toBeGreaterThan(header);
   const accessibility = at((n) => n === "Accessibility statement", glass + 1);
   expect(accessibility).toBeGreaterThan(glass);
   const cookies = at((n) => n === "Cookies", accessibility + 1);
@@ -185,17 +185,25 @@ test("every registered shell action has its own proving test case above", () => 
 });
 
 // ADR-132 Amendment 4: GOV.UK's own chrome keeps GOV.UK's link styling. The Glass gives every link a
-// bottom border (`tokens.css`), which drew a rule under the logo and the service name at rest, where
-// GOV.UK draws none (found 1 November 2026 against www.gov.uk).
-test("govuk: the GOV.UK logo and the service name are not underlined at rest", async ({ page }) => {
+// bottom border (`tokens.css`), which drew a rule under the logo at rest, where GOV.UK draws none
+// (found 1 November 2026 against www.gov.uk). The service name it also checked is gone (Amendment 5).
+test("govuk: the GOV.UK logo is not underlined at rest", async ({ page }) => {
   await page.goto("/keyboard/shell-harness.html?brand=govuk");
   const rules = await page.evaluate(() =>
-    [".govuk-header__homepage-link", ".govuk-service-navigation__link"].map((selector) => {
+    [".govuk-header__homepage-link"].map((selector) => {
       const style = getComputedStyle(document.querySelector(selector)!);
       return { selector, border: style.borderBottomStyle === "none" ? "0px" : style.borderBottomWidth, line: style.textDecorationLine };
     }),
   );
   for (const rule of rules) expect(rule, rule.selector).toEqual({ selector: rule.selector, border: "0px", line: "none" });
+});
+
+// ADR-132 Amendment 5: no service-name band in the real page under GOV.UK, and the title names the service.
+test("govuk: no service-name band is drawn, and the page title names the service", async ({ page }) => {
+  await page.goto("/keyboard/shell-harness.html?brand=govuk");
+  await page.locator(".govuk-header").waitFor();
+  await expect(page.locator(".govuk-service-navigation")).toHaveCount(0);
+  await expect(page).toHaveTitle("Prison Intelligence – GOV.UK");
 });
 
 // ADR-132 Amendment 4: under GOV.UK the sign-in and start pages sit in GOV.UK's width container (960px,
