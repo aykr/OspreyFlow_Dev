@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.50** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.51** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.51 | 2026-11-04 | The owner's rulings on sign-in (build order step 28): §5a.1, the welcome page's button names the organisation's provider by `sign_in.organisation.label` (ADR-115 Amendment 5), and someone whose email an OspreyFlow account already holds is told so in words and never joined to it (ADR-114 Amendment 33); §8, `repair-sign-in` also gives the workspace's client no refresh token (ADR-050 Amendment 2) and registers the organisation's first sign-in; §9.1, Admin → System's **Acting for people** says when the Conduit cannot act for people and to run `ospreyflow repair-sign-in` (ADR-114 Amendment 36); §16, that line, an arrival whose email is held, and windows that ask to sign in again after about half an hour left alone (a window renews only after the person has done something, ADR-050 Amendment 2). Appendix A: `governance.organisation_sign_in` and `governance.organisation_provider.label` name the button. |
 | 1.50 | 2026-11-04 | The owner's ruling (ADR-099 Amendment 11; build order step 27), "no role, no list": §5a.1 and §9.2, a person holding no role is told no dataset's name or id, even when their unit is set before a role; Home says *No cases to show* when they hold no case. |
 | 1.49 | 2026-11-04 | As found on the first server (ADR-114 Amendment 35 point 7): §13 and §14, Valkey's data was inside its container and is now moved too; a move that is refused puts back every file the command wrote, so `ospreyflow start` runs the deployment on its old data, and its words say so; the move checks each store apart from the deployment's own containers; a restore starts the identity provider again after PostgreSQL. §16 the move's refusal, and a restore refused with "could not authenticate to Keycloak: 500". |
 | 1.48 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 35; build order step 26): the stores keep their data in named volumes. §8 `uninstall --keep-data` now keeps data a later install finds; §13 where each store's data is kept, what a backup reads, and OpenSearch; §14 the one-time move of an existing deployment's data, its words, and what a failed move does to an update; new §14.1 removing the old volumes; §16 a move that is refused. |
@@ -683,9 +684,11 @@ checks the new certificate, and only the front proxy is started again.
 
 With `sign_in.organisation` in the answers, people sign in with their organisation's own account —
 Microsoft Entra ID, ADFS, or any OpenID Connect provider — through OspreyFlow's identity provider
-(Keycloak), which brokers it. The welcome page then offers **Continue with organisation sign-in**
+(Keycloak), which brokers it. The welcome page then offers **Continue with** and the provider's
+name from `sign_in.organisation.label` — for example **Continue with Example Department account** —
 first, which goes straight to the organisation's sign-in page, and **Sign in with an OspreyFlow
 account** beside it, for the accounts an administrator makes (the first administrator's among them).
+A deployment that names a provider with no label shows **Continue with organisation sign-in**.
 Without `sign_in`, there is the one **Sign in**, for those accounts alone.
 
 **What the organisation does first** — for Entra ID, in its admin centre's *App registrations*:
@@ -715,6 +718,19 @@ and roles once they have signed in, and sets their roles, then their access (cle
 handling codes); a later sign-in never takes those back. **No role, no list:** until they hold a
 role they are told no dataset's name, even if their unit is set first — the unit's dataset list and
 a case's datasets come back empty (section 9.2).
+
+**Someone whose email an OspreyFlow account already holds.** A person arriving through the
+organisation for the first time is matched by nothing but their email, and an email the
+organisation's provider sends is not proof that the person owns the OspreyFlow account with that
+address (Entra ID does not promise it is verified). So OspreyFlow **never joins the two**: when an
+account already holds that email — someone you invited by that address, say — the sign-in page
+says "This email address already belongs to an OspreyFlow account, so your organisation account has
+not been joined to it. Sign in to that account with its username and password instead, or ask your
+OspreyFlow administrator." Nothing is made. They can go on with that account (**Sign in with an
+OspreyFlow account**); for them to use the organisation's sign-in instead, remove that account in
+the identity provider's own console (Admin → People and roles cannot remove a person) and ask them
+to sign in again — they arrive with no role, and you grant their roles again. To avoid it, invite
+only the people who cannot come through the organisation (the first administrator, outside staff).
 
 **The organisation's own certificate authority.** With `server.ca`, the identity provider trusts
 it as well as the usual public authorities, so a provider on the organisation's own certificates
@@ -934,7 +950,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
-| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, and the organisation's identity provider with its client secret (section 5a.1); safe to run again, and prints no secret |
+| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret and its first sign-in (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
@@ -1019,7 +1035,7 @@ holding its right:
 | People and roles | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; disable, re-enable; reset a sign-in |
 | Dashboards | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
 | Schedules and runs | `operate_schedules` | Every scheduled or watched pipeline: pause, resume, run now, change its time, its runs |
-| System | `administer_system` | Each component's health, the models in use, the version and whether an update exists |
+| System | `administer_system` | Each component's health — **Acting for people** among them, which says "The Conduit cannot act for people: run `ospreyflow repair-sign-in`" when the identity provider refuses the Conduit's own credential — the models in use, the version and whether an update exists |
 | Datasets | `administer_system` | Every dataset and its egress — whether its material may be sent to a hosted model engine (section 10) |
 | Demo packs | `administer_system` | Which packs are loaded, and the command that adds one |
 
@@ -1568,7 +1584,9 @@ Admin → Schedules and runs lists every one.
 | A service is not healthy | `ospreyflow status`, then `ospreyflow logs <service>` |
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
-| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again |
+| Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
+| Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow never joins the two (section 5a.1). They sign in with that account, or you remove it and they arrive again |
+| Windows ask people to sign in again after about half an hour away | As intended: a window renews its sign-in only after the person has done something, so one left alone ends at the identity provider's idle limit (Keycloak's default, 30 minutes). The page is kept; they sign in again in a small window |
 | `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. "the identity provider … cannot" read the root: `chmod 644` the `ca` file. Then run the command again |
 | Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
 | Someone signed in through the organisation and sees nothing | As intended until an administrator grants them roles and access in Admin → People and roles (section 5a.1) |
@@ -1634,9 +1652,9 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `governance.identity_provider` | str | `keycloak` | The identity provider people sign in through. |
 | `governance.handling_scheme` | str | `uk-law-enforcement` | The handling scheme every item is marked under. |
 | `governance.ontology` | str | `default` | The ontology the deployment starts from. |
-| `governance.organisation_sign_in` | str or none | none | The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in*, which goes straight to it. Default: none — one *Sign in* to the OspreyFlow form. |
+| `governance.organisation_sign_in` | str or none | none | The alias of an organisation's own identity provider brokered by Keycloak. When set, the welcome page offers *Continue with organisation sign-in* (*Continue with <label>* when `organisation_provider` names one), which goes straight to it. Default: none — one *Sign in* to the OspreyFlow form. |
 | `governance.organisation_provider` | section or none | none | Small on a server of your own: the organisation's identity provider, brokered by Keycloak; its client secret is never here (section 5a.1). |
-| `governance.organisation_provider.label` | str | required | The provider's name as people know it, shown on the identity provider's own sign-in pages (for example 'Example Department account'). |
+| `governance.organisation_provider.label` | str | required | The provider's name as people know it, shown on the welcome page's button (Continue with <label>) and on the identity provider's own sign-in pages (for example 'Example Department account'). |
 | `governance.organisation_provider.issuer` | str | required | The provider's issuer, an https:// address; its discovery document is read from <issuer>/.well-known/openid-configuration (for Entra ID, https://login.microsoftonline.com/<tenant>/v2.0). |
 | `governance.organisation_provider.client_id` | str | required | The application (client) id the organisation registered for OspreyFlow. |
 | `governance.marking` | str or none | none | The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher. One of the handling scheme's classifications. Default: the scheme's lowest. |
