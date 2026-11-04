@@ -63,7 +63,7 @@ describe("Inspector — a selected link", () => {
   it("shows the link's details and a Notes section for that link", async () => {
     const fetchMock = stubNotes();
     render(<Inspector node={null} link={link} assessment={assessment} />);
-    expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
+    expect(screen.getByText("Associated with")).toBeTruthy(); // its key is never shown (step 30)
     fireEvent.click(screen.getByRole("button", { name: "Notes" })); // ADR-096: folded at first
     expect(screen.getByRole("region", { name: "Notes" })).toBeTruthy();
     await waitFor(() =>
@@ -77,7 +77,7 @@ describe("Inspector — a selected link", () => {
   it("offers no Notes when the case is not wired up (no investigation to keep them in)", () => {
     stubNotes();
     render(<Inspector node={null} link={link} />);
-    expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
+    expect(screen.getByText("Associated with")).toBeTruthy(); // its key is never shown (step 30)
     expect(screen.queryByRole("region", { name: "Notes" })).toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("Inspector sections (ADR-096)", () => {
     for (const name of ["Change this link", "Notes", /^Events/, "Change history"]) {
       expect(header(name).getAttribute("aria-expanded")).toBe("false");
     }
-    expect(screen.getByText("ASSOCIATED_WITH")).toBeTruthy();
+    expect(screen.getByText("Associated with")).toBeTruthy(); // its key is never shown (step 30)
     expect(screen.queryByRole("region", { name: "Notes" })).toBeNull(); // hidden while folded
   });
 
@@ -276,8 +276,8 @@ describe("Inspector states (ADR-097 step 1, design review item 4)", () => {
     );
     expect(screen.getByRole("button", { name: "Summary" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("2 Person")).toBeTruthy();
-    expect(screen.getByText(/employer/)).toBeTruthy(); // shared by both, with one value
-    expect(screen.queryByText(/family_name/)).toBeNull(); // different values: not shared
+    expect(screen.getByText(/Employer, shared/)).toBeTruthy(); // shared by both, with one value, named (step 30)
+    expect(screen.queryByText(/Family name/)).toBeNull(); // different values: not shared
     fireEvent.click(screen.getByRole("button", { name: "Links between them (1)" }));
     expect(screen.getByText("Associate of")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Properties" })).toBeNull(); // not one node's view

@@ -43,6 +43,20 @@ describe("HeldRowsPanel", () => {
     expect(await screen.findByText(/^Row 5: a 1$/)).toBeTruthy();
   });
 
+  it("names the source file by its name, never the server's path to it (build order step 30)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true, status: 200,
+        json: async () => [{ ...HELD, source: "/var/lib/osprey/ingest/uploaded/prison-intelligence/pid_conflicts.csv" }],
+      }) as Response),
+    );
+    render(<HeldRowsPanel apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" level="author" />);
+    await screen.findByText(/^Row 5: a 1$/);
+    expect(document.body.textContent).toContain("1 row of pid_conflicts.csv");
+    expect(document.body.textContent).not.toContain("/var/lib/osprey");
+  });
+
   it("says how many links a release made", async () => {
     serve({ load_id: "L2", edges_created: 3, nodes_created: 0, rule_notes: [] });
     expect((await release()).textContent).toContain("3 link(s) made");

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { HeldRow } from "../../../../packages/schemas/generated";
 import { COUNTS_WITHHELD_REASON } from "../admin/Schedules";
 import { Button } from "../design/primitives";
-import { rowNumber } from "../inspector/sourceLocator";
+import { rowNumber, sourceName } from "../inspector/sourceLocator";
 import type { AccessLevel } from "../investigation/cases";
 import { listHeldRows, rejectHeldRows, releaseHeldRows, type AlertsApi } from "./api";
 import { when } from "./names";
@@ -52,7 +52,7 @@ export function HeldRowsPanel(props: HeldRowsPanelProps) {
         return (
           <section key={loadId} aria-label={`Held from load ${loadId}`} style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
             <p className="value" style={{ margin: 0 }}>
-              {group.length} row{group.length === 1 ? "" : "s"} of {first.source}, held {when(first.held_at)}
+              {group.length} row{group.length === 1 ? "" : "s"} of {sourceName(first.source)}, held {when(first.held_at)}
             </p>
             <p className="label" style={{ margin: 0 }}>Why: {first.reason}</p>
             <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>

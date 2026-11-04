@@ -108,6 +108,7 @@ async def run_verify(
     row_keys: RowKeys | None = None,
     investigation_id: str | None = None,
     checks: JudgeChecks | None = None,
+    locations: Sequence[str] | None = None,
 ) -> VerifyReport:
     """`row_keys` and `investigation_id` (ADR-127 decision 5): given the store of loaded rows and
     the case, the dry run counts the rows the run would skip by the draft's own `deduplicate`, as
@@ -115,7 +116,12 @@ async def run_verify(
 
     `checks` (ADR-133 decision 6, stage (d)): the pipeline's checks on load, judging what the sample
     would write that this principal may read in full (`load_checks.would_raise`), writing nothing;
-    their would-be alerts are reported beside the rejections."""
+    their would-be alerts are reported beside the rejections.
+
+    `locations` (build order step 30): the files a run of this recipe reads
+    (`run_source.files_a_run_reads`), read here in the run's order, so Verify checks what the run
+    will load — a pipeline's source node naming its own file once made Verify read the draft's
+    while the run read the node's. Left out, the draft's own file, as before."""
     if not draft.ready_for_profile:
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
@@ -125,7 +131,15 @@ async def run_verify(
     check_reference_matches(draft.row_template, ontology)
 
     source_handling = resolve_source_handling(draft)
-    all_rows = _read_recipe_rows(draft)
+    all_rows = (
+        _read_recipe_rows(draft)
+        if not locations
+        else [
+            row
+            for location in locations
+            for row in _read_recipe_rows(draft.model_copy(update={"source_location": location}))
+        ]
+    )
     sampled = all_rows[:DEFAULT_SAMPLE_SIZE]
     sample_is_whole_source = len(all_rows) <= DEFAULT_SAMPLE_SIZE
 
@@ -154,7 +168,7 @@ async def run_verify(
         graph=graph,
         ontology=ontology,
         principal=principal,
-        source=draft.source_location or draft.recipe_id,
+        source=(locations[0] if locations else draft.source_location) or draft.recipe_id,
         scheme=scheme,
         row_keys=row_keys,
         investigation_scope=investigation_id,

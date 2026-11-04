@@ -8,6 +8,7 @@ import type { OntologySchema, RowTemplate } from "../../../../../packages/schema
 import type { Palette } from "../../color/palette";
 import type { MapSelection } from "./MapCanvas";
 import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
+import { linkTypeName } from "../../canvas/linkLabel";
 
 export const NODE_SIZE = 14;
 
@@ -58,7 +59,8 @@ export function syncTemplateGraph(
   wanted.forEach((edge, key) => {
     const isSelected = selection?.kind === "edge" && selection.index === edge.index;
     const attributes = {
-      label: edge.type,
+      // Build order step 30 (rule 7): the type's name as a person reads it, never its key.
+      label: linkTypeName(edge.type, ontology.edge_types),
       size: isSelected ? 4 : 2,
       color: isSelected ? palette.brass : colours.edge,
       templateIndex: edge.index,

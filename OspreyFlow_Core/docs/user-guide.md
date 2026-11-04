@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.34** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.35** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.35 | 2026-11-04 | The owner's ruling (ADR-091 Amendment 1; build order step 30): §5.6, the Inspector shows no identifier meant for a machine — no node id, no link Type ID, and no internal reference such as a place's site reference; properties are named as you read them ("Prison number"); a link's end that is not on the canvas is named in words. Held rows name their source file by its file name. |
 | 1.34 | 2026-11-04 | The owner's rulings (ADR-115 Amendment 5, ADR-050 Amendment 2, ADR-114 Amendment 33; build order step 28): §2, the organisation's sign-in button names the organisation's provider; what it means when the sign-in page says your email already belongs to an OspreyFlow account; staying signed in — a window renews its sign-in only while you are working in it, so one left alone asks you to sign in again when you come back, the page kept. |
 | 1.33 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.32 | 2026-11-04 | Describes v0.4.9. No change to its content. |
@@ -370,6 +371,14 @@ seen — its **source**, the file and row it came from (its file name, never the
 this value** where the type has one (section 5.2), and the **judgements** that cite it. With several selected it summarises them and the links
 between them; with a link selected it shows the link's details, notes, events and history, and lets
 an Editor **change the link** (with a reason, and what stands behind it).
+
+**What you read, not what a machine stores.** A property is named as you read it ("Prison number",
+not `prison_number`), and a link by its name ("Shared cell with"). The Inspector shows no node id and
+no link *Type ID*, and it leaves out references that mean something only to a store or to the system
+a record came from: a place's site reference, an organisation's or incident's internal reference, an
+email's message id, and where its picture or geometry is kept. They are still on the record, and
+search and the map still use them; they are only not shown. A link whose other end is not on the
+canvas names that end "an entity not in this view" rather than by its id.
 
 **Sources withheld.** A record can belong to more than one dataset, and a case reads only some. Its
 sources are named only if the case reads every dataset the record belongs to. When it does not, where

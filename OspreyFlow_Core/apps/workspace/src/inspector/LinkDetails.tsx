@@ -7,15 +7,23 @@ import { displayValue } from "../search/searchOptions";
 
 export interface LinkDetailsProps {
   edge: Edge;
-  /** The nodes at each end, when they are on screen. An end that is not falls back to its id. */
+  /** The nodes at each end, when they are on screen. An end that is not is named in words
+   * (`endName`), never by its id. */
   source: Node | undefined;
   target: Node | undefined;
   /** Whether the ontology gives this type of relationship a direction. */
   directed: boolean;
   /** The basis the link's type declares (ADR-081); `null` or left out for a type with none. */
   typeBasis?: "direct" | "probabilistic" | null;
-  /** The type's display name (ADR-091); left out, it is derived from the type's id. */
+  /** The type's display name (ADR-091); left out, it is derived from the type's key, which is
+   * never shown itself (ADR-091 Amendment 1). */
   typeName?: string;
+}
+
+/** An end of a link as the Inspector names it: by its name when it is on the canvas, and in words
+ * when it is not, never by its store id (build order step 30, rule 7). */
+export function endName(node: Node | undefined): string {
+  return node ? displayValue(node) : "an entity not in this view";
 }
 
 /** What the Inspector says about what stands behind a link (ADR-081 step B, Amendment 2). */
@@ -41,8 +49,8 @@ export function basisText(
 /** What the Inspector shows when a link is selected: its type, the direction between its two
  * ends, how many records stand behind it, its dates and its sources. */
 export function LinkDetails({ edge, source, target, directed, typeBasis, typeName }: LinkDetailsProps) {
-  const from = source ? displayValue(source) : edge.source;
-  const to = target ? displayValue(target) : edge.target;
+  const from = endName(source);
+  const to = endName(target);
   const sources = edge.provenance.sources;
   const basis = basisText(edge, typeBasis);
   return (
@@ -50,12 +58,6 @@ export function LinkDetails({ edge, source, target, directed, typeBasis, typeNam
       <div>
         <dt style={{ color: "var(--text-secondary)" }}>Link</dt>
         <dd className="value">{typeName ?? linkTypeName(edge.type, [])}</dd>
-      </div>
-      <div>
-        <dt style={{ color: "var(--text-secondary)" }}>Type ID</dt>
-        <dd className="value" style={{ color: "var(--text-tertiary)" }}>
-          {edge.type}
-        </dd>
       </div>
       <div>
         <dt style={{ color: "var(--text-secondary)" }}>Between</dt>

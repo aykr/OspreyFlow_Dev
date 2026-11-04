@@ -458,6 +458,13 @@ def _published_recipe() -> StudioRecipeDraft:
     return _draft(_recipe(), Path("one.csv"), handling=SOURCE.model_dump())
 
 
+class _NothingVerified:
+    """A recipe no Verify recorded files for (build order step 30): the run is held to none."""
+
+    async def verified_sources(self, recipe_id: str, version: int) -> None:
+        return None
+
+
 async def test_the_run_route_answers_a_view_with_no_id_from_the_loads_lists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -483,12 +490,12 @@ async def test_the_run_route_answers_a_view_with_no_id_from_the_loads_lists(
             "monitors_store": 1, "patterns_store": 1, "alerts_store": 1, "principal_resolver": 1,
             "extraction_candidates": 1, "recogniser_for": 1, "online_geocode": 1,
             "typology_rules": 1, "held_rows": 1, "screening_lists": 1, "compute": 1,
-            "kyc_expiries": 1, "recipe_runs": 1,
+            "kyc_expiries": 1, "recipe_runs": 1, "studio_recipes": _NothingVerified(),
         }  # fmt: skip
         assert names  # the dependency list is what `RecipeRunDeps` declares
         result = await app_module.run_studio_recipe(
             investigation=SimpleNamespace(id="case-1"),  # type: ignore[arg-type]
-            recipe=object(),  # type: ignore[arg-type]
+            recipe=SimpleNamespace(recipe_id="r", version=2),  # type: ignore[arg-type]
             principal=LOADER,
             body=SimpleNamespace(source_location=None),  # type: ignore[arg-type]
             **route_args,  # type: ignore[arg-type]

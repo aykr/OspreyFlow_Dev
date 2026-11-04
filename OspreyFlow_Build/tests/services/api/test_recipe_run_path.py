@@ -33,6 +33,13 @@ def test_the_scheduler_reads_every_run_dependency_from_where_the_route_does() ->
         assert getattr(deps, name) is getattr(state, STATE_NAMES.get(name, name)), name
 
 
+class _NothingVerified:
+    """The registry of a recipe no Verify recorded files for (published before step 30)."""
+
+    async def verified_sources(self, recipe_id: str, version: int) -> None:
+        return None
+
+
 async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -60,8 +67,11 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "kyc_expiries": given["kyc_expiries"],
         "recipe_runs": given["recipe_runs"],
         "influencers": given["influencers"],
+        # Build order step 30: the run is held to the files Verify recorded; none here.
+        "studio_recipes": _NothingVerified(),
     }
-    investigation, recipe, principal = SimpleNamespace(id="case-1"), object(), object()
+    investigation, principal = SimpleNamespace(id="case-1"), object()
+    recipe = SimpleNamespace(recipe_id="r", version=1)
     result = await run_studio_recipe(
         investigation=investigation,  # type: ignore[arg-type]
         recipe=recipe,  # type: ignore[arg-type]

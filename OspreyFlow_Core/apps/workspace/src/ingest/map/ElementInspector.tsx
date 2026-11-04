@@ -28,6 +28,7 @@ import {
 } from "../handlingParts";
 import { FieldBindingEditor } from "./FieldBindingEditor";
 import { classificationWouldLoosen, entityTypesForPole, edgeTypesForEndpoints } from "./rowTemplate";
+import { linkTypeName } from "../../canvas/linkLabel";
 
 const POLE_CLASSES = ["person", "object", "location", "event", "organisation"] as const;
 
@@ -528,7 +529,9 @@ export function ElementInspector({
   const availableEdgePropertyNames = (edgeTypeDef?.properties ?? []).map((p) => p.name);
 
   return (
-    <Panel title={`${edge.from} → ${edge.to} · ${edge.type}`}>
+    // Build order step 30 (rule 7): a link type is named as a person reads it; its key is only the
+    // value the select sends and the template stores.
+    <Panel title={`${edge.from} → ${edge.to} · ${linkTypeName(edge.type, ontology.edge_types)}`}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)" }}>
         <div>
           <label>Type</label>
@@ -539,7 +542,7 @@ export function ElementInspector({
           >
             {validTypes.map((t) => (
               <option key={t.name} value={t.name}>
-                {t.name}
+                {linkTypeName(t.name, ontology.edge_types)}
               </option>
             ))}
           </Select>

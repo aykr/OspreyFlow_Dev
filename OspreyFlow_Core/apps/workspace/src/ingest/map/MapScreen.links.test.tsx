@@ -78,19 +78,19 @@ describe("Map: the links are reachable without a pointer", () => {
   it("lists the template's link beside the canvas", async () => {
     await mount();
     const list = screen.getByRole("list", { name: "Links" });
-    expect(within(list).getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" })).toBeTruthy();
+    expect(within(list).getByRole("button", { name: "Link 1: Communicated with, a to b" })).toBeTruthy();
   });
 
   it("opens a link in the inspector when it is chosen from the list", async () => {
     await mount();
     expect(screen.queryByLabelText("When it occurred")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }));
+    fireEvent.click(screen.getByRole("button", { name: "Link 1: Communicated with, a to b" }));
     expect(screen.getByLabelText("When it occurred")).toBeTruthy();
   });
 
   it("binds its time and its end from columns, and the saved row template carries both", async () => {
     await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }));
+    fireEvent.click(screen.getByRole("button", { name: "Link 1: Communicated with, a to b" }));
     fireEvent.change(screen.getByLabelText("When it occurred"), { target: { value: "column" } });
     fireEvent.change(screen.getByLabelText("When it ended"), { target: { value: "column" } });
     fireEvent.change(screen.getByLabelText("Column holding when it ended"), { target: { value: "ended" } });
@@ -109,11 +109,11 @@ describe("Map: the links are reachable without a pointer", () => {
     fireEvent.change(screen.getByLabelText("To entity"), { target: { value: "a" } });
     fireEvent.change(screen.getByLabelText("Link type"), { target: { value: "OWNS" } });
     fireEvent.click(screen.getByRole("button", { name: "Add link" }));
-    // It is in the list, pressed, and open in the inspector (its type select shows OWNS too, beside
+    // It is in the list, pressed, and open in the inspector (its type select shows Owns too, beside
     // the form's own).
-    const added = screen.getByRole("button", { name: "Link 2: OWNS, b to a" });
+    const added = screen.getByRole("button", { name: "Link 2: Owns, b to a" });
     expect(added.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getAllByDisplayValue("OWNS")).toHaveLength(2);
+    expect(screen.getAllByDisplayValue("Owns")).toHaveLength(2); // its name, never its key (step 30)
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.edges).toEqual([
@@ -148,7 +148,7 @@ describe("Map: the entities are reachable without a pointer", () => {
     fireEvent.change(screen.getByLabelText("Entity ref"), { target: { value: "payer" } });
     expect(screen.getByRole("button", { name: "Entity 1: payer (Endpoint)" }).getAttribute("aria-pressed")).toBe("true");
     // The link it ends follows its new ref.
-    expect(screen.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, payer to b" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Link 1: Communicated with, payer to b" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.entities.map((e) => e.ref)).toEqual(["payer", "b"]);
@@ -179,7 +179,7 @@ describe("Map: the entities are reachable without a pointer", () => {
 
   it("deletes the chosen link and leaves its entities", async () => {
     await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }));
+    fireEvent.click(screen.getByRole("button", { name: "Link 1: Communicated with, a to b" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete element" }));
     expect(screen.queryByRole("list", { name: "Links" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));

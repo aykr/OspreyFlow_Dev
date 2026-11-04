@@ -39,7 +39,6 @@ const PIPELINE_RUN = {
     {
       source_id: "source",
       source_label: "Export A",
-      source_location: "/exports/a.csv",
       report: { load_id: "L1:source", recipe_id: "r1", recipe_version: 2, rows_read: 3, nodes_created: 2 },
     },
   ],
@@ -125,6 +124,34 @@ describe("PublishScreen", () => {
     expect(screen.queryByText(/Rows read/)).toBeNull();
     expect(screen.queryByText(/Nodes created/)).toBeNull();
     expect(screen.queryByText(/Edges created/)).toBeNull();
+  });
+
+  // Build order step 30 (the owner, 4 November 2026; spec 09 §5): Run reads exactly the file Verify
+  // checked. The Run panel no longer takes another file, and the route's refusal when the file has
+  // changed since Verify is shown in its own words. Red if the free-text file field comes back or
+  // the refusal is swallowed.
+  it("offers no other file to run on, and says why a changed source is refused", async () => {
+    const said =
+      "reports.csv has changed since Verify checked it. Nothing was loaded. Run Verify again, then run.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const json = (status: number, payload: unknown) =>
+          ({ ok: status < 400, status, json: async () => payload }) as Response;
+        if (String(url).endsWith("/run") && init?.method === "POST") {
+          expect(JSON.parse(String(init.body))).toEqual({ source_location: null });
+          return json(409, { error: "source_changed_since_verify", detail: said });
+        }
+        if (/\/ingest\/recipes\/r1$/.test(String(url))) return json(200, PUBLISHED);
+        return json(404, { error: "not_found" });
+      }),
+    );
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    const run = await screen.findByRole("button", { name: /Run now/ });
+    expect(screen.queryByRole("textbox", { name: /Source file/ })).toBeNull();
+    expect(screen.getByText(/Runs on the file Verify checked/)).toBeTruthy();
+    fireEvent.click(run);
+    expect(await screen.findByText(said)).toBeTruthy();
   });
 
   it("withholds a withheld pipeline run's branches too", async () => {

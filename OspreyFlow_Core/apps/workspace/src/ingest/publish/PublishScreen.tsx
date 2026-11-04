@@ -171,7 +171,6 @@ export function PublishScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadReport, setLoadReport] = useState<LoadReportView | PipelineRunReportView | null>(null);
-  const [runSourceLocation, setRunSourceLocation] = useState("");
 
   useEffect(() => {
     if (!recipeIdOrNull) return;
@@ -295,13 +294,9 @@ export function PublishScreen({
     setError(null);
     setLoadReport(null);
     try {
-      const report = await runRecipe(
-        apiBaseUrl,
-        bearerToken,
-        investigationId,
-        recipeId,
-        runSourceLocation || undefined,
-      );
+      // Build order step 30 (spec 09 §5): Run reads exactly the file Verify checked, so no other
+      // file is offered; the route refuses in words when that file has changed since.
+      const report = await runRecipe(apiBaseUrl, bearerToken, investigationId, recipeId);
       setLoadReport(report);
     } catch (err) {
       setError(friendlyError(err));
@@ -436,16 +431,10 @@ export function PublishScreen({
 
       {status === "published" && (
         <Panel title="Run">
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)", maxWidth: 480 }}>
-            <label>
-              Source file (optional — leave blank to repeat against the recorded location)
-              <Input
-                value={runSourceLocation}
-                onChange={(e) => setRunSourceLocation(e.target.value)}
-                placeholder={draft?.source_location ?? "s3://ingest/carrier-a/2026-09.csv"}
-              />
-            </label>
-          </div>
+          <p style={{ margin: 0, maxWidth: 480 }}>
+            Runs on the file Verify checked. If that file has changed since, or the source is
+            another file, Run says so and loads nothing: run Verify again first.
+          </p>
         </Panel>
       )}
 

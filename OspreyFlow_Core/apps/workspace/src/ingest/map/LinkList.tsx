@@ -14,6 +14,7 @@ import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
 import { moveFocusInList } from "./listKeys";
 import { edgeTypesForEndpoints, findEntity } from "./rowTemplate";
+import { linkTypeName } from "../../canvas/linkLabel";
 
 export interface LinkListProps {
   template: RowTemplate;
@@ -25,8 +26,10 @@ export interface LinkListProps {
   onAdd: (from: string, to: string, type: string) => void;
 }
 
-function labelOf(edge: RecipeEdge, index: number): string {
-  return `Link ${index + 1}: ${edge.type}, ${edge.from} to ${edge.to}`;
+// Build order step 30 (rule 7): each link type is named as a person reads it (ADR-091), never by its
+// ontology key, which stays only the value the type select sends.
+function labelOf(edge: RecipeEdge, index: number, ontology: OntologySchema): string {
+  return `Link ${index + 1}: ${linkTypeName(edge.type, ontology.edge_types)}, ${edge.from} to ${edge.to}`;
 }
 
 export function LinkList({ template, ontology, selectedIndex, onSelect, onAdd }: LinkListProps) {
@@ -68,13 +71,13 @@ export function LinkList({ template, ontology, selectedIndex, onSelect, onAdd }:
           {edges.map((edge, index) => (
             <li key={index}>
               <Button
-                aria-label={labelOf(edge, index)}
+                aria-label={labelOf(edge, index, ontology)}
                 aria-pressed={index === selectedIndex}
                 variant={index === selectedIndex ? "primary" : "default"}
                 onClick={() => onSelect(index)}
                 style={{ width: "100%", textAlign: "left" }}
               >
-                {`${edge.type}: ${edge.from} → ${edge.to}`}
+                {`${linkTypeName(edge.type, ontology.edge_types)}: ${edge.from} → ${edge.to}`}
               </Button>
             </li>
           ))}
@@ -106,7 +109,7 @@ export function LinkList({ template, ontology, selectedIndex, onSelect, onAdd }:
           <Select aria-label="Link type" value={typeName} onChange={(e) => setType(e.target.value)}>
             {types.map((t) => (
               <option key={t.name} value={t.name}>
-                {t.name}
+                {linkTypeName(t.name, ontology.edge_types)}
               </option>
             ))}
           </Select>

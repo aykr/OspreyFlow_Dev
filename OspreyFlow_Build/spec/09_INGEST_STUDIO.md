@@ -593,6 +593,16 @@ that values were masked).
 
 **Verify must pass before publish.** Not "verify is recommended".
 
+**Verify and Run read the same file (ADR-127 Amendment 47, build order step 30).** Verify reads the
+files a run reads — each source branch's, a source node's own file before the recipe's
+(`services/api/run_source.files_a_run_reads`, which the runner uses too) — and records each with the
+SHA-256 of its bytes. *Run now* is held to that record: before anything is read into a store, a run
+whose files are not those files byte for byte, or which names a file Verify did not check, is refused
+(409 `source_changed_since_verify`) in words naming the files by their file names and asking for
+Verify again; nothing is loaded. A version no Verify recorded (published before the rule, or by a
+seed) runs as before; scheduled and watched runs read each new export by design (§6) and are not held
+to it. Test: `tests/services/api/test_verify_and_run_read_one_file.py`.
+
 **The alerts the sample would raise (ADR-133 decision 6, stage (d)).** Beside the rejection report,
 Verify judges the sample with the pipeline's checks on load (§5a), each rule as its own author, as
 the load would — and writes nothing: its alert store, quarantine and signature set refuse every call
@@ -690,7 +700,8 @@ editor; the repository is the record.
   what makes a failed graph write retryable with no data loss, and what makes re-resolution
   possible without re-uploading the source file.
 - **Re-runnable.** The same recipe against a new file, or the same file again — the deduplication
-  key makes a re-run idempotent.
+  key makes a re-run idempotent. A new file is loaded by a schedule or a folder watch, or by *Run now*
+  once Verify has checked it (§5, "Verify and Run read the same file").
   A load's report counts what it made: *edges created* is the links it created, so a second call
   between the same two parties (merged into the first link) is not counted again, and a re-run of
   the same file reports none. It agrees with Verify's *would create* and with the store (the

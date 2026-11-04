@@ -9,6 +9,7 @@ collapse to a 404"."""
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -69,6 +70,9 @@ class _FakeStudioRecipes:
         self.create_calls: list[dict[str, object]] = []
         self.update_calls: list[dict[str, object]] = []
         self.raise_not_a_draft = False
+        #: Build order step 30: what each version's last Verify read, as the real store's
+        #: `verified_sources` column holds it — cleared by every edit, as the real store clears it.
+        self.verified: dict[int, list[object]] = {}
 
     async def create_draft(self, principal: Principal, **kwargs: object) -> StudioRecipeDraft:
         self.create_calls.append(kwargs)
@@ -92,7 +96,8 @@ class _FakeStudioRecipes:
         if self.raise_not_a_draft:
             raise StudioRecipeNotADraftError(recipe_id)
         assert self.draft is not None
-        self.draft = self.draft.model_copy(update={"pipeline": pipeline})
+        self.draft = self.draft.model_copy(update={"pipeline": pipeline, "verified_at": None})
+        self.verified.pop(self.draft.version, None)
         return self.draft
 
     async def update_draft(
@@ -108,7 +113,8 @@ class _FakeStudioRecipes:
         # which re-runs `_compute_ready_for_profile`; `model_copy` would
         # skip that validator and leave the fake store's `ready_for_profile`
         # stale.
-        self.draft = _draft(**{**self.draft.model_dump(), **non_none})
+        self.draft = _draft(**{**self.draft.model_dump(), **non_none, "verified_at": None})
+        self.verified.pop(self.draft.version, None)
         return self.draft
 
     async def list_drafts(self, principal: Principal) -> list[StudioRecipeDraft]:
@@ -123,7 +129,8 @@ class _FakeStudioRecipes:
             raise StudioRecipeNotADraftError(recipe_id)
         self.update_calls.append(kwargs)
         assert self.draft is not None
-        self.draft = _draft(**{**self.draft.model_dump(), **kwargs})
+        self.draft = _draft(**{**self.draft.model_dump(), **kwargs, "verified_at": None})
+        self.verified.pop(self.draft.version, None)
         return self.draft
 
     # --- Publish (09_INGEST_STUDIO.md §6) ---------------------------------
@@ -133,9 +140,18 @@ class _FakeStudioRecipes:
             return [self.draft]
         return []
 
-    async def mark_verified(self, recipe_id: str, version: int, *, now: datetime) -> None:
+    async def mark_verified(
+        self, recipe_id: str, version: int, *, now: datetime, sources: Sequence[object] = ()
+    ) -> None:
         assert self.draft is not None
         self.draft = self.draft.model_copy(update={"verified_at": now})
+        if sources:
+            self.verified[version] = list(sources)
+        else:
+            self.verified.pop(version, None)
+
+    async def verified_sources(self, recipe_id: str, version: int) -> list[object] | None:
+        return self.verified.get(version)
 
     async def publish(
         self, recipe_id: str, principal: Principal, **kwargs: object

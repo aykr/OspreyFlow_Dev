@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.24** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.25** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.25 | 2026-11-04 | The owner's rulings (build order step 30; spec 09 §5; ADR-127 Amendment 47): §3.8, Verify reads the files a run reads (a source node's own file included) and records each with a hash of its contents; §3.9, **Run now** runs on exactly the file Verify checked, and refuses in words, loading nothing, when that file has changed since or another file is named — the Run panel no longer takes a file; the run's answer no longer carries the server's path to the file. §3.6, the Map names each link type by its label ("Held at"), never its key. |
 | 1.24 | 2026-11-04 | As found on the first server (ADR-114 Amendment 35 point 7): §9.5, Valkey's data in its container is moved too (through a committed image); the move checks each store apart and never replaces a container or writes a file of the deployment's; a refused move has the caller put back every file it wrote (`FilesHeld`); and the tests that fail if any of it breaks. |
 | 1.23 | 2026-11-04 | New §9.5, where the stores keep their data in a Lite or Small `compose.yaml` (ADR-114 Amendment 35): each store's named volume, what stays on its image's unnamed volumes, the one-time move (`harness/store_volumes.py`) and the tests that fail if a store loses its volume. |
 | 1.22 | 2026-11-04 | Describes v0.4.10. No change to its content. |
@@ -209,7 +210,9 @@ For each entity:
 - **Content this holds**: a Document's text, an image or a video.
 
 For each link: its type, and its time — not recorded, or taken from a column. A link with a time can
-mark text a model may later read.
+mark text a model may later read. A link type is named by its label ("Held at") in the list of links,
+the form that makes one, the link's settings and on the canvas; the ontology's key (`HELD_AT`) is what
+the recipe stores, never what the Map shows.
 
 **Transforms are Knowledge Adapters, never expressions.** OspreyFlow has no expression or scripting
 language. A transform is one of a fixed set of tested adapters: `msisdn`, `imei`, `imsi`, `email`,
@@ -247,6 +250,11 @@ case's datasets as you), how many rows were deduplicated or rejected, and the gr
 Rejections are grouped by cause, naming the adapter and field — never the value. A value the
 ontology refuses (a date of birth that is not a date) rejects its row; nothing is silently
 changed. **A recipe is published only after it has verified.**
+
+**Verify reads the file a run will read.** A pipeline's source may name its own file (the source's
+settings); Verify reads that file, each source's in turn, as the run does, not only the file chosen at
+Connect. It records each file it read with a hash of its contents, which **Run now** is held to
+(section 3.9). Verify on a published recipe records the file as it is now.
 
 ![Verify: the alerts the sample would raise under the pipeline's checks, beside the rejections](images/developer/12-verify-would-raise.png)
 
@@ -295,6 +303,15 @@ an unknown geocoder, or a handling override with no reason.
 written, then events go to the analytics database and places to the map. The run's report gives rows
 read, rows deduplicated, entities created and referenced, links created, rejections, rows held, and
 what the case's rules said. A run is refused if the source is marked above your clearance.
+
+**Run now runs on exactly the file Verify checked.** Before anything is read into a store, the run
+checks that each file it would read is the one Verify read, byte for byte. If the file has changed
+since ("reports.csv has changed since Verify checked it"), or the run would read another file ("Verify
+checked reports.csv; this run would read reports_corrected.csv"), it loads nothing and asks you to run
+Verify again. The Run panel therefore takes no file of its own: to load another file, choose it as the
+source and verify it. A recipe that no Verify has recorded a file for — one published before this
+check, or by a demonstration pack's seed — runs on its recorded file as before. Scheduled and watched
+runs read each new export by design and are not held to it.
 
 **Known limits:** a re-run adds its events to the analytics database a second time (the graph is
 unaffected); and loads write one element at a time, so a large source takes a while.

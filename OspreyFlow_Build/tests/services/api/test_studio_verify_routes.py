@@ -23,6 +23,7 @@ from services.api.app import (
     get_patterns_store,
     get_principal_resolver,
     get_recipe_runs,
+    get_recipes_repo_root,
     get_screening_lists,
     get_typology_rules,
 )
@@ -105,6 +106,9 @@ def graph_client(client: TestClient) -> TestClient:
     app.dependency_overrides[get_graph] = lambda: fake_graph
     app.dependency_overrides[get_ontology] = lambda: load_default_ontology()
     app.dependency_overrides[get_recipe_runs] = lambda: fake_runs
+    # Build order step 30: Verify reads the files a run reads, which for a published recipe come
+    # from its committed file; these drafts are unpublished, so the root is never opened.
+    app.dependency_overrides[get_recipes_repo_root] = lambda: Path("/no-recipes-repository")
     # ADR-133 stage (d): Verify judges the pipeline's checks on load. This case has no rules, so
     # nothing else is read; the stores a check would read refuse, so a read here fails the test.
     app.dependency_overrides[get_typology_rules] = lambda: _NoRules()

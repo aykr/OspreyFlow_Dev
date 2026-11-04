@@ -330,6 +330,32 @@ async def test_editing_a_verified_draft_clears_verified_at_and_blocks_publish(
         )
 
 
+async def test_verify_records_the_files_it_read_and_an_edit_clears_them(
+    store: StudioRecipeStore,
+) -> None:
+    """Build order step 30: what a *Run now* is held to. Red if the column is not written, is
+    read back in another shape, survives an edit, or a Verify recording nothing leaves an old
+    record behind."""
+    from services.api.run_source import VerifiedSource
+
+    draft = await _verified_draft(store)
+    assert await store.verified_sources(draft.recipe_id, draft.version) is None  # none recorded
+    checked = [VerifiedSource(location="/ingest/reports.csv", sha256="ab" * 32)]
+    await store.mark_verified(
+        draft.recipe_id, draft.version, now=datetime(2026, 1, 2, tzinfo=UTC), sources=checked
+    )
+    assert await store.verified_sources(draft.recipe_id, draft.version) == checked
+
+    await store.update_draft(draft.recipe_id, AUTHOR, label="renamed")
+    assert await store.verified_sources(draft.recipe_id, draft.version) is None
+
+    await store.mark_verified(
+        draft.recipe_id, draft.version, now=datetime(2026, 1, 3, tzinfo=UTC), sources=checked
+    )
+    await store.mark_verified(draft.recipe_id, draft.version, now=datetime(2026, 1, 4, tzinfo=UTC))
+    assert await store.verified_sources(draft.recipe_id, draft.version) is None
+
+
 async def test_publish_flips_status_and_stamps_attribution(store: StudioRecipeStore) -> None:
     draft = await _verified_draft(store)
     published = await store.publish(

@@ -48,8 +48,8 @@ describe("LinkList: the links of the row template", () => {
     mount();
     const items = within(screen.getByRole("list", { name: "Links" })).getAllByRole("button");
     expect(items.map((b) => b.getAttribute("aria-label"))).toEqual([
-      "Link 1: COMMUNICATED_WITH, a to b",
-      "Link 2: OWNS, p to a",
+      "Link 1: Communicated with, a to b",
+      "Link 2: Owns, p to a",
     ]);
   });
 
@@ -61,7 +61,7 @@ describe("LinkList: the links of the row template", () => {
 
   it("selects a link when its button is pressed, by click or by Enter", () => {
     const { onSelect } = mount();
-    const second = screen.getByRole("button", { name: "Link 2: OWNS, p to a" });
+    const second = screen.getByRole("button", { name: "Link 2: Owns, p to a" });
     fireEvent.click(second);
     expect(onSelect).toHaveBeenLastCalledWith(1);
     // A native button answers Enter and Space with a click, which is what a keyboard sends.
@@ -71,8 +71,8 @@ describe("LinkList: the links of the row template", () => {
 
   it("marks the selected link", () => {
     mount(TEMPLATE, 1);
-    expect(screen.getByRole("button", { name: "Link 2: OWNS, p to a" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Link 2: Owns, p to a" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Link 1: Communicated with, a to b" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("moves focus through the list with the arrow keys, Home and End", () => {

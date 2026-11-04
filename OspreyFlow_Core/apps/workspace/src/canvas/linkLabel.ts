@@ -1,6 +1,6 @@
 // What a person reads for a link (ADR-091). The type's `name` (COMMUNICATED_WITH) is the key stored
-// on every link and is shown only where an identifier is wanted (the Inspector's Type ID row);
-// everywhere else a link reads by its type's label, in sentence case, and its count is named by what
+// on every link and is never shown (ADR-091 Amendment 1, build order step 30: the Inspector's Type ID
+// row is gone); everywhere a link reads by its type's label, in sentence case, and its count is named by what
 // it counts: "Communicated with · 3 emails".
 
 /** The part of a type definition this needs; `EdgeTypeDef` and `EdgeTypeStyle` both fit it. */

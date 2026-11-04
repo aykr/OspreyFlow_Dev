@@ -622,6 +622,12 @@ from .rule_sentences import (
     sentence_of,
 )
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
+from .run_source import (
+    SourceChangedSinceVerifyError,
+    changed_since_verify,
+    files_a_run_reads,
+    identify,
+)
 from .scheduler import (
     DEFAULT_TIMEZONE,
     ScheduleExecutor,
@@ -2545,6 +2551,17 @@ async def _connector_not_available_handler(
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": "connector_not_available", "detail": str(exc)},
+    )
+
+
+@app.exception_handler(SourceChangedSinceVerifyError)
+async def _source_changed_since_verify_handler(
+    request: Request, exc: SourceChangedSinceVerifyError
+) -> JSONResponse:
+    """Build order step 30: a *Run now* whose file is not the one Verify checked, in words."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "source_changed_since_verify", "detail": str(exc)},
     )
 
 
@@ -7870,6 +7887,7 @@ async def verify_studio_recipe(
     hotlists_store: HotlistsStoreDep,
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
+    repo_root: RecipesRepoRootDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
@@ -7900,6 +7918,11 @@ async def verify_studio_recipe(
     ) -> tuple[list[WouldRaise], list[CheckNotJudged], int]:
         return await would_raise(gate, written, shown)
 
+    # Build order step 30: Verify reads the files a run of this recipe reads (a pipeline's source
+    # node may name its own), and records each with the hash of its bytes, which *Run now* is held
+    # to. Hashed before the read, so a file changed during Verify reads as changed at the run.
+    locations = files_a_run_reads(recipe, repo_root=repo_root)
+    checked = [await asyncio.to_thread(identify, location) for location in locations]
     report = await run_verify(
         recipe,
         principal,
@@ -7909,12 +7932,15 @@ async def verify_studio_recipe(
         row_keys=recipe_runs,
         investigation_id=investigation.id,
         checks=judge_checks,
+        locations=locations,
     )
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
     # rejections can be published"), so `publish` below can gate on this
     # flag alone rather than re-running the dry run itself.
-    await studio_recipes.mark_verified(recipe.recipe_id, recipe.version, now=datetime.now(UTC))
+    await studio_recipes.mark_verified(
+        recipe.recipe_id, recipe.version, now=datetime.now(UTC), sources=checked
+    )
     await audit.record(
         principal=principal,
         action="verify_studio_recipe",
@@ -8289,12 +8315,20 @@ async def run_studio_recipe(
     compute: ComputeDep,
     kyc_expiries: KycExpiriesDep,
     recipe_runs: RecipeRunsDep,
+    studio_recipes: StudioRecipesDep,
     influencers: OptionalStrengthInfluencersDep = None,
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
     file; omitted, this repeats against the recipe's own recorded location
     (§6: "re-runnable... the deduplication key makes a re-run idempotent").
+
+    **Run reads exactly the file Verify checked (§5, build order step 30).** When Verify recorded
+    what it read for this version, the files this run would read are hashed first and must be
+    those files, byte for byte; otherwise nothing is read into a store and the answer is a 409
+    `source_changed_since_verify` saying what changed and asking for Verify again. A version Verify
+    recorded nothing for (published before the rule, or by a seed) runs as before. Scheduled and
+    watched runs do not come here: they read each new export by design (ADR-110).
     `investigation_id` is carried onto the produced `EventRecord`s'
     `investigation_scope` for analytics filtering (`schemas.analytics.
     EventRecord`) — it is not an access-control scope for the loaded
@@ -8329,6 +8363,17 @@ async def run_studio_recipe(
     ingest response itself — the load already happened; a failure to also check watches against it
     is a narrower, disclosed problem, not a reason to tell the caller their load failed when it
     didn't."""
+    verified = await studio_recipes.verified_sources(recipe.recipe_id, recipe.version)
+    if verified is not None:
+        now = [
+            await asyncio.to_thread(identify, location)
+            for location in files_a_run_reads(
+                recipe, repo_root=repo_root, source_location=body.source_location
+            )
+        ]
+        changed = changed_since_verify(verified, now, asked=body.source_location)
+        if changed is not None:
+            raise SourceChangedSinceVerifyError(changed)
     report = await run_recipe_as(
         RecipeRunDeps(
             graph=graph,

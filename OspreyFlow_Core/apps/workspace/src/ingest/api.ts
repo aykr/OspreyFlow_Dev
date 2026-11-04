@@ -559,8 +559,8 @@ export async function runRecipe(
   bearerToken: string,
   investigationId: string,
   recipeId: string,
-  /** §8: "run a published recipe against a file" — omit to repeat
-   * against the recipe's own recorded location. */
+  /** §8: "run a published recipe against a file" — omit to run on the file Verify checked. A
+   * file Verify did not check is refused (spec 09 §5, build order step 30); the Studio sends none. */
   sourceLocation?: string,
 ): Promise<LoadReportView | PipelineRunReportView> {
   const response = await fetch(
