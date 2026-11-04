@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.18** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
+**Version 1.19** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.19 | 2026-11-04 | §9.4, as measured on the first server (ADR-135 Amendment 1): the `ollama` service's flash attention and q8_0 KV cache on a GPU, with the measured times, and the doctor's 14 GiB for the 14b (was 12). |
 | 1.18 | 2026-11-04 | Describes v0.4.8. No change to its content. |
 | 1.17 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.16 | 2026-11-04 | New §9.4, the local engine on an NVIDIA GPU (ADR-135 Amendment 1): `resources.gpu`, how the render gives Ollama the GPU, `OspreyConfig.extraction_model` and the 14b default, the doctor's GPU checks and their tests, and a saved `osprey.yaml` keeping the 7b. |
@@ -720,8 +721,14 @@ deploy:
         - {driver: nvidia, count: all, capabilities: [gpu]}
 ```
 
-Nothing else changes: the same pinned Ollama image (it carries CUDA), the same pinned weights and
-the same gateway. `ollama-models` only downloads the weights, so it reserves nothing. Image
+It also gives the `ollama` service `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0`, beside
+its `OLLAMA_NOPRUNE=1`: the KV cache held at q8_0, which needs flash attention, is what fits the 14b
+at its 32k context on a 16 GB card. As measured, 4 November 2026, on the first server (RTX 5060 Ti,
+16 GB): without them Ollama reported `18 GB, 15%/85% CPU/GPU` and an answer of about 120 tokens took
+9–11 s; with them `14 GB, 100% GPU` (12.0 GiB per `nvidia-smi`) and 3.3–3.6 s. The 7b on the CPU
+took 17.3 s. Nothing else changes: the same pinned Ollama image (it carries CUDA), the same pinned
+weights and the same gateway. `ollama-models` only downloads the weights, so it reserves nothing and
+gets neither setting. Image
 description and embeddings run in the same Ollama, so they use the GPU too; transcription does not.
 With `none`, the render is byte for byte what it was with no setting.
 
@@ -742,13 +749,14 @@ before the harness runs:
 | `gpu-host` | The operating system | It is not Linux: Docker Desktop on macOS and Windows gives a container no NVIDIA GPU |
 | `gpu` | `nvidia-smi`: each GPU's name, memory and driver | `nvidia-smi` is not installed, does not answer, or lists no GPU |
 | `gpu-docker` | `docker info`: `Runtimes` and `DiscoveredDevices` | Neither the `nvidia` runtime nor a CDI device whose id begins `nvidia.com/gpu` is listed |
-| `gpu-memory` | The total memory of every GPU listed | Under 12 GiB with the 14b: a warning naming the 7b, which does not stop an install |
+| `gpu-memory` | The total memory of every GPU listed | Under 14 GiB with the 14b (the measured need at 32k with q8_0): a warning naming the 7b, which does not stop an install |
 
 OspreyFlow installs neither the NVIDIA driver nor the Container Toolkit.
 
 **Its tests** are in the developer repository: `tests/harness/test_gpu_render.py` (the refusals,
-the reservation on `ollama` alone, the 14b default and a named model winning, the pull, the route
-and the Conduit agreeing, `start --build`, and `gpu: none` rendering as no setting);
+the reservation on `ollama` alone, the two KV-cache settings on `ollama` with a GPU and on nothing
+without one, the 14b default and a named model winning, the pull, the route and the Conduit
+agreeing, `start --build`, and `gpu: none` rendering as no setting);
 `tests/cli/test_gpu.py` (each check against stand-ins that refuse as `nvidia-smi` and `docker info`
 do, an install and an `apply` refused with nothing changed, and the real probe against stand-in
 programs on `PATH`); and `tests/cli/test_answers.py`'s `test_server_gpu_*`.

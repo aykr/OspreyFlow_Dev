@@ -60,7 +60,7 @@ import yaml
 from pydantic import ValidationError
 
 from demo_fixtures.datasets import domains_for
-from harness import ingest_uploads, tls_check
+from harness import ingest_uploads, model_downloads, tls_check
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -914,6 +914,26 @@ def _keep_the_version(stage: Path, out_dir: Path, previous: Mapping[str, str]) -
         write_private(env, "\n".join(lines) + "\n")
 
 
+def _fetch_models(before: Mapping[str, Any], staged: Path) -> None:
+    steps = model_downloads.steps_to_fetch(before, staged)
+    if not steps:
+        return
+    print(
+        f"apply: fetching the newly chosen model ({', '.join(steps)}); a large model takes "
+        "minutes. Nothing that uses it starts again until it is fetched.",
+        flush=True,
+    )
+    try:
+        for argv in model_downloads.fetch_argvs(_compose(staged), steps, force=True):
+            _run(argv, stage="models", timeout=model_downloads.FETCH_TIMEOUT_SECONDS)
+    except (ApplyFailed, subprocess.TimeoutExpired) as failed:
+        raise ApplyFailed(
+            "models",
+            f"{model_downloads.failed_words(steps)}. Nothing was changed: the deployment runs as "
+            "before. Run ospreyflow apply again once it can be fetched.",
+        ) from failed
+
+
 def reapply(
     config_path: Path,
     out_root: Path,
@@ -972,6 +992,10 @@ def reapply(
         )
         restart = services_to_restart(out_dir, stage)
         removed = set(_services(out_dir)) - set(_services(stage))
+        # Defect 9 (Amendment 33, "as found on the first server"): a newly chosen model fetched,
+        # and waited on, before anything that uses it starts again. From the staged files, so a
+        # refused download changes nothing and the next apply sees the same change.
+        _fetch_models(model_downloads.commands(compose_file), stage / "compose.yaml")
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
         move_into_place(stage, out_dir)

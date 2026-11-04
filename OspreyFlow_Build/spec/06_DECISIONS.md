@@ -21244,6 +21244,33 @@ is not left in conversation (rule 11):
   probe against stand-in programs on `PATH`); `tests/test_admin_guide.py`'s
   `test_every_server_setting_is_in_the_guide`, which the answers-file case did not cover.
 
+**As measured, 4 November 2026 (v0.4.8 on the first server: Ubuntu 24.04, amd64, RTX 5060 Ti
+16 GB, Small on its own server).** Measured on the product's own route, the same prompt each time:
+the Conduit's container calling LiteLLM, which calls Ollama with the rendered `num_ctx` of 32768.
+
+- The 14b on the GPU as v0.4.8 rendered it: Ollama reported `18 GB, 15%/85% CPU/GPU, CONTEXT
+  32768`; each answer of about 120 tokens took 9–11 s.
+- With `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` on the `ollama` service:
+  `14 GB, 100% GPU`, 3.3–3.6 s; 12.0 GiB used, per `nvidia-smi`.
+- For reference, the 7b on the CPU: 17.3 s.
+
+**The owner's ruling, 4 November 2026: decisions 2 and 4 are amended.**
+
+- **Decision 2, amended.** With `nvidia`, the `ollama` service is also given
+  `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` (beside its `OLLAMA_NOPRUNE=1`). The KV
+  cache held at q8_0 (which needs flash attention) is what fits the 14b at its 32k context on a 16 GB
+  card. `ollama-models` only downloads and gets neither. Without a GPU nothing changes, and a
+  deployment without one still renders byte for byte as before.
+- **Decision 4, amended.** For the 14b the doctor asks for **at least 14 GiB** of GPU memory (the
+  measured need at 32k with q8_0), not 12; below that it is the same warning naming the 7b. The
+  total is compared against 14 × 1024 MiB.
+- **Tests that would fail if it were broken** (each shown red first):
+  `tests/harness/test_gpu_render.py`'s
+  `test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention` (the two variables on
+  `ollama` with a GPU, on neither `ollama-models` nor a deployment without one, whose byte-for-byte
+  case still passes); `tests/cli/test_gpu.py`'s
+  `test_a_gpu_below_fourteen_gib_is_a_warning_naming_the_7b` (an 8 GiB and a 12 GiB card both warn).
+
 ## ADR-136 — Egress decided per dataset as well as by handling code, and keys marked as under a privacy contract — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings: "Per-dataset egress" (from options), and "for
@@ -23712,6 +23739,74 @@ v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service 
   refuses a folder an account may not make — shown red at `install`, `apply`, `start --build` and
   `update` with the server's own `[Errno 13]`), `tests/cli/test_lifecycle.py::
   test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up`.
+- **`ospreyflow apply` did not fetch a newly chosen extraction model** (defect 9, as found on the
+  first server, 4 November 2026, on v0.4.8). Setting `resources.gpu: nvidia` changed the extraction
+  model to `qwen2.5:14b-instruct` (ADR-135 Amendment 1 decision 3); `apply` re-rendered
+  `litellm.yaml`, `OSPREY_EXTRACTION_MODEL` and `ollama-models`' pull script (which then named the
+  14b) and started "api, litellm, ner, ollama, workspace" again, but never ran the one-shot
+  `ollama-models` again: a run-once step is never among the services `services_to_restart` names,
+  and Compose leaves a one-shot step alone unless it is named. The 14b was absent and the gateway
+  routed every Ask to a missing model; `docker compose … up -d --force-recreate --no-deps
+  ollama-models` fetched it by hand (9.0 GB, digest `7cdf5a0187d5`, about 2 minutes).
+  `models.extraction` changed by hand had the same gap. **Defined:** when `ollama-models`' command
+  (what it pulls) differs between the deployment as it is and as rendered now, the step is started
+  again by name and waited on until its script idles (`exec` until its first process is the `sleep`
+  it ends in, every pull done and digest-verified), before anything that uses the model starts
+  again (`harness.model_downloads`). `apply` does it **from the staged files, before they are moved
+  into place**, forced: a refused download fails the apply at stage `models` with nothing changed
+  and the deployment running as before, and the next `apply` sees the same change and fetches
+  again. `start --build` (`scripts.refresh`) and `update` do it before their `up`, which would
+  otherwise make the step again for its changed command and start the gateway and the Conduit on
+  the new model beside it, waiting for nothing; an update's refused download rolls it back. Only the
+  command is compared, not the image: a release moving the pinned Ollama image fetches nothing new,
+  so an offline update does not fail on a pull it does not need. `whisper-models` is not among
+  them: the transcription model has one allowed value, and `whisper` waits on it through
+  `depends_on`. **Not proved here:** that Compose's `exec` returns non-zero when the step's
+  container exits mid-pull, which is how a refused pull fails the wait; to be confirmed on the
+  server. Tests: `tests/harness/test_apply_changed_settings.py` (a stand-in Compose that keeps each
+  container and the model volume, makes a container again only for a service it is given whose
+  definition changed or with `--force-recreate`, and fails an `exec` on a step whose download failed
+  — `test_the_stand_in_compose_leaves_a_one_shot_step_alone_as_compose_does`;
+  `test_a_newly_chosen_extraction_model_is_fetched_before_its_users_start_again` for the GPU and by
+  hand, `test_unchanged_models_fetch_nothing`, `test_a_failed_download_changes_nothing_and_says_so`
+  — shown red with the server's own outcome, the 14b absent), `tests/test_refresh.py::
+  test_a_newly_chosen_model_is_fetched_and_waited_on_before_anything_that_uses_it_starts` and
+  `test_a_refused_download_stops_before_the_rest_starts`, `tests/harness/test_update_apply.py::
+  test_an_update_that_changes_the_models_fetches_them_before_the_release_starts` and
+  `test_a_refused_model_download_rolls_the_update_back` (each shown red).
+- **`ospreyflow backup` failed once the object store held files** (defect 10, as found on the first
+  server, 4 November 2026, on v0.4.8 with the six demo packs loaded): `PermissionError: [Errno 13]
+  Permission denied: 'ed9c30a1….png'` at `shutil.rmtree(staging)`. The object store's export
+  (`services.api.object_transfer export`) ran in a container of the Conduit's image as its own user
+  (uid 10001) into `<set>/.objects-staging`, which was made `777` for it; the folders it made were
+  10001's, `755`, and the installer (uid 1001) could not delete the files in them. The failed-backup
+  clean-up added in v0.4.7 (`rmtree(…, ignore_errors=True)`) failed for the same reason, said "The
+  partial set … was removed", and left a partial set that had to be removed as root. Earlier
+  backups passed with an empty store, and Docker Desktop on a Mac hides ownership. **Defined:** the
+  export runs **as the caller** (`--user <uid>:<gid> -e HOME=/tmp`, `harness.signatures._as_caller`,
+  as cosign's container has since v0.4.6), so what it writes is the installer's to remove; the
+  staging folder is the caller's own, `755`, no longer writable by every account. Chosen over
+  streaming a tar to standard output (the Conduit's image would need a shell and room for a second
+  copy in its own writable layer) and over the container removing its own copy (a failed export
+  would still leave one): the copy is never anyone else's to begin with. A clean-up that cannot
+  remove something now **says what**, renames the set `<set>.incomplete` and writes an
+  `INCOMPLETE` file in it naming the remedy (`sudo rm -rf`), and `restore` refuses such a folder by
+  name, so no person, restore or update takes it for a set. **The other items** were checked for the
+  same trap: the graph store's archive, the analytics file and the recipes repository are copied out
+  with `docker compose cp`, which writes on the host as the user who runs it, and the databases and
+  the identity export come through standard output — none stages through a container's user.
+  **The restore's mirror image:** `restore_object_store` extracts the archive as the person
+  restoring, with Python's `data` filter, which keeps each member's mode less group and other write:
+  the export writes under the container's umask (`022`), so folders `755` and files `644`, and the
+  staging folder is archived `755`, so the import, as the Conduit's user, can read every file; what
+  it writes goes into the object store through S3, the object store's own. Not changed. Tests:
+  `tests/harness/test_backup_object_ownership.py` (a stand-in Docker that writes as the Conduit's
+  user unless `--user` names the caller, with that user's folders closed to the test's own user —
+  `test_the_stand_in_refuses_as_linux_does`; `test_a_store_holding_files_backs_up_and_leaves_nothing_behind`,
+  shown red with the server's own `[Errno 13]` at `rmtree`;
+  `test_a_partial_set_that_cannot_be_removed_is_said_and_marked_incomplete`, shown red with "was
+  removed; nothing was kept" said of a set still there). Skipped when run as root, which may remove
+  anything.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 

@@ -574,22 +574,32 @@ models' pinned weights and the gateway are the same. Image descriptions and embe
 same model server, so they use the GPU too; transcription stays on the processors. The extraction
 model, which also answers Ask the case and Ask to search on the local engine, becomes
 `qwen2.5:14b-instruct` (about 9 GB, downloaded once) instead of `qwen2.5:7b-instruct`, unless
-`osprey.yaml` names one under `models.extraction`, which always wins. An `osprey.yaml` saved by the
+`osprey.yaml` names one under `models.extraction`, which always wins. `ospreyflow apply` fetches
+a newly chosen model, and waits for it, before the services that use it start again. An `osprey.yaml` saved by the
 guided page (`--gui`) names every model, `models.extraction: qwen2.5:7b-instruct` among them, so it
-keeps the 7b on the GPU until that line is removed. Without a GPU nothing changes.
+keeps the 7b on the GPU until that line is removed. On the GPU the model server also keeps its
+working memory for a question at reduced precision (`OLLAMA_FLASH_ATTENTION=1` and
+`OLLAMA_KV_CACHE_TYPE=q8_0`), which is what fits the 14b, with the long context it is given, wholly
+on a 16 GB card. Without a GPU nothing changes.
+
+**As measured, 4 November 2026**, on the first server (an RTX 5060 Ti, 16 GB), the same question
+through the product's own route: the 14b on the GPU without those two settings used 18 GB, ran 15%
+on the processors and 85% on the GPU, and took 9–11 s an answer of about 120 tokens; with them it
+used 14 GB, ran wholly on the GPU (12.0 GiB, per `nvidia-smi`), and took 3.3–3.6 s. The 7b on the
+processors took 17.3 s.
 
 **What is checked before anything starts.** `doctor`, `install` and `apply` refuse, in words and
 with nothing changed: a computer that is not Linux; `nvidia-smi` not installed, or not answering
 ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver": install the
 driver, or restart after installing it); and Docker listing neither the toolkit's `nvidia` runtime
-nor an NVIDIA CDI device (`docker info`). With the 14b model, less than 12 GiB of GPU memory is a
+nor an NVIDIA CDI device (`docker info`). With the 14b model, less than 14 GiB of GPU memory is a
 warning naming the 7b: set `models.extraction: qwen2.5:7b-instruct` in `osprey.yaml` and run
 `ospreyflow apply`. The doctor names the GPU, its memory and its driver, for example:
 
 ```
 ✔ The NVIDIA GPU is NVIDIA GeForce RTX 5060 Ti, 15.9 GiB (driver 595.99.02).
 ✔ Docker can run a container on the GPU (the nvidia runtime of the NVIDIA Container Toolkit).
-✔ The GPU has 15.9 GiB of memory; qwen2.5:14b-instruct asks for at least 12 GiB.
+✔ The GPU has 15.9 GiB of memory; qwen2.5:14b-instruct asks for at least 14 GiB.
 ```
 
 To turn it off, set `resources.gpu: none` in `osprey.yaml` and run `ospreyflow apply`.
@@ -1031,6 +1041,14 @@ never in it. Schedule it with a cron line, for example
 organisation's identity provider is restored still linked to it. OpenSearch is rebuilt, not
 restored, as on Lite.
 
+**A backup that fails** removes the set it had started, and says so. If it cannot remove all of it,
+it says what it could not remove, renames the set `<set>.incomplete` with a file `INCOMPLETE` in it,
+and `ospreyflow restore` refuses it; remove it as root (`sudo rm -rf <set>.incomplete`).
+
+**Once the object store holds files** (a demo pack or an upload has put some there), it is copied
+as the account that runs `ospreyflow backup`, so that account can remove its working copy. With
+v0.4.8 and earlier on Linux such a backup failed with "Permission denied" (section 16).
+
 **Enterprise.** The cloud protects its managed services as for Small. **The graph store and the
 analytics database run in the cluster, and nothing backs them up yet**: `ospreyflow backup` drives
 a Compose deployment and does not reach a cluster. Until it does, take snapshots of their volumes
@@ -1103,6 +1121,8 @@ Admin → Schedules and runs lists every one.
 | People on the network cannot connect to Small on your own server | Port 443 is open in front of the server — its firewall or security group, or the `DOCKER-USER` chain; `ufw` does not filter a port Docker publishes — and the three names resolve to the server in the organisation's DNS |
 | `doctor`, `install` or `apply` refuses the GPU | Each reason is named, and nothing was changed: install the NVIDIA driver and restart until `nvidia-smi` lists the GPU; install the NVIDIA Container Toolkit and run `sudo nvidia-ctk runtime configure --runtime=docker` and `sudo systemctl restart docker`; on macOS or Windows, set the GPU to `none` (section 5a.4) |
 | `ospreyflow demo add` or an upload fails with "Permission denied: '/var/lib/osprey/ingest/uploaded/…'", or `install`, `apply`, `start` or `update` says "the Conduit (uid 10001) cannot write …/uploaded" | Linux only: the Conduit's upload folder in `server.ingest` (Lite: `components.storage.ingest`) is not its own. A deployment installed or updated with v0.4.8 or earlier has it so: run `ospreyflow apply` or `ospreyflow start` once with a later version, which gives the folder over (section 5a). When giving it over fails, the command names Docker's reason; or give it over yourself, `sudo chown 10001:10001 <server.ingest>/uploaded`, and run the command again |
+| `ospreyflow backup` fails with "Permission denied" on a file under `.objects-staging`, or a folder named `….incomplete` is left where backups are written | Linux, v0.4.8 or earlier, once the object store holds files: the object store's copy belonged to the Conduit's user. Update, then back up again. Remove what was left as root (`sudo rm -rf <folder>`); a folder with an `INCOMPLETE` file in it is not a backup, and `restore` refuses it (section 13) |
+| Ask on the local engine fails after the extraction model was changed (the GPU switched on, or `models.extraction`) | `ospreyflow apply` fetches the newly chosen model, and waits for it, before anything that uses it starts again; if the download fails it stops with nothing changed, saying "the model download (ollama-models) did not finish": `ospreyflow logs ollama-models` says why, then run `ospreyflow apply` again. With v0.4.8 or earlier, `apply` never fetched it: `docker compose --env-file <deployment>/deployment.env -f <deployment>/compose.yaml up -d --force-recreate --no-deps ollama-models` fetches it (the 14b is about 9 GB) |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |

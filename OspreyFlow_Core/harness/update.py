@@ -30,7 +30,7 @@ from typing import Any
 
 import yaml
 
-from harness import ingest_uploads
+from harness import ingest_uploads, model_downloads
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
     GITHUB_API,
@@ -427,10 +427,17 @@ def apply_update(
     up = [*compose, "up", "-d", "--wait", *([] if prepared.pull else ["--pull", "never"])]
     try:
         _ok(host, ["git", "-C", str(repo), "checkout", "--quiet", tag], "check out the release")
+        pulls_before = model_downloads.commands(directory / "compose.yaml")
         changed = host.files_up_to_date()
         pin_images(directory, prepared.lock, prepared.references)
         if prepared.pull:
             _ok(host, [*compose, "pull"], "pull the release's images")
+        # Defect 9 (ADR-114 Amendment 33): the release's `up` would make `ollama-models` again for
+        # a changed pull, but start the gateway and the Conduit on the new model beside it.
+        steps = model_downloads.steps_to_fetch(pulls_before, directory / "compose.yaml")
+        never = () if prepared.pull else ("--pull", "never")
+        for argv in model_downloads.fetch_argvs(compose, steps, force=False, extra=never):
+            _ok(host, argv, f"fetch the new model ({', '.join(steps)}; ospreyflow logs has why)")
         _ok(host, up, "start the release")
         # `proxy_changed` names the models' proxy (LiteLLM); `routing_changed` the front proxy's
         # routing table (ADR-132 Amendment 2).

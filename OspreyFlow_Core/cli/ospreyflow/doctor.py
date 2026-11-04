@@ -51,8 +51,10 @@ _CLOUD_CLI = {"aws": ("aws", "AWS"), "azure": ("az", "Azure")}
 #: none (`schemas.deployment.GPU_EXTRACTION_MODEL`; `test_gpu.py` holds the two to each other).
 GPU_EXTRACTION_MODEL = "qwen2.5:14b-instruct"
 SMALLER_EXTRACTION_MODEL = "qwen2.5:7b-instruct"
-#: Decision 4: the GPU memory the 14b asks for; below it, a warning naming the 7b.
-MIN_GPU_MEMORY_GIB = 12
+#: Decision 4: the GPU memory the 14b asks for; below it, a warning naming the 7b. 14 GiB as
+#: measured on the first server, 4 November 2026: the 14b at 32k context with its KV cache at q8_0
+#: used 12.0 GiB of the GPU (`nvidia-smi`), and Ollama reported 14 GB.
+MIN_GPU_MEMORY_GIB = 14
 #: One line per GPU — its name, its memory in MiB and the driver's version — as the test server's
 #: answered: `NVIDIA GeForce RTX 5060 Ti, 16311, 595.99.02`.
 NVIDIA_SMI_QUERY = ("--query-gpu=name,memory.total,driver_version", "--format=csv,noheader,nounits")
@@ -781,7 +783,7 @@ def gpu_checks(probes: Probes, plan: GpuPlan) -> list[Check]:
     """ADR-135 Amendment 1 decision 4: before anything starts on the GPU — a Linux machine; the
     NVIDIA driver (`nvidia-smi` answers, and names the GPU and its memory); Docker able to run a
     container on it (the Container Toolkit's `nvidia` runtime, or a CDI device); and, for the 14b,
-    12 GiB of GPU memory, below which it is a warning naming the 7b. OspreyFlow installs neither the
+    14 GiB of GPU memory, below which it is a warning naming the 7b. OspreyFlow installs neither the
     driver nor the toolkit."""
     system = probes.system()
     if system != "Linux":

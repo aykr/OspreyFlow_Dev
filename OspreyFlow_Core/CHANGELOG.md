@@ -14,6 +14,24 @@ update. Work not yet in a release is listed under *Unreleased*.
   the Conduit's own image; it is never made writable by every account, and a folder the Conduit can
   already write is left as it is. A deployment updated from v0.4.8 or earlier is put right by its
   first `ospreyflow apply` or `ospreyflow start` afterwards.
+- **The local engine fits the 14b wholly on a 16 GB GPU.** With `resources.gpu: nvidia`, the model
+  server now keeps its KV cache at q8_0 with flash attention (`OLLAMA_FLASH_ATTENTION=1`,
+  `OLLAMA_KV_CACHE_TYPE=q8_0`). Measured on the first server (RTX 5060 Ti, 16 GB), the same question:
+  before, 18 GB, 15%/85% CPU/GPU, 9–11 s an answer; now 14 GB, 100% GPU, 3.3–3.6 s. The doctor now
+  asks for at least 14 GiB of GPU memory for the 14b (12 before); below that it warns and names the
+  7b. Without a GPU nothing changes. Run `ospreyflow apply` on a GPU deployment to take it.
+- **`ospreyflow apply` fetches a newly chosen model.** Switching the GPU on (which chooses the 14b)
+  or changing `models.extraction` re-rendered the deployment and restarted the gateway and the
+  Conduit, but never fetched the new model, so every Ask on the local engine went to a model that
+  was not there. `apply` now fetches it, and waits, before anything that uses it starts again; if
+  the download fails, nothing is changed and it says so. `ospreyflow start --build` and
+  `ospreyflow update` also wait for a changed model before starting the rest.
+- **`ospreyflow backup` works once the object store holds files.** On Linux, after a demo pack or an
+  upload, every backup failed with "Permission denied": the object store's working copy belonged
+  to the Conduit's user, and the installing account could not remove it. It is now made as the
+  account that runs the backup. A failed backup that cannot remove its partial set says so, renames
+  it `<set>.incomplete` with an `INCOMPLETE` file in it, and `ospreyflow restore` refuses it. A
+  partial set left by v0.4.8 or earlier has to be removed as root (`sudo rm -rf <set>`).
 
 ## v0.4.8 — 2026-11-04
 

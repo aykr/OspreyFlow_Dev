@@ -245,9 +245,38 @@ def test_the_chosen_models_are_brought_up_to_date_and_no_secret_changes(repo: Pa
     services = yaml.safe_load((out / "compose.yaml").read_text())["services"]
     assert "pull_and_verify qwen2.5:14b-instruct" in services["ollama-models"]["command"][0]
     assert services["ollama"]["command"] == ["serve"]  # the server itself never pulls
-    # The proxy reads its routing table at start: restarted after `up`, and waited on.
-    assert _subcommands(run.calls) == ["build", "up", "restart", "up"]
-    assert run.calls[2][-1] == "litellm"
+    # The new model fetched and waited on first (defect 9); then the proxy, which reads its routing
+    # table at start: restarted after `up`, and waited on.
+    assert _subcommands(run.calls) == ["build", "up", "exec", "up", "restart", "up"]
+    assert run.calls[4][-1] == "litellm"
+
+
+def test_a_newly_chosen_model_is_fetched_and_waited_on_before_anything_that_uses_it_starts(
+    repo: Path,
+) -> None:
+    """Defect 9 (ADR-114 Amendment 33, found on the first server): the gateway and the Conduit
+    started on the new model while nothing had fetched it. `ollama-models` is started again by
+    name, then waited on until its script idles, before the `up` that starts the rest; not forced,
+    since its changed command is what makes Compose recreate it."""
+    _rendered(repo, "qwen2.5:14b-instruct")
+    run = Recorder()
+    refresh.refresh(repo, run=run, register=Registrar())
+    fetch, wait = run.calls[1], run.calls[2]
+    assert fetch[fetch.index("up") :] == ["up", "-d", "--no-deps", "ollama-models"]
+    assert wait[wait.index("exec") : wait.index("exec") + 3] == ["exec", "-T", "ollama-models"]
+    assert run.calls[3][-3:] == ["up", "-d", "--wait"]
+    # Fetched once: the next start, with nothing changed, fetches nothing.
+    again = Recorder()
+    refresh.refresh(repo, run=again, register=Registrar())
+    assert not any("ollama-models" in c for c in again.calls)
+
+
+def test_a_refused_download_stops_before_the_rest_starts(repo: Path) -> None:
+    _rendered(repo, "qwen2.5:14b-instruct")
+    run = Recorder(fail_on="exec")
+    with pytest.raises(refresh.RefreshFailed, match="ollama-models"):
+        refresh.refresh(repo, run=run, register=Registrar())
+    assert _subcommands(run.calls) == ["build", "up", "exec"]
 
 
 def test_bringing_the_models_up_to_date_twice_changes_nothing_the_second_time(repo: Path) -> None:

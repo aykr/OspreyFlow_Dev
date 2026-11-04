@@ -85,6 +85,13 @@ class _Host:
         self.lock_signed = True
         self.loaded_ids: dict[str, str] = {}
         self.bundle_refused = False
+        #: `ollama-models`: the command its container ran, its pulls, and the state of the models
+        #: each `up` of the rest of the deployment found.
+        self.step_command: Any = None
+        self.fetch = "done"
+        self.fetch_fails = False
+        self.started_with_models: list[str] = []
+        self.new_pull_command: list[str] | None = None
 
     # -- the command runner ------------------------------------------------------------------
     def run(self, argv: Sequence[str]) -> tuple[int, str]:
@@ -137,6 +144,12 @@ class _Host:
             ]
             return (1, f"manifest unknown: {missing}") if missing else (0, "")
         if args[0] == "up":
+            named = [a for a in args[1:] if not a.startswith("-")]
+            self._model_step(args, named)
+            if named == ["ollama-models"]:
+                return 0, ""
+            # Whatever the rest of the deployment starts on, the model it names is there or not.
+            self.started_with_models.append(self.fetch)
             images = self._images()
             # Whatever each service names runs: by digest, or (from a bundle) by a loaded tag.
             self.running = {
@@ -152,6 +165,11 @@ class _Host:
             return 0, ""
         if args[0] == "restart":
             return 0, ""
+        if args[0] == "exec" and args[2] == "ollama-models":
+            # Waits until the step's pulls are done; a refused pull exits it, and the exec fails.
+            if self.fetch == "fetching":
+                self.fetch = "failed" if self.fetch_fails else "done"
+            return (1, "exit status 137") if self.fetch == "failed" else (0, "")
         if args[0] == "ps":
             rows = [{"Service": n, "Name": f"osprey-test-{n}-1", "State": "running", "Health": "",
                      "ExitCode": 0} for n in self.running]  # fmt: skip
@@ -161,6 +179,19 @@ class _Host:
                          "State": "exited", "Health": "", "ExitCode": int(failed)})  # fmt: skip
             return 0, "\n".join(json.dumps(r) for r in rows)
         raise AssertionError(args)
+
+    def _model_step(self, args: list[str], named: list[str]) -> None:
+        """As Compose does with the one-shot `ollama-models`: an `up` that covers it (naming it, or
+        naming nothing) makes it again only when its command changed, or forced; made again, it
+        pulls in the background, and nothing waits for it."""
+        step = yaml.safe_load((self.directory / "compose.yaml").read_text())["services"].get(
+            "ollama-models"
+        )
+        if step is None or (named and "ollama-models" not in named):
+            return
+        if step["command"] != self.step_command or "--force-recreate" in args:
+            self.step_command = step["command"]
+            self.fetch = "fetching"
 
     # -- the other seams -----------------------------------------------------------------------
     def cosign_run(self, argv: Sequence[str]) -> tuple[int, str]:
@@ -186,7 +217,14 @@ class _Host:
 
     def files_up_to_date(self) -> dict[str, bool]:
         self.actions.append("files")
-        return {"proxy_changed": False, "theme_changed": False}
+        if self.new_pull_command is None:
+            return {"proxy_changed": False, "theme_changed": False}
+        # The new checkout's refresh writes the release's pull script (`scripts/refresh.py`).
+        text = (self.directory / "compose.yaml").read_text()
+        doc = yaml.safe_load(text)
+        doc["services"]["ollama-models"]["command"] = self.new_pull_command
+        (self.directory / "compose.yaml").write_text("# banner\n" + yaml.safe_dump(doc))
+        return {"proxy_changed": True, "theme_changed": False}
 
     def find_release(self, tag: str | None) -> dict[str, str]:
         self.actions.append(f"find {tag}")
@@ -347,6 +385,69 @@ def test_an_update_backs_up_moves_the_checkout_pins_by_digest_and_verifies(
     said = capsys.readouterr().out
     assert "Updated to v0.5.0" in said and "set-1" in said
     assert "s3cret" not in said
+
+
+OLD_PULLS = ["pull_and_verify qwen2.5:7b-instruct 845dbda0ea48\nexec sleep infinity\n"]
+NEW_PULLS = ["pull_and_verify qwen2.5:14b-instruct 7cdf5a0187d5\nexec sleep infinity\n"]
+
+
+def _with_the_model_step(fake: _Host) -> None:
+    doc = yaml.safe_load((fake.directory / "compose.yaml").read_text())
+    doc["services"]["ollama-models"] = {
+        "image": "ollama/ollama:0.12.6", "command": OLD_PULLS, "restart": "no"
+    }  # fmt: skip
+    (fake.directory / "compose.yaml").write_text("# banner\n" + yaml.safe_dump(doc))
+    fake.step_command = OLD_PULLS
+    fake.new_pull_command = NEW_PULLS
+
+
+def test_the_stand_in_starts_the_model_step_again_only_when_its_command_changed(
+    tmp_path: Path,
+) -> None:
+    """Rule 15: as Compose does, an `up` that leaves the step out, or finds its command unchanged,
+    fetches nothing; one that makes it again does not wait for its pulls."""
+    fake = _Host(tmp_path)
+    _with_the_model_step(fake)
+    compose = ["docker", "compose", "-f", str(fake.directory / "compose.yaml")]
+    fake.run([*compose, "up", "-d", "--wait"])
+    fake.run([*compose, "up", "-d", "--no-deps", "api"])
+    assert fake.fetch == "done" and fake.step_command == OLD_PULLS
+    fake.files_up_to_date()
+    fake.run([*compose, "up", "-d", "--no-deps", "api"])
+    assert fake.step_command == OLD_PULLS
+    fake.run([*compose, "up", "-d", "--wait"])
+    assert fake.started_with_models[-1] == "fetching"
+    fake.fetch_fails = True
+    assert fake.run([*compose, "exec", "-T", "ollama-models", "true"])[0] == 1
+
+
+def test_an_update_that_changes_the_models_fetches_them_before_the_release_starts(
+    tmp_path: Path,
+) -> None:
+    """Defect 9's shape in `update`: the release's `up` makes `ollama-models` again for its new
+    command, and starts the gateway and the Conduit on the new model beside it, waiting for
+    nothing. The step is started by name and waited on first."""
+    fake = _Host(tmp_path)
+    _with_the_model_step(fake)
+    assert _update(fake) == 0
+    assert fake.started_with_models == ["done"] * len(fake.started_with_models)
+    fetch = fake.actions.index("compose up -d --no-deps ollama-models")
+    assert fake.actions[fetch + 1].startswith("compose exec -T ollama-models")
+    assert fetch < fake.actions.index("compose up -d --wait")
+
+
+def test_a_refused_model_download_rolls_the_update_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    _with_the_model_step(fake)
+    fake.fetch_fails = True
+    before = _files(fake)
+    assert _update(fake) == 1
+    said = capsys.readouterr().err
+    assert "ollama-models" in said
+    assert "restore set-1" in fake.actions
+    assert _files(fake) == before
 
 
 # --- an update that fails is rolled back ----------------------------------------------------------

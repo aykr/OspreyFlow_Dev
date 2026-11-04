@@ -16,7 +16,11 @@ What a mistake would do, and the case that catches it:
   and the same through `start --build`'s own update of them,
   `test_start_build_brings_the_14b_to_a_gpu_deployment`;
 - a deployment without a GPU rendered differently from before —
-  `test_gpu_none_renders_byte_for_byte_as_no_setting`.
+  `test_gpu_none_renders_byte_for_byte_as_no_setting`;
+- the 14b at 32k context left 15%/85% split between CPU and GPU because its KV cache is held at
+  full precision (measured on the first server, 4 November 2026: 18 GB, 9–11 s an answer, against
+  14 GB, 100% GPU, 3.3–3.6 s with the two settings) —
+  `test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention`.
 """
 
 from __future__ import annotations
@@ -109,6 +113,22 @@ def test_with_nvidia_the_ollama_service_alone_reserves_every_gpu(raw: dict[str, 
     assert [name for name, service in services.items() if "deploy" in service] == ["ollama"]
     without = _services(OspreyConfig.model_validate(raw))
     assert not any("deploy" in service for service in without.values())
+
+
+def test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention() -> None:
+    """ADR-135 Amendment 1, as measured 4 November 2026: on the GPU the `ollama` server keeps the
+    KV cache at q8_0 with flash attention (which q8_0 needs), and so fits the 14b at 32k context on
+    a 16 GB card. Without a GPU its environment is what it was; `ollama-models` never has them."""
+    for raw in ({}, OWN_SERVER):
+        services = _services(_with_gpu(raw))
+        assert services["ollama"]["environment"] == {
+            "OLLAMA_NOPRUNE": "1",
+            "OLLAMA_FLASH_ATTENTION": "1",
+            "OLLAMA_KV_CACHE_TYPE": "q8_0",
+        }
+        assert "environment" not in services["ollama-models"]
+        without = _services(OspreyConfig.model_validate(raw))
+        assert without["ollama"]["environment"] == {"OLLAMA_NOPRUNE": "1"}
 
 
 def _named(extraction: str, gpu: str = "nvidia") -> OspreyConfig:

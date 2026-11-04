@@ -33,13 +33,23 @@ What a mistake would do, and the case that catches it (rule 12):
   `test_a_render_on_its_own_writes_deployment_env_600`;
 - the deployment's own running ports refusing its own apply, or another program's port let through —
   `test_preflight_does_not_refuse_the_deployments_own_ports`,
-  `test_preflight_still_refuses_a_port_something_else_holds`.
+  `test_preflight_still_refuses_a_port_something_else_holds`;
+- a newly chosen model never fetched, so the gateway routes every Ask to a model that is not there
+  (defect 9, found on the first server, 4 November 2026: `resources.gpu: nvidia` chose the 14b and
+  `apply` never ran `ollama-models` again) —
+  `test_a_newly_chosen_extraction_model_is_fetched_before_its_users_start_again`, for the GPU and
+  for `models.extraction` changed by hand;
+  `test_unchanged_models_fetch_nothing`;
+  `test_a_failed_download_changes_nothing_and_says_so`. The stand-in leaves a one-shot step alone
+  unless it is named and its definition changed or it is forced, as Compose does —
+  `test_the_stand_in_compose_leaves_a_one_shot_step_alone_as_compose_does`.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
+import re
 import socket
 import stat
 from collections.abc import Callable, Iterator
@@ -66,16 +76,76 @@ GEMINI = {
 SECRET = ("PASSWORD", "SECRET", "SECRET_KEY", "ACCESS_KEY")
 
 
+_PULLED = re.compile(r"pull_and_verify (\S+) ")
+
+
+def _pulled_by(service: dict[str, Any]) -> set[str]:
+    command = " ".join(str(part) for part in service.get("command") or [])
+    return set(_PULLED.findall(command))
+
+
 class FakeCompose:
     """Stands in for `docker compose` (`apply._run`). Records each command; answers `ps` as Compose
     does (one JSON object per line, with `Publishers`); and refuses as Compose does an `up` naming a
-    service the compose file does not have, and an `--env-file` that is not there."""
+    service the compose file does not have, and an `--env-file` that is not there.
+
+    It also keeps each container (`as_installed` makes the deployment's), and the model volume
+    (`models`), as Compose and the download steps do. An `up` makes a container again only for a
+    service it is given (every service without a profile, when it names none) whose definition
+    differs from the container's, or with `--force-recreate`; a one-shot step it does not make again
+    — idle, or exited — fetches nothing. A download step made again (`ollama-models`) fetches what
+    its command names once an `exec` has waited for it. A download that fails exits the container,
+    and the `exec` waiting on it fails; one on a container that is not running is refused."""
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         #: service -> host ports its running container publishes.
         self.published: dict[str, list[int]] = {}
         self.running = True
+        #: service -> its container: the definition it was made from, and its state.
+        self.containers: dict[str, dict[str, Any]] = {}
+        #: The models in the model volumes.
+        self.models: set[str] = set()
+        #: What happened to the containers and the models, in order.
+        self.events: list[str] = []
+        self.download_fails = False
+
+    def as_installed(self, compose_file: Path) -> None:
+        """The deployment as its install left it: every service without a profile running, each
+        download step done, and its models in the volume."""
+        services = yaml.safe_load(compose_file.read_text(encoding="utf-8"))["services"]
+        for name, service in services.items():
+            if service.get("profiles"):
+                continue
+            idle = "exec sleep infinity" in " ".join(service.get("command") or [])
+            state = "exited" if service.get("restart") == "no" and not idle else "running"
+            self.containers[name] = {"definition": service, "state": state, "pending": False}
+            self.models |= _pulled_by(service)
+
+    def _download(self, name: str, stage: str) -> None:
+        container = self.containers[name]
+        container["pending"] = False
+        if self.download_fails:
+            container["state"] = "exited"
+            raise apply.ApplyFailed(stage, f"{name} exited with code 1")
+        self.models |= _pulled_by(container["definition"])
+        self.events.append(f"fetched {name}")
+
+    def _up(self, args: list[str], services: dict[str, Any], named: list[str], stage: str) -> None:
+        targets = named or [n for n, s in services.items() if not s.get("profiles")]
+        for name in targets:
+            definition = services[name]
+            container = self.containers.get(name)
+            if (
+                container is not None
+                and container["definition"] == definition
+                and "--force-recreate" not in args
+            ):
+                continue  # Compose leaves it as it is, running or exited
+            download = bool(_pulled_by(definition)) and definition.get("restart") == "no"
+            self.containers[name] = {"definition": definition, "state": "running",
+                                     "pending": download}  # fmt: skip
+            self.events.append(f"started {name}")
 
     def __call__(self, args: list[str], *, stage: str, **_kwargs: object) -> str:
         self.calls.append(list(args))
@@ -110,6 +180,14 @@ class FakeCompose:
             jobs = [n for n in named if services[n].get("restart") == "no"]
             if jobs and "--wait" in args:
                 raise apply.ApplyFailed(stage, f"service {jobs[0]!r} exited with code 2")
+            self._up(args, services, named, stage)
+        if verb == "exec":
+            name = args[args.index("exec") + 2]
+            container = self.containers.get(name)
+            if container is None or container["state"] != "running":
+                raise apply.ApplyFailed(stage, f"service {name!r} is not running")
+            if container["pending"]:
+                self._download(name, stage)
         return ""
 
     def ups(self) -> list[list[str]]:
@@ -374,6 +452,93 @@ def test_a_run_once_job_is_neither_started_nor_waited_on(
     assert "ingest" not in deployment.compose.restarted()
     assert "ingest" not in capsys.readouterr().out
     assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
+
+
+FOURTEEN = "qwen2.5:14b-instruct"
+
+
+def test_the_stand_in_compose_leaves_a_one_shot_step_alone_as_compose_does(
+    deployment: Deployment,
+) -> None:
+    """Rule 15: the refusal defect 9 hid behind. A one-shot step not named is not touched; named,
+    with its definition unchanged and not forced, it is not made again, so it fetches nothing."""
+    compose_file = deployment.folder / "compose.yaml"
+    fake = deployment.compose
+    fake.as_installed(compose_file)
+    compose = apply._compose(compose_file)
+    fake([*compose, "up", "-d", "--no-deps", "--force-recreate", "litellm"], stage="up")
+    fake([*compose, "up", "-d", "--no-deps", "ollama-models"], stage="up")
+    assert fake.events == ["started litellm"]
+    # Its command changed, unnamed: still not touched.
+    text = compose_file.read_text("utf-8").replace("qwen2.5:7b-instruct", FOURTEEN)
+    compose_file.write_text(text, "utf-8")
+    fake([*compose, "up", "-d", "--no-deps", "litellm"], stage="up")
+    assert FOURTEEN not in fake.models
+    # Named, it is made again; done once an `exec` has waited for it.
+    fake([*compose, "up", "-d", "--no-deps", "ollama-models"], stage="up")
+    fake([*compose, "exec", "-T", "ollama-models", "true"], stage="up")
+    assert FOURTEEN in fake.models
+    # A failed download exits the container; whatever waits on it fails.
+    fake.download_fails = True
+    fake([*compose, "up", "-d", "--no-deps", "--force-recreate", "ollama-models"], stage="up")
+    with pytest.raises(apply.ApplyFailed, match="exited with code 1"):
+        fake([*compose, "exec", "-T", "ollama-models", "true"], stage="up")
+    with pytest.raises(apply.ApplyFailed, match="is not running"):
+        fake([*compose, "exec", "-T", "ollama-models", "true"], stage="up")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"resources": {"gpu": "nvidia"}}, {"models": {"extraction": FOURTEEN}}],
+    ids=["a-gpu-chooses-the-14b", "named-by-hand"],
+)
+def test_a_newly_chosen_extraction_model_is_fetched_before_its_users_start_again(
+    deployment: Deployment, change: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Defect 9, at the real call site: the pull script, the routing table and the Conduit's
+    model all named the 14b, the gateway, the Conduit and the model server were started again, and
+    `ollama-models` was never run again, so the 14b was never fetched."""
+    fake = deployment.compose
+    fake.as_installed(deployment.folder / "compose.yaml")
+    assert FOURTEEN not in fake.models
+    deployment.config.write_text(yaml.safe_dump(change), encoding="utf-8")
+    assert deployment.reapply() == 0
+    assert FOURTEEN in fake.models
+    # Fetched, and waited on, before anything that uses it started again.
+    fetched = fake.events.index("fetched ollama-models")
+    for user in ("litellm", "api"):
+        assert fetched < fake.events.index(f"started {user}")
+    assert "ollama-models" in capsys.readouterr().out
+
+
+def test_unchanged_models_fetch_nothing(deployment: Deployment) -> None:
+    fake = deployment.compose
+    fake.as_installed(deployment.folder / "compose.yaml")
+    deployment.write_config(GEMINI)
+    assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
+    assert not any(e.startswith("fetched") for e in fake.events)
+    assert not any("-models" in e for e in fake.events)
+
+
+def test_a_failed_download_changes_nothing_and_says_so(
+    deployment: Deployment, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Fetched from the staged files, before they are moved into place: a refused download leaves
+    the deployment's files and its running services as they were, so the next `apply` sees the
+    same change and fetches again."""
+    fake = deployment.compose
+    fake.as_installed(deployment.folder / "compose.yaml")
+    fake.download_fails = True
+    before = deployment.snapshot()
+    deployment.write_config(None, resources={"gpu": "nvidia"})
+    assert deployment.reapply() == 1
+    said = capsys.readouterr().err
+    assert "ollama-models" in said and "Nothing was changed" in said
+    assert deployment.snapshot() == before
+    assert fake.events == ["started ollama-models"]
+    fake.download_fails = False
+    assert deployment.reapply() == 0
+    assert FOURTEEN in fake.models
 
 
 def test_nothing_changed_restarts_nothing(

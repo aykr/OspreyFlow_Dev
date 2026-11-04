@@ -13,7 +13,7 @@ What a mistake would do, and the case that catches it:
 - a GPU asked for on macOS or Windows, where Docker Desktop gives a container none — the same case;
 - the Container Toolkit configured for CDI alone refused — `test_a_cdi_nvidia_device_is_enough`;
 - a GPU too small for the 14b refusing the install rather than naming the 7b —
-  `test_a_gpu_below_twelve_gib_is_a_warning_naming_the_7b`;
+  `test_a_gpu_below_fourteen_gib_is_a_warning_naming_the_7b`;
 - `apply` turning the GPU on past the same checks —
   `test_apply_onto_a_gpu_is_refused_with_nothing_changed_when_the_driver_is_not_loaded`;
 - the command and the schema disagreeing on the extraction model a GPU runs —
@@ -108,13 +108,24 @@ def test_a_cdi_nvidia_device_is_enough(tmp_path: Path) -> None:
     assert "nvidia.com/gpu=all" in checks["gpu-docker"].says
 
 
-def test_a_gpu_below_twelve_gib_is_a_warning_naming_the_7b(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("gpu", "mib", "shown"),
+    [
+        ("NVIDIA GeForce RTX 3060 Ti", 8192, "8.0 GiB"),
+        ("NVIDIA GeForce RTX 3060", 12288, "12.0 GiB"),
+    ],
+)
+def test_a_gpu_below_fourteen_gib_is_a_warning_naming_the_7b(
+    tmp_path: Path, gpu: str, mib: int, shown: str
+) -> None:
+    """ADR-135 Amendment 1, as measured 4 November 2026: the 14b at 32k context with a q8_0 KV
+    cache used 12.0 GiB of the GPU; 14 GiB is asked for, so a 12 GB card is a warning too."""
     probes = FakeProbes()
-    probes.gpus = [("NVIDIA GeForce RTX 3060 Ti", 8192, "595.99.02")]
+    probes.gpus = [(gpu, mib, "595.99.02")]
     checks = _gpu_checks(probes, tmp_path)
     memory = checks["gpu-memory"]
     assert memory.ok and memory.warn
-    assert "8.0 GiB" in memory.says and "12 GiB" in memory.says
+    assert shown in memory.says and "14 GiB" in memory.says
     assert "qwen2.5:7b-instruct" in memory.fix
     # Named, the 7b asks for no memory check at all.
     assert "gpu-memory" not in _gpu_checks(probes, tmp_path, SEVEN)
