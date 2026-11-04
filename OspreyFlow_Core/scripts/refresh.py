@@ -44,7 +44,7 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import yaml
-from harness import register_sign_in
+from harness import ingest_uploads, register_sign_in
 from harness.apply import _compose, release_registry
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
@@ -532,6 +532,23 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
     }
 
 
+def _uploads_ready(compose_file: Path, run: Callable[[Sequence[str]], None]) -> None:
+    """The Ingest Studio's upload folder the Conduit's to write, before `up` (ADR-114 Amendment 33,
+    "as found on the first server"; `harness.ingest_uploads`)."""
+
+    def run_it(argv: Sequence[str]) -> tuple[int, str]:
+        try:
+            run(argv)
+        except RefreshFailed as failed:
+            return 1, str(failed)
+        return 0, ""
+
+    try:
+        ingest_uploads.prepare(compose_file, run=run_it)
+    except ingest_uploads.UploadFolderRefused as refused:
+        raise RefreshFailed(str(refused)) from refused
+
+
 def refresh(
     repo_root: Path = REPO_ROOT,
     *,
@@ -543,6 +560,7 @@ def refresh(
     changed = files_up_to_date(repo_root)
     theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
     run([*compose, "build", "--pull"])
+    _uploads_ready(directory / "compose.yaml", run)
     run([*compose, "up", "-d", "--wait"])
     if proxy_changed:
         # The proxy reads its routing table at start; `up` recreates the Ollama and API

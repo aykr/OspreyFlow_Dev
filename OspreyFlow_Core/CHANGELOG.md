@@ -6,6 +6,15 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **Uploads and demo packs work on Linux.** On a Linux server or computer, the folder the Ingest
+  Studio's uploads and the demo packs' files go to (`uploaded/` in the ingest folder) was made by
+  Docker, owned by root, and the Conduit could not write it: `ospreyflow demo add` and every upload
+  failed with "Permission denied". Before anything starts, `install`, `apply`, `start` and `update`
+  now make that folder and give it to the Conduit's user (uid 10001) when it cannot write it, with
+  the Conduit's own image; it is never made writable by every account, and a folder the Conduit can
+  already write is left as it is. A deployment updated from v0.4.8 or earlier is put right by its
+  first `ospreyflow apply` or `ospreyflow start` afterwards.
+
 ## v0.4.8 — 2026-11-04
 
 - **`ospreyflow update` works for an install from a release.** Every earlier release's update

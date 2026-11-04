@@ -14,6 +14,12 @@ What a mistake would do, and the case that catches it:
 - backup and restore not reaching the harness from the product folder —
   `test_backup_and_restore_pass_through_to_the_harness`;
 - `open` opening the wrong address — `test_open_opens_the_configured_address`;
+- `start` or `switch` bringing the stack up before the Conduit's upload folder is its own (ADR-114
+  Amendment 33, found on the first server, 4 November 2026), or bringing it up when that failed —
+  `test_start_and_stop_drive_compose_with_the_deployments_env_file`,
+  `test_switch_with_nothing_else_running_only_starts_this_one`,
+  `test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up` (the step itself:
+  `tests/harness/test_ingest_uploads.py`);
 - a step that cannot import the checkout's own packages (`schemas`, `ports`) — found running
   `ospreyflow backup` on the owner's machine for B2e, where it failed at its first import; every
   test until then had a fake runner, and every live run a shell with `PYTHONPATH` already set —
@@ -39,6 +45,12 @@ def _compose(rig: Rig) -> list[str]:
     ]  # fmt: skip
 
 
+def _uploads(rig: Rig) -> list[str]:
+    """The step before every `up`: the Conduit's upload folder made its own."""
+    python = str(rig.product / ".venv" / "bin" / "python")
+    return [python, "-m", "harness.ingest_uploads", str(rig.deployment / "compose.yaml")]
+
+
 def _ps(*rows: tuple[str, str, str]) -> str:
     return "\n".join(
         json.dumps({"Service": s, "State": state, "Health": health}) for s, state, health in rows
@@ -50,6 +62,7 @@ def test_start_and_stop_drive_compose_with_the_deployments_env_file(rig: Rig) ->
     assert rig("start") == 0
     assert rig("stop") == 0
     assert rig.runner.argvs() == [
+        _uploads(rig),
         [*_compose(rig), "up", "-d", "--wait"],
         [*_compose(rig), "stop"],
     ]
@@ -108,6 +121,7 @@ def test_the_dashed_spelling_is_an_alias(rig: Rig) -> None:
     assert rig("--start") == 0
     assert rig("--stop") == 0
     assert rig.runner.argvs() == [
+        _uploads(rig),
         [*_compose(rig), "up", "-d", "--wait"],
         [*_compose(rig), "stop"],
     ]
@@ -251,6 +265,7 @@ def test_switch_stops_the_other_running_deployment_then_starts_and_opens_this_on
     ]  # fmt: skip
     assert rig.runner.argvs() == [
         [*other_compose, "stop"],
+        _uploads(rig),
         [*_compose(rig), "up", "-d", "--wait"],
     ]
     assert rig.opened == ["http://ospreyflow.localhost"]
@@ -261,7 +276,14 @@ def test_switch_with_nothing_else_running_only_starts_this_one(rig: Rig) -> None
     own = ("osprey-local-lite", "exited(18)", rig.deployment / "compose.yaml")
     rig.responses["ls"] = [(0, _ls(own))]
     assert rig("switch") == 0
-    assert rig.runner.argvs() == [[*_compose(rig), "up", "-d", "--wait"]]
+    assert rig.runner.argvs() == [_uploads(rig), [*_compose(rig), "up", "-d", "--wait"]]
+
+
+def test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up(rig: Rig) -> None:
+    rig.install_deployment()
+    rig.runner.fail["harness.ingest_uploads"] = 1
+    assert rig("start") != 0
+    assert rig.runner.argvs() == [_uploads(rig)]
 
 
 def test_switch_list_names_each_deployment_its_state_and_address(

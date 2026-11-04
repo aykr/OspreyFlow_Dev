@@ -23684,6 +23684,34 @@ v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service 
   (empty buckets in its manifest) are made, not copied. Tests:
   `tests/harness/test_backup_fresh_deployment.py` (a `docker cp` stand-in refusing as Docker does,
   exit 1).
+- **The Conduit could not write its upload folder** (as found on the first server, 4 November 2026,
+  on v0.4.8; branch `fix-ingest-uploads-owner`). The renderer bind-mounts
+  `<components.storage.ingest>/uploaded` into the Conduit, writable (ADR-067), and nothing made it,
+  so Docker made it at the first `up`, owned by root, `755`. The Conduit runs as `osprey`, uid and
+  gid 10001 (`services/api/Dockerfile`'s `useradd --uid 10001 osprey`; `docker exec … id` on the
+  server), so `ospreyflow demo add operation-ledger` failed with `PermissionError: [Errno 13]
+  Permission denied: '/var/lib/osprey/ingest/uploaded/ledger'`, `prison-intelligence` was refused
+  the same way, and so would every browser upload be. Docker Desktop's file sharing lets any
+  container user write, which is why no Mac showed it; Lite on Linux has it too. **Defined:** before
+  every `up` — `harness.apply` (install, `ospreyflow apply`, whether or not a service restarts),
+  `scripts.refresh` (`start --build`), `harness.update` (before the backup, with the running
+  version's own image) and the command's `start` and `switch` — `harness.ingest_uploads` makes the
+  folder and, **only when uid 10001 cannot write it** (read as Linux reads the owner, group and
+  other bits), gives it to `10001:10001` (`CONDUIT_USER`) with a one-off container of the
+  deployment's own Conduit image as root (`docker compose run --rm --no-deps --user 0 --entrypoint
+  chown api 10001:10001 /var/lib/osprey/ingest/uploaded`, the pattern `harness.restore` already uses
+  to hand a file back to the Conduit), so there is no other image to pin or trust and the installer
+  needs no root. An operator's own arrangement that already lets the Conduit write (the Conduit's
+  group and `2775`, say) is left as it is, and the folder is never made writable by every account.
+  If the container fails, nothing is started and the refusal names the folder, Docker's words and
+  the remedy (`sudo chown 10001:10001 <folder>`). On Docker Desktop (macOS, Windows) nothing is done.
+  **A deployment updated from v0.4.8 or earlier** runs the old `harness.update`, which has no such
+  step; its first `ospreyflow start` or `apply` afterwards gives the folder over. Tests:
+  `tests/harness/test_ingest_uploads.py` (a stand-in for the kernel and Docker Engine that refuses a
+  write by uid 10001 into a folder another owns with `755`, makes a missing bind source as root, and
+  refuses a folder an account may not make — shown red at `install`, `apply`, `start --build` and
+  `update` with the server's own `[Errno 13]`), `tests/cli/test_lifecycle.py::
+  test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up`.
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 

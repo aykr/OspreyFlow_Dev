@@ -30,6 +30,7 @@ from typing import Any
 
 import yaml
 
+from harness import ingest_uploads
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
     GITHUB_API,
@@ -404,6 +405,13 @@ def apply_update(
         f"{current} and its data back. The deployment is unavailable while it runs."
     ):
         print("Nothing was changed.")
+        return 1
+    # ADR-114 Amendment 33, "as found on the first server": the upload folder the Conduit's to write
+    # before anything is changed, by the running version's own Conduit image, which is here.
+    try:
+        ingest_uploads.prepare(directory / "compose.yaml", run=host.run)
+    except ingest_uploads.UploadFolderRefused as refused:
+        print(f"ospreyflow: {refused} Nothing was changed.", file=sys.stderr)
         return 1
     commit = _ok(host, ["git", "-C", str(repo), "rev-parse", "HEAD"], "read the checkout").strip()
     try:
