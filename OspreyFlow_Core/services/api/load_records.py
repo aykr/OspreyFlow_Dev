@@ -257,7 +257,6 @@ def report_view(
             BranchRunReportView(
                 source_id=b.source_id,
                 source_label=b.source_label,
-                source_location=b.source_location,
                 report=_load_view(b.report, reader, scheme),
             )
             for b in report.branches

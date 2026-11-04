@@ -5,7 +5,6 @@ export type RecipeId = string;
 export type RecipeVersion = number;
 export type SourceId = string;
 export type SourceLabel = string;
-export type SourceLocation = string | null;
 export type LoadId1 = string;
 export type RecipeId1 = string;
 export type RecipeVersion1 = number;
@@ -83,12 +82,13 @@ export interface PipelineRunReportView {
   [k: string]: unknown;
 }
 /**
- * `BranchRunReport` as a route answers it: the branch's `LoadReportView`.
+ * `BranchRunReport` as a route answers it: the branch's `LoadReportView`. Not the file it
+ * read: that is the server's path to it, which the Glass never shows (rule 7; build order step
+ * 30), and the person running chose it, so the answer does not repeat it.
  */
 export interface BranchRunReportView {
   source_id: SourceId;
   source_label: SourceLabel;
-  source_location?: SourceLocation;
   report: LoadReportView;
   [k: string]: unknown;
 }

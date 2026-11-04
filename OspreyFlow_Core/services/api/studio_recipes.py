@@ -57,6 +57,7 @@ from schemas.ingest import (
 )
 
 from .dataset_scope import made_in, reach_clause
+from .run_source import VerifiedSource
 from .studio_map import validate_handling_tightens
 from .studio_publish import pack_versions_for
 
@@ -91,6 +92,9 @@ ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused_reason TEXT;
 -- ADR-120 D10, Amendment 1: the pack versions it was published against; NULL until published
 -- (and for one published before pinning, until the start-up backfill stamps it).
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS pack_versions JSONB;
+-- Build order step 30: each file the last Verify read, with the SHA-256 of its bytes; NULL when no
+-- Verify recorded one (before this column, or a seed's say-so). Cleared with `verified_at`.
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS verified_sources JSONB;
 """
 
 #: ADR-120 Amendment 1, decision 4: the versions the packs stood at when pinning began, which is
@@ -553,7 +557,8 @@ class StudioRecipeStore:
         content = _content_json(draft, **overrides)
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE studio_recipes SET label = $1, content = $2, verified_at = NULL "
+                "UPDATE studio_recipes SET label = $1, content = $2, verified_at = NULL, "
+                "verified_sources = NULL "
                 "WHERE recipe_id = $3 AND version = $4",
                 label if label is not None else draft.label,
                 content,
@@ -577,7 +582,8 @@ class StudioRecipeStore:
         content = _content_json(draft, pipeline=pipeline.model_dump(by_alias=True))
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE studio_recipes SET content = $1, verified_at = NULL "
+                "UPDATE studio_recipes SET content = $1, verified_at = NULL, "
+                "verified_sources = NULL "
                 "WHERE recipe_id = $2 AND version = $3",
                 content,
                 recipe_id,
@@ -606,7 +612,8 @@ class StudioRecipeStore:
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE studio_recipes SET content = $1, verified_at = NULL "
+                "UPDATE studio_recipes SET content = $1, verified_at = NULL, "
+                "verified_sources = NULL "
                 "WHERE recipe_id = $2 AND version = $3",
                 content,
                 recipe_id,
@@ -645,19 +652,47 @@ class StudioRecipeStore:
         drafts.sort(key=lambda d: d.created_at, reverse=True)
         return drafts
 
-    async def mark_verified(self, recipe_id: str, version: int, *, now: datetime) -> None:
+    async def mark_verified(
+        self,
+        recipe_id: str,
+        version: int,
+        *,
+        now: datetime,
+        sources: Sequence[VerifiedSource] = (),
+    ) -> None:
         """Called once by the Verify route after `run_verify` (`services/
         api/studio_verify.py`) completes without raising — never from here
         on the report's own rejection count, since §5 is explicit that a
-        run with rejections still passes. `publish` below is the only
-        thing that reads this."""
+        run with rejections still passes. `publish` below reads `verified_at`.
+
+        `sources` (build order step 30): each file that Verify read, with its hash, which a *Run
+        now* is held to (`verified_sources`). None given (the seed's say-so, where no Verify ran)
+        records none, and such a run is not held to one."""
+        recorded = (
+            json.dumps([source.model_dump() for source in sources]) if sources else None
+        )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE studio_recipes SET verified_at = $1 WHERE recipe_id = $2 AND version = $3",
+                "UPDATE studio_recipes SET verified_at = $1, verified_sources = $4::jsonb "
+                "WHERE recipe_id = $2 AND version = $3",
                 now,
                 recipe_id,
                 version,
+                recorded,
             )
+
+    async def verified_sources(self, recipe_id: str, version: int) -> list[VerifiedSource] | None:
+        """The files the last Verify of this version read, or `None` when no Verify recorded any."""
+        async with self._pool.acquire() as conn:
+            raw = await conn.fetchval(
+                "SELECT verified_sources FROM studio_recipes WHERE recipe_id = $1 AND version = $2",
+                recipe_id,
+                version,
+            )
+        if raw is None:
+            return None
+        items = json.loads(raw) if isinstance(raw, str) else raw
+        return [VerifiedSource.model_validate(item) for item in items]
 
     async def publish(
         self,

@@ -2,7 +2,6 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type SourceId = string;
 export type SourceLabel = string;
-export type SourceLocation = string | null;
 export type LoadId = string;
 export type RecipeId = string;
 export type RecipeVersion = number;
@@ -29,12 +28,13 @@ export type RuleNotes = string[];
 export type Withheld = boolean;
 
 /**
- * `BranchRunReport` as a route answers it: the branch's `LoadReportView`.
+ * `BranchRunReport` as a route answers it: the branch's `LoadReportView`. Not the file it
+ * read: that is the server's path to it, which the Glass never shows (rule 7; build order step
+ * 30), and the person running chose it, so the answer does not repeat it.
  */
 export interface BranchRunReportView {
   source_id: SourceId;
   source_label: SourceLabel;
-  source_location?: SourceLocation;
   report: LoadReportView;
   [k: string]: unknown;
 }

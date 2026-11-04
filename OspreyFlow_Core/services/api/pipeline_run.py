@@ -48,7 +48,9 @@ from services.api.review import (
     text_windows,
 )
 from services.api.rule_evaluation import RuleGate
-from services.api.studio_publish import LoadSink, load_published_recipe, run_published_recipe
+from services.api.run_source import branch_location as _branch_location
+from services.api.run_source import pipeline_of, topological
+from services.api.studio_publish import LoadSink, run_published_recipe
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
@@ -59,7 +61,6 @@ from services.ingest.pipeline import (
     SUPPORTED_EXTRACT_LIBRARIES,
     SUPPORTED_EXTRACT_MEDIA,
     SUPPORTED_GEOCODERS,
-    pipeline_from_recipe,
 )
 
 from conduit_common.identity import new_node_id
@@ -145,26 +146,8 @@ def online_geocode_from_env() -> OnlineGeocode | None:
     return geocode
 
 
-def _topological(graph: PipelineGraph) -> list[PipelineNode]:
-    """Kahn's order, ties broken by node id — the save gate guarantees acyclicity, but a runner
-    ordering is re-derived here rather than trusted from the stored node list's accidents."""
-    by_id = {n.id: n for n in graph.nodes}
-    indegree = dict.fromkeys(by_id, 0)
-    forward: dict[str, list[str]] = {}
-    for edge in graph.edges:
-        if edge.source in by_id and edge.target in by_id:
-            indegree[edge.target] += 1
-            forward.setdefault(edge.source, []).append(edge.target)
-    queue = deque(sorted(node_id for node_id, n in indegree.items() if n == 0))
-    ordered: list[PipelineNode] = []
-    while queue:
-        at = queue.popleft()
-        ordered.append(by_id[at])
-        for nxt in sorted(forward.get(at, [])):
-            indegree[nxt] -= 1
-            if indegree[nxt] == 0:
-                queue.append(nxt)
-    return ordered
+#: The runner's order, shared with Verify's choice of files (`run_source.files_a_run_reads`).
+_topological = topological
 
 
 def _upstream_sources(graph: PipelineGraph, node_id: str) -> list[str]:
@@ -511,12 +494,9 @@ async def run_published_pipeline(
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
     to the sources that read the draft's own recorded location. A source node carrying its own
     `source_location` in its config keeps it."""
-    recipe = load_published_recipe(draft, repo_root) if draft.git_path else None
-    pipeline = (
-        recipe.pipeline
-        if recipe is not None and recipe.pipeline is not None
-        else pipeline_from_recipe(draft)
-    )
+    # The one choice of pipeline and of each branch's file Verify makes too (`run_source`, build
+    # order step 30), so a run cannot read a file Verify did not check.
+    pipeline = pipeline_of(draft, repo_root)
 
     report = PipelineRunReport(
         load_id=load_id, recipe_id=draft.recipe_id, recipe_version=draft.version
@@ -526,7 +506,7 @@ async def run_published_pipeline(
     for node in ordered:
         if node.kind is not PipelineNodeKind.SOURCE:
             continue
-        branch_location = node.config.get("source_location") or source_location
+        branch_location = _branch_location(node, source_location)
         branch_report = await run_published_recipe(
             draft,
             principal,

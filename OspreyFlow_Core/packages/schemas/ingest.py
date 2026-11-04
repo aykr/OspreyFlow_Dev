@@ -1043,11 +1043,12 @@ class PipelineRunReport(BaseModel):
 
 
 class BranchRunReportView(BaseModel):
-    """`BranchRunReport` as a route answers it: the branch's `LoadReportView`."""
+    """`BranchRunReport` as a route answers it: the branch's `LoadReportView`. Not the file it
+    read: that is the server's path to it, which the Glass never shows (rule 7; build order step
+    30), and the person running chose it, so the answer does not repeat it."""
 
     source_id: str
     source_label: str
-    source_location: str | None = None
     report: LoadReportView
 
 
