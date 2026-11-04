@@ -24513,6 +24513,45 @@ client's data.
 **The owner's rulings of 4 November 2026** on Amendment 1's two open questions (points 5 and 6;
 open question 25 of `process/BUILD_ORDER_2026-11.md`).
 
+**(b) Renew only after the person has done something since the last renewal or sign-in.** Each
+renewal is a `prompt=none` round at Keycloak, which counts as activity on its session, so an open,
+awake, unattended window reached only the session's maximum (Keycloak's default, 10 hours), never
+its idle limit (the realm sets neither, so Keycloak's 30 minutes applies).
+
+1. **What counts as activity** (`auth/tokenRenewal.ts`, `ACTIVITY_EVENTS`): a key press
+   (`keydown`), a pointer press (`pointerdown`, which covers touch and pen) and a wheel turn
+   (`wheel`) anywhere in the page. Deliberately not a pointer merely moving (a resting mouse
+   jitters), focus, or the tab becoming visible. `watchActivity` listens on `window` in the capture
+   phase (a handler that stops an event cannot hide it) and passively (no scroll waits on it); the
+   listener only sets a flag, so it costs nothing on a busy canvas.
+2. **When a renewal is made.** Activity is counted from the last renewal's start or the last
+   sign-in (`schedule`, which a sign-in calls). At the renewal's time (a minute before expiry, as
+   Amendment 1 point 2), it renews only if there has been activity; otherwise nothing is asked and
+   the token is left to lapse. A call the Conduit refuses (`App.tsx`'s `renewAfterRefusal`) renews
+   only on the same condition (`renewIfActive`), so a screen's own poll cannot keep the session
+   alive either; it answers 401 to that screen, as an expired token always did. **The person's
+   first action after a lapse renews at once** (`noteActivity`), and a call that action makes joins
+   that renewal and is made again with its token (Amendment 1 point 3). If the identity provider's
+   idle limit passed meanwhile, that renewal answers `login_required` and the session prompt asks in
+   place, the page kept (Amendment 1 point 4). *Try again* on the prompt asks outright
+   (`renewNow`), whatever the activity. One renewal is in flight at a time, as before.
+3. **What this means.** A window that nobody touches now ends at the identity provider's idle
+   limit, measured from the last renewal before the person stopped (so up to the idle limit plus one
+   token's life, about 35 minutes with Keycloak's defaults); a person working keeps their window to
+   the maximum, as before. No screen reloads, at any point. Nothing else in the Glass, the realm or
+   the Conduit changes.
+
+**Tests**, red first (`s28b_*`): `src/auth/tokenRenewal.test.ts` "renewal only after the person has
+done something" — an idle window does not renew (red: renewed 15 times in an idle hour); activity
+after the token has lapsed renews at once; activity is counted from the last renewal; activity before
+a sign-in does not count after it; a refused call while idle is not renewed, after activity it is;
+*Try again* renews outright; an ended session is asked once — and "watchActivity" (the three events
+and not a moving pointer; passive, capture phase); Amendment 1's cases now with the person active.
+`src/App.test.tsx` "windows stay signed in": "an unattended window lets its token lapse: no renewal,
+and nothing asked" and "a call refused while nobody is there is not renewed; the person's first key
+press renews, and their call is answered" (red: the refused call renewed). No Glass action is added,
+so no keyboard step (rule 13); `keyboard/session-prompt.spec.ts` is unchanged.
+
 **(c) `use.refresh.tokens: false` on `osprey-glass`, so ADR-050's "no refresh token" is literally
 true.**
 

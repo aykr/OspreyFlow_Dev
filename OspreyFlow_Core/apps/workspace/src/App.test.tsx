@@ -576,10 +576,13 @@ describe("windows stay signed in: the token is renewed silently before it expire
   }
 
   const recipes = () => fetch(`${API}/v1/ingest/recipes`, { headers: { Authorization: "Bearer good-token" } });
+  // ADR-050 Amendment 2: the person doing something, which a renewal now waits for.
+  const press = () => fireEvent.keyDown(window, { key: "ArrowDown" });
 
   test("a token near expiry is renewed in the background, with no navigation, and the next call carries it", async () => {
     vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
     const { signinRedirect, sent } = await signedIn(2);
+    press();
 
     // Nothing is called and nothing refused: the renewal comes of the token's own expiry alone.
     await vi.waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1), { timeout: 4000 });
@@ -601,6 +604,7 @@ describe("windows stay signed in: the token is renewed silently before it expire
       .mockImplementation(() => new Promise((resolve) => (finish = resolve)) as never);
     await signedIn(300);
 
+    press();
     const both = Promise.all([recipes(), recipes()]);
     await vi.waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalled());
     finish(renewed());
@@ -615,6 +619,7 @@ describe("windows stay signed in: the token is renewed silently before it expire
     vi.mocked(userManager.signInAgainInPlace).mockReset().mockResolvedValue(renewed());
     const { signinRedirect, sent } = await signedIn(300);
 
+    press();
     expect((await recipes()).status).toBe(401);
 
     const prompt = await screen.findByRole("alertdialog", { name: "Your session has ended" });
@@ -634,9 +639,34 @@ describe("windows stay signed in: the token is renewed silently before it expire
     vi.mocked(userManager.renewSilently).mockReset().mockRejectedValue(new Error("IFrame timed out without a response"));
     await signedIn(300);
 
+    press();
     await recipes();
 
     const prompt = await screen.findByRole("alertdialog", { name: "The sign-in service could not be reached" });
     expect(within(prompt).getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  // ADR-050 Amendment 2 (build order step 28 (b)): an unattended window is not kept alive.
+  test("an unattended window lets its token lapse: no renewal, and nothing asked", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
+    await signedIn(2);
+    await new Promise((resolve) => setTimeout(resolve, 2500)); // past the renewal's time and the expiry
+    expect(vi.mocked(userManager.renewSilently)).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("a call refused while nobody is there is not renewed; the person's first key press renews, and their call is answered", async () => {
+    vi.mocked(userManager.renewSilently).mockReset().mockResolvedValue(renewed());
+    const { sent } = await signedIn(300);
+
+    expect((await recipes()).status).toBe(401); // a screen's own poll, say: no person behind it
+    expect(vi.mocked(userManager.renewSilently)).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    press();
+    await vi.waitFor(() => expect(vi.mocked(userManager.renewSilently)).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((await recipes()).status).toBe(200);
+    expect(sent.at(-1)?.authorisation).toBe("Bearer renewed-token");
   });
 });

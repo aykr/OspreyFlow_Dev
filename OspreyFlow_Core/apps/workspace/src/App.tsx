@@ -28,7 +28,7 @@ import {
 import { clearHandoff, readHandoff } from "./auth/launcherHandoff";
 import { installUnauthorisedWatch } from "./auth/unauthorised";
 import { SessionPrompt } from "./auth/SessionPrompt";
-import { createTokenRenewal, type RenewedUser, type TokenRenewal } from "./auth/tokenRenewal";
+import { createTokenRenewal, type RenewedUser, type TokenRenewal, watchActivity } from "./auth/tokenRenewal";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
@@ -414,7 +414,10 @@ export function App() {
     });
     renewalRef.current = renewal;
     renewal.schedule(expiresAtRef.current);
+    // ADR-050 Amendment 2: a renewal waits for the person to have done something since the last.
+    const stopWatching = watchActivity(window, () => renewal.noteActivity());
     return () => {
+      stopWatching();
       renewal.dispose();
       renewalRef.current = null;
     };
@@ -445,7 +448,10 @@ export function App() {
     if (sessionPromptRef.current !== null) return false;
     const renewal = renewalRef.current;
     if (!renewal) return false;
-    return (await renewal.renewNow()).kind === "renewed";
+    // A call refused while nobody has done anything (a screen's own poll) is not renewed, so an
+    // unattended window still reaches the identity provider's idle limit (ADR-050 Amendment 2); the
+    // person's next action renews, and a call they make then is renewed as before.
+    return (await renewal.renewIfActive()).kind === "renewed";
   }, [isDevBypass]);
   const handleUnauthenticatedResponse = useCallback((): void => {
     void renewAfterRefusal();
