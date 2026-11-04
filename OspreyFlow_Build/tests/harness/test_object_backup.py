@@ -46,8 +46,8 @@ def test_the_backup_exports_through_the_conduits_image_not_a_data_folder(
                                          work_dir=tmp_path / "set")  # fmt: skip
     (command,) = ran
     tail = command[command.index("run") :]
-    assert tail[:4] == ["run", "--rm", "--no-deps", "--entrypoint"]
-    assert tail[4] == "python"
+    assert tail[:3] == ["run", "--rm", "--no-deps"]
+    assert tail[tail.index("--entrypoint") + 1] == "python"
     assert command[-5:] == ["api", "-m", "services.api.object_transfer", "export", "/transfer"]
     assert not any("minio:/data" in part or "objectstore:/data" in part for part in command)
     with tarfile.open(archive) as tar:

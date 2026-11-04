@@ -82,6 +82,7 @@ from harness.render import (
     git_sha,
     load_config,
 )
+from harness.signatures import _as_caller
 from harness.site import (
     answer_localhost_with_loopback,
     answer_the_deployment_here,
@@ -401,11 +402,17 @@ def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
-    # The Conduit's image runs as its own user, which must be able to write here.
-    staging.chmod(0o777)
+    # **Run as the caller, so the copy is the caller's to remove** (defect 10, ADR-114 Amendment
+    # 33, as found on the first server, 4 November 2026). As the Conduit's own user (uid 10001) the
+    # export made its folders 10001's, mode 755, and the installer could not delete the files in
+    # them, so every backup of a store holding files failed at this `rmtree`; Docker Desktop hides
+    # ownership. As cosign's container is run (`harness.signatures._as_caller`). The folder is the
+    # caller's own, so it is no longer opened to every account; 755 so a restore's import, as
+    # whichever user, can read the tree it comes back as.
+    staging.chmod(0o755)
     _run(
         _compose(compose_file) + [
-            "run", "--rm", "--no-deps", "--entrypoint", "python",
+            "run", "--rm", "--no-deps", *_as_caller(), "--entrypoint", "python",
             "-v", f"{staging.resolve()}:/transfer",
             "api", "-m", "services.api.object_transfer", "export", "/transfer",
         ],
@@ -414,8 +421,27 @@ def backup_object_store(compose_file: Path, destination: Path, *, work_dir: Path
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(destination, "w:gz") as archive:
         archive.add(staging, arcname="objects-export")
-    shutil.rmtree(staging)
+    left = remove_tree(staging)
+    if left:
+        raise BackupFailed("objects", f"its staging copy {staging} could not be removed: {left}")
     return destination
+
+
+def remove_tree(folder: Path) -> str:
+    """Removes `folder` and everything in it; returns, in words, what could not be removed (empty
+    when everything was). Never raises for what it cannot remove: a clean-up that fails silently
+    left a partial set that looked removed (defect 10)."""
+    refused: list[str] = []
+
+    def note(_function: object, path: str, error: BaseException) -> None:
+        refused.append(f"{path} ({getattr(error, 'strerror', None) or error})")
+
+    if folder.exists():
+        shutil.rmtree(folder, onexc=note)
+    if not refused:
+        return ""
+    more = f", and {len(refused) - 3} more" if len(refused) > 3 else ""
+    return "; ".join(refused[:3]) + more
 
 
 #: How Docker refuses a `cp` from a path the container does not have: the daemon's words since
@@ -623,14 +649,44 @@ def run_backup(
     except BaseException as failure:
         # A set is good only once its manifest is written, and `restore` refuses a folder without
         # one; but a half-written folder beside the good sets is still one a person can take for a
-        # set, so it is removed (as found on the first server, 4 November 2026).
-        shutil.rmtree(target, ignore_errors=True)
+        # set, so it is removed (as found on the first server, 4 November 2026) — or, where some of
+        # it cannot be, marked incomplete and said so (defect 10).
+        said = _set_aside(target)
         if isinstance(failure, BackupFailed):
-            raise BackupFailed(
-                failure.item,
-                f"{failure.detail}\nThe partial set {target} was removed; nothing was kept.",
-            ) from failure
+            raise BackupFailed(failure.item, f"{failure.detail}\n{said}") from failure
         raise
+
+
+#: The file that marks a set a failed backup could not remove whole; `harness.restore` refuses it.
+INCOMPLETE = "INCOMPLETE"
+
+
+def _set_aside(target: Path) -> str:
+    """A failed backup's set removed; what could not be removed renamed `<set>.incomplete`, with an
+    `INCOMPLETE` file in it, so no person, restore or update takes it for a set. Returns what was
+    done, in words."""
+    left = remove_tree(target)
+    if not left:
+        return f"The partial set {target} was removed; nothing was kept."
+    marked = target.with_name(f"{target.name}.incomplete")
+    try:
+        target.rename(marked)
+    except OSError:
+        marked = target
+    try:
+        (marked / INCOMPLETE).write_text(
+            "This backup set is incomplete: the backup failed and some of it could not be "
+            f"removed ({left}). It is not a backup; restore refuses it. Remove it as root: "
+            f"sudo rm -rf {marked}\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # the name still says so
+    return (
+        f"The partial set could not be removed whole: {left}. It was renamed {marked} and marked "
+        f"incomplete ({INCOMPLETE} in it), so restore refuses it and it is not a backup. Remove it "
+        f"as root: sudo rm -rf {marked}"
+    )
 
 
 def _take_set(

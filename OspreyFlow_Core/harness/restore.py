@@ -162,6 +162,12 @@ class DryRun:
 
 
 def load_manifest(directory: Path) -> dict[str, Any]:
+    if directory.name.endswith(".incomplete") or (directory / "INCOMPLETE").exists():
+        raise RestoreRefused(
+            f"{directory} is a failed backup's incomplete set, which could not be removed",
+            "it is not a backup; choose another set, and remove this one as root "
+            f"(sudo rm -rf {directory})",
+        )
     path = directory / "manifest.json"
     if not path.exists():
         raise RestoreRefused(
