@@ -1184,11 +1184,12 @@ class StoreVolume:
     path: str
 
 
-#: **The stores' named volumes** (ADR-114 Amendment 35; build order step 26). Before them PostgreSQL,
-#: ArcadeDB and Valkey kept their data in the anonymous volumes their images' `VOLUME` lines make,
-#: and OpenSearch in its container (as found on the first server, 4 November 2026): kept when
-#: Compose recreates a container, but a new container gets new, empty ones. ArcadeDB's `backups/`,
-#: `log/` and `replication/` stay on the image's anonymous volumes: nothing a restart needs.
+#: **The stores' named volumes** (ADR-114 Amendment 35; build order step 26). Before them
+#: PostgreSQL, ArcadeDB and Valkey kept their data in the anonymous volumes their images' `VOLUME`
+#: lines make, and OpenSearch in its container (as found on the first server, 4 November 2026):
+#: kept when Compose recreates a container, but a new container gets new, empty ones. ArcadeDB's
+#: `backups/`, `log/` and `replication/` stay on the image's anonymous volumes: nothing a restart
+#: needs.
 #: `tests/harness/test_store_volumes.py::test_every_store_has_its_named_volume_on_lite_and_small` is
 #: what fails if a row goes. An existing deployment's data is moved by `harness/store_volumes.py`.
 STORE_VOLUMES: tuple[StoreVolume, ...] = (
