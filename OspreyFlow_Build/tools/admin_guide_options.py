@@ -98,7 +98,8 @@ SECTIONS = {
     "governance.organisation_provider": "Small on a server of your own: the organisation's identity "
     "provider, brokered by Keycloak; its client secret is never here (section 5a.1).",
     "resources": "Small on a server of your own: the stores sized to the server's memory "
-    "(section 5a.2).",
+    "(section 5a.2); and, on Lite or such a Small on Linux, the local engine on an NVIDIA GPU "
+    "(section 5a.4).",
     "map": "The basemaps the map offers.",
     "map.providers": "One basemap.",
     "map.providers.licence": "The basemap's licence.",

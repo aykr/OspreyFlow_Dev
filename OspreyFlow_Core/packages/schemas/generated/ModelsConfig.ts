@@ -37,7 +37,7 @@ export type ContractReference = string | null;
  */
 export type Providers = ModelProviderConfig[];
 /**
- * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with.
+ * ADR-095: the local model that extracts entities from text. Default: qwen2.5:7b-instruct, the model the product ships with; with resources.gpu: nvidia and this not named, qwen2.5:14b-instruct (ADR-135 Amendment 1).
  */
 export type Extraction = "qwen2.5:7b-instruct" | "qwen2.5:14b-instruct";
 /**

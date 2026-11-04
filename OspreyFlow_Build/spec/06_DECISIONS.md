@@ -21210,6 +21210,40 @@ end to end, with the toolkit installed, and the guides (admin §2.2a, §5a, Appe
 **Cost.** One more answer and three checks. A server with a GPU still needs the NVIDIA driver and
 the Container Toolkit installed by its administrator; OspreyFlow checks them and installs neither.
 
+**Units 1–3 as built (4 November 2026).** As decided, with these readings, each recorded here so it
+is not left in conversation (rule 11):
+
+- **Where the cloud refusal lives.** `resources.gpu: nvidia` is refused by the schema for profile
+  `cluster` and for a Small with `external:` (`OspreyConfig._a_gpu_is_not_a_clouds`); the answers
+  refuse `server.gpu: nvidia` beside `cloud:` or `external:` naming the GPU, before the general
+  "not both" refusal. `resources.gpu` is not part of `resources.any`, so Lite may set it while the
+  stores' sizing stays Small's alone. macOS and Windows are refused by the doctor (`gpu-host`),
+  which reads the machine, not by the schema.
+- **"Not named" is the key being in the file.** `OspreyConfig.extraction_model` returns
+  `models.extraction` when the key is in `osprey.yaml` (`model_fields_set`), whatever its value;
+  else the 14b on a GPU and the 7b without. The render's pull, the routing table,
+  `OSPREY_EXTRACTION_MODEL` and `start --build`'s update of them (`scripts/refresh.py`) all read it.
+  **Found:** an `osprey.yaml` saved by the setup harness or the guided page (`--gui`) is the whole
+  schema dumped with its defaults, so it names `models.extraction: qwen2.5:7b-instruct` and keeps the
+  7b on a GPU until that line is removed. The administration guide (§5a.4) says so; changing what
+  the page writes is not part of this amendment.
+- **The checks** run in `doctor` (Lite reading the product's `osprey.yaml`; Small reading the
+  answers), in `install` before anything is written, and in `apply` before the harness runs; each
+  refuses with nothing changed. The toolkit check reads `Runtimes` and `DiscoveredDevices` from the
+  `docker info` the doctor already asks for (`{{json .}}`, of which `{{json .Runtimes}}` is a part):
+  the `nvidia` runtime, or a CDI device whose id begins `nvidia.com/gpu`. The memory is the **total**
+  of every GPU `nvidia-smi` lists (the reservation is `count: all`), in MiB, against 12 × 1024 MiB.
+  A card sold as 12 GB that reports a little under 12288 MiB gets the warning.
+- **Tests that would fail if it were broken** (each shown red first):
+  `tests/harness/test_gpu_render.py` (the refusals, the reservation on `ollama` alone, the 14b
+  default and an explicit model winning, the pull, route and Conduit agreeing, `start --build`, and
+  `gpu: none` rendering byte for byte as no setting); `tests/cli/test_answers.py`'s
+  `test_server_gpu_*`; `tests/cli/test_gpu.py` (each check refusing in words, an install and an
+  `apply` refused with nothing changed, the warning naming the 7b, the command and the schema
+  agreeing on the model, the stand-ins refusing as `nvidia-smi` and `docker info` do, and the real
+  probe against stand-in programs on `PATH`); `tests/test_admin_guide.py`'s
+  `test_every_server_setting_is_in_the_guide`, which the answers-file case did not cover.
+
 ## ADR-136 — Egress decided per dataset as well as by handling code, and keys marked as under a privacy contract — ACCEPTED (design)
 
 Status: accepted 1 November 2026, the owner's rulings: "Per-dataset egress" (from options), and "for

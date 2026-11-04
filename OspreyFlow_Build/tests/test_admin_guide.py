@@ -6,7 +6,9 @@ What a drift would do, and the case that catches it:
 - an `osprey.yaml` setting added, renamed or removed without the guide's appendix following —
   `test_the_settings_appendix_is_the_schemas_own`;
 - a command or a flag nobody is told of — `test_every_command_and_install_flag_is_in_the_guide`;
-- an answers-file setting nobody is told of — `test_every_answers_file_setting_is_in_the_guide`.
+- an answers-file setting nobody is told of — `test_every_answers_file_setting_is_in_the_guide`,
+  and one of `server:`'s, which that case does not read —
+  `test_every_server_setting_is_in_the_guide`.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 import argparse
 
 import pytest
-from ospreyflow.answers import _SECTIONS, _TOP
+from ospreyflow.answers import _SECTIONS, _SERVER, _TOP
 from ospreyflow.main import _parser
 from tools import admin_guide_options
 
@@ -63,3 +65,10 @@ def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None
     keys = [key] if key not in _SECTIONS else [f"{key}.{child}" for child in _SECTIONS[key]]
     for setting in keys:
         assert f"`{setting}`" in GUIDE or f"{setting}`" in GUIDE, f"{setting} is not in {name}"
+
+
+@each_guide
+@pytest.mark.parametrize("key", sorted(_SERVER))
+def test_every_server_setting_is_in_the_guide(name: str, key: str) -> None:
+    """ADR-114 Amendment 33's `server:` is checked by its own list, not `_SECTIONS`."""
+    assert f"`server.{key}`" in GUIDES[name], f"server.{key} is not in {name}"
