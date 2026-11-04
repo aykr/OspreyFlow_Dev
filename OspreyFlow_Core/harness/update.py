@@ -465,7 +465,7 @@ def apply_update(
     except store_volumes.StoresNotMoved as failed:
         print(
             f"ospreyflow: the update to {tag} failed at 'move the stores to named volumes': "
-            f"{failed.words()}",
+            f"{failed.words(again=False)}",
             file=sys.stderr,
         )
         if not failed.started:

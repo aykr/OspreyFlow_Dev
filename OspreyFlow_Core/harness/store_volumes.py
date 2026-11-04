@@ -113,18 +113,24 @@ class StoresNotMoved(Exception):
         self.old = list(old)
         super().__init__(self.words())
 
-    def words(self) -> str:
+    def words(self, *, again: bool = True) -> str:
+        """What to show. `again`: say the deployment is stopped and to run the command again —
+        not for `update`, whose rollback then starts the old version itself."""
         where = ", ".join(self.old) if self.old else "its old volumes"
         if self.started:
             return (
                 f"the stores' data could not be moved to named volumes: {self.why}. Nothing was "
                 f"removed: the data as it was is still in {where}."
             )
-        return (
+        said = (
             f"the stores' data could not be moved to named volumes: {self.why}. Nothing was "
-            f"removed: each store's data is still where it was ({where}), and the deployment is "
-            "stopped. Run the same command again once the cause is fixed."
+            f"removed: each store's data is still where it was ({where})."
         )
+        if again:
+            said += (
+                " The deployment is stopped. Run the same command again once the cause is fixed."
+            )
+        return said
 
 
 @dataclass
@@ -336,7 +342,7 @@ def move(
     services = list(dict.fromkeys(p.row.service for p in pending))
     old = [p.source for p in pending if p.source and not p.source_is_folder]
     say(
-        "The stores' data moves to named volumes, once (ADR-114 Amendment 35): "
+        "The stores' data moves to named volumes, once: "
         + ", ".join(services)
         + ". The deployment is stopped while it moves; the old volumes are kept."
     )

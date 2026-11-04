@@ -763,4 +763,4 @@ def test_the_command_says_what_failed_and_exits_one(
     monkeypatch.setattr(store_volumes, "_subprocess", docker)
     assert store_volumes.main([str(compose_file)]) == 1
     err = capsys.readouterr().err
-    assert "could not be moved to named volumes" in err and "the deployment is stopped" in err
+    assert "could not be moved to named volumes" in err and "The deployment is stopped" in err
