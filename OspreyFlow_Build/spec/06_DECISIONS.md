@@ -24115,3 +24115,55 @@ measured twice, the same both times, before and after this step's fixes.
   establishment 0.06. Recorded for the coordinator to put in the script; the plan's constant and tests are
   left as they are (open question: model the search's draw in the plan, or change the click path so the
   number is added with its links alone).
+
+### ADR-127, Amendment 46 (4 November 2026) — the Prison Intelligence pack handles post-ingest resolution itself (build order step 25 (c))
+
+The owner's ruling of 4 November 2026 on open question 30: `components.post_ingest_resolution`
+defaults to true, the administration guide told the operator to turn it off before `ospreyflow demo
+add prison-intelligence`, and a fresh install turned it back on. The pack is to handle it itself:
+either it refuses while resolution is on (option 1), or it turns resolution off for its own case or
+datasets (option 2) — option 2 only if the specification already allows resolution scoped so.
+
+- **What governs resolution.** Amendments 33–35 of this ADR: one switch, `OSPREY_POST_INGEST_RESOLUTION`
+  (`components.post_ingest_resolution`), read by the Conduit for the whole deployment; when on,
+  `submit_post_ingest_resolution_jobs` (ADR-025's hook) queues `resolve_entity_type` for each entity
+  type a run's recipe declares, and the worker resolves **every** node of that type in the corpus. No
+  ADR scopes it to a case or a dataset: ADR-126 (a case's domain packs and its Reports view) does not
+  touch resolution; ADR-025 resolves by entity type, corpus-wide. **So option 2 is not available, and
+  option 1 is built.**
+- **The pack refuses while it is on.** `ospreyflow demo add prison-intelligence`
+  (`cli/ospreyflow/demo.py`, `_require_resolution_off`) reads the deployment's rendered
+  `deployment.env` — what its Conduit runs with, read as `scripts.seed_internal._switch_args` reads
+  it (no line, from a deployment rendered before Amendment 33, is `on`) — and, unless it says `off`,
+  refuses before anything starts, in words naming `post_ingest_resolution: false` under
+  `components:`, the deployment's `osprey.yaml` by path, and `ospreyflow apply` (with `--name` for a
+  deployment kept by name); nothing is added. Where nothing is installed, the seed says so as before.
+  `prison-intelligence-scale` is not refused: it is written straight into the graph with no pipeline
+  run, so nothing it does queues resolution.
+- **An install that chooses the pack writes it off** (`cli/ospreyflow/answers.py`,
+  `_resolution_off_for_the_packs`). Option 1 alone would have made every install whose answers name
+  the pack — the `crime` starter's one command among them, and the first server's own install of
+  every pack — refuse at its last step, after everything else was installed. So when `demo_packs`
+  names it, the `osprey.yaml` the answers make has `components.post_ingest_resolution: false`, and
+  the install says so on screen; this is Amendment 33's original "the install … writes it", which
+  Amendment 35 had replaced by an operator's step. Over the checkout's defaults the answers decide; a
+  file of the operator's own (`config:`, used as it is, the guided page's draft among them) that
+  sets it **true** is refused in words, with nothing installed, rather than overridden. **The cost,
+  disclosed:** the switch is the deployment's, so the deployment's other demo cases (the crime
+  starter's `hmp`) gain no automatic `SAME_AS` links either; an analyst's own Resolve now still works.
+- **Also corrected:** `scripts/seed_pid.resolution_warning` named `ospreyflow install` to re-render;
+  since ADR-137 a changed `osprey.yaml` reaches an installed deployment through `ospreyflow apply`,
+  which it now names.
+- **Tests** (`tests/cli/test_pid_resolution.py`; the deployment's `deployment.env` is written by the
+  real `harness.render._render_env`, as `harness.apply` writes it):
+  `test_adding_the_pack_is_refused_in_words_while_resolution_is_on` (rendered on, and with no line —
+  shown red: the seed ran), `test_the_pack_loads_once_resolution_is_off`,
+  `test_other_packs_are_not_refused_while_resolution_is_on`,
+  `test_an_install_that_chooses_the_pack_turns_resolution_off` (the crime starter's `osprey.yaml`,
+  rendered, reads `off`, and the pack then loads; an install without the pack leaves the setting
+  alone — shown red: `KeyError`, nothing written),
+  `test_a_config_that_turns_resolution_on_with_the_pack_is_refused_before_anything_runs` (shown red:
+  the install ran). Updated with reasons: `tests/cli/test_starters.py::test_each_starters_osprey_yaml_carries_its_brand_and_demo_packs_and_nothing_else_differs`
+  (a starter loading the pack now also differs in this one setting) and
+  `tests/test_seed_pid.py::test_the_warning_names_the_osprey_yaml_line_and_the_re_render` (`apply`,
+  not `install`).

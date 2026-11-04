@@ -17,6 +17,13 @@ update. Work not yet in a release is listed under *Unreleased*.
   administration guide, before anything is installed. It used to fall back to a certificate the
   front proxy obtains itself, which needs port 80 and a public name a server inside an
   organisation's network does not have. A cloud's server is unchanged.
+- **The Prison Intelligence pack looks after post-ingest resolution itself.** An install that
+  chooses it (the `crime` starter does) now writes `components.post_ingest_resolution: false` and
+  says so, so a fresh install no longer turns resolution back on under the pack. Added later with
+  `ospreyflow demo add prison-intelligence`, it refuses, in words and with nothing added, while
+  resolution is on, naming the setting and `ospreyflow apply`. Resolution is the whole
+  deployment's setting: the deployment's other demo cases gain no automatic "same as" links either;
+  an analyst's own Resolve now still works.
 
 ## v0.4.10 — 2026-11-04
 

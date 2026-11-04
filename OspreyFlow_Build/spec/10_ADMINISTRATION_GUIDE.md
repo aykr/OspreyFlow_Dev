@@ -48,6 +48,13 @@ and what its demo cases are set to, never what the ontology offers.
 `ospreyflow starters` (or `ospreyflow install --list-starters`) prints the same table and the
 command for each.
 
+**A starter that loads `prison-intelligence`** (`crime`) also writes
+`components.post_ingest_resolution: false` into the `osprey.yaml` it makes, and says so: that pack
+needs post-ingest resolution off (section 11), and resolution is the whole deployment's setting, so
+the deployment's other demo cases do not gain automatic "same as" links either. An analyst's own
+Resolve now still works. The same holds for any answers file whose `demo_packs` names it; one whose
+own `osprey.yaml` (`config:`) sets it `true` is refused before anything is installed.
+
 **One command per starter.** Add `--yes` to take every other default; leave it out to be asked.
 
 ```
@@ -978,6 +985,14 @@ download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pa
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
 attribution travel with it.
+
+**Prison Intelligence** (`prison-intelligence`) needs `components.post_ingest_resolution` off
+(appendix A), or a live load in the demonstration adds automatic "same as" links and every rehearsal
+reset then refuses. An install whose `demo_packs` names it (the `crime` starter's does) writes the
+setting off itself (section 1a). Added later, on a deployment where it is on, `ospreyflow demo add
+prison-intelligence` refuses, in words, with nothing added: set `post_ingest_resolution: false` under
+`components:` in the deployment's `osprey.yaml`, run `ospreyflow apply`, then add it again.
+Resolution is the whole deployment's setting; no case or dataset can turn it off on its own.
 
 **Enron** is the one pack of **real personal data**: the email of real people, released during the
 US regulator's investigation and distributed by Carnegie Mellon University. OspreyFlow never carries

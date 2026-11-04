@@ -238,8 +238,8 @@ def resolution_warning() -> list[str]:
         f"warning: {RESOLUTION_SWITCH} is on in this deployment: a live run of the reports recipe "
         "queues resolution, whose worker writes SAME_AS links onto the people it made, and every "
         "rehearsal reset then refuses.",
-        "  Set `components.post_ingest_resolution: false` in osprey.yaml, re-render the deployment "
-        "(`ospreyflow install`) and restart the Conduit.",
+        "  Set `components.post_ingest_resolution: false` in the deployment's osprey.yaml and run "
+        "`ospreyflow apply`, which renders it and starts the Conduit again.",
     ]
 
 

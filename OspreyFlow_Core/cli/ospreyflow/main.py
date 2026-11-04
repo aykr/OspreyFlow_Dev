@@ -528,6 +528,7 @@ def _write_config(ctx: _Context, answers: Answers, force: bool) -> None:
     config = osprey_config(answers, read_config(ctx.product))
     header = starters.comment(answers.starter, answers.demo_packs) if answers.starter else ""
     if config == read_config(ctx.product) and (not header or _begins_with(path, header)):
+        _say_resolution_off(answers)
         return  # what the answers make is what is there, or the owner's own file used as it is
     if not force:
         raise CommandRefused(
@@ -537,6 +538,7 @@ def _write_config(ctx: _Context, answers: Answers, force: bool) -> None:
         )
     path.write_text(header + yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     print(f"Wrote {path}.")
+    _say_resolution_off(answers)
 
 
 def _begins_with(path: Path, header: str) -> bool:
@@ -721,8 +723,32 @@ def _add_demo_packs(ctx: _Context, answers: Answers) -> None:
         file = answers.paysim_file if pack == "paysim" else None
         demo.add_pack(
             ctx.product, ctx.run, ctx.env, pack, file,
-            case_domains=answers.case_domains, deployment_env=ctx.named_env(),
+            case_domains=answers.case_domains, **_pack_target(ctx),
         )  # fmt: skip
+
+
+def _pack_target(ctx: _Context) -> dict[str, Any]:
+    """Where a demo pack loads: the deployment, its `osprey.yaml` and the `apply` that applies it
+    (for the Prison Intelligence pack's resolution check, ADR-127 Amendment 46)."""
+    name = f" --name {ctx.target.name}" if ctx.target.named else ""
+    return {
+        "deployment_env": ctx.named_env(),
+        "deployment": ctx.deployment,
+        "settings": ctx.config_path,
+        "apply_command": f"ospreyflow apply{name}",
+    }
+
+
+def _say_resolution_off(answers: Answers) -> None:
+    """ADR-127 Amendment 46: said whenever the answers' packs turn post-ingest resolution off."""
+    packs = sorted(set(answers.demo_packs) & set(demo.RESOLUTION_OFF_PACKS))
+    if packs:
+        print(
+            f"Post-ingest resolution is off (components.post_ingest_resolution: false), because "
+            f"{', '.join(packs)} needs it off: its live loads must not add automatic \"same as\" "
+            "links. An analyst's own Resolve now still works (section 11 of the administration "
+            "guide)."
+        )
 
 
 def _docker_projects(ctx: _Context) -> dict[str, list[Path]]:
@@ -789,6 +815,7 @@ def _write_named_config(ctx: _Context, args: argparse.Namespace, answers: Answer
     named.private_folder(ctx.target.folder)
     path.write_text(text, encoding="utf-8")
     print(f"Wrote {path}.")
+    _say_resolution_off(answers)
 
 
 def _apply_argv(ctx: _Context, args: argparse.Namespace) -> list[str]:
@@ -1229,8 +1256,7 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
             return 0
         demo.add_pack(
             ctx.product, ctx.run, ctx.env, args.pack, args.file,
-            ask=ctx.ask, accept_real_data=args.accept_real_data,
-            deployment_env=ctx.named_env(),
+            ask=ctx.ask, accept_real_data=args.accept_real_data, **_pack_target(ctx),
         )  # fmt: skip
         return 0
     if verb == "uninstall":

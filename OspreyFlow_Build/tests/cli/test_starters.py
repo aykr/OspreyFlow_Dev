@@ -55,6 +55,10 @@ def test_each_starters_osprey_yaml_carries_its_brand_and_demo_packs_and_nothing_
     text = (rig.product / "osprey.yaml").read_text(encoding="utf-8")
     written = yaml.safe_load(text)
     plain = osprey_config(load_answers({"mode": "lite"}, packs=ALL_PACKS.split()), BASE_CONFIG)
+    if "prison-intelligence" in starter.domain.demo_packs:
+        # Build order step 25 (c), ADR-127 Amendment 46: a starter loading the Prison Intelligence
+        # pack also turns post-ingest resolution off, which the pack needs (`test_pid_resolution`).
+        plain["components"]["post_ingest_resolution"] = False
     # Nothing but the look differs from an install without a starter.
     assert {k: v for k, v in written.items() if k != "appearance"} == plain
     assert written["appearance"]["brand"] == starter.theme

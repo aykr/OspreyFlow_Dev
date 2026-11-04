@@ -549,7 +549,7 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         if answers.appearance:
             # ADR-138: the guided page installs from its draft; the look is a Mode-screen answer.
             loaded["appearance"] = {**(loaded.get("appearance") or {}), **answers.appearance}
-        return loaded
+        return _resolution_off_for_the_packs(loaded, answers.demo_packs, own_file=answers.config)
     config = copy.deepcopy(dict(base))
     config["profile"] = PROFILES[answers.mode]
     storage = config.setdefault("components", {}).setdefault("storage", {})
@@ -600,4 +600,34 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         governance["organisation_provider"] = {
             k: answers.organisation[k] for k in ("label", "issuer", "client_id")
         }
+    return _resolution_off_for_the_packs(config, answers.demo_packs, own_file=None)
+
+
+#: ADR-127 Amendment 46 (build order step 25 (c)): the demo packs that load only while post-ingest
+#: resolution is off (`ospreyflow.demo.RESOLUTION_OFF_PACKS`, which refuses them while it is on).
+RESOLUTION_OFF_PACKS = ("prison-intelligence",)
+
+
+def _resolution_off_for_the_packs(
+    config: dict[str, Any], packs: tuple[str, ...], *, own_file: Path | None
+) -> dict[str, Any]:
+    """An install that chooses the Prison Intelligence pack writes `components.
+    post_ingest_resolution: false`, so it never turns resolution back on under the pack (and the
+    pack's own refusal never stops the install's last step). Over the checkout's defaults the
+    answers decide; a file of the operator's own (`config:`) that says `true` is refused in words,
+    not overridden, since it is used as it is."""
+    chosen = sorted(set(packs) & set(RESOLUTION_OFF_PACKS))
+    if not chosen:
+        return config
+    components = config.setdefault("components", {})
+    if not isinstance(components, dict):
+        return config  # the schema names what is wrong with it
+    if own_file is not None and components.get("post_ingest_resolution") is True:
+        raise AnswersRefused(
+            f"{own_file} sets components.post_ingest_resolution: true, and demo_packs chooses "
+            f"{', '.join(chosen)}, which needs it off: a live load in the demonstration would add "
+            'automatic "same as" links. Set it to false (or leave it out, and the install sets '
+            f"it), or leave {', '.join(chosen)} out. Nothing was installed"
+        )
+    components["post_ingest_resolution"] = False
     return config

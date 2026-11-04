@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.46** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.47** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.47 | 2026-11-04 | The owner's ruling (ADR-127 Amendment 46; build order step 25): §1a and §11, the Prison Intelligence pack handles post-ingest resolution itself — an install that chooses it writes `components.post_ingest_resolution: false`, and `ospreyflow demo add prison-intelligence` refuses, in words, while it is on. |
 | 1.46 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33; build order step 25): §5a and §7, `server.certificate` and `server.key` are required, and an answers file without them is refused in words; the doctor no longer checks port 80 for a certificate the proxy would obtain itself. |
 | 1.45 | 2026-11-04 | Found on the first server (ADR-114 Amendment 33; build order step 25): §4 and §5a, the install waits for the extraction model to download, says so with its size, and only then says it is installed. |
 | 1.44 | 2026-11-04 | Describes v0.4.10. No change to its content. |
@@ -209,6 +210,13 @@ and what its demo cases are set to, never what the ontology offers.
 
 `ospreyflow starters` (or `ospreyflow install --list-starters`) prints the same table and the
 command for each.
+
+**A starter that loads `prison-intelligence`** (`crime`) also writes
+`components.post_ingest_resolution: false` into the `osprey.yaml` it makes, and says so: that pack
+needs post-ingest resolution off (section 11), and resolution is the whole deployment's setting, so
+the deployment's other demo cases do not gain automatic "same as" links either. An analyst's own
+Resolve now still works. The same holds for any answers file whose `demo_packs` names it; one whose
+own `osprey.yaml` (`config:`) sets it `true` is refused before anything is installed.
 
 **One command per starter.** Add `--yes` to take every other default; leave it out to be asked.
 
@@ -1296,9 +1304,14 @@ attribution travel with it.
 
 **Prison Intelligence** seeds its case through the Ingest Studio's own pipelines, as a data engineer
 would, and has commands for rehearsing a demonstration: `--reset-live` between rehearsals, and two
-for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). Turn
-`components.post_ingest_resolution` off (appendix A) before adding it, or a live load in the
-demonstration adds automatic "same as" links. Its **scale cohort** (`prison-intelligence-scale`) is
+for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). It needs
+`components.post_ingest_resolution` off (appendix A), or a live load in the demonstration adds
+automatic "same as" links and every rehearsal reset then refuses. An install whose `demo_packs`
+names it (the `crime` starter's does) writes the setting off itself (section 1a). Added later, on a
+deployment where it is on, `ospreyflow demo add prison-intelligence` refuses, in words, with nothing
+added: set `post_ingest_resolution: false` under `components:` in the deployment's `osprey.yaml`, run
+`ospreyflow apply`, then add it again. Resolution is the whole deployment's setting; no case or
+dataset can turn it off on its own. Its **scale cohort** (`prison-intelligence-scale`) is
 written straight into the graph in a case of its own, with no pipeline runs, so the rehearsal reset
 does not touch it; adding it again changes nothing, and a run that stopped part-way says so rather
 than finishing it. `python -m scripts.write_pid_files --out <folder> --profile scale` writes its
