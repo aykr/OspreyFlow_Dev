@@ -234,7 +234,7 @@ def test_the_published_recipes_repository_is_in_the_set(
         asked.append(command)
         source, target = command[-2], Path(command[-1])
         if not source.endswith("/var/lib/osprey/data/recipes"):
-            return subprocess.CompletedProcess(command, 1, stdout="", stderr="Could not find the file: does not exist")
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr=f"Error response from daemon: Could not find the file {source.partition(':')[2]} in container osprey-small-api-1")
         (target / ".git").mkdir(parents=True)
         (target / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
         (target / "recipes").mkdir()
