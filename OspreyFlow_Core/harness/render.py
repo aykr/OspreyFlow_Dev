@@ -1145,6 +1145,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
 
 def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str:
     services = compose_services(config, images)
+    stores = name_the_stores(services)
     document = {
         # ADR-132 Amendment 1: `deployment.name`, else `osprey-<profile>` as before.
         "name": compose_project(config),
@@ -1164,12 +1165,52 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
                 else {}
             ),
             **({"clickhouse-data": {"driver": "local"}} if _uses_clickhouse(config) else {}),
+            # ADR-114 Amendment 35: each store's own.
+            **stores,
         },
         # ADR-114 Amendment 7: `osprey` has no route out; `egress` only for what needs one.
         "networks": {"osprey": {"internal": True}, "egress": {}},
     }
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     return _comment_block(_BANNER, "#") + body
+
+
+@dataclass(frozen=True)
+class StoreVolume:
+    """A store's data path, kept in a named volume of its own (ADR-114 Amendment 35)."""
+
+    service: str
+    volume: str
+    path: str
+
+
+#: **The stores' named volumes** (ADR-114 Amendment 35; build order step 26). Before them PostgreSQL,
+#: ArcadeDB and Valkey kept their data in the anonymous volumes their images' `VOLUME` lines make,
+#: and OpenSearch in its container (as found on the first server, 4 November 2026): kept when
+#: Compose recreates a container, but a new container gets new, empty ones. ArcadeDB's `backups/`,
+#: `log/` and `replication/` stay on the image's anonymous volumes: nothing a restart needs.
+#: `tests/harness/test_store_volumes.py::test_every_store_has_its_named_volume_on_lite_and_small` is
+#: what fails if a row goes. An existing deployment's data is moved by `harness/store_volumes.py`.
+STORE_VOLUMES: tuple[StoreVolume, ...] = (
+    StoreVolume("postgres", "postgres-data", "/var/lib/postgresql/data"),
+    StoreVolume("arcadedb", "arcadedb-databases", "/home/arcadedb/databases"),
+    StoreVolume("arcadedb", "arcadedb-config", "/home/arcadedb/config"),
+    StoreVolume("valkey", "valkey-data", "/data"),
+    StoreVolume("opensearch", "opensearch-data", "/usr/share/opensearch/data"),
+)
+
+
+def name_the_stores(services: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Each store the deployment runs given its named volumes (compose only: a cluster's stores
+    keep their claims, `harness/cluster.py`), and the top-level `volumes:` entries they need."""
+    declared: dict[str, dict[str, str]] = {}
+    for row in STORE_VOLUMES:
+        service = services.get(row.service)
+        if not isinstance(service, dict):
+            continue
+        service["volumes"] = [*(service.get("volumes") or []), f"{row.volume}:{row.path}"]
+        declared[row.volume] = {"driver": "local"}
+    return declared
 
 
 #: The Postgres image: the deployment's own server, and the client its Keycloak step runs.
