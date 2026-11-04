@@ -711,3 +711,51 @@ def test_a_deployment_reached_by_other_people_keeps_its_ports_on_every_interface
 
     after = yaml.safe_load((out / "compose.yaml").read_text())
     assert after["services"]["proxy"]["ports"] == ["80:80", "443:443"]
+
+
+# --- step 20 unit 10 (4 November): an update keeps a release's own registry -----------------------
+
+
+def _installed_from_a_release(out: Path, registry: str) -> dict[str, str]:
+    """The deployment as an install from a release leaves it: each owned service runs the release's
+    image from the user repository's registry, pinned by digest, and the lock names them there."""
+    import yaml
+
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    pinned: dict[str, str] = {}
+    rows = []
+    for number, name in enumerate(("api", "workspace", "ingest", "ner"), start=1):
+        service = document["services"][name]
+        service.pop("build", None)
+        digest = f"sha256:{number:064x}"
+        pinned[name] = f"{registry}/{name}@{digest}"
+        service["image"] = pinned[name]
+        rows.append(f"- service: {name}\n  repository: {registry}/{name}\n  tag: abc\n"
+                    f"  digest: {digest}\n  source: registry\n")  # fmt: skip
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+    (out / "versions.lock").write_text("images:\n" + "".join(rows))
+    return pinned
+
+
+def test_an_update_keeps_the_owned_images_in_the_releases_own_registry(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Red before 4 November: `update` brings the files up to date with `refresh --files-only`,
+    whose render named the owned images in the built-in registry (`ghcr.io/ospreyflow`), not the
+    release's (`ghcr.io/aykr`). They no longer matched the lock, were left unpinned, and the pull
+    asked for `ghcr.io/ospreyflow/api:<sha>`, which the registry refused ("denied"), so every update
+    of a release install rolled back. `apply` takes the registry from the lock; so must this."""
+    import yaml
+    from harness.update import pin_images
+
+    monkeypatch.delenv("OSPREY_IMAGE_REGISTRY", raising=False)
+    out = _rendered(repo)
+    pinned = _installed_from_a_release(out, "ghcr.io/acme")
+
+    refresh.files_up_to_date(repo)
+    pin_images(out, (out / "versions.lock").read_text())
+
+    services = yaml.safe_load((out / "compose.yaml").read_text())["services"]
+    assert {name: services[name]["image"] for name in pinned} == pinned

@@ -35,16 +35,17 @@ is still `python -m harness.apply`. Every compose call reads the deployment's ow
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import yaml
 from harness import register_sign_in
-from harness.apply import _compose
+from harness.apply import _compose, release_registry
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
     THEME_NAME,
@@ -479,6 +480,43 @@ def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     """Every file of the deployment as this checkout writes it, and nothing run: `update` uses this
     from the new checkout (ADR-114 Amendment 8 point 6a). Says which services must restart."""
     directory = _deployment_dir(repo_root)
+    with _release_registry(directory):
+        return _files_up_to_date(directory, repo_root)
+
+
+@contextlib.contextmanager
+def _release_registry(directory: Path) -> Iterator[None]:
+    """A deployment installed from a release runs the release's own images, which live where its
+    lock says (`ghcr.io/<owner>`), not in the built-in registry: render as `apply` does for one, or
+    every owned image looks moved to an address the registry refuses (step 20 unit 10, 4 November:
+    each update of a release install rolled back at its pull)."""
+    lock = directory / "versions.lock"
+    compose = directory / "compose.yaml"
+    services = (
+        (yaml.safe_load(compose.read_text(encoding="utf-8")) or {}).get("services") or {}
+        if compose.is_file()
+        else {}
+    )
+    api = services.get("api") if isinstance(services, dict) else None
+    from_a_release = (
+        lock.is_file() and isinstance(api, dict) and "build" not in api
+        and "@sha256:" in str(api.get("image", ""))
+    )  # fmt: skip
+    if not from_a_release:
+        yield
+        return
+    before = os.environ.get("OSPREY_IMAGE_REGISTRY")
+    os.environ["OSPREY_IMAGE_REGISTRY"] = release_registry(lock.read_text(encoding="utf-8"))
+    try:
+        yield
+    finally:
+        if before is None:
+            os.environ.pop("OSPREY_IMAGE_REGISTRY", None)
+        else:
+            os.environ["OSPREY_IMAGE_REGISTRY"] = before
+
+
+def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
     theme_changed = _theme_changed(directory, repo_root)
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
