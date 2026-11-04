@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import urllib.parse
 import urllib.request
 import uuid
@@ -21,6 +22,7 @@ import pytest
 from harness import first_admin
 from harness.keycloak_admin import _call, admin_token, ensure_unmanaged_attributes
 from ontology.handling import load_uk_le_scheme
+from schemas.rights import ADMIN, ANALYST, Right, rights_for
 from services.api import identity_admin
 
 
@@ -31,10 +33,54 @@ def test_the_code_has_an_invitations_shape() -> None:
 
 def test_the_first_administrator_holds_the_top_clearance_and_must_choose_a_password() -> None:
     user = first_admin.first_administrator("admin", code="ABCD", scheme=load_uk_le_scheme())
-    assert user["attributes"]["roles"] == ["osprey-admin"]
+    assert sorted(user["attributes"]["roles"]) == ["analyst", "osprey-admin"]
     assert user["attributes"]["clearance"] == ["SECRET"]
     assert user["requiredActions"] == ["UPDATE_PASSWORD"]
     assert user["credentials"] == [{"type": "password", "value": "ABCD", "temporary": True}]
+
+
+def test_the_first_administrator_can_open_the_cases_they_author() -> None:
+    """The owner's ruling of 4 November 2026 (ADR-114 Amendment 33): the first administrator holds
+    the Admin and the Analyst roles from the start, demo packs or none. The Admin role alone has no
+    right to investigate, so a demo case they author was listed but would not open."""
+    user = first_admin.first_administrator("admin", code="ABCD", scheme=load_uk_le_scheme())
+    held = rights_for(user["attributes"]["roles"])
+    assert Right.INVESTIGATE in held
+    assert ADMIN | ANALYST <= held
+
+
+class _Kcadm:
+    """`create_first_administrator`'s container exec, answering as `kcadm.sh create users` against
+    Keycloak 26 does: the account is kept as sent, and a second of the same username is refused
+    "Conflict detected" with exit 1."""
+
+    def __init__(self) -> None:
+        self.users: dict[str, dict[str, Any]] = {}
+
+    def __call__(self, argv: list[str], *, env: dict[str, str], **_: Any) -> Any:
+        assert argv[-3:-1] == ["sh", "-c"] and argv[-1] == first_admin.KCADM_CREATE
+        user = json.loads(env["OSPREY_FIRST_ADMIN"])
+        if user["username"] in self.users:
+            return subprocess.CompletedProcess(
+                argv, 1, "", "Conflict detected. See logs for details\n"
+            )
+        self.users[user["username"]] = user
+        return subprocess.CompletedProcess(
+            argv, 0, f"Created new user with id '{uuid.uuid4()}'\n", ""
+        )
+
+
+def test_the_account_the_install_makes_holds_admin_and_analyst(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kcadm = _Kcadm()
+    monkeypatch.setattr(first_admin.subprocess, "run", kcadm)
+    first_admin.create_first_administrator(["docker", "compose", "exec", "-T"])
+    roles = kcadm.users["admin"]["attributes"]["roles"]
+    assert sorted(roles) == ["analyst", "osprey-admin"]
+    assert Right.INVESTIGATE in rights_for(roles)
+    with pytest.raises(first_admin.FirstAdministratorRefused, match="was not changed"):
+        first_admin.create_first_administrator(["docker", "compose", "exec", "-T"])
 
 
 KEYCLOAK = os.environ.get("OSPREY_TEST_KEYCLOAK")
@@ -84,7 +130,7 @@ def test_the_code_is_the_accounts_password_until_it_chooses_its_own(realm: Any) 
     status, users = _call(f"{KEYCLOAK}/admin/realms/{name}/users?username=admin&exact=true",
                           token=token)  # fmt: skip
     (user,) = users
-    assert user["attributes"]["roles"] == ["osprey-admin"]
+    assert sorted(user["attributes"]["roles"]) == ["analyst", "osprey-admin"]
     assert user["attributes"]["clearance"] == ["SECRET"]
     assert user["requiredActions"] == ["UPDATE_PASSWORD"]
     # The right code reaches the update-password step; a wrong one is refused as a wrong password.

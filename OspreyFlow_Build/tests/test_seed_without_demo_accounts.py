@@ -21,8 +21,12 @@ that catches it:
   the same case, on `--run-as`;
 - a pack's mid-demo check looking in the demo unit —
   `test_a_mid_demo_check_reads_the_case_in_the_first_administrators_unit`;
-- the Admin role, which does not open a case's graph, left unsaid —
-  `test_it_says_the_admin_role_does_not_open_the_case`;
+- the case's Author unable to open it: the Admin role alone has no right to investigate, so the
+  first administrator holds the Analyst role too (the owner's ruling of 4 November 2026) — the
+  stand-in holds the account exactly as `harness.first_admin` makes it, and
+  `test_the_first_administrator_can_open_the_case_they_author` reads its roles from there;
+- the obsolete advice to give the first administrator the Analyst role still said —
+  `test_it_names_the_author_and_gives_no_advice_on_roles`;
 - a deployment with neither the demo accounts nor the first administrator seeded into a case nobody
   can open — `test_with_neither_the_demo_accounts_nor_the_first_administrator_it_refuses_in_words`;
 - the demo accounts' behaviour changed where they exist — `test_seed_internal.py`, unchanged.
@@ -39,23 +43,25 @@ from threading import Thread
 from typing import Any
 
 import pytest
+from harness.first_admin import FIRST_ADMIN_USERNAME, first_administrator
+from ontology.handling import load_uk_le_scheme
+from schemas.rights import Right, rights_for
 from scripts import seed_internal
 
 ADMIN_PASSWORD = "bootstrap-admin-password"
 TOKEN = "stand-in-admin-token"
 ADMIN_SUBJECT = "6f1c2e0a-0000-4000-8000-00000000ad01"
+#: The first administrator as `harness.first_admin` makes it, as Keycloak 26 then answers a user
+#: search: with the subject it gave the account, and never the credentials it was made with.
 FIRST_ADMIN = {
     "id": ADMIN_SUBJECT,
-    "username": "admin",
-    "enabled": True,
-    "emailVerified": False,
-    "attributes": {
-        "clearance": ["SECRET"],
-        "org_unit": ["administration"],
-        "receivable_handling_codes": ["H1"],
-        "roles": ["osprey-admin"],
+    **{
+        key: value
+        for key, value in first_administrator(
+            FIRST_ADMIN_USERNAME, code="ABCD-EFGH-JKLM-NPQR", scheme=load_uk_le_scheme()
+        ).items()
+        if key != "credentials"
     },
-    "requiredActions": ["UPDATE_PASSWORD"],
 }
 SYNTHETIC_PACKS = {
     "hmp": "hmp",
@@ -189,13 +195,23 @@ def test_a_mid_demo_check_reads_the_case_in_the_first_administrators_unit(repo: 
     assert _values(call, "--run-as") == [ADMIN_SUBJECT]
 
 
-def test_it_says_the_admin_role_does_not_open_the_case(
+def test_the_first_administrator_can_open_the_case_they_author(repo: Path) -> None:
+    runner = Runner()
+    _seed(repo, "hmp", runner)
+    (grant,) = _values(_seed_call(runner), "--grant")
+    subject, _, role = grant.partition("=")
+    (author,) = [user for user in _Keycloak.users if user["id"] == subject]
+    assert role == "author" and author["username"] == FIRST_ADMIN_USERNAME
+    assert Right.INVESTIGATE in rights_for(author["attributes"]["roles"])
+
+
+def test_it_names_the_author_and_gives_no_advice_on_roles(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lines = _seed(repo, "hmp", Runner())
     said = capsys.readouterr().out
-    assert "admin, the first administrator, is its Author" in said
-    assert "Analyst role" in said and lines[-1] in said
+    assert "admin, the first administrator, is its Author" in said and lines[-1] in said
+    assert "Analyst role" not in said and "People and roles" not in said
 
 
 def test_with_neither_the_demo_accounts_nor_the_first_administrator_it_refuses_in_words(
