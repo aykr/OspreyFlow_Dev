@@ -6,6 +6,21 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **Installing on a hardened server works.** On a server whose installing account has a strict
+  umask (077, or a CIS-hardened 027), the identity provider could not read its own settings and the
+  install stopped at "build and start the deployment". Every file a service reads from the
+  deployment's folder is now readable by it, whatever the umask; `deployment.env` stays readable by
+  its owner alone. `ospreyflow doctor` and `install` refuse, in words, an organisation's root
+  certificate (`server.ca`) that the identity provider could not read.
+- **Demo packs load on Small.** The answers' `demo_packs` were accepted and silently not loaded on a
+  server of your own; they now load once the first administrator exists. And `ospreyflow demo add`
+  refused every pack on a deployment with no demo accounts; each now loads into its own case with
+  the first administrator, `admin`, as its Author. The Admin role does not open a case's graph:
+  give `admin`, or an analyst you invite, the Analyst role in Admin, People and roles.
+- **The first backup of a new deployment works.** `ospreyflow backup` failed on 'recipes' before
+  any recipe had been published, and left a half-written set behind. Items a new deployment does
+  not have yet are now recorded as empty, and a backup that fails removes what it had started.
+
 ## v0.4.6 — 2026-11-04
 
 - **Installing and updating on a Linux server works.** Earlier releases refused every install and

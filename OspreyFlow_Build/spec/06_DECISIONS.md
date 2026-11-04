@@ -23604,6 +23604,71 @@ worker's machine is an arm64 Mac running the owner's deployments — which is un
 `sign_in` against a real provider reachable from the VM, `memory_gib: auto` on the VM's real memory,
 a backup and a restore with a brokered person, and an `update` between two release tags.
 
+#### As found on the first server, 4 November 2026 (unit 10, branch `step-20-unit10-defects`)
+
+v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service account `osprey`
+(uid 1001), found four defects. Each is now defined behaviour, with the test that fails without it.
+
+- **A strict umask.** The installer ran under `umask 077` (a CIS-hardened server's 027 fails the same
+  way): every rendered file was written 600 and every folder 700, Keycloak (uid 1000) could not read
+  the bind-mounted `realm.json` ("ERROR: Failed to run import"), and the install stopped at "build
+  and start the deployment". **Defined:** every rendered file a container reads through a bind mount
+  is written `644`, and each folder of them `755`, whatever the umask (`harness.render.write_shared`,
+  `make_shared_folder`): `realm.json`, `litellm.yaml`, `glass.json`, `Caddyfile`, `tls-fingerprint`,
+  the deployment's `osprey.yaml` copy, the sign-in theme under `keycloak-theme/osprey/`, and the
+  update notice under `state/`; and `compose.yaml`, `versions.lock` and `RUNBOOK.md`, which hold no
+  secret, with them. None holds a secret: the realm's client secrets and every password are set
+  through the admin API afterwards, a provider's key is read from the environment
+  (`os.environ/…`), and `osprey.yaml` never holds one (05 §7). **`deployment.env` stays `600`**, and
+  the deployment's own folder keeps its mode (ADR-138's `700`), which a file's bind mount never
+  walks. The organisation's **`server.ca`**, which Keycloak mounts into its truststore, is refused by
+  `harness.tls_check` — so by the doctor, the install and every `apply` — unless every account can
+  read it, in words naming `chmod 644`; the key stays the proxy's own, `600`, since the proxy runs
+  as its owner. Tests: `tests/harness/test_rendered_files_readable.py` (renders under
+  `os.umask(0o077)`, parses `compose.yaml`, and checks every bind mount inside the deployment's
+  folder of every service that does not run as the caller — shown red with fifteen mounts
+  unreadable), `tests/harness/test_tls_check.py::test_a_ca_file_keycloak_cannot_read_is_refused_in_words`.
+- **`demo_packs` dropped.** `install` on a server of your own accepted the answers' `demo_packs` and
+  never loaded them, saying nothing. **Defined:** they load as Lite's do, each into its own case,
+  after the stack, the sign-in and the first administrator exist.
+  Test: `tests/cli/test_install_small_server.py::test_the_chosen_demo_packs_load_after_the_first_administrator_exists`.
+- **No pack could load without demo accounts.** `ospreyflow demo add` refused every pack because
+  `osprey-demo-admin` and `osprey-demo-analyst` were not in the identity provider, and
+  `repair-sign-in` never makes them on a Small (§5a). **Defined** (the administration guide's "the
+  installing administrator as Author"): with both demo accounts, nothing changes. With neither, the
+  case's Author is the first administrator (`admin`, `harness.first_admin.FIRST_ADMIN_USERNAME`), there
+  is no Editor, and the case is made **in the administrator's own unit** (their `org_unit`, read from
+  the identity provider; `administration` as `first_admin` makes it), because a case of another unit
+  is never listed whatever its grants; the Prison Intelligence Dataset's pipeline loads and its
+  mid-demo steps run as the administrator (`--run-as`), there being no demo engineer. With one demo
+  account and not the other the seed is refused as before; with neither the demo accounts nor the
+  first administrator it is refused in words, naming both remedies. **No pack needs a role only the
+  demo accounts give to load; but the Admin role carries no right to investigate** (`schemas.rights.
+  ADMIN`), so the administrator sees the case listed and cannot open its graph until someone holds
+  the Analyst role: the seed says so after it loads ("give admin — or an analyst you invite into the
+  unit — the Analyst role in Admin, People and roles"). Whether the first administrator should hold
+  the Analyst role from the start is the owner's decision, not taken here. Test:
+  `tests/test_seed_without_demo_accounts.py` (a stand-in Keycloak over HTTP answering as Keycloak 26
+  does for a realm with `admin` and no demo account: a token only for the right password, 401
+  without a bearer token, an empty list for an account that is not there, a substring search without
+  `exact=true`), all six synthetic packs.
+- **The first backup failed.** `ospreyflow backup` on a fresh deployment failed on 'recipes' with
+  Docker's own refusal — "Could not find the file /var/lib/osprey/data/recipes in container
+  osprey-small-api-1" — and left its half-written set folder behind. The recipes repository does not
+  exist until a recipe is published, nor the analytics file until an event is written; the backup
+  looked for "not exist", which Docker never says, and the test stand-in had said "does not exist"
+  (rule 15). **Defined:** a `docker cp` refused with Docker's words for a missing path ("Could not
+  find the file … in container …", or the older client's "No such container:path") is an **empty
+  item**, recorded in the manifest's `empty` list and named by `backup` and by the restore's dry
+  run; any other `cp` failure still fails the backup. A restore restores nothing for an empty item.
+  A backup that fails **removes its partial set folder**, and says so; a folder without
+  `manifest.json` was already refused by `restore`. The other items need no such case on a fresh
+  deployment, by reading their code (not yet run against a fresh server): the graph store's own `BACKUP DATABASE` names the file it copies, every database
+  dumped has the schema its service made at start, the identity export and the object store's export
+  (empty buckets in its manifest) are made, not copied. Tests:
+  `tests/harness/test_backup_fresh_deployment.py` (a `docker cp` stand-in refusing as Docker does,
+  exit 1).
+
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
 Two gaps in Amendment 8 points 4 and 10, found drafting Amendment 33 (its answers 14 and 15, which
