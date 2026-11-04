@@ -497,7 +497,7 @@ async function openMap(page: Page) {
 }
 
 async function selectTheLink(page: Page) {
-  await page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" }).focus();
+  await page.getByRole("button", { name: "Link 1: Communicated with, a to b" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("When it occurred")).toBeVisible();
 }
@@ -510,7 +510,7 @@ async function saveTheTemplate(page: Page) {
 test("a link of the row template is chosen from the list in Map by keyboard", async ({ page }) => {
   await serve(page, {}, { rowTemplate: ONE_LINK });
   await openMap(page);
-  const link = page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" });
+  const link = page.getByRole("button", { name: "Link 1: Communicated with, a to b" });
   await link.focus();
   await page.keyboard.press("Enter");
   await expect(link).toHaveAttribute("aria-pressed", "true");
@@ -532,7 +532,7 @@ test("a link is made in Map by keyboard, from its two ends and its type, and the
   await page.keyboard.type("COMM");
   await page.getByRole("button", { name: "Add link" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Link 1: Communicated with, a to b" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -696,7 +696,7 @@ test("a link is deleted in Map by keyboard, and the save keeps its entities", as
   await selectTheLink(page);
   await page.getByRole("button", { name: "Delete element" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Link 1: COMMUNICATED_WITH, a to b" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Link 1: Communicated with, a to b" })).toHaveCount(0);
   await saveTheTemplate(page);
   await expect.poll(() => served.templates.length).toBe(1);
   const saved = served.templates[0]!.row_template;

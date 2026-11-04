@@ -32,7 +32,8 @@ const ends = { source: node("a", "jeff@enron.com"), target: node("b", "kit@enron
 describe("LinkDetails", () => {
   it("names the type and the two ends, by what they are rather than their ids", () => {
     render(<LinkDetails edge={link()} {...ends} directed />);
-    expect(screen.getByText("COMMUNICATED_WITH")).toBeTruthy();
+    expect(screen.getByText("Communicated with")).toBeTruthy();
+    expect(screen.queryByText("COMMUNICATED_WITH")).toBeNull(); // the key is never shown (step 30)
     expect(screen.getByText(/jeff@enron\.com/)).toBeTruthy();
     expect(screen.getByText(/kit@enron\.com/)).toBeTruthy();
   });

@@ -26,6 +26,8 @@ import { TypeChip } from "./TypeChip";
 import { NeighbourhoodRisk, type NeighbourhoodRiskProps } from "./NeighbourhoodRisk";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
+import { endName } from "./LinkDetails";
+import { isInternalReference, propertyLabel } from "./propertyNames";
 import type { HandlingScheme } from "../ingest/api";
 
 function isResolutionLink(type: string): boolean {
@@ -274,6 +276,7 @@ function SelectionView({
   for (const n of nodes) byType.set(n.type, (byType.get(n.type) ?? 0) + 1);
   // Properties every selected node has, with one value among them.
   const shared = Object.entries(nodes[0]?.properties ?? {}).filter(([key, value]) =>
+    !isInternalReference(key) &&
     nodes.every((n) => n.properties?.[key] !== undefined && String(n.properties[key]) === String(value)),
   );
   const between = graph
@@ -305,7 +308,7 @@ function SelectionView({
             <dl style={{ margin: 0 }}>
               {shared.map(([key, value]) => (
                 <div key={key}>
-                  <dt style={{ color: "var(--text-secondary)" }}>{key}, shared</dt>
+                  <dt style={{ color: "var(--text-secondary)" }}>{propertyLabel(key)}, shared</dt>
                   <dd className="value">{String(value)}</dd>
                 </div>
               ))}
@@ -452,8 +455,8 @@ function LinkView({
             investigationId={assessment.investigationId}
             edgeId={link.edge.id}
             noun={noun}
-            sourceLabel={link.source ? displayValue(link.source) : link.edge.source}
-            targetLabel={link.target ? displayValue(link.target) : link.edge.target}
+            sourceLabel={endName(link.source)}
+            targetLabel={endName(link.target)}
             focusSignal={linkEditing?.openEventsSignal}
             onDelta={linkEditing?.onDelta}
             onReadFullScreen={linkEditing?.onReadFullScreen}
@@ -548,10 +551,6 @@ function NodeView({
               <dt style={{ color: "var(--text-secondary)" }}>Type</dt>
               <dd className="value">{node.type}</dd>
             </div>
-            <div>
-              <dt style={{ color: "var(--text-secondary)" }}>ID</dt>
-              <dd className="identifier">{node.id}</dd>
-            </div>
             {(() => {
               // ADR-128 Decision 4: which icon this node's value stands for, when its type maps one.
               // Only when the renderer draws it: the node's own picture and the analyst's choice for
@@ -566,9 +565,10 @@ function NodeView({
                 </div>
               );
             })()}
-            {Object.entries(node.properties ?? {}).map(([key, value]) => (
+            {/* Build order step 30 (rule 7): no store id, no internal reference, no raw key. */}
+            {Object.entries(node.properties ?? {}).filter(([key]) => !isInternalReference(key)).map(([key, value]) => (
               <div key={key}>
-                <dt style={{ color: "var(--text-secondary)" }}>{key}</dt>
+                <dt style={{ color: "var(--text-secondary)" }}>{propertyLabel(key)}</dt>
                 <dd className="value">{String(value)}</dd>
               </div>
             ))}
