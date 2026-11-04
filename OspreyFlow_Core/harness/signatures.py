@@ -16,6 +16,7 @@ workflow, as the binary the workflow installs (`--cosign cosign`).
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -102,6 +103,19 @@ def _subprocess_run(argv: Sequence[str]) -> tuple[int, str]:
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
+def _as_caller() -> list[str]:
+    """`docker run` arguments that run cosign's image as the caller (step 20 unit 10, 4 November).
+
+    The image's own user (65532) cannot read a folder the caller owns with mode 700 — every
+    `TemporaryDirectory` the lock is written into — so on a Linux server each install and update
+    was refused "permission denied" before any image was checked; Docker Desktop on a Mac shares
+    files without their permissions and hid it. cosign keeps its TUF cache under `HOME`, which for
+    a user the image does not know is `/`, so it is pointed at `/tmp`. Windows has no user ids."""
+    if not hasattr(os, "getuid"):
+        return []
+    return ["--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp"]
+
+
 class Cosign:
     """`cosign verify`, from its image (the default) or a binary (`binary`)."""
 
@@ -127,7 +141,7 @@ class Cosign:
             ["-v", f"{identity.path.parent}:/keys:ro"] if isinstance(identity, PublicKey) else []
         )
         return [
-            "docker", "run", "--rm", *mounts, *docker_args, image,
+            "docker", "run", "--rm", *mounts, *docker_args, *_as_caller(), image,
             "verify", *identity.arguments(mounted=True), ref,
         ]  # fmt: skip
 
@@ -148,7 +162,7 @@ class Cosign:
         """An image as `cosign save` kept it, verified with no network at all (`update --from`)."""
         return [
             "docker", "run", "--rm", "--network", "none", *Cosign._keys(identity),
-            "-v", f"{saved.parent}:/saved:ro", image,
+            "-v", f"{saved.parent}:/saved:ro", *_as_caller(), image,
             "verify", *identity.arguments(mounted=True), "--offline",
             "--local-image", f"/saved/{saved.name}",
         ]  # fmt: skip
@@ -169,7 +183,7 @@ class Cosign:
         else:
             argv = [
                 "docker", "run", "--rm", *self._docker_args, "-v", f"{dest.parent}:/out",
-                self._image, "save", "--dir", f"/out/{dest.name}", ref,
+                *_as_caller(), self._image, "save", "--dir", f"/out/{dest.name}", ref,
             ]  # fmt: skip
         code, said = self._run(argv)
         return code == 0, said
@@ -188,7 +202,7 @@ class Cosign:
             network = ["--network", "none"] if offline else list(self._docker_args)
             argv = [
                 "docker", "run", "--rm", *network, *self._keys(identity),
-                "-v", f"{blob.parent}:/blob:ro", self._image,
+                "-v", f"{blob.parent}:/blob:ro", *_as_caller(), self._image,
                 "verify-blob", *identity.arguments(mounted=True),
                 *(["--offline"] if offline else []),
                 "--bundle", f"/blob/{signature.name}", f"/blob/{blob.name}",
