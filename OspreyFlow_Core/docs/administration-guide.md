@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.42** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
+**Version 1.43** · 2026-11-04 · For OspreyFlow v0.4.9 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.43 | 2026-11-04 | §5a.4: on a GPU the model stays loaded (`OLLAMA_KEEP_ALIVE=-1`), so the first question after a pause does not wait for it to load. |
 | 1.42 | 2026-11-04 | Describes v0.4.9. No change to its content. |
 | 1.41 | 2026-11-04 | The owner's ruling (ADR-132 Amendment 5): §1a, the GOV.UK service's name is shown in the page title on every page, the sign-in page's included; no band under the GOV.UK header names it any more. Appendix A: `appearance` and `appearance.service_name` say the same. |
 | 1.40 | 2026-11-04 | As measured and found on the first server (ADR-135 Amendment 1, ADR-114 Amendment 33): §5a.4 the model server's KV cache at q8_0 with flash attention on a GPU, the measured times, the doctor's 14 GiB for the 14b (was 12), and `apply` fetching a newly chosen model; §13 the object store copied as the account that runs the backup, and a failed backup's set it cannot remove marked incomplete; §16 a backup refused with "Permission denied", and Ask failing after the extraction model changed. |
@@ -763,7 +764,7 @@ guided page (`--gui`) names every model, `models.extraction: qwen2.5:7b-instruct
 keeps the 7b on the GPU until that line is removed. On the GPU the model server also keeps its
 working memory for a question at reduced precision (`OLLAMA_FLASH_ATTENTION=1` and
 `OLLAMA_KV_CACHE_TYPE=q8_0`), which is what fits the 14b, with the long context it is given, wholly
-on a 16 GB card. Without a GPU nothing changes.
+on a 16 GB card. On the GPU the model also stays loaded (`OLLAMA_KEEP_ALIVE=-1`): left to Ollama's default, an idle model was unloaded after five minutes and the next question waited 56 s for it to load again, against 3.3 s once loaded. Without a GPU nothing changes.
 
 **As measured, 4 November 2026**, on the first server (an RTX 5060 Ti, 16 GB), the same question
 through the product's own route: the 14b on the GPU without those two settings used 18 GB, ran 15%

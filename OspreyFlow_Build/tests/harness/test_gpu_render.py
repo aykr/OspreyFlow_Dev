@@ -125,6 +125,7 @@ def test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention()
             "OLLAMA_NOPRUNE": "1",
             "OLLAMA_FLASH_ATTENTION": "1",
             "OLLAMA_KV_CACHE_TYPE": "q8_0",
+            "OLLAMA_KEEP_ALIVE": "-1",
         }
         assert "environment" not in services["ollama-models"]
         without = _services(OspreyConfig.model_validate(raw))
@@ -190,3 +191,14 @@ def test_start_build_brings_the_14b_to_a_gpu_deployment(tmp_path: Path) -> None:
     services = yaml.safe_load((tmp_path / "compose.yaml").read_text(encoding="utf-8"))["services"]
     assert "pull_and_verify qwen2.5:14b-instruct " in services["ollama-models"]["command"][0]
     assert "qwen2.5:14b-instruct" in (tmp_path / "litellm.yaml").read_text(encoding="utf-8")
+
+
+def test_on_a_gpu_the_model_stays_loaded() -> None:
+    """ADR-135 Amendment 1, the owner's ruling of 4 November 2026: Ollama unloads an idle model
+    after five minutes, so on the first server the first question after a pause took 56 s (loading
+    14 GB into the GPU) against 3.3 s once loaded. On a GPU the model stays loaded; without one,
+    Ollama's own default stands."""
+    for raw in ({}, OWN_SERVER):
+        assert _services(_with_gpu(raw))["ollama"]["environment"]["OLLAMA_KEEP_ALIVE"] == "-1"
+        without = _services(OspreyConfig.model_validate(raw))
+        assert "OLLAMA_KEEP_ALIVE" not in without["ollama"]["environment"]

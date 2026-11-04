@@ -21312,6 +21312,11 @@ the Conduit's container calling LiteLLM, which calls Ollama with the rendered `n
 - **Decision 4, amended.** For the 14b the doctor asks for **at least 14 GiB** of GPU memory (the
   measured need at 32k with q8_0), not 12; below that it is the same warning naming the 7b. The
   total is compared against 14 × 1024 MiB.
+- **Decision 2, amended again (the owner, 4 November 2026, later the same day).** With `nvidia`,
+  `ollama` is also given `OLLAMA_KEEP_ALIVE=-1`, so the model stays loaded: on the first server an
+  idle model was unloaded after five minutes and the next question waited 56 s for it to load
+  again, against 3.3 s once loaded. Tested by `test_gpu_render.py`'s
+  `test_on_a_gpu_the_model_stays_loaded`, shown red first.
 - **Tests that would fail if it were broken** (each shown red first):
   `tests/harness/test_gpu_render.py`'s
   `test_on_a_gpu_the_model_server_quantises_its_kv_cache_with_flash_attention` (the two variables on

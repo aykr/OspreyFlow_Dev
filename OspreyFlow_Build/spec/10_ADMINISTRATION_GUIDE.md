@@ -580,7 +580,7 @@ guided page (`--gui`) names every model, `models.extraction: qwen2.5:7b-instruct
 keeps the 7b on the GPU until that line is removed. On the GPU the model server also keeps its
 working memory for a question at reduced precision (`OLLAMA_FLASH_ATTENTION=1` and
 `OLLAMA_KV_CACHE_TYPE=q8_0`), which is what fits the 14b, with the long context it is given, wholly
-on a 16 GB card. Without a GPU nothing changes.
+on a 16 GB card. On the GPU the model also stays loaded (`OLLAMA_KEEP_ALIVE=-1`): left to Ollama's default, an idle model was unloaded after five minutes and the next question waited 56 s for it to load again, against 3.3 s once loaded. Without a GPU nothing changes.
 
 **As measured, 4 November 2026**, on the first server (an RTX 5060 Ti, 16 GB), the same question
 through the product's own route: the 14b on the GPU without those two settings used 18 GB, ran 15%
