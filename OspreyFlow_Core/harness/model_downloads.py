@@ -80,8 +80,34 @@ def fetch_argvs(
     argvs: list[list[str]] = []
     for step in steps:
         argvs.append([*compose, "up", "-d", "--no-deps", *recreate, *extra, step])
-        argvs.append([*compose, "exec", "-T", step, "sh", "-c", _UNTIL_IDLE])
+        argvs += wait_argvs(compose, [step])
     return argvs
+
+
+def wait_argvs(compose: list[str], steps: list[str]) -> list[list[str]]:
+    """The commands that wait for `steps` already started (by an install's `up`) to finish their
+    downloads: each returns once its step idles, every pull done and digest-verified, and fails
+    when the step has exited (a pull refused)."""
+    return [[*compose, "exec", "-T", step, "sh", "-c", _UNTIL_IDLE] for step in steps]
+
+
+#: What each extraction model downloads, as Ollama's library lists it (the 14b measured on the first
+#: server, 4 November 2026: 9.0 GB), for the words an install says while it waits.
+EXTRACTION_MODEL_SIZES: dict[str, str] = {
+    "qwen2.5:7b-instruct": "4.7 GB",
+    "qwen2.5:14b-instruct": "9.0 GB",
+}
+
+
+def downloading_words(model: str) -> str:
+    """What an install says while the deployment's extraction model downloads (build order step 25
+    (a)): the model by name, with its size where it is known."""
+    size = EXTRACTION_MODEL_SIZES.get(model)
+    named = f"{model} ({size})" if size else model
+    return (
+        f"downloading the extraction model, {named}, with the smaller models beside it; a large "
+        "model takes minutes. OspreyFlow is not ready until it is in."
+    )
 
 
 def failed_words(steps: list[str]) -> str:

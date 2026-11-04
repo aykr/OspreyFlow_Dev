@@ -23861,6 +23861,39 @@ v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service 
   removed; nothing was kept" said of a set still there). Skipped when run as root, which may remove
   anything.
 
+#### Build order step 25 as built (4 November 2026, branch `step-25-install-hardening`)
+
+The owner's rulings of 4 November 2026 on open questions 27 and 30.
+
+- **(a) An install is not ready until its extraction model is downloaded.** Found on the first
+  server: a fresh install of Small reported ready while `ollama-models` was still fetching
+  `qwen2.5:14b-instruct` (9 GB, one to two minutes), and Ask through LiteLLM answered 404 meanwhile.
+  `up --wait` and every health check had passed, because the model server's health check
+  (`harness.render._OLLAMA_HEALTHCHECK`) covers only `qwen2.5:0.5b-instruct` and the embedding
+  model. **Defined:** `harness.apply`'s install, after `up` and the per-service health wait, says on
+  screen which extraction model is downloading (`OspreyConfig.extraction_model`, never a name of its
+  own) with its size where known (`harness.model_downloads.EXTRACTION_MODEL_SIZES`: 4.7 GB for the
+  7b, 9.0 GB for the 14b), then waits on each download step `up` has just started
+  (`model_downloads.wait_argvs`: `exec` until the step's first process is the `sleep` its script
+  ends in), before Keycloak's grants, the accounts, the demo packs and "ready". The step's script
+  pulls and digest-verifies the extraction model before it idles, so an idle step is the model
+  present; a refused pull exits the step, the wait fails, and the install stops at stage `models`
+  naming `ospreyflow logs ollama-models`. **Why not the health check:** it gates every `up --wait` —
+  `start`, an `apply`'s restarts, `update` and its rollback — so the model server would read
+  unhealthy for as long as a 9 GB download takes, and a slow link would fail the start outright,
+  as the vision model once did (the comment on `_OLLAMA_HEALTHCHECK`); the one-shot step is already
+  the thing that knows when its pulls are done, and `harness.model_downloads` (defect 9) already
+  waits on it for `apply`, `start --build` and `update`. **`update` is unchanged:** it fetches and
+  waits on a changed pull before the release's `up` (defect 9); an unchanged one names models the
+  kept volume already holds, and a release that only moves the Ollama image fetches nothing, so an
+  offline update does not fail on a pull it does not need. **The cost, disclosed:** the wait covers
+  the whole script, so the vision model (918 MB, pulled before the extraction model) is waited for
+  too. Tests: `tests/harness/test_apply_changed_settings.py::test_an_install_is_not_ready_until_the_extraction_model_is_downloaded`
+  (the 7b and the GPU's 14b; the stand-in Compose reports every service healthy at once, as the real
+  health check did, and holds no model until the step's download is waited on — shown red with the
+  wiring removed: the install moved past `up` with the model volume empty) and
+  `::test_an_install_whose_model_download_is_refused_fails_and_says_so` (red: the install returned 0).
+
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
 Two gaps in Amendment 8 points 4 and 10, found drafting Amendment 33 (its answers 14 and 15, which

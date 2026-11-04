@@ -279,7 +279,9 @@ basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in 
    `osprey.yaml` is already there, unless `--force`);
 2. on a release (the checkout sits on a `vX.Y.Z` tag): checks the release's signatures and runs
    exactly its images, pinned by digest; otherwise builds the images from the checkout;
-3. starts the deployment and waits until every service is healthy;
+3. starts the deployment and waits until every service is healthy and the extraction model has
+   downloaded (it says which, and its size: `qwen2.5:7b-instruct`, about 4.7 GB, or the 14b on a GPU,
+   about 9 GB), so Ask works as soon as the install says it is done;
 4. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
 
 It ends by saying the address and that the sign-in details are in `deployment.env`.
@@ -452,6 +454,15 @@ and the highest clearance, and prints its **one-time code once**, on the termina
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
 Admin area (section 9). The install's own tools reach the three names on the server itself and
 trust the deployment's certificate (and `ca`), so they work before the organisation's DNS does.
+
+**The extraction model.** Once every service is healthy, the install waits for the deployment's
+extraction model (`models.extraction`; on a GPU, the 14b) to finish downloading and pass its digest
+check, and says so on screen, with its size: about 4.7 GB for `qwen2.5:7b-instruct`, about 9 GB for
+`qwen2.5:14b-instruct` (one to two minutes on the first server). Only then does it go on and say it is
+installed, so Ask works from the start. A download that is refused stops the install at stage
+`models`, naming `ospreyflow logs ollama-models`; run the install again once it can be fetched.
+`ospreyflow update`, `start --build` and `apply` fetch a model whose choice has changed before
+anything that uses it starts again (section 5a.4).
 
 **The upload folder.** Files an analyst uploads in the Ingest Studio, and the demo packs' own
 files, are written to `uploaded/` inside `server.ingest` by the Conduit, which runs as uid 10001.

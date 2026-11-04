@@ -6,6 +6,13 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **An install is ready only once its extraction model is in.** A fresh install said it was ready
+  while the model server was still downloading the extraction model (the 14b on a GPU is about
+  9 GB), and Ask answered "not found" for a minute or two. The install now says which model is
+  downloading, and its size, waits until it is downloaded and its digest checked, and only then
+  says it is installed. A refused download stops the install, naming `ospreyflow logs
+  ollama-models`.
+
 ## v0.4.10 — 2026-11-04
 
 - **On a GPU the model stays loaded.** The first question after a few idle minutes no longer
