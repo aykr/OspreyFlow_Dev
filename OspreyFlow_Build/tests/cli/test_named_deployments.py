@@ -215,6 +215,12 @@ def _compose_for(folder: Path) -> list[str]:
             "-f", str(folder / "compose.yaml")]  # fmt: skip
 
 
+def _uploads_for(machine: Machine, folder: Path) -> list[str]:
+    """The step before every `up` (ADR-114 Amendment 33): the Conduit's upload folder its own."""
+    python = str(machine.product / ".venv" / "bin" / "python")
+    return [python, "-m", "harness.ingest_uploads", str(folder / "compose.yaml")]
+
+
 # --- installing side by side ---------------------------------------------------------------------
 
 
@@ -437,6 +443,7 @@ def test_the_checkout_deployment_works_unchanged_and_is_listed_as_default(
     for verb in (("start",), ("stop",), ("status",), ("open",)):
         assert machine(*verb) == 0
     assert [argv for argv, _e, _c in machine.docker.calls] == [
+        _uploads_for(machine, checkout),
         [*_compose_for(checkout), "up", "-d", "--wait"],
         [*_compose_for(checkout), "stop"],
     ]
@@ -472,6 +479,7 @@ def test_switch_stops_the_running_deployment_and_starts_the_named_one(machine: M
     assert machine("switch", "default") == 0
     assert [argv for argv, _e, _c in machine.docker.calls] == [
         [*_compose_for(machine.root / "alpha"), "stop"],
+        _uploads_for(machine, checkout),
         [*_compose_for(checkout), "up", "-d", "--wait"],
     ]
     assert machine.docker.refusals == []
@@ -479,6 +487,7 @@ def test_switch_stops_the_running_deployment_and_starts_the_named_one(machine: M
     assert machine("switch", "alpha") == 0
     assert [argv for argv, _e, _c in machine.docker.calls] == [
         [*_compose_for(checkout), "stop"],
+        _uploads_for(machine, machine.root / "alpha"),
         [*_compose_for(machine.root / "alpha"), "up", "-d", "--wait"],
     ]
     assert machine.opened[-1] == machine.config("alpha")["network"]["public_origin"]  # type: ignore[index]

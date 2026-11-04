@@ -919,8 +919,18 @@ def _start(args: argparse.Namespace, ctx: _Context) -> int:
             env=ctx.named_env(),
         )
     else:
+        _uploads_ready(ctx, directory)
         ctx.step("start the deployment", [*compose(directory), "up", "-d", "--wait"])
     return 0
+
+
+def _uploads_ready(ctx: _Context, directory: Path) -> None:
+    """ADR-114 Amendment 33, "as found on the first server": the Ingest Studio's upload folder the
+    Conduit's to write before `up` (`harness.ingest_uploads`, which says why when it cannot)."""
+    ctx.step(
+        "prepare the upload folder",
+        [*ctx.python, "-m", "harness.ingest_uploads", str(directory / "compose.yaml")],
+    )
 
 
 def _apply_settings(ctx: _Context) -> int:
@@ -1025,6 +1035,7 @@ def _switch(args: argparse.Namespace, ctx: _Context) -> int:
         if running and folder.resolve() != own:
             print(f"Stopping {name}, so this one has the machine to itself.")
             ctx.step(f"stop {name}", [*compose(folder), "stop"])
+    _uploads_ready(ctx, ctx.deployed())
     ctx.step("start the deployment", [*compose(ctx.deployed()), "up", "-d", "--wait"])
     named.remember(ctx.env, ctx.target.name)
     address = ctx.origin()

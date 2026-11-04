@@ -34,6 +34,22 @@ from jwt.algorithms import RSAAlgorithm
 # (ports 2480, 5432, 80, 8080, 8081), refused at start-up and at every connection.
 from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F401
 
+
+@pytest.fixture(autouse=True)
+def _no_test_gives_a_real_folder_to_the_conduit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`harness.ingest_uploads` (ADR-114 Amendment 33) changes a host folder's owner through Docker
+    before every `up`, on Linux only. Run on a Linux CI runner by a test that drives `apply`,
+    `refresh` or `update` for some other reason, it would make real folders (as root, where the
+    runner is root) and add a command that test never meant to stand in for. Every test therefore
+    runs as on Docker Desktop, where the step does nothing; `tests/harness/test_ingest_uploads.py`
+    turns Linux back on, against its own stand-in for the kernel and Docker Engine."""
+    try:
+        from harness import ingest_uploads
+    except ImportError:  # a suite run without the harness on its path
+        return
+    monkeypatch.setattr(ingest_uploads, "DOCKER_ENFORCES_OWNERSHIP", False)
+
+
 DEFAULT_KID = "test-signing-key-1"
 TOKEN_EXCHANGE_CLIENT_ID = "conduit-service-account"
 TOKEN_EXCHANGE_CLIENT_SECRET = "test-client-secret"  # noqa: S105 - test fixture only
