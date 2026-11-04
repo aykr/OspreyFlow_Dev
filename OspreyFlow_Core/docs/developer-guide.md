@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.17** · 2026-11-04 · For OspreyFlow v0.4.7 · Issued
+**Version 1.18** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.18 | 2026-11-04 | Describes v0.4.8. No change to its content. |
 | 1.17 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.16 | 2026-11-04 | New §9.4, the local engine on an NVIDIA GPU (ADR-135 Amendment 1): `resources.gpu`, how the render gives Ollama the GPU, `OspreyConfig.extraction_model` and the 14b default, the doctor's GPU checks and their tests, and a saved `osprey.yaml` keeping the 7b. |
 | 1.15 | 2026-11-04 | Describes v0.4.6. No change to its content. |

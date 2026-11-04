@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.37** · 2026-11-04 · For OspreyFlow v0.4.7 · Issued
+**Version 1.38** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.38 | 2026-11-04 | Describes v0.4.8. No change to its content. |
 | 1.37 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.36 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33): the first administrator holds the Admin and the Analyst roles from the start, whether or not demo packs load, so the cases they author open for them. §1a and §11 no longer ask anyone to give them the Analyst role; §5 and §5a say which roles the account is made with; §9.2 says so too, and that an `admin` made by v0.4.6 or earlier needs the Analyst role added. |
 | 1.35 | 2026-11-04 | Found installing Small on the first server of its own (ADR-114 Amendment 33): §1a and §11 a demo pack on a deployment with no demo accounts — its case's Author is the first administrator, in their own unit, with no Editor, and the Admin role does not open a case's graph until someone holds the Analyst role; §5a the answers' `demo_packs` load after the first administrator exists, the installing account's umask does not matter, and `ca` must be readable by every account; §13 a fresh deployment's first backup, its empty items, and a failed backup leaving no partial set; §16 an unreadable CA. |

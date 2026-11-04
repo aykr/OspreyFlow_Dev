@@ -6,6 +6,19 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.8 — 2026-11-04
+
+- **`ospreyflow update` works for an install from a release.** Every earlier release's update
+  brought the deployment's files up to date with OspreyFlow's own images named in the project's old
+  registry (`ghcr.io/ospreyflow`) instead of the release's (`ghcr.io/aykr`), so they were not pinned
+  and the pull was refused ("denied"). The update rolled back each time, with nothing lost. It now
+  uses the registry the release's lock names, as `install` does.
+- **Updating from v0.4.6 or earlier, on a deployment where no recipe has been published yet,** the
+  old release's backup stops the update before it starts ("Could not find the file
+  /var/lib/osprey/data/recipes"; nothing is changed). Move the checkout to the new release first,
+  then update: `git -C <your checkout> fetch --tags`, `git -C <your checkout> checkout v0.4.8`,
+  `sh install.sh` in the checkout, then `ospreyflow update --to v0.4.8`.
+
 ## v0.4.7 — 2026-11-04
 
 - **Installing on a hardened server works.** On a server whose installing account has a strict
