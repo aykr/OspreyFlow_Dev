@@ -231,7 +231,8 @@ def plan(compose_file: Path, *, run: Run) -> list[_Pending]:
             raise StoresNotMoved(
                 f"{row.service} has {len(found)} containers; one was expected", started=False
             )
-        details = json.loads(_ok(run, ["docker", "inspect", found[0]], f"inspect {row.service}"))[0]
+        inspected = _ok(run, ["docker", "inspect", found[0]], f"inspect {row.service}")
+        details = _json(inspected, "[")[0]
         target = _target_name(document, project, row.volume)
         mount = next(
             (m for m in details.get("Mounts") or [] if m.get("Destination") == row.path), None
@@ -287,8 +288,7 @@ def _read_figure(service: str, said: str) -> str:
         names = [line.strip() for line in said.splitlines() if line.strip()]
         return "the databases " + ", ".join(names) if names else "no databases"
     if service == "arcadedb":
-        start = said.find("{")
-        names = sorted(str(n) for n in json.loads(said[start:])["result"])
+        names = sorted(str(n) for n in _json(said, "{")["result"])
         return "the databases " + ", ".join(names) if names else "no databases"
     if service == "valkey":
         kept = [
@@ -302,6 +302,11 @@ def _read_figure(service: str, said: str) -> str:
         if line.strip() and not line.strip().startswith(".")
     )
     return "the indexes " + ", ".join(indexes) if indexes else "no index of its own"
+
+
+def _json(said: str, opening: str) -> Any:
+    """The first JSON value in what a command said, which may carry Docker's warnings around it."""
+    return json.JSONDecoder().raw_decode(said[said.index(opening) :])[0]
 
 
 def _env_value(env_file: Path, name: str) -> str:
