@@ -6,6 +6,20 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.6 — 2026-11-04
+
+- **Installing and updating on a Linux server works.** Earlier releases refused every install and
+  update on Linux with "permission denied" before checking any image: the release's signature was
+  checked by cosign's container as a user that could not read the private folder the release was
+  written to. cosign now runs as you. (Docker Desktop on a Mac hid the problem.)
+- **An offline package can be made again.** `ospreyflow update --make-bundle` failed on the three
+  model images pinned by digest alone (Ollama, LiteLLM, Speaches), which the release's lock named
+  wrongly; it names them by repository and digest now.
+- **The administration guide** (§5a) shows a firewall rule for the `DOCKER-USER` chain that limits
+  who reaches the service without cutting off the server's own outbound HTTPS.
+- Update with `ospreyflow update` (on a Mac or Windows). On Linux, no earlier release could install
+  from a release, so install v0.4.6 afresh.
+
 ## v0.4.5 — 2026-11-04
 
 - **Small on a server of your own.** Small can now run on one Linux server with every store in a

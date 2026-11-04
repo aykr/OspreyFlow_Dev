@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.32** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
+**Version 1.33** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.33 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.32 | 2026-11-04 | §5a: a `DOCKER-USER` rule that matches only arriving connections (`--ctdir ORIGINAL`), found on the first Linux server. |
 | 1.31 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.30 | 2026-11-03 | Small on your own server, second part (ADR-114 Amendment 33 drop 2): §2.2a the backups folder and what the organisation's sign-in needs; §5a the answers file's `server.backups`, `server.memory_gib` and `sign_in`, and the doctor's new checks; new §5a.1 sign-in through the organisation's identity provider (Entra ID: the application, its two addresses, its client secret, assignment, the route out; no role until an administrator grants one); new §5a.2 memory sized to the server; new §5a.3 backups to `server.backups` with a cron line; §7 the answers' settings; §8 `repair-sign-in` restores the organisation's sign-in and gives a Small no demo accounts; §13 and §14 backup and `update` on this kind of Small; §16 the organisation's sign-in and the backups folder. Appendix A: `governance.organisation_provider`, `resources`. |

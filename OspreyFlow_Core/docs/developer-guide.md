@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.14** · 2026-11-04 · For OspreyFlow v0.4.5 · Issued
+**Version 1.15** · 2026-11-04 · For OspreyFlow v0.4.6 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.15 | 2026-11-04 | Describes v0.4.6. No change to its content. |
 | 1.14 | 2026-11-04 | Describes v0.4.5. No change to its content. |
 | 1.13 | 2026-11-03 | §1: a level 0 diagram, who uses OspreyFlow and what it talks to. The administration guide has the level 1 diagram and every interface. |
 | 1.12 | 2026-11-02 | Checked against the code end to end (build order step 10). §7.6 and §7.7: the tests named are in the developer repository, beside the test suites, not in this one. |
