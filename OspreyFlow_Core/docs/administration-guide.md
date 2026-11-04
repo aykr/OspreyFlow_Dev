@@ -14,10 +14,13 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.44** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.47** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.47 | 2026-11-04 | The owner's ruling (ADR-127 Amendment 46; build order step 25): §1a and §11, the Prison Intelligence pack handles post-ingest resolution itself — an install that chooses it writes `components.post_ingest_resolution: false`, and `ospreyflow demo add prison-intelligence` refuses, in words, while it is on. |
+| 1.46 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 33; build order step 25): §5a and §7, `server.certificate` and `server.key` are required, and an answers file without them is refused in words; the doctor no longer checks port 80 for a certificate the proxy would obtain itself. |
+| 1.45 | 2026-11-04 | Found on the first server (ADR-114 Amendment 33; build order step 25): §4 and §5a, the install waits for the extraction model to download, says so with its size, and only then says it is installed. |
 | 1.44 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.43 | 2026-11-04 | §5a.4: on a GPU the model stays loaded (`OLLAMA_KEEP_ALIVE=-1`), so the first question after a pause does not wait for it to load. |
 | 1.42 | 2026-11-04 | Describes v0.4.9. No change to its content. |
@@ -207,6 +210,13 @@ and what its demo cases are set to, never what the ontology offers.
 
 `ospreyflow starters` (or `ospreyflow install --list-starters`) prints the same table and the
 command for each.
+
+**A starter that loads `prison-intelligence`** (`crime`) also writes
+`components.post_ingest_resolution: false` into the `osprey.yaml` it makes, and says so: that pack
+needs post-ingest resolution off (section 11), and resolution is the whole deployment's setting, so
+the deployment's other demo cases do not gain automatic "same as" links either. An analyst's own
+Resolve now still works. The same holds for any answers file whose `demo_packs` names it; one whose
+own `osprey.yaml` (`config:`) sets it `true` is refused before anything is installed.
 
 **One command per starter.** Add `--yes` to take every other default; leave it out to be asked.
 
@@ -444,7 +454,9 @@ basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in 
    `osprey.yaml` is already there, unless `--force`);
 2. on a release (the checkout sits on a `vX.Y.Z` tag): checks the release's signatures and runs
    exactly its images, pinned by digest; otherwise builds the images from the checkout;
-3. starts the deployment and waits until every service is healthy;
+3. starts the deployment and waits until every service is healthy and the extraction model has
+   downloaded (it says which, and its size: `qwen2.5:7b-instruct`, about 4.7 GB, or the 14b on a GPU,
+   about 9 GB), so Ask works as soon as the install says it is done;
 4. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
 
 It ends by saying the address and that the sign-in details are in `deployment.env`.
@@ -578,6 +590,11 @@ admin_email: ops@example.internal                 # optional: the first administ
 components: {dashboards: false}
 ```
 
+**The certificate and key are required.** An answers file whose `server:` lacks
+`server.certificate` or `server.key` is refused, in words naming both, before anything is installed.
+A server of your own always serves the organisation's own certificate: there is no certificate the
+front proxy obtains for itself, which would need port 80 and a name the public internet can reach.
+
 **The three names and the certificate.** The deployment answers at `<host>`, `id.<host>` (sign-in)
 and `bi.<host>` (dashboards, when they are on), all on the one address. Ask the organisation's DNS
 to point each at the server, and its CA for a certificate naming them as subject alternative names
@@ -629,6 +646,15 @@ and the highest clearance, and prints its **one-time code once**, on the termina
 accounts. At their first sign-in they choose their own password, then invite everyone else from the
 Admin area (section 9). The answers' `demo_packs` are loaded after the administrator is made, each
 into its own case with `admin` as its Author (section 1a says what that means for opening it).
+
+**The extraction model.** Once every service is healthy, the install waits for the deployment's
+extraction model (`models.extraction`; on a GPU, the 14b) to finish downloading and pass its digest
+check, and says so on screen, with its size: about 4.7 GB for `qwen2.5:7b-instruct`, about 9 GB for
+`qwen2.5:14b-instruct` (one to two minutes on the first server). Only then does it go on and say it is
+installed, so Ask works from the start. A download that is refused stops the install at stage
+`models`, naming `ospreyflow logs ollama-models`; run the install again once it can be fetched.
+`ospreyflow update`, `start --build` and `apply` fetch a model whose choice has changed before
+anything that uses it starts again (section 5a.4).
 
 **The installing account's umask.** A server hardened to `umask 077` or `027` is fine: every file
 the deployment's containers read from its folder is written readable by every account whatever the
@@ -873,7 +899,7 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `cloud.provider`, `cloud.region`, `cloud.domain`, `cloud.size`, `cloud.dns_zone`, `cloud.admin_email` | Small (section 5) and Enterprise (section 6) |
 | `cloud.api_cidrs` | Enterprise with `--cloud`: the addresses the cluster's API answers (section 6) |
 | `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
-| `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address`, `server.backups`, `server.memory_gib`, `server.gpu` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.backups` is where backups are written (default `~/OspreyFlow/backups`); `server.memory_gib` is `auto` or a number of GiB, at least 16 (section 5a.2); `server.gpu` is `none` (the default) or `nvidia`, the local engine on the server's NVIDIA GPU (section 5a.4) |
+| `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address`, `server.backups`, `server.memory_gib`, `server.gpu` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.certificate` and `server.key` are required. `server.backups` is where backups are written (default `~/OspreyFlow/backups`); `server.memory_gib` is `auto` or a number of GiB, at least 16 (section 5a.2); `server.gpu` is `none` (the default) or `nvidia`, the local engine on the server's NVIDIA GPU (section 5a.4) |
 | `admin_email` | Small on your own server: the first administrator's email |
 | `sign_in.organisation`: `alias`, `label`, `issuer`, `client_id` | Small on your own server: sign-in through the organisation's identity provider (section 5a.1). `alias` defaults to `org`; `issuer` is `https://`. Its client secret is never here — `OSPREY_ORG_SIGN_IN_SECRET` in the terminal — and a setting naming a secret is refused |
 | `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
@@ -1278,9 +1304,14 @@ attribution travel with it.
 
 **Prison Intelligence** seeds its case through the Ingest Studio's own pipelines, as a data engineer
 would, and has commands for rehearsing a demonstration: `--reset-live` between rehearsals, and two
-for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). Turn
-`components.post_ingest_resolution` off (appendix A) before adding it, or a live load in the
-demonstration adds automatic "same as" links. Its **scale cohort** (`prison-intelligence-scale`) is
+for the session itself (`DEMO_GUIDE.md` in the repository gives each, in full). It needs
+`components.post_ingest_resolution` off (appendix A), or a live load in the demonstration adds
+automatic "same as" links and every rehearsal reset then refuses. An install whose `demo_packs`
+names it (the `crime` starter's does) writes the setting off itself (section 1a). Added later, on a
+deployment where it is on, `ospreyflow demo add prison-intelligence` refuses, in words, with nothing
+added: set `post_ingest_resolution: false` under `components:` in the deployment's `osprey.yaml`, run
+`ospreyflow apply`, then add it again. Resolution is the whole deployment's setting; no case or
+dataset can turn it off on its own. Its **scale cohort** (`prison-intelligence-scale`) is
 written straight into the graph in a case of its own, with no pipeline runs, so the rehearsal reset
 does not touch it; adding it again changes nothing, and a run that stopped part-way says so rather
 than finishing it. `python -m scripts.write_pid_files --out <folder> --profile scale` writes its

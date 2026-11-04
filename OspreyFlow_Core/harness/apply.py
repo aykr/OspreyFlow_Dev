@@ -934,6 +934,30 @@ def _fetch_models(before: Mapping[str, Any], staged: Path) -> None:
         ) from failed
 
 
+def _wait_for_models(compose_file: Path, config: OspreyConfig) -> str:
+    """Waits for the download steps `up` has just started, saying first which extraction model is
+    downloading, and its size. The model server's health check is not lengthened to cover it: that
+    check gates every `up --wait` (a start, an `apply`'s restarts, an update and its rollback), the
+    model server would be unhealthy for as long as a 9 GB download takes, and a slow link would
+    fail the start outright, as the vision model once did (`harness.render._OLLAMA_HEALTHCHECK`).
+    The step's own script pulls and digest-verifies `config.extraction_model` before it idles, so
+    an idle step is the model present; a refused pull exits the step and fails the wait."""
+    steps = list(model_downloads.commands(compose_file))
+    if not steps:
+        return "no local model to download"
+    print(f"apply: {model_downloads.downloading_words(config.extraction_model)}", flush=True)
+    try:
+        for argv in model_downloads.wait_argvs(_compose(compose_file), steps):
+            _run(argv, stage="models", timeout=model_downloads.FETCH_TIMEOUT_SECONDS)
+    except (ApplyFailed, subprocess.TimeoutExpired) as failed:
+        raise ApplyFailed(
+            "models",
+            f"{model_downloads.failed_words(steps)}. Everything else is installed; run the install "
+            "again once it can be fetched.",
+        ) from failed
+    return f"{config.extraction_model} downloaded and verified"
+
+
 def reapply(
     config_path: Path,
     out_root: Path,
@@ -1367,6 +1391,11 @@ def main(
         _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
         health = wait_for_health(compose_file, timeout_seconds=args.health_timeout)
         result.record("up", f"{len(health)} service(s) healthy")
+
+        # 4a. The deployment's extraction model downloaded before the install says it is ready
+        # (build order step 25 (a), found on the first server: a fresh Small reported ready while
+        # `ollama-models` was still fetching the 14b, and Ask answered 404 for two minutes).
+        result.record("models", _wait_for_models(compose_file, config))
 
         # 4b. The two service-account grants a realm import cannot express, because it would need
         # client ids that do not exist until the import has run. Separate grants on purpose: the

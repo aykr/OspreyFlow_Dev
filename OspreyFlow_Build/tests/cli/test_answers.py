@@ -281,6 +281,27 @@ def test_server_answers_make_a_small_osprey_yaml_with_its_address_and_certificat
 
 
 @pytest.mark.parametrize(
+    "missing",
+    [("certificate", "key"), ("certificate",), ("key",)],
+    ids=["neither", "no-certificate", "no-key"],
+)
+def test_a_server_without_its_certificate_and_key_is_refused_in_words(
+    tmp_path: Path, missing: tuple[str, ...]
+) -> None:
+    """Build order step 25 (b), the owner's ruling of 4 November 2026: without the organisation's
+    certificate and key the front proxy fell back to obtaining a certificate itself (Caddy's
+    automatic ACME), which needs port 80 and a public name a server inside an organisation's network
+    does not have. Refused instead, in words naming both answers and §5a; nothing is installed."""
+    server = {k: v for k, v in SERVER.items() if k not in missing}
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "small", "server": server}, packs=PACKS, home=tmp_path)
+    words = str(refused.value)
+    assert "server.certificate" in words and "server.key" in words
+    assert "5a" in words
+    assert "obtains" not in words  # no certificate the proxy fetches itself is offered
+
+
+@pytest.mark.parametrize(
     ("server", "words"),
     [
         ({"certificate": "/c.pem", "key": "/k.pem"}, "server.address"),

@@ -6,6 +6,25 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **An install is ready only once its extraction model is in.** A fresh install said it was ready
+  while the model server was still downloading the extraction model (the 14b on a GPU is about
+  9 GB), and Ask answered "not found" for a minute or two. The install now says which model is
+  downloading, and its size, waits until it is downloaded and its digest checked, and only then
+  says it is installed. A refused download stops the install, naming `ospreyflow logs
+  ollama-models`.
+- **A server of your own needs its certificate and key.** An answers file whose `server:` gives
+  no `certificate` or no `key` is now refused, in words naming both and section 5a of the
+  administration guide, before anything is installed. It used to fall back to a certificate the
+  front proxy obtains itself, which needs port 80 and a public name a server inside an
+  organisation's network does not have. A cloud's server is unchanged.
+- **The Prison Intelligence pack looks after post-ingest resolution itself.** An install that
+  chooses it (the `crime` starter does) now writes `components.post_ingest_resolution: false` and
+  says so, so a fresh install no longer turns resolution back on under the pack. Added later with
+  `ospreyflow demo add prison-intelligence`, it refuses, in words and with nothing added, while
+  resolution is on, naming the setting and `ospreyflow apply`. Resolution is the whole
+  deployment's setting: the deployment's other demo cases gain no automatic "same as" links either;
+  an analyst's own Resolve now still works.
+
 ## v0.4.10 — 2026-11-04
 
 - **On a GPU the model stays loaded.** The first question after a few idle minutes no longer

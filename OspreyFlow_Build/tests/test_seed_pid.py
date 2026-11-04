@@ -2772,7 +2772,9 @@ def test_a_switch_the_conduit_would_refuse_is_refused() -> None:
 def test_the_warning_names_the_osprey_yaml_line_and_the_re_render() -> None:
     text = "\n".join(seed_pid.resolution_warning())
     assert "components.post_ingest_resolution: false" in text
-    assert "ospreyflow install" in text and "restart" in text.lower()
+    # `ospreyflow apply` (ADR-137) is how a changed osprey.yaml reaches an installed deployment
+    # and starts the Conduit again; a re-install is no longer the way (build order step 25 (c)).
+    assert "ospreyflow apply" in text and "starts the conduit again" in text.lower()
     assert "SAME_AS" in text
 
 

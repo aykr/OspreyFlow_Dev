@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .answers import RESOLUTION_OFF_PACKS
 from .home import CommandRefused, python_for
 from .run import Capture, Runner, StepFailed
 
@@ -29,6 +30,13 @@ PACK_KEYS = {
     # ADR-138: the synthetic STIX 2.1 intrusion case, the cyber starter's demo.
     "cyber-intrusion": "cyber-intrusion",
 }
+#: Build order step 25 (c), ADR-127 Amendment 46: `RESOLUTION_OFF_PACKS` (from the answers, which
+#: turn resolution off for them at install) load only while post-ingest resolution is off. A live
+#: load in the Prison Intelligence demonstration would otherwise queue resolution, whose worker
+#: writes `SAME_AS` links across the corpus, and every rehearsal reset would refuse. Resolution is
+#: the whole deployment's setting; no case or dataset can turn it off on its own.
+#: The deployment's rendered switch (`harness.render`), as `scripts.seed_internal` reads it.
+RESOLUTION_SWITCH = "OSPREY_POST_INGEST_RESOLUTION"
 #: PaySim's source page. A test holds this to the pack's own `source_page`.
 PAYSIM_SOURCE_PAGE = "https://www.kaggle.com/datasets/ealaxi/paysim1"
 PAYSIM_FOLDER = "PaySIM_Dataset"
@@ -178,15 +186,21 @@ def add_pack(
     accept_real_data: bool = False,
     case_domains: tuple[str, ...] | None = None,
     deployment_env: Mapping[str, str] | None = None,
+    deployment: Path | None = None,
+    settings: Path | None = None,
+    apply_command: str = "ospreyflow apply",
 ) -> None:
     """Seed `pack` into its own case. `case_domains` (a starter's, ADR-138) are the domain packs the
     case is set to while nobody has chosen; `deployment_env` points the seed at a deployment kept
-    by name (`OSPREYFLOW_DEPLOYMENT_DIR`). Raises `CommandRefused` before anything starts when the
-    request cannot be honoured, and `StepFailed` when a step it ran exits non-zero."""
+    by name (`OSPREYFLOW_DEPLOYMENT_DIR`). `deployment` is that deployment's folder, `settings` the
+    `osprey.yaml` that `apply_command` applies. Raises `CommandRefused` before anything starts when
+    the request cannot be honoured, and `StepFailed` when a step it ran exits non-zero."""
     if pack not in PACK_KEYS:
         raise CommandRefused(
             f"There is no demo pack called '{pack}'. The packs are: {', '.join(PACK_KEYS)}."
         )
+    if pack in RESOLUTION_OFF_PACKS and deployment is not None:
+        _require_resolution_off(deployment, settings, apply_command)
     python = python_for(product)
     root = demo_data_root(product, env)
     if pack == "paysim":
@@ -211,6 +225,37 @@ def add_pack(
     )
     if code != 0:
         raise StepFailed(f"load the {pack} demo pack", code)
+
+
+def resolution_switch(deployment: Path) -> str | None:
+    """The deployment's rendered `OSPREY_POST_INGEST_RESOLUTION`, as its Conduit reads it: `on` when
+    the line is missing (a deployment rendered before the switch existed), None when nothing is
+    installed there."""
+    env = deployment / "deployment.env"
+    if not env.is_file():
+        return None
+    value = "on"
+    for line in env.read_text(encoding="utf-8").splitlines():
+        if line.startswith(f"{RESOLUTION_SWITCH}="):
+            value = line.partition("=")[2].strip() or "on"
+    return value
+
+
+def _require_resolution_off(deployment: Path, settings: Path | None, apply_command: str) -> None:
+    """ADR-127 Amendment 46: the Prison Intelligence pack refuses, in words and before anything
+    starts, while post-ingest resolution is on. Where nothing is installed, the seed says so."""
+    value = resolution_switch(deployment)
+    if value is None or value == "off":
+        return
+    where = f"in {settings}" if settings is not None else "in the deployment's osprey.yaml"
+    raise CommandRefused(
+        "The Prison Intelligence pack needs post-ingest resolution off, and this deployment has it "
+        f"on ({RESOLUTION_SWITCH} in {deployment / 'deployment.env'}). With it on, a live load in "
+        'the demonstration adds automatic "same as" links, and every rehearsal reset then refuses. '
+        f"Set post_ingest_resolution: false under components: {where}, run {apply_command}, then "
+        "add the pack again. Resolution is the whole deployment's setting: no case or dataset can "
+        "turn it off on its own. Nothing was added."
+    )
 
 
 # --- A public dataset of the administrator's choosing (ADR-138 decision 3) --------------------

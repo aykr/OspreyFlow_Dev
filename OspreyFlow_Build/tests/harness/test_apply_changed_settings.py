@@ -42,7 +42,14 @@ What a mistake would do, and the case that catches it (rule 12):
   `test_unchanged_models_fetch_nothing`;
   `test_a_failed_download_changes_nothing_and_says_so`. The stand-in leaves a one-shot step alone
   unless it is named and its definition changed or it is forced, as Compose does —
-  `test_the_stand_in_compose_leaves_a_one_shot_step_alone_as_compose_does`.
+  `test_the_stand_in_compose_leaves_a_one_shot_step_alone_as_compose_does`;
+- a fresh install reporting ready while `ollama-models` is still downloading the extraction model,
+  so Ask answers 404 (found on the first server, 4 November 2026; build order step 25 (a)) —
+  `test_an_install_is_not_ready_until_the_extraction_model_is_downloaded`, for the shipped 7b and
+  the GPU's 14b; `test_an_install_whose_model_download_is_refused_fails_and_says_so`. The stand-in
+  reports every service healthy at once, as the real model server's health check (the 0.5b and
+  the embedding model only) did, and the model volume holds nothing until the step's download is
+  waited on.
 """
 
 from __future__ import annotations
@@ -784,3 +791,69 @@ def test_a_changed_certificate_restarts_only_the_proxy(
     assert compose.restarted() == {"proxy"}
     assert (folder / "tls-fingerprint").read_text(encoding="utf-8") != old
     assert (folder / "deployment.env").read_text(encoding="utf-8") == env_before
+
+
+# ---- Build order step 25 (a): an install waits for its extraction model -------------------------
+
+SEVEN = "qwen2.5:7b-instruct"
+
+
+def _install_to_the_end(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch, **settings: Any
+) -> tuple[int, list[set[str]]]:
+    """The first install, by the real `apply.main`, through to "ready": Keycloak's grants and
+    passwords stood in, and the models in the volume recorded when the install moved past `up`."""
+    seen: list[set[str]] = []
+    fake = deployment.compose
+    monkeypatch.setattr(
+        apply, "grant_service_account_roles", lambda **_k: seen.append(set(fake.models))
+    )
+    monkeypatch.setattr(apply, "set_demo_analyst_password", lambda **_k: None)
+    monkeypatch.setattr(apply, "set_demo_admin_password", lambda **_k: None)
+    deployment.write_config(None, **settings)
+    argv = ["--config", str(deployment.config), "--out-root", str(deployment.out_root),
+            "--demo-analyst", "--no-build", "--skip-verify"]  # fmt: skip
+    code = apply.main(argv)
+    return code, seen
+
+
+@pytest.mark.parametrize(
+    ("settings", "model", "size"),
+    [({}, SEVEN, "4.7 GB"), ({"resources": {"gpu": "nvidia"}}, FOURTEEN, "9.0 GB")],
+    ids=["the-shipped-7b", "a-gpus-14b"],
+)
+def test_an_install_is_not_ready_until_the_extraction_model_is_downloaded(
+    tmp_path: Path,
+    compose: FakeCompose,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    settings: dict[str, Any],
+    model: str,
+    size: str,
+) -> None:
+    """As found on the first server: `up --wait` and every health check passed while
+    `ollama-models` was still fetching the 14b, and the install said it was ready."""
+    code, seen = _install_to_the_end(Deployment(tmp_path, compose), monkeypatch, **settings)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "apply: local-lite ready in" in out
+    # The model was in the volume before the install went on, not merely by the time it ended.
+    assert seen and model in seen[0]
+    assert model in compose.models
+    # Said on screen, by name and size, before the wait.
+    assert f"downloading the extraction model, {model} ({size})" in out
+
+
+def test_an_install_whose_model_download_is_refused_fails_and_says_so(
+    tmp_path: Path,
+    compose: FakeCompose,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    compose.download_fails = True
+    code, seen = _install_to_the_end(Deployment(tmp_path, compose), monkeypatch)
+    said = capsys.readouterr()
+    assert code == 1
+    assert "stage 'models'" in said.err and "ollama-models" in said.err
+    assert "local-lite ready in" not in said.out
+    assert seen == []

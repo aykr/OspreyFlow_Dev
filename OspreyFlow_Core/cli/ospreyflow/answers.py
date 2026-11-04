@@ -34,8 +34,8 @@ a person at the prompts and CI install the same way.
       shared_storage_class: efs-sc #   the volume every Conduit shares: EFS on AWS, Azure Files
     server:                        # small only (ADR-114 Amendment 33): a server you provide,
       address: https://osprey.example.internal   # every store in a container; https:// only
-      certificate: /etc/ospreyflow/tls/osprey.crt  # PEM: the certificate, then its intermediates
-      key: /etc/ospreyflow/tls/osprey.key          # PEM, unencrypted, mode 600
+      certificate: /etc/ospreyflow/tls/osprey.crt  # required; PEM, then intermediates
+      key: /etc/ospreyflow/tls/osprey.key          # required. PEM, unencrypted, mode 600
       ca: /etc/ospreyflow/tls/org-root.pem         # optional: the organisation's root
       ingest: /srv/ospreyflow/ingest   # folders.ingest: where the CSV exports are put
       redirect_http: false         #   true also publishes 80, only to send people to 443
@@ -274,21 +274,15 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
         )
     network: dict[str, Any] = {"public_origin": address.rstrip("/")}
     files = {k: section[k] for k in ("certificate", "key", "ca") if section.get(k)}
-    if ("certificate" in files) != ("key" in files):
-        raise AnswersRefused(
-            "server.certificate and server.key are given both or neither: the certificate and its "
-            "key (or neither, for a certificate the front proxy obtains itself)"
-        )
-    if files:
-        tls = {}
-        for key, value in files.items():
-            text = str(value)
-            if not (text.startswith("/") or text.startswith("~")):
-                raise AnswersRefused(
-                    f"server.{key} is a relative path ({text}); give it from / or from ~"
-                )
-            tls[key] = str(_host_path(f"server.{key}", value, home))
-        network["tls"] = tls
+    tls = {}
+    for key, value in files.items():
+        text = str(value)
+        if not (text.startswith("/") or text.startswith("~")):
+            raise AnswersRefused(
+                f"server.{key} is a relative path ({text}); give it from / or from ~"
+            )
+        tls[key] = str(_host_path(f"server.{key}", value, home))
+    network["tls"] = tls
     if "redirect_http" in section:
         network["redirect_http"] = _boolean("server.redirect_http", section["redirect_http"])
     if section.get("listen_address") is not None:
@@ -314,6 +308,19 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
                 f"{section['gpu']!r}"
             )
         found["gpu"] = section["gpu"]
+    # Build order step 25 (b), the owner's ruling of 4 November 2026: the organisation's own
+    # certificate, always. Without it the front proxy once fell back to obtaining a certificate
+    # itself, which needs port 80 and a public name; a server inside the organisation has neither.
+    # Checked last, so a setting that is wrong in itself is named first.
+    absent = [f"server.{k}" for k in ("certificate", "key") if k not in files]
+    if absent:
+        raise AnswersRefused(
+            f"{' and '.join(absent)} {'is' if len(absent) == 1 else 'are'} missing: a server of "
+            "your own serves the organisation's own certificate, so give both server.certificate "
+            "(PEM: the certificate, then its intermediates) and server.key (PEM, unencrypted, mode "
+            "600) — section 5a of the administration guide says what the certificate must name. "
+            "Nothing was installed"
+        )
     return found
 
 
@@ -542,7 +549,7 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         if answers.appearance:
             # ADR-138: the guided page installs from its draft; the look is a Mode-screen answer.
             loaded["appearance"] = {**(loaded.get("appearance") or {}), **answers.appearance}
-        return loaded
+        return _resolution_off_for_the_packs(loaded, answers.demo_packs, own_file=answers.config)
     config = copy.deepcopy(dict(base))
     config["profile"] = PROFILES[answers.mode]
     storage = config.setdefault("components", {}).setdefault("storage", {})
@@ -593,4 +600,34 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         governance["organisation_provider"] = {
             k: answers.organisation[k] for k in ("label", "issuer", "client_id")
         }
+    return _resolution_off_for_the_packs(config, answers.demo_packs, own_file=None)
+
+
+#: ADR-127 Amendment 46 (build order step 25 (c)): the demo packs that load only while post-ingest
+#: resolution is off (`ospreyflow.demo.RESOLUTION_OFF_PACKS`, which refuses them while it is on).
+RESOLUTION_OFF_PACKS = ("prison-intelligence",)
+
+
+def _resolution_off_for_the_packs(
+    config: dict[str, Any], packs: tuple[str, ...], *, own_file: Path | None
+) -> dict[str, Any]:
+    """An install that chooses the Prison Intelligence pack writes `components.
+    post_ingest_resolution: false`, so it never turns resolution back on under the pack (and the
+    pack's own refusal never stops the install's last step). Over the checkout's defaults the
+    answers decide; a file of the operator's own (`config:`) that says `true` is refused in words,
+    not overridden, since it is used as it is."""
+    chosen = sorted(set(packs) & set(RESOLUTION_OFF_PACKS))
+    if not chosen:
+        return config
+    components = config.setdefault("components", {})
+    if not isinstance(components, dict):
+        return config  # the schema names what is wrong with it
+    if own_file is not None and components.get("post_ingest_resolution") is True:
+        raise AnswersRefused(
+            f"{own_file} sets components.post_ingest_resolution: true, and demo_packs chooses "
+            f"{', '.join(chosen)}, which needs it off: a live load in the demonstration would add "
+            'automatic "same as" links. Set it to false (or leave it out, and the install sets '
+            f"it), or leave {', '.join(chosen)} out. Nothing was installed"
+        )
+    components["post_ingest_resolution"] = False
     return config

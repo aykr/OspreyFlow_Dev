@@ -102,10 +102,12 @@ class ServerPlan:
     from the answers file's `server:` section, for the server's own checks."""
 
     host: str
+    #: The organisation's own certificate and key, always (build order step 25 (b)): the answers
+    #: refuse a `server:` without them, so there is no certificate the proxy obtains itself.
+    certificate: str
+    key: str
     port: int = 443
     dashboards: bool = True
-    certificate: str | None = None
-    key: str | None = None
     ca: str | None = None
     redirect_http: bool = False
     #: ADR-132: the GOV.UK brand on a name not under gov.uk earns a one-line notice (decision 10).
@@ -580,35 +582,34 @@ def _server_checks(
         )
     )
     wanted = [plan.port]
-    if plan.redirect_http or plan.certificate is None:
-        wanted.insert(0, 80)  # the redirect, or the automatic certificate's challenge
+    if plan.redirect_http:
+        wanted.insert(0, 80)  # the redirect, and nothing else
     checks += [_server_port_check(probes, port) for port in wanted]
     graph = _port_check(probes, 2480)
     checks.append(
         Check(graph.name, graph.ok, graph.says.replace("Port 2480", "Port 2480 (the graph "
               "store's door, on this server only)"), graph.fix)
     )  # fmt: skip
-    if plan.certificate and plan.key:
-        code, said = probes.certificate(product, plan.certificate, plan.key, plan.ca, plan.names)
-        refused = [line.removeprefix("refused: ") for line in said.splitlines()
-                   if line.startswith("refused: ")]  # fmt: skip
-        warned = [line.removeprefix("warning: ") for line in said.splitlines()
-                  if line.startswith("warning: ")]  # fmt: skip
-        if code == 0:
-            checks.append(
-                Check("certificate", True, f"The certificate covers {', '.join(plan.names)}.")
+    code, said = probes.certificate(product, plan.certificate, plan.key, plan.ca, plan.names)
+    refused = [line.removeprefix("refused: ") for line in said.splitlines()
+               if line.startswith("refused: ")]  # fmt: skip
+    warned = [line.removeprefix("warning: ") for line in said.splitlines()
+              if line.startswith("warning: ")]  # fmt: skip
+    if code == 0:
+        checks.append(
+            Check("certificate", True, f"The certificate covers {', '.join(plan.names)}.")
+        )
+    else:
+        checks.append(
+            Check(
+                "certificate",
+                False,
+                "The certificate is refused: " + ("; ".join(refused) or said.strip()) + ".",
+                "Fix the files named in server: (section 5a of the administration guide), "
+                "then run this again.",
             )
-        else:
-            checks.append(
-                Check(
-                    "certificate",
-                    False,
-                    "The certificate is refused: " + ("; ".join(refused) or said.strip()) + ".",
-                    "Fix the files named in server: (section 5a of the administration guide), "
-                    "then run this again.",
-                )
-            )
-        checks += [Check("certificate-expiry", True, w, "", warn=True) for w in warned]
+        )
+    checks += [Check("certificate-expiry", True, w, "", warn=True) for w in warned]
     count = probes.max_map_count()
     if count is None or count < MAX_MAP_COUNT:
         checks.append(

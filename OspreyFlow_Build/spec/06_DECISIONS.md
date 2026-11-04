@@ -23861,6 +23861,58 @@ v0.4.6 installed as Small on a real Ubuntu 24.04 `amd64` server, by the service 
   removed; nothing was kept" said of a set still there). Skipped when run as root, which may remove
   anything.
 
+#### Build order step 25 as built (4 November 2026, branch `step-25-install-hardening`)
+
+The owner's rulings of 4 November 2026 on open questions 27 and 30.
+
+- **(a) An install is not ready until its extraction model is downloaded.** Found on the first
+  server: a fresh install of Small reported ready while `ollama-models` was still fetching
+  `qwen2.5:14b-instruct` (9 GB, one to two minutes), and Ask through LiteLLM answered 404 meanwhile.
+  `up --wait` and every health check had passed, because the model server's health check
+  (`harness.render._OLLAMA_HEALTHCHECK`) covers only `qwen2.5:0.5b-instruct` and the embedding
+  model. **Defined:** `harness.apply`'s install, after `up` and the per-service health wait, says on
+  screen which extraction model is downloading (`OspreyConfig.extraction_model`, never a name of its
+  own) with its size where known (`harness.model_downloads.EXTRACTION_MODEL_SIZES`: 4.7 GB for the
+  7b, 9.0 GB for the 14b), then waits on each download step `up` has just started
+  (`model_downloads.wait_argvs`: `exec` until the step's first process is the `sleep` its script
+  ends in), before Keycloak's grants, the accounts, the demo packs and "ready". The step's script
+  pulls and digest-verifies the extraction model before it idles, so an idle step is the model
+  present; a refused pull exits the step, the wait fails, and the install stops at stage `models`
+  naming `ospreyflow logs ollama-models`. **Why not the health check:** it gates every `up --wait` —
+  `start`, an `apply`'s restarts, `update` and its rollback — so the model server would read
+  unhealthy for as long as a 9 GB download takes, and a slow link would fail the start outright,
+  as the vision model once did (the comment on `_OLLAMA_HEALTHCHECK`); the one-shot step is already
+  the thing that knows when its pulls are done, and `harness.model_downloads` (defect 9) already
+  waits on it for `apply`, `start --build` and `update`. **`update` is unchanged:** it fetches and
+  waits on a changed pull before the release's `up` (defect 9); an unchanged one names models the
+  kept volume already holds, and a release that only moves the Ollama image fetches nothing, so an
+  offline update does not fail on a pull it does not need. **The cost, disclosed:** the wait covers
+  the whole script, so the vision model (918 MB, pulled before the extraction model) is waited for
+  too. Tests: `tests/harness/test_apply_changed_settings.py::test_an_install_is_not_ready_until_the_extraction_model_is_downloaded`
+  (the 7b and the GPU's 14b; the stand-in Compose reports every service healthy at once, as the real
+  health check did, and holds no model until the step's download is waited on — shown red with the
+  wiring removed: the install moved past `up` with the model volume empty) and
+  `::test_an_install_whose_model_download_is_refused_fails_and_says_so` (red: the install returned 0).
+
+- **(b) `server:` is refused without the organisation's certificate and key.** Decision 3 kept a
+  fallback: an answers file giving neither `server.certificate` nor `server.key` installed a Small
+  whose front proxy obtained a certificate itself (Caddy's automatic ACME), which needs port 80 on
+  every interface and a public name — what a server inside an organisation's network does not
+  have. **Defined:** `cli/ospreyflow/answers.py`'s `_server` refuses a `server:` missing either, in
+  words naming both answers and the administration guide's §5a, with nothing installed; it is
+  checked after the section's other settings, so one wrong in itself is still named first. The
+  fallback's own paths are gone: the doctor's `ServerPlan` takes the certificate and key as
+  required, its certificate check always runs, and port 80 is checked only with `redirect_http`
+  (it was also checked for the automatic certificate's challenge). **Kept:** `server` never reaches
+  the schema (the answers turn it into `network.*`), so `network.tls` stays optional there, and the
+  front proxy's automatic certificate stays in `harness.site.render_caddyfile` for a cloud's Small
+  (`external:`), which obtains one for its public domain; Lite is plain HTTP and unchanged. Tests:
+  `tests/cli/test_answers.py::test_a_server_without_its_certificate_and_key_is_refused_in_words`
+  (neither, the certificate alone, the key alone — shown red: neither was accepted, and one alone
+  was told "or neither, for a certificate the front proxy obtains itself"). No existing test relied
+  on the fallback; `test_a_server_section_that_cannot_be_installed_is_refused_naming_the_setting`'s
+  certificate-without-key case still finds "both" in the new words.
+
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 
 Two gaps in Amendment 8 points 4 and 10, found drafting Amendment 33 (its answers 14 and 15, which
@@ -24063,3 +24115,55 @@ measured twice, the same both times, before and after this step's fixes.
   establishment 0.06. Recorded for the coordinator to put in the script; the plan's constant and tests are
   left as they are (open question: model the search's draw in the plan, or change the click path so the
   number is added with its links alone).
+
+### ADR-127, Amendment 46 (4 November 2026) — the Prison Intelligence pack handles post-ingest resolution itself (build order step 25 (c))
+
+The owner's ruling of 4 November 2026 on open question 30: `components.post_ingest_resolution`
+defaults to true, the administration guide told the operator to turn it off before `ospreyflow demo
+add prison-intelligence`, and a fresh install turned it back on. The pack is to handle it itself:
+either it refuses while resolution is on (option 1), or it turns resolution off for its own case or
+datasets (option 2) — option 2 only if the specification already allows resolution scoped so.
+
+- **What governs resolution.** Amendments 33–35 of this ADR: one switch, `OSPREY_POST_INGEST_RESOLUTION`
+  (`components.post_ingest_resolution`), read by the Conduit for the whole deployment; when on,
+  `submit_post_ingest_resolution_jobs` (ADR-025's hook) queues `resolve_entity_type` for each entity
+  type a run's recipe declares, and the worker resolves **every** node of that type in the corpus. No
+  ADR scopes it to a case or a dataset: ADR-126 (a case's domain packs and its Reports view) does not
+  touch resolution; ADR-025 resolves by entity type, corpus-wide. **So option 2 is not available, and
+  option 1 is built.**
+- **The pack refuses while it is on.** `ospreyflow demo add prison-intelligence`
+  (`cli/ospreyflow/demo.py`, `_require_resolution_off`) reads the deployment's rendered
+  `deployment.env` — what its Conduit runs with, read as `scripts.seed_internal._switch_args` reads
+  it (no line, from a deployment rendered before Amendment 33, is `on`) — and, unless it says `off`,
+  refuses before anything starts, in words naming `post_ingest_resolution: false` under
+  `components:`, the deployment's `osprey.yaml` by path, and `ospreyflow apply` (with `--name` for a
+  deployment kept by name); nothing is added. Where nothing is installed, the seed says so as before.
+  `prison-intelligence-scale` is not refused: it is written straight into the graph with no pipeline
+  run, so nothing it does queues resolution.
+- **An install that chooses the pack writes it off** (`cli/ospreyflow/answers.py`,
+  `_resolution_off_for_the_packs`). Option 1 alone would have made every install whose answers name
+  the pack — the `crime` starter's one command among them, and the first server's own install of
+  every pack — refuse at its last step, after everything else was installed. So when `demo_packs`
+  names it, the `osprey.yaml` the answers make has `components.post_ingest_resolution: false`, and
+  the install says so on screen; this is Amendment 33's original "the install … writes it", which
+  Amendment 35 had replaced by an operator's step. Over the checkout's defaults the answers decide; a
+  file of the operator's own (`config:`, used as it is, the guided page's draft among them) that
+  sets it **true** is refused in words, with nothing installed, rather than overridden. **The cost,
+  disclosed:** the switch is the deployment's, so the deployment's other demo cases (the crime
+  starter's `hmp`) gain no automatic `SAME_AS` links either; an analyst's own Resolve now still works.
+- **Also corrected:** `scripts/seed_pid.resolution_warning` named `ospreyflow install` to re-render;
+  since ADR-137 a changed `osprey.yaml` reaches an installed deployment through `ospreyflow apply`,
+  which it now names.
+- **Tests** (`tests/cli/test_pid_resolution.py`; the deployment's `deployment.env` is written by the
+  real `harness.render._render_env`, as `harness.apply` writes it):
+  `test_adding_the_pack_is_refused_in_words_while_resolution_is_on` (rendered on, and with no line —
+  shown red: the seed ran), `test_the_pack_loads_once_resolution_is_off`,
+  `test_other_packs_are_not_refused_while_resolution_is_on`,
+  `test_an_install_that_chooses_the_pack_turns_resolution_off` (the crime starter's `osprey.yaml`,
+  rendered, reads `off`, and the pack then loads; an install without the pack leaves the setting
+  alone — shown red: `KeyError`, nothing written),
+  `test_a_config_that_turns_resolution_on_with_the_pack_is_refused_before_anything_runs` (shown red:
+  the install ran). Updated with reasons: `tests/cli/test_starters.py::test_each_starters_osprey_yaml_carries_its_brand_and_demo_packs_and_nothing_else_differs`
+  (a starter loading the pack now also differs in this one setting) and
+  `tests/test_seed_pid.py::test_the_warning_names_the_osprey_yaml_line_and_the_re_render` (`apply`,
+  not `install`).
