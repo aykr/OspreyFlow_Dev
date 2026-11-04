@@ -147,7 +147,7 @@ def test_a_run_naming_another_file_than_verify_checked_is_refused_in_words(
     """The owner's case: choose A, Verify, re-choose B, Run. Red if the run loads B, or
     anything."""
     a = _csv(tmp_path / "reports.csv", ["07960112334"])
-    b = _csv(tmp_path / "reports_corrected.csv", ["07960112334", "07700900718"])
+    b = _csv(tmp_path / "reports_corrected.csv", ["07960112334", "07960112335"])
     studio.store.draft = _pipeline_draft(tmp_path, a)
     _verify(studio)
     _publish(studio)
@@ -190,7 +190,7 @@ def test_a_file_changed_since_verify_is_refused_until_verify_runs_again(
     studio.store.draft = _pipeline_draft(tmp_path, a)
     _verify(studio)
     _publish(studio)
-    _csv(tmp_path / "reports.csv", ["07960112334", "07700900718"])
+    _csv(tmp_path / "reports.csv", ["07960112334", "07960112335"])
 
     response = _run(studio)
 
@@ -212,7 +212,7 @@ def test_verify_reads_the_file_the_run_will_read_when_the_source_node_names_its_
     """The rehearsal's defect itself: the source node names B, the draft row A. Red if Verify
     checks A (one row) while the run loads B (two)."""
     a = _csv(tmp_path / "reports.csv", ["07960112334"])
-    b = _csv(tmp_path / "reports_corrected.csv", ["07960112334", "07700900718"])
+    b = _csv(tmp_path / "reports_corrected.csv", ["07960112334", "07960112335"])
     studio.store.draft = _pipeline_draft(tmp_path, a, node_location=b)
 
     assert _verify(studio)["rows_read"] == 2
