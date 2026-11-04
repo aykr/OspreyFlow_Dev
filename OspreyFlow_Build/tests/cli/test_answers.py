@@ -377,3 +377,43 @@ def test_server_memory_and_backups_reach_osprey_yaml(tmp_path: Path) -> None:
                            packs=PACKS, home=tmp_path)  # fmt: skip
     assert answers.memory_gib == "auto"
     assert "resources" not in osprey_config(answers, {})
+
+
+# ---- ADR-135 Amendment 1: the local engine on an NVIDIA GPU (unit 1) -----------------------------
+
+
+def test_server_gpu_reaches_osprey_yaml_and_none_writes_nothing(tmp_path: Path) -> None:
+    """`server.gpu: nvidia` is written as `resources.gpu`; left out, or `none`, the `osprey.yaml`
+    is what it was, so a deployment without a GPU renders byte for byte as before."""
+    config = _config({"mode": "small", "server": {**SERVER, "gpu": "nvidia"}}, tmp_path)
+    assert config.resources.gpu == "nvidia"
+    for server in (SERVER, {**SERVER, "gpu": "none"}):
+        answers = load_answers({"mode": "small", "server": server}, packs=PACKS, home=tmp_path)
+        assert "resources" not in osprey_config(answers, {})
+
+
+def test_server_gpu_other_than_none_or_nvidia_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "small", "server": {**SERVER, "gpu": "amd"}}, packs=PACKS,
+                     home=tmp_path)  # fmt: skip
+    assert "server.gpu is none or nvidia" in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [
+        {"cloud": {"provider": "aws", "region": "eu-west-2", "domain": "osprey.example.org"}},
+        {"external": {"postgres": {"host": "db.example.org"}}},
+    ],
+    ids=["cloud", "external"],
+)
+def test_server_gpu_is_refused_for_a_clouds_server(
+    tmp_path: Path, beside: dict[str, object]
+) -> None:
+    """A cloud's server (Small built with `cloud:`, or its first boot onto `external:`) is sized
+    without a GPU (ADR-114), so the answer is refused naming it, not by the general rule."""
+    raw = {"mode": "small", "server": {**SERVER, "gpu": "nvidia"}, **beside}
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers(raw, packs=PACKS, home=tmp_path)
+    assert "server.gpu" in str(refused.value)
+    assert "without a GPU" in str(refused.value)

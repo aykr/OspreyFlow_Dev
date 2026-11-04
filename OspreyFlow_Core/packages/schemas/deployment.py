@@ -1029,9 +1029,19 @@ class ResourcesConfig(BaseModel):
         default=None, ge=0.125,
         description="Overrides PostgreSQL's shared_buffers, in GiB.",
     )  # fmt: skip
+    #: ADR-135 Amendment 1: the local engine on the server's NVIDIA GPU. It sizes nothing, so it is
+    #: not one of `any`'s settings, and Lite on a Linux computer may set it too.
+    gpu: Literal["none", "nvidia"] = Field(
+        default="none",
+        description="Default: none — the local engine runs on the CPU. nvidia: the ollama service "
+        "reserves every NVIDIA GPU, and the extraction model is qwen2.5:14b-instruct unless "
+        "models.extraction names one. The NVIDIA driver and Container Toolkit are the "
+        "administrator's to install.",
+    )
 
     @property
     def any(self) -> bool:
+        """Whether the stores are sized to the server (Small's alone); `gpu` is not part of it."""
         return any(
             value is not None
             for value in (self.memory_gib, self.graph_heap_gib, self.search_heap_gib,
@@ -1252,6 +1262,24 @@ class OspreyConfig(BaseModel):
             raise ValueError(
                 "resources (the stores sized to the server's memory) is for Small on a server of "
                 f"your own, every store in a container, not {where}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_gpu_is_not_a_clouds(self) -> OspreyConfig:
+        """ADR-135 Amendment 1 decision 1: the local engine on an NVIDIA GPU is for Lite on a Linux
+        computer or Small on a server of your own. A cloud's servers are sized without a GPU
+        (ADR-114), so it is refused there in words. macOS and Windows, whose Docker Desktop gives a
+        container no NVIDIA GPU, are refused by the doctor, which reads the machine."""
+        if self.resources.gpu == "nvidia" and (
+            self.profile is Profile.CLUSTER or self.external.any
+        ):
+            where = (
+                "Enterprise" if self.profile is Profile.CLUSTER else "a Small on managed services"
+            )
+            raise ValueError(
+                "resources.gpu: nvidia is for Lite on a Linux computer or Small on a server of "
+                f"your own, not {where}: a cloud's servers are sized without a GPU"
             )
         return self
 

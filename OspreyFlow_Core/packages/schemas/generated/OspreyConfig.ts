@@ -456,6 +456,10 @@ export type SearchHeapGib = number | null;
  * Overrides PostgreSQL's shared_buffers, in GiB.
  */
 export type PostgresSharedBuffersGib = number | null;
+/**
+ * Default: none — the local engine runs on the CPU. nvidia: the ollama service reserves every NVIDIA GPU, and the extraction model is qwen2.5:14b-instruct unless models.extraction names one. The NVIDIA driver and Container Toolkit are the administrator's to install.
+ */
+export type Gpu = "none" | "nvidia";
 
 /**
  * The whole of `osprey.yaml`.
@@ -837,4 +841,5 @@ export interface ResourcesConfig {
   graph_heap_gib?: GraphHeapGib;
   search_heap_gib?: SearchHeapGib;
   postgres_shared_buffers_gib?: PostgresSharedBuffersGib;
+  gpu?: Gpu;
 }

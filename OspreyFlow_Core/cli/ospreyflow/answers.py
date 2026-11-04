@@ -42,6 +42,7 @@ a person at the prompts and CI install the same way.
       listen_address: 192.0.2.10   #   optional: one interface of the server; default every one
       backups: /srv/ospreyflow/backups  # where `ospreyflow backup` writes; ~/OspreyFlow/backups
       memory_gib: auto             #   or a number (GiB): what the stores are sized to
+      gpu: nvidia                  #   optional: the local engine on the server's NVIDIA GPU; none
     sign_in:                       # small on a server, optional; without it, local accounts only
       organisation:                #   the organisation's OpenID Connect provider (Entra ID, ADFS…)
         alias: org                 #   in the address the organisation registers; default org
@@ -89,11 +90,14 @@ _TOP = {
     "mail", "external", "cluster", "starter", "appearance", "demo_accounts", "server",
     "admin_email", "sign_in",
 }  # fmt: skip
-#: ADR-114 Amendment 33: `server:` (drop 1), with `backups` and `memory_gib` (drop 2, units 5–6).
+#: ADR-114 Amendment 33: `server:` (drop 1), with `backups` and `memory_gib` (drop 2, units 5–6),
+#: and ADR-135 Amendment 1's `gpu`.
 _SERVER = {
     "address", "certificate", "key", "ca", "ingest", "redirect_http", "listen_address",
-    "backups", "memory_gib",
+    "backups", "memory_gib", "gpu",
 }  # fmt: skip
+#: ADR-135 Amendment 1 decision 1: the GPUs the local engine can be given.
+GPUS = ("none", "nvidia")
 #: Amendment 33 decision 6 and the owner's answer 16: a server is at least a nominal 32 GB one
 #: (30 GiB as Docker reports it is `doctor`'s floor); the sizing rule's own floor is 16.
 MIN_MEMORY_GIB = 16
@@ -160,6 +164,8 @@ class Answers:
     backups: Path | None = None
     #: Amendment 33 decision 6: `"auto"` (measured by the install), a number of GiB, or None.
     memory_gib: int | str | None = None
+    #: ADR-135 Amendment 1: `nvidia` puts the local engine on the server's NVIDIA GPU.
+    gpu: str = "none"
     #: Amendment 33 decision 4: the organisation's identity provider — alias, label, issuer and
     #: client id, as `governance` takes them. Empty without `sign_in.organisation`.
     organisation: dict[str, str] = field(default_factory=dict)
@@ -301,6 +307,13 @@ def _server(section: object, mode: str, home: Path) -> dict[str, Any]:
         found["backups"] = _host_path("server.backups", section["backups"], home)
     if section.get("memory_gib") is not None:
         found["memory_gib"] = _memory(section["memory_gib"])
+    if section.get("gpu") is not None:
+        if section["gpu"] not in GPUS:
+            raise AnswersRefused(
+                f"server.gpu is none or nvidia (the local engine on the server's NVIDIA GPU), not "
+                f"{section['gpu']!r}"
+            )
+        found["gpu"] = section["gpu"]
     return found
 
 
@@ -422,6 +435,12 @@ def load_answers(
     server: dict[str, Any] = {}
     if raw.get("server") is not None:
         server = _server(raw["server"], str(mode), home)
+        if server.get("gpu") == "nvidia" and (raw.get("cloud") or external):
+            # ADR-135 Amendment 1 decision 1, said before the general rule below.
+            raise AnswersRefused(
+                "server.gpu is for a server of your own; a cloud's server (cloud: or external:) is "
+                "sized without a GPU. Nothing was installed"
+            )
         if raw.get("cloud"):
             raise AnswersRefused(
                 "build a server with --cloud (the cloud: settings), or install onto one you have "
@@ -508,6 +527,7 @@ def load_answers(
         admin_email=str(admin_email) if admin_email is not None else None,
         backups=server.get("backups", home / "OspreyFlow" / "backups") if server else None,
         memory_gib=server.get("memory_gib"),
+        gpu=server.get("gpu", "none"),
         organisation=organisation,
     )
 
@@ -563,6 +583,9 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(answers.memory_gib, int):
         # Decision 6: a number given is written as it is; `auto` is measured by the install.
         config["resources"] = {**(config.get("resources") or {}), "memory_gib": answers.memory_gib}
+    if answers.gpu == "nvidia":
+        # ADR-135 Amendment 1: written only when asked for, so `none` changes nothing.
+        config["resources"] = {**(config.get("resources") or {}), "gpu": "nvidia"}
     if answers.organisation:
         # Decision 4: the organisation's provider, by name and address; its secret is never here.
         governance = config.setdefault("governance", {})
