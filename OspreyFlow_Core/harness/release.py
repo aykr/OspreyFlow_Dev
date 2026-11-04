@@ -19,6 +19,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from harness.render import make_shared_folder, write_shared
+
 GITHUB_API = "https://api.github.com"
 NOTICE_FILE = "update.json"
 STATE_DIR = "state"
@@ -242,10 +244,12 @@ def _asset(asset: dict[str, Any], tag: str) -> str:
 
 
 def write_notice(deployment: Path, notice: dict[str, Any]) -> Path:
+    """The notice where the Conduit, which runs as its own user, reads it through its `./state`
+    mount: the folder `755` and the file `644`, whatever the umask. It holds no secret."""
     state = deployment / STATE_DIR
-    state.mkdir(exist_ok=True)
+    make_shared_folder(state, under=deployment)
     path = state / NOTICE_FILE
-    path.write_text(json.dumps(notice, indent=2) + "\n", encoding="utf-8")
+    write_shared(path, json.dumps(notice, indent=2) + "\n")
     return path
 
 

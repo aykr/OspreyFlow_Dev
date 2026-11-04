@@ -1687,6 +1687,36 @@ def write_private(path: Path, text: str) -> None:
         handle.write(text)
 
 
+#: What a rendered file that holds no secret is written as, and a folder of them, whatever the
+#: installer's umask: readable by every account, because a container that does not run as the
+#: installer reads it through a bind mount (Keycloak as uid 1000, the workspace as `nginx`, the
+#: Conduit as `osprey`). Found on the first server, 4 November 2026 (ADR-114 Amendment 33): an
+#: install under `umask 077` wrote `realm.json` 600 and Keycloak could not import it.
+SHARED_FILE_MODE = 0o644
+SHARED_FOLDER_MODE = 0o755
+
+
+def write_shared(path: Path, text: str) -> None:
+    """`text` into `path`, readable by every account (`644`) whatever the umask, whether the file is
+    new or was tighter before. Only for a file that holds no secret: `write_private` is the other
+    half, for `deployment.env`."""
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, SHARED_FILE_MODE)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), SHARED_FILE_MODE)
+        handle.write(text)
+
+
+def make_shared_folder(path: Path, *, under: Path) -> None:
+    """`path` and every folder between `under` and it made, each `755` whatever the umask, so a
+    container mounting any of them can walk it. `under` itself keeps its own mode: a named
+    deployment's folder is `700` (ADR-138), which a file's bind mount never walks."""
+    path.mkdir(parents=True, exist_ok=True)
+    for folder in (path, *path.parents):
+        if folder == under or under not in folder.parents:
+            break
+        folder.chmod(SHARED_FOLDER_MODE)
+
+
 def write(result: RenderResult, out_dir: Path) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
@@ -1695,7 +1725,7 @@ def write(result: RenderResult, out_dir: Path) -> list[Path]:
         if name == SECRETS_FILE:
             write_private(target, content)
         else:
-            target.write_text(content, encoding="utf-8")
+            write_shared(target, content)
         written.append(target)
     return written
 
@@ -1720,7 +1750,8 @@ def write_config_copy(config_path: Path, out_dir: Path) -> Path:
         content = yaml.safe_dump(
             OspreyConfig().model_dump(mode="json", exclude_none=True), sort_keys=False
         )
-    target.write_text(content, encoding="utf-8")
+    # The Conduit mounts it, and it holds no secret (05_DEPLOYMENT.md §7: never in osprey.yaml).
+    write_shared(target, content)
     return target
 
 

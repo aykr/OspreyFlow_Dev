@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import stat
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -202,6 +203,17 @@ def check(
 
     if ca is not None:
         ca_bytes = _read(ca, "CA file", report)
+        if ca_bytes is not None and not ca.stat().st_mode & stat.S_IROTH:
+            # Keycloak mounts it into its truststore and runs as uid 1000, not the installing
+            # account (as found on the first server, 4 November 2026). A root certificate is
+            # public.
+            mode = stat.S_IMODE(ca.stat().st_mode)
+            report.refusals.append(
+                f"{ca} is mode {mode:o}, so the identity provider, which reads it through its "
+                "mount as another account, cannot: it is the organisation's "
+                f"root certificate and holds no secret, so make it readable by every account "
+                f"(chmod 644 {ca})"
+            )
         anchors: list[x509.Certificate] = []
         if ca_bytes is not None:
             try:
