@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.49** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.50** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.50 | 2026-11-04 | The owner's ruling (ADR-099 Amendment 11; build order step 27), "no role, no list": §5a.1 and §9.2, a person holding no role is told no dataset's name or id, even when their unit is set before a role; Home says *No cases to show* when they hold no case. |
 | 1.49 | 2026-11-04 | As found on the first server (ADR-114 Amendment 35 point 7): §13 and §14, Valkey's data was inside its container and is now moved too; a move that is refused puts back every file the command wrote, so `ospreyflow start` runs the deployment on its old data, and its words say so; the move checks each store apart from the deployment's own containers; a restore starts the identity provider again after PostgreSQL. §16 the move's refusal, and a restore refused with "could not authenticate to Keycloak: 500". |
 | 1.48 | 2026-11-04 | The owner's ruling (ADR-114 Amendment 35; build order step 26): the stores keep their data in named volumes. §8 `uninstall --keep-data` now keeps data a later install finds; §13 where each store's data is kept, what a backup reads, and OpenSearch; §14 the one-time move of an existing deployment's data, its words, and what a failed move does to an update; new §14.1 removing the old volumes; §16 a move that is refused. |
 | 1.47 | 2026-11-04 | The owner's ruling (ADR-127 Amendment 46; build order step 25): §1a and §11, the Prison Intelligence pack handles post-ingest resolution itself — an install that chooses it writes `components.post_ingest_resolution: false`, and `ospreyflow demo add prison-intelligence` refuses, in words, while it is on. |
@@ -711,7 +712,9 @@ with **no role, no handling code, and a clearance and unit of `unassigned`** tha
 shows every place dimmed until an administrator grants them. Nothing is taken from the
 organisation's directory — no group becomes a role. An administrator finds them in Admin → People
 and roles once they have signed in, and sets their roles, then their access (clearance, unit,
-handling codes); a later sign-in never takes those back.
+handling codes); a later sign-in never takes those back. **No role, no list:** until they hold a
+role they are told no dataset's name, even if their unit is set first — the unit's dataset list and
+a case's datasets come back empty (section 9.2).
 
 **The organisation's own certificate authority.** With `server.ca`, the identity provider trusts
 it as well as the usual public authorities, so a provider on the organisation's own certificates
@@ -1033,6 +1036,13 @@ holding its right:
 
 A single right can be given on its own. **Nobody can be given more than the person giving it
 holds** — clearance included — which is why the first administrator holds the highest clearance.
+
+**Someone with no role sees no datasets.** A person holding no role (or only a role this deployment
+does not know) is told no dataset's name or id anywhere: the list a new case chooses from and the
+datasets a case reads come back empty, and a model engine's reason for being unavailable names none,
+whatever unit or case level they have been given. Home shows them every place dimmed with the role each needs,
+and *No cases to show* when they hold no case. A single right given on its own counts as a role here.
+Set their roles first, or straight after their access, and they see what that role allows.
 
 **The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
 **Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin

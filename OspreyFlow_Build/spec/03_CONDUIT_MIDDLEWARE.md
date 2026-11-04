@@ -223,7 +223,7 @@ in the store) is left out of every read.
 
 ```
 POST   /v1/investigations/{id}/search      federated search across graph, documents, index, within the case's datasets (ADR-099)
-GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099)
+GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099); none to a caller holding no right (Amendment 11)
 POST   /v1/datasets                     a new, empty dataset of the caller's unit (`{"name": ...}`), audited (ADR-099); `POST /v1/investigations` takes `dataset_ids`, and with none makes the case a dataset of its own named after it
 POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers start with what is typed (ADR-059), within the case's datasets (ADR-099)
 GET    /v1/investigations/{id}/explore/counts          nodes per entity type and links per link type the analyst can see, within the case's datasets (ADR-100)

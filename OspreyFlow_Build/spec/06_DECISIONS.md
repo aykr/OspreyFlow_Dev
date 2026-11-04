@@ -17704,6 +17704,64 @@ requires.
 - **Amendment 7, item 1** reports a past symptom ("the status bar said '285 hidden by handling'"). It
   is history and stands as written; the figure it names no longer exists.
 
+### ADR-099, Amendment 11 (4 November 2026) — no role, no dataset list
+
+Status: accepted 4 November 2026 (the owner's ruling, "No: no role, no list", on open question 28 of
+build order step 20 drop 2). ADR-099, ADR-112 and ADR-114 Amendment 33 are unchanged except where
+this says so.
+
+**Found.** A person arriving through the organisation's sign-in has no role and the unit
+`unassigned` until an administrator grants them (ADR-114 Amendment 33, drop 2), and sees nothing. But
+an administrator may set a unit before a role, and then `GET /v1/datasets` — a route needing no right
+(ADR-112's table, `test_route_rights.py`) — listed that unit's datasets by name. Not their data:
+every graph read still needs a right and the case's datasets.
+
+1. **A person holding no right is told no dataset's name or id**, on any path. "No right" is
+   `rights_for(roles)` empty: no role, or only roles this deployment does not know (Keycloak's own
+   `default-roles-…` and `offline_access` confer nothing). A single right granted alone
+   (`right:<name>`) is a role here: its holder reads names as before.
+2. **The rule lives in the dataset store, in the query (rule 3).** Every dataset name a request is
+   given comes from `DatasetStore.list_for(reader)` (a unit's) or `DatasetStore.of_case(id, reader)`
+   (a case's). Both take the reader, and the reader's holding a right is part of the `WHERE` clause
+   (`AND $2::boolean`, from `datasets.reads_dataset_names`), so Postgres returns no row for them;
+   the in-memory store applies the same condition. Nothing is retrieved and then dropped. The answer
+   is the same empty list whatever the unit or case holds, so neither its body nor its length says
+   that any dataset exists. `list_all` (the Admin area's) and `egress_of` (the model routing's) take
+   no reader: their routes need `administer_system` or `ask_model`, refused by `require_right` before
+   any query runs — a refusal decided by the principal alone, never by what the store holds, so it
+   too says nothing of what exists.
+3. **The paths, all of them.** The routes a person with no right can reach are those
+   `test_route_rights.py` gives `None`. Four name datasets, and each now answers them nothing:
+   - `GET /v1/datasets`: `[]` (was the unit's list — the finding);
+   - `GET /v1/investigations`: each case the person holds a level on with `datasets` and
+     `dataset_ids` empty (a role-less person can hold a level an Author granted);
+   - `GET /v1/investigations/{id}/datasets`: `[]`;
+   - `GET /v1/investigations/{id}/models/engines`: the hosted engine's reason is the one for data
+     whose datasets are not known, with no name and no count (it reads the case's datasets through
+     `of_case` with the caller, so not "a dataset not known here" once per dataset).
+   Every other path that names a dataset needs a right (the Admin area's list, Ask's brief, the
+   Studio, alerts, packs, monitoring), so it refuses a person with none before any query.
+4. **Nothing changes for a person with a role:** the same lists, names, ids and reasons as before.
+5. **The Glass.** Home already shows such a person every place gated with the role it needs
+   (ADR-115 decision 7). Its *Recent cases* now says "No cases to show." instead of an empty table.
+
+**Not changed, for the owner.** A role-less person given a case level by its Author still sees that
+case's name in the picker and on Home (`GET /v1/investigations`), and the case's delta stream
+(`/v1/investigations/{id}/stream`, which names no right in ADR-112's table) still opens for them, under
+their clearance and the case's datasets; the arrival's `unassigned` clearance reads nothing there.
+Neither names a dataset; whether a case level without a role should count at all is a separate
+question.
+
+Tests (rule 12), each shown red first: `tests/services/api/test_no_role_no_dataset_list.py` — the
+unit list, the case picker, a case's datasets and the engine reasons, each empty for a person with no
+role and alike in body and length whether the unit or case holds one dataset or two; the same for
+only unknown roles; the Admin list refused; and every role's view unchanged. The store's own half:
+`test_the_store_names_no_dataset_to_a_reader_with_no_role` (in memory) and, live against Postgres,
+`tests/services/api/test_datasets_store.py::test_postgres_names_no_dataset_to_a_reader_with_no_role`
+(red with the condition planted out of each query in turn). The Glass:
+`apps/workspace/src/home/HomePage.test.tsx` "shows a person with no role every place gated, and
+nothing to show in words, not an error".
+
 ### ADR-124, Amendment 15 (25 October 2026) — U10b: the close
 
 Decided by the coordinator under the owner's instruction of 24 October 2026 to take the recommended
@@ -23572,6 +23630,9 @@ Units 7, 5 and 6. Where this section and the text above differ, this section is 
   provider (`syncMode: IMPORT`), **`clearance: unassigned` and `org_unit: unassigned`**
   (`realm.ORGANISATION_ARRIVAL_ATTRIBUTES`) — a clearance no scheme knows, so default-deny
   (`01_DOMAIN_MODEL.md` §2.2) — and no role and no handling code. Nothing comes from the directory.
+  **A unit given before a role names no dataset** (ADR-099 Amendment 11, the owner's ruling of 4
+  November 2026, "No: no role, no list"): a person holding no right is told no dataset's name on any
+  path, whatever unit an administrator has set.
   An administrator's later grant is never taken back by a sign-in (measured: a mapper in `FORCE` mode
   would).
 - **Truststore.** With `network.tls.ca` on Small, the CA is mounted read-only at
