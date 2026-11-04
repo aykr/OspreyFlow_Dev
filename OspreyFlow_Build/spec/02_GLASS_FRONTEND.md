@@ -321,9 +321,12 @@ their new box at once. Reachable by keyboard (`keyboard/panel-frames.spec.ts`).
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 
-Under the GOV.UK brand (ADR-132) the GOV.UK header, the service navigation naming the service and
-the phase banner stand above the classification strip, and the GOV.UK footer below the workspace;
-the top bar below is the same bar, with the same controls and names, re-themed by the tokens.
+Under the GOV.UK brand (ADR-132) the GOV.UK header and the phase banner stand above the
+classification strip, and the GOV.UK footer below the workspace; the top bar below is the same bar,
+with the same controls and names, re-themed by the tokens. There is no service-name band (GOV.UK's
+service navigation) under the header: the owner removed it everywhere on 4 November 2026 to give the
+workspace its height back (ADR-132 Amendment 5). The service's name is in the page title,
+"<service> – GOV.UK", on the Glass and on the sign-in page alike.
 
 One row, 40px. From the left:
 

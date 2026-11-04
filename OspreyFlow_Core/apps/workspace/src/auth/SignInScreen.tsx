@@ -155,7 +155,7 @@ export function SignInScreen({ reason, intent, onSignIn, marking = null, welcome
     <div className="welcome">
       {marking && <ClassificationStrip marking={marking} />}
       <header className="welcome-header">
-        {/* ADR-132: under GOV.UK the GOV.UK header above names the service; no OspreyFlow mark. */}
+        {/* ADR-132: under GOV.UK the GOV.UK header stands above and the page title names the service; no OspreyFlow mark. */}
         {currentBrand() === "govuk" ? (
           <span className="welcome-header__brand" />
         ) : (

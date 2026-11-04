@@ -459,8 +459,12 @@ scale, 19px body; the workspace keeps the 13px base (§9 exception 1).
 
 Page width (ADR-132 Amendment 4): the sign-in and start pages hold their content in GOV.UK's width
 container, 960px with 30px gutters (15px at 640px and narrower), so it starts on the logo's edge.
-GOV.UK's own header, service navigation, phase banner and footer keep GOV.UK's link styling, with no
-Glass link border.
+GOV.UK's own header, phase banner and footer keep GOV.UK's link styling, with no Glass link border.
+
+No service-name band (ADR-132 Amendment 5, the owner's ruling of 4 November 2026): GOV.UK's service
+navigation is not drawn under the header, on the workspace, the start and welcome pages or the
+sign-in page, because it took too much of the workspace's height. The service's name is in the page
+title, "<service> – GOV.UK".
 
 Identity under GOV.UK (ADR-132 Amendment 4): no OspreyFlow mark in the page's chrome. The GOV.UK footer
 says "Built with OspreyFlow, open source." in words; the workspace's top bar keeps its mark; the

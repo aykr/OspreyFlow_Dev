@@ -119,7 +119,7 @@ export function deploymentWelcome(): WelcomeSettingsRead {
   return deployment?.welcome ?? PLAIN_WELCOME;
 }
 
-/** The deployment's brand and what its GOV.UK header, footer and banner name (ADR-132); the
+/** The deployment's brand and what its page title, GOV.UK footer and banner name (ADR-132); the
  * OspreyFlow brand where there is no deployment file. */
 export function deploymentAppearance(): Appearance {
   return deployment?.appearance ?? PLAIN_APPEARANCE;

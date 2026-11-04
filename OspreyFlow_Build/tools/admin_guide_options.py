@@ -108,7 +108,7 @@ SECTIONS = {
     "monitoring": "Monitoring and alerts: whom a new hotlist's alerts reach, and who changes it.",
     "mail": "A mail server, for invitations and password resets by email.",
     "welcome": "The welcome page before sign-in: its About section and footer links.",
-    "appearance": "How every page looks: the deployment's brand, and what a GOV.UK header names.",
+    "appearance": "How every page looks: the deployment's brand, and what its page title names.",
     "deployment": "Which deployment this is, on a machine that runs more than one.",
     "external": "What a cloud runs for the deployment instead of a container (Small).",
     "external.postgres": "A cloud's managed PostgreSQL; its password arrives at install.",

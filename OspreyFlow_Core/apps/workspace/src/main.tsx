@@ -7,7 +7,7 @@ import "./design/primitives.css";
 import { App } from "./App";
 import { answerTheWindowThatAsked } from "./auth/callbackFrame";
 import { deploymentAppearance, loadDeploymentSettings } from "./auth/oidcConfig";
-import { applyBrand, brandFromUrl, brandTitle, loadBrandStylesheet } from "./brand/brand";
+import { applyBrand, brandFromUrl, loadBrandStylesheet } from "./brand/brand";
 import { BrandFrame } from "./brand/BrandFrame";
 import { applyTheme, readStoredTheme } from "./theme/theme";
 
@@ -30,11 +30,11 @@ if (!onlyCarryingAnAnswer) void loadDeploymentSettings().then(async () => {
   const brand = brandFromUrl(window.location.search, import.meta.env.DEV) ?? appearance.brand;
   applyBrand(brand);
   applyTheme(readStoredTheme());
-  document.title = brandTitle(appearance, brand, document.title);
   // The GOV.UK stylesheet, awaited so the header is never drawn unstyled; never fetched otherwise.
   await loadBrandStylesheet(brand);
   createRoot(container).render(
     <StrictMode>
+      {/* The frame also sets the page title, "<service> – GOV.UK" under GOV.UK (ADR-132 Am. 5). */}
       <BrandFrame appearance={{ ...appearance, brand }}>
         <App />
       </BrandFrame>

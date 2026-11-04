@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.30** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
+**Version 1.31** · 2026-11-04 · For OspreyFlow v0.4.8 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.31 | 2026-11-04 | The owner's ruling (ADR-132 Amendment 5): §4, under the GOV.UK theme the service's name is in the browser tab's title; the band under the GOV.UK header that named it is gone, giving the workspace its height back. |
 | 1.30 | 2026-11-04 | Describes v0.4.8. No change to its content. |
 | 1.29 | 2026-11-04 | Describes v0.4.7. No change to its content. |
 | 1.28 | 2026-11-04 | §6: on a deployment whose own model has an NVIDIA GPU (ADR-135 Amendment 1), it answers much faster and is the larger qwen2.5:14b-instruct, as its "Answered by" line shows. |
@@ -165,8 +166,9 @@ and choices fit it). Every pack stays available to the cases you create.
 | `…-cyber` | Cyber intrusion (synthetic demo): a STIX 2.1 threat case | STIX |
 | `…-blank` | None, and no demonstration accounts | — |
 
-The theme (`ospreyflow-…` or `govuk-…`) changes only the look: under the GOV.UK theme, the header
-names the service your administrator chose, the same on every case. A dataset your administrator
+The theme (`ospreyflow-…` or `govuk-…`) changes only the look: under the GOV.UK theme, the browser
+tab's title names the service your administrator chose ("<service> – GOV.UK"), the same on every
+case. There is no band under the GOV.UK header naming it, so the workspace has the window's height. A dataset your administrator
 added from outside, such as a VAST Challenge dataset, is a case of its own named after the dataset,
 "(public dataset)".
 

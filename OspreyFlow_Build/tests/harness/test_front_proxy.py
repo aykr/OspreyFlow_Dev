@@ -237,8 +237,8 @@ def test_a_localhost_name_reaches_loopback_where_the_resolver_refuses_it(
 
 
 def test_the_glass_learns_the_deployments_appearance() -> None:
-    """ADR-132: the brand, and what the GOV.UK header, footer and phase banner name, travel in the
-    same file as the identity provider, so the bundle stays the same for every deployment."""
+    """ADR-132: the brand, and what the page title, GOV.UK footer and phase banner name, travel in
+    the same file as the identity provider, so the bundle stays the same for every deployment."""
     appearance = {
         "brand": "govuk",
         "service_name": "Prison Intelligence",

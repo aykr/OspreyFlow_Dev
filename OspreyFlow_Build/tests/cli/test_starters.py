@@ -6,7 +6,7 @@ What a mistake would do, and the case that catches it (rule 12):
 - the demo cases left with the seeds' own domains instead of the starter's —
   `test_each_starters_demo_packs_are_seeded_with_its_case_domains`;
 - `blank` making a demo case or a demo account — `test_blank_makes_no_demo_case_and_no_demo_account`;
-- a GOV.UK service installed with no name in its header —
+- a GOV.UK service installed with no name for its page title —
   `test_a_govuk_starter_without_a_service_name_is_refused_in_words`;
 - a default service name that names one demo case (step 9d finding 3) —
   `test_the_service_name_offered_names_the_deployment_not_a_demo_case`;

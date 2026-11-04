@@ -26,8 +26,7 @@ afterEach(() => applyBrand("ospreyflow"));
 describe("the sign-in page's GOV.UK header and footer", () => {
   it("are the Glass's own components", () => {
     applyBrand("govuk");
-    // The script fills the service name in at run time; "SERVICE" is the placeholder it replaces.
-    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader serviceName="SERVICE" />));
+    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader />));
     expect(constant("FOOTER")).toBe(renderToStaticMarkup(<GovukFooter organisation={null} />));
   });
 });

@@ -157,7 +157,7 @@ export function ModeScreen({
                 aria-describedby="service-name-help"
               />
               <p id="service-name-help" className="help">
-                Shown in the GOV.UK header on every case, so name the service, not one case.
+                Shown in the page title on every case, so name the service, not one case.
               </p>
               <label htmlFor="organisation">Organisation</label>
               <input

@@ -6,6 +6,11 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **No service-name band under the GOV.UK header.** Under the GOV.UK theme the band that named the
+  service below the GOV.UK header is gone, on the workspace, the start and welcome pages and the
+  sign-in page alike, so the workspace gets that height back (the owner's ruling, ADR-132
+  Amendment 5). The service's name is in the page title, "<service> – GOV.UK", now on the sign-in
+  page too. The "Beta" banner is unchanged: `appearance.phase: none` turns it off.
 - **Uploads and demo packs work on Linux.** On a Linux server or computer, the folder the Ingest
   Studio's uploads and the demo packs' files go to (`uploaded/` in the ingest folder) was made by
   Docker, owned by root, and the Conduit could not write it: `ospreyflow demo add` and every upload

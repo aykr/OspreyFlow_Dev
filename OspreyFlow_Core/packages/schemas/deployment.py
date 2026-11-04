@@ -891,7 +891,7 @@ class AppearanceConfig(BaseModel):
     service_name: str | None = Field(
         default=None,
         min_length=1,
-        description="Default: none. The service's name in the GOV.UK header and the page title.",
+        description="Default: none. The service's name, in the page title.",
     )
     organisation: str | None = Field(
         default=None,

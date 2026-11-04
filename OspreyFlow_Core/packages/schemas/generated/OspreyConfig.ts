@@ -369,7 +369,7 @@ export type GraphPort = number | null;
  */
 export type Brand = "ospreyflow" | "govuk";
 /**
- * Default: none. The service's name in the GOV.UK header and the page title.
+ * Default: none. The service's name, in the page title.
  */
 export type ServiceName = string | null;
 /**

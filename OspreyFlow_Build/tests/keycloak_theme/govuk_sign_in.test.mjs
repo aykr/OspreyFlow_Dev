@@ -1,7 +1,7 @@
 // ADR-132 Amendment 2: on the identity provider's sign-in page under the GOV.UK brand, the shared
 // light and dark script holds the page light and draws no theme button, and `govuk_chrome.js` adds
-// the GOV.UK header, service navigation, skip link and footer. Without the brand, the script
-// behaves as before.
+// the GOV.UK header, skip link and footer, and names the service in the page title. Without the
+// brand, the script behaves as before.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -15,7 +15,7 @@ const CHROME = readFileSync(new URL("../../../OspreyFlow_Core/harness/govuk_chro
 /** A page like Keycloak's sign-in page, with the scripts run in the order the theme loads them. */
 function page({ brand, cookie = "ospreyflow_theme=dark", settings } = {}) {
   const dom = new JSDOM(
-    '<!doctype html><html><head></head><body><main><form id="kc-form-login"><input name="username"></form></main></body></html>',
+    '<!doctype html><html><head><title>Sign in to OspreyFlow</title></head><body><main><form id="kc-form-login"><input name="username"></form></main></body></html>',
     { url: "http://id.govuk.ospreyflow.localhost:8081/realms/osprey/", runScripts: "outside-only" },
   );
   dom.window.document.cookie = cookie;
@@ -49,22 +49,37 @@ test("without a brand the saved choice and the button are as before", () => {
   assert.ok(win.document.getElementById("osprey-theme-toggle"));
 });
 
-test("the GOV.UK header, service name, skip link and footer are added in reading order", () => {
+test("the GOV.UK header, skip link and footer are added in reading order", () => {
   const win = page({ brand: "govuk", settings: SETTINGS });
   // A link's name as a screen reader gets it here: its text, or the label on its logo.
   const nameOf = (a) => a.textContent.trim() || a.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
   const links = [...win.document.querySelectorAll("a[href]")].map((a) => [nameOf(a), a.getAttribute("href")]);
   const names = links.map(([name]) => name);
   assert.equal(names[0], "Skip to main content");
-  assert.ok(names.findIndex((n) => n.includes("GOV.UK")) > 0);
-  assert.deepEqual(links.find(([n]) => n === "Prison Intelligence"), ["Prison Intelligence", SETTINGS.glassOrigin + "/"]);
+  assert.ok(names[1].includes("GOV.UK"));
   assert.deepEqual(links.find(([n]) => n === "Accessibility statement"), [
     "Accessibility statement",
     SETTINGS.glassOrigin + "/accessibility-statement.html",
   ]);
-  assert.ok(names.indexOf("Cookies") > names.indexOf("Prison Intelligence"));
+  assert.ok(names.indexOf("Cookies") > names.indexOf("Accessibility statement"));
   const phase = win.document.querySelector('[aria-label="Service phase"]');
   assert.ok(phase && phase.textContent.includes("Beta"));
+});
+
+// ADR-132 Amendment 5 (the owner's ruling of 4 November 2026): no service-name band under the GOV.UK
+// header, here as in the Glass; the service is named in the page title, as the Glass's is.
+test("no service-name band is drawn, and the page title names the service", () => {
+  const win = page({ brand: "govuk", settings: SETTINGS });
+  assert.equal(win.document.querySelector(".govuk-service-navigation"), null);
+  const names = [...win.document.querySelectorAll("a[href]")].map((a) => a.textContent.trim());
+  assert.ok(!names.includes("Prison Intelligence"));
+  assert.equal(win.document.title, "Prison Intelligence – GOV.UK");
+});
+
+test("without a service name the title falls back as the Glass's does", () => {
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, serviceName: null, organisation: "Ministry of Examples" } });
+  assert.equal(win.document.title, "Ministry of Examples – GOV.UK");
+  assert.equal(win.document.querySelector(".govuk-service-navigation"), null);
 });
 
 test("the skip link's target is the page's main content, focusable", () => {
@@ -76,8 +91,10 @@ test("the skip link's target is the page's main content, focusable", () => {
 });
 
 test("a service name is text, never markup", () => {
-  const win = page({ brand: "govuk", settings: { ...SETTINGS, serviceName: "<img src=x onerror=alert(1)>" } });
+  const hostile = "<img src=x onerror=alert(1)>";
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, serviceName: hostile } });
   assert.equal(win.document.querySelector("img[src=x]"), null);
+  assert.equal(win.document.title, `${hostile} – GOV.UK`);
 });
 
 const SIGN_IN = readFileSync(new URL("../../../OspreyFlow_Core/harness/sign_in_form.js", import.meta.url), "utf8");

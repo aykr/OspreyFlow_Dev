@@ -56,7 +56,7 @@ describe("under the GOV.UK brand", () => {
     expect(screen.queryByRole("button", themeButton)).toBeNull();
   });
 
-  it("the sign-in page draws no OspreyFlow wordmark, since the GOV.UK header names the service", () => {
+  it("the sign-in page draws no OspreyFlow wordmark under the GOV.UK header", () => {
     applyBrand("govuk");
     render(<SignInScreen onSignIn={() => undefined} />);
     expect(document.querySelector(".welcome-header__wordmark")).toBeNull();

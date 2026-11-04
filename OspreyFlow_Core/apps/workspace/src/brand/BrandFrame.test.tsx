@@ -46,15 +46,26 @@ describe("under the OspreyFlow brand", () => {
 });
 
 describe("under the GOV.UK brand", () => {
-  it("reads skip link, GOV.UK header, service name, the Glass, then the footer", () => {
+  it("reads skip link, GOV.UK header, the Glass, then the footer", () => {
     applyBrand("govuk");
     const { container } = frame(GOVUK);
     const stops = tabStops(container);
     expect(stops[0]).toBe("Skip to main content");
-    expect(stops.indexOf("Prison Intelligence")).toBeGreaterThan(0);
-    expect(stops.indexOf("Inside the Glass")).toBeGreaterThan(stops.indexOf("Prison Intelligence"));
+    expect(stops[1]).toContain("GOV.UK");
+    expect(stops[2]).toBe("Inside the Glass");
     expect(stops.indexOf("Accessibility statement")).toBeGreaterThan(stops.indexOf("Inside the Glass"));
     expect(stops.indexOf("Cookies")).toBeGreaterThan(stops.indexOf("Accessibility statement"));
     expect(screen.getByRole("region", { name: "Service phase" })).toBeTruthy();
+  });
+
+  // ADR-132 Amendment 5 (the owner's ruling of 4 November 2026): the service-name band under the
+  // GOV.UK header is gone, to give the workspace its height back; the name stays in the page title.
+  it("draws no service-name band, and names the service in the page title", () => {
+    applyBrand("govuk");
+    document.title = "OspreyFlow — The Glass";
+    const { container } = frame(GOVUK);
+    expect(container.querySelector(".govuk-service-navigation")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Prison Intelligence" })).toBeNull();
+    expect(document.title).toBe("Prison Intelligence – GOV.UK");
   });
 });
