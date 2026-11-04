@@ -36,8 +36,14 @@ update. Work not yet in a release is listed under *Unreleased*.
   copy file by file, and starts each store on its named volume only once it holds the same
   databases (or keys) as before. It needs room for a second copy of the stores' data. The old
   volumes are kept, and named, with the command to remove them once the deployment works as before
-  (administration guide §14.1). A move that fails removes nothing and says why; an update then
-  rolls back to the previous release on its own, untouched data.
+  (administration guide §14.1). Valkey's data, which its image keeps inside its container, is
+  copied from the stopped container and checked like the rest, so its working sets and queues
+  (which no backup holds) are kept. A move that fails removes nothing, says why, and puts back
+  every file the command wrote, so `ospreyflow start` runs the deployment on its old data; an
+  update then rolls back to the previous release on its own, untouched data.
+- **A restore starts the identity provider again before it brings the accounts back.** A Keycloak
+  left running while its database was replaced refused the restore ("could not authenticate to
+  Keycloak: 500").
 
 ## v0.4.10 — 2026-11-04
 

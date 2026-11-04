@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.23** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.24** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.24 | 2026-11-04 | As found on the first server (ADR-114 Amendment 35 point 7): §9.5, Valkey's data in its container is moved too (through a committed image); the move checks each store apart and never replaces a container or writes a file of the deployment's; a refused move has the caller put back every file it wrote (`FilesHeld`); and the tests that fail if any of it breaks. |
 | 1.23 | 2026-11-04 | New §9.5, where the stores keep their data in a Lite or Small `compose.yaml` (ADR-114 Amendment 35): each store's named volume, what stays on its image's unnamed volumes, the one-time move (`harness/store_volumes.py`) and the tests that fail if a store loses its volume. |
 | 1.22 | 2026-11-04 | Describes v0.4.10. No change to its content. |
 | 1.21 | 2026-11-04 | §9.4: the `ollama` service keeps the model loaded on a GPU (`OLLAMA_KEEP_ALIVE=-1`). |
@@ -795,19 +796,29 @@ a restart. The volumes are added to the compose document alone (`name_the_stores
 translation of the same services keeps its own claims (`harness/cluster.py`'s `CLAIMS`). A store a
 deployment does not run gets no volume.
 
-**The one-time move.** A deployment rendered before kept the stores on unnamed volumes and
-OpenSearch inside its container. `scripts.refresh`'s `_stores_named` adds the volumes to its
+**The one-time move.** A deployment rendered before kept PostgreSQL and ArcadeDB on unnamed volumes,
+and Valkey and OpenSearch inside their containers. `scripts.refresh`'s `_stores_named` adds the volumes to its
 `compose.yaml` (`update` and `start --build` take their files from it), and `harness.store_volumes`
 moves the data before the next `up` — wherever `harness.ingest_uploads` runs: `harness.apply`,
 `scripts.refresh`, the `ospreyflow` command's `start` and `switch`, and `harness.update` after its
-backup and pull. It copies with the store's own image by ID, checks both sides entry by entry
+backup and pull. It copies with the store's own image by ID (Valkey's data, in its container's
+layer, from the stopped container committed to a temporary image), checks both sides entry by entry
 (owner, group, mode, kind, SHA-256), and compares each store's databases (or Valkey's keys that do
-not expire) before and after; it never removes the old volume. In the test suite it is off
-(`tests/conftest.py`); its own tests turn it on against a Docker stand-in.
+not expire) before and after, the after in a container of its own (`compose run --no-deps`); it
+never removes the old volume, never replaces a container of the deployment's and never writes one
+of its files. A caller that wrote the deployment's files before it (`harness.apply`,
+`scripts.refresh`) holds them first (`store_volumes.FilesHeld`) and puts them back when the move is
+refused, so the compose file names the stores' volumes only once their data is in them. In the test
+suite it is off (`tests/conftest.py`); its own tests turn it on against a Docker stand-in.
 
 **The tests that fail if this breaks.** `tests/harness/test_store_volumes.py`:
 `test_every_store_has_its_named_volume_on_lite_and_small` (a store left on an unnamed volume),
 `test_the_move_keeps_every_stores_data_with_owners_and_modes`, `test_a_second_move_does_nothing`,
-`test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one`, and the stand-in's own
-`test_the_stand_in_keeps_anonymous_volumes_on_recreate_and_not_for_a_new_container` and
-`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`.
+`test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one`,
+`test_a_refused_move_leaves_the_files_as_they_were_and_start_runs_on_the_old_data` (through the
+real `start --build`, then `start`), and the stand-in's own
+`test_the_stand_in_keeps_anonymous_volumes_on_recreate_and_not_for_a_new_container`,
+`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`,
+`test_the_stand_in_valkey_keeps_its_data_in_its_container` and
+`test_the_stand_in_compose_gives_a_named_volume_that_is_not_there_empty`. A restore starts Keycloak
+again after PostgreSQL: `tests/harness/test_restore_identity_provider.py`.
