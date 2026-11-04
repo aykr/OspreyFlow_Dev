@@ -8,6 +8,11 @@ pins every image by the lock's digest, pulls, starts, and verifies. A failure af
 back: the old commit and files put back, the stores emptied and the backup restored, the old
 version verified — or, if that fails too, exactly where things stand is said.
 
+Between the pull and the start, a deployment whose stores' data is not yet in their named volumes
+has it moved there once (`harness.store_volumes`, ADR-114 Amendment 35). A move that fails before
+any store has started on a named volume rolls back without emptying anything: the old version
+starts on its own data, which never left its volumes.
+
 `--check` asks the user repository's GitHub releases from the machine this runs on and writes the
 notice the Conduit reads (`state/update.json`); the deployment itself never calls out. The version
 checked is the one the deployment was rendered with (`OSPREY_RELEASE_VERSION` in its
@@ -30,7 +35,7 @@ from typing import Any
 
 import yaml
 
-from harness import ingest_uploads, model_downloads
+from harness import ingest_uploads, model_downloads, store_volumes
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
     GITHUB_API,
@@ -432,10 +437,13 @@ def apply_update(
         pin_images(directory, prepared.lock, prepared.references)
         if prepared.pull:
             _ok(host, [*compose, "pull"], "pull the release's images")
+        never = () if prepared.pull else ("--pull", "never")
+        # ADR-114 Amendment 35: the stores' data moved into their named volumes, once, after the
+        # backup and before anything starts, so a failure rolls back.
+        moved = store_volumes.move(directory / "compose.yaml", run=host.run, up_extra=never)
         # Defect 9 (ADR-114 Amendment 33): the release's `up` would make `ollama-models` again for
         # a changed pull, but start the gateway and the Conduit on the new model beside it.
         steps = model_downloads.steps_to_fetch(pulls_before, directory / "compose.yaml")
-        never = () if prepared.pull else ("--pull", "never")
         for argv in model_downloads.fetch_argvs(compose, steps, force=False, extra=never):
             _ok(host, argv, f"fetch the new model ({', '.join(steps)}; ospreyflow logs has why)")
         _ok(host, up, "start the release")
@@ -454,6 +462,16 @@ def apply_update(
                 _ok(host, [*compose, "restart", service], "start the release")
                 _ok(host, up, "start the release")
         verify_running(host, directory, prepared.lock, prepared.image_ids)
+    except store_volumes.StoresNotMoved as failed:
+        print(
+            f"ospreyflow: the update to {tag} failed at 'move the stores to named volumes': "
+            f"{failed.words()}",
+            file=sys.stderr,
+        )
+        if not failed.started:
+            # Nothing was started on a named volume: the old version's data never left its volumes.
+            return _roll_back_untouched(host, directory, repo, point, commit, backup, current)
+        return _roll_back(host, directory, repo, point, commit, backup, current, made=failed.made)
     except UpdateFailed as failed:
         print(
             f"ospreyflow: the update to {tag} failed at '{failed.step}': {failed.why}",
@@ -466,6 +484,8 @@ def apply_update(
         notice.update(current=tag, update_available=bool(latest) and newer(str(latest), tag))
         write_notice(directory, notice)
     print(f"Updated to {tag}. The backup taken before it is {backup}.")
+    if moved.removal_words():
+        print(moved.removal_words())
     return 0
 
 
@@ -516,8 +536,48 @@ def make_bundle_for(
     return 0
 
 
-def _roll_back(
+def _roll_back_untouched(
     host: Host, directory: Path, repo: Path, point: Path, commit: str, backup: Path, version: str
+) -> int:
+    """ADR-114 Amendment 35 point 4: the stores' move failed before any store started on a named
+    volume, so every store's data is still in its own volume, as the old version left it. The old
+    commit and files are put back and the old version started on that data; nothing is emptied
+    and nothing restored."""
+    compose = _compose_argv(directory)
+    try:
+        _ok(
+            host, ["git", "-C", str(repo), "checkout", "--quiet", commit], "put the old commit back"
+        )
+        _put_back(directory, point)
+        _ok(host, [*compose, "up", "-d", "--wait"], "start the old version")
+        verify_running(host, directory, None)
+    except UpdateFailed as failed:
+        print(
+            f"ospreyflow: The rollback did not finish, at '{failed.step}': {failed.why}. The "
+            f"deployment's files are those of {version} (kept in {point}); its data was never "
+            f"moved and is still in its own volumes, and the backup {backup} holds it too. Start "
+            "it with: ospreyflow start",
+            file=sys.stderr,
+        )
+        return 2
+    print(
+        f"ospreyflow: rolled back to {version} on its own data, which was never moved; nothing "
+        f"was restored. The backup taken before the update is {backup}.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def _roll_back(
+    host: Host,
+    directory: Path,
+    repo: Path,
+    point: Path,
+    commit: str,
+    backup: Path,
+    version: str,
+    *,
+    made: Sequence[str] = (),
 ) -> int:
     compose = _compose_argv(directory)
     try:
@@ -530,6 +590,9 @@ def _roll_back(
         # A backup restores into an empty deployment (harness.restore): the stores are emptied only
         # now, with the old images back and the backup on disk.
         _ok(host, [*compose, "down", "-v"], "empty the stores")
+        # ADR-114 Amendment 35 point 4: the named volumes a failed move filled, which the old
+        # compose file does not declare and `down -v` leaves; the backup is what is restored.
+        store_volumes.remove_made(host.run, made)
         _ok(host, [*compose, "up", "-d", "--wait"], "start the old version")
         host.restore(backup)
         verify_running(host, directory, None)

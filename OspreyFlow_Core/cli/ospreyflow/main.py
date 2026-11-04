@@ -947,6 +947,7 @@ def _start(args: argparse.Namespace, ctx: _Context) -> int:
         )
     else:
         _uploads_ready(ctx, directory)
+        _stores_named(ctx, directory)
         ctx.step("start the deployment", [*compose(directory), "up", "-d", "--wait"])
     return 0
 
@@ -957,6 +958,16 @@ def _uploads_ready(ctx: _Context, directory: Path) -> None:
     ctx.step(
         "prepare the upload folder",
         [*ctx.python, "-m", "harness.ingest_uploads", str(directory / "compose.yaml")],
+    )
+
+
+def _stores_named(ctx: _Context, directory: Path) -> None:
+    """ADR-114 Amendment 35: a deployment whose stores' data is not yet in their named volumes has
+    it moved there once, before `up` (`harness.store_volumes`, which says why when it cannot; the
+    stores are then never started on empty named volumes beside their data)."""
+    ctx.step(
+        "move the stores' data to named volumes",
+        [*ctx.python, "-m", "harness.store_volumes", str(directory / "compose.yaml")],
     )
 
 
@@ -1063,6 +1074,7 @@ def _switch(args: argparse.Namespace, ctx: _Context) -> int:
             print(f"Stopping {name}, so this one has the machine to itself.")
             ctx.step(f"stop {name}", [*compose(folder), "stop"])
     _uploads_ready(ctx, ctx.deployed())
+    _stores_named(ctx, ctx.deployed())
     ctx.step("start the deployment", [*compose(ctx.deployed()), "up", "-d", "--wait"])
     named.remember(ctx.env, ctx.target.name)
     address = ctx.origin()

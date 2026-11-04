@@ -51,6 +51,12 @@ def _uploads(rig: Rig) -> list[str]:
     return [python, "-m", "harness.ingest_uploads", str(rig.deployment / "compose.yaml")]
 
 
+def _stores(rig: Rig) -> list[str]:
+    """The step after it (ADR-114 Amendment 35): the stores' data moved to named volumes, once."""
+    python = str(rig.product / ".venv" / "bin" / "python")
+    return [python, "-m", "harness.store_volumes", str(rig.deployment / "compose.yaml")]
+
+
 def _ps(*rows: tuple[str, str, str]) -> str:
     return "\n".join(
         json.dumps({"Service": s, "State": state, "Health": health}) for s, state, health in rows
@@ -63,6 +69,7 @@ def test_start_and_stop_drive_compose_with_the_deployments_env_file(rig: Rig) ->
     assert rig("stop") == 0
     assert rig.runner.argvs() == [
         _uploads(rig),
+        _stores(rig),
         [*_compose(rig), "up", "-d", "--wait"],
         [*_compose(rig), "stop"],
     ]
@@ -122,6 +129,7 @@ def test_the_dashed_spelling_is_an_alias(rig: Rig) -> None:
     assert rig("--stop") == 0
     assert rig.runner.argvs() == [
         _uploads(rig),
+        _stores(rig),
         [*_compose(rig), "up", "-d", "--wait"],
         [*_compose(rig), "stop"],
     ]
@@ -266,6 +274,7 @@ def test_switch_stops_the_other_running_deployment_then_starts_and_opens_this_on
     assert rig.runner.argvs() == [
         [*other_compose, "stop"],
         _uploads(rig),
+        _stores(rig),
         [*_compose(rig), "up", "-d", "--wait"],
     ]
     assert rig.opened == ["http://ospreyflow.localhost"]
@@ -276,7 +285,11 @@ def test_switch_with_nothing_else_running_only_starts_this_one(rig: Rig) -> None
     own = ("osprey-local-lite", "exited(18)", rig.deployment / "compose.yaml")
     rig.responses["ls"] = [(0, _ls(own))]
     assert rig("switch") == 0
-    assert rig.runner.argvs() == [_uploads(rig), [*_compose(rig), "up", "-d", "--wait"]]
+    assert rig.runner.argvs() == [
+        _uploads(rig),
+        _stores(rig),
+        [*_compose(rig), "up", "-d", "--wait"],
+    ]
 
 
 def test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up(rig: Rig) -> None:
@@ -284,6 +297,15 @@ def test_a_start_whose_upload_folder_cannot_be_prepared_brings_nothing_up(rig: R
     rig.runner.fail["harness.ingest_uploads"] = 1
     assert rig("start") != 0
     assert rig.runner.argvs() == [_uploads(rig)]
+
+
+def test_a_start_whose_stores_cannot_be_moved_brings_nothing_up(rig: Rig) -> None:
+    """ADR-114 Amendment 35 point 4: a refused move stops the start before `up`, so the stores are
+    never started on empty named volumes beside their data."""
+    rig.install_deployment()
+    rig.runner.fail["harness.store_volumes"] = 1
+    assert rig("start") != 0
+    assert rig.runner.argvs() == [_uploads(rig), _stores(rig)]
 
 
 def test_switch_list_names_each_deployment_its_state_and_address(

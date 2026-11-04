@@ -857,3 +857,46 @@ def test_an_install_whose_model_download_is_refused_fails_and_says_so(
     assert "stage 'models'" in said.err and "ollama-models" in said.err
     assert "local-lite ready in" not in said.out
     assert seen == []
+
+
+def test_apply_moves_the_stores_before_it_starts_anything_and_then_starts_it_all(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 35: `ospreyflow apply` on a deployment rendered before the stores had
+    named volumes moves their data first (before any `up`); the move stops the whole deployment, so
+    all of it is started again, not only the services whose files changed."""
+    from harness import store_volumes
+
+    seen: list[str] = []
+
+    def move(compose_file: Path, **kwargs: Any) -> store_volumes.Moved:
+        seen.append(f"move, {len(deployment.compose.ups())} up(s) before")
+        return store_volumes.Moved(services=["postgres"], left=["a1b2c3"])
+
+    monkeypatch.setattr(apply.store_volumes, "move", move)
+    deployment.write_config(GEMINI)
+    assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
+    assert seen == ["move, 0 up(s) before"]
+    targeted, everything = deployment.compose.ups()
+    assert "--force-recreate" in targeted
+    assert everything[everything.index("up") :] == ["up", "-d", "--wait"]
+
+
+def test_a_refused_move_starts_nothing(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from harness import store_volumes
+
+    def refuse(compose_file: Path, **kwargs: Any) -> store_volumes.Moved:
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", started=False)
+
+    monkeypatch.setattr(apply.store_volumes, "move", refuse)
+    deployment.write_config(GEMINI)
+    with pytest.raises(apply.ApplyFailed, match="No space left on device"):
+        apply.reapply(
+            deployment.config,
+            deployment.out_root,
+            environ={"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY},
+            ask_secret=None,
+        )
+    assert deployment.compose.ups() == []
