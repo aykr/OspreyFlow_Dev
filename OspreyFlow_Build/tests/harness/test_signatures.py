@@ -371,3 +371,56 @@ def test_a_release_signed_by_the_withdrawn_homes_workflow_is_refused(tmp_path: P
     with pytest.raises(SignatureRefused):
         verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(WITHDRAWN_HOME, "v0.4.3")))
     verify_release(lock, identity, Cosign(_cosign_holding_a_signature_by(HOME, "v0.4.3")))
+
+
+# --- cosign's image reads what the caller mounts (step 20 unit 10, 4 November) -------------------
+
+
+class _LinuxDocker:
+    """`docker run` as Linux answers it: the container's user is the image's own (cosign's is 65532)
+    unless `--user` names another, and a mounted folder the caller owns with mode 700 is closed to
+    any other user. Docker Desktop on a Mac shares files without their permissions, which is why
+    v0.4.5's install passed there and was refused on the first Linux server."""
+
+    IMAGE_USER = "65532"
+
+    def __init__(self) -> None:
+        self.asked: list[list[str]] = []
+
+    def __call__(self, argv: Sequence[str]) -> tuple[int, str]:
+        argv = list(argv)
+        self.asked.append(argv)
+        user = argv[argv.index("--user") + 1].split(":")[0] if "--user" in argv else self.IMAGE_USER
+        mounts = [argv[i + 1].split(":")[0] for i, a in enumerate(argv) if a == "-v"]
+        for host in mounts:
+            folder = Path(host)
+            info = folder.stat()
+            if str(info.st_uid) != user and not info.st_mode & 0o005:
+                return 1, "error during command execution: open /blob: permission denied"
+        return 0, "Verified OK"
+
+
+def test_the_lock_is_checked_by_cosigns_image_from_a_private_temporary_folder() -> None:
+    """Red before 4 November: `update.verify_lock` writes the lock into a `TemporaryDirectory`
+    (mode 700, the caller's), and cosign's image ran as its own user, so every install and update on
+    a Linux server was refused with "permission denied" before any image was checked."""
+    from harness.update import verify_lock
+
+    docker = _LinuxDocker()
+    verify_lock(Cosign(docker), "images: []\n", "{}", Keyless("acme", "ospreyflow", "v0.5.0"))
+    assert docker.asked
+
+
+def test_every_cosign_container_runs_as_the_caller(tmp_path: Path) -> None:
+    """The same for each other way cosign's image is run: an image's check with a key mounted, an
+    image as `cosign save` kept it, and `cosign save` writing into the caller's folder."""
+    private = tmp_path / "private"
+    (private / "keys").mkdir(parents=True)
+    (private / "saved").mkdir()
+    for folder in (private, private / "keys", private / "saved"):
+        folder.chmod(0o700)
+    key = PublicKey(private / "keys" / "cosign.pub")
+    docker = _LinuxDocker()
+    assert Cosign(docker).verify(f"ghcr.io/acme/api@{D}", key)[0]
+    assert Cosign(docker).verify_local(private / "saved" / "api", key)[0]
+    assert Cosign(docker).save(f"ghcr.io/acme/api@{D}", private / "saved" / "api")[0]
