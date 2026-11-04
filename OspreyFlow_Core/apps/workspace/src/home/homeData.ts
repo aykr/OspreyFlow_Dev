@@ -44,7 +44,7 @@ export interface HomeInputs {
   lastCaseId: string | null;
   perCase: Record<string, CaseFigures>;
   /** Absent where the reader may not read it. */
-  system?: { components: { name: string; ok: boolean }[] } | Unreadable;
+  system?: { components: { name: string; ok: boolean; notice?: string | null }[] } | Unreadable;
   dashboards?: DashboardLite[] | Unreadable;
 }
 
@@ -74,7 +74,7 @@ export interface HomeSummary {
   attention: AttentionRow[];
   recent: RecentCase[];
   /** The Admin panel's picture: each component and whether it answered; `null` where not read. */
-  services: { name: string; ok: boolean }[] | null;
+  services: { name: string; ok: boolean; notice?: string | null }[] | null;
   /** Rows still held across the reader's cases, for the Studio panel's picture. */
   held: number | null;
 }
@@ -170,9 +170,11 @@ export function summariseHome(input: HomeInputs): HomeSummary {
   let services: HomeSummary["services"] = null;
   if (input.system !== undefined) {
     if (readable(input.system)) {
-      services = input.system.components.map(({ name, ok }) => ({ name, ok }));
+      services = input.system.components.map(({ name, ok, notice }) => (notice ? { name, ok, notice } : { name, ok }));
       const healthy = services.filter((s) => s.ok).length;
       admin.push({ tone: healthy === services.length ? "ok" : "warn", text: `${healthy} of ${services.length} services healthy` });
+      // ADR-114 Amendment 36: what Admin -> System says to do (the Conduit's credential refused).
+      for (const s of services) if (!s.ok && s.notice) admin.push({ tone: "error", text: s.notice });
     } else {
       admin.push({ tone: "error", text: "The services could not be asked" });
     }
@@ -265,7 +267,7 @@ export async function loadHome(args: {
     );
   }
   const [system, dashboards] = await Promise.all([
-    may("administer_system") ? get<{ components: { name: string; ok: boolean }[] }>("/v1/admin/system") : undefined,
+    may("administer_system") ? get<{ components: { name: string; ok: boolean; notice?: string | null }[] }>("/v1/admin/system") : undefined,
     may("manage_dashboards") ? get<DashboardLite[]>("/v1/admin/dashboards") : undefined,
   ]);
   return { me: args.me, now: args.now ?? new Date(), cases, lastCaseId: args.lastCaseId, perCase, system, dashboards };

@@ -50,6 +50,7 @@ class _Realm:
         self.emails: list[tuple[str, list[str]]] = []
         self.passwords: dict[str, tuple[str, bool]] = {}
         self.logged_out: list[str] = []
+        self.token_requests = 0
 
 
 def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
@@ -81,9 +82,17 @@ def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
             url = urlparse(self.path)
             if url.path.endswith("/token"):
                 body = str(self._body())
+                realm.token_requests += 1
                 if f"client_id={CLIENT_ID}" in body and f"client_secret={CLIENT_SECRET}" in body:
                     return self._send(200, {"access_token": BEARER})
-                return self._send(401, {"error": "invalid_client"})
+                # Keycloak 26.0's answers: a client it holds with another secret (the realm wiped
+                # and imported again, step 18a's D2) is 401 `unauthorized_client`; a client it does
+                # not hold is 401 `invalid_client`. Neither repeats the secret sent.
+                said = "Invalid client or Invalid client credentials"
+                if f"client_id={CLIENT_ID}" in body:
+                    refused = {"error": "unauthorized_client", "error_description": said}
+                    return self._send(401, refused)
+                return self._send(401, {"error": "invalid_client", "error_description": said})
             if not self._authorised():
                 return
             realm.calls.append(f"POST {url.path}")
@@ -279,6 +288,57 @@ async def test_a_refused_token_is_said_not_swallowed(idp: tuple[IdentityAdmin, _
         await admin.list_people()
     await admin.aclose()
 
+
+
+# --- ADR-114 Amendment 36 (build order step 28 (d)): can the Conduit act for people? -------------
+
+
+async def test_the_conduits_credential_is_said_accepted_refused_or_not_known(
+    idp: tuple[IdentityAdmin, _Realm],
+) -> None:
+    admin, _ = idp
+    accepted = await admin.credential_check()
+    assert (accepted.state, accepted.detail) == ("accepted", None)
+    await admin.aclose()
+
+    # D2: the realm imported afresh holds a secret Keycloak made, so the deployment's is refused.
+    wrong = "the-deployments-own-secret-that-keycloak-no-longer-holds"
+    settings = admin._settings  # noqa: SLF001
+    refused_admin = IdentityAdmin(
+        dataclasses.replace(settings, oidc_token_exchange_client_secret=wrong)  # type: ignore[type-var]
+    )
+    refused = await refused_admin.credential_check()
+    assert refused.state == "refused"
+    said = json.dumps(dataclasses.asdict(refused))
+    assert wrong not in said and CLIENT_SECRET not in said
+    await refused_admin.aclose()
+
+    # Nothing answering at the address: an outage, not a refusal (ADR-044's distinction).
+    gone = IdentityAdmin(
+        dataclasses.replace(settings, oidc_token_exchange_url="http://127.0.0.1:9/token")  # type: ignore[type-var]
+    )
+    assert (await gone.credential_check()).state == "unreachable"
+    await gone.aclose()
+
+
+async def test_the_credential_check_is_asked_at_most_once_in_thirty_seconds(
+    idp: tuple[IdentityAdmin, _Realm],
+) -> None:
+    """Admin -> System is asked as the screen opens and on each *Ask again*: one token request per
+    half minute at most, whatever the answer."""
+    admin, realm = idp
+    now = [1000.0]
+    admin._clock = lambda: now[0]  # noqa: SLF001
+    first = await admin.credential_check()
+    await admin.credential_check()
+    assert realm.token_requests == 1
+    now[0] += 29.0
+    assert await admin.credential_check() == first
+    assert realm.token_requests == 1
+    now[0] += 2.0
+    await admin.credential_check()
+    assert realm.token_requests == 2
+    await admin.aclose()
 
 
 # --- ADR-114 Amendment 5 (stage B4b): invite, access, disable, enable, reset sign-in ---------------

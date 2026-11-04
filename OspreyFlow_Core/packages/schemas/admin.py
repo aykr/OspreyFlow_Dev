@@ -112,6 +112,9 @@ class ComponentHealth(BaseModel):
     ok: bool
     millis: int = Field(ge=0)
     detail: str | None = None
+    #: What to do about it, in words, shown in place of "not answering" (ADR-114 Amendment 36):
+    #: a part that answered and is wrong is not a part that did not answer.
+    notice: str | None = None
 
 
 class ModelRoleStatus(BaseModel):

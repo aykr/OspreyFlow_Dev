@@ -5,6 +5,7 @@ export type Name = string;
 export type Ok = boolean;
 export type Millis = number;
 export type Detail = string | null;
+export type Notice = string | null;
 export type Components = ComponentHealth[];
 export type Role = "extraction" | "vision" | "transcription" | "embedding";
 export type Model = string;
@@ -48,6 +49,7 @@ export interface ComponentHealth {
   ok: Ok;
   millis: Millis;
   detail?: Detail;
+  notice?: Notice;
   [k: string]: unknown;
 }
 /**

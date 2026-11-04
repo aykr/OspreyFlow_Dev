@@ -24613,3 +24613,48 @@ provider on its button when the deployment gives its label" and "keeps the plain
 no label"; rule 13: `keyboard/sign-in.spec.ts` "organisation sign-in named by its label goes to that
 provider by keyboard" (`continue-with-the-organisations-named-provider`), shown red against the old
 wording.
+
+### ADR-114, Amendment 36 (4 November 2026) — System health says when the Conduit cannot act for people (build order step 28 (d))
+
+**The owner's ruling of 4 November 2026** (open question 25): a System health line for step 18a's D2
+— the Conduit's own client credential refused by the identity provider after a wipe or a re-import
+(Amendment 32), when every rule, hotlist and list screening run is refused while the screens look
+well.
+
+1. **The line.** Admin → System gains **Acting for people**: green when the identity provider grants
+   the Conduit's client credential; when it refuses, red with **"The Conduit cannot act for people:
+   run `ospreyflow repair-sign-in`"**; when the identity provider did not answer, red with "Not
+   known: the identity provider did not answer" (an outage is not a refusal, ADR-044). The
+   **Identity provider** line is now green when Keycloak answered, refused or not — before, a
+   refused credential showed it as "not answering", which it was not.
+2. **The check** (`services/api/identity_admin.py`, `IdentityAdmin.credential_check`): one
+   client-credentials request with the Conduit's own settings — the request the Conduit makes before
+   acting for anyone — read as *accepted* (200), *refused* (400 or 401: Keycloak 26 answers 401
+   `unauthorized_client` for a client it holds with another secret, `invalid_client` for one it does
+   not hold) or *unreachable* (no answer, or any other status). **Cheap and cached:** it is the one
+   request the System screen already made for the Identity provider line, now answering both, and its
+   answer is kept for 30 seconds (`CREDENTIAL_CHECK_SECONDS`), so *Ask again* and Home's figures make
+   at most one request per half minute; after `repair-sign-in`, the line is green within that.
+   **Never the secret:** the line's words are fixed, and neither the secret nor Keycloak's answer is
+   repeated (`IdentityAdminRefused`'s words, as before).
+3. **The Glass.** `ComponentHealth` gains `notice`: what to do, in words, which Admin → System shows in
+   place of "not answering: …" (a part that answered and is wrong is not a part that did not
+   answer). Home's administration figures say the notice beside "N of M services healthy", and its
+   picture of the services says "needs attention" for that line.
+4. **Who sees it.** The line is part of `GET /v1/admin/system`, behind `administer_system` like the
+   rest of the screen (ADR-112): the Admin role and a single `right:administer_system` grant; no
+   other role, and no person without a role.
+
+**Tests**, red first (`s28d_*`): `tests/services/api/test_identity_admin.py` (its stand-in now refuses
+as Keycloak 26.0 does: `unauthorized_client` for the held client with another secret,
+`invalid_client` for an unknown one) `::test_the_conduits_credential_is_said_accepted_refused_or_not_known`
+(the secret in no field) and `::test_the_credential_check_is_asked_at_most_once_in_thirty_seconds`;
+`tests/services/api/test_admin_routes.py::test_a_refused_credential_says_what_to_run_and_the_identity_provider_still_answered`,
+`::test_an_accepted_credential_raises_no_notice_and_an_unreachable_one_is_not_called_refused`, and,
+rule 4, `::test_only_a_role_that_sees_system_health_sees_the_credential_line` over every role of both
+rights tables, a single-right grant, another single right and no role (shown red with the route's
+right check removed: 9 failed); `src/admin/AdminPlace.test.tsx` "says when the Conduit cannot act for
+people, and what to run, in place of 'not answering'"; `src/home/homeData.test.ts` "says what a part
+needs done, beside the count". No Glass action is added (rule 13). **Not proved here:** the line
+against a real Keycloak after a real wipe; the stand-in's two answers are Keycloak 26.0's as recorded
+in step 18a's live check on GOV.UK and the drop 2 tests.

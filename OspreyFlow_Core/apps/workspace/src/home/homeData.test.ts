@@ -64,6 +64,29 @@ describe("Home's figures", () => {
     expect(home.services).toEqual([{ name: "Graph store", ok: true }, { name: "Cache", ok: true }, { name: "Identity", ok: false }]);
   });
 
+  // ADR-114 Amendment 36: what Admin -> System says to do is said on Home too.
+  it("says what a part needs done, beside the count", () => {
+    const refused = summariseHome({
+      ...BASE,
+      dashboards: [],
+      system: {
+        components: [
+          { name: "Identity provider", ok: true },
+          { name: "Acting for people", ok: false, notice: "The Conduit cannot act for people: run `ospreyflow repair-sign-in`" },
+        ],
+      },
+    });
+    expect(refused.admin.map((f) => [f.tone, f.text])).toEqual([
+      ["warn", "1 of 2 services healthy"],
+      ["error", "The Conduit cannot act for people: run `ospreyflow repair-sign-in`"],
+    ]);
+    expect(refused.services?.[1]).toEqual({
+      name: "Acting for people",
+      ok: false,
+      notice: "The Conduit cannot act for people: run `ospreyflow repair-sign-in`",
+    });
+  });
+
   it("lists what needs the reader, newest first: their own and unclaimed alerts, held rows by case, failing pulls", () => {
     expect(home.attention.map((a) => [a.place, a.title])).toEqual([
       ["admin", "osprey-dashboard-compliance-board is not updating"],
