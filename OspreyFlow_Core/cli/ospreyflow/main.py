@@ -39,7 +39,17 @@ from .answers import (
     osprey_config,
 )
 from .cloud import build_enterprise, build_small
-from .doctor import Check, Probes, ServerPlan, SystemProbes, format_check, run_doctor
+from .doctor import (
+    Check,
+    GpuPlan,
+    Probes,
+    ServerPlan,
+    SystemProbes,
+    format_check,
+    gpu_checks,
+    gpu_plan,
+    run_doctor,
+)
 from .home import (
     CommandRefused,
     deployment_dir,
@@ -357,14 +367,27 @@ def _print_checks(checks: list[Check]) -> bool:
 
 def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
     server = None
+    base = _product_config(product)
+    gpu = gpu_plan(base)
     if args.config is not None:
         raw = _file_or_default_answers(args)
         answers = load_answers(raw, packs=[str(p) for p in raw.get("demo_packs") or ()])
         server = server_plan(answers)
+        gpu = _gpu_of(answers, base)
     ok = _print_checks(
-        run_doctor(args.mode, probes, product=product, cloud=args.cloud, server=server)
+        run_doctor(args.mode, probes, product=product, cloud=args.cloud, server=server, gpu=gpu)
     )
     return 0 if ok else 1
+
+
+def _product_config(product: Path) -> dict[str, object]:
+    """The product's `osprey.yaml`, or nothing where there is none yet (`doctor` may come first)."""
+    return read_config(product) if (product / "osprey.yaml").is_file() else {}
+
+
+def _gpu_of(answers: Answers, base: Mapping[str, Any]) -> GpuPlan | None:
+    """ADR-135 Amendment 1: what the `osprey.yaml` these answers make asks of the GPU."""
+    return gpu_plan(osprey_config(answers, base))
 
 
 def server_plan(answers: Answers) -> ServerPlan | None:
@@ -643,6 +666,7 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
     checks = run_doctor(
         doctor_mode, ctx.probes, product=ctx.product, cloud=args.cloud, ports=named_ports,
         server=server_plan(answers) if own_server else None,
+        gpu=_gpu_of(answers, _product_config(ctx.product)),
     )  # fmt: skip
     if not _print_checks(checks):
         print("Nothing was installed. Fix the above and run ospreyflow install again.")
@@ -894,8 +918,15 @@ def _apply_settings(ctx: _Context) -> int:
     """ADR-137 decision 1: the harness's own `--reapply` — the same rendering an install does, with
     every secret kept and only the services whose files changed started again. No install step is
     run. A newly enabled provider's key comes from `OSPREY_MODEL_KEY_<NAME>` in this terminal, which
-    the harness inherits, or the harness asks for it at a hidden prompt."""
+    the harness inherits, or the harness asks for it at a hidden prompt.
+
+    ADR-135 Amendment 1 decision 4: a GPU asked for is checked first, and nothing is changed if it
+    is not ready."""
     directory = ctx.deployed()
+    plan = gpu_plan(yaml.safe_load(ctx.config_path.read_text(encoding="utf-8")) or {})
+    if plan is not None and not _print_checks(gpu_checks(ctx.probes, plan)):
+        print("Nothing was changed. Fix the above and run ospreyflow apply again.")
+        return 1
     ctx.step(
         "apply the changed settings",
         [*ctx.python, "-m", "harness.apply", "--reapply",
