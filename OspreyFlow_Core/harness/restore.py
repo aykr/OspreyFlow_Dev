@@ -103,6 +103,11 @@ SECONDS_PER_MEGABYTE = 0.35
 #: minute" regardless of the payload.
 MINIMUM_PROJECTED_SECONDS = 20.0
 
+#: Keycloak's token endpoint asked this often, this far apart, once it has been started again after
+#: PostgreSQL is restored (ADR-114 Amendment 35 point 7): healthy is not yet answering.
+KEYCLOAK_ATTEMPTS = 60
+KEYCLOAK_PAUSE_SECONDS = 5.0
+
 
 class RestoreRefused(RuntimeError):
     """A refusal, not a failure. The distinction is the point — see the module docstring."""
@@ -447,6 +452,43 @@ def _set_env_line(env_path: Path, name: str, value: str) -> None:
     env_path.write_text("\n".join([*lines, f"{name}={value}"]) + "\n", encoding="utf-8")
 
 
+def restart_identity_provider(compose_file: Path) -> None:
+    """Keycloak started again once PostgreSQL is restored, and waited on until it is healthy, before
+    the identity is imported (ADR-114 Amendment 35 point 7).
+
+    **As found on the first server (4 November 2026).** A Keycloak that kept running while the
+    PostgreSQL under it was replaced answered its token endpoint `500 unknown_error`, its log saying
+    `relation "offline_user_session" does not exist`: it builds its schema only when it starts, and
+    the database it had built it in was gone. Started again, it built it, and the same identity
+    import succeeded. A restore into a freshly installed deployment had not met this — its
+    Keycloak built its schema at its own start, and the restore leaves Keycloak's own database alone
+    (the backup does not carry it) — so this does not depend on how the deployment got here."""
+    services = (yaml.safe_load(compose_file.read_text(encoding="utf-8")) or {}).get("services")
+    if not isinstance(services, dict) or "keycloak" not in services:
+        return
+    compose = _compose(compose_file)
+    _run([*compose, "restart", "keycloak"], item="identity")
+    _run([*compose, "up", "-d", "--no-deps", "--wait", "keycloak"], item="identity")
+
+
+def _admin_token_when_ready(issuer: str, password: str) -> str:
+    """A master-realm admin token, asked for until Keycloak answers (a restarted Keycloak is
+    healthy a little before its token endpoint answers). A refusal of the password is not waited
+    on: it would not change."""
+    for attempt in range(KEYCLOAK_ATTEMPTS):
+        try:
+            return keycloak_admin.admin_token(
+                issuer=issuer, admin_user="admin", admin_password=password
+            )
+        except keycloak_admin.AdminLoginRefused:
+            raise
+        except keycloak_admin.RealmConfigurationFailed:
+            if attempt + 1 == KEYCLOAK_ATTEMPTS:
+                raise
+            time.sleep(KEYCLOAK_PAUSE_SECONDS)
+    raise AssertionError("unreachable")
+
+
 def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
     """The people and dashboard identities, with their ids (`harness/identity.py`); the demo
     accounts' passwords set again; report-sync's dashboards setting written back."""
@@ -454,10 +496,8 @@ def restore_identity(compose_file: Path, held: Path) -> dict[str, int]:
     issuer = deployment_origins(env_path)[1]
     carried = json.loads(held.read_text(encoding="utf-8"))
     try:
-        token = keycloak_admin.admin_token(
-            issuer=issuer,
-            admin_user="admin",
-            admin_password=_env_value(env_path, "OSPREY_KEYCLOAK_ADMIN_PASSWORD"),
+        token = _admin_token_when_ready(
+            issuer, _env_value(env_path, "OSPREY_KEYCLOAK_ADMIN_PASSWORD")
         )
         summary = identity.import_identity(
             issuer=issuer, realm=REALM, token=token, identity=carried
@@ -605,6 +645,9 @@ def run_restore(
         restore_graph_store(compose_file, archive, database=database)
     roles = by_item.get("postgres-roles", [None])[0]
     restore_postgres_all(compose_file, by_item.get("postgres", []), roles)
+    # ADR-114 Amendment 35 point 7: Keycloak started again on the restored PostgreSQL, so the
+    # identity step below never asks one still holding a database replaced underneath it.
+    restart_identity_provider(compose_file)
     for objects in by_item.get("objects", []):
         restore_object_store(compose_file, objects, work_dir=directory)
     for analytics in by_item.get("analytics", []):

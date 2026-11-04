@@ -50,6 +50,20 @@ def _no_test_gives_a_real_folder_to_the_conduit(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(ingest_uploads, "DOCKER_ENFORCES_OWNERSHIP", False)
 
 
+@pytest.fixture(autouse=True)
+def _no_test_moves_a_real_deployments_stores(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`harness.store_volumes` (ADR-114 Amendment 35) asks Docker for the deployment's containers
+    before every `up` that follows a re-render, and moves their data. A test that drives `apply`,
+    `refresh`, `update` or `start` for another reason must never reach this machine's own Docker, so
+    the move is off; `tests/harness/test_store_volumes.py` and the wiring tests turn it on against
+    their own stand-in for Docker."""
+    try:
+        from harness import store_volumes
+    except ImportError:  # a suite run without the harness on its path
+        return
+    monkeypatch.setattr(store_volumes, "ENABLED", False)
+
+
 DEFAULT_KID = "test-signing-key-1"
 TOKEN_EXCHANGE_CLIENT_ID = "conduit-service-account"
 TOKEN_EXCHANGE_CLIENT_SECRET = "test-client-secret"  # noqa: S105 - test fixture only

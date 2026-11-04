@@ -788,3 +788,101 @@ def test_an_update_keeps_the_owned_images_in_the_releases_own_registry(
 
     services = yaml.safe_load((out / "compose.yaml").read_text())["services"]
     assert {name: services[name]["image"] for name in pinned} == pinned
+
+
+# --- ADR-114 Amendment 35: the stores' named volumes reach a deployment rendered before them ------
+
+
+def _without_store_volumes(out: Path) -> None:
+    """The deployment as rendered up to v0.4.10: the stores on their images' anonymous volumes."""
+    import yaml
+    from harness.render import STORE_VOLUMES
+
+    text = (out / "compose.yaml").read_text()
+    banner = text[: text.index("\nname:") + 1]
+    document = yaml.safe_load(text)
+    for row in STORE_VOLUMES:
+        service = document["services"].get(row.service)
+        if service is None:
+            continue
+        service["volumes"] = [v for v in service.get("volumes", []) if not v.startswith(row.volume)]
+        if not service["volumes"]:
+            del service["volumes"]
+        document["volumes"].pop(row.volume, None)
+    (out / "compose.yaml").write_text(banner + yaml.safe_dump(document, sort_keys=False))
+
+
+def test_the_stores_named_volumes_reach_a_deployment_rendered_before_them(repo: Path) -> None:
+    """`update` and `start --build` take the deployment's files from `files_up_to_date`; without
+    this the stores would stay on anonymous volumes for ever on every existing deployment."""
+    import yaml
+
+    out = _rendered(repo)
+    rendered = yaml.safe_load((out / "compose.yaml").read_text())
+    _without_store_volumes(out)
+    refresh.files_up_to_date(repo)
+    after = yaml.safe_load((out / "compose.yaml").read_text())
+    for service in ("postgres", "arcadedb", "valkey", "opensearch"):
+        assert sorted(after["services"][service].get("volumes", [])) == sorted(
+            rendered["services"][service].get("volumes", [])
+        ), service
+    assert after["volumes"] == rendered["volumes"]
+    before = (out / "compose.yaml").read_bytes()
+    refresh.files_up_to_date(repo)
+    assert (out / "compose.yaml").read_bytes() == before, "a second time changes nothing"
+
+
+def test_start_build_moves_the_stores_before_it_starts_them(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The move after the build (the images it may need are there) and before anything is
+    started; a refused move starts nothing."""
+    from harness import store_volumes
+
+    run = Recorder()
+
+    def move(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
+        run.calls.append(["move", str(compose_file)])
+        return store_volumes.Moved()
+
+    monkeypatch.setattr(refresh.store_volumes, "move", move)
+    refresh.refresh(repo, run=run, register=Registrar())
+    order = [
+        c[0] if c[0] == "move" else next(a for a in c if a in {"build", "up"}) for c in run.calls
+    ]
+    assert order == ["build", "move", "up"]
+
+    def refuse(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+
+    monkeypatch.setattr(refresh.store_volumes, "move", refuse)
+    again = Recorder()
+    with pytest.raises(refresh.RefreshFailed, match="No space left on device"):
+        refresh.refresh(repo, run=again, register=Registrar())
+    assert not any("up" in c for c in again.calls)
+
+
+def test_a_refused_move_puts_back_every_file_start_build_wrote(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 35 point 7, as found on the first server: a refused move left the compose
+    file naming the stores' new volumes, so the next `start` brought them up empty beside their
+    data. Every file is put back byte for byte, the compose file included, and the words say so.
+    (`tests/harness/test_store_volumes.py` drives the same through its Docker stand-in, and the
+    next `start` with it.)"""
+    from harness import store_volumes
+
+    out = _rendered(repo)
+    _without_store_volumes(out)
+    before = {p: p.read_bytes() for p in out.rglob("*") if p.is_file()}
+
+    def refuse(compose_file: Path, **kwargs: object) -> store_volumes.Moved:
+        assert b"postgres-data:" in compose_file.read_bytes(), "the move sees the named volumes"
+        raise store_volumes.StoresNotMoved("postgres: No space left on device", stopped=True)
+
+    monkeypatch.setattr(refresh.store_volumes, "move", refuse)
+    with pytest.raises(refresh.RefreshFailed) as refused:
+        refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert {p: p.read_bytes() for p in out.rglob("*") if p.is_file()} == before
+    assert "the deployment's files are as they were" in str(refused.value)
+    assert "ospreyflow start starts it on that data" in str(refused.value)

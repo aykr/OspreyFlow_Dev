@@ -24,6 +24,26 @@ update. Work not yet in a release is listed under *Unreleased*.
   resolution is on, naming the setting and `ospreyflow apply`. Resolution is the whole
   deployment's setting: the deployment's other demo cases gain no automatic "same as" links either;
   an analyst's own Resolve now still works.
+- **The stores keep their data in named volumes.** PostgreSQL, ArcadeDB (its databases and its
+  settings), Valkey and OpenSearch now each have a volume of their own (`<project>_postgres-data`
+  and so on), on Lite and on Small on a server of your own. Their data had been in unnamed volumes,
+  and OpenSearch's inside its container: kept across a restart, `apply` and `update`, but not by
+  `docker compose down` then `up`, and `uninstall --keep-data` kept volumes a later install never
+  found. Now `uninstall --keep-data` keeps data the next install finds.
+- **An existing deployment's data is moved into them once.** The first `update` (after its
+  backup), `start`, `start --build`, `apply` or install from a newer checkout stops the deployment,
+  copies each store's data with the store's own image keeping every owner and permission, checks the
+  copy file by file, and starts each store on its named volume only once it holds the same
+  databases (or keys) as before. It needs room for a second copy of the stores' data. The old
+  volumes are kept, and named, with the command to remove them once the deployment works as before
+  (administration guide §14.1). Valkey's data, which its image keeps inside its container, is
+  copied from the stopped container and checked like the rest, so its working sets and queues
+  (which no backup holds) are kept. A move that fails removes nothing, says why, and puts back
+  every file the command wrote, so `ospreyflow start` runs the deployment on its old data; an
+  update then rolls back to the previous release on its own, untouched data.
+- **A restore starts the identity provider again before it brings the accounts back.** A Keycloak
+  left running while its database was replaced refused the restore ("could not authenticate to
+  Keycloak: 500").
 
 ## v0.4.10 — 2026-11-04
 

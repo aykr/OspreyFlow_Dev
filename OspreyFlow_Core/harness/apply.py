@@ -60,7 +60,7 @@ import yaml
 from pydantic import ValidationError
 
 from demo_fixtures.datasets import domains_for
-from harness import ingest_uploads, model_downloads, tls_check
+from harness import ingest_uploads, model_downloads, store_volumes, tls_check
 from harness.keycloak_admin import (
     grant_service_account_roles,
     set_demo_admin_password,
@@ -279,6 +279,26 @@ def uploads_ready(compose_file: Path) -> str:
         return ingest_uploads.prepare(compose_file, run=run)
     except ingest_uploads.UploadFolderRefused as refused:
         raise ApplyFailed("uploads", str(refused)) from refused
+
+
+def stores_moved(compose_file: Path, held: store_volumes.FilesHeld) -> store_volumes.Moved:
+    """`harness.store_volumes.move` through this module's own runner, before an `up` (ADR-114
+    Amendment 35): a deployment rendered before the stores had named volumes has their data moved
+    into them once; otherwise it only looks. `held`: the deployment's files as they were before
+    this run wrote them, put back when the move is refused (Amendment 35 point 7), so the compose
+    file never names volumes the stores' data is not in."""
+
+    def run(argv: Sequence[str]) -> tuple[int, str]:
+        try:
+            return 0, _run(list(argv), stage="stores", timeout=7200)
+        except ApplyFailed as failed:
+            return 1, failed.detail
+
+    try:
+        return store_volumes.move(compose_file, run=run)
+    except store_volumes.StoresNotMoved as failed:
+        held.put_back()
+        raise ApplyFailed("stores", failed.words(files_put_back=True)) from failed
 
 
 def compose_services(compose_file: Path) -> list[str]:
@@ -1020,6 +1040,8 @@ def reapply(
         # and waited on, before anything that uses it starts again. From the staged files, so a
         # refused download changes nothing and the next apply sees the same change.
         _fetch_models(model_downloads.commands(compose_file), stage / "compose.yaml")
+        # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
+        held = store_volumes.FilesHeld(out_dir)
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
         move_into_place(stage, out_dir)
@@ -1028,6 +1050,9 @@ def reapply(
     # Whether or not anything restarts: a deployment installed before the upload folder was made the
     # Conduit's has the folder Docker made, root's, and the Conduit sees a change of owner at once.
     uploads_ready(compose_file)
+    # ADR-114 Amendment 35: the stores' data moved into their named volumes once; the move stops
+    # the whole deployment, so all of it is started again afterwards.
+    moved = stores_moved(compose_file, held)
     if restart or removed:
         _run(
             _compose(compose_file)
@@ -1036,6 +1061,8 @@ def reapply(
             + sorted(restart),
             stage="up",
         )
+    if moved.services:
+        _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
     return restart
 
 
@@ -1363,6 +1390,8 @@ def main(
         # is touched (ADR-132, ruling 6).
         try:
             preflight(PreflightContext(config=config, out_dir=stage))
+            # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
+            held = store_volumes.FilesHeld(out_dir)
             move_into_place(stage, out_dir)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1386,6 +1415,12 @@ def main(
         # 3b. The Ingest Studio's upload folder, the Conduit's to write before anything starts
         # (Amendment 33, "as found on the first server"): left to `up`, Docker made it root's.
         result.record("uploads", uploads_ready(compose_file))
+
+        # 3c. A deployment rendered before the stores had named volumes (ADR-114 Amendment 35):
+        # their data moved into them once, before anything starts on them.
+        moved = stores_moved(compose_file, held)
+        if moved.services:
+            result.record("stores", f"moved to named volumes: {', '.join(moved.services)}")
 
         # 4. Up, then a per-service wait that names what did not make it.
         _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")

@@ -34,6 +34,12 @@ DESTROYS_BY_DESIGN = frozenset({"test_restore_exit_test.py"})
 #: the moment it does, the scan treats it like any other teardown.
 FAKE_RUNNER_ONLY = frozenset({"test_uninstall.py"})
 
+#: Drive a stand-in for Docker that models `down` and `-v` (ADR-114 Amendment 35's move), and never
+#: run a process. Passed only while the file neither imports `subprocess` nor calls the module's
+#: real runner (`_subprocess(`): the moment it does, the scan treats it like any other teardown.
+STAND_IN_ONLY = frozenset({"test_store_volumes.py"})
+_REAL_PROCESS = re.compile(r"import subprocess|_subprocess\(")
+
 _THIS_FILE_AND_ITS_TEST = frozenset({"deployment_guard.py", "test_deployment_guard.py"})
 
 
@@ -95,6 +101,8 @@ def teardowns_that_do_not_ask(tests_root: Path) -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         if path.name in FAKE_RUNNER_ONLY and "use_real_runner" not in text:
+            continue
+        if path.name in STAND_IN_ONLY and not _REAL_PROCESS.search(text):
             continue
         if (
             _DOWN.search(text)

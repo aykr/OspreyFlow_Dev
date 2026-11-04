@@ -106,6 +106,9 @@ class _Host:
                 repo = f"{REG}/api" if service == "report-sync" else _repo_of(service)
                 return 0, self.loaded_ids.get(repo, "sha256:unknown")
             return 0, f"image-of-{argv[-1]}"
+        if argv[:3] == ["docker", "volume", "rm"]:
+            self.actions.append("volume rm " + " ".join(argv[3:]))
+            return 0, ""
         if argv[:4] == ["docker", "image", "inspect", "--format"]:
             service = argv[-1].removeprefix("image-of-osprey-test-").removesuffix("-1")
             digest = self.running[service]
@@ -750,3 +753,87 @@ def test_update_moves_a_self_contained_small(
     assert made.parent == backups
     (argv,) = [a for a in ran if "harness.backup" in a]
     assert argv[argv.index("--out-root") + 1] == str(backups)
+
+
+# --- the stores moved to named volumes (ADR-114 Amendment 35) -----------------------------------
+
+
+class _Move:
+    """`harness.store_volumes.move` as `update` calls it; the move itself is
+    `tests/harness/test_store_volumes.py`'s, against its Docker stand-in."""
+
+    def __init__(self, fake: _Host, failure: Any = None, made: Sequence[str] = ()) -> None:
+        self.fake = fake
+        self.failure = failure
+        self.made = list(made)
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, compose_file: Path, **kwargs: Any) -> Any:
+        from harness import store_volumes
+
+        self.fake.actions.append("move the stores")
+        self.calls.append({"compose": compose_file, **kwargs})
+        if self.failure is not None:
+            raise self.failure
+        return store_volumes.Moved(services=["postgres"], left=["a1b2c3"], made=self.made)
+
+
+def test_an_update_moves_the_stores_after_its_backup_and_before_it_starts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = _Host(tmp_path)
+    move = _Move(fake)
+    monkeypatch.setattr(update.store_volumes, "move", move)
+    assert _update(fake) == 0
+    order = fake.actions
+    first_up = next(i for i, a in enumerate(order) if a.startswith("compose up"))
+    assert order.index("backup") < order.index("compose pull") < order.index("move the stores")
+    assert order.index("move the stores") < first_up
+    assert move.calls[0]["compose"] == fake.directory / "compose.yaml"
+    assert move.calls[0]["run"] == fake.run
+    said = capsys.readouterr().out
+    assert "docker volume rm a1b2c3" in said
+
+
+def test_a_failed_move_rolls_the_update_back_on_its_untouched_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Amendment 35 point 4: the move never replaces a container of the deployment's, so every
+    store's data is still where it was — the old version is started on it, with nothing emptied and
+    nothing restored."""
+    from harness import store_volumes
+
+    fake = _Host(tmp_path)
+    before = _files(fake)
+    failure = store_volumes.StoresNotMoved(
+        "copy postgres's /var/lib/postgresql/data: No space left on device",
+        stopped=True, old=["a1b2c3"],
+    )  # fmt: skip
+    monkeypatch.setattr(update.store_volumes, "move", _Move(fake, failure))
+    assert _update(fake) == 1
+    assert not any(a.startswith("compose down") for a in fake.actions)
+    assert not any(a.startswith("restore") for a in fake.actions)
+    assert fake.head == "c0ffee" and not _changed(fake, before)
+    assert fake.actions[-2:] == ["compose up -d --wait", "compose ps --all --format json"]
+    err = capsys.readouterr().err
+    assert "No space left on device" in err and "a1b2c3" in err
+    assert "on its own data, which was never moved; nothing was restored" in err
+
+
+def test_a_release_that_fails_after_the_move_restores_the_backup_and_removes_its_volumes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The move succeeded and the release then failed to start: the stores are emptied and the
+    backup restored as for any failed update, and the named volumes the move filled (which the old
+    compose file does not declare, so `down -v` leaves them) are removed too."""
+    fake = _Host(tmp_path, release=BROKEN)
+    monkeypatch.setattr(
+        update.store_volumes, "move", _Move(fake, made=["osprey-test_arcadedb-databases"])
+    )
+    assert _update(fake) == 1
+    order = fake.actions
+    assert (
+        order.index("compose down -v")
+        < order.index("volume rm osprey-test_arcadedb-databases")
+        < order.index("restore set-1")
+    )

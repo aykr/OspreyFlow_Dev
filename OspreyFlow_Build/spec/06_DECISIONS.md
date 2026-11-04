@@ -24167,3 +24167,213 @@ datasets (option 2) — option 2 only if the specification already allows resolu
   (a starter loading the pack now also differs in this one setting) and
   `tests/test_seed_pid.py::test_the_warning_names_the_osprey_yaml_line_and_the_re_render` (`apply`,
   not `install`).
+
+### ADR-114, Amendment 35 (4 November 2026) — the stores keep their data in named volumes, and an existing deployment's data is moved into them once (build order step 26)
+
+**As found on the first server (v0.4.6–v0.4.10, Small on its own server, 4 November 2026).** The
+rendered `compose.yaml` gave the stores no volume of their own. PostgreSQL kept
+`/var/lib/postgresql/data` in an **anonymous** volume made from its image's `VOLUME`; ArcadeDB kept
+`/home/arcadedb/{databases,backups,config,log,replication}` in five; Valkey and OpenSearch had
+**none**, their data in their containers' writable layers (Valkey's corrected at point 7: this
+paragraph first said Valkey kept `/data` in an anonymous volume, as Redis's image would). Only `osprey-data`,
+`osprey-staging`, `objectstore-data`, `ollama-models`, `whisper-models` (and `clickhouse-data`,
+`proxy-data` where rendered) were named. Compose carries a container's anonymous volumes over when
+it recreates that container, so `stop`/`start`, `apply` and `update` kept the data, as proved on the
+server. A **new** container gets new, empty ones: `docker compose down` then `up` (the old ones are
+left behind, unattached), `ospreyflow uninstall --keep-data` then an install (the same: "the data
+volumes are kept", but nothing ever mounted them again), `docker volume prune`, or OpenSearch's
+container recreated at all. **The owner's ruling (4 November 2026): named volumes, with a
+migration, before a client's data goes on a server.** Mechanics *(mine)*, recorded with the change
+(rule 11).
+
+1. **The named volumes** (Lite and Small, which share the compose render; Enterprise keeps its
+   claims, `harness/cluster.py`'s `CLAIMS`, unchanged). Each is declared under the compose file's
+   top-level `volumes:` and so is `<project>_<name>` in Docker:
+
+   | Service | Volume | Mounted at | Why |
+   | --- | --- | --- | --- |
+   | `postgres` | `postgres-data` | `/var/lib/postgresql/data` | Every PostgreSQL database: the Conduit's records, Keycloak's accounts, the audit log, Superset's |
+   | `arcadedb` | `arcadedb-databases` | `/home/arcadedb/databases` | The graph |
+   | `arcadedb` | `arcadedb-config` | `/home/arcadedb/config` | `server-users.jsonl` and the server's settings (§5's ArcadeDB upgrade keeps it by hand; the chart already claims it) |
+   | `valkey` | `valkey-data` | `/data` | The working sets, the job queues and the access index (its snapshot, `dump.rdb`) |
+   | `opensearch` | `opensearch-data` | `/usr/share/opensearch/data` | The search index |
+
+   **Left on the image's anonymous volumes, deliberately:** ArcadeDB's `backups/` (a backup's
+   `BACKUP DATABASE` file, copied off at once by `ospreyflow backup`), `log/` and `replication/`
+   (no HA in Compose) — nothing a restart needs; `keycloak-db`, a one-shot psql client on the
+   PostgreSQL image whose entrypoint never runs `initdb`, so its anonymous volume holds nothing; and
+   Caddy's `/config` and `/data` with the organisation's certificate (Amendment 33 decision 3: nothing
+   is obtained, so nothing is kept). A store a deployment does not run (PostgreSQL on a managed
+   server, OpenSearch with `postgres-fulltext`) gets no volume. The render adds them in
+   `harness/render.py`'s `STORE_VOLUMES`, applied to the compose document only, so the cluster's
+   translation of the same services is untouched.
+
+2. **OpenSearch gets a named volume, and nothing is copied into it.** Read on 4 November 2026: no
+   code in `services/` or `packages/` writes to OpenSearch (`services/api/search.py` is the graph leg
+   only; the index leg "lands later"), so its data is its own cluster state and nothing of
+   OspreyFlow's. A named volume now means a restart, a recreate or `uninstall --keep-data` never
+   forces a rebuild once something is indexed. **The rebuild after a restore stands as guide §13
+   says:** a restore goes into an empty deployment, so OpenSearch starts empty; while nothing is
+   indexed there is nothing to rebuild. The first feature to write an index must make it rebuildable
+   from the graph store and have `restore` trigger that rebuild, with a test that restores a set and
+   finds the index again (rule 12) — that is the feature's, recorded here so it is not forgotten.
+
+3. **The move, once, for a deployment whose stores sit elsewhere** (`harness/store_volumes.py`).
+   It runs before every `up` that follows a re-render, wherever `harness.ingest_uploads` runs:
+   `harness.apply` (install and `ospreyflow apply`), `scripts.refresh` (`start --build`), the
+   `ospreyflow` command's `start` and `switch`, and `harness.update` — there after its backup and
+   pull, before anything is started, so a failure rolls back (point 4).
+   - **What it looks for.** For each row of point 1 whose mount the deployment's `compose.yaml` now
+     has, the service's existing container (Compose's own labels: project and service). None: a new
+     install, nothing to do. Already mounting `<project>_<name>` at the path: already moved, nothing
+     to do — **so a second run does nothing**. Otherwise the store's data is in an anonymous volume,
+     another volume or a host folder, or in the container's own layer (Valkey, point 7) — all
+     moved — or OpenSearch's, checked and not copied (point 2). The named volume must be absent or
+     empty; if it holds data while the container's data is elsewhere, nothing is moved and it says
+     so, naming both.
+   - **How.** Every container of the deployment is stopped, so nothing writes. Each store is started
+     alone, on its old data, and asked for a figure; then stopped. The figures: PostgreSQL its list of
+     databases; ArcadeDB its list of databases; Valkey, after a `SAVE`, the number of keys in each
+     database that do not expire (keys with a time to live may expire between the two readings, and
+     are not counted); OpenSearch its indexes (point 2: it must hold none that is not a system index,
+     else the move is refused, since its container would be recreated and nothing in it kept). For each
+     volume: the named volume made with Compose's labels, the data copied by a one-shot container of
+     **the store's own image as the old container runs it (by image ID, so nothing is pulled)**, as
+     root, with no network: `cp -a /from/. /to/` then the top folder's owner and mode set to the
+     original's. Data in the container's own layer (point 7) is copied the same way by a one-shot of
+     **the stopped container committed to a temporary image** (`docker commit`), which holds the
+     layer with its owners and modes; the image is removed afterwards. **Ownership and modes are kept exactly**: PostgreSQL refuses a data directory that is
+     not its own user's (uid 999) or whose mode is not `0700`/`0750`. The copy is then **checked, not
+     trusted**: the same image lists both sides — every entry's owner, group, mode, kind and, for a
+     file, its SHA-256 — and the two lists must be identical, the top folder included.
+   - **Then** each moved store is started on its named volume **in a container of its own, apart
+     from the deployment's** (`docker compose run -d --no-deps --name <project>-<service>-moving`:
+     the service's definition, no port published), asked for its figure again (it must be the
+     same), and that container removed. **The move never replaces a container of the deployment's
+     and never writes a file of the deployment's** (point 7); the caller's own `up` does the first,
+     once the move has returned.
+   - **The old volume is never removed.** The words at the end name each one and how to remove it,
+     once the deployment works as before: `docker volume rm <name> …`.
+   - **The messages** are in `harness/store_volumes.py` and quoted in the administration guide §14.
+
+4. **When the move fails** (a refusal, a failed or differing copy, or another figure on the named
+   volume — all before any container of the deployment's is replaced, point 7): each named volume
+   the move filled is removed (each was absent or empty before), the old containers and their data
+   are as they were, and the move says so. **The caller puts back every file it wrote before the
+   move** (`harness.store_volumes.FilesHeld`, byte for byte, mode for mode; the runtime `state/`
+   folder is left alone), so the compose file never names volumes the data is not in: `apply`,
+   install and `start --build` then stop, saying "…, and the deployment's files are as they were.
+   The deployment is stopped; ospreyflow start starts it on that data." (or "Nothing was stopped."
+   when the move refused before stopping anything), and the next `start` runs on the old data.
+   `update` rolls back **without emptying the stores**: the old commit and files put back and the
+   old version started on its untouched data, with no restore. A move that succeeded followed by a
+   later failure of the update rolls back as any failed update does — the stores emptied, the
+   backup restored — and also removes the named volumes the move filled (`Moved.made`: the old
+   compose file does not declare them, so `down -v` would not).
+
+5. **Backup and restore need no change of path.** `ospreyflow backup` reads every store through the
+   running containers (`pg_dump`, ArcadeDB's `BACKUP DATABASE` then `docker compose cp` of
+   `/home/arcadedb/backups/…`, the object store's S3 export, the Conduit's files), which work the
+   same whatever backs a path. `restore`'s empty-deployment check asks the graph store; its remedy,
+   `docker compose down -v` then `up`, removes the named volumes declared in the compose file as it
+   removed the anonymous ones. `ospreyflow uninstall --keep-data` now keeps data a later install
+   mounts again; `uninstall` without it removes the named volumes.
+
+6. **Not changed, recorded:** Valkey is not in the backup set (its working sets and queues), as
+   before; a backup restores into an empty Valkey. That is why its move matters (point 7): a Valkey
+   started empty loses them silently, with nothing to restore them from.
+
+7. **As found on the first server (Small on its own server, v0.4.10 with this change, 4 November
+   2026).** Before the move, `docker inspect` gave PostgreSQL one anonymous volume, ArcadeDB five,
+   and **Valkey and OpenSearch no mount at all**; Valkey held `db0:keys=2,expires=1`. Three defects:
+   - **The move refused every deployment.** `ospreyflow apply` stopped with "valkey keeps /data
+     inside its container, not in a volume; it was not moved": the Valkey 8.0 image declares no
+     `VOLUME`, and the move moved only volumes and folders. The test stand-in had modelled Valkey
+     with a `VOLUME /data`, as Redis's image has — a fixture more permissive than the dependency
+     (rule 15). **Fix:** data in a container's layer is copied from the stopped container committed
+     to a temporary image (point 3), then checked as a volume's copy is; Valkey's figure stays the
+     non-expiring keys per database after a `SAVE`. The same rule holds for any other store found
+     with its data in its layer; OpenSearch keeps point 2's.
+   - **A refused move left the deployment pointing at empty volumes** (the serious one). After the
+     refusal, `deploy/generated/small/compose.yaml` already named `postgres-data`, `valkey-data` and
+     the rest, and a plain `ospreyflow start` brought the stores up on them, new and empty:
+     PostgreSQL said `relation "investigations" does not exist`, Keycloak had no users, while the
+     old anonymous volumes still held the data — and the refusal had said "Nothing was removed:
+     each store's data is still where it was", true of the volumes but not of what the deployment
+     ran from. **Cause:** every caller wrote the re-rendered files into the deployment's folder
+     before the move (`harness.apply`'s `move_into_place` for install and `ospreyflow apply`;
+     `scripts.refresh`'s `files_up_to_date`, whose `_stores_named` adds the volumes, for `start
+     --build`) and nothing put them back when it was refused; any later `up` not preceded by a
+     successful move — a `start` from a command older than this change, `docker compose up`, or a
+     demo pack's seeding, whose `up api` starts its dependencies — then started the stores on
+     volumes Compose made empty. (This change's own `start` runs the move before its `up`, and on
+     that deployment the move would have refused again and started nothing; which `up` ran there
+     is not recorded. The defect is the switched file, whichever `up` met it.) The refusal's words also said "The deployment is stopped" when the
+     move had refused before stopping anything. **Fix:** point 4's put-back, the move never
+     replacing a container of the deployment's (it checks each store apart, point 3), and words
+     that say what is true in each case: whether anything was stopped, and whether the files were
+     put back.
+   - **Restore's identity step failed while Keycloak was running.** On that deployment, running on
+     the empty stores, `ospreyflow restore <set> --yes` restored the graph store and PostgreSQL,
+     then failed: "could not authenticate to Keycloak: 500 {'error': 'unknown_error', …}", Keycloak's
+     log saying `relation "offline_user_session" does not exist`. Keycloak builds its schema only
+     when it starts, and its database had been replaced underneath it while it ran (PostgreSQL
+     recreated on an empty volume by that `start`; Keycloak's own definition had not changed, so
+     Compose left it running). After the stack was started again, `harness.restore.restore_identity`
+     alone succeeded and brought `admin` back with its original id. **The earlier successful restore
+     into a freshly installed deployment was not luck of timing**: the backup does not carry
+     Keycloak's database (Amendment 5), so a restore leaves it alone, and a fresh install's Keycloak
+     built its schema at its own start. **Fix:** after PostgreSQL is restored, `restore` starts
+     Keycloak again (`compose restart keycloak`, then `up -d --no-deps --wait keycloak`) and asks
+     its token endpoint until it answers (`KEYCLOAK_ATTEMPTS`, 60 × 5 s; a refused password is not
+     waited on), before the identity step — so that step never depends on how the Keycloak it asks
+     got there.
+
+**Tests** (each shown red first; the Docker stand-in models what the real Docker, Compose and
+PostgreSQL refuse). `tests/harness/test_store_volumes.py` — the stand-in pinned:
+`test_the_stand_in_keeps_anonymous_volumes_on_recreate_and_not_for_a_new_container`,
+`test_the_stand_in_postgres_refuses_a_data_directory_with_the_wrong_owner_or_mode`,
+`test_the_stand_in_valkey_keeps_its_data_in_its_container` and
+`test_the_stand_in_compose_gives_a_named_volume_that_is_not_there_empty` (point 7); the render:
+`test_every_store_has_its_named_volume_on_lite_and_small` (**rule 12: the test that fails if a store
+loses its named volume**; its paths are written out in the test, not read from the renderer's table),
+`test_a_store_left_off_its_named_volume_is_found_by_the_render_test` (the check shown red with a row
+taken out), `test_the_named_volumes_are_the_amendments_names`,
+`test_a_store_the_deployment_does_not_run_gets_no_volume`,
+`test_the_cluster_translation_is_unchanged_by_the_named_volumes`; the move:
+`test_the_move_keeps_every_stores_data_with_owners_and_modes`,
+`test_after_the_move_a_new_container_keeps_the_data`, `test_a_second_move_does_nothing`,
+`test_a_new_install_has_nothing_to_move`,
+`test_a_copy_that_loses_the_top_folders_owner_is_refused_before_postgres_sees_it`,
+`test_a_failed_copy_leaves_the_old_volume_and_removes_the_new_one`,
+`test_opensearch_with_an_index_of_its_own_is_not_moved`,
+`test_a_named_volume_already_holding_data_is_not_overwritten`,
+`test_a_store_that_answers_differently_on_its_named_volume_is_refused_and_nothing_is_left`,
+`test_valkeys_copy_from_its_container_that_fails_leaves_it_there_and_removes_the_rest`,
+`test_the_command_says_what_failed_and_exits_one`; point 7's whole failure, through the real
+`start --build` and then `start` against the stand-in, refused three ways (Valkey's copy from its
+container, a volume's copy, OpenSearch with an index of its own):
+`test_a_refused_move_leaves_the_files_as_they_were_and_start_runs_on_the_old_data` — every file
+byte-identical, and the stores up on their old data. The wiring:
+`tests/harness/test_update_apply.py::test_an_update_moves_the_stores_after_its_backup_and_before_it_starts`,
+`::test_a_failed_move_rolls_the_update_back_on_its_untouched_data`,
+`::test_a_release_that_fails_after_the_move_restores_the_backup_and_removes_its_volumes`;
+`tests/test_refresh.py::test_the_stores_named_volumes_reach_a_deployment_rendered_before_them`,
+`::test_start_build_moves_the_stores_before_it_starts_them`,
+`::test_a_refused_move_puts_back_every_file_start_build_wrote`;
+`tests/harness/test_apply_changed_settings.py::test_apply_moves_the_stores_before_it_starts_anything_and_then_starts_it_all`,
+`::test_a_refused_move_starts_nothing_and_puts_back_every_file`; the restore:
+`tests/harness/test_restore_identity_provider.py` (a stand-in Keycloak that answers 500 while its
+database has been replaced and it has not been started again, as the real one did:
+`::test_the_stand_in_keycloak_refuses_until_it_is_restarted`,
+`::test_a_restore_restarts_keycloak_after_postgresql_and_before_the_identity`,
+`::test_a_refused_password_is_not_waited_on`); `tests/cli/test_lifecycle.py` (`start` and `switch` run the
+move before `up`; `::test_a_start_whose_stores_cannot_be_moved_brings_nothing_up`). The move is off
+for every other test (`tests/conftest.py`), so none reaches the machine's own Docker. The copy and
+listing scripts were also run against real files on macOS with GNU `stat` and `sha256sum` shimmed: a
+copy is listed identical, and a top folder whose mode changed is not. Point 7's three were each
+shown red first, against the code as it was, with the server's own words. **Not proved here:** the
+move against real Docker and the real images — `docker commit` of Valkey's container, `compose run`
+of each store on its named volume — and the Keycloak restart against a real Keycloak: proved on a
+throwaway copy of the server's deployment (a second Compose project made from a backup) before a
+client's data.

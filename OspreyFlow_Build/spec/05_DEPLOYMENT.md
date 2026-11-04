@@ -1118,6 +1118,13 @@ build stands against the table above:
   monitors, alerts, the export ledger and the review queue, so it shares their retention and their
   backup. §2.4's destroy confirmation assumes the opposite. A deployment whose legal basis requires
   this section's behaviour does not have it.
+- **Where the stores keep their data (Lite and Small; `06_DECISIONS.md` ADR-114 Amendment 35).** In
+  named volumes: `postgres-data`, `arcadedb-databases`, `arcadedb-config`, `valkey-data` and
+  `opensearch-data`, beside `osprey-data`, `osprey-staging` and `objectstore-data`, so a recreated
+  container, `docker compose down` then `up`, or `uninstall --keep-data` keeps them. A deployment
+  rendered before has its stores' data moved into them once, before its next `up`
+  (`harness/store_volumes.py`), the old volumes left for the operator to remove. Valkey is not in
+  the backup set.
 
 ## 7. Security posture
 

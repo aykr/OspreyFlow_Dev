@@ -29,6 +29,11 @@ chosen model before anything that uses it starts (`harness.model_downloads`), an
 proxy when its table changed. Nothing else in those files is touched, and no secret changes. The
 Glass's `/deployment.json` (`glass.json`, no secret in it) is written as the checkout renders it.
 
+Before its `up`, a deployment whose stores' data is not yet in their named volumes has the
+volumes added to `compose.yaml` and the data moved there once (`harness.store_volumes`, ADR-114
+Amendment 35); the old volumes are kept. A refused move puts every file this wrote back as it was
+(Amendment 35 point 7), so the next `start` runs on the old data, never on empty named volumes.
+
 What it never does, on purpose: render the deployment again (that mints new secrets for stores that
 keep the old ones), remove a volume, force a container to be recreated, or seed. First-time set-up
 is still `python -m harness.apply`. Every compose call reads the deployment's own `--env-file`.
@@ -45,7 +50,7 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import yaml
-from harness import ingest_uploads, model_downloads, register_sign_in
+from harness import ingest_uploads, model_downloads, register_sign_in, store_volumes
 from harness.apply import _compose, release_registry
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
@@ -58,6 +63,7 @@ from harness.keycloak_theme import (
 )
 from harness.render import (
     STATE_CONTAINER_PATH,
+    STORE_VOLUMES,
     _render_compose,
     load_config,
     release_version,
@@ -477,6 +483,37 @@ def _pins_moved(directory: Path) -> None:
         )
 
 
+def _stores_named(directory: Path) -> bool:
+    """ADR-114 Amendment 35: each store the deployment runs given its named volume, as the render
+    gives it, with the top-level declaration. A path the store already mounts from somewhere is
+    left as it is (an operator's own edit). The data is moved by `harness.store_volumes` before the
+    next `up`, never here. Says whether anything changed."""
+    compose_path = directory / "compose.yaml"
+    text = compose_path.read_text(encoding="utf-8")
+    header_end = text.find("\nname:") + 1
+    document = yaml.safe_load(text) or {}
+    services = document.get("services") or {}
+    declared = document.get("volumes") or {}
+    changed = False
+    for row in STORE_VOLUMES:
+        service = services.get(row.service)
+        if not isinstance(service, dict):
+            continue
+        mounted = {
+            str(v).split(":")[1] for v in service.get("volumes") or [] if str(v).count(":") >= 1
+        }
+        if row.path in mounted:
+            continue
+        service["volumes"] = [*(service.get("volumes") or []), f"{row.volume}:{row.path}"]
+        declared[row.volume] = {"driver": "local"}
+        changed = True
+    if changed:
+        document["volumes"] = declared
+        body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+        compose_path.write_text(text[:header_end] + body, encoding="utf-8")
+    return changed
+
+
 def files_up_to_date(repo_root: Path = REPO_ROOT) -> dict[str, bool]:
     """Every file of the deployment as this checkout writes it, and nothing run: `update` uses this
     from the new checkout (ADR-114 Amendment 8 point 6a). Says which services must restart."""
@@ -526,6 +563,7 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
     _glass_settings_up_to_date(directory)
     routing_changed = _routing_up_to_date(directory)
     _release_up_to_date(directory)
+    _stores_named(directory)
     return {
         "proxy_changed": proxy_changed,
         "theme_changed": theme_changed,
@@ -555,14 +593,23 @@ def refresh(
     *,
     run: Callable[[Sequence[str]], None] = _run,
     register: Callable[[list[str]], int] = _register,
+    docker: store_volumes.Run | None = None,
 ) -> None:
     directory = _deployment_dir(repo_root)
     compose = _compose(directory / "compose.yaml")
     pulls_before = model_downloads.commands(directory / "compose.yaml")
+    held = store_volumes.FilesHeld(directory)
     changed = files_up_to_date(repo_root)
     theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
     run([*compose, "build", "--pull"])
     _uploads_ready(directory / "compose.yaml", run)
+    # ADR-114 Amendment 35: a store's data moved into its named volume, once, before anything
+    # starts on it. `docker` is Docker itself unless a test stands one in.
+    try:
+        store_volumes.move(directory / "compose.yaml", run=docker or store_volumes._subprocess)
+    except store_volumes.StoresNotMoved as failed:
+        held.put_back()
+        raise RefreshFailed(failed.words(files_put_back=True)) from failed
     # Defect 9 (ADR-114 Amendment 33): `up` alone would start `ollama-models` again for its changed
     # command, but start the gateway and the Conduit on the new model beside it, before it is there.
     steps = model_downloads.steps_to_fetch(pulls_before, directory / "compose.yaml")

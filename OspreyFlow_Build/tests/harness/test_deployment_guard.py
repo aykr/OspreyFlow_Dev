@@ -108,3 +108,19 @@ def test_an_argv_only_file_passes_only_while_it_never_asks_for_a_real_runner(tmp
     assert teardowns_that_do_not_ask(tmp_path) == []
     (folder / "test_uninstall.py").write_text("rig.use_real_runner = True\n" + fake, encoding="utf-8")
     assert teardowns_that_do_not_ask(tmp_path) == ["cli/test_uninstall.py"]
+
+
+def test_a_stand_in_only_file_passes_only_while_it_runs_no_real_process(tmp_path: Path) -> None:
+    """`test_store_volumes.py` models `down` and `-v` in its Docker stand-in and runs nothing; the
+    moment it imports `subprocess` or calls the real runner, it is a teardown like any other."""
+    stand_in = 'if "down" in argv:\n    pass\nif word == "-v":\n    pass\n'
+    (tmp_path / "test_store_volumes.py").write_text(stand_in, encoding="utf-8")
+    assert teardowns_that_do_not_ask(tmp_path) == []
+    (tmp_path / "test_store_volumes.py").write_text(
+        "import subprocess\n" + stand_in, encoding="utf-8"
+    )
+    assert teardowns_that_do_not_ask(tmp_path) == ["test_store_volumes.py"]
+    (tmp_path / "test_store_volumes.py").write_text(
+        "store_volumes._subprocess(argv)\n" + stand_in, encoding="utf-8"
+    )
+    assert teardowns_that_do_not_ask(tmp_path) == ["test_store_volumes.py"]
