@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ingest Studio Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a fixed studio chrome (top bar + place tabs), one scrolling work area per place, a right-hand drawer for node editors. */
+:root{
+  --bg:#f6f8f9; --panel:#ffffff; --panel2:#eef2f4; --ink:#17262b; --muted:#5f6f76; --line:#cfd8dc;
+  --accent:#005299; --teal:#0097a7; --amber:#b47b2b; --ok:#1d7a4a; --warn:#b45309; --bad:#b3261e;
+  --canvas:#fbfcfc; --sel:#e3f2fd;
+  --display:'Atkinson Hyperlegible Next',system-ui,Segoe UI,Arial,sans-serif;
+  --mono:'IBM Plex Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1719; --panel:#162124; --panel2:#1d2a2e; --ink:#e6edf0; --muted:#9fb0b7; --line:#2f3f45;
+  --accent:#6fb1ff; --teal:#3cc3d2; --amber:#e0a94f; --ok:#5fcf8f; --warn:#f0b35b; --bad:#ff8a80; --canvas:#121c1f; --sel:#1f3344; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1719; --panel:#162124; --panel2:#1d2a2e; --ink:#e6edf0; --muted:#9fb0b7; --line:#2f3f45;
+  --accent:#6fb1ff; --teal:#3cc3d2; --amber:#e0a94f; --ok:#5fcf8f; --warn:#f0b35b; --bad:#ff8a80; --canvas:#121c1f; --sel:#1f3344; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--display);font-size:14px;line-height:1.45}
+button{font:inherit;color:inherit}
+.top{background:#053238;color:#e8f3f5;display:flex;align-items:center;gap:18px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap}
+.top .brand{font-weight:700;color:#fff}
+.top .ds{background:#0b4a52;border:0;color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer}
+.top .spacer{flex:1}
+.mode{display:flex;border:1px solid #2f6a73;border-radius:999px;overflow:hidden}
+.mode button{background:transparent;border:0;color:#cfe3e8;padding:5px 12px;cursor:pointer}
+.mode button.on{background:#0097a7;color:#fff;font-weight:700}
+.wrap{padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+.tabs{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.tab{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 18px;cursor:pointer;min-width:120px;text-align:center}
+.tab.on{background:var(--panel);border-color:var(--accent);color:var(--accent);font-weight:700;box-shadow:inset 0 0 0 1px var(--accent)}
+.ready{margin-left:auto;background:var(--panel2);border-radius:999px;padding:7px 14px;display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.ready b{color:var(--ink);font-weight:500}
+h1{font-size:18px;margin:0 0 2px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 14px}
+.head{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.head .grow{flex:1;min-width:240px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.btn.ghost{border-color:transparent;color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.card h3{margin:0 0 10px;font-size:14px}
+.k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--teal);font-weight:700}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-size:12.5px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11.5px;background:var(--panel2);color:var(--ink)}
+.chip.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.chip.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.chip.ex{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.chip.acc{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:11px;color:var(--muted);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.sel td{background:var(--sel)}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--panel2)}
+.tscroll{overflow-x:auto}
+.check{display:flex;gap:10px;align-items:center;padding:5px 0;cursor:pointer}
+.check input{accent-color:var(--accent)}
+.list li{padding:7px 0;border-bottom:1px solid var(--line)}
+.list li:last-child{border:0}
+/* canvas */
+.studio{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px}
+@media (max-width:980px){.studio{grid-template-columns:1fr}}
+.canvas{background:var(--canvas);border:1px solid var(--line);border-radius:10px;padding:10px;overflow-x:auto;position:relative;min-height:420px}
+.canvas svg{display:block;min-width:720px;width:100%;height:auto}
+.node{cursor:pointer}
+.node rect.body{fill:var(--panel);stroke:var(--line)}
+.node.sel rect.body{stroke:var(--accent);stroke-width:2}
+.node text{fill:var(--ink);font-family:var(--display)}
+.node .t{font-size:12px;font-weight:700}
+.node .s{font-size:10.5px;fill:var(--muted)}
+.node rect.cap{stroke:none}
+.node.src rect.cap{fill:#8a9aa3}.node.stage rect.cap{fill:var(--teal)}.node.map rect.cap{fill:var(--accent)}.node.load rect.cap{fill:#8a9aa3}
+.node.expert rect.body{stroke-dasharray:5 3}
+.edge{stroke:#8a9aa3;stroke-width:1.5;fill:none}
+.lane{font-size:10.5px;font-weight:700;fill:var(--teal);letter-spacing:.06em}
+.drawer{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow:auto;min-width:0}
+.drawer h3{margin:0;font-size:15px}
+.drawer .hd{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+.field{margin:8px 0}
+.field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.field input,.field select,.field textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 9px;font:inherit}
+.field textarea{font-family:var(--mono);font-size:12px;min-height:90px}
+.note{background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:12.5px;margin:10px 0}
+.sample{font-family:var(--mono);font-size:11.5px;width:100%;border-collapse:collapse}
+.sample th,.sample td{padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.sample th{font-family:var(--display);font-size:10.5px}
+/* steps list (guided) */
+.steps{display:grid;gap:8px}
+.step{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.step.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.step .n{width:28px;height:28px;border-radius:50%;background:var(--panel2);display:grid;place-items:center;font-weight:700;color:var(--teal);flex:none}
+.step .b{flex:1;min-width:0}
+/* runs grid */
+.runs{display:grid;grid-template-columns:200px repeat(9,1fr);gap:6px;align-items:center;min-width:720px}
+.runs .h{font-size:11px;color:var(--muted);font-weight:700;text-align:center}
+.cell{height:30px;border-radius:5px;cursor:pointer;display:grid;place-items:center;font-size:10.5px;color:#fff;font-weight:700}
+.cell.ok{background:var(--teal)}.cell.held{background:var(--amber)}.cell.sched{background:var(--line);color:var(--muted)}.cell.run{background:var(--accent);animation:pulse 1s infinite}
+.cell.none{background:transparent}
+.cell.sel{outline:2px solid var(--accent);outline-offset:1px}
+@keyframes pulse{50%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){.cell.run{animation:none}}
+
+/* map editor */
+.strip{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--panel2);border-radius:8px;padding:6px 10px;font-size:12px;margin-bottom:10px}
+.strip .pn{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:2px 8px;cursor:pointer}
+.strip .pn.on{border-color:var(--accent);color:var(--accent);font-weight:700}
+.mapgrid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:10px}
+@media (max-width:760px){.mapgrid{grid-template-columns:1fr}}
+.cols{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:430px;overflow:auto}
+.col{display:flex;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:6px;cursor:grab;border:1px solid transparent;font-size:12px}
+.col:hover{background:var(--panel2)}.col.bound{border-color:var(--teal)}.col.pend{border-color:var(--accent);background:var(--sel)}
+.col .v{font-family:var(--mono);color:var(--muted);font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col .pat{color:var(--teal);font-size:10.5px}
+.tpl{background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px;position:relative}
+.tpl svg{display:block;width:100%;height:auto;min-width:480px}
+.el{cursor:pointer}
+.el .shape{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.el.sel .shape{stroke:var(--accent);stroke-width:2.5}
+.el.drop .shape{stroke:var(--teal);stroke-width:3}
+.el.inf .shape{stroke-dasharray:5 3}
+.el text{fill:var(--ink);font-family:var(--display)}
+.el .lab{font-size:11.5px;font-weight:700}.el .ty{font-size:10px;fill:var(--muted)}.el .bd{font-size:9.5px;fill:var(--teal);font-family:var(--mono)}
+.ln{stroke:#8a9aa3;stroke-width:1.8;fill:none;cursor:pointer}.ln.inf{stroke-dasharray:5 3}.ln.sel{stroke:var(--accent);stroke-width:2.5}
+.lnt{font-size:9.5px;fill:var(--muted);font-family:var(--mono);cursor:pointer}
+.lnt.sel{fill:var(--accent);font-weight:700}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;margin-top:8px}
+.bind{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 8px;background:var(--panel2);border-radius:6px;margin:4px 0;font-size:12px}
+.bind .x{cursor:pointer;color:var(--muted)}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(5,30,36,.45);display:grid;place-items:center;padding:16px;z-index:20}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;max-width:720px;width:100%;max-height:90vh;overflow:auto}
+.toast{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:#053238;color:#fff;padding:10px 16px;border-radius:8px;z-index:30;font-size:13px;max-width:90vw}
+.wiz{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.wiz span{border-radius:999px;padding:4px 10px;background:var(--panel2);font-size:12px}
+.wiz span.on{background:var(--accent);color:#fff;font-weight:700}
+.intro{background:color-mix(in srgb,var(--accent) 8%,var(--panel));border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px}
+.intro b{color:var(--accent)}
+kbd{font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="top">
+  <span class="brand">▶ Osprey</span><span>Ingest Studio</span>
+  <button class="ds" id="dsBtn">Dataset: Prison Intelligence Dataset ▾</button>
+  <span class="spacer"></span>
+  <div class="mode" role="group" aria-label="Mode"><button id="mGuided" class="on">Guided</button><button id="mExpert">Expert</button></div>
+  <span class="muted" style="color:#cfe3e8">osprey-demo-engineer · OFFICIAL</span>
+</div>
+
+<div class="wrap">
+  <div class="intro" id="intro"><b>Prototype.</b> This emulates the redesigned Studio on the synthetic Prison Intelligence Dataset. Everything is clickable; nothing is real. Try: switch <b>Guided / Expert</b>, open <b>3 Pipelines → Visits and contacts</b>, click the <b>Map</b> node to open the row template, press <b>Test</b>, then <b>Deploy</b>, then watch it appear in <b>4 Runs</b>.</div>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-p="model">1 Model</button>
+    <button class="tab" data-p="sources">2 Sources</button>
+    <button class="tab" data-p="pipelines">3 Pipelines</button>
+    <button class="tab" data-p="runs">4 Runs</button>
+    <div class="ready" id="ready"></div>
+  </div>
+  <div id="place"></div>
+</div>
+<div id="overlay"></div>
+
+<script>
+// ---------------------------------------------------------------- state
+const S = {
+  mode: 'guided', place: 'model',
+  model: { version: 3, packs: { pole: true, justice: true, fincrime: false, cyber: false }, extensions: [
+    { t: 'Person', n: 'prisoner_number', kind: 'identifier', detail: 'pattern Z####ZZ' },
+    { t: 'Person', n: 'wing', kind: 'property', detail: "from list 'Wings'" }],
+    lists: [{ n: 'Wings', rows: 12, v: 2, key: 'wing_code', used: 2 }, { n: 'Establishments', rows: 118, v: 1, key: 'estab_id', used: 3 }, { n: 'UK Sanctions List (synthetic)', rows: 5, v: '28/09', key: 'name', used: 0, screening: true }],
+    history: ['v3 · 2 Nov · added Establishment, HELD_AT', 'v2 · 27 Oct · added prisoner_number', 'v1 · 18 Oct · POLE core + Justice pack'] },
+  sources: [
+    { id: 'pin_calls', conn: 'Files · ingest/pin/*.csv', prof: '100,080 rows', mark: 'OFFICIAL', used: ['PIN calls'], watch: 'monthly', cols: [['prisoner_no', 'pattern Z####ZZ', '99.8%'], ['pin_account', 'string', '100% distinct'], ['called_number', 'phone (UK)', '98.1%'], ['started_at', 'timestamp +00:00', '100%'], ['duration_s', 'integer', '0.0% null']] },
+    { id: 'intel_reports', conn: 'Files · uploaded/', prof: '350 rows · 1 rejected', mark: 'OFFICIAL', used: ['Intel reports'], watch: '—', cols: [['report_id', 'string', '100% distinct'], ['text', 'text', 'masked'], ['area', 'string', '12 distinct'], ['phone', 'phone (UK)', '99.7% (1 letter O)']] },
+    { id: 'visit_bookings', conn: 'SQL · nomis_replica.visits', prof: 'daily snapshot', mark: 'OFFICIAL', used: ['Visits and contacts'], watch: 'daily 05:00', cols: [['booking_id', 'string', '100% distinct'], ['prisoner_no', 'pattern Z####ZZ', '99.6%'], ['visitor_name', 'string', 'shape-masked'], ['contact_number', 'phone (UK)', '97.2%'], ['visit_at', 'timestamp +00:00', '100%']] },
+    { id: 'seized_handsets', conn: 'JSON · forensic export v2', prof: '2 files', mark: 'OFFICIAL · S', used: ['Handsets'], watch: 'folder', cols: [['imei', 'IMEI (Luhn)', '100%'], ['contacts[]', 'nested', '—'], ['calls[].number', 'phone', '96%']] },
+    { id: 'number_owners', conn: 'API · telco lookup', prof: '1,909 rows', mark: 'OFFICIAL', used: ['PIN calls', 'Visits and contacts'], watch: 'weekly', cols: [['number', 'phone (E.164)', '100%'], ['owner_name', 'string', 'shape-masked'], ['since', 'date', '100%']] },
+    { id: 'cell_stays', conn: 'Files · ingest/cells/', prof: 'profiled 27 Oct', mark: 'OFFICIAL', used: [], watch: '—', cols: [['prisoner_no', 'pattern Z####ZZ', '100%'], ['cell', 'string', '318 distinct'], ['from', 'date', '100%'], ['to', 'date', '3.1% null']] },
+  ],
+  selSource: 'visit_bookings',
+  pipelines: [
+    { id: 'pin', name: 'PIN calls', v: 3, status: 'deployed', sched: 'monthly, 1st 02:00', cells: 'ooooooooS' },
+    { id: 'intel', name: 'Intel reports', v: 6, status: 'deployed', sched: '—', cells: '.o..o.ooo' },
+    { id: 'visits', name: 'Visits and contacts', v: 4, status: 'draft from v4', sched: 'daily 05:00', cells: 'ooooooHoo' },
+    { id: 'handsets', name: 'Seized handsets', v: 2, status: 'deployed', sched: 'watch ingest/handsets/*.json', cells: '..o...o.o' },
+    { id: 'first', name: 'PIN first contacts', v: 1, status: 'deployed', sched: 'weekly, Mon 06:00 (paused)', cells: '.......o.' },
+  ],
+  openPipeline: null, selNode: null, tested: false,
+  selRun: { p: 'visits', i: 6 },
+};
+const NODES = [
+  { id: 'src1', kind: 'src', x: 20, y: 40, w: 180, h: 54, t: 'visit_bookings', s: 'SQL · 1,204 rows (sample)' },
+  { id: 'src2', kind: 'src', x: 20, y: 120, w: 180, h: 54, t: 'number_owners', s: 'API · 1,909 rows' },
+  { id: 'src3', kind: 'src', x: 20, y: 200, w: 180, h: 54, t: 'pin_calls', s: 'Files · 100,080 rows' },
+  { id: 'lk', kind: 'stage', x: 250, y: 40, w: 190, h: 54, t: 'Lookup: establishment', s: "list 'Establishments' on estab_id" },
+  { id: 'jn', kind: 'stage', x: 250, y: 120, w: 190, h: 54, t: 'Join: owner of contact', s: 'number_owners on E.164(contact)' },
+  { id: 'sql', kind: 'stage', expert: true, x: 250, y: 200, w: 190, h: 54, t: 'SQL: calls per booking', s: 'expert · DuckDB over staged rows' },
+  { id: 'fz', kind: 'stage', expert: true, x: 250, y: 280, w: 190, h: 54, t: 'Fuzzy match: visitor ≈ owner', s: 'score ≥ 0.85 · 212 of 1,204' },
+  { id: 'map', kind: 'map', x: 500, y: 120, w: 160, h: 70, t: 'Map: one booking →', s: 'Person, Visit, Endpoint, VISITED, USES' },
+  { id: 'load', kind: 'load', x: 710, y: 120, w: 140, h: 70, t: 'Load', s: '→ Prison Intelligence · 3 rules' },
+];
+const EDGES = [['src1', 'lk'], ['src2', 'jn'], ['src3', 'sql'], ['src1', 'jn'], ['src1', 'fz'], ['src2', 'fz'], ['lk', 'map'], ['jn', 'map'], ['sql', 'map'], ['fz', 'map'], ['map', 'load']];
+
+// ---------------------------------------------------------------- helpers
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(m) { document.querySelectorAll('.toast').forEach(x => x.remove()); const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
+function modal(html) { $('#overlay').innerHTML = `<div class="modal" id="modal"><div class="box">${html}</div></div>`; $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); }); }
+function closeModal() { $('#overlay').innerHTML = ''; }
+function setPlace(p) { S.place = p; document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.p === p)); render(); }
+function setMode(m) { S.mode = m; $('#mGuided').classList.toggle('on', m === 'guided'); $('#mExpert').classList.toggle('on', m === 'expert'); render(); }
+function readiness() {
+  const untested = S.pipelines.filter(p => p.status.startsWith('draft')).length;
+  $('#ready').innerHTML = `<span>● <b>Model v${S.model.version}</b></span><span>● <b>${S.sources.length} sources</b></span><span>● <b>${S.pipelines.length} pipelines</b>${untested ? ' · ' + untested + ' untested' : ''}</span><span>● <b>last run 05:00 ✓</b></span>`;
+}
+
+// ---------------------------------------------------------------- MODEL
+function renderModel() {
+  const m = S.model;
+  const packs = [['pole', 'POLE core (always on)', true], ['justice', 'Justice and public safety pack', false], ['fincrime', 'Financial crime and AML pack', false], ['cyber', 'Cyber threat pack', false]];
+  return `
+  <div class="head"><div class="grow"><h1>Target model for Prison Intelligence Dataset · version ${m.version}</h1>
+  <p class="sub">Every pipeline that loads this dataset maps into this model. POLE core + ${packs.filter(p => m.packs[p[0]] && p[0] !== 'pole').map(p => p[1].replace(' pack', '')).join(', ') || 'no packs'} + ${m.extensions.length} extensions.</p></div>
+  <div class="actions"><button class="btn" onclick="showYaml('model')">Show YAML</button><button class="btn primary" onclick="saveModel()">Save as version ${m.version + 1}</button></div></div>
+  <div class="grid g3">
+    <div class="card"><h3>Starting point</h3>
+      ${packs.map(p => `<label class="check"><input type="checkbox" ${m.packs[p[0]] ? 'checked' : ''} ${p[2] ? 'disabled' : ''} onchange="togglePack('${p[0]}',this.checked)"> ${p[1]}</label>`).join('')}
+      <p class="muted" style="font-size:12px">Accelerator packs add types; they never remove or rename a POLE type.</p></div>
+    <div class="card"><h3>Entity and link types</h3>
+      <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px;font-size:12.5px">
+        <div><div class="k">Person</div>Person${m.extensions.map(e => `<div style="color:var(--amber)">+ ${e.n} (ext.)</div>`).join('')}</div>
+        <div><div class="k">Object</div>Endpoint<br>Device<br>Account<br>Document</div>
+        <div><div class="k">Location</div>Location<br>${m.packs.justice ? 'Establishment' : '<span class="muted">—</span>'}</div>
+        <div><div class="k">Event</div>Incident<br>${m.packs.justice ? 'Visit<br>Call' : '<span class="muted">Call</span>'}</div>
+      </div>
+      <p class="muted" style="font-size:12px;margin:10px 0 6px">Links: COMMUNICATED_WITH · SHARED_CELL_WITH · VISITED · HELD_AT · USES · IN_CONFLICT_WITH${m.packs.fincrime ? ' · OWNS · PAID' : ''}</p>
+      <div class="row"><button class="btn ghost" onclick="addExtension()">+ Add a property or identifier</button>${S.mode === 'expert' ? '<button class="btn ghost" onclick="toast(\'Expert mode: a new entity type must sit under one of the four POLE classes\')">+ Add an entity type</button>' : ''}</div></div>
+    <div class="card"><h3>Reference lists (lookup tables)</h3>
+      <ul class="list" style="list-style:none;padding:0;margin:0">${m.lists.map(l => `<li><b>${esc(l.n)}</b> <span class="chip ${l.screening ? 'acc' : ''}">${l.screening ? 'screening' : 'lookup'}</span><br><span class="muted" style="font-size:12px">${l.rows} rows · v${l.v} · key: ${l.key} · ${l.used ? 'used by ' + l.used + ' pipelines' : 're-screens on change'}</span></li>`).join('')}</ul>
+      <button class="btn" style="margin-top:8px" onclick="addList()">+ Add a list from CSV</button>
+      <p class="muted" style="font-size:12px">A list is a table with a key: usable in a Lookup step, a Map binding, and, if marked screening, by the monitoring rules.</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Versions and impact</h3>
+    <div class="mono muted" style="font-size:12px">${m.history.join('<br>')}</div>
+    <p class="muted" style="font-size:12px">Change a type a deployed pipeline writes and that pipeline is marked <span class="chip warn">needs attention</span>; its schedule pauses until it is re-tested and re-deployed.</p></div>`;
+}
+function togglePack(k, on) { S.model.packs[k] = on; if (k === 'fincrime' && on) toast('Financial crime pack added: OWNS, PAID, Account.kyc_status now available'); render(); }
+function addExtension() {
+  modal(`<h3 style="margin-top:0">Add to the model (this dataset only)</h3>
+  <div class="field"><label>Entity type</label><select id="xT"><option>Person</option><option>Endpoint</option><option>Location</option><option>Incident</option></select></div>
+  <div class="field"><label>Name</label><input id="xN" value="niu_flag"></div>
+  <div class="field"><label>Kind</label><select id="xK"><option>property</option><option>identifier</option></select></div>
+  <div class="field"><label>Pattern or list (optional)</label><input id="xD" value="from list 'NIU flags'"></div>
+  <div class="actions"><button class="btn primary" onclick="S.model.extensions.push({t:$('#xT').value,n:$('#xN').value,kind:$('#xK').value,detail:$('#xD').value});closeModal();toast('Added to the draft of version ${S.model.version + 1}');render()">Add</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+}
+function addList() { S.model.lists.push({ n: 'NIU flags', rows: 4, v: 1, key: 'code', used: 0 }); toast("List 'NIU flags' added (4 rows, key: code)"); render(); }
+function saveModel() { S.model.version++; S.model.history.unshift(`v${S.model.version} · today · ${S.model.extensions.length} extensions, ${S.model.lists.length} lists`); S.pipelines[2].status = 'needs attention'; toast(`Model saved as version ${S.model.version}. 'Visits and contacts' writes Person: marked needs attention.`); render(); }
+
+// ---------------------------------------------------------------- SOURCES
+function renderSources() {
+  const s = S.sources.find(x => x.id === S.selSource) || S.sources[0];
+  return `
+  <div class="head"><div class="grow"><h1>Sources feeding Prison Intelligence Dataset</h1><p class="sub">A source is one table, tied to a connection. Register it once: profile, marking and legal basis live here, not inside every pipeline.</p></div>
+  <div class="actions"><button class="btn primary" onclick="WZ.c='Files (ingest root)';WZ.conn={};registerWizard(1)">+ Register a source</button></div></div>
+  <div class="grid g2" style="grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)">
+    <div class="card tscroll"><table><thead><tr><th>Source table</th><th>Connection</th><th>Profiled</th><th>Marking</th><th>Used by</th><th>Refresh</th></tr></thead><tbody>
+    ${S.sources.map(x => `<tr class="click ${x.id === s.id ? 'sel' : ''}" onclick="S.selSource='${x.id}';render()"><td><b>${x.id}</b></td><td>${x.conn}</td><td>${x.prof}</td><td>${x.mark}</td><td>${x.used.length ? x.used.join(', ') : '<span style="color:var(--amber)">— not yet used</span>'}</td><td>${x.watch}</td></tr>`).join('')}
+    </tbody></table><p class="muted" style="font-size:12px">Connections (admin-managed, read-only credentials): Files (ingest root) · SQL: nomis_replica · API: telco lookup · JSON schemas: forensic export v2</p></div>
+    <div class="card"><h3>${s.id}</h3><p class="muted" style="font-size:12px;margin-top:-6px">${s.conn}</p>
+      <div class="k">Profile (automatic, 10,000-row sample)</div>
+      <table class="sample" style="margin:6px 0 12px"><tbody>${s.cols.map(c => `<tr><td>${c[0]}</td><td style="font-family:var(--display)">${c[1]}</td><td style="color:var(--teal);text-align:right">${c[2]}</td></tr>`).join('')}</tbody></table>
+      <div class="k">Governance (set once, inherited by every pipeline)</div>
+      <p style="font-size:12.5px;margin:4px 0 12px">Handling: ${s.mark} · P &nbsp; Units: fenwick-moor-security &nbsp; Legal basis: DPA 2018 Part 3, s.35</p>
+      <div class="k">Lineage</div>
+      <p style="font-size:12.5px;margin:4px 0 12px">${s.used.length ? s.used.map(u => `→ pipeline '${u}'`).join('<br>') : 'Not used by a pipeline yet'}</p>
+      <div class="actions"><button class="btn" onclick="S.openPipeline='visits';setPlace('pipelines')">Open in a pipeline</button><button class="btn" onclick="toast('Re-profiling ${s.id} on a fresh 10,000-row sample…')">Re-profile</button><button class="btn" onclick="toast('Governance edits are audited and apply to every pipeline using this source')">Edit governance</button></div></div>
+  </div>`;
+}
+const WZ = { c: 'Files (ingest root)', conn: {}, t: '' };
+function registerWizard(step) {
+  const names = ['Connection', 'Connection details', 'Table', 'Profile', 'Governance'];
+  const isNew = WZ.c.startsWith('New');
+  const visible = isNew ? [1, 2, 3, 4, 5] : [1, 3, 4, 5];
+  const w = `<div class="wiz">${visible.map(n => `<span class="${n === step ? 'on' : ''}">${visible.indexOf(n) + 1} ${names[n - 1]}</span>`).join('')}</div>`;
+  const nav = (back, next, nextLabel = 'Next', extra = '') => `<div class="actions" style="margin-top:12px">${back ? `<button class="btn" onclick="registerWizard(${back})">‹ Back</button>` : ''}${extra}<button class="btn primary" id="wNext" ${next ? `onclick="${next}"` : ''}>${nextLabel}</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`;
+  const hd = `<h3 style="margin-top:0">Register a source</h3>${w}`;
+  if (step === 1) modal(`${hd}<div class="field"><label>Connection</label><select id="wC" onchange="WZ.c=this.value">${['Files (ingest root)', 'SQL · nomis_replica (existing)', 'API · telco lookup (existing)', 'JSON · forensic export v2 (existing)', 'New SQL database connection…', 'New API connection…'].map(o => `<option ${o === WZ.c ? 'selected' : ''}>${o}</option>`).join('')}</select></div><p class="muted" style="font-size:12px">Existing connections are admin-managed with read-only credentials. A new one is created here and then owned by the Admin area.</p>${nav(null, "registerWizard(WZ.c.startsWith('New') ? 2 : 3)")}`);
+  if (step === 2) {
+    const sql = WZ.c.startsWith('New SQL');
+    const f = (id, label, val, type = 'text', hint = '') => `<div class="field"><label>${label}</label><input id="${id}" type="${type}" value="${esc(WZ.conn[id] ?? val)}" oninput="WZ.conn['${id}']=this.value">${hint ? `<div class="muted" style="font-size:11px;margin-top:2px">${hint}</div>` : ''}</div>`;
+    modal(`${hd}<p class="muted" style="font-size:12.5px;margin-top:0">${sql ? 'A read-only database login. The password is stored in the deployment\'s secrets, never in a pipeline.' : 'An HTTPS endpoint returning JSON, reached through the deployment\'s egress allow-list.'}</p>
+    ${sql ? `<div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">${f('name', 'Connection name', 'nomis_replica_2')}${f('engine', 'Engine', 'PostgreSQL')}${f('host', 'Host', 'nomis-replica.internal.justice.gov.uk')}${f('port', 'Port', '5432')}${f('db', 'Database', 'nomis')}${f('schema', 'Schema', 'public')}${f('user', 'Read-only user', 'osprey_ro')}${f('secret', 'Password', '', 'password', 'kept as secret nomis_replica_2/password')}</div>
+    <div class="check"><input type="checkbox" checked> Require TLS (the organisation\'s CA is trusted by the deployment)</div>`
+    : `${f('name', 'Connection name', 'telco_lookup_2')}${f('url', 'Base URL', 'https://lookup.example.gov.uk/v2/')}<div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">${f('auth', 'Auth', 'Bearer token (secret)', 'text', 'kept as secret telco_lookup_2/token')}${f('page', 'Pagination', 'page / per_page')}</div><div class="check"><input type="checkbox" checked> Add the host to the egress allow-list (admin approval)</div>`}
+    <div id="wTest" class="note" style="display:none"></div>
+    ${nav(1, 'registerWizard(3)', 'Next', `<button class="btn" onclick="testConn(${sql})">Test connection</button>`)}`);
+    $('#wNext').disabled = true;
+  }
+  if (step === 3) { const sql = WZ.c.includes('SQL'), api = WZ.c.includes('API'), json = WZ.c.includes('JSON');
+    const opts = sql ? ['visits', 'property', 'adjudications', 'cell_shares'] : api ? ['/numbers/owners', '/numbers/history'] : json ? ['handset_export_*.json'] : ['cell_shares.csv', 'adjudications.csv'];
+    modal(`${hd}<p class="muted" style="font-size:12.5px;margin-top:0">${esc(WZ.c.replace(' (existing)', ''))}${WZ.conn.name ? ' · ' + esc(WZ.conn.name) : ''}</p><div class="field"><label>${sql ? 'Table (schema ' + esc(WZ.conn.schema || 'public') + ')' : api ? 'Endpoint' : json ? 'File pattern' : 'File'}</label><select id="wT" onchange="WZ.t=this.value">${opts.map(o => `<option ${o === WZ.t ? 'selected' : ''}>${o}</option>`).join('')}</select></div>${sql && S.mode === 'expert' ? '<div class="field"><label>Expert: a SQL query as the table (read-only)</label><textarea placeholder="SELECT … FROM visits WHERE …"></textarea></div>' : ''}${json ? '<div class="field"><label>JSON path to the record set</label><input value="$.handsets[*]"></div>' : ''}${nav(isNew ? 2 : 1, "WZ.t=$('#wT').value;registerWizard(4)")}`); WZ.t = opts[0]; }
+  if (step === 4) { modal(`${hd}<p>Profiling <b>${esc(WZ.t)}</b>… <span class="muted">(10,000-row sample)</span></p><div id="wP" class="muted">reading…</div>${nav(3, 'registerWizard(5)')}`); $('#wNext').disabled = true;
+    setTimeout(() => { const p = $('#wP'); if (!p) return; p.innerHTML = `<table class="sample"><tr><td>prisoner_no</td><td>pattern Z####ZZ</td><td style="color:var(--teal)">100%</td></tr><tr><td>cell</td><td>string</td><td style="color:var(--teal)">318 distinct</td></tr><tr><td>shared_with</td><td>pattern Z####ZZ</td><td style="color:var(--teal)">99.1%</td></tr><tr><td>from, to</td><td>date</td><td style="color:var(--teal)">100% / 3.1% null</td></tr></table><p class="muted" style="font-size:12px">Pattern matches are ranked by the evidence they carry, not the raw rate.</p>`; $('#wNext').disabled = false; }, 900); }
+  const sid = (WZ.t || 'new_source').replace('.csv', '').replace('.json', '').replace('_*', '').split('/').filter(Boolean).join('_');
+  if (step === 5) { const sql = WZ.c.includes('SQL'), api = WZ.c.includes('API');
+    const trig = sql ? ['Snapshot on a schedule (daily 05:00 Europe/London)', 'Poll for new rows every hour', 'Manual: Run now only'] : api ? ['Poll on a schedule (weekly, Mon 06:00)', 'Poll every hour', 'Manual: Run now only'] : ['Folder watch: each new matching file, once it has settled', 'Manual: upload or Run now only'];
+    modal(`${hd}<div class="grid" style="grid-template-columns:1fr 1fr;gap:0 12px">
+    <div class="field"><label>Handling marking</label><select><option>OFFICIAL</option><option>OFFICIAL · S</option></select></div>
+    <div class="field"><label>Units this source's rows may name</label><input value="fenwick-moor-security"></div></div>
+    <div class="field"><label>Legal basis</label><input value="DPA 2018 Part 3, s.35"></div>
+    <div class="k" style="margin:10px 0 4px">Refresh policy (how new data arrives)</div>
+    <div class="field"><label>Trigger</label><select id="wTrig">${trig.map(o => `<option>${o}</option>`).join('')}</select></div>
+    ${sql || api ? `<div class="field"><label>Mode</label><select id="wMode" onchange="$('#wWm').style.display=this.value.startsWith('Incremental')?'block':'none';$('#wGone').style.display=this.value.startsWith('Full')?'block':'none'"><option>Incremental: only rows past a watermark</option><option>Full snapshot: read the whole table each time</option></select></div>
+    <div class="field" id="wWm"><label>Watermark column (the highest value seen is kept per source)</label><select><option>updated_at (timestamp)</option><option>visit_id (increasing id)</option></select></div>
+    <div class="field" id="wGone" style="display:none"><label>Rows that disappear between snapshots</label><select><option>Keep what was loaded (nothing is ever deleted)</option><option>Supersede elements made only by the previous snapshot (reversible)</option></select></div>` : ''}
+    <div class="note" style="font-size:12px">Every refresh is a run of each pipeline that uses this source, under its own load id, judged by the load rules, listed in Runs with trigger "source refresh". A row already loaded is matched by the pipeline's dedupe key, so a re-read is idempotent; nothing is deleted, only superseded, and every load can be reverted.</div>
+    ${nav(4, `S.sources.push({id:'${sid}',conn:'${esc(WZ.c.replace(' (existing)', '').replace('New ', ''))}${WZ.conn.name ? ' · ' + esc(WZ.conn.name) : ''}',prof:'profiled today',mark:'OFFICIAL',used:[],watch:$('#wTrig').value.split(':')[0].replace('Snapshot on a schedule','daily 05:00').replace('Poll on a schedule','weekly').replace('Folder watch','folder'),cols:[['prisoner_no','pattern Z####ZZ','100%'],['cell','string','318 distinct']]});closeModal();toast('Source registered. Its refresh policy will run every pipeline that uses it.');render()`, 'Register')}`); }
+}
+function testConn(sql) { const b = $('#wTest'); b.style.display = 'block'; b.textContent = sql ? `Connecting to ${WZ.conn.host || 'nomis-replica.internal.justice.gov.uk'}:${WZ.conn.port || 5432}/${WZ.conn.db || 'nomis'} as ${WZ.conn.user || 'osprey_ro'}…` : `Calling ${WZ.conn.url || 'https://lookup.example.gov.uk/v2/'}…`; $('#wNext').disabled = true;
+  setTimeout(() => { if (!$('#wTest')) return; $('#wTest').innerHTML = sql ? `<b style="color:var(--ok)">Connected.</b> PostgreSQL 16.3 · read-only confirmed (INSERT refused) · 14 tables visible in schema ${esc(WZ.conn.schema || 'public')} · TLS on.` : `<b style="color:var(--ok)">Connected.</b> 200 OK · JSON · 1,909 records across 20 pages · host added to the allow-list request.`; $('#wNext').disabled = false; }, 900); }
+
+// ---------------------------------------------------------------- PIPELINES
+function renderPipelines() {
+  if (!S.openPipeline) return `
+  <div class="head"><div class="grow"><h1>Pipelines loading Prison Intelligence Dataset</h1><p class="sub">One pipeline = one DAG: source tables → staging steps → map to the target model → load. Open one to edit it beside its canvas.</p></div>
+  <div class="actions"><button class="btn primary" onclick="toast('New pipeline: name it, pick its first source table, and the canvas opens with source → map → load drawn')">+ New pipeline</button></div></div>
+  <div class="card tscroll"><table><thead><tr><th>Pipeline</th><th>Version</th><th>Status</th><th>Sources</th><th>Writes</th><th>Schedule</th><th></th></tr></thead><tbody>
+  ${S.pipelines.map(p => `<tr class="click" onclick="S.openPipeline='${p.id}';S.selNode=null;render()"><td><b>${p.name}</b></td><td>v${p.v}</td><td><span class="chip ${p.status === 'deployed' ? 'ok' : p.status === 'needs attention' ? 'warn' : ''}">${p.status}</span></td><td>${p.id === 'visits' ? 'visit_bookings, number_owners, pin_calls' : p.id === 'pin' ? 'pin_calls, number_owners' : p.id === 'intel' ? 'intel_reports' : p.id === 'handsets' ? 'seized_handsets' : 'pin_calls'}</td><td>${p.id === 'visits' ? 'Person, Visit, Endpoint, VISITED, USES' : p.id === 'pin' ? 'Endpoint, Call, COMMUNICATED_WITH' : p.id === 'intel' ? 'Document, Person (extract)' : p.id === 'handsets' ? 'Device, Endpoint, USES' : 'Endpoint, COMMUNICATED_WITH'}</td><td>${p.sched}</td><td><button class="btn ghost">Open ›</button></td></tr>`).join('')}
+  </tbody></table></div>`;
+  const p = S.pipelines.find(x => x.id === S.openPipeline);
+  const head = `<div class="head"><div class="grow"><h1><button class="btn ghost" style="padding:2px 6px" onclick="S.openPipeline=null;render()">‹ Pipelines</button> ${p.name} · ${p.status === 'deployed' ? 'v' + p.v : p.status} · target: Prison Intelligence Dataset (model v${S.model.version})</h1>
+  <p class="sub">${S.mode === 'expert' ? 'Left to right: source tables → staging steps → map → load. Click a node: its editor opens beside the canvas, with a live sample.' : 'The same pipeline as numbered steps. Click a step to edit it. Expert-only steps are shown read-only.'}</p></div>
+  <div class="actions"><button class="btn" onclick="showYaml('pipeline')">Show YAML</button><button class="btn" onclick="runTest()">Test (dry run)</button><button class="btn primary" ${S.tested ? '' : 'disabled title="Test must pass before Deploy"'} onclick="deploy()">Deploy as v${p.v + 1}</button></div></div>`;
+  const body = S.mode === 'expert' ? renderCanvas() : renderSteps();
+  return head + `<div class="studio"><div>${body}</div>${renderDrawer()}</div>`;
+}
+function renderCanvas() {
+  if (S.selNode === 'map') return renderMapEditor();
+  const pos = Object.fromEntries(NODES.map(n => [n.id, n]));
+  const edges = EDGES.map(([a, b]) => { const A = pos[a], B = pos[b]; const x1 = A.x + A.w, y1 = A.y + A.h / 2, x2 = B.x, y2 = B.y + B.h / 2; return `<path class="edge" d="M${x1},${y1} C${x1 + 30},${y1} ${x2 - 30},${y2} ${x2},${y2}" marker-end="url(#arr)"/>`; }).join('');
+  const nodes = NODES.map(n => `<g class="node ${n.kind} ${n.expert ? 'expert' : ''} ${S.selNode === n.id ? 'sel' : ''}" onclick="S.selNode='${n.id}';render()" tabindex="0" role="button" aria-label="${esc(n.t)}"><rect class="body" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6"/><rect class="cap" x="${n.x}" y="${n.y}" width="${n.w}" height="5" rx="2"/><text class="t" x="${n.x + 10}" y="${n.y + 24}">${esc(n.t)}</text><text class="s" x="${n.x + 10}" y="${n.y + 41}">${esc(n.s)}</text></g>`).join('');
+  return `<div class="canvas"><svg viewBox="0 0 870 360" role="img" aria-label="Pipeline canvas"><defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8a9aa3"/></marker></defs>
+  <text class="lane" x="20" y="22">SOURCES</text><text class="lane" x="250" y="22">STAGING</text><text class="lane" x="500" y="22">MAP</text><text class="lane" x="710" y="22">LOAD</text>${edges}${nodes}</svg>
+  <div class="row" style="margin-top:8px;font-size:12.5px"><button class="btn ghost" onclick="toast('Pick a registered source table to add as a new branch')">+ Source table</button><button class="btn ghost" onclick="addStep()">+ Staging step ▾</button><button class="btn ghost" onclick="toast('Extract: a model reads the Documents a branch made; findings go to the review queue as inferred')">+ Extract</button><button class="btn ghost" onclick="toast('Enrich: geocode places via the local gazetteer first')">+ Enrich</button><span class="muted">· Save draft is automatic · dashed = expert-only step, disclosed in every run report</span></div></div>`;
+}
+function addStep() { modal(`<h3 style="margin-top:0">Add a staging step</h3><div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${['Lookup', 'Join', 'Filter', 'Derive', 'Union', 'Dedupe', 'Fuzzy match (expert)', 'SQL transform (expert)'].map(s => `<button class="btn" onclick="closeModal();toast('${s} added after the selected node')">${s}</button>`).join('')}</div><p class="muted" style="font-size:12px">Joins are on a declared key. Fuzzy match and SQL are expert steps: they need the write_sql_transforms right and are disclosed in every run report.</p>`); }
+function renderSteps() {
+  if (S.selNode === 'map') return renderMapEditor();
+  const order = ['src1', 'src2', 'src3', 'lk', 'jn', 'sql', 'fz', 'map', 'load'];
+  return `<div class="steps">${order.map((id, i) => { const n = NODES.find(x => x.id === id); return `<div class="step ${S.selNode === id ? 'sel' : ''}" onclick="S.selNode='${id}';render()"><div class="n">${i + 1}</div><div class="b"><b>${esc(n.t)}</b> ${n.expert ? '<span class="chip ex">expert step · read-only here</span>' : ''}<br><span class="muted" style="font-size:12px">${esc(n.s)}</span></div><span class="muted">›</span></div>`; }).join('')}</div>`;
+}
+function renderDrawer() {
+  if (S.selNode === 'map') return renderMapInspector();
+  const n = NODES.find(x => x.id === S.selNode);
+  if (!n) return `<div class="drawer"><h3>Nothing selected</h3><p class="muted">Choose a ${S.mode === 'expert' ? 'node on the canvas' : 'step in the list'} to edit it here. The editor opens beside the pipeline, never instead of it.</p><div class="note"><b>Two gates, both in plain words.</b><br>Save: a pipeline that breaks the rules is refused (a cycle, a source reaching no load).<br>Deploy: configuration the runner cannot run is refused (an unrunnable step, SQL that drops the _ref columns).</div></div>`;
+  const ro = n.expert && S.mode === 'guided';
+  const hd = `<div class="hd"><h3>${esc(n.t)}</h3>${n.expert ? '<span class="chip ex">expert step</span>' : ''}</div>`;
+  const sample = (hdrs, rows) => `<div class="k" style="margin-top:10px">Live sample</div><div class="tscroll"><table class="sample"><thead><tr>${hdrs.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const foot = `<div class="actions" style="margin-top:12px"><button class="btn" onclick="toast('Preview: dry run up to this node — ${esc(n.t)}')">Preview this step</button><button class="btn" onclick="showYaml('node')">Show as YAML</button>${ro ? '' : '<button class="btn" onclick="toast(\'Step removed from the draft\')">Remove</button>'}</div>${ro ? '<p class="muted" style="font-size:12px">Switch to Expert mode (and hold the write_sql_transforms right) to edit this step.</p>' : ''}`;
+  let body = '';
+  if (n.kind === 'src') body = `<p class="muted" style="font-size:12.5px">A registered source. Its profile, marking and legal basis are set on the Sources tab and inherited here.</p><div class="field"><label>Source</label><input value="${n.t}" readonly></div><div class="field"><label>Branch</label><input value="runs under its own load id; revertible on its own" readonly></div>` + sample(['booking_id', 'prisoner_no', 'contact_number', 'visit_at'], [['VB-2605-001', 'Z4162ZZ', '07700 900640', '2026-05-09 14:00'], ['VB-2605-002', 'Z0193ZZ', '07700 900718', '2026-05-09 14:30'], ['VB-2605-003', 'Z7731ZZ', '07700 900102', '2026-05-10 10:00']]);
+  if (n.id === 'lk') body = `<div class="field"><label>Reference list</label><select><option>Establishments (v1, key estab_id)</option><option>Wings (v2, key wing_code)</option></select></div><div class="field"><label>Match column</label><select><option>visit_bookings.estab_id</option></select></div><div class="field"><label>Columns to add</label><input value="estab_name, region"></div>` + sample(['estab_id', 'estab_name', 'region'], [['EST-014', 'Fenwick Moor', 'North East'], ['EST-021', 'Saltmarsh Grange', 'North East']]);
+  if (n.id === 'jn') body = `<div class="field"><label>Left</label><input value="visit_bookings" readonly></div><div class="field"><label>Right</label><input value="number_owners" readonly></div><div class="field"><label>On (a declared key)</label><input value="E.164(contact_number) = E.164(number)"></div><div class="field"><label>Kind</label><select><option>left (keep unmatched bookings)</option><option>inner</option></select></div><div class="note">The key is normalised by the phone adapter on both sides. A join is never on a guess: fuzzy matching is its own step.</div>` + sample(['booking_id', 'contact_number', 'owner_name', 'since'], [['VB-2605-001', '+447700900640', 'Marcus Ellery', '2025-11-02'], ['VB-2605-002', '+447700900718', '— (no owner)', ''], ['VB-2605-003', '+447700900102', 'Shona Whitlow', '2026-01-14']]);
+  if (n.id === 'sql') body = `<div class="field"><label>SELECT over upstream nodes (DuckDB, read-only, sandboxed)</label><textarea ${ro ? 'readonly' : ''}>SELECT b.booking_id, b._ref, COUNT(c.call_id) AS calls_30d
+FROM "Join: owner of contact" b
+LEFT JOIN pin_calls c ON c.called_number = b.contact_number
+ AND c.started_at > b.visit_at - INTERVAL 30 DAY
+GROUP BY b.booking_id, b._ref</textarea></div><div class="field"><label>Plain-words summary (required; shown in guided mode and the run report)</label><input ${ro ? 'readonly' : ''} value="Counts PIN calls to the visitor's number in the 30 days before the visit"></div><div class="note">The deploy gate refuses anything but a single SELECT, and a SELECT that drops the <span class="mono">_ref</span> columns: provenance must survive the join.</div>` + sample(['booking_id', 'calls_30d'], [['VB-2605-001', '158'], ['VB-2605-002', '30'], ['VB-2605-003', '0']]);
+  if (n.id === 'fz') body = `<div class="field"><label>Left · right</label><input readonly value="visit_bookings.visitor_name ≈ number_owners.owner_name"></div><div class="field"><label>Method</label><select ${ro ? 'disabled' : ''}><option>Name similarity (Jaro-Winkler) + shared contact_number</option><option>Name similarity only</option></select></div><div class="field"><label>Threshold: <b id="thv">0.85</b></label><input type="range" min="0.6" max="0.99" step="0.01" value="0.85" ${ro ? 'disabled' : ''} oninput="$('#thv').textContent=this.value;$('#thn').textContent=Math.round(1204*(1-(this.value-0.6)/0.39*0.9))"></div><div class="note"><b>What this step asserts.</b> A match is written as a scored SAME_AS link marked <i>inferred</i>, with the score, method and this version's threshold in its provenance. It is never a merge: an analyst confirms or undoes it in the Glass. Below-threshold rows are kept, unmatched, and counted. <span class="muted">(Overrides ADR-006 for this step only, by the owner's ruling of 4 Nov 2026.)</span></div><p style="font-size:12.5px"><b id="thn">212</b> of 1,204 bookings match at this threshold.</p>` + sample(['visitor_name', 'owner_name', 'score'], [['S. Whitlow', 'Shona WHITLOW', '<span style="color:var(--teal)">0.97</span>'], ['M. Ellery', 'Marcus Ellery', '<span style="color:var(--teal)">0.95</span>'], ['J Pryce', 'Jamie PRYCE', '<span style="color:var(--teal)">0.91</span>'], ['A. Khan', 'A. Khan (2 owners)', '<span style="color:var(--amber)">0.86 ⚠</span>']]);
+  if (n.kind === 'map') body = `<p class="muted" style="font-size:12.5px">The row template: what one staged row becomes. Drag a staged column onto an element to bind it.</p><div class="note mono" style="font-size:11.5px;line-height:1.7">⬤ Person (prisoner) ← prisoner_no &nbsp;[match on identifier · reference or create]<br>⬤ Person (visitor) ← visitor_name, owner_name &nbsp;[inferred via fuzzy match]<br>◆ Visit ← booking_id, visit_at, estab_name<br>⬡ Endpoint ← E.164(contact_number)<br>── VISITED: visitor → prisoner · when: visit_at<br>── USES: visitor → Endpoint<br>── SAME_AS (inferred, scored): visitor ≈ owner</div><div class="field"><label>Unmapped staged columns (always shown)</label><input readonly value="region · calls_30d — map them, or mark ignore with a note"></div>`;
+  if (n.kind === 'load') body = `<div class="field"><label>Target dataset</label><input readonly value="Prison Intelligence Dataset (the Studio is open on it)"></div><div class="field"><label>Load rules (which rules judge this pipeline's loads)</label><div class="check"><input type="checkbox" checked> Hotlist: 07700 900640 → <b>load with an alert</b></div><div class="check"><input type="checkbox" checked> Contact on a seized handset → <b>hold the rows</b> for a reviewer</div><div class="check"><input type="checkbox" checked> Whole-deployment: sanctions screening (cannot be left off)</div></div><div class="field"><label>Dedupe key for this branch</label><input value="booking_id"></div><div class="note">One transaction per run under one load id; each link written once; every element records the pipeline version that made it. A load is revertible.</div>`;
+  return `<div class="drawer">${hd}${body}${foot}</div>`;
+}
+function showYaml(what) {
+  const y = what === 'node' && S.selNode === 'map' ? S.tpl.els.map(e => `- ref: ${e.id}\n  type: ${e.type}\n  match_on: ${e.matchOn}\n  on_match: ${e.onMatch}${e.inf ? '\n  inferred: true' : ''}\n  values:\n${e.binds.map(b => `    ${b[0].replace(/ \(.*\)/, '').replace(/ /g, '_')}: ${b[1]}`).join('\n')}`).join('\n') + '\nlinks:\n' + S.tpl.links.map(l => `  - {type: ${l.t}, from: ${l.a}, to: ${l.b}, when: ${l.when.startsWith('(') ? 'null' : l.when}${l.score ? ', score: ' + l.score + ', inferred: true' : ''}}`).join('\n') : what === 'model' ? `dataset: prison-intelligence\ntarget_model:\n  version: ${S.model.version}\n  packs: [pole, niem]\n  extensions:\n${S.model.extensions.map(e => `    - ${e.t}.${e.n}: {kind: ${e.kind}, ${e.detail.includes('pattern') ? 'pattern: "Z####ZZ"' : "list: Wings"}}`).join('\n')}\n  lists:\n${S.model.lists.map(l => `    - ${l.n.replace(/ /g, '_').toLowerCase()}: {key: ${l.key}, version: ${l.v}${l.screening ? ', screening: true' : ''}}`).join('\n')}`
+    : what === 'node' ? `- id: fz\n  step: fuzzy_match\n  left: visit_bookings.visitor_name\n  right: number_owners.owner_name\n  method: [jaro_winkler, shared_identifier(contact_number)]\n  threshold: 0.85\n  writes: same_as   # scored, inferred; never a merge\n  below_threshold: keep_unmatched`
+    : `pipeline: visits-and-contacts\nversion: 5 (draft)\ntarget: {dataset: prison-intelligence, model_version: ${S.model.version}}\nsources: [visit_bookings, number_owners, pin_calls]\nstaging:\n  - {id: lk, step: lookup, list: establishments, on: estab_id}\n  - {id: jn, step: join, left: visit_bookings, right: number_owners, on: e164(contact_number)=e164(number), kind: left}\n  - {id: sql, step: sql, summary: "Counts PIN calls…", select: "SELECT b.booking_id, b._ref, …"}\n  - {id: fz, step: fuzzy_match, threshold: 0.85, writes: same_as}\nmap:\n  row_template: …   # unchanged from today's recipe\nload:\n  dataset: prison-intelligence\n  rules: [hotlist-900640: alert, seized-handset-contact: hold, sanctions: alert]\n  dedupe_key: booking_id`;
+  modal(`<h3 style="margin-top:0">YAML ${S.mode === 'expert' ? '(editable in expert mode)' : '(read-only in guided mode)'}</h3><textarea style="width:100%;min-height:300px;font-family:var(--mono);font-size:12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:10px" ${S.mode === 'expert' ? '' : 'readonly'}>${esc(y)}</textarea><div class="actions" style="margin-top:10px"><button class="btn primary" onclick="closeModal()">Close</button></div>`);
+}
+function runTest() {
+  modal(`<h3 style="margin-top:0">Test: dry run of the whole pipeline</h3><p class="muted" id="tp">Resolving 1,204 sample rows…</p><div id="tr"></div>`);
+  setTimeout(() => { if (!$('#tr')) return; $('#tp').textContent = 'Writes nothing. Here is what a run would make:'; $('#tr').innerHTML = `
+  <div class="grid g2"><div class="card"><h3>The graph it would make</h3><svg viewBox="0 0 300 150" style="width:100%;max-width:320px"><g fill="var(--accent)"><circle cx="150" cy="75" r="9"/><circle cx="80" cy="40" r="6"/><circle cx="60" cy="100" r="6"/><circle cx="230" cy="50" r="6"/><circle cx="240" cy="110" r="6"/><circle cx="150" cy="130" r="6"/></g><g stroke="#8a9aa3" stroke-width="1.5"><line x1="150" y1="75" x2="80" y2="40"/><line x1="150" y1="75" x2="60" y2="100"/><line x1="150" y1="75" x2="230" y2="50"/><line x1="150" y1="75" x2="240" y2="110"/><line x1="150" y1="75" x2="150" y2="130" stroke-dasharray="4 3"/></g><text x="150" y="20" font-size="10" fill="var(--muted)" text-anchor="middle">38 Person · 1,204 Visit · 61 Endpoint · dashed = inferred SAME_AS</text></svg></div>
+  <div class="card"><h3>Counts</h3><table class="sample"><tr><td>Rows read</td><td>1,204</td></tr><tr><td>Staged after joins</td><td>1,204 · 212 fuzzy ≥ 0.85</td></tr><tr><td>Would create</td><td>38 Person · 1,204 Visit · 61 Endpoint</td></tr><tr><td>Would reference</td><td>1,166 existing</td></tr><tr><td style="color:var(--warn)">Rejected</td><td style="color:var(--warn)">3 · timestamp: zone undeterminable</td></tr><tr><td style="color:var(--warn)">Would hold</td><td style="color:var(--warn)">2 · contact on a seized handset</td></tr><tr><td>Alerts the sample would raise</td><td>1 High (hotlist 07700 900640)</td></tr><tr><td>Expert steps disclosed</td><td>1 SQL (1,204 → 1,204), 1 fuzzy match</td></tr></table></div></div>
+  <div class="note" style="margin-top:12px"><b>Test passed.</b> Rows are rejected, never coerced; the 3 rejected rows are listed by cause with masked samples. Deploy is now available.</div>
+  <div class="actions"><button class="btn primary" onclick="S.tested=true;closeModal();render()">Close</button></div>`; }, 1100);
+}
+function deploy() { const p = S.pipelines.find(x => x.id === S.openPipeline); p.v++; p.status = 'deployed'; S.tested = false; toast(`Deployed ${p.name} as v${p.v}. It did not run: use Runs → Run now, or wait for its schedule.`); render(); }
+
+// ---------------------------------------------------------------- RUNS
+const DAYS = ['27 Oct', '28', '29', '30', '31', '1 Nov', '2', '3', '4'];
+function renderRuns() {
+  const r = S.selRun; const p = S.pipelines.find(x => x.id === r.p); const c = p.cells[r.i];
+  const report = c === '.' ? `<p class="muted">No run that day.</p>` : c === 'S' ? `<p class="muted">Scheduled, not yet run.</p>` : c === 'R' ? `<p>Running… <span class="muted">resolving rows → staging → writing the graph → judging by the rules</span></p>` : `
+    <p class="muted" style="font-size:12px;margin-top:-4px">Trigger: ${p.id === 'visits' ? 'schedule (owner: osprey-demo-engineer)' : 'run now'} · v${p.v} · 42 s</p>
+    <table class="sample"><tr><td>Rows read</td><td>1,204</td></tr><tr><td>Staged (after joins)</td><td>1,204 · 212 fuzzy matches ≥ 0.85</td></tr><tr><td>Created</td><td>38 Person · 1,204 Visit · 61 Endpoint</td></tr><tr><td>Referenced</td><td>1,166 existing</td></tr><tr><td style="color:var(--warn)">Rejected</td><td style="color:var(--warn)">3 (timezone undeterminable)</td></tr><tr><td style="color:${c === 'H' ? 'var(--warn)' : 'inherit'}">Held for review</td><td style="color:${c === 'H' ? 'var(--warn)' : 'inherit'}">${c === 'H' ? "2 — rule 'contact on a seized handset'" : '0'}</td></tr><tr><td>Alerts raised</td><td>1 High (hotlist 07700 900640)</td></tr><tr><td>Expert steps</td><td>1 SQL step, 1 fuzzy match (disclosed)</td></tr></table>
+    <div class="actions" style="margin-top:10px">${c === 'H' ? '<button class="btn primary" onclick="heldRows()">Open held rows (2)</button>' : ''}<button class="btn" onclick="toast('Rejection report: 3 rows, one cause, masked samples')">Rejection report</button><button class="btn" onclick="toast('Revert supersedes everything this load created; the audit trail stays. Needs the revert_loads right.')">Revert this load</button></div>`;
+  return `
+  <div class="head"><div class="grow"><h1>Runs for Prison Intelligence Dataset</h1><p class="sub">One row per pipeline, one cell per run. Click a cell for the run report.</p></div>
+  <div class="actions"><button class="btn" onclick="toast('Schedules: hourly / daily / weekday / weekly / cron in a named zone, previewed as words with the next five runs')">Schedules and watches</button><button class="btn primary" onclick="runNow()">Run now ▾</button></div></div>
+  <div class="grid g2" style="grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr)">
+    <div class="card tscroll"><div class="runs"><div class="h" style="text-align:left">Pipeline</div>${DAYS.map(d => `<div class="h">${d}</div>`).join('')}
+    ${S.pipelines.map(p => `<div><b>${p.name}</b><br><span class="muted" style="font-size:11px">v${p.v} · ${p.status}</span></div>${[...p.cells].map((c, i) => `<div class="cell ${{ o: 'ok', H: 'held', S: 'sched', R: 'run', '.': 'none' }[c]} ${r.p === p.id && r.i === i ? 'sel' : ''}" onclick="S.selRun={p:'${p.id}',i:${i}};render()" role="button" tabindex="0">${c === 'H' ? 'held' : c === 'R' ? '…' : ''}</div>`).join('')}`).join('')}</div>
+    <p class="muted" style="font-size:12px">teal = succeeded · amber = rows held, needs a person · grey = scheduled · blank = no run</p></div>
+    <div class="card"><h3>${p.name} · ${DAYS[r.i].length <= 2 ? DAYS[r.i] + (r.i < 5 ? ' Oct' : ' Nov') : DAYS[r.i]}</h3>${report}</div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Schedules and folder watches</h3><div class="tscroll"><table><tbody>${S.pipelines.map(p => `<tr><td><b>${p.name}</b></td><td>${p.sched}</td><td class="muted">${p.sched.includes('paused') ? '<span style="color:var(--warn)">paused: owner lost Editor (3 refusals)</span>' : p.sched === '—' ? 'run by hand' : 'next run tomorrow'}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function runNow() {
+  modal(`<h3 style="margin-top:0">Run now</h3><div class="field"><label>Pipeline</label><select id="rn">${S.pipelines.map(p => `<option value="${p.id}">${p.name} (v${p.v})</option>`).join('')}</select></div><div class="actions"><button class="btn primary" onclick="startRun($('#rn').value)">Run</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+}
+function startRun(id) { closeModal(); const p = S.pipelines.find(x => x.id === id); p.cells = p.cells.slice(0, 8) + 'R'; S.selRun = { p: id, i: 8 }; render(); toast(`${p.name} is running as you (v${p.v})`); setTimeout(() => { p.cells = p.cells.slice(0, 8) + 'o'; render(); toast(`${p.name} finished: 1,204 rows, 3 rejected, 1 alert`); }, 1800); }
+function heldRows() { modal(`<h3 style="margin-top:0">Held rows · Visits and contacts · 3 Nov</h3><p class="muted">Rows a rule could not pass wait for a person. Release loads them under a new load id, judged again, never held twice. Reject needs a reason.</p><table class="sample"><thead><tr><th>booking</th><th>contact</th><th>why held</th><th></th></tr></thead><tbody><tr><td>VB-2605-002</td><td>+447700900718</td><td>number on seized handset CH9J0H</td><td><button class="btn" onclick="toast('Released: loaded under a new load id, judged again; raised 1 alert')">Release and load</button> <button class="btn" onclick="toast('Reject needs a written reason')">Reject</button></td></tr><tr><td>VB-2605-017</td><td>+447700900718</td><td>number on seized handset CH9J0H</td><td><button class="btn">Release and load</button> <button class="btn">Reject</button></td></tr></tbody></table><div class="actions" style="margin-top:10px"><button class="btn primary" onclick="closeModal()">Close</button></div>`); }
+
+
+// ---------------------------------------------------------------- MAP EDITOR (row template)
+const STAGED = {
+  cols: [['booking_id','string'],['prisoner_no','Z####ZZ'],['visitor_name','string'],['owner_name','string (fuzzy)'],['match_score','0–1'],['contact_number','phone (UK)'],['visit_at','timestamp'],['estab_name','string (lookup)'],['region','string'],['calls_30d','integer (SQL)']],
+  rows: [
+    {booking_id:'VB-2605-001',prisoner_no:'Z4162ZZ',visitor_name:'S. Whitlow',owner_name:'Shona WHITLOW',match_score:'0.97',contact_number:'07700 900640',visit_at:'2026-05-09 14:00',estab_name:'Fenwick Moor',region:'North East',calls_30d:'158'},
+    {booking_id:'VB-2605-002',prisoner_no:'Z0193ZZ',visitor_name:'J Pryce',owner_name:'Jamie PRYCE',match_score:'0.91',contact_number:'07700 900718',visit_at:'2026-05-09 14:30',estab_name:'Fenwick Moor',region:'North East',calls_30d:'30'},
+    {booking_id:'VB-2605-003',prisoner_no:'Z7731ZZ',visitor_name:'A. Khan',owner_name:'A. Khan (2 owners)',match_score:'0.86',contact_number:'07700 900102',visit_at:'2026-05-10 10:00',estab_name:'Saltmarsh Grange',region:'North East',calls_30d:'0'},
+  ]};
+S.tpl = {
+  els: [
+    {id:'prisoner',cls:'Person',type:'Person',label:'prisoner',x:420,y:60,shape:'circle',binds:[['prisoner_number (identifier)','prisoner_no']],matchOn:'prisoner_number',onMatch:'reference'},
+    {id:'visitor',cls:'Person',type:'Person',label:'visitor',x:180,y:150,shape:'circle',binds:[['name','visitor_name']],matchOn:'name + contact_number (fuzzy)',onMatch:'reference',inf:true},
+    {id:'owner',cls:'Person',type:'Person',label:'owner (from fuzzy match)',x:180,y:310,shape:'circle',binds:[['name','owner_name']],matchOn:'name',onMatch:'reference',inf:true},
+    {id:'visit',cls:'Event',type:'Visit',label:'visit',x:420,y:200,shape:'diamond',binds:[['id','booking_id'],['at','visit_at']],matchOn:'id',onMatch:'create'},
+    {id:'endpoint',cls:'Object',type:'Endpoint',label:'contact number',x:660,y:150,shape:'hex',binds:[['value (msisdn)','contact_number']],matchOn:'value_normalised = E.164',onMatch:'reference'},
+    {id:'estab',cls:'Location',type:'Establishment',label:'establishment',x:660,y:300,shape:'pin',binds:[['name','estab_name']],matchOn:'name',onMatch:'reference'},
+  ],
+  links: [
+    {id:'l1',t:'VISITED',a:'visitor',b:'prisoner',when:'visit_at'},
+    {id:'l2',t:'USES',a:'visitor',b:'endpoint',when:'(not recorded)'},
+    {id:'l3',t:'HELD_AT',a:'visit',b:'estab',when:'visit_at'},
+    {id:'l4',t:'SAME_AS',a:'visitor',b:'owner',when:'(not recorded)',inf:true,score:'match_score'},
+    {id:'l5',t:'ATTENDED',a:'visitor',b:'visit',when:'visit_at'},
+  ],
+  sel: 'visitor', row: 0, pending: null, ignored: [],
+};
+function boundCols(){ const set=new Set(); S.tpl.els.forEach(e=>e.binds.forEach(b=>set.add(b[1]))); S.tpl.links.forEach(l=>{ if(l.when && !l.when.startsWith('(')) set.add(l.when); if(l.score) set.add(l.score); }); return set; }
+function shapePath(e){ const r=22; if(e.shape==='circle') return `<circle class="shape" cx="${e.x}" cy="${e.y}" r="${r}"/>`;
+  if(e.shape==='diamond') return `<path class="shape" d="M${e.x},${e.y-r} L${e.x+r},${e.y} L${e.x},${e.y+r} L${e.x-r},${e.y} Z"/>`;
+  if(e.shape==='hex') return `<path class="shape" d="M${e.x-r},${e.y} L${e.x-r/2},${e.y-r*0.87} L${e.x+r/2},${e.y-r*0.87} L${e.x+r},${e.y} L${e.x+r/2},${e.y+r*0.87} L${e.x-r/2},${e.y+r*0.87} Z"/>`;
+  return `<path class="shape" d="M${e.x},${e.y+r} C${e.x-r},${e.y-4} ${e.x-r*0.6},${e.y-r} ${e.x},${e.y-r} C${e.x+r*0.6},${e.y-r} ${e.x+r},${e.y-4} ${e.x},${e.y+r} Z"/>`; }
+function renderMapEditor(){
+  const t=S.tpl, row=STAGED.rows[t.row], bound=boundCols();
+  const strip=`<div class="strip"><span class="muted">Pipeline:</span>${['src1','lk','jn','sql','fz','map','load'].map(id=>{const n=NODES.find(x=>x.id===id);return `<span class="pn ${id==='map'?'on':''}" onclick="S.selNode='${id}';render()">${esc(n.t.split(':')[0])}</span>`;}).join('<span class="muted">›</span>')}<span class="spacer" style="flex:1"></span><span class="muted">Map: what one staged row becomes</span></div>`;
+  const cols=`<div class="cols"><div class="k" style="margin:2px 0 6px">Staged columns · row ${t.row+1} of 1,204</div>${STAGED.cols.map(([c,pat])=>{const ign=t.ignored.includes(c);return `<div class="col ${bound.has(c)?'bound':''} ${t.pending===c?'pend':''}" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${c}');S.tpl.pending='${c}'" onclick="pickCol('${c}')" title="Drag onto an element, or click it then click an element"><div><div>${c}${ign?' <span class="muted">(ignored)</span>':''}</div><div class="pat">${pat}</div></div><div class="v">${esc(row[c])}</div></div>`;}).join('')}
+  <p class="muted" style="font-size:11px;margin:8px 2px 0">${[...STAGED.cols.map(c=>c[0])].filter(c=>!bound.has(c)&&!t.ignored.includes(c)).length} unmapped: ${STAGED.cols.map(c=>c[0]).filter(c=>!bound.has(c)&&!t.ignored.includes(c)).join(', ')||'none'}. Map them or mark ignore.</p></div>`;
+  const pos=Object.fromEntries(t.els.map(e=>[e.id,e]));
+  const links=t.links.map(l=>{const A=pos[l.a],B=pos[l.b];const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;const vert=Math.abs(A.x-B.x)<30;return `<line class="ln ${l.inf?'inf':''} ${t.sel===l.id?'sel':''}" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" marker-end="url(#arr2)" onclick="S.tpl.sel='${l.id}';render()"/><text class="lnt ${t.sel===l.id?'sel':''}" x="${vert?mx-12:mx}" y="${vert?my+4:my-6}" text-anchor="${vert?'end':'middle'}" onclick="S.tpl.sel='${l.id}';render()">${l.t}${l.inf?' (inferred)':''}</text>`;}).join('');
+  const els=t.els.map(e=>`<g class="el ${t.sel===e.id?'sel':''} ${e.inf?'inf':''}" tabindex="0" role="button" aria-label="${e.label}" onclick="elClick('${e.id}')" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="event.preventDefault();bindCol(event.dataTransfer.getData('text/plain'),'${e.id}')">${shapePath(e)}<text class="lab" x="${e.x}" y="${e.y+38}" text-anchor="middle">${esc(e.label)}</text><text class="ty" x="${e.x}" y="${e.y+50}" text-anchor="middle">${e.cls} · ${e.type}</text><text class="bd" x="${e.x}" y="${e.y+62}" text-anchor="middle">${e.binds.map(b=>'← '+b[1]).join(' ')}</text></g>`).join('');
+  const tpl=`<div class="tpl"><svg viewBox="0 0 820 380" role="img" aria-label="Row template"><defs><marker id="arr2" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8a9aa3"/></marker></defs>${links}${els}</svg>
+  <div class="bar"><button class="btn ghost" onclick="toast('Pick a type from the target model (v${S.model.version}): only types the model has are offered')">+ Entity</button><button class="btn ghost" onclick="toast('Pick two elements, then a link type the model allows between them')">+ Link</button><span class="muted">·</span><button class="btn ghost" onclick="S.tpl.row=(S.tpl.row+2)%3;render()">◂</button><span>Sample row ${t.row+1}</span><button class="btn ghost" onclick="S.tpl.row=(S.tpl.row+1)%3;render()">▸</button><span class="muted">· the template is always shown bound to a real row; page through to find the nulls</span></div></div>`;
+  return strip+`<div class="mapgrid">${cols}${tpl}</div>`;
+}
+function pickCol(c){ if(S.tpl.pending===c){ S.tpl.pending=null; } else { S.tpl.pending=c; toast(`Now click the element to bind '${c}' to (or mark it ignored in the inspector)`); } render(); }
+function elClick(id){ if(S.tpl.pending){ bindCol(S.tpl.pending,id); return; } S.tpl.sel=id; render(); }
+function bindCol(c,id){ const e=S.tpl.els.find(x=>x.id===id); if(!c||!e) return; if(!e.binds.some(b=>b[1]===c)) e.binds.push([c.replace(/_/g,' '),c]); S.tpl.pending=null; S.tpl.sel=id; S.tpl.ignored=S.tpl.ignored.filter(x=>x!==c); toast(`Bound ${c} → ${e.label}.${c.replace(/_/g,' ')}`); render(); }
+function unbind(id,i){ const e=S.tpl.els.find(x=>x.id===id); e.binds.splice(i,1); render(); }
+function ignoreCol(){ const c=S.tpl.pending; if(!c) return toast('Click a column first'); S.tpl.ignored.push(c); S.tpl.pending=null; toast(`'${c}' marked ignore (with a note) — deliberately, not silently`); render(); }
+function renderMapInspector(){
+  const t=S.tpl; const e=t.els.find(x=>x.id===t.sel); const l=t.links.find(x=>x.id===t.sel);
+  const ro=S.mode==='guided' && (e?.inf || l?.inf);
+  if(l){ const A=t.els.find(x=>x.id===l.a),B=t.els.find(x=>x.id===l.b); return `<div class="drawer"><div class="hd"><h3>Link: ${l.t}</h3>${l.inf?'<span class="chip ex">inferred</span>':''}</div>
+    <div class="field"><label>From → to</label><input readonly value="${A.label} → ${B.label}"></div>
+    <div class="field"><label>When it occurred (chosen, never assumed)</label><select ${ro?'disabled':''} onchange="S.tpl.links.find(x=>x.id==='${l.id}').when=this.value;render()">${['(not recorded)','visit_at','booking_id'].map(o=>`<option ${o===l.when?'selected':''}>${o}</option>`).join('')}</select></div>
+    ${l.score?`<div class="field"><label>Score column</label><input readonly value="${l.score}"></div><div class="note">A SAME_AS written by a fuzzy match is scored and inferred: an analyst confirms or undoes it in the Glass. Never a merge.</div>`:''}
+    <div class="note mono" style="font-size:11.5px">Row ${t.row+1} would write: ${A.label} —${l.t}→ ${B.label}${l.when.startsWith('(')?'':' at '+STAGED.rows[t.row][l.when]}${l.score?' · score '+STAGED.rows[t.row][l.score]:''}</div>
+    <div class="actions"><button class="btn" onclick="toast('Preview: the links this template makes from the sample')">Preview</button><button class="btn" onclick="toast('Link removed from the template')">Remove link</button></div></div>`; }
+  if(!e) return `<div class="drawer"><h3>Row template</h3><p class="muted">Select an element or a link to edit its bindings and match rules. Drag a staged column onto an element to bind it.</p></div>`;
+  const row=STAGED.rows[t.row];
+  return `<div class="drawer"><div class="hd"><h3>${esc(e.label)}</h3>${e.inf?'<span class="chip ex">inferred</span>':''}</div>
+    <div class="field"><label>POLE class · type (from the target model v${S.model.version})</label><input readonly value="${e.cls} · ${e.type}"></div>
+    <div class="field"><label>Bindings (drag a column here, or click a column then this element)</label>${e.binds.map((b,i)=>`<div class="bind"><span><b>${b[0]}</b> ← <span class="mono">${b[1]}</span> <span class="muted">= ${esc(row[b[1]]??'')}</span></span>${ro?'':`<span class="x" onclick="unbind('${e.id}',${i})" title="Remove binding">✕</span>`}</div>`).join('')||'<p class="muted" style="font-size:12px">No bindings yet.</p>'}
+    ${t.pending?`<button class="btn primary" onclick="bindCol('${t.pending}','${e.id}')">Bind '${t.pending}' here</button> <button class="btn" onclick="ignoreCol()">Mark '${t.pending}' ignored</button>`:''}</div>
+    <div class="field"><label>Match on (what identifies this ${e.type})</label><select ${ro?'disabled':''}><option>${e.matchOn}</option><option>— choose an identifier or a normalised value —</option></select></div>
+    <div class="field"><label>On match</label><div class="check"><input type="radio" name="om" ${e.onMatch==='reference'?'checked':''} ${ro?'disabled':''} onchange="S.tpl.els.find(x=>x.id==='${e.id}').onMatch='reference';render()"> reference the existing node</div><div class="check"><input type="radio" name="om" ${e.onMatch==='create'?'checked':''} ${ro?'disabled':''} onchange="S.tpl.els.find(x=>x.id==='${e.id}').onMatch='create';render()"> create a new node</div></div>
+    <div class="note mono" style="font-size:11.5px">Row ${t.row+1} would ${e.onMatch==='reference'?'reference or create':'create'} ${e.type}${e.binds.length?' ['+e.binds.map(b=>b[0]+'='+(row[b[1]]??'')).join(', ')+']':''}${e.inf?' · marked inferred':''}</div>
+    <p class="muted" style="font-size:11.5px">On match decides whether 1,204 bookings make 38 people or 1,204. A value the ontology refuses rejects the row, never coerces it.</p>
+    <div class="actions"><button class="btn" onclick="toast('Preview: the graph this template would make from the sample (Test does the whole pipeline)')">Preview</button><button class="btn" onclick="showYaml('node')">Show as YAML</button></div></div>`;
+}
+
+// ---------------------------------------------------------------- render
+function render() {
+  readiness();
+  const map = { model: renderModel, sources: renderSources, pipelines: renderPipelines, runs: renderRuns };
+  $('#place').innerHTML = map[S.place]();
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setPlace(t.dataset.p)));
+$('#mGuided').onclick = () => setMode('guided'); $('#mExpert').onclick = () => setMode('expert');
+$('#dsBtn').onclick = () => modal(`<h3 style="margin-top:0">Choose the dataset to work on</h3><p class="muted">The Studio opens on a dataset, not a case. A composite dataset has a Model and Runs tab but no Sources or Pipelines of its own.</p><ul class="list" style="list-style:none;padding:0"><li><b>Prison Intelligence Dataset</b> <span class="chip ok">open</span><br><span class="muted" style="font-size:12px">unit: fenwick-moor-security · 4 cases read it</span></li><li><b>Operation Ledger</b><br><span class="muted" style="font-size:12px">unit: fincrime-demo · 1 case</span></li><li><b>Regional custody (composite)</b> <span class="chip">composite</span><br><span class="muted" style="font-size:12px">union of Prison Intelligence Dataset + Saltmarsh dataset · evaluated at read time</span></li></ul><div class="actions"><button class="btn primary" onclick="closeModal()">Close</button></div>`);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+render();
+</script>
+
+</head></html>

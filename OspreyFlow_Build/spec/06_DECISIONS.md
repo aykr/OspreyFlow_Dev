@@ -25018,3 +25018,480 @@ carries no server path), `::test_a_recipe_verify_never_recorded_runs_as_before`;
 source is refused". The route tests' store stand-in now clears `verified_at` on every edit, as the
 real store does (rule 15); `tests/services/api/test_studio_recipes_store.py::test_verify_records_the_files_it_read_and_an_edit_clears_them`
 is the live-Postgres case, **not run here** (no Postgres on 55433 in this session).
+
+## ADR-140 — The Ingest Studio as a four-step studio: model, sources, pipelines, runs — ACCEPTED (design)
+
+Status: accepted from the owner's rulings R1–R9 and R12 of 4 November 2026, each put to the owner as a
+choice and answered, and four further rulings of 5 November 2026 (R13, R15, R16 and R17 below) given
+where the design met a standing rule or ruling it did not itself name as changed. **Not built.** Built
+in phases 1–9 of the redesign's build plan; phase 0 (this ADR, its amendments and the spec edits) is
+the only one done. ADR-141 records R10 and R11.
+
+**Design reference.** `spec/ingest_studio_redesign/INGEST_STUDIO_REDESIGN_BRIEF_v2.md` (draft 2.2,
+4 November 2026; "the brief" below) and the clickable prototype
+`spec/ingest_studio_redesign/ingest_studio_prototype.html`, the owner-approved feel of every screen,
+with the wireframes `wf1_model.svg` to `wf4_runs.svg` beside them. They were written outside the
+repository and copied into `spec/` at the owner's choice on 5 November 2026, so the reference is
+version-controlled. Where the brief and this ADR differ, this ADR governs: it adds the 5 November
+rulings, which the brief predates.
+
+### The owner's rulings of 4 November 2026 (verbatim, brief §0)
+
+| # | Ruling | What it changes |
+| --- | --- | --- |
+| R1 | The Studio follows the steps a data engineer expects: **1 define the target model → 2 register source tables → 3 map sources to the model → 4 multi-stage transforms (joins, operations) organised as a DAG.** | Supersedes ADR-108's canvas-of-doors arrangement and the five-step wizard it wrapped. |
+| R2 | **POLE stays the enforced baseline** of every target model. A model starts from an accelerator pack or blank POLE; a developer may extend it, and may define **lookup lists that act as reference tables**. | Keeps `01_DOMAIN_MODEL.md` §1.1; adds reference lists as a first-class model object. |
+| R3 | **One target model per dataset.** The model is owned by the dataset; every pipeline loading that dataset maps into it; a case's packs follow from the datasets it reads. | Amends ADR-126 (packs were a case setting) and removes the pipeline's own domain-model node (ADR-108 §1). |
+| R4 | **The staging layer may join and transform.** In guided mode, a closed catalogue of steps. In **expert mode a developer may write SQL-style transforms.** | Overturns `09_INGEST_STUDIO.md` §9 "no joins across sources at ingest" and, for expert mode only, "no scripting". |
+| R5 | **Fuzzy joins are allowed in staging** (similarity match with a threshold). | Overturns ADR-006 for that step only; this brief adds the provenance, marking and undo that make it defensible (§5.4). |
+| R6 | Two modes over the same pipeline: **guided (no-code)** and **expert (low-code)**. | New. |
+| R7 | The three top-level concerns are **equals**, not a dbt-first or Airflow-first home; the user picks the entry point. | New. |
+| R8 | **A case reads exactly one dataset; a dataset serves many cases.** A need to analyse several datasets together is met by a **composite dataset** (a declared union of member datasets, evaluated at read time), never by a case naming several. | Amends ADR-099 decisions 3 and 6; ADR-126 becomes derived. |
+| R9 | **A source carries its own refresh policy** (trigger and mode); a refresh runs every pipeline that uses the source. | Moves ADR-110's folder watch and schedule to the source; adds incremental and full-snapshot modes. |
+| R12 | **A target model is draft or live.** Exactly one live version serves pipelines and cases; at most one draft is edited beside it; pipelines can be tested against the draft; *Make live* is the only step that changes what runs. | New; §4. |
+
+("§4" and "§5.4" in the right-hand column are the brief's sections.)
+
+### The owner's rulings of 5 November 2026
+
+Put as multiple-choice questions during phase 0, because the brief met a standing rule or ruling it
+did not name as changed. R14 is recorded in ADR-141.
+
+| # | Question | Ruling |
+| --- | --- | --- |
+| R13 | The brief (§5.4) lets Map "use the matched columns" of a fuzzy match; written as asserted, that breaks rule 5. | **Matched values inferred.** Map may bind a fuzzy match's right-hand columns, but every element or property sourced from one is written `inferred`, carrying the match's score, until an analyst confirms the `SAME_AS`. Rule 5 holds unchanged. |
+| R15 | `09_INGEST_STUDIO.md` §9 says "no aggregation at ingest", not named as changed; a SELECT can aggregate. | **Yes, with ref lists.** An expert-mode SQL transform may aggregate, provided each output row carries the `_ref` of every input row it was computed from. The §9 bullet is reworded. |
+| R16 | One dataset per case removes ADR-099 Amendment 8's *Start empty* (the owner's ruling of 9 October 2026) and the "dataset of its own" fallback for a case opened from an alert. | **Pick, or make one.** The new-case form offers *Use an existing dataset* or *Make a new dataset* (named in the form, then loaded in the Studio). A case opened from an alert reads the alert's dataset. Amendment 8 is withdrawn in words (ADR-099 Amendment 12). |
+| R17 | The brief (§6.6) lets a SQL or API source refresh by "a short poll"; ADR-110 Amendment 3 item 4 is the owner's 15-minute floor. | **Left open to phase 4.** The poll trigger is recorded; whether it may run more often than every 15 minutes is decided in phase 4. Until then the floor stands for every trigger. |
+
+### What is not reopened
+
+The recipe-as-YAML principle (`09_INGEST_STUDIO.md` §1) stands: a pipeline is a declarative,
+versioned, diffable file, and a run is provably against the version that was deployed. Expert-mode SQL
+and fuzzy steps are declared **in** that YAML, never kept beside it. Kept unchanged (brief §1): the row
+template as a drawn mini-graph; a true dry run with a rendered preview; rows rejected, never coerced;
+one transaction per run under a revertible `load_id`, each link written once; every element stamped
+with the recipe version that made it; access control inside every store query (ADR-099, rule 3);
+checks on load; held rows released by a person; the review queue for extracted findings; ontology
+changes flagging pipelines.
+
+### Decision
+
+1. **Four places, in the method's order** (R1, R7): **Model** (what shape is the data in this
+   dataset), **Sources** (what tables feed it, from where, under what marking), **Pipelines** (how
+   each source becomes graph), **Runs** (when it runs and what happened), with a readiness strip
+   (model version, sources registered, pipelines tested and deployed, last run). The user picks the
+   entry point. **The Studio opens on a dataset, never a case** (R8).
+2. **The vocabulary a person reads changes** (brief §3): recipe → *pipeline*; domain model (node) →
+   *target model*, owned by the dataset; Connect → *register a source*; Profile → a property of a
+   source; Verify → *Test* (whole pipeline) and *Preview* (one node), both dry runs; Publish →
+   *Deploy as vN*, which commits a version only; Run now and the schedule → the **Runs** tab; checks on
+   load → *Load rules* on the Load node; flagged → *needs attention*; superseded → *previous version*.
+   Routes and YAML keys may keep their names for compatibility.
+3. **Two modes over one pipeline** (R6). *Guided* shows a numbered list of steps with forms and a
+   read-only picture of the DAG, and offers only the closed catalogue. *Expert* shows the canvas as
+   the editor, an editable *Show YAML*, and the expert-only steps. A pipeline edited in expert mode
+   opens in guided mode with its expert steps shown read-only and labelled. The mode is a per-person
+   preference; the expert-only steps also need the right `write_sql_transforms`, granted by an
+   administrator.
+4. **The target model belongs to the dataset** (R2, R3; brief §4): the POLE core, always on, plus
+   zero or more accelerator packs, the dataset's own extensions and its reference lists. A pack only
+   adds types or widens an edge's ends; a collision with the core is refused; POLE types cannot be
+   removed or renamed; an expert-mode entity type sits under one of the four POLE classes. An
+   extension is today's analyst-proposed type (ADR-090, ADR-099 Amendment 3 decision 2). An extension
+   is **retired, never deleted**; a rename is "add the new, retire the old". Editing a model needs the
+   new right `edit_target_model`.
+5. **Draft and live** (R12): exactly one *live* version; at most one *draft* (N+1), opened by the
+   first edit; every earlier version *previous* and read-only. A pipeline can be tested against the
+   draft (a Test names the model version it used). The draft shows its **impact** (deployed pipelines
+   writing a changed or retired type, cases reading the dataset, pipelines using a changed list,
+   screening re-runs, covering composites). *Make live* is the only step that changes what runs:
+   pipelines writing a changed or retired type are marked *needs attention* and their schedules and
+   refreshes pause with that reason; others are untouched. Loaded data is never rewritten. Rolling
+   back is a forward step ("Revert to version N" goes live as N+2). A discarded draft leaves no trace
+   in the version history. A pack upgrade is the same flow.
+6. **Reference lists** (R2): a small versioned table with a declared key column, belonging to the
+   dataset, used by a staging Lookup, as the value source of a Map property binding, and, marked
+   *screening*, by the monitoring rules. Today's screening lists (`ListSchedule`) become one kind of
+   reference list.
+7. **Sources are registered once** (brief §5): a source is one table, file set or endpoint on a
+   connection, carrying its profile, handling marking and lawful-sharing code, the units its rows may
+   name, its legal basis and its refresh policy; every pipeline using it inherits them. Today's Connect
+   gate leaves the pipeline. Registering is `SOURCE_AUTHOR`; *Edit governance* is audited. Connections
+   (Files, SQL database, API, JSON schema) are admin-managed and read-only; the connector profile
+   pattern (ADR-016) is the extension point and is unchanged.
+8. **A pipeline is one DAG** (R1, R4; brief §6): source tables → staging steps → Map → (Extract,
+   Enrich) → Load. **The canvas is the editor**: choosing a node opens its editor in a drawer beside
+   the canvas, with a live sample of that node's output; nothing replaces the canvas. The Map editor is
+   three panes (staged columns, the template on the Glass's Sigma canvas, the inspector) under a
+   clickable strip of the pipeline (brief §6.5). Unmapped columns are mapped or marked *ignore* with a
+   note, never left silent.
+9. **The staging catalogue.** Guided and expert: Lookup, Join (two upstream tables on an exact or
+   normalised key, inner or left, the key declared and never guessed), Filter (declared conditions),
+   Derive (a catalogue of operations), Union, Dedupe. Each guided step is declared in structured YAML
+   fields and every operation in it is a Knowledge Adapter with golden test files (rule 8 as reworded
+   by this ADR). Expert only, read-only in guided mode: **SQL transform** and **Fuzzy match**.
+10. **Staged rows are first-class**: each step's output is a table the next reads, profiled like a
+    source, written to Parquet as resolved rows are today (`03_CONDUIT_MIDDLEWARE.md` §5.1).
+11. **Provenance through staging.** Every staged row carries `source_refs`: for each input table, the
+    source row's identity (its dedupe key or row hash) and its `load_id`. A Join carries both sides; a
+    Union one; an aggregating SQL step **every input row's ref** (R15). The element Map creates records
+    the staged row's refs in its audit stub beside `recipe_version`. **Rule 7 holds:** a source row's
+    identity in `source_refs` is a source-system identifier and never reaches the Glass raw (ADR-091
+    Amendment 1); the Glass shows where an element came from in words.
+12. **SQL transform** (R4, R15): one SELECT over the names of its upstream nodes, run by the Vault's
+    DuckDB over the staged Parquet in a sandbox: read-only, no file or network functions, no other
+    dataset's rows, a time and memory limit, and the person's own principal, so a row they may not read
+    is absent, not masked (ADR-099). The publish gate refuses anything but a single SELECT and anything
+    that drops the `_ref` columns; an aggregating SELECT must carry every input row's `_ref`. The run
+    report lists each SQL step with its rows in and out. Guided mode shows the step read-only with its
+    SQL and a mandatory plain-words summary its author wrote.
+13. **Fuzzy match** (R5, R13): left and right tables, the columns compared, the method (the
+    Splink-backed comparisons already in the product), a threshold. It writes a scored `SAME_AS` link
+    marked `inferred`, never a merge; the threshold is part of the version; below-threshold rows are
+    kept, unmatched, and counted. A value Map binds from a matched column is written `inferred` with the
+    match's score until an analyst confirms the `SAME_AS` (R13). ADR-006 Amendment 1 has the detail.
+14. **Test, Preview, Deploy.** *Preview* on any node is today's dry run up to that node; *Test* is the
+    whole pipeline, and must pass before Deploy (as today). *Deploy as vN* commits the YAML (staging
+    steps, SQL text, fuzzy settings, load rules), the pinned model version and pack versions; it does
+    not run or schedule. *Deploy and run now* is a second button.
+15. **Refresh policy on the source** (R9; brief §6.6): a trigger (files: folder watch or manual; SQL
+    and API: a schedule, a poll, or manual) and, for SQL and API, a mode (incremental past a watermark
+    column, or full snapshot; on a full snapshot, rows that disappear are kept or their elements
+    superseded, never deleted). A refresh runs every pipeline using the source, each under its own
+    `load_id`, judged by its load rules, listed in Runs with the trigger *source refresh*. ADR-110
+    Amendment 5 has the detail. **Prerequisite:** ADR-109 Amendment 1's "not fixed" re-run events
+    (phase 1).
+16. **Runs** (brief §7): a grid of deployed pipelines by day, each cell a run report (rows read,
+    staged, created and referenced by type, rejected by cause, held with the rule, alerts, expert
+    steps disclosed, trigger, owner, duration), with *Open held rows*, *Rejection report* and *Revert
+    this load* under today's rights. *Run now ▾*; *Schedules and watches* is ADR-110's editor,
+    unchanged in its executor.
+17. **Datasets and cases** (R8, R16; brief §2): a case reads exactly one dataset; a dataset serves
+    any number of cases; a branch inherits its parent's. Several bodies of data together are a
+    **composite dataset**. ADR-099 Amendment 12 has the detail.
+18. **Every write stays within the Studio's dataset**; the Load node cannot name another.
+
+### Standing rules, as they apply
+
+- **Rule 2.** A Preview or Test sample says it is a sample and of how many rows; below-threshold fuzzy
+  rows and rows a Filter drops are counted in the run report; nothing is dropped silently.
+- **Rule 3.** A dry run, a Preview, a profile and a SQL sandbox read with the person's own principal,
+  limited in the store. How a Studio request opened on a dataset, not a case, is scoped is designed in
+  phase 2 (open question 6), with an access test on every route (rule 4).
+- **Rule 5.** A fuzzy match's `SAME_AS`, and anything Map writes from its matched columns, is
+  `inferred` until a person confirms it (R13). No threshold promotes.
+- **Rule 6.** Nothing is merged in storage; a Join widens a staged row, and the elements Map writes
+  meet existing nodes only through *match on* and *reference*, as today.
+- **Rule 8,** reworded by this ADR: no expression or scripting language in guided mode; expert mode
+  may declare a sandboxed SELECT.
+
+### Tests to write first, named (rules 1, 4, 12, 15)
+
+Each in the phase that builds the thing; listed here so the invariant and its test are stated
+together.
+- A fuzzy-match step leaves two nodes and one `inferred` `SAME_AS` (red if the step writes one node);
+  a property bound from a matched column is `inferred` with the score (red if asserted); a
+  below-threshold row is counted in the report and present in the staged output.
+- A SQL step whose SELECT drops a `_ref` column, or an aggregate whose rows do not carry every input
+  row's `_ref`, is refused at publish (red with the gate removed); a SQL step reading a row its author
+  may not read sees no such row (red with the principal replaced by an unlimited one); `read_csv`,
+  `httpfs` and any second statement are refused.
+- *Make live* flags exactly the pipelines writing a changed or retired type and pauses their refreshes;
+  a pipeline writing only unchanged types keeps running.
+- A Test against the draft names the draft's version; *Deploy* without a passing Test is refused.
+- `source_refs` survive a Join, a Union and an aggregate to the element's audit stub, and no source
+  row identity appears in any Glass response (rule 7).
+- Every new workspace action has its keyboard case (rule 13).
+
+### Steps
+
+Phase 0 (this record): ADR-006 Amendment 1; ADR-099 Amendment 12; ADR-108 Amendment 6; ADR-110
+Amendment 5; ADR-126 Amendment 2; `09_INGEST_STUDIO.md` §0 and §9; `process/CLAUDE.md` rule 8; the
+design reference copied into `spec/ingest_studio_redesign/`. Phases 1–9 follow the build plan: 1
+idempotent run events; 2 vocabulary and the four tabs; 3 sources; 4 refresh policy; 5 target model,
+reference lists, ADR-126 derived, one dataset per case and composites (with the new objects in
+`01_DOMAIN_MODEL.md`: `TargetModel`, `ReferenceList`, `SourceTable`, staging step records,
+`source_refs`); 6 the canvas as editor and the Map editor; 7 the staging catalogue; 8 the expert
+steps; 9 SQL, API and JSON connectors. Each phase rewrites its own slice of `09_INGEST_STUDIO.md`.
+
+### Open questions (not blocking phases 0–3)
+
+1. May a fuzzy match ever *assert* identity (merge columns into one Person)? The brief says no; it
+   stays no unless the owner rules otherwise.
+2. Expert-mode SQL dialect: DuckDB SQL as is (the brief's recommendation), or a restricted subset?
+3. Saved patterns, hotlists and monitors: move to the case (the brief's recommendation, §2 item 4), or
+   stay the dataset's? Until ruled they stay the dataset's (ADR-099 Amendment 12 item 7).
+4. Guided mode the default for every new person, expert opt-in? (The brief recommends yes.)
+5. Cross-unit composites: who grants, per composite or per dataset? Its own ADR.
+6. How a Studio request names its dataset and is scoped to it, now that it names no case (ADR-099
+   decision 5 and Amendment 4 decision 5): phase 2.
+7. What becomes of the values Map wrote from a fuzzy match's columns when an analyst undoes the
+   `SAME_AS` (R13): phase 8.
+8. The poll trigger's floor (R17): phase 4.
+
+### Cost
+
+The largest change to the Studio since ADR-108: new objects in the domain model, a second
+configuration surface per dataset (the model) and per source, a sandboxed SQL engine path, and a
+migration of every multi-dataset case to a composite. Every Studio walkthrough, keyboard spec and the
+deck's data-engineer chapter are rebuilt again. The owner accepted this for a Studio that follows the
+steps a data engineer expects.
+
+## ADR-141 — Operations and external orchestration — ACCEPTED (design)
+
+Status: accepted from the owner's rulings R10 and R11 of 4 November 2026 and R14 of 5 November 2026.
+**Not built.** Built in phases 4 (the run ledger's `source refresh` trigger) and 10 of the Ingest
+Studio redesign's build plan. Design reference: §6.7 and §7.1 of
+`spec/ingest_studio_redesign/INGEST_STUDIO_REDESIGN_BRIEF_v2.md` (ADR-140 says how it came into
+`spec/`). ADR-110 is unchanged except where this says so.
+
+### The owner's rulings of 4 November 2026 (verbatim, brief §0)
+
+| # | Ruling | What it changes |
+| --- | --- | --- |
+| R10 | **Two views of one run ledger.** The Studio's Runs tab is the engineer's view (when does my pipeline run, what happened); the Admin area's Operations view is the deployment's (what is being spent, on whom, is the scheduler keeping up), with metering, quotas and budget alerts. | New; extends ADR-110's run ledger with resource figures. |
+| R11 | **External orchestration by thin clients, never by exporting the engine.** A pipeline's definition exports as a package (YAML + model version + lists + connector profile). Execution from Airflow, Prefect, Dagster or cron goes through OspreyFlow's run API via a generated DAG, a provider package or the CLI; the map-to-graph and the load always run inside OspreyFlow. | New ADR; no change to phases 0–9. |
+
+### The owner's ruling of 5 November 2026
+
+| # | Question | Ruling |
+| --- | --- | --- |
+| R14 | The brief (§6.7) has an externally triggered run act as a service identity; ADR-110 decision 3 says a run always acts as a named person, never as the system. | **Person; the service identity only triggers.** The service identity authorises the trigger. The run acts as the pipeline's named owner through token exchange, exactly as a scheduled run does, so ADR-110 decision 3 is untouched. |
+
+### Decision
+
+1. **Operations replaces Admin's *Schedules and runs*** (R10; brief §7.1): the deployment's view of
+   the same run ledger the Studio's Runs tab reads.
+2. **Metering on every run**, recorded on the existing `PipelineRunReport` so an engineer sees their
+   own pipeline's cost: wall time; rows read and staged; bytes written to Parquet and to the object
+   store; graph writes (nodes and links); DuckDB time and peak memory per SQL step; model calls, time
+   and, for a hosted engine on a sendable dataset, tokens per Extract step.
+3. **Rolled up** by pipeline, dataset, unit and trigger (manual, schedule, watch, source refresh,
+   external) per day, with a trend.
+4. **Scheduler health:** slots skipped, missed after downtime, refused by reason, paused schedules
+   with their reason, and the queue depth when several sources refresh at once — outcomes ADR-110's
+   executor already records.
+5. **Storage:** the ingest root, the staging Parquet area, the object store and each dataset's share of
+   the graph, with growth, beside Admin → System's component health.
+6. **Controls:** a deployment-wide concurrency limit on runs; per-dataset and per-unit quotas (runs per
+   day, rows per run, staged bytes), refused in plain words when hit; budget alerts on the
+   administrator's alerts before a quota bites. The Runs tab shows the same quota as a bar on the
+   pipeline.
+7. **Rule 3 on Operations.** ADR-110 decision 8 applies to every figure: an administrator sees
+   schedule metadata and outcomes for every pipeline, but a count of what a run read, staged or wrote
+   only where the source's handling is one the administrator may view, otherwise *withheld*. A
+   dataset's share of the graph is counted with the administrator's own access step, never once for
+   everyone (rule 7: no unfiltered count).
+8. **The definition exports as a pipeline package** (R11): a zip of the pipeline YAML, the target-model
+   version it was deployed against, the reference lists it uses (by version) and the connector
+   profile. Importable into another OspreyFlow deployment; YAML round-trips, Python does not. No
+   credential is in it (a connection's password is a secret, never in a pipeline).
+9. **The orchestrator orchestrates, OspreyFlow executes** (R11). The run API (`run_recipe_as`, run
+   status, run report, held-row counts) is versioned and hardened, and thin clients are generated
+   from the Runs tab: an Airflow DAG (an operator and a sensor that fails on chosen thresholds), an
+   Airflow provider package (published and signed from the release pipeline like the images), the same
+   shape for Prefect and Dagster, and the CLI (`ospreyflow run <dataset> <pipeline> --version N
+   --wait --fail-on held`, under ADR-114's command). Staging SQL and fuzzy-match steps are never
+   exported for execution elsewhere: they run in the Vault, where the sandbox, `_ref` provenance and the
+   person's principal apply.
+10. **Who an external run acts as** (R14). The client authenticates as a **service identity** through
+    the deployment's OIDC (client credentials). The service identity authorises the trigger and nothing
+    more. **The run acts as the pipeline's owner**, the person who handed its schedule to the
+    orchestrator (decision 11), resolved at each run through ADR-043's token exchange, exactly as
+    ADR-110 decision 3 resolves a schedule's owner, with every refusal that decision and its
+    amendments make (an owner revoked, unresolvable, or no longer cleared for the source is a refused
+    run, recorded and told in words). The ledger records both: the owner the run acted as, and the
+    service identity that triggered it.
+11. **Owned externally.** A pipeline whose schedule is handed to an orchestrator is marked *owned
+    externally*, so nobody sets both; the person who marks it is its owner for decision 10. A generated
+    DAG pins a deployed version or "latest deployed", chosen at export.
+12. **Idempotency.** The external run id (an Airflow `dag_id`/`run_id`) is the idempotency key: a
+    retried task cannot load twice. It is recorded in the ledger with the trigger `external`.
+13. **Data in:** the orchestrator lands a file in the ingest root or a bucket the source reads, then
+    triggers the source refresh (ADR-140 decision 15).
+14. **External triggers on Operations** are listed with their service identity, the owner they ran as,
+    and their cost.
+
+### Tests to write first, named (rules 4, 12, 15)
+
+- An external trigger whose pipeline's owner has lost the studio role, Editor level or clearance is
+  refused in words and recorded *refused* (red if the run acts as the service identity).
+- A service identity with no grant to trigger a pipeline is refused; one with the grant cannot read
+  anything through the run API it could not read as the owner.
+- The same external run id twice loads once (red with the key ignored).
+- Every Operations count is *withheld* for a source above the administrator's clearance (red with the
+  check removed); `/v1/admin/…` Operations routes refuse a non-administrator.
+- A pipeline package contains no secret, and a round trip of its YAML is byte-identical.
+- The fake identity provider standing in for the client-credentials grant and the token exchange
+  refuses what the real Keycloak refuses (rule 15, second worked example).
+
+### Open questions (phase 10)
+
+1. The grant that lets a service identity trigger a pipeline: its name, who gives it, and whether it is
+   per pipeline or per dataset.
+2. The quotas' defaults, and whether a quota refusal counts toward ADR-110's three refusals that pause a
+   schedule.
+
+### Cost
+
+A new Admin screen with roll-ups, a metering column set on the run report, a hardened and versioned
+run API, a provider package to publish and sign, and the CLI verb. The owner chose thin clients over
+exporting the engine so that none of OspreyFlow's guarantees has to be re-implemented outside it.
+
+### ADR-006, Amendment 1 (5 November 2026) — a fuzzy-match staging step may decide a match at ingest, recorded as inferred
+
+Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R5 of 4 November and R13 of 5
+November 2026). ADR-006 is unchanged except where this says so.
+
+1. **What changes.** "Revisit if. Never for person-like entities" is overturned **for one step
+   only**: an expert-mode **fuzzy-match** staging step (ADR-140 decision 13) may decide at ingest that
+   a left row and a right row are a match, by a Splink-backed comparison and a threshold.
+2. **What does not.** The decision is written as a scored `SAME_AS` link marked `inferred` (rule 5),
+   with the score, the method and the version's threshold in its provenance, exactly as Splink's
+   post-load resolution writes one. Nothing is merged in storage: the two records stay two nodes, and
+   the Conduit still collapses at the session threshold τ on read. An analyst confirms or undoes the
+   link in the Glass.
+3. **Values from a match are inferred** (R13). Map may bind the matched right-hand columns, but an
+   element or property written from one is `inferred` and carries the match's score until an analyst
+   confirms the `SAME_AS`. A wrong match therefore attributes nothing as fact. What becomes of those
+   values when the link is undone is decided in phase 8 (ADR-140 open question 7).
+4. **The threshold is part of the pipeline's version**; changing it is a new version, and a run says
+   which it used.
+5. **Below-threshold rows are kept**, unmatched, and counted ("212 of 1,204 matched ≥ 0.85").
+6. **Not allowed:** a fuzzy match that asserts identity (columns merged into one Person, no
+   `SAME_AS`). That would need its own ruling (ADR-140 open question 1).
+
+Tests: ADR-140's first bullet under "Tests to write first".
+
+### ADR-099, Amendment 12 (5 November 2026) — one dataset per case; composite datasets; the Studio on the dataset
+
+Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R8 of 4 November and R16 of 5
+November 2026). **Not built** (redesign phase 5). ADR-099 and its amendments are unchanged except
+where this says so.
+
+1. **Decision 3 now reads:** a case reads **exactly one dataset** of its own unit, or one composite
+   dataset; a dataset serves any number of cases; a branch takes its parent's. Changing it is the
+   case's Author's, audited, and refused for a dataset of another unit. A case naming several datasets
+   is refused.
+2. **Composite datasets.** An Author of the owning unit may declare a composite: a dataset whose
+   members are other datasets, evaluated at read time as a filter over the members' ids (decision 2
+   already gives every element its list of datasets), so nothing is copied. A composite has its own
+   target model, a superset of its members' (ADR-140 decision 5), a Model and a Runs tab in the
+   Studio, and no Sources or Pipelines of its own. Cross-unit composites need their own ADR (ADR-140
+   open question 5).
+3. **`Principal.datasets`** for a case is its dataset's id, or a composite's member ids together with
+   the composite's own id *(mine: so the `SAME_AS` links item 4 writes into the composite are read)*.
+   Decision 4's access step is unchanged.
+4. **Amendment 2 item 3 is widened:** entity resolution across two members writes its `SAME_AS` links
+   into every composite naming both. A match across two datasets that no composite names is still in
+   none.
+5. **Decision 6 now reads:** "Data added to a case joins its dataset." Where data added to a case
+   reading a composite is written (a composite has no pipelines, but an analyst may mark an entity or
+   add a file there) is not decided by the brief: phase 5, put to the owner.
+6. **A new case** (R16): the form asks for *Use an existing dataset* or *Make a new dataset* (named in
+   the form; an empty dataset of the case's unit, then loaded in the Studio). **Amendment 8 is
+   withdrawn:** *Start empty*, and the Conduit giving a case with no datasets one of its own, are gone.
+   **A case opened from an alert reads the alert's dataset**; Amendment 1 item 4's and Amendment 4 item
+   3's "a dataset of its own" are withdrawn.
+7. **Amendment 3 decision 3:** an Ingest Studio recipe or source file belongs to **the dataset the
+   Studio is open on**, not "the first dataset of the case it was made in". A saved pattern, hotlist,
+   monitor and its alerts still belong to a dataset: with one dataset per case, "the first dataset of
+   the case" reads "the case's dataset". Moving them to the case is ADR-140 open question 3.
+8. **Amendment 4 decision 5** ("the Ingest Studio works only within a case") is replaced: the Studio
+   opens on a dataset, never a case (ADR-140 decision 1). How a Studio request is scoped to its dataset
+   is ADR-140 open question 6; until it is built the Studio works as before.
+9. **Migration:** each existing case naming several datasets gets a composite of that set, by a
+   `scripts.stamp_datasets`-style script, dry-run first.
+
+Tests (phase 5, written first): a case naming two datasets is refused (red with the check removed); a
+composite case reads each member's elements and a member-only case does not read the other member's
+(the conformance suite's dataset section, rule 1); a cross-member `SAME_AS` is read in the composite
+case and in neither member's; a new case from an alert reads the alert's dataset; the migration's dry
+run writes nothing and a second run changes nothing; an access test on every changed route (rule 4).
+
+### ADR-108, Amendment 6 (5 November 2026) — superseded in part by ADR-140
+
+Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R1, R3, R4 and R6 of 4 November
+2026). **Not built** (redesign phases 2, 6, 7 and 8). ADR-108 is unchanged except where this says so.
+
+1. **The canvas is the editor.** Choosing a node opens its editor in a drawer beside the canvas with a
+   live sample of the node's output; no button replaces the canvas with a full-screen editor, and "←
+   Back to the pipeline" goes (Amendment 2's rehosting). Guided mode reaches the same drawer from a
+   numbered list (ADR-140 decision 3).
+2. **The `domain-model` node is removed.** The target model is the dataset's (ADR-140 decision 4), and
+   a pipeline pins the version it was deployed against. The save gate's "exactly one domain root" rule
+   goes with it; how an existing pipeline's domain node is read is decided in phase 5, read-time and
+   never stored back, as a v1 recipe is read today.
+3. **Verify and Publish are replaced** by *Test* (the whole pipeline), *Preview* (one node) and *Deploy
+   as vN* (commits only; *Deploy and run now* beside it). Run now and the schedule move to the Runs tab
+   (ADR-110 Amendment 5).
+4. **The node vocabulary grows**: the staging steps Lookup, Join, Filter, Derive, Union and Dedupe,
+   and, in expert mode, SQL transform and Fuzzy match (ADR-140 decisions 9, 12, 13). The decision's
+   "Rule 8 stands untouched: no expression language" now reads as rule 8 as reworded by ADR-140: none
+   in guided mode; a sandboxed SELECT in expert mode. Load gains the *load rules* and the dedupe key.
+5. **One Map per branch** (brief §6.5): spec 09 §1's "every branch runs the recipe's one committed row
+   template — per-branch templates are future work" is the future work, built in phase 6. Branches
+   meet in the graph through *match on* and *reference*, never a join after Map.
+6. **Unchanged:** rulings Q1 to Q5 (extraction output, down-classification, libraries, NIEM roles,
+   geocoding); the extract and enrich nodes; each source branch under its own `load_id`; the DAG
+   executed in topological order, idempotent and revertible per load.
+
+### ADR-110, Amendment 5 (5 November 2026) — the schedule and the folder watch become the source's refresh policy
+
+Status: accepted 5 November 2026, under ADR-140 (the owner's ruling R9 of 4 November 2026; R17 of 5
+November 2026 leaves the poll's floor open). **Not built** (redesign phase 4, after phase 1). ADR-110
+and its amendments are unchanged except where this says so. (The brief's §9 table lists ADR-110 as
+"unchanged"; R9 and the build plan, which move its triggers to the source, govern.)
+
+1. **A trigger is set on the source**, not on the pipeline: for a file source, decision 5's folder
+   watch (Amendment 4's semantics, unchanged) or manual; for a SQL or API source, decision 7's
+   schedule, a poll, or manual. Set at registration and editable on the source's page.
+2. **A mode, for SQL and API sources:** *incremental* (rows past a declared watermark column; the
+   highest value seen is kept per source) or *full snapshot* (the whole table each time). On a full
+   snapshot, rows that disappear are either kept or have the elements made only by the previous
+   snapshot superseded: nothing is deleted, superseding is reversible, the previous load's audit trail
+   stays.
+3. **A refresh runs every deployed pipeline that uses the source**, each under its own `load_id`,
+   judged by its load rules, deduplicated by its own key. The ledger (decision 6) gains the trigger
+   `source refresh` (and `external`, ADR-141). A pipeline marked *needs attention* is not run and is
+   recorded *blocked*, as decision 4 and Amendment 4 item 6 already do.
+4. **The owner** of a refresh policy is whoever set it, and a refresh acts as that person (decision 3,
+   unchanged). Decision 3's "scoped to the recipe's case (`scope_to_case`)" becomes scoped to the
+   source's dataset; how is designed with ADR-140 open question 6.
+5. **The 15-minute floor** (Amendment 3 item 4) stands for schedules. Whether a poll may run more often
+   is decided in phase 4 (R17); until it is, a poll is held to the same floor.
+6. **The executor, its claims, its locks, the run ledger and its refusals are unchanged.** The screens
+   move: the Publish screen's schedule editor to the source's refresh policy and the Runs tab's
+   *Schedules and watches*; Admin's *Schedules and runs* to Operations (ADR-141). The Glass's *Data
+   feeds* panel keeps reading the ledger.
+7. **Prerequisite:** ADR-109 Amendment 1's "not fixed" item (a re-run writes its events again) is fixed
+   first (phase 1), since an incremental or full-snapshot refresh re-reads rows by design.
+
+Tests (phase 4, written first): a refresh runs each pipeline using the source once, under separate
+load ids; an incremental refresh reads only rows past the kept watermark (red with the watermark
+ignored); a full snapshot's disappeared rows are superseded, not deleted, and the supersession is
+reverted by the revert; a *needs attention* pipeline is recorded *blocked*; a refresh whose owner lost
+clearance is refused (the token-exchange fake refusing what Keycloak refuses, rule 15).
+
+### ADR-126, Amendment 2 (5 November 2026) — a case's packs are derived from its dataset's target model
+
+Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R3 and R8 of 4 November 2026).
+**Not built** (redesign phase 5). ADR-126 is unchanged except where this says so.
+
+1. **The packs are derived, not chosen.** A case's domain packs are the packs of its dataset's live
+   target model (ADR-140 decisions 4 and 5); a composite's are its own model's, which is a superset of
+   its members'. "The domain is a case setting" is superseded.
+2. **The setting becomes read-only**: the case shows its packs and says they come from the dataset's
+   model, changed on the Studio's Model tab by someone with `edit_target_model`.
+3. **Decision 2** (existing cases, NULL as "never chosen") is superseded by derivation; what becomes of
+   the stored `investigations.domains` column is decided in phase 5.
+4. **Unchanged:** what the Reports view and the feed offer from the packs (the POLE card, KYC figures
+   only where FIBO is in force, the Trends rule), now read from the derived set; a branch has its
+   parent's packs, since it has its parent's dataset.
+5. **When the live model changes** (*Make live*), the case's packs change with it; nothing in the case
+   is edited.
+
+Tests (phase 5): a case's packs equal its dataset's live model's (red with the stored column read
+instead); a PATCH of a case's packs is refused; a *Make live* adding FIBO brings the KYC figures to
+every case reading the dataset.

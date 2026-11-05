@@ -44,8 +44,9 @@ outside the stated scope of the change — a correction to one section must not 
 6. **Entities are never merged in storage.** Resolution writes scored `SAME_AS` edges and
    collapses them at query time.
 7. **The Glass never sees Gremlin**, a source-system identifier, or an unfiltered count.
-8. **No expression or scripting language in the Ingest Studio.** Transforms are Knowledge
-   Adapters with golden test files.
+8. **No expression or scripting language in the Ingest Studio's guided mode.** Expert mode may
+   declare a sandboxed SELECT (ADR-140); transforms in guided mode remain Knowledge Adapters with
+   golden test files.
 9. **Fixtures are synthetic and in-repo.** No real intelligence data anywhere, in this repository
    or in CI, ever — with one narrow exception: a dataset the owner has explicitly named in the
    local, never-committed real-data exceptions list (`scripts/real_data_exceptions.py` —

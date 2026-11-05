@@ -7,6 +7,23 @@ means are analysts and data officers, not the platform team.
 Read `01_DOMAIN_MODEL.md` §1.1 first for POLE, and §7 for the Knowledge Adapters. This document
 specifies the studio; `03_CONDUIT_MIDDLEWARE.md` §5 specifies the pipeline it drives.
 
+## 0. The redesign under way (ADR-140, 5 November 2026)
+
+The Studio is being rebuilt as a four-step studio — **Model**, **Sources**, **Pipelines**, **Runs** —
+opened on a dataset, never a case, with a guided (no-code) and an expert (low-code) mode over one
+pipeline. The decision is **ADR-140** (the owner's rulings R1–R9 and R12 of 4 November 2026 and R13,
+R15–R17 of 5 November); operations and external orchestration are **ADR-141** (R10, R11, R14). The
+design reference is the brief, `spec/ingest_studio_redesign/INGEST_STUDIO_REDESIGN_BRIEF_v2.md`, with
+the clickable prototype `spec/ingest_studio_redesign/ingest_studio_prototype.html` and the wireframes
+beside it; where the brief and ADR-140 differ, the ADR governs.
+
+**How to read this document meanwhile.** §9 already states the rules as ADR-140 changed them. Every
+other section describes the Studio **as built** and is rewritten in slices as each redesign phase
+lands, as ADR-108's sections were. Where a section below conflicts with ADR-140 — the Studio working
+within a case (§1), the domain-model node (§1, §1.1), the Connect gate on the first source (§2),
+Verify and Publish as buttons (§5, §6), the schedule on Publish (§6) — it describes what runs today,
+and ADR-140 describes what is being built.
+
 ## 1. The principle: the studio edits a recipe
 
 The studio is an editor for a declarative **ingest recipe** — a YAML file. It is not a UI that
@@ -939,14 +956,32 @@ nothing in this section is wired to anything yet.
 
 ## 9. What the studio deliberately does not do
 
-- **No scripting.** Covered in §4, and worth restating because it is the request that will come
-  up most often. Transforms are adapters with golden tests.
-- **No joins across sources at ingest.** A pipeline may hold several sources (§1), but each is its
-  own branch under its own `load_id`, mapped row by row; no row is ever joined to another source's
-  row. Relating two sources is entity
-  resolution's job, at query time, where it can be adjusted and undone. Joining at ingest bakes a
-  decision into storage and is the same mistake ADR-006 rejects.
-- **No aggregation at ingest.** Load records at source fidelity. Aggregation is a query.
+Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). The joins, SQL and fuzzy match
+below are **not built yet** (redesign phases 7 and 8); until they are, a pipeline's sources are
+separate branches mapped row by row, as §1 describes.
+
+- **No scripting in guided mode; a sandboxed SELECT in expert mode** (`process/CLAUDE.md` rule 8).
+  Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
+  Dedupe), each declared in the recipe's YAML, and every operation in it is a Knowledge Adapter with
+  golden tests (§4). Expert mode, for a person holding `write_sql_transforms`, may declare an SQL
+  transform: a single SELECT over its upstream nodes, run by the Vault's DuckDB over the staged rows in
+  a sandbox (read-only, no file or network functions, no other dataset's rows, a time and memory limit,
+  the person's own principal), refused at publish if it is anything but one SELECT or if it drops the
+  `_ref` columns, and listed in the run report with its rows in and out (ADR-140 decision 12).
+- **Joins on declared keys in guided mode; SQL and fuzzy match in expert mode, with provenance,
+  disclosure and safeguards.** A Join takes two upstream tables on an exact or normalised key, declared
+  and never guessed. Every staged row carries `source_refs` — each input row's identity and `load_id`
+  — into the audit stub of the element Map writes, so every link still shows where it came from
+  (ADR-140 decision 11). A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link
+  marked `inferred`, never a merge; its threshold is part of the version; below-threshold rows are kept,
+  unmatched and counted; a value Map binds from a matched column is `inferred`, with the match's score,
+  until an analyst confirms the link (ADR-006 Amendment 1). Elements still meet existing nodes only
+  through *match on* and *reference*; nothing is merged in storage (rule 6).
+- **No aggregation at ingest, except an expert-mode SQL transform that carries its inputs' refs.**
+  Load records at source fidelity, and aggregation is otherwise a query. An expert SQL transform may
+  aggregate only when each output row carries the `_ref` of every input row it was computed from, so
+  the element it becomes still names all of its sources (ruling R15); the publish gate refuses one that
+  does not.
 - **No enrichment from external services, except a geocoder the deployment allows.** No hosted
   lookup and no third-party enrichment API — with the one exception ADR-108 ruling Q5 made: an
   enrich node may geocode online, only through the deployment's configured allow-list
