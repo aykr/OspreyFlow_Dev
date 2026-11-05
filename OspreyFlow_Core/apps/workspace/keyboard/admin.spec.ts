@@ -38,6 +38,7 @@ async function serve(page: Page): Promise<string[]> {
     if (path === "people/u1/access") return json(200, { ...PERSON, ...(request.postDataJSON() as object) });
     if (path === "people/u1/disable") return json(200, { ...PERSON, enabled: false });
     if (path === "people/u1/enable") return json(200, { ...PERSON, enabled: true });
+    if (path === "people/u1" && request.method() === "DELETE") return json(200, PERSON);
     if (path === "people/u1/reset-sign-in")
       return json(200, { person: { ...PERSON, must_set_password: true }, delivery: "one_time_code", one_time_code: "WXYZ-WXYZ-WXYZ-WXYZ" });
     if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (request.postDataJSON() as { roles: string[] }).roles });
@@ -181,6 +182,19 @@ test("a person's sign-in is reset by keyboard and the new code shown", async ({ 
   await expect(page.getByText("WXYZ-WXYZ-WXYZ-WXYZ")).toBeVisible();
   expect(asked).toContain("POST people/u1/reset-sign-in");
   registerCovered(REGISTRY, "reset-a-persons-sign-in-by-keyboard");
+});
+
+// ADR-112 Amendment 3 (build order step 33 (a)): a person removed, only once confirmed, by keyboard.
+test("a person is removed by keyboard once the removal is confirmed", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Remove osprey-demo-analyst");
+  await expect(page.getByRole("group", { name: "Remove osprey-demo-analyst" })).toContainText("This cannot be undone.");
+  expect(asked).not.toContain("DELETE people/u1");
+  await press(page, "Confirm removing osprey-demo-analyst");
+  await expect(page.getByText("Demo Analyst (osprey-demo-analyst) was removed.", { exact: false })).toBeVisible();
+  expect(asked).toContain("DELETE people/u1");
+  registerCovered(REGISTRY, "remove-a-person-by-keyboard");
 });
 
 test("a demo pack's command is copied by keyboard", async ({ page, context }) => {

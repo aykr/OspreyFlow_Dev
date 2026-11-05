@@ -457,6 +457,7 @@ from .identity_admin import (
     DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    PersonActionRefused,
     PersonExistsError,
     UnknownRoleError,
 )
@@ -10240,6 +10241,26 @@ async def reset_person_sign_in_route(
     return reset
 
 
+@app.delete(
+    "/v1/admin/people/{user_id}", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def remove_person_route(
+    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> PersonAccount:
+    """The person's account removed from the identity provider (ADR-112 Amendment 3). Never one's
+    own; never an account OspreyFlow itself uses, nor the last person who can manage people — each
+    refused in words before anything changes. The audit record keeps who the id was: what they
+    made keeps their id, which ADR-106 shows in place of a name once the account is gone."""
+    if user_id == principal.id:
+        raise HTTPException(status_code=409, detail={"error": "cannot_remove_yourself"})
+    person = await identity_admin.remove_person(user_id)
+    await audit.record(principal=principal, action="remove_person",
+                       resolved_query={"user_id": user_id, "username": person.username,
+                                       "name": person.name, "email": person.email},
+                       result_cardinality=1)  # fmt: skip
+    return person
+
+
 @app.get("/v1/admin/demo-packs", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def list_demo_packs_route(
     principal: PrincipalDep, investigations: InvestigationsDep, audit: AuditDep
@@ -11780,6 +11801,11 @@ async def _identity_admin_refused(request: Request, exc: IdentityAdminRefused) -
     return JSONResponse(
         status_code=502, content={"error": "identity_provider_refused", "detail": str(exc)}
     )
+
+
+@app.exception_handler(PersonActionRefused)
+async def _person_action_refused(request: Request, exc: PersonActionRefused) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": exc.error, "detail": exc.words})
 
 
 @app.exception_handler(UnknownRoleError)

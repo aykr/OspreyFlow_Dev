@@ -756,3 +756,58 @@ def test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_no
     # The same person, with no account holding their email, arrives as before.
     arrived = sign_in(stack)
     assert arrived.tokens is not None, (arrived.visited, _said(arrived))
+
+
+# ---- build order step 33 (ADR-112 Amendment 3, ADR-114 Amendment 33 "Step 33") -------------------
+
+
+def _identity_admin(stack: Stack) -> Any:
+    """The Admin area's own calls (`services.api.identity_admin`), as the Conduit makes them: its
+    client credential, against the deployment's realm, knowing the organisation's alias."""
+    from services.api.identity_admin import IdentityAdmin
+
+    issuer = f"{stack.deployment.origin}/realms/osprey"
+    return IdentityAdmin(OidcResolverSettings(
+        oidc_jwks_url=f"{issuer}/protocol/openid-connect/certs",
+        oidc_token_exchange_url=f"{issuer}/protocol/openid-connect/token",
+        oidc_token_exchange_client_id=CONDUIT_CLIENT_ID,
+        oidc_token_exchange_client_secret=stack.values["OSPREY_OIDC_CLIENT_SECRET"],
+        oidc_admin_users_url=f"{stack.deployment.origin}/admin/realms/osprey/users",
+    ))  # fmt: skip
+
+
+def _user_id(stack: Stack, username: str) -> str:
+    token = _admin(stack.deployment)
+    return keycloak_admin.user_id(
+        issuer=stack.deployment.origin, realm="osprey", token=token, username=username
+    )
+
+
+def test_a_removed_account_frees_its_email_for_the_organisation_arrival(stack: Stack) -> None:
+    """ADR-112 Amendment 3 (a), against Keycloak 26.0: the arrival refused for a held email arrives
+    as a new account once an administrator removes the account holding it; an account OspreyFlow
+    itself uses is refused and left in place."""
+    from services.api.identity_admin import PersonActionRefused
+
+    _register(stack)
+    _forget(stack, PERSON["username"])
+    _forget(stack, "pat.local")
+    _invite(stack, "pat.local", PERSON["email"])
+    assert sign_in(stack).tokens is None
+    admin = _identity_admin(stack)
+
+    async def remove() -> tuple[str, str]:
+        try:
+            gone = await admin.remove_person(_user_id(stack, "pat.local"))
+            probe = _user_id(stack, "osprey-verify-probe")
+            with pytest.raises(PersonActionRefused) as refused:
+                await admin.remove_person(probe)
+            return gone.username, refused.value.error
+        finally:
+            await admin.aclose()
+
+    assert asyncio.run(remove()) == ("pat.local", "not_a_person")
+    assert _user_id(stack, "osprey-verify-probe"), "left in place"
+    arrived = sign_in(stack)
+    assert arrived.tokens is not None, (arrived.visited, _said(arrived))
+    assert _principal(stack, arrived.tokens["access_token"]).roles == []

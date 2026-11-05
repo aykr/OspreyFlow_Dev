@@ -19,7 +19,12 @@ from services.api.app import (
     get_report_freshness,
     get_valkey,
 )
-from services.api.identity_admin import PersonExistsError, UnknownRoleError, allowed_role
+from services.api.identity_admin import (
+    PersonActionRefused,
+    PersonExistsError,
+    UnknownRoleError,
+    allowed_role,
+)
 from services.api.report_freshness import Freshness
 
 from ontology.handling import load_uk_le_scheme
@@ -43,6 +48,9 @@ class _Audit:
 
     async def record(self, **kwargs: Any) -> None:
         self.records.append(kwargs)
+
+
+LAST_ADMIN = "admin.last is the only enabled person who can manage people."
 
 
 class _Identity:
@@ -80,6 +88,14 @@ class _Identity:
         self.made.append(("reset", user_id))
         return SignInDelivery(person=PersonAccount(id=user_id, username="x", name="x", enabled=True, roles=[]),
                               delivery="one_time_code", one_time_code="WXYZ-WXYZ-WXYZ-WXYZ")  # fmt: skip
+
+    # ADR-112 Amendment 3 (build order step 33 (a))
+    async def remove_person(self, user_id: str) -> PersonAccount:
+        if user_id == "last-admin":
+            raise PersonActionRefused("last_administrator", LAST_ADMIN)
+        self.made.append(("removed", user_id))
+        return PersonAccount(id=user_id, username="leaver", name="Lee Leaver", enabled=True,
+                             roles=["analyst"], email="leaver@example.org")  # fmt: skip
 
     async def list_dashboards(self) -> list[DashboardIdentity]:
         return [DashboardIdentity(client_id="osprey-dashboard-board", account_id="sa-1"),
@@ -438,3 +454,59 @@ def test_only_a_role_that_sees_system_health_sees_the_credential_line(
     else:
         assert response.status_code == 403, response.text
         assert "repair-sign-in" not in response.text and "Acting for people" not in response.text
+
+
+# --- ADR-112 Amendment 3 (build order step 33): remove a person ---------------------------------
+
+
+def _every_grant() -> list[str]:
+    """Every role the rights tables know, every single-right grant, and a person with no role."""
+    from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, Right
+
+    return [*ROLE_RIGHTS, *LEGACY_ROLE_RIGHTS, *(f"right:{r.value}" for r in Right), ""]
+
+
+def _manages_people(role: str) -> bool:
+    from schemas.rights import Right, rights_for
+
+    return Right.MANAGE_PEOPLE in rights_for([role] if role else [])
+
+
+@pytest.mark.parametrize("role", _every_grant())
+def test_only_a_role_that_manages_people_removes_a_person(client: Any, role: str) -> None:
+    """Rule 4, over every role: only `manage_people` removes; everyone else is 403 and the identity
+    provider is never asked."""
+    _as(Principal(id="p-1", clearance="SECRET", org_unit="verify", roles=[role] if role else []))
+    response = client.delete("/v1/admin/people/u1")
+    if _manages_people(role):
+        assert response.status_code == 200, response.text
+        assert client.identity.made == [("removed", "u1")]
+    else:
+        assert response.status_code == 403, response.text
+        assert client.identity.made == [] and client.audit.records == []
+
+
+def test_a_removal_is_audited_with_who_the_id_was(client: Any) -> None:
+    _as(ADMIN)
+    response = client.delete("/v1/admin/people/u1")
+    assert response.status_code == 200 and response.json()["username"] == "leaver"
+    (record,) = client.audit.records
+    assert record["action"] == "remove_person"
+    assert record["resolved_query"] == {"user_id": "u1", "username": "leaver", "name": "Lee Leaver",
+                                        "email": "leaver@example.org"}  # fmt: skip
+
+
+def test_an_administrator_cannot_remove_their_own_account(client: Any) -> None:
+    _as(ADMIN)
+    response = client.delete(f"/v1/admin/people/{ADMIN.id}")
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "cannot_remove_yourself"
+    assert client.identity.made == [] and client.audit.records == []
+
+
+def test_a_refused_removal_is_said_in_words_and_not_audited(client: Any) -> None:
+    _as(ADMIN)
+    response = client.delete("/v1/admin/people/last-admin")
+    assert response.status_code == 409
+    assert response.json() == {"error": "last_administrator", "detail": LAST_ADMIN}
+    assert client.audit.records == []

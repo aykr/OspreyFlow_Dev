@@ -12167,6 +12167,62 @@ identities (R2), which hold no `INVESTIGATE`, read a case's POLE summary in the 
 feed: per-type counts of what the case holds, filtered for the reader. They already read the KYC
 figures, which are of the same kind.
 
+### ADR-112, Amendment 3 (5 November 2026) — Admin → People removes a person and joins an organisation account (build order step 33)
+
+**The owner's rulings of 5 November 2026** (open question 32): build all three of — removing a
+person, joining a refused organisation arrival to the existing account, and an opt-in join by email.
+This amendment holds the first two as Admin → People actions; the opt-in, and what Keycloak needs for
+the second, are ADR-114 Amendment 33's "Step 33". Both actions are behind `manage_people`, like every
+other People action (Amendment 1), and audited.
+
+#### (a) Remove a person
+
+**Decided *(mine, within the ruling)*: removing deletes the account in the identity provider.**
+Keeping an account but stopping its sign-in is already *Disable* (ADR-114 Amendment 5), so a
+"remove" that only disabled would be the same action under a second name. Removal is the other
+thing: the account is gone, its sign-in name and email address are free again — which is also what
+step 28 (e)'s refused arrival needs, when the administrator would rather the person arrive afresh
+through the organisation than be joined to the old account.
+
+1. **What happens.** `DELETE /v1/admin/people/{user_id}` → `IdentityAdmin.remove_person` → Keycloak's
+   `DELETE /users/{id}`, which also ends the person's sessions. Nothing OspreyFlow stores changes:
+   cases, alerts, recipes, assessments and history keep the person's id, and ADR-106 shows the id
+   where it used to show the name (the owner chose to leave unknown people shown by id). Case grants
+   held by the id stay inert (Keycloak's ids are UUIDs, never reissued). A case whose last Author is
+   removed is not stranded: ADR-052 decision 4's administrator safety net still manages its access.
+2. **The audit record says who the id was** — `remove_person` with the id, sign-in name, display name
+   and email as they were — so a page showing a removed person's id can be traced to a person.
+3. **Refused in words, before anything changes** (409, the answer's `error` and the administrator's
+   words in `detail`):
+   - **your own account** (`cannot_remove_yourself`), in the route, before the identity provider is
+     asked — as *Disable* already refuses;
+   - **an account OspreyFlow itself uses** (`not_a_person`): a client's service account (Keycloak
+     marks it `serviceAccountClientId`; the Conduit's, the dashboards') and the deploy's verify
+     probes `osprey-verify-probe` and `osprey-verify-revoked` (`identity_admin.CONDUIT_ACCOUNTS`,
+     held equal to `harness/realm.py`'s by a test). `PersonAccount.system_account` marks them, and
+     the Glass offers no *Remove* for them;
+   - **the last administrator** (`last_administrator`): a person who is enabled and whose roles
+     confer `manage_people` (the Admin role, or the single right), when no *other* enabled person's
+     do. Disabled administrators do not count. (The caller holds the right in their token, but a
+     token can outlive a change of role, so the identity provider's own record is what is counted.)
+4. **The Glass.** *Remove* on each person's row opens a confirmation in words — the account is
+   deleted, they can no longer sign in, their name and address become free, what they made shows
+   their id in place of their name, it cannot be undone, and *Disable* is the way to keep the account
+   — with *Remove the account* and *Keep it*. A refusal is said in the Conduit's words.
+5. **Tests**, red first: `tests/services/api/test_identity_admin.py`
+   `::test_removing_a_person_deletes_their_account_and_says_who_they_were`,
+   `::test_an_account_ospreyflow_itself_uses_is_never_removed`,
+   `::test_the_last_person_who_can_manage_people_is_not_removed`,
+   `::test_the_conduits_own_accounts_are_the_realms_verify_probes`; `test_admin_routes.py`
+   `::test_only_a_role_that_manages_people_removes_a_person` (rule 4: every role, every single right,
+   no role), `::test_a_removal_is_audited_with_who_the_id_was`,
+   `::test_an_administrator_cannot_remove_their_own_account`,
+   `::test_a_refused_removal_is_said_in_words_and_not_audited`; `test_route_rights.py`'s table;
+   `AdminPlace.test.tsx`'s "people: remove"; `keyboard/admin.spec.ts` "a person is removed by keyboard
+   once the removal is confirmed" (`remove-a-person-by-keyboard`, rule 13). Against a real Keycloak
+   26.0: `tests/harness/test_organisation_sign_in.py`
+   `::test_a_removed_account_frees_its_email_for_the_organisation_arrival`.
+
 ## ADR-113 — Trend reports, case report packs and their distribution; four demo personas — ACCEPTED
 
 Status: **accepted on the owner's rulings of 11 October 2026.** The owner asked that analysts "create

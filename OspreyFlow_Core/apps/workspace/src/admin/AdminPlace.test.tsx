@@ -451,3 +451,65 @@ describe("the Datasets tab", () => {
     expect(screen.queryByText("Enron corpus: egress is now any.")).toBeNull();
   });
 });
+
+// ADR-112 Amendment 3 (build order step 33 (a)): remove a person, only once confirmed in words.
+describe("people: remove", () => {
+  it("removes a person only once the words are confirmed, and says what became of their work", async () => {
+    const sent = serve((path, init) => (path === "people/u1" && init?.method === "DELETE" ? json(200, PERSON) : null));
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    const asked = screen.getByRole("group", { name: "Remove osprey-demo-analyst" });
+    expect(asked.textContent).toContain("Remove Demo Analyst (osprey-demo-analyst)? Their account is deleted");
+    expect(asked.textContent).toContain("show their id in place of their name");
+    expect(asked.textContent).toContain("disable it instead");
+    expect(sent.some((s) => s.path === "DELETE people/u1")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText(/Demo Analyst \(osprey-demo-analyst\) was removed/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove osprey-demo-analyst" })).toBeNull();
+    expect(sent.filter((s) => s.path === "DELETE people/u1")).toHaveLength(1);
+  });
+
+  it("keeps the person when the removal is not confirmed", async () => {
+    const sent = serve();
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep osprey-demo-analyst" }));
+    expect(screen.queryByRole("group", { name: "Remove osprey-demo-analyst" })).toBeNull();
+    expect(sent.some((s) => s.path.startsWith("DELETE"))).toBe(false);
+    expect(screen.getByText("Demo Analyst")).toBeTruthy();
+  });
+
+  it("says a refusal in the Conduit's words and keeps the person listed", async () => {
+    const words = "osprey-demo-analyst is the only enabled person who can manage people. Give someone else the Admin role first.";
+    serve((path, init) =>
+      path === "people/u1" && init?.method === "DELETE" ? json(409, { error: "last_administrator", detail: words }) : null,
+    );
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(screen.getByText("Demo Analyst")).toBeTruthy();
+  });
+
+  it("says removing your own account is refused", async () => {
+    serve((path, init) =>
+      path === "people/u1" && init?.method === "DELETE" ? json(409, { detail: { error: "cannot_remove_yourself" } }) : null,
+    );
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText("You cannot remove your own account.")).toBeTruthy();
+  });
+
+  it("offers no removal of an account OspreyFlow itself uses", async () => {
+    serve((path) =>
+      path === "people"
+        ? json(200, [PERSON, { id: "u9", username: "osprey-verify-probe", name: "osprey-verify-probe", enabled: true, roles: [],
+                              system_account: true }])  // prettier-ignore
+        : null,
+    );
+    place(["manage_people"]);
+    await screen.findByRole("button", { name: "Remove osprey-demo-analyst" });
+    expect(screen.queryByRole("button", { name: "Remove osprey-verify-probe" })).toBeNull();
+  });
+});

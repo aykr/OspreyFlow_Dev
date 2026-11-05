@@ -10,6 +10,7 @@ export type OrgUnit = string | null;
 export type Email = string | null;
 export type ReceivableHandlingCodes = string[];
 export type MustSetPassword = boolean;
+export type SystemAccount = boolean;
 export type Delivery = "email" | "one_time_code";
 export type OneTimeCode = string | null;
 
@@ -34,5 +35,6 @@ export interface PersonAccount {
   email?: Email;
   receivable_handling_codes?: ReceivableHandlingCodes;
   must_set_password?: MustSetPassword;
+  system_account?: SystemAccount;
   [k: string]: unknown;
 }

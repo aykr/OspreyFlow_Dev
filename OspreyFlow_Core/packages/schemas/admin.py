@@ -21,6 +21,9 @@ class PersonAccount(BaseModel):
     receivable_handling_codes: list[str] = Field(default_factory=list)
     #: Invited or reset, and not yet signed in to choose their own password.
     must_set_password: bool = False
+    #: An account OspreyFlow itself uses (the deploy's verify probes), not a person's: never
+    #: removed or joined to an organisation account (ADR-112 Amendment 3).
+    system_account: bool = False
 
 
 #: A sign-in name the identity provider takes (measured: spaces and most punctuation are refused).

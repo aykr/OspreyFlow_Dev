@@ -35,7 +35,13 @@ from schemas.admin import (
     RegisteredDashboard,
     SignInDelivery,
 )
-from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, SINGLE_RIGHT_PREFIX, Right
+from schemas.rights import (
+    LEGACY_ROLE_RIGHTS,
+    ROLE_RIGHTS,
+    SINGLE_RIGHT_PREFIX,
+    Right,
+    rights_for,
+)
 
 DASHBOARD_PREFIX = "osprey-dashboard-"
 _RIGHT_VALUES = {r.value for r in Right}
@@ -45,8 +51,25 @@ _PRINCIPAL_CLAIMS = (("clearance", False), ("org_unit", False),
                      ("receivable_handling_codes", True), ("roles", True))  # fmt: skip
 
 
+#: Accounts OspreyFlow itself uses that are not a client's service account: the deploy's verify
+#: probes (`harness/realm.py`'s `VERIFY_SUBJECT` and `REVOKED_SUBJECT`, held equal by
+#: `test_identity_admin.py`). Never removed and never joined to an organisation account (ADR-112
+#: Amendment 3); a client's service account (`service-account-*`) is no person at all.
+CONDUIT_ACCOUNTS = frozenset({"osprey-verify-probe", "osprey-verify-revoked"})
+
+
 class IdentityAdminRefused(Exception):
     """The identity provider refused or could not be reached; said in words, never swallowed."""
+
+
+class PersonActionRefused(Exception):
+    """An Admin -> People action OspreyFlow refuses, before the identity provider is changed
+    (ADR-112 Amendment 3): `error` is the answer's code, `words` what the administrator reads."""
+
+    def __init__(self, error: str, words: str) -> None:
+        super().__init__(words)
+        self.error = error
+        self.words = words
 
 
 class ConduitCredentialRefused(IdentityAdminRefused):
@@ -108,6 +131,16 @@ def _first(attributes: dict[str, Any], key: str) -> str | None:
     return str(values[0]) if values else None
 
 
+def _system(user: dict[str, Any]) -> bool:
+    """An account OspreyFlow itself uses: a client's service account, or a `CONDUIT_ACCOUNTS`."""
+    username = str(user.get("username", ""))
+    return (
+        username.startswith("service-account-")
+        or bool(user.get("serviceAccountClientId"))
+        or username in CONDUIT_ACCOUNTS
+    )
+
+
 def _person(user: dict[str, Any]) -> PersonAccount:
     attributes = user.get("attributes") or {}
     name = " ".join(str(user.get(k) or "").strip() for k in ("firstName", "lastName")).strip()
@@ -124,6 +157,7 @@ def _person(user: dict[str, Any]) -> PersonAccount:
             str(c) for c in attributes.get("receivable_handling_codes") or []
         ],
         must_set_password="UPDATE_PASSWORD" in (user.get("requiredActions") or []),
+        system_account=_system(user),
     )
 
 
@@ -379,6 +413,50 @@ class IdentityAdmin:
             one_time_code=code,
         )  # fmt: skip
 
+    # --- remove (ADR-112 Amendment 3) ----------------------------------------------------------
+
+    async def remove_person(self, user_id: str) -> PersonAccount:
+        """The person's account deleted from the identity provider: they can no longer sign in, and
+        their sign-in name and email address are free again. Nothing OspreyFlow stores is changed —
+        what they made keeps their id (ADR-106 shows it in place of a name). Refused, before
+        anything is changed: an account OspreyFlow itself uses, and the last enabled person who
+        can manage people. Returns the person as they were, for the audit record."""
+        found = await self._call("GET", f"/users/{user_id}")
+        user = found.json() if found.status_code == 200 else None
+        if not user:
+            raise IdentityAdminRefused("no such person")
+        person = _person(user)
+        if _system(user):
+            raise PersonActionRefused(
+                "not_a_person",
+                f"{person.username} is an account OspreyFlow itself uses, not a person's; it "
+                "cannot be removed.",
+            )
+        if person.enabled and Right.MANAGE_PEOPLE in rights_for(person.roles):
+            listed = await self._call(
+                "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
+            )
+            others = [
+                u for u in listed.json()
+                if str(u.get("id")) != user_id and not _system(u) and u.get("enabled", True)
+                and Right.MANAGE_PEOPLE in rights_for(_person(u).roles)
+            ]  # fmt: skip
+            if not others:
+                raise PersonActionRefused(
+                    "last_administrator",
+                    f"{person.username} is the only enabled person who can manage people. Give "
+                    "someone else the Admin role first, so the deployment is not left with no "
+                    "administrator.",
+                )
+        gone = await self._call("DELETE", f"/users/{user_id}")
+        if gone.status_code == 404:
+            raise IdentityAdminRefused("no such person")
+        if gone.status_code not in (200, 204):
+            raise IdentityAdminRefused(
+                f"the identity provider did not remove the person ({gone.status_code})"
+            )
+        return person
+
     # --- dashboards ---------------------------------------------------------------------------
 
     def _client(self, client_id: str, audience: str) -> dict[str, Any]:
@@ -474,6 +552,7 @@ class IdentityAdmin:
 
 
 __all__ = [
-    "DashboardExistsError", "DashboardIdentity", "IdentityAdmin", "IdentityAdminRefused",
-    "PersonAccount", "RegisteredDashboard", "UnknownRoleError", "allowed_role",
+    "CONDUIT_ACCOUNTS", "DashboardExistsError", "DashboardIdentity", "IdentityAdmin",
+    "IdentityAdminRefused", "PersonAccount", "PersonActionRefused", "RegisteredDashboard",
+    "UnknownRoleError", "allowed_role",
 ]  # fmt: skip

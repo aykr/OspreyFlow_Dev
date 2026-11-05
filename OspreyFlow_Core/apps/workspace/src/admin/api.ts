@@ -36,6 +36,10 @@ async function failure(response: Response): Promise<Error> {
   if (typeof detail === "object" && detail?.error === "cannot_disable_yourself") {
     return new Error("You cannot disable your own account.");
   }
+  // ADR-112 Amendment 3: removing and joining people, refused in the Conduit's words.
+  if (typeof detail === "object" && detail?.error === "cannot_remove_yourself") {
+    return new Error("You cannot remove your own account.");
+  }
   // ADR-110 Amendment 3: Run now and Change schedule, refused in the Conduit's words.
   if (body.error === "run_refused" && typeof detail === "string") return new Error(`Not run: ${detail}`);
   if (body.error === "schedule_refused" && typeof detail === "string") return new Error(detail);
@@ -44,6 +48,7 @@ async function failure(response: Response): Promise<Error> {
   if (body.error === "not_allowed" && typeof detail === "string") return new Error(detail);
   if (body.error === "identity_provider_refused" && typeof detail === "string") return new Error(detail);
   if (body.error === "dataset_not_found") return new Error("That dataset is no longer there.");
+  if (response.status === 409 && typeof body.error === "string" && typeof detail === "string") return new Error(detail);
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
 }
@@ -72,6 +77,9 @@ export const enablePerson = (api: AdminApi, userId: string) =>
   call<PersonAccount>(api, person(userId, "enable"), { method: "POST" });
 export const resetSignIn = (api: AdminApi, userId: string) =>
   call<SignInDelivery>(api, person(userId, "reset-sign-in"), { method: "POST" });
+// ADR-112 Amendment 3: a person's account removed from the identity provider.
+export const removePerson = (api: AdminApi, userId: string) =>
+  call<PersonAccount>(api, `people/${encodeURIComponent(userId)}`, { method: "DELETE" });
 export const listDashboards = (api: AdminApi) => call<DashboardIdentity[]>(api, "dashboards");
 export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string) =>
   call<RegisteredDashboard>(api, "dashboards", {

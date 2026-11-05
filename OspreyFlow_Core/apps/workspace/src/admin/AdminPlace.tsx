@@ -28,6 +28,7 @@ import {
   listPeople,
   registerDashboard,
   removeDashboard,
+  removePerson,
   resetSignIn,
   setAccess,
   setDatasetEgress,
@@ -181,23 +182,75 @@ function AccessEditor({
   );
 }
 
+/** ADR-112 Amendment 3: what removing a person does, said before it is done. */
+export function removalWords(person: PersonAccount): string {
+  const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
+  return (
+    `Remove ${who}? Their account is deleted: they can no longer sign in, and their sign-in name and email address ` +
+    "become free to use again. Cases, alerts and recipes they made stay as they are and show their id in place of " +
+    "their name. This cannot be undone. To keep the account but stop them signing in, disable it instead."
+  );
+}
+
+function RemoveConfirmation({
+  api,
+  person,
+  onRemoved,
+  onCancel,
+}: {
+  api: AdminApi;
+  person: PersonAccount;
+  onRemoved: (p: PersonAccount) => void;
+  onCancel: () => void;
+}) {
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <div
+      role="group"
+      aria-label={`Remove ${person.username}`}
+      style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}
+    >
+      <p style={{ margin: 0 }}>{removalWords(person)}</p>
+      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+        <Button
+          aria-label={`Confirm removing ${person.username}`}
+          onClick={() =>
+            void removePerson(api, person.id)
+              .then(onRemoved)
+              .catch((e: Error) => setProblem(e.message))
+          }
+        >
+          Remove the account
+        </Button>
+        <Button aria-label={`Keep ${person.username}`} onClick={onCancel}>
+          Keep it
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PersonRow({
   api,
   person,
   scheme,
   onSaved,
   onDelivered,
+  onRemoved,
 }: {
   api: AdminApi;
   person: PersonAccount;
   scheme: Scheme;
   onSaved: (p: PersonAccount) => void;
   onDelivered: (d: SignInDelivery) => void;
+  onRemoved: (p: PersonAccount) => void;
 }) {
   const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
   const [said, setSaid] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
   const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
   const status = !person.enabled ? "Disabled" : person.must_set_password ? "Invited — must set a password" : null;
@@ -296,6 +349,11 @@ function PersonRow({
             >
               Reset sign-in
             </Button>
+            {!person.system_account && (
+              <Button aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+                Remove
+              </Button>
+            )}
           </div>
           {said && <span role="status" className="label">{` ${said}`}</span>}
         </td>
@@ -304,6 +362,13 @@ function PersonRow({
         <tr>
           <td colSpan={ROLES.length + 3}>
             <AccessEditor api={api} person={person} scheme={scheme} onSaved={onSaved} />
+          </td>
+        </tr>
+      )}
+      {removing && (
+        <tr>
+          <td colSpan={ROLES.length + 3}>
+            <RemoveConfirmation api={api} person={person} onRemoved={onRemoved} onCancel={() => setRemoving(false)} />
           </td>
         </tr>
       )}
@@ -434,6 +499,7 @@ function People({ api }: { api: AdminApi }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
+  const [removed, setRemoved] = useState<PersonAccount | null>(null);
   const scheme = useScheme(api);
   useEffect(() => {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
@@ -449,6 +515,11 @@ function People({ api }: { api: AdminApi }) {
         Other grants (single rights, older roles) are kept as they are.
       </p>
       {delivered && <Delivered delivery={delivered} />}
+      {removed && (
+        <p role="status" style={{ margin: 0 }}>
+          {`${removed.name || removed.username} (${removed.username}) was removed. What they made now shows their id in place of their name.`}
+        </p>
+      )}
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>
@@ -462,7 +533,18 @@ function People({ api }: { api: AdminApi }) {
         </thead>
         <tbody>
           {people.map((p) => (
-            <PersonRow key={p.id} api={api} person={p} scheme={scheme} onSaved={saved} onDelivered={setDelivered} />
+            <PersonRow
+              key={p.id}
+              api={api}
+              person={p}
+              scheme={scheme}
+              onSaved={saved}
+              onDelivered={setDelivered}
+              onRemoved={(gone) => {
+                setRemoved(gone);
+                setPeople((current) => (current ?? []).filter((x) => x.id !== gone.id));
+              }}
+            />
           ))}
         </tbody>
       </table>

@@ -21,10 +21,12 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from services.api.identity_admin import (
     CODE_ALPHABET,
+    CONDUIT_ACCOUNTS,
     DashboardExistsError,
-    PersonExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    PersonActionRefused,
+    PersonExistsError,
     UnknownRoleError,
 )
 
@@ -40,7 +42,9 @@ class _Realm:
             "u-analyst": {"id": "u-analyst", "username": "osprey-demo-analyst", "firstName": "Demo",
                           "lastName": "Analyst", "enabled": True, "email": "analyst@example.org",
                           "attributes": {"roles": ["analyst"], "clearance": ["OFFICIAL"], "org_unit": ["verify"]}},
-            "u-sa": {"id": "u-sa", "username": "service-account-osprey-conduit", "enabled": True, "attributes": {}},
+            # Keycloak 26 marks a client's service account with the client it belongs to.
+            "u-sa": {"id": "u-sa", "username": "service-account-osprey-conduit", "enabled": True,
+                     "attributes": {}, "serviceAccountClientId": "osprey-conduit"},
         }  # fmt: skip
         self.clients: dict[str, dict[str, object]] = {}
         self.calls: list[str] = []
@@ -444,3 +448,70 @@ async def test_a_service_account_is_no_person_to_manage(idp: tuple[IdentityAdmin
             await act
     assert realm.users["u-sa"]["enabled"] is True
     await admin.aclose()
+
+
+# --- ADR-112 Amendment 3 (build order step 33 (a)): remove a person -----------------------------
+
+
+Idp = tuple[IdentityAdmin, _Realm]
+
+
+def _admin_user(
+    realm: _Realm, uid: str, *, enabled: bool = True, roles: list[str] | None = None
+) -> None:
+    realm.users[uid] = {"id": uid, "username": f"admin.{uid}", "firstName": "Ada", "lastName": uid,
+                        "enabled": enabled, "email": f"{uid}@example.org",
+                        "attributes": {"roles": roles or ["osprey-admin"]}}  # fmt: skip
+
+
+async def test_removing_a_person_deletes_their_account_and_says_who_they_were(idp: Idp) -> None:
+    admin, realm = idp
+    removed = await admin.remove_person("u-analyst")
+    assert (removed.username, removed.name, removed.email) == (
+        "osprey-demo-analyst", "Demo Analyst", "analyst@example.org")  # fmt: skip
+    assert "u-analyst" not in realm.users
+    assert "DELETE /admin/realms/osprey/users/u-analyst" in realm.calls
+    with pytest.raises(IdentityAdminRefused, match="no such person"):
+        await admin.remove_person("u-analyst")
+    await admin.aclose()
+
+
+async def test_an_account_ospreyflow_itself_uses_is_never_removed(idp: Idp) -> None:
+    """A client's service account (Keycloak marks it `serviceAccountClientId`) and the deploy's
+    verify probes: refused in words, and nothing is deleted."""
+    admin, realm = idp
+    realm.users["u-probe"] = {"id": "u-probe", "username": "osprey-verify-probe",
+                              "enabled": True, "attributes": {}}  # fmt: skip
+    for uid in ("u-sa", "u-probe"):
+        with pytest.raises(PersonActionRefused) as refused:
+            await admin.remove_person(uid)
+        assert refused.value.error == "not_a_person"
+        assert "OspreyFlow itself uses" in refused.value.words
+    assert not [c for c in realm.calls if c.startswith("DELETE")]
+    people = {p.username: p for p in await admin.list_people()}
+    assert people["osprey-verify-probe"].system_account is True
+    assert people["osprey-demo-analyst"].system_account is False
+    await admin.aclose()
+
+
+async def test_the_last_person_who_can_manage_people_is_not_removed(idp: Idp) -> None:
+    """Another administrator who is disabled, or who holds only another role, does not count; an
+    enabled one — by the Admin role or by the single right — does."""
+    admin, realm = idp
+    _admin_user(realm, "a1")
+    _admin_user(realm, "a2", enabled=False)
+    _admin_user(realm, "a3", roles=["analyst", "right:manage_dashboards"])
+    with pytest.raises(PersonActionRefused) as refused:
+        await admin.remove_person("a1")
+    assert refused.value.error == "last_administrator" and "Admin role" in refused.value.words
+    assert "a1" in realm.users and not [c for c in realm.calls if c.startswith("DELETE")]
+    _admin_user(realm, "a4", roles=["right:manage_people"])
+    assert (await admin.remove_person("a1")).username == "admin.a1"
+    assert "a1" not in realm.users
+    await admin.aclose()
+
+
+def test_the_conduits_own_accounts_are_the_realms_verify_probes() -> None:
+    from harness.realm import REVOKED_SUBJECT, VERIFY_SUBJECT
+
+    assert {VERIFY_SUBJECT, REVOKED_SUBJECT} == CONDUIT_ACCOUNTS
