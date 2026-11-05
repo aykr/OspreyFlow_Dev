@@ -424,15 +424,20 @@ def run_doctor(
     ports: tuple[int, ...] | None = None,
     server: ServerPlan | None = None,
     gpu: GpuPlan | None = None,
+    joins_by_email: bool = False,
 ) -> list[Check]:
     """Every check for `mode`, in the order a person should fix them. `ports` are a deployment's
     own when it is not the checkout's (ADR-138: one installed by name, at an address of its own).
     `server` is a Small on a server of your own (ADR-114 Amendment 33), checked as that server.
-    `gpu` is the local engine on an NVIDIA GPU (ADR-135 Amendment 1), checked after the rest."""
+    `gpu` is the local engine on an NVIDIA GPU (ADR-135 Amendment 1), checked after the rest.
+    `joins_by_email`: the installed `osprey.yaml` joins organisation arrivals by email ("Step 33"),
+    warned of as the answers' own setting is."""
     checks = _mode_checks(mode, probes, product=product, cloud=cloud, ports=ports, server=server)
     if gpu is not None and (mode == "lite" or server is not None):
         # A cloud's servers have no GPU: the answers and the schema refuse one there.
         checks += gpu_checks(probes, gpu)
+    if joins_by_email and not any(c.name == "organisation-trust-email" for c in checks):
+        checks.append(trust_email_check())
     return checks
 
 
@@ -688,6 +693,34 @@ def _backups_disk(probes: Probes, folder: Path) -> Check:
     )  # fmt: skip
 
 
+#: ADR-114 Amendment 33, "Step 33": joining by email, said by the doctor and the install whenever
+#: it is on — a warning, not a refusal: the organisation's security officer has decided it.
+TRUST_EMAIL_SAYS = (
+    "Sign-in through the organisation joins by email (sign_in.organisation.trust_email): a person "
+    "arriving through the organisation's provider is joined, automatically, to the OspreyFlow "
+    "account holding the same email address, with its roles and clearance. Anyone who can make the "
+    "provider give that address, an address a person can set themselves or another tenant can "
+    "claim, takes that account over: the 2023 \"nOAuth\" account takeovers were exactly this."
+)
+TRUST_EMAIL_FIX = (
+    "Keep it on only with the organisation's security officer's written sign-off that every "
+    "address its provider gives is verified and cannot be changed by the person who holds it. "
+    "Otherwise set trust_email: false (the default): a person whose email an account holds is "
+    "refused in words, and an administrator joins them in Admin, People and roles."
+)
+
+
+def trust_email_check() -> Check:
+    return Check("organisation-trust-email", True, TRUST_EMAIL_SAYS, TRUST_EMAIL_FIX, warn=True)
+
+
+def joins_by_email(config: Mapping[str, object]) -> bool:
+    """Whether an `osprey.yaml` (as plain data) joins organisation arrivals by email."""
+    governance = config.get("governance")
+    provider = governance.get("organisation_provider") if isinstance(governance, Mapping) else None
+    return isinstance(provider, Mapping) and provider.get("trust_email") is True
+
+
 def _organisation_checks(probes: Probes, plan: ServerPlan) -> list[Check]:
     """Decision 4: the organisation's identity provider — its client secret in this terminal for
     the install, the two addresses the organisation registers, and Keycloak's one route out."""
@@ -710,6 +743,8 @@ def _organisation_checks(probes: Probes, plan: ServerPlan) -> list[Check]:
             "kept only in the deployment's own secrets file), then run this again.",
         )
     ]
+    if plan.organisation.get("trust_email") == "true":
+        checks.append(trust_email_check())
     provider = urlsplit(plan.organisation.get("issuer", "")).hostname or ""
     if provider and not probes.resolves(provider):
         checks.append(

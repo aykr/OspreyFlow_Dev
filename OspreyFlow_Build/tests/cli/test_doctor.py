@@ -19,6 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+import yaml
 from ospreyflow.doctor import Check, ServerPlan, SystemProbes, format_check, run_doctor
 
 from .conftest import FakeProbes, Rig
@@ -417,3 +418,39 @@ def test_organisation_sign_in_needs_its_secret_and_says_what_to_register(tmp_pat
     probes.unresolved = {"login.microsoftonline.com"}
     route = _server(probes, tmp_path, plan)["organisation-route"]
     assert route.warn and "login.microsoftonline.com" in route.says
+
+
+# ---- ADR-114 Amendment 33, "Step 33" (build order step 33 (c)): joining by email is warned of ---
+
+
+def test_joining_by_email_is_warned_of_naming_the_takeover_and_never_stops_the_install(
+    tmp_path: Path,
+) -> None:
+    organisation = {"alias": "org", "issuer": "https://login.microsoftonline.com/t/v2.0"}
+    plan = ServerPlan(**{**PLAN.__dict__, "organisation": organisation,
+                         "organisation_secret_given": True})  # fmt: skip
+    assert "organisation-trust-email" not in _server(FakeProbes(), tmp_path, plan)
+    trusting = ServerPlan(**{**plan.__dict__,
+                             "organisation": {**organisation, "trust_email": "true"}})  # fmt: skip
+    warning = _server(FakeProbes(), tmp_path, trusting)["organisation-trust-email"]
+    assert warning.ok and warning.warn
+    assert "nOAuth" in warning.says and "takes that account over" in warning.says
+    assert "security officer" in warning.fix and "trust_email: false" in warning.fix
+
+
+def test_the_doctor_warns_of_an_installed_deployment_that_joins_by_email(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`ospreyflow doctor` with no answers reads the installed `osprey.yaml`."""
+    config = rig.product / "osprey.yaml"
+    raw = yaml.safe_load(config.read_text(encoding="utf-8")) if config.is_file() else {}
+    raw.setdefault("governance", {})["organisation_provider"] = {
+        "label": "Org", "issuer": "https://login.example.org/t", "client_id": "c",
+        "trust_email": True}
+    config.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    assert rig("doctor") == 0, "a warning, not a refusal"
+    assert "nOAuth" in capsys.readouterr().out
+    raw["governance"]["organisation_provider"]["trust_email"] = False
+    config.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    assert rig("doctor") == 0
+    assert "nOAuth" not in capsys.readouterr().out

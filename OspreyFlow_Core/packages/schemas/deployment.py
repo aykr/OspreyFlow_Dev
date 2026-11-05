@@ -520,6 +520,17 @@ class OrganisationProvider(BaseModel):
         min_length=1,
         description="The application (client) id the organisation registered for OspreyFlow.",
     )
+    trust_email: bool = Field(
+        default=False,
+        description="ADR-114 Amendment 33, 'Step 33': true joins a person arriving through the "
+        "organisation to the OspreyFlow account holding the same email address, automatically, "
+        "with its roles and clearance. Off by default: a person whose email an account holds is "
+        "refused in words, and an administrator joins them in Admin, People and roles. Turn it on "
+        "only with the organisation's security officer's written sign-off that every address its "
+        "provider gives is verified and cannot be set by the person who holds it: anyone who can "
+        "make the provider give an address takes over the account that holds it (the 2023 "
+        "'nOAuth' account takeovers).",
+    )
 
     @field_validator("issuer")
     @classmethod

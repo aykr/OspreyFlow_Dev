@@ -614,6 +614,26 @@ def ensure_arrival_events(*, issuer: str, realm: str, token: str) -> str:
     return "refused organisation sign-ins: recorded for seven days, for Admin to join"
 
 
+def remove_first_sign_in_flow(*, issuer: str, realm: str, token: str, alias: str) -> str | None:
+    """The flow `alias` removed from the realm, if it is there (ADR-114 Amendment 33, "Step 33":
+    the join-by-email flow, once joining by email is turned off — run after the provider names the
+    other flow, as Keycloak refuses to remove a flow a provider names). None when there was none."""
+    base = f"{issuer}/admin/realms/{realm}/authentication/flows"
+    status, flows = _call(base, token=token)
+    if status != 200 or not isinstance(flows, list):
+        raise RealmConfigurationFailed(f"Keycloak did not list the sign-in flows ({status})")
+    held = [f for f in flows if f.get("alias") == alias]
+    if not held:
+        return None
+    status, _ = _call(f"{base}/{held[0]['id']}", token=token, method="DELETE")
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(
+            f"Keycloak refused to remove the sign-in flow {alias!r} ({status}); remove it in "
+            "Keycloak's console, under Authentication"
+        )
+    return f"the sign-in flow {alias!r}: removed"
+
+
 def ensure_first_sign_in_flow(*, issuer: str, realm: str, token: str, flow: dict[str, Any]) -> str:
     """The flow a person's first sign-in through the organisation's provider runs (ADR-114
     Amendment 33, "Step 28 (e)"; `realm.organisation_first_sign_in_flow`), made or put back as

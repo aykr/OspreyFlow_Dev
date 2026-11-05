@@ -414,6 +414,12 @@ _REALM = "osprey"
 ORGANISATION_FIRST_SIGN_IN_FLOW = "osprey organisation first sign-in"
 #: The login theme's message key for the refusal (`harness/keycloak_theme.py`).
 ACCOUNT_EXISTS_MESSAGE = "ospreyAccountExistsMessage"
+#: ADR-114 Amendment 33, "Step 33": the first sign-in a deployment that opted in to joining by email
+#: runs instead (`governance.organisation_provider.trust_email`, off by default) — a person whose
+#: email an account holds is joined to that account, automatically. Made only while the setting is
+#: on, and removed when it is turned off.
+#: (Measured on Keycloak 26.0: a flow's alias may not hold `,`, `(`, `:` or `;` — refused, 400.)
+ORGANISATION_JOIN_BY_EMAIL_FLOW = "osprey organisation first sign-in joined by email"
 
 
 def organisation_first_sign_in_flow() -> dict[str, Any]:
@@ -465,6 +471,52 @@ def organisation_first_sign_in_flow() -> dict[str, Any]:
     }
 
 
+def organisation_join_by_email_flow() -> dict[str, Any]:
+    """The opt-in's flow (`ORGANISATION_JOIN_BY_EMAIL_FLOW`), as Keycloak 26's own "automatically
+    link existing first login" flow has it: *Create User If Unique*, and when the email is held,
+    *Automatically Set Existing User*, as alternatives in a sub-flow of their own.
+
+    *Review Profile* is **off**, not *missing*: with it on, a person whose provider gave no email
+    would be asked to type one, and the account holding what they typed would be joined to them.
+    With it off only the provider's own address is ever compared. (A person the provider gave no
+    email gets a new account with none, and Keycloak's own profile check asks for one at sign-in,
+    where an address another account holds is refused.)"""
+    return {
+        "alias": ORGANISATION_JOIN_BY_EMAIL_FLOW,
+        "description": "OspreyFlow: a person's first sign-in through the organisation's provider, "
+        "on a deployment that trusts the organisation's email (trust_email). A new account, or the "
+        "account holding the same email, joined automatically.",
+        "steps": [
+            {
+                "provider": "idp-review-profile",
+                "requirement": "REQUIRED",
+                "config": {
+                    "alias": "osprey organisation join review profile",
+                    "config": {"update.profile.on.first.login": "off"},
+                },
+            },
+            {
+                "flow": "osprey organisation join by email",
+                "requirement": "REQUIRED",
+                "steps": [
+                    {"provider": "idp-create-user-if-unique", "requirement": "ALTERNATIVE"},
+                    {"provider": "idp-auto-link", "requirement": "ALTERNATIVE"},
+                ],
+            },
+        ],
+    }
+
+
+def organisation_sign_in_flows(config: OspreyConfig) -> tuple[dict[str, Any], str | None]:
+    """The first-sign-in flow the provider names, by the deployment's setting, and the alias of the
+    flow the other setting would use when it must not be left in the realm (the join flow, while
+    joining by email is off) — None when the other may stay (the refusal, harmless while unused)."""
+    provider = config.governance.organisation_provider
+    if provider is not None and provider.trust_email:
+        return organisation_join_by_email_flow(), None
+    return organisation_first_sign_in_flow(), ORGANISATION_JOIN_BY_EMAIL_FLOW
+
+
 def organisation_redirect_uris(
     config: OspreyConfig, *, realm_name: str = _REALM
 ) -> tuple[str, str]:
@@ -494,7 +546,11 @@ def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
 
     Not in the realm import (`render_realm`): an import is read only on Keycloak's first start, and
     the endpoints are not known until the discovery document is read. `ospreyflow install` and
-    `ospreyflow repair-sign-in` register it through the admin API instead, each time."""
+    `ospreyflow repair-sign-in` register it through the admin API instead, each time.
+
+    **Joining by email** (ADR-114 Amendment 33, "Step 33"): with `trust_email` on, the provider
+    trusts the organisation's email and names `ORGANISATION_JOIN_BY_EMAIL_FLOW`; off (the default),
+    neither — step 28 (e)'s refusal."""
     governance = config.governance
     provider = governance.organisation_provider
     if provider is None or not governance.organisation_sign_in:
@@ -504,11 +560,15 @@ def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
         "displayName": provider.label,
         "providerId": "oidc",
         "enabled": True,
-        "trustEmail": False,
+        "trustEmail": provider.trust_email,
         "storeToken": False,
         "addReadTokenRoleOnCreate": False,
         "linkOnly": False,
-        "firstBrokerLoginFlowAlias": ORGANISATION_FIRST_SIGN_IN_FLOW,
+        "firstBrokerLoginFlowAlias": (
+            ORGANISATION_JOIN_BY_EMAIL_FLOW
+            if provider.trust_email
+            else ORGANISATION_FIRST_SIGN_IN_FLOW
+        ),
         "config": {
             "clientId": provider.client_id,
             "clientAuthMethod": "client_secret_post",

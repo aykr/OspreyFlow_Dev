@@ -49,6 +49,7 @@ a person at the prompts and CI install the same way.
         label: Example Department account  # its name on the sign-in pages
         issuer: https://login.microsoftonline.com/<tenant>/v2.0
         client_id: 00000000-0000-0000-0000-000000000000
+        trust_email: false         #   true joins by email: needs the security officer's sign-off
         # its client secret is never an answer: set OSPREY_ORG_SIGN_IN_SECRET for the install
     admin_email: ops@example.org   # small on a server: the first administrator's email
     config: ./osprey.yaml          # instead of the sections above: use this osprey.yaml as it is
@@ -103,7 +104,7 @@ GPUS = ("none", "nvidia")
 MIN_MEMORY_GIB = 16
 #: Amendment 33 decision 4 (drop 2, unit 7): `sign_in.organisation`.
 _SIGN_IN = {"organisation"}
-_ORGANISATION = {"alias", "label", "issuer", "client_id"}
+_ORGANISATION = {"alias", "label", "issuer", "client_id", "trust_email"}
 #: The provider's alias when none is given: part of the address the organisation registers.
 DEFAULT_ORGANISATION_ALIAS = "org"
 DEFAULT_ORGANISATION_LABEL = "Organisation account"
@@ -384,6 +385,15 @@ def _organisation(section: object, server: bool) -> dict[str, str]:
             f"sign_in.organisation.issuer {chosen['issuer']!r} must be an https:// address"
         )
     chosen["issuer"] = chosen["issuer"].rstrip("/")
+    # ADR-114 Amendment 33, "Step 33": joining by email, off unless said in so many words.
+    trust = organisation.get("trust_email", False)
+    if not isinstance(trust, bool):
+        raise AnswersRefused(
+            f"sign_in.organisation.trust_email is true or false, not {trust!r}; nothing was "
+            "installed"
+        )
+    if trust:
+        chosen["trust_email"] = "true"
     return chosen
 
 
@@ -600,6 +610,8 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         governance["organisation_provider"] = {
             k: answers.organisation[k] for k in ("label", "issuer", "client_id")
         }
+        if answers.organisation.get("trust_email") == "true":
+            governance["organisation_provider"]["trust_email"] = True
     return _resolution_off_for_the_packs(config, answers.demo_packs, own_file=None)
 
 

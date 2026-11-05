@@ -12,7 +12,9 @@ with Keycloak 26's authentication-flow and identity-provider admin routes, and w
 those make: a flow or sub-flow alias already held anywhere in the realm is 409; an execution of a
 provider Keycloak does not have is 400; an unknown flow, execution or configuration is 404; a
 configuration without an alias is 400; and an identity provider naming a first-sign-in flow that
-does not exist is refused (400, "No available authentication flow with alias"). It also **runs** a
+does not exist is refused (400, "No available authentication flow with alias"); and (step 33)
+removing a built-in flow, or one a provider names, is refused (400), and so is a flow alias holding
+`,`, `(`, `:` or `;` (400, "Character ',' not allowed." — measured on 26.0). It also **runs** a
 first-broker-login flow as Keycloak's `DefaultAuthenticationFlow` does: a level holding a REQUIRED
 step ignores its ALTERNATIVE ones; alternatives are tried in order until one succeeds; *Create User
 If Unique* as an alternative steps aside when the email is held (and shows Keycloak's own "already
@@ -178,6 +180,21 @@ class FlowKeycloak(FakeKeycloak):
     def _authentication(self, verb: str, route: str, data: Any) -> tuple[int, Any]:
         if route == "/flows" and verb == "GET":
             return 200, [dict(f) for f in self.flows.values() if f["topLevel"]]
+        if route.startswith("/flows/") and route.count("/") == 2 and verb == "DELETE":
+            held = [f for f in self.flows.values() if f["id"] == route.split("/")[2]]
+            if not held:
+                return 404, {"error": "Could not find flow with id"}
+            if held[0]["builtIn"]:
+                return 400, {"error": "Can't delete built in flow"}
+            if any(p.get("firstBrokerLoginFlowAlias") == held[0]["alias"]
+                   for p in self.providers.values()):  # fmt: skip
+                return 400, {"error": "Cannot delete flow, it's used by an identity provider"}
+            del self.flows[held[0]["alias"]]
+            return 204, ""
+        alias = str((data or {}).get("alias", ""))
+        refused_character = next((c for c in ",(:;" if c in alias), None)
+        if verb == "POST" and refused_character and route.startswith("/flows"):
+            return 400, {"error": f"Character '{refused_character}' not allowed."}
         if route == "/flows" and verb == "POST":
             if data["alias"] in self.flows:
                 return 409, {"errorMessage": f"Flow {data['alias']} already exists"}
@@ -340,15 +357,21 @@ def keycloak(monkeypatch: pytest.MonkeyPatch) -> FlowKeycloak:
     return fake
 
 
-def _identity(keycloak: FlowKeycloak) -> list[str]:
+def _identity(keycloak: FlowKeycloak, config: OspreyConfig | None = None) -> list[str]:
     """What `ospreyflow install` and `ospreyflow repair-sign-in --no-demo-accounts` run."""
     token = keycloak_admin.admin_token(
         issuer=ISSUER, admin_user="admin", admin_password=ADMIN_PASSWORD
     )
     return register_sign_in.ensure_identity(
-        issuer=ISSUER, realm="osprey", token=token, config=_organisation_config(),
+        issuer=ISSUER, realm="osprey", token=token, config=config or _organisation_config(),
         values={"OSPREY_ORG_SIGN_IN_SECRET": ORG_SECRET},
     )  # fmt: skip
+
+
+def _joining_by_email(on: bool) -> OspreyConfig:
+    raw = _organisation_config().model_dump(mode="json")
+    raw["governance"]["organisation_provider"]["trust_email"] = on
+    return OspreyConfig.model_validate(raw)
 
 
 def _flow_writes(keycloak: FlowKeycloak) -> int:
@@ -457,6 +480,68 @@ def test_a_deployment_without_the_organisations_provider_gets_no_flow(
         values={},
     )  # fmt: skip
     assert _flow_writes(keycloak) == 0
+
+
+# --- ADR-114 Amendment 33, "Step 33" (c): joining by email, opt-in ------------------------------
+
+
+def test_with_joining_by_email_on_an_arrival_is_joined_to_the_account_holding_the_email(
+    keycloak: FlowKeycloak,
+) -> None:
+    from harness.realm import ORGANISATION_JOIN_BY_EMAIL_FLOW
+
+    keycloak.invite("pat.local", EMAIL)
+    lines = _identity(keycloak, _joining_by_email(True))
+    provider = keycloak.providers[ALIAS]
+    assert provider["trustEmail"] is True
+    assert provider["firstBrokerLoginFlowAlias"] == ORGANISATION_JOIN_BY_EMAIL_FLOW
+    assert keycloak.arrive("pat.example", EMAIL) == Arrival("signed-in", "")
+    assert keycloak.links == {"pat.local": {ALIAS}}, "joined to the account, no second one made"
+    assert [u["username"] for u in keycloak.users.values() if u.get("email") == EMAIL] == [
+        "pat.local"]  # fmt: skip
+    assert any(line.startswith("WARNING") and "nOAuth" in line for line in lines), lines
+    # Nobody holds the email: a new account, as before.
+    assert keycloak.arrive("sam.example", "sam@example.org") == Arrival("signed-in", "")
+
+
+def test_the_join_by_email_flow_never_asks_the_person_for_an_address(
+    keycloak: FlowKeycloak,
+) -> None:
+    """With *Review Profile* asking for what is missing, a person whose provider gave no email
+    would type one, and be joined to whoever holds it; the opt-in's flow has it off."""
+    from harness.realm import organisation_join_by_email_flow
+
+    (review,) = [s for s in organisation_join_by_email_flow()["steps"]
+                 if s.get("provider") == "idp-review-profile"]  # fmt: skip
+    assert review["config"]["config"] == {"update.profile.on.first.login": "off"}
+    _identity(keycloak, _joining_by_email(True))
+    flow = keycloak.providers[ALIAS]["firstBrokerLoginFlowAlias"]
+    (made,) = [e for e in keycloak.executions.values()
+               if e["provider"] == "idp-review-profile" and e["parent"] == flow]  # fmt: skip
+    assert keycloak.configs[made["config"]]["config"] == {"update.profile.on.first.login": "off"}
+
+
+def test_turning_joining_by_email_off_puts_the_refusal_back_and_removes_the_join(
+    keycloak: FlowKeycloak,
+) -> None:
+    """What `repair-sign-in`, `apply` and a restore each run: the provider follows the setting
+    either way, and no join flow is left behind for a hand to point the provider at."""
+    from harness.realm import ORGANISATION_FIRST_SIGN_IN_FLOW, ORGANISATION_JOIN_BY_EMAIL_FLOW
+
+    keycloak.invite("pat.local", EMAIL)
+    _identity(keycloak, _joining_by_email(True))
+    assert ORGANISATION_JOIN_BY_EMAIL_FLOW in keycloak.flows
+    lines = _identity(keycloak, _joining_by_email(False))
+    provider = keycloak.providers[ALIAS]
+    assert provider["trustEmail"] is False
+    assert provider["firstBrokerLoginFlowAlias"] == ORGANISATION_FIRST_SIGN_IN_FLOW
+    assert ORGANISATION_JOIN_BY_EMAIL_FLOW not in keycloak.flows
+    assert any("removed" in line for line in lines), lines
+    assert not any("nOAuth" in line for line in lines)
+    assert keycloak.arrive("pat.example", EMAIL) == Arrival("refused", "ospreyAccountExistsMessage")
+    # And on again.
+    _identity(keycloak, _joining_by_email(True))
+    assert keycloak.arrive("pat.example", EMAIL) == Arrival("signed-in", "")
 
 
 # --- ADR-112 Amendment 3 (b), build order step 33: the realm keeps its record of a refusal --------

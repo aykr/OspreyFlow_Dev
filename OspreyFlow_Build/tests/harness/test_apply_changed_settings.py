@@ -934,3 +934,75 @@ def test_a_refused_move_starts_nothing_and_puts_back_every_file(
     deployment.compose([*apply._compose(compose_file), "up", "-d", "--wait"], stage="up")
     stores = {"postgres", "arcadedb", "valkey", "opensearch"}
     assert not [e for e in deployment.compose.events if e.removeprefix("started ") in stores]
+
+
+# ---- ADR-114 Amendment 33, "Step 33": joining by email follows `ospreyflow apply` ---------------
+
+
+def _organisation_install(
+    tmp_path: Path, compose: FakeCompose, monkeypatch: pytest.MonkeyPatch
+) -> Deployment:
+    """A self-contained Small signing in through the organisation, installed by the real
+    `apply.main` (stopped at its first compose command)."""
+    from .tls_fixtures import HOST, write_set
+
+    files = write_set(tmp_path / "tls")
+    found = Deployment(tmp_path, compose)
+    found.write_config(**_organisation_settings(HOST, files, trust_email=False))
+    monkeypatch.setenv("OSPREY_ORG_SIGN_IN_SECRET", "the-organisations-secret")
+
+    def refuse(args: list[str], *, stage: str, **_kwargs: object) -> str:
+        raise apply.ApplyFailed(stage, "no Docker in this test")
+
+    before = apply._run
+    apply._run = refuse  # type: ignore[assignment]
+    try:
+        assert apply.main(["--config", str(found.config), "--out-root", str(found.out_root)]) == 1
+    finally:
+        apply._run = before  # type: ignore[assignment]
+    assert (found.out_root / "small" / "deployment.env").is_file()
+    compose.calls.clear()
+    return found
+
+
+def _organisation_settings(host: str, files: Any, *, trust_email: bool) -> dict[str, Any]:
+    return {
+        "profile": "small",
+        "network": {"public_origin": f"https://{host}",
+                    "tls": {"certificate": str(files.certificate), "key": str(files.key),
+                            "ca": str(files.ca)}},
+        "reporting": {"sync": False, "superset": False},
+        "governance": {"organisation_sign_in": "org", "organisation_provider": {
+            "label": "Example Department account", "issuer": "https://login.example.org/t",
+            "client_id": "osprey", "trust_email": trust_email}},
+    }  # fmt: skip
+
+
+def test_joining_by_email_turned_on_or_off_reaches_the_identity_provider(
+    tmp_path: Path, compose: FakeCompose, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keycloak reads none of the rendered files, so `apply` registers the organisation's sign-in
+    again — identity settings only, no demo account — whenever its settings changed, and only
+    then."""
+    from harness import register_sign_in
+
+    from .tls_fixtures import HOST
+
+    deployment = _organisation_install(tmp_path, compose, monkeypatch)
+    registered: list[list[str]] = []
+    monkeypatch.setattr(register_sign_in, "main", lambda argv: registered.append(argv) or 0)
+    installed = yaml.safe_load(deployment.config.read_text(encoding="utf-8"))
+    files = SimpleNamespace(**{k: Path(v) for k, v in installed["network"]["tls"].items()})
+    assert deployment.reapply() == 0
+    assert registered == [], "nothing of the sign-in changed"
+    deployment.write_config(**_organisation_settings(HOST, files, trust_email=True))
+    assert deployment.reapply() == 0
+    (argv,) = registered
+    assert "--no-demo-accounts" in argv and argv[argv.index("--profile") + 1] == "small"
+    deployment.write_config(**_organisation_settings(HOST, files, trust_email=False))
+    assert deployment.reapply() == 0
+    assert len(registered) == 2
+    # A registration Keycloak refuses is said, naming what to run.
+    monkeypatch.setattr(register_sign_in, "main", lambda argv: 1)
+    deployment.write_config(**_organisation_settings(HOST, files, trust_email=True))
+    assert deployment.reapply() == 1

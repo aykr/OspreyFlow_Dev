@@ -438,3 +438,28 @@ def test_server_gpu_is_refused_for_a_clouds_server(
         load_answers(raw, packs=PACKS, home=tmp_path)
     assert "server.gpu" in str(refused.value)
     assert "without a GPU" in str(refused.value)
+
+
+# ---- ADR-114 Amendment 33, "Step 33" (build order step 33 (c)): joining by email, opt-in ---------
+
+
+def test_joining_by_email_is_off_unless_the_answers_say_true(tmp_path: Path) -> None:
+    """Off by default, and written into `osprey.yaml` only when the answers say `true`: a deployment
+    that never asked renders as before."""
+    raw = {"mode": "small", "server": SERVER, "sign_in": {"organisation": ORGANISATION}}
+    off = load_answers(raw, packs=PACKS, home=tmp_path)
+    assert "trust_email" not in osprey_config(off, {})["governance"]["organisation_provider"]
+    assert _config(raw, tmp_path).governance.organisation_provider.trust_email is False  # type: ignore[union-attr]
+    stated_off = {**raw, "sign_in": {"organisation": {**ORGANISATION, "trust_email": False}}}
+    assert _config(stated_off, tmp_path).governance.organisation_provider.trust_email is False  # type: ignore[union-attr]
+    on = {**raw, "sign_in": {"organisation": {**ORGANISATION, "trust_email": True}}}
+    assert _config(on, tmp_path).governance.organisation_provider.trust_email is True  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize("value", ["yes", "true", 1, None])
+def test_joining_by_email_takes_only_true_or_false(tmp_path: Path, value: object) -> None:
+    """A security setting is never guessed from a near miss: "yes", the string "true", 1."""
+    raw = {"mode": "small", "server": SERVER,
+           "sign_in": {"organisation": {**ORGANISATION, "trust_email": value}}}  # fmt: skip
+    with pytest.raises(AnswersRefused, match="trust_email is true or false"):
+        load_answers(raw, packs=PACKS, home=tmp_path)

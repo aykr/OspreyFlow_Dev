@@ -24195,6 +24195,57 @@ and a deployment may opt in to joining by email. What Keycloak needs for each:
    `::test_the_conduit_is_told_the_organisations_sign_in_only_when_there_is_one`;
    `test_register_sign_in.py::test_a_refresh_grants_the_conduits_account_the_roles_it_lacks` (now
    with `view-events`); against real Keycloak 26.0, ADR-112 Amendment 3 (b)'s case.
+5. **Joining by email, opt-in (the owner's ruling (c)).** Point 1 of step 28 (e) said where a join by
+   email is safe and who decides; this is that switch, off by default.
+   - **The setting:** in the answers, `sign_in.organisation.trust_email: true` (only `true` or
+     `false` — "yes", the string "true", 1 and an empty value are refused in words); carried into
+     `osprey.yaml` as `governance.organisation_provider.trust_email`, written only when true, so a
+     deployment that never asked renders as before.
+   - **On:** the provider has `trustEmail: true` and names `ORGANISATION_JOIN_BY_EMAIL_FLOW`
+     (`osprey organisation first sign-in joined by email`, `realm.organisation_join_by_email_flow`):
+     *Review Profile*, then a REQUIRED sub-flow of *Create User If Unique* and *Automatically Set
+     Existing User* (`idp-auto-link`) as alternatives — Keycloak 26's own "automatically link
+     existing first login" shape. ***Review Profile* is `off`, not `missing`:** with `missing`, a
+     person whose provider gave no email would be asked to type one, and the account holding what
+     they typed would be joined to them; with `off` only the provider's own address is compared.
+     **Measured on 26.0:** the arrival lands in the account holding their email, no second account
+     is made; an invited account whose password was never set is joined and then asked for one
+     (its pending action — there is no administrator step to withdraw it, as there is in ADR-112
+     Amendment 3 (b)); a flow alias holding `,`, `(`, `:` or `;` is refused (400 — this flow's first
+     name had a comma; the stand-in now refuses the same).
+   - **Off (the default):** step 28 (e)'s refusal, `trustEmail: false`; and the join flow is
+     removed from the realm (`keycloak_admin.remove_first_sign_in_flow`, after the provider names
+     the refusal — Keycloak refuses to remove a flow a provider names), so no hand can point the
+     provider back at it unnoticed. The refusal flow is left in place while joining is on (unused,
+     harmless).
+   - **Kept matching the setting either way** by every path that registers the identity provider:
+     `ospreyflow install` and `repair-sign-in` (`ensure_identity`), a restore (its
+     `_register_sign_in` runs the same registration), and now **`ospreyflow apply`**: Keycloak reads
+     none of the rendered files, so `apply.reapply` compares the organisation's provider as the
+     installed `osprey.yaml` names it with the new one and, when they differ, runs `repair-sign-in
+     --no-demo-accounts`'s registration (identity settings only); a refusal there fails the apply
+     naming `ospreyflow repair-sign-in`.
+   - **Said, every time:** the doctor (`organisation-trust-email`, a warning that does not stop an
+     install — the security officer has decided it — from the answers' setting, or with no answers
+     from the installed `osprey.yaml`), the install again after the addresses to register, and every
+     registration's own output — each naming the account takeover and the 2023 "nOAuth" class, and
+     what keeping it on needs: the security officer's written sign-off that every address the
+     provider gives is verified and cannot be changed by its holder.
+   - **Tests**, red first: `test_organisation_first_sign_in.py`
+     `::test_with_joining_by_email_on_an_arrival_is_joined_to_the_account_holding_the_email`,
+     `::test_the_join_by_email_flow_never_asks_the_person_for_an_address`,
+     `::test_turning_joining_by_email_off_puts_the_refusal_back_and_removes_the_join`;
+     `tests/cli/test_answers.py::test_joining_by_email_is_off_unless_the_answers_say_true`,
+     `::test_joining_by_email_takes_only_true_or_false`; `tests/cli/test_doctor.py`
+     `::test_joining_by_email_is_warned_of_naming_the_takeover_and_never_stops_the_install`,
+     `::test_the_doctor_warns_of_an_installed_deployment_that_joins_by_email`;
+     `tests/cli/test_install_small_server.py`
+     `::test_an_install_that_joins_by_email_warns_at_the_doctor_and_again_at_the_end`;
+     `tests/harness/test_apply_changed_settings.py`
+     `::test_joining_by_email_turned_on_or_off_reaches_the_identity_provider`; against two real
+     Keycloak 26.0, `test_organisation_sign_in.py`
+     `::test_joining_by_email_joins_an_arrival_when_on_and_refuses_again_when_off` (shown red with
+     no auto-link step, and with the join flow left behind).
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 

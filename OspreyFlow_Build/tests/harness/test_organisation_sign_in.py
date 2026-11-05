@@ -871,3 +871,72 @@ def test_an_administrator_joins_a_refused_arrival_who_then_lands_in_the_account(
         assert (principal.id, principal.roles) == (local, ["analyst"])
     finally:
         _forget(stack, "pat.local")
+
+
+def test_joining_by_email_joins_an_arrival_when_on_and_refuses_again_when_off(stack: Stack) -> None:
+    """ADR-114 Amendment 33, "Step 33" (c), against Keycloak 26.0: with `trust_email` on, the
+    registration names the join-by-email flow and the arrival lands in the invited account holding
+    their email; turned off, the provider names the refusal again, the join flow is gone (Keycloak
+    removing it once no provider names it), and the next such arrival is refused in words."""
+    from harness.realm import ORGANISATION_FIRST_SIGN_IN_FLOW, ORGANISATION_JOIN_BY_EMAIL_FLOW
+
+    raw = stack.config.model_dump(mode="json")
+    raw["governance"]["organisation_provider"]["trust_email"] = True
+    trusting = OspreyConfig.model_validate(raw)
+    token = _admin(stack.deployment)
+    base = f"{stack.deployment.origin}/admin/realms/osprey"
+
+    def register(config: OspreyConfig) -> list[str]:
+        return ensure_identity(issuer=stack.deployment.origin, realm="osprey",
+                               token=_admin(stack.deployment), config=config,
+                               values=stack.values)  # fmt: skip
+
+    def flows() -> set[str]:
+        status, listed = keycloak_admin._call(f"{base}/authentication/flows", token=token)
+        assert status == 200, (status, listed)
+        return {f["alias"] for f in listed}
+
+    _forget(stack, PERSON["username"])
+    _forget(stack, "pat.local")
+    _invite(stack, "pat.local", PERSON["email"])
+    try:
+        lines = register(trusting)
+        assert any("nOAuth" in line for line in lines), lines
+        status, provider = keycloak_admin._call(
+            f"{base}/identity-provider/instances/{ALIAS}", token=token
+        )
+        assert (provider["trustEmail"], provider["firstBrokerLoginFlowAlias"]) == (
+            True, ORGANISATION_JOIN_BY_EMAIL_FLOW)  # fmt: skip
+        # Measured: an invited account whose password was never set is joined, and Keycloak then
+        # asks for the password its pending action wants (no administrator step to withdraw it).
+        pending = sign_in(stack)
+        assert pending.tokens is None and "Update password" in _said(pending), _said(pending)
+        local = _user_id(stack, "pat.local")
+        status, user = keycloak_admin._call(f"{base}/users/{local}", token=token)
+        keycloak_admin._call(f"{base}/users/{local}", token=token, method="PUT",
+                             data={**user, "requiredActions": []})  # fmt: skip
+        joined = sign_in(stack)
+        assert joined.tokens is not None, (joined.visited, _said(joined))
+        assert _principal(stack, joined.tokens["access_token"]).id == local
+        (link,) = _links(stack, "pat.local")
+        assert link["userId"] == _org_subject(stack)
+        status, found = keycloak_admin._call(
+            f"{base}/users?username={PERSON['username']}&exact=true", token=token
+        )
+        assert found == [], "joined, not a second account"
+
+        register(stack.config)
+        status, provider = keycloak_admin._call(
+            f"{base}/identity-provider/instances/{ALIAS}", token=token
+        )
+        assert (provider["trustEmail"], provider["firstBrokerLoginFlowAlias"]) == (
+            False, ORGANISATION_FIRST_SIGN_IN_FLOW)  # fmt: skip
+        assert ORGANISATION_JOIN_BY_EMAIL_FLOW not in flows()
+        _forget(stack, "pat.local")
+        _invite(stack, "pat.local", PERSON["email"])
+        refused = sign_in(stack)
+        assert refused.tokens is None
+        assert "already belongs to an OspreyFlow account" in _said(refused)
+    finally:
+        register(stack.config)
+        _forget(stack, "pat.local")
