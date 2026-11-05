@@ -997,7 +997,10 @@ node as supporting evidence, within the same session — `08_ACCEPTANCE_SCENARIO
 `POST .../ingest/recipes/{recipe_id}/run` is Loader-gated (`StudioRole.LOADER`) — §8's "Loader: run
 a published recipe against a file at or below their own clearance." `source_location`, when given
 in the request, is that file; omitted, it repeats against the recipe's own recorded location, and
-the recipe's own deduplication key makes a re-run idempotent (§6: "re-runnable"). A load that
+the recipe's own deduplication key makes a re-run idempotent (§6: "re-runnable"): rows whose key the
+case kept are skipped whole, so a re-run writes no node, link occurrence or analytics event again
+(ADR-127 decision 5, ADR-109 Amendment 8). A recipe with no deduplication key loads every row, and
+its events, every time. A load that
 actually creates something submits a post-ingest resolution job per resolvable entity type the
 recipe declares — the only route through which an ingest can raise a hotlist or saved-pattern
 alert against a live deployment, not fixture data assembled by a test harness.

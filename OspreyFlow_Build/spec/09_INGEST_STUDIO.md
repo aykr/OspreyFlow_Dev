@@ -723,10 +723,12 @@ editor; the repository is the record.
   between the same two parties (merged into the first link) is not counted again, and a re-run of
   the same file reports none. It agrees with Verify's *would create* and with the store (the
   report once counted every edge write, 236 for 141 links, until 9 October 2026).
-  **Not yet true of the run's events (found 10 October 2026, ADR-109 Amendment 1, not fixed):** a
-  re-run writes each transaction's event to the analytics store again under a new id
-  (`load_events` inserts), so the timeline and event counts double for a re-run file. Typology rules
-  read one transaction once regardless; the timeline does not yet.
+  **The run's events too, for a recipe with `deduplicate`** (ADR-109 Amendment 8): a re-run of the
+  same file into the same case skips every row whose key the case kept (ADR-127 decision 5), so no
+  event reaches the analytics store again and the timeline does not double
+  (`tests/ingest/test_rerun_events.py`). A recipe **without** `deduplicate` loads every row every
+  time: its links gain an occurrence and its events load again, together, so the timeline and the
+  occurrence counts agree; it is not idempotent and says nothing otherwise.
 - **Judged by the case's rules (ADR-109 ruling 1).** A run is judged by its case's typology rules
   at the point each declares (`03_CONDUIT_MIDDLEWARE.md` §3.8a, §5.1). The run report carries
   `rows_held` and `rule_notes`: what each rule raised, and any rows a failing pre-commit rule held

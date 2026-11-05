@@ -25518,3 +25518,32 @@ recommended option). ADR-140 and ADR-099 Amendment 12 are unchanged except where
    decision 3). Built in phase 6.
 
 Open questions 1 and 5 to 8 stay open.
+
+### ADR-109, Amendment 8 (5 November 2026) — a re-run's events: fixed by ADR-127 decision 5 for a keyed recipe (redesign phase 1)
+
+Status: accepted 5 November 2026 (the owner's ruling "Prove it, fix the spec", put as a choice when
+phase 1 of the Ingest Studio redesign, ADR-140, found its premise already met). ADR-109 is unchanged
+except where this says so.
+
+1. **Amendment 1's "Not fixed, recorded" item is fixed for every recipe with `deduplicate`.** ADR-127
+   decision 5 (25 October 2026) keeps each loaded row's key per case, and a re-run of the same recipe
+   into the same case skips a row whose key is kept, whole: no node, no link occurrence, and **no
+   event** is written again. The Studio's run route and the scheduler (ADR-110 decision 1's
+   `run_recipe_as`) both run with the case's key store, so this holds on every run path. Amendment 1
+   was written on 10 October, before that decision, and was never brought up to date.
+2. **A recipe without `deduplicate` is not idempotent, by design and consistently.** Every row loads
+   every time: its links gain an occurrence and its events are loaded again, together, so the timeline
+   and the links' occurrence counts agree. Making a keyless re-run load nothing (a default whole-row
+   key, or ignoring an event already held) was offered and not chosen; the second would have made the
+   timeline disagree with the occurrence counts.
+3. **What this asks of the redesign.** A source refresh re-reads rows by design (ADR-140 decision 15,
+   ADR-110 Amendment 5), and is idempotent only for a pipeline with a deduplication key. Phase 4
+   therefore refuses, in words, a refresh policy on a source used by a pipeline with no `deduplicate`,
+   or makes the key part of registering such a source; it decides which.
+
+**Tests.** `tests/ingest/test_rerun_events.py`, through the Studio's run path
+(`run_published_recipe`) into a recording analytics store:
+`::test_a_second_run_of_a_keyed_recipe_holds_each_event_once` (red with the key store answering that
+nothing is kept: 6 events held, not 3; restored byte for byte) and
+`::test_a_keyless_recipe_reloads_its_events_and_its_occurrences_together`. `tests/ingest/test_row_keys.py`
+already proved the same at `load_with_rules`.
