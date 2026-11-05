@@ -6,6 +6,27 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+- **Remove a person in Admin → People.** *Remove*, once confirmed in words, deletes the account
+  from the identity provider: they can no longer sign in, and their sign-in name and email address
+  are free again. What they made keeps their id, shown in place of their name; the audit log says
+  whose id it was. Your own account, an account OspreyFlow itself uses and the last enabled person
+  who can manage people are refused in words.
+- **Join someone the organisation's sign-in refused to their account.** A person arriving through
+  the organisation whose email an OspreyFlow account already holds is still refused in words, and
+  is now listed in Admin → People's *Refused organisation sign-ins* (the last seven days, by their
+  name at the organisation). An administrator chooses the account that is theirs and confirms; their
+  next sign-in through the organisation lands in it, with its roles. Audited. Run `ospreyflow
+  repair-sign-in` once after updating: it lets the identity provider record the refusals, and gives
+  the Conduit's account the `view-events` it needs to read them.
+- **Joining by email, for an organisation that verifies every address.** A new answer,
+  `sign_in.organisation.trust_email: true` (`governance.organisation_provider.trust_email`; off by
+  default), joins an organisation arrival to the account holding the same email automatically. It
+  hands that account to whoever the organisation's provider gives the address (the 2023 "nOAuth"
+  takeovers), so it is for an organisation whose security officer signs off that every address is
+  verified; `ospreyflow doctor`, the install and `repair-sign-in` warn of it each time. `ospreyflow
+  apply` now also brings the identity provider up to date when the organisation's sign-in settings
+  change.
+
 - **Run now runs on exactly the file Verify checked.** Verify now reads the file a run will read
   (a pipeline's source that names its own file included; it used to read the file chosen at
   Connect, so a file could pass Verify while the run loaded another) and records it with a hash of
