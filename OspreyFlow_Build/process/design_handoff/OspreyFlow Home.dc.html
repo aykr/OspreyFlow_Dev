@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@200..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+--n0:#090d0e;--n1:#101314;--n2:#161a1b;--n3:#202425;--n4:#2b2f30;--n5:#3a3e3f;--n6:#4d5051;--n7:#66696a;--n8:#848788;--n9:#a2a5a6;--n10:#c1c5c6;--n11:#e8eced;
+--surface-sunken:var(--n0);--surface-app:var(--n1);--surface-panel:var(--n2);--surface-raised:var(--n3);--surface-hover:var(--n4);
+--border-subtle:var(--n5);--border:var(--n6);--border-strong:var(--n7);
+--text-disabled:var(--n8);--text-tertiary:var(--n9);--text-secondary:var(--n10);--text-primary:var(--n11);
+--brass:#c08a34;--brass-hover:#d49c44;--brass-ink:#141517;
+--error:#e2695f;--warning:#d9a63f;--success:#6bab7e;
+--ch-indigo:#677bd6;--ch-violet:#8364a6;--ch-azure:#61b1e6;--ch-jade:#72b99a;--ch-ochre:#b34917;
+--seq-2:#1d575a;--seq-4:#3b999e;
+--ui:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif;
+--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+:root[data-theme="light"]{
+--n0:#ffffff;--n1:#f7fbfc;--n2:#f1f4f5;--n3:#e8eced;--n4:#dde0e1;--n5:#ced2d2;--n6:#bbbebf;--n7:#a2a5a6;--n8:#a2a5a6;--n9:#66696a;--n10:#4b4e4e;--n11:#191b1c;
+--brass:#8a6318;--brass-hover:#6f4e10;--brass-ink:#ffffff;
+--error:#a82f22;--warning:#8f6410;--success:#2f6c4a;
+--ch-indigo:#5367cb;--ch-violet:#562182;--ch-azure:#3682b2;--ch-jade:#2f8364;--ch-ochre:#83330d;
+--seq-2:#a0ced0;--seq-4:#358f94;
+}
+html,body{margin:0;padding:0}
+body{background:var(--surface-app);color:var(--text-primary);font-family:var(--ui);font-size:13px;line-height:18px;-webkit-font-smoothing:antialiased}
+*:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+a{color:var(--text-primary);text-decoration:none;border-bottom:1px solid var(--border-strong)}
+a:hover{color:var(--brass);border-bottom-color:var(--brass)}
+p{margin:0;text-wrap:pretty}
+@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation-duration:0s!important}}
+</style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: var(--surface-app); color: var(--text-primary)">
+
+  <div role="note" aria-label="Protective marking" style="height: 20px; display: flex; align-items: center; justify-content: center; background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle); font-size: 11px; font-weight: 600; letter-spacing: 0.02em">OFFICIAL</div>
+
+  <header style="height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 clamp(16px, 3vw, 32px); border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel)">
+    <svg width="24" height="24" viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" style="display: block"><path d="M4.9 6.7L6.4 17.2L23.9 11.1Z"></path><path d="M6.8 17.9L24.3 19.9L24.2 11.7Z"></path><path d="M6.6 18.6L8 29.1L24.2 20.7Z"></path><path d="M8.4 30.1L9.4 41L24.4 21.2Z"></path><path d="M9.8 41.2L24.4 30.2L24.7 21.5Z"></path><path d="M25.6 11.9L26.2 29.2L43.9 25.7Z"></path></svg>
+    <span style="font-size: 15px; letter-spacing: -0.01em"><span style="font-weight: 700">Osprey</span><span style="font-weight: 400">Flow</span></span>
+    <span style="flex: 1"></span>
+    <button onClick="{{ toggleTheme }}" style="height: 30px; padding: 0 10px; font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">{{ themeLabel }}</button>
+    <button style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; font-family: var(--ui); font-size: 13px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+      <span style="width: 24px; height: 24px; border-radius: 50%; background: var(--surface-hover); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">DA</span>
+      <span>osprey-demo-admin</span>
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+    </button>
+  </header>
+
+  <main style="flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 28px clamp(16px, 3vw, 32px) 40px; box-sizing: border-box">
+
+    <section style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 32px; margin-bottom: 24px">
+      <div>
+        <h1 style="margin: 0 0 4px; font-size: 23px; line-height: 30px; font-weight: 700; letter-spacing: -0.01em">{{ greeting }}, Dana</h1>
+        <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">Signed in as <span style="font-family: var(--mono)">osprey-demo-admin</span> with clearance <span style="font-family: var(--mono)">OFFICIAL</span>. Your roles: {{ roleList }}.</p>
+      </div>
+      <p style="font-size: 12px; color: var(--text-tertiary)">Last sign-in <span style="font-family: var(--mono)">2026-10-11 16:58 UTC</span> from <span style="font-family: var(--mono)">10.40.2.17</span>. Not you? <a href="#">Report it</a>.</p>
+    </section>
+
+    <section aria-label="Applications" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 32px">
+      <sc-for list="{{ apps }}" as="a" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; opacity: {{ a.opacity }}">
+          <div aria-hidden="true" style="height: 132px; border-bottom: 1px solid var(--border-subtle); background-color: var(--surface-app); background-image: {{ a.grid }}; background-size: 12px 12px; position: relative; overflow: hidden">
+
+            <sc-if value="{{ a.isGlass }}" hint-placeholder-val="{{ true }}">
+              <svg viewBox="0 0 320 132" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display: block">
+                <g style="stroke: var(--border-strong); stroke-width: 1">
+                  <line x1="70" y1="40" x2="128" y2="66"></line><line x1="58" y1="92" x2="128" y2="66"></line><line x1="128" y1="66" x2="186" y2="44"></line><line x1="186" y1="44" x2="246" y2="34"></line><line x1="186" y1="44" x2="238" y2="92"></line><line x1="128" y1="66" x2="160" y2="104"></line><line x1="238" y1="92" x2="282" y2="70"></line>
+                  <line x1="246" y1="34" x2="282" y2="70" stroke-dasharray="4 3"></line><line x1="96" y1="26" x2="70" y2="40"></line>
+                </g>
+                <g style="stroke: var(--text-primary); stroke-width: 2"><line x1="58" y1="92" x2="128" y2="66"></line><line x1="128" y1="66" x2="186" y2="44"></line><line x1="186" y1="44" x2="238" y2="92"></line></g>
+                <circle cx="70" cy="40" r="6" style="fill: var(--ch-indigo)"></circle><circle cx="58" cy="92" r="6" style="fill: var(--ch-indigo)"></circle><circle cx="96" cy="26" r="5" style="fill: var(--ch-indigo)"></circle>
+                <rect x="121" y="59" width="14" height="14" style="fill: var(--ch-azure)"></rect>
+                <path d="M186 36L194 44L186 52L178 44Z" style="fill: var(--ch-violet)"></path>
+                <rect x="240" y="28" width="12" height="12" rx="3" style="fill: var(--ch-jade)"></rect>
+                <rect x="232" y="86" width="12" height="12" rx="3" style="fill: var(--ch-jade)"></rect>
+                <path d="M282 64a6 6 0 1 0 .01 0ZM282 67.5a2.5 2.5 0 1 1-.01 0Z" fill-rule="evenodd" style="fill: var(--ch-ochre)"></path>
+                <circle cx="160" cy="104" r="5" style="fill: var(--ch-indigo)"></circle>
+                <circle cx="128" cy="66" r="12" fill="none" style="stroke: var(--brass); stroke-width: 2"></circle>
+              </svg>
+            </sc-if>
+
+            <sc-if value="{{ a.isIngest }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 0; padding: 0 16px">
+                <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="4">
+                  <div style="display: flex; align-items: center">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+                      <div style="min-width: 54px; padding: 6px 8px; box-sizing: border-box; text-align: center; font-size: 11px; font-weight: 600; background: var(--surface-raised); border: 1px solid {{ p.border }}; border-radius: 2px; color: var(--text-primary)">{{ p.name }}</div>
+                      <span style="font-family: var(--mono); font-size: 10px; color: {{ p.tone }}; white-space: nowrap">{{ p.meta }}</span>
+                    </div>
+                    <sc-if value="{{ p.arrow }}" hint-placeholder-val="{{ true }}">
+                      <svg width="22" height="10" viewBox="0 0 22 10" style="margin: 0 2px 16px"><path d="M1 5h18M15 1.5L19 5l-4 3.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--border-strong); stroke-width: 1.3"></path></svg>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ a.isAdmin }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; inset: 0; padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; align-content: center">
+                <sc-for list="{{ services }}" as="s" hint-placeholder-count="6">
+                  <div style="display: flex; align-items: center; gap: 7px; min-width: 0">
+                    <span style="flex: none; width: 14px; font-family: var(--mono); font-size: 11px; font-weight: 600; text-align: center; color: {{ s.tone }}">{{ s.glyph }}</span>
+                    <span style="font-family: var(--mono); font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ s.name }}</span>
+                    <span style="flex: 1; min-width: 6px; height: 1px; background: var(--border-subtle)"></span>
+                    <span style="font-size: 11px; color: {{ s.tone }}; white-space: nowrap">{{ s.state }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px; flex: 1">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+              <h2 style="margin: 0; font-size: 19px; line-height: 26px; font-weight: 700">{{ a.name }}</h2>
+              <span style="font-size: 12px; color: var(--text-tertiary)">{{ a.who }}</span>
+            </div>
+            <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">{{ a.what }}</p>
+            <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px">
+              <sc-for list="{{ a.facts }}" as="f" hint-placeholder-count="2">
+                <li style="display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; font-size: 12px; line-height: 17px">
+                  <span style="font-family: var(--mono); font-weight: 600; color: {{ f.tone }}">{{ f.glyph }}</span><span>{{ f.t }}</span>
+                </li>
+              </sc-for>
+            </ul>
+            <span style="flex: 1"></span>
+            <sc-if value="{{ a.allowed }}" hint-placeholder-val="{{ true }}">
+              <a href="{{ a.href }}" style="align-self: stretch; height: 34px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; font-weight: 700; color: {{ a.btnInk }}; background: {{ a.btnBg }}; border: 1px solid {{ a.btnBorder }}; border-radius: 2px" style-hover="filter: brightness(1.08)">Open {{ a.name }}<kbd style="font-family: var(--mono); font-size: 10px; font-weight: 500; border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; line-height: 14px; opacity: 0.8">{{ a.key }}</kbd></a>
+            </sc-if>
+            <sc-if value="{{ a.denied }}" hint-placeholder-val="{{ false }}">
+              <p style="font-size: 12px; line-height: 17px; color: var(--text-tertiary); padding: 8px 10px; border: 1px dashed var(--border); border-radius: 2px">You need the {{ a.role }} role for this. Ask an administrator to add it.</p>
+            </sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 32px 40px; align-items: start">
+
+      <div style="display: flex; flex-direction: column; gap: 32px; min-width: 0">
+        <section aria-labelledby="attn">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px">
+            <h2 id="attn" style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 700">Needs your attention</h2>
+            <span style="flex: none; white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ attnCount }} items</span>
+          </div>
+          <ul style="margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border-subtle)">
+            <sc-for list="{{ attention }}" as="t" hint-placeholder-count="4">
+              <li style="border-bottom: 1px solid var(--border-subtle)">
+                <a href="#" style="display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 6px; margin: 0 -6px; border-bottom: none; border-radius: 2px; color: var(--text-primary)" style-hover="background: var(--surface-hover); color: var(--text-primary)">
+                  <span style="font-family: var(--mono); font-size: 12px; font-weight: 600; color: {{ t.tone }}">{{ t.glyph }}</span>
+                  <span style="min-width: 0">
+                    <span style="display: block; font-size: 13px; line-height: 18px">{{ t.t }}</span>
+                    <span style="display: block; font-size: 12px; line-height: 17px; color: var(--text-tertiary)">{{ t.d }}</span>
+                  </span>
+                  <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+                    <span style="font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border-subtle); border-radius: 2px; padding: 0 5px; line-height: 16px">{{ t.app }}</span>
+                    <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ t.when }}</span>
+                  </span>
+                </a>
+              </li>
+            </sc-for>
+          </ul>
+        </section>
+
+        <section aria-labelledby="cases">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px">
+            <h2 id="cases" style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 700">Recent cases</h2>
+            <a href="#" style="flex: none; white-space: nowrap; font-size: 12px">All cases</a>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+              <thead>
+                <tr style="text-align: left">
+                  <th style="padding: 6px 8px 6px 0; font-size: 12px; font-weight: 600; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle)">Case</th>
+                  <th style="padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle)">Your level</th>
+                  <th style="padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); text-align: right">Entities</th>
+                  <th style="padding: 6px 0 6px 8px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); text-align: right">Opened</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ cases }}" as="c" hint-placeholder-count="5">
+                  <tr>
+                    <td style="padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border-subtle)">
+                      <a href="{{ c.href }}" style="font-weight: 600; border-bottom: none" style-hover="color: var(--brass)">{{ c.name }}</a>
+                      <span style="display: block; font-size: 11px; color: var(--text-tertiary)">{{ c.kind }}</span>
+                    </td>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; color: var(--text-secondary)">{{ c.level }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid var(--border-subtle); font-family: var(--mono); font-size: 12px; text-align: right">{{ c.n }}</td>
+                    <td style="padding: 8px 0 8px 8px; border-bottom: 1px solid var(--border-subtle); font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); text-align: right; white-space: nowrap">{{ c.when }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 32px; min-width: 0">
+        <section aria-labelledby="tips">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px">
+            <h2 id="tips" style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 700">Ways of working</h2>
+            <div style="flex: none; display: flex; align-items: center; gap: 8px">
+              <span style="white-space: nowrap; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ tipPos }}</span>
+              <button aria-label="Previous tip" onClick="{{ prevTip }}" style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M6.5 2L3.5 5L6.5 8" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg></button>
+              <button aria-label="Next tip" onClick="{{ nextTip }}" style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2L6.5 5L3.5 8" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg></button>
+            </div>
+          </div>
+          <div aria-live="polite" style="background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden">
+            <div aria-hidden="true" style="height: 112px; border-bottom: 1px solid var(--border-subtle); background: var(--surface-app); display: flex; align-items: center; justify-content: center; padding: 0 20px">
+              <sc-if value="{{ tipIsDim }}" hint-placeholder-val="{{ true }}">
+                <div style="width: 100%; max-width: 300px">
+                  <div style="position: relative; height: 44px; display: flex; align-items: flex-end; gap: 2px">
+                    <sc-for list="{{ tipBars }}" as="b" hint-placeholder-count="24"><span style="{{ b }}"></span></sc-for>
+                    <span style="position: absolute; top: -3px; bottom: 0; left: 37.5%; width: 29.2%; border: 1px solid var(--border-strong); border-radius: 2px"></span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); margin-top: 4px"><span>dimmed</span><span>in window</span><span>dimmed</span></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tipIsStroke }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 10px">
+                  <sc-for list="{{ strokes }}" as="s" hint-placeholder-count="3">
+                    <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary)">
+                      <svg width="120" height="14" viewBox="0 0 120 14"><circle cx="7" cy="7" r="5" style="fill: var(--ch-indigo)"></circle><line x1="16" y1="7" x2="104" y2="7" stroke-dasharray="{{ s.dash }}" style="stroke: var(--text-secondary); stroke-width: 1.5"></line><rect x="108" y="2" width="10" height="10" style="fill: var(--ch-azure)"></rect></svg>{{ s.name }}
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tipIsCount }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 5px; min-width: 220px">
+                  <sc-for list="{{ counts }}" as="c" hint-placeholder-count="3">
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 10px; font-size: 12px; padding: 3px 8px; background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 2px">
+                      <span>{{ c.k }}</span><span style="font-family: var(--mono); text-align: right">{{ c.n }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tipIsBranch }}" hint-placeholder-val="{{ false }}">
+                <svg width="260" height="80" viewBox="0 0 260 80">
+                  <rect x="4" y="18" width="96" height="44" rx="3" fill="none" style="stroke: var(--border-strong)"></rect>
+                  <circle cx="30" cy="40" r="5" style="fill: var(--ch-indigo)"></circle><circle cx="58" cy="30" r="5" style="fill: var(--ch-indigo)"></circle><circle cx="78" cy="48" r="5" style="fill: var(--ch-indigo)"></circle>
+                  <path d="M108 40h40M142 35l6 5-6 5" fill="none" style="stroke: var(--text-secondary); stroke-width: 1.4"></path>
+                  <rect x="160" y="18" width="96" height="44" rx="3" fill="none" stroke-dasharray="4 3" style="stroke: var(--brass)"></rect>
+                  <circle cx="196" cy="34" r="5" style="fill: var(--ch-indigo)"></circle><circle cx="222" cy="46" r="5" style="fill: var(--ch-indigo)"></circle>
+                </svg>
+              </sc-if>
+            </div>
+            <div style="padding: 14px 16px">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
+                <h3 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 700">{{ tip.t }}</h3>
+                <span style="font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border-subtle); border-radius: 2px; padding: 0 5px; line-height: 16px">{{ tip.app }}</span>
+              </div>
+              <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">{{ tip.d }}</p>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="new">
+          <h2 id="new" style="margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 700">New in <span style="font-family: var(--mono); font-weight: 600">2.6</span></h2>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column">
+            <sc-for list="{{ changes }}" as="c" hint-placeholder-count="3">
+              <li style="padding: 8px 0; border-top: 1px solid var(--border-subtle); display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px">
+                <span style="font-size: 12px; color: var(--text-tertiary)">{{ c.app }}</span>
+                <span style="font-size: 13px; line-height: 18px">{{ c.t }}</span>
+              </li>
+            </sc-for>
+          </ul>
+          <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 8px">Next: scheduled pipeline runs, and adding entities to a report pack from the canvas.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer style="border-top: 1px solid var(--border-subtle); padding: 12px clamp(16px, 3vw, 32px); display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; font-size: 12px; color: var(--text-tertiary)">
+    <span>OspreyFlow <span style="font-family: var(--mono); font-size: 11px">v2.6.0</span>. Every session is recorded in the audit log.</span>
+    <nav aria-label="Footer" style="display: flex; gap: 8px 20px; flex-wrap: wrap">
+      <a href="#" style="color: var(--text-secondary)">Keyboard shortcuts</a>
+      <a href="#" style="color: var(--text-secondary)">Accessibility statement</a>
+      <a href="#" style="color: var(--text-secondary)">Service status</a>
+    </nav>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;roles&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;All roles&quot;,&quot;Analyst only&quot;,&quot;Data engineer&quot;,&quot;Administrator&quot;],&quot;default&quot;:&quot;All roles&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Signed-in user&quot;},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Signed-in user&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, tip: 0 };
+
+  componentDidMount() {
+    this.apply();
+    this.onKey = e => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA") || e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      const app = this.apps().find(a => a.key.toLowerCase() === k && a.allowed);
+      if (app && app.href !== "#") window.location.href = app.href;
+    };
+    window.addEventListener("keydown", this.onKey);
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this.onKey); }
+  componentDidUpdate() { this.apply(); }
+  theme() { return this.state.theme || this.props.defaultTheme || "dark"; }
+  apply() {
+    const r = document.documentElement;
+    if (this.theme() === "light") r.setAttribute("data-theme", "light"); else r.removeAttribute("data-theme");
+  }
+
+  roles() {
+    const p = this.props.roles ?? "All roles";
+    return {
+      "All roles": ["Analyst", "Data engineer", "Administrator"],
+      "Analyst only": ["Analyst"],
+      "Data engineer": ["Data engineer"],
+      "Administrator": ["Administrator"]
+    }[p] || ["Analyst", "Data engineer", "Administrator"];
+  }
+
+  apps() {
+    const R = this.roles();
+    const ok = { tone: "var(--success)", glyph: "✓" }, warn = { tone: "var(--warning)", glyph: "△" }, info = { tone: "var(--text-tertiary)", glyph: "·" };
+    const grid = "linear-gradient(color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px)";
+    const list = [
+      { name: "Glass", role: "Analyst", key: "G", href: "OspreyFlow Workspace.dc.html", who: "For analysts", isGlass: true, grid,
+        what: "Work a case on the graph, map and timeline. Record assessments with their evidence, and build trends and report packs.",
+        facts: [{ ...warn, t: "3 alerts in your team's queue, 1 claimed by you" }, { ...info, t: "4 cases open to you, last worked on Enron corpus" }] },
+      { name: "Ingest Studio", role: "Data engineer", key: "I", href: "#", who: "For data engineers", isIngest: true, grid: "none",
+        what: "Draw pipelines from source to load over the domain model. Each transform is tested, and nothing is scripted.",
+        facts: [{ ...warn, t: "2 rows held: a rule could not reach its screening list" }, { ...warn, t: "4 Carrier B recipes flagged after ontology v16" }] },
+      { name: "Admin console", role: "Administrator", key: "A", href: "#", who: "For administrators", isAdmin: true, grid: "none",
+        what: "Manage people, roles and dashboard identities, and watch the services. The console never reads case content.",
+        facts: [{ ...ok, t: "5 of 6 services healthy" }, { ...warn, t: "report-sync: 1 dashboard pull failing since 08:15" }] }
+    ];
+    let primaryGiven = false;
+    return list.map(a => {
+      const allowed = R.includes(a.role);
+      const primary = allowed && !primaryGiven; if (primary) primaryGiven = true;
+      return { ...a, allowed, denied: !allowed, isGlass: !!a.isGlass, isIngest: !!a.isIngest, isAdmin: !!a.isAdmin, opacity: allowed ? 1 : 0.72,
+        btnBg: primary ? "var(--brass)" : "var(--surface-raised)", btnInk: primary ? "var(--brass-ink)" : "var(--text-primary)", btnBorder: primary ? "var(--brass)" : "var(--border)" };
+    });
+  }
+
+  renderVals() {
+    const st = this.state;
+    const dark = this.theme() === "dark";
+    const R = this.roles();
+    const h = new Date().getHours();
+    const tips = [
+      { kind: "dim", t: "Dim, do not remove", app: "Glass", d: "Brushing the timeline fades everything outside the window. The network stays where you left it, so you can see what changed without losing your place." },
+      { kind: "stroke", t: "Read a link's stroke", app: "Glass", d: "A solid link comes from a source record. A dashed one was inferred by the model and carries a confidence score. A dotted one has a single unverified source." },
+      { kind: "count", t: "Counted before drawn", app: "Glass", d: "Expanding a node shows how many links of each kind it has before anything is added to the canvas. An expansion over the working-set limit is refused with options." },
+      { kind: "branch", t: "Branch, then cut down", app: "Glass", d: "Select a group and branch it into a new workspace to work on it on its own. The original case is unchanged, and both stay linked in the history." }
+    ];
+    const tip = tips[((st.tip % tips.length) + tips.length) % tips.length];
+    let s = 7; const r = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const attention = [
+      { glyph: "△", tone: "var(--warning)", t: "KYC screening alert on Halcyon Marine Ltd", d: "A beneficial owner matches a sanctions list entry with a score of 0.98. Claimed by you.", app: "Glass", when: "06:46" },
+      { glyph: "△", tone: "var(--warning)", t: "Two onboarding rows held for review", d: "A rule could not reach its screening list, so nothing was loaded.", app: "Ingest Studio", when: "06:13" },
+      { glyph: "!", tone: "var(--error)", t: "Compliance board dashboard is not updating", d: "report-sync could not pull as compliance-board: the token was rejected. Re-issue the secret.", app: "Admin console", when: "08:15" },
+      { glyph: "·", tone: "var(--text-tertiary)", t: "Kay Mann gave you Editor on Operation Ledger", d: "You can now add assessments and notes to this case.", app: "Glass", when: "yesterday" }
+    ].filter(a => a.app === "Glass" ? R.includes("Analyst") : a.app === "Ingest Studio" ? R.includes("Data engineer") : R.includes("Administrator"));
+    return {
+      themeLabel: dark ? "Light theme" : "Dark theme",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      greeting: h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening",
+      roleList: R.join(", ").replace(/, ([^,]*)$/, " and $1").toLowerCase().replace(/^./, c => c.toUpperCase()),
+      apps: this.apps(),
+      pipeline: [
+        { name: "Source", meta: "csv, 2 files", tone: "var(--text-tertiary)", border: "var(--border)", arrow: true },
+        { name: "Profile", meta: "11 columns", tone: "var(--text-tertiary)", border: "var(--border)", arrow: true },
+        { name: "Map", meta: "FIBO v16", tone: "var(--text-tertiary)", border: "var(--border)", arrow: true },
+        { name: "Load", meta: "△ 2 held", tone: "var(--warning)", border: "var(--warning)", arrow: false }
+      ],
+      services: [
+        { name: "graph-store", state: "healthy", glyph: "✓", tone: "var(--success)" },
+        { name: "case-stores", state: "healthy", glyph: "✓", tone: "var(--success)" },
+        { name: "cache", state: "healthy", glyph: "✓", tone: "var(--success)" },
+        { name: "model-server", state: "healthy", glyph: "✓", tone: "var(--success)" },
+        { name: "identity", state: "healthy", glyph: "✓", tone: "var(--success)" },
+        { name: "report-sync", state: "failing", glyph: "!", tone: "var(--error)" }
+      ],
+      attention, attnCount: attention.length,
+      cases: [
+        { name: "Enron corpus", kind: "Email network, this machine only", level: "Author", n: "517,551", when: "yesterday", href: "OspreyFlow Workspace.dc.html" },
+        { name: "Operation Ledger", kind: "AML review, synthetic", level: "Editor", n: "68", when: "11 Oct", href: "#" },
+        { name: "HMP fixture", kind: "Organised crime, synthetic", level: "Viewer", n: "1,041", when: "9 Oct", href: "#" },
+        { name: "PaySim", kind: "Mobile money at scale, synthetic", level: "Viewer", n: "26,632", when: "2 Oct", href: "#" }
+      ],
+      tip, tipPos: `${((st.tip % tips.length) + tips.length) % tips.length + 1} of ${tips.length}`,
+      nextTip: () => this.setState({ tip: st.tip + 1 }),
+      prevTip: () => this.setState({ tip: st.tip - 1 }),
+      tipIsDim: tip.kind === "dim", tipIsStroke: tip.kind === "stroke", tipIsCount: tip.kind === "count", tipIsBranch: tip.kind === "branch",
+      tipBars: Array.from({ length: 24 }, (_, i) => { const on = i >= 9 && i <= 15; return `flex: 1; height: ${Math.round(8 + r() * 22 + (on ? 10 : 0))}px; background: ${on ? "var(--seq-4)" : "var(--seq-2)"}; border-radius: 1px`; }),
+      strokes: [{ name: "From a record", dash: "" }, { name: "Inferred, with confidence", dash: "5 3" }, { name: "Single source", dash: "1 3" }],
+      counts: [{ k: "Present at", n: "22" }, { k: "Associate of", n: "9" }, { k: "Mentioned in", n: "4" }],
+      changes: [
+        { app: "Glass", t: "Report packs: trends, assessments and notes in order, each under its own marking, published as a fixed version." },
+        { app: "Glass", t: "Dashboards from the Reports view open inside Glass, with no second sign-in." },
+        { app: "Ingest Studio", t: "Recipes written for an older ontology are flagged, and their runs are blocked until they are reverified." },
+        { app: "Admin console", t: "Dashboard identities show their clearance and how fresh their figures are, or why a pull is failing." }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

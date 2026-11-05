@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@200..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+--n0:#090d0e;--n1:#101314;--n2:#161a1b;--n3:#202425;--n4:#2b2f30;--n5:#3a3e3f;--n6:#4d5051;--n7:#66696a;--n8:#848788;--n9:#a2a5a6;--n10:#c1c5c6;--n11:#e8eced;
+--surface-sunken:var(--n0);--surface-app:var(--n1);--surface-panel:var(--n2);--surface-raised:var(--n3);--surface-hover:var(--n4);
+--border-subtle:var(--n5);--border:var(--n6);--border-strong:var(--n7);
+--text-disabled:var(--n8);--text-tertiary:var(--n9);--text-secondary:var(--n10);--text-primary:var(--n11);
+--brass:#c08a34;--brass-hover:#d49c44;--brass-press:#a97427;--brass-ink:#141517;
+--error:#e2695f;--warning:#d9a63f;--success:#6bab7e;
+--ch-indigo:#677bd6;--ch-violet:#8364a6;
+--seq-2:#1d575a;--seq-4:#3b999e;
+--overlay-shadow:0 8px 24px -8px rgba(0,0,0,.7);
+--ui:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif;
+--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+:root[data-theme="light"]{
+--n0:#ffffff;--n1:#f7fbfc;--n2:#f1f4f5;--n3:#e8eced;--n4:#dde0e1;--n5:#ced2d2;--n6:#bbbebf;--n7:#a2a5a6;--n8:#a2a5a6;--n9:#66696a;--n10:#4b4e4e;--n11:#191b1c;
+--brass:#8a6318;--brass-hover:#6f4e10;--brass-press:#573c08;--brass-ink:#ffffff;
+--error:#a82f22;--warning:#8f6410;--success:#2f6c4a;
+--ch-indigo:#5367cb;--ch-violet:#562182;
+--seq-2:#a0ced0;--seq-4:#358f94;
+--overlay-shadow:0 6px 20px -6px rgba(25,27,28,.18);
+}
+html,body{margin:0;padding:0}
+body{background:var(--surface-app);color:var(--text-primary);font-family:var(--ui);font-size:13px;line-height:18px;-webkit-font-smoothing:antialiased}
+*:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+a{color:var(--text-primary);text-decoration:none;border-bottom:1px solid var(--border-strong)}
+a:hover{color:var(--brass);border-bottom-color:var(--brass)}
+p{margin:0;text-wrap:pretty}
+input::placeholder{color:var(--text-tertiary)}
+@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation-duration:0s!important}}
+</style>
+</helmet>
+
+<div style="height: 100vh; min-height: 680px; display: flex; flex-direction: column; background: var(--surface-app); color: var(--text-primary); overflow: hidden">
+
+  <div role="note" aria-label="Protective marking" style="flex: none; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle); font-size: 11px; font-weight: 600; letter-spacing: 0.02em">OFFICIAL</div>
+
+  <header style="flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel)">
+    <div style="display: flex; align-items: center; gap: 8px; margin-right: 6px">
+      <svg width="20" height="20" viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" style="display: block"><path d="M4 6L25 11L45 26L25.5 30L9 42Z"></path></svg>
+      <span style="font-size: 14px; font-weight: 700; letter-spacing: -0.01em">Osprey</span>
+    </div>
+    <button title="Enron corpus (real data, this machine only)" style="flex: none; height: 30px; min-width: 180px; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-family: var(--ui); font-size: 13px; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border); border-radius: 2px; cursor: pointer">
+      <span style="font-weight: 600">Enron corpus</span>
+      <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--border-subtle); border-radius: 2px; padding: 0 4px; line-height: 15px">local</span>
+      <span style="flex: 1"></span>
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+    </button>
+    <label style="flex: 1 1 160px; min-width: 0; max-width: 480px; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; background: var(--surface-app); border: 1px solid var(--border); border-radius: 2px">
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: none; color: var(--text-tertiary)"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5"></path></svg>
+      <input ref="{{ searchRef }}" aria-label="Search entities, identifiers and documents" placeholder="Search entities, identifiers, documents" style="flex: 1; min-width: 0; height: 26px; border: none; outline: none; background: transparent; font-family: var(--ui); font-size: 13px; color: var(--text-primary)"></input>
+      <kbd style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--border); border-radius: 2px; padding: 0 5px; line-height: 16px">/</kbd>
+    </label>
+    <div role="tablist" aria-label="View" style="display: flex; height: 44px; align-items: stretch; margin-left: 4px">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+        <button role="tab" aria-selected="{{ v.on }}" onClick="{{ v.pick }}" style="padding: 0 10px; font-family: var(--ui); font-size: 13px; font-weight: {{ v.weight }}; color: {{ v.color }}; background: transparent; border: none; box-shadow: {{ v.line }}; cursor: pointer" style-hover="color: var(--text-primary)">{{ v.name }}</button>
+      </sc-for>
+    </div>
+    <span style="flex: 1"></span>
+    <button style="height: 30px; padding: 0 10px; display: flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 13px; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">Export<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg></button>
+    <button onClick="{{ toggleTheme }}" aria-label="{{ themeAria }}" title="{{ themeAria }}" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor"></path></svg>
+    </button>
+    <button style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; font-family: var(--ui); font-size: 13px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+      <span style="width: 22px; height: 22px; border-radius: 50%; background: var(--surface-hover); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">DA</span>
+      <sc-if value="{{ showUser }}" hint-placeholder-val="{{ true }}"><span>osprey-demo-admin</span></sc-if>
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>
+    </button>
+  </header>
+
+  <div style="flex: 1; min-height: 0; display: flex; position: relative">
+
+    <nav aria-label="Workspace" style="flex: none; width: 48px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; border-right: 1px solid var(--border-subtle); background: var(--surface-panel)">
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="7">
+        <button aria-label="{{ r.name }}" title="{{ r.name }}" aria-current="{{ r.current }}" style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{ r.color }}; background: {{ r.bg }}; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover); color: var(--text-primary)">
+          <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ r.icon }}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+          <sc-if value="{{ r.badge }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; top: 3px; right: 2px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 999px; background: var(--text-primary); color: var(--surface-app); font-family: var(--mono); font-size: 10px; line-height: 14px; font-weight: 600; text-align: center">{{ r.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+      <span style="flex: 1"></span>
+      <button aria-label="Keyboard shortcuts and help" title="Keyboard shortcuts and help (?)" onClick="{{ openWelcome }}" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+        <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.3"></circle><path d="M6.3 6.2a1.8 1.8 0 1 1 2.5 1.7c-.5.2-.8.6-.8 1.1v.4M8 11.3v.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg>
+      </button>
+    </nav>
+
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+
+      <div role="toolbar" aria-label="Canvas" style="flex: none; height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel)">
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="font-size: 12px; color: var(--text-tertiary)">Layout</span>
+          <button style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-family: var(--ui); font-size: 12px; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border); border-radius: 2px; cursor: pointer">Organic<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg></button>
+          <button aria-label="Run layout again" title="Run layout again" style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        </div>
+        <span style="width: 1px; height: 18px; background: var(--border-subtle)"></span>
+        <div style="display: flex; align-items: center; gap: 6px">
+          <span style="font-size: 12px; color: var(--text-tertiary)">Show</span>
+          <div style="display: flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden">
+            <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="3">
+              <button aria-pressed="{{ t.on }}" onClick="{{ t.flip }}" style="height: 24px; padding: 0 9px; display: flex; align-items: center; gap: 5px; font-family: var(--ui); font-size: 12px; color: {{ t.color }}; background: {{ t.bg }}; border: none; cursor: pointer">
+                <span style="width: 8px; height: 8px; border-radius: 1px; border: 1px solid currentColor; background: {{ t.dot }}"></span>{{ t.name }}
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <span style="flex: 1"></span>
+        <sc-if value="{{ showUser }}" hint-placeholder-val="{{ true }}"><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-tertiary)">Last change: expanded richard.ring, yesterday 16:42</span></sc-if>
+        <button onClick="{{ togglePanel }}" aria-pressed="{{ panelOpen }}" style="flex: none; height: 26px; padding: 0 9px; display: flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 12px; color: var(--text-primary); background: {{ panelBtnBg }}; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12v10H2zM10 3v10" fill="none" stroke="currentColor" stroke-width="1.3"></path></svg>Details</button>
+      </div>
+
+      <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; background-color: var(--surface-app); background-image: linear-gradient(color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px); background-size: 16px 16px">
+
+        <div tabIndex="0" role="application" aria-label="{{ canvasAria }}" onKeyDown="{{ onCanvasKey }}" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; outline: none" style-focus="box-shadow: inset 0 0 0 2px var(--brass)">
+          <div style="width: 100%; max-width: 1500px; padding: 16px 160px; box-sizing: border-box">
+          <div style="position: relative; width: 100%; aspect-ratio: 1000 / 560">
+            <svg viewBox="0 0 1000 560" width="100%" height="100%" aria-hidden="true" style="display: block">
+              <defs>
+                <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" style="fill: var(--border-strong)"></path></marker>
+                <marker id="arr-on" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" style="fill: var(--text-primary)"></path></marker>
+              </defs>
+              <sc-if value="{{ showCommunities }}" hint-placeholder-val="{{ false }}">
+                <g>
+                  <rect x="140" y="104" width="300" height="352" rx="6" fill="none" stroke-dasharray="4 3" style="stroke: var(--border-strong)"></rect>
+                  <rect x="560" y="104" width="300" height="352" rx="6" fill="none" stroke-dasharray="4 3" style="stroke: var(--border-strong)"></rect>
+                </g>
+              </sc-if>
+              <sc-for list="{{ edges }}" as="e" hint-placeholder-count="30">
+                <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke-dasharray="{{ e.dash }}" marker-end="{{ e.marker }}" style="{{ e.style }}"></line>
+              </sc-for>
+              <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="25">
+                <path d="{{ n.d }}" onClick="{{ n.pick }}" style="{{ n.style }}"></path>
+              </sc-for>
+              <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+                <circle cx="{{ selX }}" cy="{{ selY }}" r="13" fill="none" style="stroke: var(--brass); stroke-width: 2; pointer-events: none"></circle>
+              </sc-if>
+            </svg>
+            <sc-if value="{{ showLabels }}" hint-placeholder-val="{{ true }}">
+              <div aria-hidden="true">
+                <sc-for list="{{ labels }}" as="l" hint-placeholder-count="15">
+                  <span style="{{ l.style }}">{{ l.t }}</span>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showCommunities }}" hint-placeholder-val="{{ false }}">
+              <div aria-hidden="true">
+                <span style="position: absolute; left: 14%; top: 15.5%; font-size: 11px; font-weight: 600; color: var(--text-tertiary); transform: translateY(-100%)">Community 1, 13 entities</span>
+                <span style="position: absolute; left: 56%; top: 15.5%; font-size: 11px; font-weight: 600; color: var(--text-tertiary); transform: translateY(-100%)">Community 2, 12 entities</span>
+              </div>
+            </sc-if>
+          </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ showWelcome }}" hint-placeholder-val="{{ true }}">
+          <section aria-labelledby="welcome-title" style="position: absolute; top: 12px; left: 12px; width: {{ welcomeW }}; max-width: calc(100% - 24px); max-height: calc(100% - 72px); overflow: auto; box-sizing: border-box; background: var(--surface-raised); border-radius: 6px; box-shadow: var(--overlay-shadow); padding: 16px">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px">
+              <h2 id="welcome-title" style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 700">Welcome back</h2>
+              <button aria-label="Close welcome panel" onClick="{{ closeWelcome }}" style="width: 24px; height: 24px; margin: -3px -4px 0 0; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button>
+            </div>
+            <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary); margin-bottom: 14px">The Enron corpus holds 517,401 messages from 150 mailboxes. The canvas shows the 25 entities you were working on last.</p>
+
+            <h3 style="margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Pick up where you left off</h3>
+            <div style="display: flex; flex-direction: column; margin-bottom: 14px">
+              <sc-for list="{{ recent }}" as="h" hint-placeholder-count="3">
+                <button onClick="{{ h.go }}" style="display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 6px; margin: 0 -6px; text-align: left; font-family: var(--ui); font-size: 12px; line-height: 16px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="margin-top: 1px; color: var(--text-tertiary)"><path d="{{ h.icon }}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <span><span style="display: block">{{ h.what }}</span><span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ h.when }}</span></span>
+                </button>
+              </sc-for>
+            </div>
+
+            <h3 style="margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Keys worth knowing</h3>
+            <div style="display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; align-items: center">
+              <sc-for list="{{ keys }}" as="k" hint-placeholder-count="6">
+                <kbd style="justify-self: start; min-width: 22px; text-align: center; font-family: var(--mono); font-size: 11px; line-height: 18px; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 2px; padding: 0 5px">{{ k.k }}</kbd>
+                <span style="font-size: 12px; line-height: 16px; color: var(--text-secondary)">{{ k.d }}</span>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+
+        <div style="position: absolute; top: 12px; right: 12px; background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px">
+          <span style="font-size: 11px; font-weight: 600; color: var(--text-tertiary)">Legend</span>
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 12px"><svg width="12" height="12" viewBox="-7 -7 14 14" aria-hidden="true"><circle r="5.5" style="fill: var(--ch-indigo)"></circle></svg>Person<span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); margin-left: auto; padding-left: 12px">{{ nPeople }}</span></span>
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 12px"><svg width="12" height="12" viewBox="-7 -7 14 14" aria-hidden="true"><path d="M0 -6L6 0L0 6L-6 0Z" style="fill: var(--ch-violet)"></path></svg>Email<span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); margin-left: auto; padding-left: 12px">{{ nEmails }}</span></span>
+          <span style="height: 1px; background: var(--border-subtle); margin: 2px 0"></span>
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 12px"><svg width="18" height="6" aria-hidden="true"><line x1="1" y1="3" x2="17" y2="3" style="stroke: var(--text-secondary); stroke-width: 1.4"></line></svg>From a record</span>
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 12px"><svg width="18" height="6" aria-hidden="true"><line x1="1" y1="3" x2="17" y2="3" stroke-dasharray="4 3" style="stroke: var(--text-secondary); stroke-width: 1.4"></line></svg>Inferred</span>
+        </div>
+
+        <div role="group" aria-label="Zoom" style="position: absolute; right: 12px; top: 150px; width: 44px; display: flex; flex-direction: column; align-items: stretch; background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 4px">
+          <button aria-label="Zoom out" title="Zoom out (−)" style="width: 100%; height: 28px; color: var(--text-secondary); background: transparent; border: none; cursor: pointer; font-size: 15px" style-hover="background: var(--surface-hover)">−</button>
+          <span style="font-family: var(--mono); font-size: 11px; line-height: 20px; color: var(--text-secondary); text-align: center">100%</span>
+          <button aria-label="Zoom in" title="Zoom in (+)" style="width: 100%; height: 28px; color: var(--text-secondary); background: transparent; border: none; cursor: pointer; font-size: 15px" style-hover="background: var(--surface-hover)">+</button>
+          <span style="height: 1px; background: var(--border-subtle)"></span>
+          <button aria-label="Fit to view" title="Fit to view (F)" style="height: 28px; padding: 0 8px; font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: transparent; border: none; cursor: pointer" style-hover="background: var(--surface-hover)">Fit</button>
+        </div>
+
+        <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+          <div role="toolbar" aria-label="Selection" style="position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--surface-raised); border-radius: 6px; box-shadow: var(--overlay-shadow); white-space: nowrap">
+            <span style="font-size: 12px; font-weight: 600; padding: 0 8px">1 selected</span>
+            <button style="height: 28px; padding: 0 10px; font-family: var(--ui); font-size: 12px; font-weight: 700; color: var(--brass-ink); background: var(--brass); border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--brass-hover)">Expand <span style="font-family: var(--mono); font-weight: 500; opacity: 0.85">{{ selDegree }}</span></button>
+            <button style="height: 28px; padding: 0 10px; font-family: var(--ui); font-size: 12px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">Branch to new workspace</button>
+            <button style="height: 28px; padding: 0 10px; font-family: var(--ui); font-size: 12px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">Remove from view</button>
+            <span style="width: 1px; height: 16px; background: var(--border-subtle)"></span>
+            <button onClick="{{ clearSel }}" style="height: 28px; padding: 0 8px; display: flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">Clear<kbd style="font-family: var(--mono); font-size: 10px; border: 1px solid var(--border); border-radius: 2px; padding: 0 3px; line-height: 14px">Esc</kbd></button>
+          </div>
+        </sc-if>
+      </div>
+
+      <section aria-label="Timeline" style="flex: none; border-top: 1px solid var(--border-subtle); background: var(--surface-panel)">
+        <div style="height: 34px; display: flex; align-items: center; gap: 12px; padding: 0 10px">
+          <button onClick="{{ toggleTl }}" aria-expanded="{{ tlOpen }}" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px; margin-left: -6px; font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="transform: {{ tlChevron }}"><path d="M3.5 2L6.5 5L3.5 8" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>Timeline
+          </button>
+          <sc-if value="{{ tlClosed }}" hint-placeholder-val="{{ true }}">
+            <div aria-hidden="true" style="flex: 1; min-width: 0; height: 18px; display: flex; align-items: flex-end; gap: 1px">
+              <sc-for list="{{ tlMini }}" as="b" hint-placeholder-count="60">
+                <span style="{{ b }}"></span>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ tlOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="flex: 1; display: flex; gap: 8px; align-items: center">
+              <div style="display: flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden">
+                <button aria-pressed="true" style="height: 22px; padding: 0 8px; font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--surface-hover); border: none; cursor: pointer">Density</button>
+                <button aria-pressed="false" style="height: 22px; padding: 0 8px; font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: transparent; border: none; cursor: pointer">Cyclical</button>
+              </div>
+            </div>
+          </sc-if>
+          <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); white-space: nowrap">2001-05-14 to 2001-12-03</span>
+        </div>
+        <sc-if value="{{ tlOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 0 10px 10px 34px">
+            <div style="position: relative; height: 96px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--border-subtle)">
+              <div aria-hidden="true" style="position: absolute; left: -26px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); text-align: right; width: 20px"><span>{{ tlMax }}</span><span>0</span></div>
+              <sc-for list="{{ tlFull }}" as="b" hint-placeholder-count="60">
+                <span style="{{ b }}"></span>
+              </sc-for>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); margin-top: 4px"><span>May</span><span>Jul</span><span>Sep</span><span>Nov</span></div>
+          </div>
+        </sc-if>
+      </section>
+    </main>
+
+    <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ true }}">
+    <aside aria-label="Details" style="{{ asideStyle }}">
+      <div role="tablist" aria-label="Panel" style="flex: none; height: 36px; display: flex; align-items: stretch; padding: 0 6px; border-bottom: 1px solid var(--border-subtle)">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+          <button role="tab" aria-selected="{{ t.on }}" onClick="{{ t.pick }}" style="padding: 0 10px; font-family: var(--ui); font-size: 12px; font-weight: {{ t.weight }}; color: {{ t.color }}; background: transparent; border: none; box-shadow: {{ t.line }}; cursor: pointer" style-hover="color: var(--text-primary)">{{ t.name }}</button>
+        </sc-for>
+        <span style="flex: 1"></span>
+        <button onClick="{{ closePanel }}" aria-label="Close details panel" style="align-self: center; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button>
+      </div>
+
+      <div style="flex: 1; min-height: 0; overflow: auto">
+
+        <sc-if value="{{ tabInspector }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <sc-if value="{{ noSel }}" hint-placeholder-val="{{ false }}">
+              <div style="padding: 32px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px">
+                <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true" style="color: var(--border-strong)"><circle cx="16" cy="18" r="6" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M33 26l7 7-7 7-7-7z" fill="none" stroke="currentColor" stroke-width="2"></path><path d="M21 21l8 8" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"></path></svg>
+                <p style="font-size: 13px; color: var(--text-secondary)">Select a node to read it here.</p>
+                <p style="font-size: 12px; color: var(--text-tertiary)">Click one on the canvas, use the arrow keys, or press <kbd style="font-family: var(--mono); font-size: 11px; border: 1px solid var(--border); border-radius: 2px; padding: 0 4px">/</kbd> to search.</p>
+              </div>
+            </sc-if>
+            <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+              <div>
+                <div style="padding: 14px 14px 12px; border-bottom: 1px solid var(--border-subtle)">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
+                    <svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><path d="{{ ins.shape }}" style="{{ ins.fill }}"></path></svg>
+                    <span style="font-size: 12px; color: var(--text-secondary)">{{ ins.type }}</span>
+                    <span style="flex: 1"></span>
+                    <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--border-subtle); border-radius: 2px; padding: 0 4px">OFFICIAL</span>
+                  </div>
+                  <div style="font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 600; word-break: break-all">{{ ins.id }}</div>
+                  <sc-if value="{{ ins.name }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size: 14px; line-height: 20px; color: var(--text-secondary); margin-top: 2px">{{ ins.name }}</div>
+                  </sc-if>
+                </div>
+
+                <div style="padding: 12px 14px; border-bottom: 1px solid var(--border-subtle)">
+                  <h3 style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Attributes</h3>
+                  <dl style="margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 5px 10px">
+                    <sc-for list="{{ ins.attrs }}" as="a" hint-placeholder-count="4">
+                      <dt style="font-size: 12px; color: var(--text-tertiary)">{{ a.k }}</dt>
+                      <dd style="margin: 0; font-family: var(--mono); font-size: 12px; color: var(--text-primary); word-break: break-all">{{ a.v }}</dd>
+                    </sc-for>
+                  </dl>
+                </div>
+
+                <div style="padding: 12px 14px; border-bottom: 1px solid var(--border-subtle)">
+                  <h3 style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Relationships</h3>
+                  <p style="font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px">Counted in the store before anything is drawn.</p>
+                  <sc-for list="{{ ins.rels }}" as="r" hint-placeholder-count="3">
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 44px 60px; align-items: center; gap: 8px; padding: 4px 0">
+                      <span style="font-size: 13px">{{ r.k }}</span>
+                      <span style="font-family: var(--mono); font-size: 12px; text-align: right">{{ r.n }}</span>
+                      <button style="height: 24px; font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover); color: var(--text-primary)">Expand</button>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="padding: 12px 14px">
+                  <h3 style="margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Provenance</h3>
+                  <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px">
+                    <svg width="18" height="6" aria-hidden="true"><line x1="1" y1="3" x2="17" y2="3" style="stroke: var(--text-secondary); stroke-width: 1.4"></line></svg>
+                    <span>From a record: message headers</span>
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px">Source records</div>
+                  <sc-for list="{{ ins.sources }}" as="s" hint-placeholder-count="3">
+                    <div style="font-family: var(--mono); font-size: 11px; line-height: 18px; color: var(--text-secondary)">{{ s }}</div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabQuery }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <sc-for list="{{ queries }}" as="q" hint-placeholder-count="3">
+              <div style="border-bottom: 1px solid var(--border-subtle)">
+                <button onClick="{{ q.flip }}" aria-expanded="{{ q.open }}" style="width: 100%; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--text-primary); background: transparent; border: none; cursor: pointer; text-align: left" style-hover="background: var(--surface-hover)">
+                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style="transform: {{ q.rot }}"><path d="M3.5 2L6.5 5L3.5 8" fill="none" stroke="currentColor" stroke-width="1.4"></path></svg>{{ q.name }}
+                </button>
+                <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 0 14px 14px 32px; display: flex; flex-direction: column; gap: 8px">
+                    <p style="font-size: 12px; line-height: 17px; color: var(--text-secondary)">{{ q.d }}</p>
+                    <button style="align-self: flex-start; height: 26px; padding: 0 10px; font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">{{ q.cta }}</button>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabCase }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 14px">
+            <h3 style="margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">What this case holds</h3>
+            <p style="font-size: 11px; color: var(--text-tertiary); margin-bottom: 10px">Counted for you at 09:02 UTC.</p>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px">
+              <sc-for list="{{ holds }}" as="h" hint-placeholder-count="3">
+                <div style="display: grid; grid-template-columns: 76px minmax(0, 1fr) 64px; align-items: center; gap: 8px">
+                  <span style="font-size: 12px">{{ h.k }}</span>
+                  <span style="height: 6px; background: var(--surface-hover); border-radius: 1px; overflow: hidden"><span style="display: block; height: 100%; width: {{ h.w }}; background: var(--seq-4)"></span></span>
+                  <span style="font-family: var(--mono); font-size: 11px; text-align: right">{{ h.n }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <h3 style="margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary)">Most connected in this view</h3>
+            <ol style="margin: 0; padding: 0; list-style: none">
+              <sc-for list="{{ top }}" as="t" hint-placeholder-count="5">
+                <li>
+                  <button onClick="{{ t.pick }}" style="width: 100%; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; margin: 0 -6px; font-family: var(--ui); font-size: 12px; color: var(--text-primary); background: transparent; border: none; border-radius: 2px; text-align: left; cursor: pointer" style-hover="background: var(--surface-hover)">
+                    <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ t.rank }}</span>
+                    <span style="font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ t.id }}</span>
+                    <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">{{ t.n }} links</span>
+                  </button>
+                </li>
+              </sc-for>
+            </ol>
+          </div>
+        </sc-if>
+      </div>
+    </aside>
+    </sc-if>
+  </div>
+
+  <footer style="flex: none; height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--border-subtle); background: var(--surface-panel); font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">
+    <span>{{ nNodes }} entities</span>
+    <span>{{ nEdges }} links</span>
+    <span>0 dimmed by filter</span>
+    <span>0 hidden by handling</span>
+    <span style="flex: 1"></span>
+    <span style="font-family: var(--ui); font-size: 12px; display: flex; align-items: center; gap: 8px; min-width: 0">
+      <span style="font-weight: 700; color: var(--text-secondary)">Tip</span>
+      <span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ tip }}</span>
+      <button onClick="{{ nextTip }}" aria-label="Next tip" title="Next tip" style="height: 20px; padding: 0 6px; font-family: var(--ui); font-size: 11px; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; cursor: pointer; white-space: nowrap" style-hover="background: var(--surface-hover)">Next tip</button>
+    </span>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Workspace&quot;},&quot;showWelcome&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Workspace&quot;}}">
+class Component extends DCLogic {
+  state = { vw: typeof window !== "undefined" ? window.innerWidth : 1440, panel: null, theme: null, view: "Graph", tab: "inspector", sel: 0, labels: true, communities: false, tlOpen: false, welcome: null, tip: 0, q: {} };
+  searchRef = React.createRef();
+
+  componentDidMount() {
+    this.apply();
+    this.onKey = e => {
+      const t = e.target;
+      const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+      if (e.key === "/" && !typing) { e.preventDefault(); this.searchRef.current && this.searchRef.current.focus(); }
+      else if (e.key === "Escape") { if (typing) t.blur(); else this.setState({ sel: null }); }
+      else if (e.key === "?" && !typing) this.setState({ welcome: true });
+    };
+    window.addEventListener("keydown", this.onKey);
+    this.onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener("resize", this.onResize);
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this.onKey); window.removeEventListener("resize", this.onResize); }
+  componentDidUpdate() { this.apply(); }
+  theme() { return this.state.theme || this.props.defaultTheme || "dark"; }
+  apply() {
+    const r = document.documentElement;
+    if (this.theme() === "light") r.setAttribute("data-theme", "light"); else r.removeAttribute("data-theme");
+  }
+
+  graph() {
+    if (this.g) return this.g;
+    const A = ["richard.ring@enron.com", "sally.beck@enron.com", "vince.kaminski@enron.com", "phillip.allen@enron.com", "kay.mann@enron.com", "tana.jones@enron.com", "jeff.shields@enron.com"];
+    const B = ["jeff.dasovich@enron.com", "sara.shackleton@enron.com", "mark.taylor@enron.com", "chris.germany@enron.com", "gerald.nemec@enron.com", "steven.kean@enron.com"];
+    const names = { "richard.ring@enron.com": "Richard Ring", "jeff.shields@enron.com": "Jeff Shields", "sally.beck@enron.com": "Sally Beck", "vince.kaminski@enron.com": "Vince Kaminski", "phillip.allen@enron.com": "Phillip Allen", "kay.mann@enron.com": "Kay Mann", "tana.jones@enron.com": "Tana Jones", "jeff.dasovich@enron.com": "Jeff Dasovich", "sara.shackleton@enron.com": "Sara Shackleton", "mark.taylor@enron.com": "Mark Taylor", "chris.germany@enron.com": "Chris Germany", "gerald.nemec@enron.com": "Gerald Nemec", "steven.kean@enron.com": "Steven Kean" };
+    let s = 19; const rnd = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const hex = n => Array.from({ length: n }, () => "0123456789abcdef"[Math.floor(rnd() * 16)]).join("");
+    const nodes = [];
+    const place = (list, cx, a0, a1) => list.forEach((id, i) => {
+      const a = (a0 + (a1 - a0) * (i / (list.length - 1))) * Math.PI / 180;
+      nodes.push({ id, kind: "person", x: cx + Math.cos(a) * 150, y: 280 + Math.sin(a) * 150, a });
+    });
+    place(A, 290, 100, 260);
+    place(B, 710, -80, 80);
+    const em = (cx, n) => Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2 + 0.4;
+      const id = "email:enron-ev-" + hex(32);
+      nodes.push({ id, kind: "email", x: cx + Math.cos(a) * 62, y: 280 + Math.sin(a) * 62 });
+      return nodes.length - 1;
+    });
+    const eA = em(290, 5), eB = em(710, 5);
+    nodes.push({ id: "email:enron-ev-6be20c3a41bc5dd880d78422d90c7", kind: "email", x: 500, y: 280, hub: true });
+    const hub = nodes.length - 1;
+    const idx = id => nodes.findIndex(n => n.id === id);
+    const edges = [];
+    const mail = (ei, pool) => {
+      const sender = pool[Math.floor(rnd() * pool.length)];
+      edges.push({ a: idx(sender), b: ei, kind: "sent" });
+      const k = 1 + Math.floor(rnd() * 2);
+      for (let j = 0; j < k; j++) {
+        const r = pool[Math.floor(rnd() * pool.length)];
+        if (r !== sender) edges.push({ a: ei, b: idx(r), kind: "received", inferred: rnd() < 0.15 });
+      }
+    };
+    eA.forEach(e => mail(e, A)); eB.forEach(e => mail(e, B));
+    edges.push({ a: idx("richard.ring@enron.com"), b: hub, kind: "sent" });
+    edges.push({ a: hub, b: idx("jeff.shields@enron.com"), kind: "received" });
+    edges.push({ a: hub, b: idx("jeff.dasovich@enron.com"), kind: "received" });
+    edges.push({ a: hub, b: idx("steven.kean@enron.com"), kind: "received", inferred: true });
+    nodes.forEach(n => { n.deg = edges.filter(e => e.a === nodes.indexOf(n) || e.b === nodes.indexOf(n)).length; });
+    this.g = { nodes, edges, names, hub };
+    return this.g;
+  }
+
+  shape(kind, x, y, r) {
+    const f = n => n.toFixed(1);
+    if (kind === "person") return `M${f(x - r)} ${f(y)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+    const q = r * 1.2;
+    return `M${f(x)} ${f(y - q)}L${f(x + q)} ${f(y)}L${f(x)} ${f(y + q)}L${f(x - q)} ${f(y)}Z`;
+  }
+
+  short(id) { return id.length > 28 ? id.slice(0, 19) + "…" + id.slice(-4) : id; }
+
+  renderVals() {
+    const st = this.state;
+    const dark = this.theme() === "dark";
+    const { nodes, edges, names, hub } = this.graph();
+    const sel = st.sel;
+    const pick = i => () => this.setState({ sel: i, tab: "inspector" });
+    const showWelcome = st.welcome === null ? (this.props.showWelcome ?? true) : st.welcome;
+
+    const vEdges = edges.map(e => {
+      const A = nodes[e.a], B = nodes[e.b];
+      const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy);
+      const rb = (B.kind === "person" ? 7 : B.hub ? 10 : 7.5) + 2;
+      const on = sel !== null && (e.a === sel || e.b === sel);
+      return {
+        x1: A.x.toFixed(1), y1: A.y.toFixed(1), x2: (B.x - dx / L * rb).toFixed(1), y2: (B.y - dy / L * rb).toFixed(1),
+        dash: e.inferred ? "4 3" : "", marker: on ? "url(#arr-on)" : "url(#arr)",
+        style: on ? "stroke: var(--text-primary); stroke-width: 1.75" : "stroke: var(--border-strong); stroke-width: 1"
+      };
+    });
+    const vNodes = nodes.map((n, i) => {
+      const r = n.kind === "person" ? 7 : n.hub ? 8 : 6;
+      const fill = n.kind === "person" ? "var(--ch-indigo)" : "var(--ch-violet)";
+      return { d: this.shape(n.kind, n.x, n.y, r), pick: pick(i), style: `fill: ${fill}; stroke: var(--surface-app); stroke-width: 1.5; cursor: pointer` };
+    });
+    const labels = nodes.map((n, i) => {
+      if (n.kind !== "person" && !n.hub) return null;
+      let tx = "-50%", ty = "-50%", ox = 0, oy = 0;
+      if (n.hub) { ty = "0"; oy = 16; }
+      else {
+        const c = Math.cos(n.a), s = Math.sin(n.a);
+        if (c < -0.3) { tx = "-100%"; ox = -12; } else if (c > 0.3) { tx = "0"; ox = 12; } else { oy = s > 0 ? 14 : -14; ty = s > 0 ? "0" : "-100%"; }
+      }
+      const isSel = i === sel;
+      return {
+        t: this.short(n.id),
+        style: `position: absolute; left: ${((n.x + ox) / 10).toFixed(2)}%; top: ${((n.y + oy) / 5.6).toFixed(2)}%; transform: translate(${tx}, ${ty}); white-space: nowrap; pointer-events: none; font-family: var(--mono); font-size: 11px; line-height: 14px; font-weight: ${isSel ? 600 : 400}; color: ${isSel ? "var(--text-primary)" : "var(--text-secondary)"}; background: var(--surface-app); padding: 0 3px; border-radius: 2px`
+      };
+    }).filter(Boolean);
+
+    const S = sel !== null ? nodes[sel] : null;
+    let ins = null;
+    if (S) {
+      const out = edges.filter(e => e.a === sel).length, inn = edges.filter(e => e.b === sel).length;
+      const isP = S.kind === "person";
+      ins = {
+        type: isP ? "Person" : "Email",
+        shape: this.shape(S.kind, 0, 0, 5.5),
+        fill: `fill: ${isP ? "var(--ch-indigo)" : "var(--ch-violet)"}`,
+        id: S.id,
+        name: isP ? names[S.id] || null : null,
+        attrs: isP
+          ? [{ k: "Domain", v: "enron.com" }, { k: "Mailbox", v: S.id.split("@")[0] }, { k: "First seen", v: "2001-05-14T08:14Z" }, { k: "Last seen", v: "2001-12-03T17:52Z" }]
+          : [{ k: "Message id", v: S.id.replace("email:", "") }, { k: "Sent", v: "2001-10-09T11:27Z" }, { k: "Recipients", v: String(out) }, { k: "Size", v: "4,812 bytes" }],
+        rels: isP
+          ? [{ k: "Sent", n: out * 7 + 5 }, { k: "Received", n: inn * 11 + 9 }, { k: "Copied on", n: 4 }]
+          : [{ k: "From", n: inn }, { k: "To", n: out }, { k: "Attachments", n: 0 }],
+        sources: ["maildir/ring-r/sent/1043.", "maildir/ring-r/inbox/287.", "maildir/shields-j/inbox/96."]
+      };
+    }
+
+    const people = nodes.map((n, i) => ({ n, i })).filter(o => o.n.kind === "person").sort((a, b) => b.n.deg - a.n.deg).slice(0, 5);
+    const tips = [
+      "Press / to search entities, identifiers and documents.",
+      "Select a node and press E to expand it by one hop. The count is shown before anything is drawn.",
+      "Shift-click to add to the selection. Esc clears it.",
+      "Brush the timeline to dim everything outside the window. Nothing is removed from the canvas.",
+      "Dashed links were inferred by the model. Solid links come from a source record.",
+      "Branch a selection to work on it in a new workspace without changing this one."
+    ];
+    let ts = 3; const tr = () => { ts = (ts * 16807) % 2147483647; return (ts - 1) / 2147483646; };
+    const tl = Array.from({ length: 60 }, (_, i) => Math.round(2 + tr() * 6 + (i > 34 && i < 44 ? 9 + tr() * 6 : 0) - (i % 7 > 4 ? 3 : 0)));
+    const tlMax = Math.max(...tl);
+    const tab = (k, name) => ({ name, on: st.tab === k, pick: () => this.setState({ tab: k }), weight: st.tab === k ? 700 : 400, color: st.tab === k ? "var(--text-primary)" : "var(--text-secondary)", line: st.tab === k ? "inset 0 -2px 0 var(--text-primary)" : "none" });
+    const tog = (k, name) => ({ name, on: st[k], flip: () => this.setState({ [k]: !st[k] }), color: st[k] ? "var(--text-primary)" : "var(--text-secondary)", bg: st[k] ? "var(--surface-hover)" : "transparent", dot: st[k] ? "currentColor" : "transparent" });
+    const Q = [
+      { k: "rank", name: "Ranking", d: "Order entities in this view by degree, betweenness or PageRank. Ranked names appear in the Case tab.", cta: "Rank by betweenness" },
+      { k: "comm", name: "Community detection", d: "Group entities that are more connected to each other than to the rest. Groups are boxed on the canvas.", cta: "Find communities" },
+      { k: "filter", name: "Filter", d: "Dim entities outside a date window or below a link count. Dimmed entities stay where they are.", cta: "Add a filter" }
+    ];
+
+    const wide = st.vw >= 1200;
+    const panelOpen = st.panel === null ? wide : st.panel;
+    return {
+      showUser: st.vw >= 1100,
+      panelOpen,
+      panelBtnBg: panelOpen ? "var(--surface-hover)" : "transparent",
+      togglePanel: () => this.setState({ panel: !panelOpen }),
+      closePanel: () => this.setState({ panel: false }),
+      asideStyle: "flex: none; width: 340px; max-width: 100%; display: flex; flex-direction: column; background: var(--surface-panel); min-height: 0; " + (wide ? "border-left: 1px solid var(--border-subtle)" : "position: absolute; top: 0; right: 0; bottom: 0; z-index: 5; box-shadow: var(--overlay-shadow)"),
+      welcomeW: st.vw < 1100 ? "280px" : "320px",
+      themeAria: dark ? "Switch to light theme" : "Switch to dark theme",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      searchRef: this.searchRef,
+      views: ["Graph", "Map", "Timeline", "Reports"].map(v => ({ name: v, on: st.view === v, pick: () => this.setState({ view: v }), weight: st.view === v ? 700 : 400, color: st.view === v ? "var(--text-primary)" : "var(--text-secondary)", line: st.view === v ? "inset 0 -2px 0 var(--text-primary)" : "none" })),
+      rail: [
+        { name: "Cases", icon: "M2 4.5h4l1.5 1.5H14v7H2z", current: "page" },
+        { name: "Alerts", icon: "M4 11V7a4 4 0 0 1 8 0v4l1 1.5H3zM6.5 14h3", badge: "3" },
+        { name: "Ownership", icon: "M8 2v4M8 6L4 10M8 6l4 4M2.5 10h3v3.5h-3zM10.5 10h3v3.5h-3z" },
+        { name: "History", icon: "M8 2.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zM8 5v3.2l2 1.3" },
+        { name: "Watches", icon: "M4 2h8v12l-4-3-4 3z" },
+        { name: "Proposed types", icon: "M2 2h6l6 6-6 6-6-6zM5 5h.01" },
+        { name: "Ingest Studio", icon: "M8 2v8M5 7l3 3 3-3M2.5 11v2.5h11V11" }
+      ].map(r => ({ ...r, current: r.current || null, badge: r.badge || null, color: r.current ? "var(--text-primary)" : "var(--text-secondary)", bg: r.current ? "var(--surface-hover)" : "transparent" })),
+      openWelcome: () => this.setState({ welcome: true }),
+      closeWelcome: () => this.setState({ welcome: false }),
+      showWelcome,
+      toggles: [tog("labels", "Labels"), tog("communities", "Communities")],
+      showLabels: st.labels,
+      showCommunities: st.communities,
+
+      edges: vEdges, nodes: vNodes, labels,
+      hasSel: sel !== null, noSel: sel === null,
+      selX: S ? S.x : 0, selY: S ? S.y : 0,
+      selDegree: S ? S.deg : 0,
+      clearSel: () => this.setState({ sel: null }),
+      canvasAria: S ? `Graph canvas. ${S.id} selected. Arrow keys move between nodes, Escape clears.` : "Graph canvas. Arrow keys select nodes.",
+      onCanvasKey: e => {
+        if (["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) {
+          e.preventDefault();
+          const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+          const cur = sel === null ? (d > 0 ? -1 : 0) : sel;
+          this.setState({ sel: (cur + d + nodes.length) % nodes.length, tab: "inspector" });
+        } else if (e.key === "Enter" && sel !== null) this.setState({ tab: "inspector" });
+      },
+      nPeople: nodes.filter(n => n.kind === "person").length,
+      nEmails: nodes.filter(n => n.kind === "email").length,
+      nNodes: nodes.length, nEdges: edges.length,
+
+      recent: [
+        { what: "Expanded richard.ring@enron.com by one hop", when: "yesterday 16:42", icon: "M8 3v10M3 8h10", go: () => this.setState({ sel: 0, tab: "inspector" }) },
+        { what: "Branched 2 entities into a new workspace", when: "yesterday 16:10", icon: "M4 2v8a3 3 0 0 0 3 3h5M10 11l2 2-2 2", go: () => {} },
+        { what: "Ran community detection on this view", when: "8 Oct 11:05", icon: "M2.5 3h5v5h-5zM9.5 8h4v5h-4z", go: () => this.setState({ communities: true }) }
+      ],
+      keys: [
+        { k: "/", d: "Search entities, identifiers, documents" },
+        { k: "←→", d: "Move between nodes on the canvas" },
+        { k: "E", d: "Expand the selection by one hop" },
+        { k: "F", d: "Fit the graph to the window" },
+        { k: "Esc", d: "Clear the selection" },
+        { k: "?", d: "Open this panel again" }
+      ],
+
+      tlOpen: st.tlOpen, tlClosed: !st.tlOpen,
+      toggleTl: () => this.setState({ tlOpen: !st.tlOpen }),
+      tlChevron: st.tlOpen ? "rotate(90deg)" : "none",
+      tlMini: tl.map(v => `flex: 1; height: ${Math.max(2, Math.round(v / tlMax * 18))}px; background: var(--seq-2); border-radius: 1px`),
+      tlFull: tl.map(v => `flex: 1; height: ${Math.round(v / tlMax * 96)}px; background: var(--seq-4); border-radius: 1px 1px 0 0`),
+      tlMax,
+
+      tabs: [tab("inspector", "Inspector"), tab("query", "Query"), tab("case", "Case")],
+      tabInspector: st.tab === "inspector", tabQuery: st.tab === "query", tabCase: st.tab === "case",
+      ins: ins || { attrs: [], rels: [], sources: [] },
+      queries: Q.map(q => ({ ...q, open: !!st.q[q.k], rot: st.q[q.k] ? "rotate(90deg)" : "none", flip: () => this.setState({ q: { ...st.q, [q.k]: !st.q[q.k] } }) })),
+      holds: [{ k: "Email", n: "517,401", w: "100%" }, { k: "Person", n: "150", w: "4%" }, { k: "Attachment", n: "34,210", w: "18%" }],
+      top: people.map((o, r) => ({ rank: r + 1, id: o.n.id, n: o.n.deg, pick: pick(o.i) })),
+
+      tip: tips[st.tip % tips.length],
+      nextTip: () => this.setState({ tip: st.tip + 1 })
+    };
+  }
+}
+
+</script>
+</body>
+</html>

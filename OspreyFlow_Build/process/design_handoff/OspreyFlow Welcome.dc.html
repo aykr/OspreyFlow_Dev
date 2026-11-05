@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@200..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+:root{
+--n0:#090d0e;--n1:#101314;--n2:#161a1b;--n3:#202425;--n4:#2b2f30;--n5:#3a3e3f;--n6:#4d5051;--n7:#66696a;--n8:#848788;--n9:#a2a5a6;--n10:#c1c5c6;--n11:#e8eced;
+--surface-sunken:var(--n0);--surface-app:var(--n1);--surface-panel:var(--n2);--surface-raised:var(--n3);--surface-hover:var(--n4);
+--border-subtle:var(--n5);--border:var(--n6);--border-strong:var(--n7);
+--text-disabled:var(--n8);--text-tertiary:var(--n9);--text-secondary:var(--n10);--text-primary:var(--n11);
+--brass:#c08a34;--brass-hover:#d49c44;--brass-press:#a97427;--brass-ink:#141517;
+--error:#e2695f;--warning:#d9a63f;--success:#6bab7e;
+--ch-ochre:#b34917;--ch-rose:#b74b5e;--ch-plum:#916384;--ch-violet:#8364a6;--ch-indigo:#677bd6;--ch-azure:#61b1e6;--ch-cyan:#35b9c0;--ch-jade:#72b99a;--ch-moss:#90b667;
+--seq-2:#1d575a;--seq-4:#3b999e;
+--ui:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif;
+--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+:root[data-theme="light"]{
+--n0:#ffffff;--n1:#f7fbfc;--n2:#f1f4f5;--n3:#e8eced;--n4:#dde0e1;--n5:#ced2d2;--n6:#bbbebf;--n7:#a2a5a6;--n8:#a2a5a6;--n9:#66696a;--n10:#4b4e4e;--n11:#191b1c;
+--brass:#8a6318;--brass-hover:#6f4e10;--brass-press:#573c08;--brass-ink:#ffffff;
+--error:#a82f22;--warning:#8f6410;--success:#2f6c4a;
+--ch-ochre:#83330d;--ch-rose:#7e032c;--ch-plum:#632a55;--ch-violet:#562182;--ch-indigo:#5367cb;--ch-azure:#3682b2;--ch-cyan:#2b9095;--ch-jade:#2f8364;--ch-moss:#6c8c4a;
+--seq-2:#a0ced0;--seq-4:#358f94;
+}
+html,body{margin:0;padding:0}
+body{background:var(--surface-app);color:var(--text-primary);font-family:var(--ui);font-size:13px;line-height:18px;-webkit-font-smoothing:antialiased}
+*:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+a{color:var(--text-primary);text-decoration:none;border-bottom:1px solid var(--border-strong)}
+a:hover{color:var(--brass);border-bottom-color:var(--brass)}
+p{margin:0;text-wrap:pretty}
+input::placeholder{color:var(--text-tertiary)}
+@media (prefers-reduced-motion: reduce){*{transition-duration:0s!important;animation-duration:0s!important}}
+</style>
+</helmet>
+
+<div style="background: var(--surface-app); color: var(--text-primary); min-height: 100vh; display: flex; flex-direction: column">
+
+  <sc-if value="{{ hasMarking }}" hint-placeholder-val="{{ true }}">
+    <div role="note" aria-label="Protective marking" style="height: 20px; display: flex; align-items: center; justify-content: center; background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-primary)">{{ marking }}</div>
+  </sc-if>
+
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px clamp(20px, 4vw, 48px); border-bottom: 1px solid var(--border-subtle)">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="28" height="28" viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" style="display: block; color: var(--text-primary)"><path d="M4.9 6.7L6.4 17.2L23.9 11.1Z"></path><path d="M6.8 17.9L24.3 19.9L24.2 11.7Z"></path><path d="M6.6 18.6L8 29.1L24.2 20.7Z"></path><path d="M8.4 30.1L9.4 41L24.4 21.2Z"></path><path d="M9.8 41.2L24.4 30.2L24.7 21.5Z"></path><path d="M25.6 11.9L26.2 29.2L43.9 25.7Z"></path></svg>
+      <div style="font-size: 17px; line-height: 22px; letter-spacing: -0.01em"><span style="font-weight: 700">Osprey</span><span style="font-weight: 400">Flow</span></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px">
+      <a href="#about" style="font-size: 13px; color: var(--text-secondary); border-bottom: none">About</a>
+      <button onClick="{{ toggleTheme }}" aria-label="{{ themeAria }}" style="font-family: var(--ui); font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); background: transparent; border: 1px solid var(--border); border-radius: 2px; padding: 5px 10px; cursor: pointer" style-hover="background: var(--surface-hover)">{{ themeLabel }}</button>
+    </div>
+  </header>
+
+  <main style="flex: 1">
+    <section style="max-width: 1320px; margin: 0 auto; padding: 32px clamp(20px, 4vw, 48px) 40px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+
+      <div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <div style="max-width: 640px">
+          <h1 style="margin: 0 0 10px; font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.015em; text-wrap: balance">Crime analysis on one graph</h1>
+          <p style="font-size: 15px; line-height: 23px; color: var(--text-secondary)">Fraud, anti-money-laundering and organised-crime investigation in one workspace. Network, map, timeline and reports read the same case, and a filter applied in one view applies in all of them. Every element carries its handling and where it came from.</p>
+        </div>
+
+        <dl style="margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 20px">
+          <sc-for list="{{ caps }}" as="c" hint-placeholder-count="4">
+            <div style="padding: 10px 0 0; border-top: 2px solid var(--border)">
+              <dt style="display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; margin-bottom: 3px">
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: none; color: var(--text-secondary)"><path d="{{ c.icon }}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path></svg>{{ c.name }}
+              </dt>
+              <dd style="margin: 0; font-size: 12px; line-height: 17px; color: var(--text-secondary)">{{ c.d }}</dd>
+            </div>
+          </sc-for>
+        </dl>
+
+        <figure style="margin: 0; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: var(--surface-panel)">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 12px; border-bottom: 1px solid var(--border-subtle); flex-wrap: wrap">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+              <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Operation Ledger</span>
+              <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">synthetic</span>
+            </div>
+            <div style="display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">
+              <span>{{ nodeCount }} entities</span><span>{{ edgeCount }} links</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap">
+          <div style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column">
+          <div style="position: relative; background-color: var(--surface-app); background-image: linear-gradient(color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--border-subtle) 40%, transparent) 1px, transparent 1px); background-size: 16px 16px">
+            <svg viewBox="0 0 680 400" width="100%" role="img" aria-label="Example network: five groups of people, companies, accounts and addresses, with one path traced between two groups" style="display: block">
+              <sc-for list="{{ edges }}" as="e" hint-placeholder-count="40">
+                <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke-dasharray="{{ e.dash }}" stroke-linecap="round" style="{{ e.style }}"></line>
+              </sc-for>
+              <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="50">
+                <path d="{{ n.d }}" fill-rule="evenodd" style="{{ n.style }}"></path>
+              </sc-for>
+              <circle cx="{{ sel.x }}" cy="{{ sel.y }}" r="14" fill="none" style="stroke: var(--brass); stroke-width: 2"></circle>
+            </svg>
+            <sc-for list="{{ labels }}" as="l" hint-placeholder-count="5">
+              <span aria-hidden="true" style="{{ l.style }}">{{ l.t }}</span>
+            </sc-for>
+          </div>
+          <div style="border-top: 1px solid var(--border-subtle); padding: 8px 12px 6px; background: var(--surface-panel)">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px">
+              <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Timeline</span>
+              <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">11–19 Mar selected</span>
+            </div>
+            <div aria-hidden="true" style="position: relative; height: 34px; display: flex; align-items: flex-end; gap: 2px">
+              <sc-for list="{{ tl }}" as="b" hint-placeholder-count="28">
+                <span style="{{ b.style }}"></span>
+              </sc-for>
+              <span style="position: absolute; top: -2px; bottom: 0; left: {{ brushL }}; width: {{ brushW }}; border: 1px solid var(--border-strong); border-radius: 2px; pointer-events: none"></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px"><span>1 Mar</span><span>14 Mar</span><span>28 Mar</span></div>
+          </div>
+          </div>
+
+          <div style="flex: 1 1 200px; max-width: 100%; display: flex; flex-wrap: wrap; align-content: flex-start; box-shadow: -1px 0 0 var(--border-subtle); background: var(--surface-panel)">
+            <div style="flex: 1 1 180px; padding: 8px 12px; box-shadow: 0 1px 0 var(--border-subtle)">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px">
+                <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Map</span>
+                <span style="font-size: 11px; color: var(--text-tertiary)">Basemap</span>
+              </div>
+              <div style="position: relative; height: 120px; border: 1px solid var(--border-subtle); border-radius: 2px; overflow: hidden; background: var(--surface-app)">
+                <image-slot id="welcome-map" src="assets/screen-map.jpg" shape="rect" fit="fill" placeholder="Drop a map screenshot" style="position: absolute; width: 132%; height: 124%; left: -4%; top: -14%"></image-slot>
+              </div>
+            </div>
+            <div style="flex: 1 1 180px; padding: 8px 12px 10px">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px">
+                <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Report pack</span>
+                <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">v3</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 9px">
+                <div>
+                  <div style="font-size: 12px; line-height: 16px; margin-bottom: 4px">Value transacted, weekly</div>
+                  <div aria-hidden="true" style="height: 20px; display: flex; align-items: flex-end; gap: 2px">
+                    <sc-for list="{{ spark }}" as="s" hint-placeholder-count="10">
+                      <span style="{{ s }}"></span>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="font-size: 12px; line-height: 16px">Assessment: <span style="font-weight: 600">likely</span> <span style="font-family: var(--mono); font-size: 11px; color: var(--text-tertiary)">55–75%</span></div>
+                <div style="font-size: 12px; line-height: 16px; color: var(--text-tertiary)">1 item withheld from this reader</div>
+              </div>
+            </div>
+          </div>
+          </div>
+          <figcaption style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 9px 12px; border-top: 1px solid var(--border-subtle)">
+            <sc-for list="{{ legend }}" as="g" hint-placeholder-count="6">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary)">
+                <svg width="12" height="12" viewBox="-7 -7 14 14" aria-hidden="true" style="display: block"><path d="{{ g.d }}" fill-rule="evenodd" style="{{ g.style }}"></path></svg>{{ g.name }}
+              </span>
+            </sc-for>
+            <span style="flex: 1"></span>
+            <sc-for list="{{ strokes }}" as="s" hint-placeholder-count="3">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary)">
+                <svg width="22" height="8" aria-hidden="true" style="display: block"><line x1="1" y1="4" x2="21" y2="4" stroke-dasharray="{{ s.dash }}" style="stroke: var(--text-secondary); stroke-width: 1.5"></line></svg>{{ s.name }}
+              </span>
+            </sc-for>
+          </figcaption>
+        </figure>
+      </div>
+
+      <aside aria-labelledby="signin-title" style="flex: 0 1 360px; min-width: 300px; position: sticky; top: 24px">
+        <div style="background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 24px">
+
+          <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <div>
+                <h2 id="signin-title" style="margin: 0 0 4px; font-size: 19px; line-height: 26px; font-weight: 700">Sign in</h2>
+                <p style="font-size: 13px; line-height: 19px; color: var(--text-tertiary)">You see only what your role, clearance and cases allow. Every session is recorded in the audit log.</p>
+              </div>
+
+              <button onClick="{{ onSso }}" disabled="{{ ssoBusy }}" style="height: 36px; width: 100%; font-family: var(--ui); font-size: 13px; font-weight: 700; color: var(--brass-ink); background: var(--brass); border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--brass-hover)" style-active="background: var(--brass-press)">{{ ssoLabel }}</button>
+              <p style="font-size: 12px; line-height: 17px; color: var(--text-tertiary); margin-top: -8px">Your password is entered only on your organisation's sign-in page.</p>
+
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-tertiary)">
+                <span style="flex: 1; height: 1px; background: var(--border-subtle)"></span>
+                <span>or use an OspreyFlow account</span>
+                <span style="flex: 1; height: 1px; background: var(--border-subtle)"></span>
+              </div>
+
+              <form onSubmit="{{ onSubmit }}" noValidate="{{ true }}" style="display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; flex-direction: column; gap: 5px">
+                  <label for="email" style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Email or username</label>
+                  <input id="email" type="text" autoComplete="username" autoCapitalize="none" spellCheck="false" value="{{ email }}" onChange="{{ onEmail }}" placeholder="name@organisation.gov.uk or j.okafor" aria-invalid="{{ emailInvalid }}" aria-describedby="email-err" style="height: 32px; padding: 0 9px; font-family: var(--mono); font-size: 13px; color: var(--text-primary); background: var(--surface-sunken); border: 1px solid {{ emailBorder }}; border-radius: 2px; outline: none" style-focus="border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass)"></input>
+                  <sc-if value="{{ emailErr }}" hint-placeholder-val="{{ false }}">
+                    <span id="email-err" style="font-size: 12px; line-height: 16px; color: var(--error)">{{ emailErr }}</span>
+                  </sc-if>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 5px">
+                  <div style="display: flex; justify-content: space-between; align-items: baseline">
+                    <label for="password" style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Password</label>
+                    <button type="button" onClick="{{ toForgot }}" style="font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: none; border: none; border-bottom: 1px solid var(--border-strong); padding: 0; cursor: pointer" style-hover="color: var(--brass); border-bottom-color: var(--brass)">Forgot password?</button>
+                  </div>
+                  <div style="position: relative">
+                    <input id="password" type="{{ pwType }}" autoComplete="current-password" value="{{ password }}" onChange="{{ onPassword }}" aria-invalid="{{ pwInvalid }}" aria-describedby="pw-err" style="height: 32px; width: 100%; box-sizing: border-box; padding: 0 56px 0 9px; font-family: var(--mono); font-size: 13px; color: var(--text-primary); background: var(--surface-sunken); border: 1px solid {{ pwBorder }}; border-radius: 2px; outline: none" style-focus="border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass)"></input>
+                    <button type="button" onClick="{{ togglePw }}" aria-pressed="{{ pwShown }}" style="position: absolute; right: 3px; top: 3px; height: 26px; padding: 0 8px; font-family: var(--ui); font-size: 12px; color: var(--text-secondary); background: transparent; border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">{{ pwToggleLabel }}</button>
+                  </div>
+                  <sc-if value="{{ pwErr }}" hint-placeholder-val="{{ false }}">
+                    <span id="pw-err" style="font-size: 12px; line-height: 16px; color: var(--error)">{{ pwErr }}</span>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ formMsg }}" hint-placeholder-val="{{ false }}">
+                  <div role="status" style="display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid {{ formTone }}; border-radius: 2px; font-size: 12px; line-height: 17px; color: var(--text-secondary)">
+                    <span style="font-family: var(--mono); font-weight: 600; color: {{ formTone }}">{{ formGlyph }}</span><span>{{ formMsg }}</span>
+                  </div>
+                </sc-if>
+
+                <button type="submit" disabled="{{ busy }}" style="height: 34px; width: 100%; font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">{{ submitLabel }}</button>
+              </form>
+
+              <p style="font-size: 12px; line-height: 17px; color: var(--text-tertiary); padding-top: 4px; border-top: 1px solid var(--border-subtle)">No account yet? Your OspreyFlow administrator invites people and assigns roles. Locked out or seeing the wrong cases? <a href="#help">Get account help</a>.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isForgot }}" hint-placeholder-val="{{ false }}">
+            <form onSubmit="{{ onReset }}" noValidate="{{ true }}" style="display: flex; flex-direction: column; gap: 16px">
+              <div>
+                <h2 style="margin: 0 0 4px; font-size: 19px; line-height: 26px; font-weight: 700">Reset your password</h2>
+                <p style="font-size: 13px; line-height: 19px; color: var(--text-tertiary)">For OspreyFlow accounts only. If you sign in through your organisation, reset your password there instead.</p>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 5px">
+                <label for="reset-email" style="font-size: 12px; font-weight: 600; color: var(--text-secondary)">Email or username</label>
+                <input id="reset-email" type="text" autoCapitalize="none" spellCheck="false" value="{{ email }}" onChange="{{ onEmail }}" placeholder="name@organisation.gov.uk or j.okafor" aria-invalid="{{ emailInvalid }}" style="height: 32px; padding: 0 9px; font-family: var(--mono); font-size: 13px; color: var(--text-primary); background: var(--surface-sunken); border: 1px solid {{ emailBorder }}; border-radius: 2px; outline: none" style-focus="border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass)"></input>
+                <sc-if value="{{ emailErr }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size: 12px; line-height: 16px; color: var(--error)">{{ emailErr }}</span>
+                </sc-if>
+              </div>
+              <button type="submit" style="height: 36px; width: 100%; font-family: var(--ui); font-size: 13px; font-weight: 700; color: var(--brass-ink); background: var(--brass); border: none; border-radius: 2px; cursor: pointer" style-hover="background: var(--brass-hover)">Send reset link</button>
+              <button type="button" onClick="{{ toSignin }}" style="align-self: flex-start; font-family: var(--ui); font-size: 13px; color: var(--text-secondary); background: none; border: none; border-bottom: 1px solid var(--border-strong); padding: 0; cursor: pointer" style-hover="color: var(--brass); border-bottom-color: var(--brass)">Back to sign in</button>
+            </form>
+          </sc-if>
+
+          <sc-if value="{{ isSent }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <div>
+                <h2 style="margin: 0 0 4px; font-size: 19px; line-height: 26px; font-weight: 700">Check your email</h2>
+                <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">If an OspreyFlow account matches <span style="font-family: var(--mono); color: var(--text-primary)">{{ email }}</span>, a reset link is on its way to the email address on that account. It expires in 30 minutes.</p>
+              </div>
+              <p style="font-size: 12px; line-height: 17px; color: var(--text-tertiary)">Nothing after five minutes? Check your junk folder, or ask your administrator to confirm the address on your account.</p>
+              <button type="button" onClick="{{ toSignin }}" style="height: 34px; width: 100%; font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 2px; cursor: pointer" style-hover="background: var(--surface-hover)">Back to sign in</button>
+            </div>
+          </sc-if>
+        </div>
+      </aside>
+    </section>
+
+    <sc-if value="{{ showAbout }}" hint-placeholder-val="{{ true }}">
+      <section id="about" style="border-top: 1px solid var(--border-subtle)">
+        <div style="max-width: 1320px; margin: 0 auto; padding: 40px clamp(20px, 4vw, 48px) 48px">
+          <h2 style="margin: 0 0 6px; font-size: 23px; line-height: 30px; font-weight: 700; letter-spacing: -0.01em">Two kinds of work, one graph</h2>
+          <p style="max-width: 640px; font-size: 14px; line-height: 21px; color: var(--text-tertiary); margin-bottom: 32px">A crime analysis unit and a financial-crime team use the same graph, rules and reports. The screens below come from synthetic demonstration cases.</p>
+
+          <h3 style="margin: 0 0 4px; font-size: 19px; line-height: 26px; font-weight: 700">Crime analysis</h3>
+          <p style="max-width: 640px; font-size: 13px; line-height: 19px; color: var(--text-tertiary); margin-bottom: 20px">For fraud and organised-crime analysts: networks, rhythm, and the people who matter.</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px 28px">
+            <sc-for list="{{ features }}" as="f" hint-placeholder-count="3">
+              <article style="display: flex; flex-direction: column; gap: 12px">
+                <div style="aspect-ratio: 16 / 10; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: var(--surface-panel)">
+                  <image-slot id="{{ f.slot }}" src="{{ f.src }}" shape="rect" fit="cover" placeholder="{{ f.placeholder }}"></image-slot>
+                </div>
+                <div>
+                  <h4 style="margin: 0 0 4px; font-size: 16px; line-height: 22px; font-weight: 600">{{ f.title }}</h4>
+                  <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">{{ f.body }}</p>
+                </div>
+              </article>
+            </sc-for>
+          </div>
+
+          <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--border-subtle)">
+            <h3 style="margin: 0 0 4px; font-size: 19px; line-height: 26px; font-weight: 700">Anti-money-laundering</h3>
+            <p style="max-width: 640px; font-size: 13px; line-height: 19px; color: var(--text-tertiary); margin-bottom: 20px">For financial-crime teams: from onboarding to a decision on the record. The same rules work at each stage.</p>
+            <ol aria-label="Financial-crime lifecycle" style="list-style: none; margin: 0 0 28px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 24px">
+              <sc-for list="{{ lifecycle }}" as="s" hint-placeholder-count="4">
+                <li style="padding: 10px 0; border-top: 2px solid var(--border)">
+                  <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px">
+                    <span style="font-size: 13px; font-weight: 700">{{ s.stage }}</span>
+                    <span style="font-size: 12px; color: var(--text-tertiary)">{{ s.what }}</span>
+                  </div>
+                  <p style="font-size: 12px; line-height: 17px; color: var(--text-secondary)">{{ s.d }}</p>
+                </li>
+              </sc-for>
+            </ol>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px 28px">
+              <sc-for list="{{ amlFeatures }}" as="f" hint-placeholder-count="3">
+                <article style="display: flex; flex-direction: column; gap: 12px">
+                  <div style="aspect-ratio: 16 / 10; border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: var(--surface-panel)">
+                    <image-slot id="{{ f.slot }}" src="{{ f.src }}" shape="rect" fit="cover" placeholder="{{ f.placeholder }}"></image-slot>
+                  </div>
+                  <div>
+                    <h4 style="margin: 0 0 4px; font-size: 16px; line-height: 22px; font-weight: 600">{{ f.title }}</h4>
+                    <p style="font-size: 13px; line-height: 19px; color: var(--text-secondary)">{{ f.body }}</p>
+                  </div>
+                </article>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid var(--border-subtle); display: grid; grid-template-columns: minmax(200px, 0.8fr) minmax(0, 2fr); gap: 20px 40px">
+            <div>
+              <h2 style="margin: 0 0 6px; font-size: 19px; line-height: 26px; font-weight: 700">Seeing is not doing</h2>
+              <p style="font-size: 13px; line-height: 19px; color: var(--text-tertiary)">Control and audit are the conditions an analyst works within. They are not a check run at export.</p>
+            </div>
+            <dl style="margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 28px">
+              <sc-for list="{{ safeguards }}" as="s" hint-placeholder-count="4">
+                <div style="padding: 12px 0; border-top: 1px solid var(--border-subtle)">
+                  <dt style="font-size: 13px; font-weight: 600; margin-bottom: 3px">{{ s.t }}</dt>
+                  <dd style="margin: 0; font-size: 13px; line-height: 19px; color: var(--text-secondary)">{{ s.d }}</dd>
+                </div>
+              </sc-for>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+  </main>
+
+  <footer id="help" style="border-top: 1px solid var(--border-subtle); padding: 14px clamp(20px, 4vw, 48px); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-tertiary)">
+      <svg width="16" height="16" viewBox="0 0 48 48" fill="currentColor" aria-hidden="true" style="display: block; color: var(--text-secondary)"><path d="M4 6L25 11L45 26L25.5 30L9 42Z"></path></svg>
+      <span>OspreyFlow</span>
+      <span style="font-family: var(--mono); font-size: 11px">v2.6.0</span>
+    </div>
+    <nav aria-label="Footer" style="display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12px">
+      <a href="#help" style="color: var(--text-secondary)">Account help</a>
+      <a href="#help" style="color: var(--text-secondary)">Accessibility statement</a>
+      <a href="#help" style="color: var(--text-secondary)">Privacy notice</a>
+      <a href="#help" style="color: var(--text-secondary)">Service status</a>
+    </nav>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;marking&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;OFFICIAL&quot;,&quot;OFFICIAL-SENSITIVE&quot;,&quot;None&quot;],&quot;default&quot;:&quot;OFFICIAL&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Deployment&quot;},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Deployment&quot;},&quot;showAbout&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Deployment&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, view: "signin", email: "", password: "", pwShown: false, errs: {}, busy: false, ssoBusy: false, msg: null };
+
+  componentDidMount() { this.apply(this.theme()); }
+  componentDidUpdate() { this.apply(this.theme()); }
+  theme() { return this.state.theme || this.props.defaultTheme || "dark"; }
+  apply(t) {
+    const r = document.documentElement;
+    if (t === "light") r.setAttribute("data-theme", "light"); else r.removeAttribute("data-theme");
+  }
+
+  validate(needPw) {
+    const errs = {};
+    const e = this.state.email.trim();
+    if (!e) errs.email = "Enter your email address or username.";
+    else if (e.includes("@")) { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) errs.email = "Enter an email address in the format name@organisation.gov.uk, or use your username."; }
+    else if (!/^[A-Za-z0-9._-]{2,64}$/.test(e)) errs.email = "Usernames use letters, numbers, dots, hyphens and underscores, with no spaces.";
+    if (needPw && !this.state.password) errs.pw = "Enter your password.";
+    return errs;
+  }
+
+  submit = ev => {
+    ev.preventDefault();
+    const errs = this.validate(true);
+    this.setState({ errs, msg: null });
+    if (Object.keys(errs).length) return;
+    this.setState({ busy: true });
+    clearTimeout(this.t);
+    this.t = setTimeout(() => {
+      if (this.state.password.length < 8) {
+        this.setState({ busy: false, msg: { tone: "error", text: "That email or username and password do not match an OspreyFlow account. Check for typos, or reset your password. Five failed attempts lock the account for 15 minutes." } });
+      } else {
+        this.setState({ busy: false, msg: { tone: "success", text: "Signed in. Opening your cases." } });
+      }
+    }, 700);
+  };
+
+  reset = ev => {
+    ev.preventDefault();
+    const errs = this.validate(false);
+    this.setState({ errs });
+    if (!Object.keys(errs).length) this.setState({ view: "sent" });
+  };
+
+  tl() {
+    if (this._tl) return this._tl;
+    const N = 28, a = 10, b = 18;
+    let s = 5; const r = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const bars = Array.from({ length: N }, (_, i) => {
+      const base = 6 + r() * 12 + (i >= 12 && i <= 16 ? 14 : 0) + (i % 7 === 6 ? -5 : 0);
+      const on = i >= a && i <= b;
+      return { style: `flex: 1; height: ${Math.max(3, Math.round(base))}px; background: ${on ? "var(--seq-4)" : "var(--seq-2)"}; border-radius: 1px` };
+    });
+    this._tl = { bars, l: (a / N * 100).toFixed(2) + "%", w: ((b - a + 1) / N * 100).toFixed(2) + "%" };
+    return this._tl;
+  }
+
+  build() {
+    if (this.g) return this.g;
+    let s = 11;
+    const rnd = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    const T = {
+      person: { ch: "indigo", shape: "circle", name: "Person" },
+      company: { ch: "azure", shape: "square", name: "Organisation" },
+      account: { ch: "jade", shape: "rounded", name: "Account" },
+      address: { ch: "ochre", shape: "ring", name: "Location" },
+      phone: { ch: "rose", shape: "triangle", name: "Phone" },
+      doc: { ch: "violet", shape: "diamond", name: "Document" }
+    };
+    const shape = (k, x, y, r) => {
+      const f = n => n.toFixed(1);
+      if (k === "circle") return `M${f(x - r)} ${f(y)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+      if (k === "square") { const q = r * 0.9; return `M${f(x - q)} ${f(y - q)}h${f(2 * q)}v${f(2 * q)}h${f(-2 * q)}Z`; }
+      if (k === "rounded") { const q = r * 0.92, c = r * 0.4; return `M${f(x - q + c)} ${f(y - q)}H${f(x + q - c)}Q${f(x + q)} ${f(y - q)} ${f(x + q)} ${f(y - q + c)}V${f(y + q - c)}Q${f(x + q)} ${f(y + q)} ${f(x + q - c)} ${f(y + q)}H${f(x - q + c)}Q${f(x - q)} ${f(y + q)} ${f(x - q)} ${f(y + q - c)}V${f(y - q + c)}Q${f(x - q)} ${f(y - q)} ${f(x - q + c)} ${f(y - q)}Z`; }
+      if (k === "diamond") { const q = r * 1.2; return `M${f(x)} ${f(y - q)}L${f(x + q)} ${f(y)}L${f(x)} ${f(y + q)}L${f(x - q)} ${f(y)}Z`; }
+      if (k === "triangle") { const q = r * 1.15; return `M${f(x)} ${f(y - q)}L${f(x + q)} ${f(y + q * 0.75)}L${f(x - q)} ${f(y + q * 0.75)}Z`; }
+      const ri = r * 0.45;
+      return `M${f(x - r)} ${f(y)}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0ZM${f(x - ri)} ${f(y)}a${ri} ${ri} 0 1 1 ${2 * ri} 0a${ri} ${ri} 0 1 1 ${-2 * ri} 0Z`;
+    };
+    const C = [
+      { x: 150, y: 120, n: 11, hub: "person", mix: ["account", "account", "phone", "address", "company"], label: "HALE, Marcus", mono: false, lab: { dx: 12, dy: -11 } },
+      { x: 360, y: 92, n: 9, hub: "company", mix: ["person", "account", "address", "doc"], label: "Hale Logistics Ltd", mono: false, lab: { dx: 12, dy: -11 } },
+      { x: 560, y: 140, n: 12, hub: "account", mix: ["account", "account", "person", "phone"], label: "60-16-13 ••19", mono: true, lab: { dx: -12, dy: -11, left: true } },
+      { x: 470, y: 300, n: 10, hub: "person", mix: ["phone", "address", "account", "doc"], label: "CARTER, Jamal", mono: false, lab: { dx: 12, dy: 12, below: true } },
+      { x: 220, y: 300, n: 9, hub: "company", mix: ["person", "account", "address"], label: "Brightpath Consulting Ltd", mono: false, dim: true, lab: { dx: 12, dy: -11 } }
+    ];
+    const nodes = [], edges = [], labels = [];
+    const hubs = [];
+    C.forEach((c, ci) => {
+      const hub = { x: c.x, y: c.y, t: c.hub, r: 8, dim: !!c.dim, ci };
+      nodes.push(hub); hubs.push(hub);
+      const members = [];
+      for (let i = 0; i < c.n; i++) {
+        const a = (i / c.n) * Math.PI * 2 + rnd() * 0.5, d = 34 + rnd() * 46;
+        const m = { x: c.x + Math.cos(a) * d * 1.15, y: c.y + Math.sin(a) * d * 0.85, t: c.mix[Math.floor(rnd() * c.mix.length)], r: 5, dim: !!c.dim, ci };
+        m.x = Math.max(12, Math.min(668, m.x)); m.y = Math.max(12, Math.min(388, m.y));
+        nodes.push(m); members.push(m);
+        edges.push({ a: hub, b: m, p: rnd() < 0.72 ? "solid" : rnd() < 0.6 ? "dashed" : "dotted", dim: !!c.dim });
+      }
+      for (let i = 0; i < members.length; i++) if (rnd() < 0.28) {
+        const b = members[(i + 1 + Math.floor(rnd() * 3)) % members.length];
+        edges.push({ a: members[i], b, p: rnd() < 0.5 ? "solid" : "dashed", dim: !!c.dim });
+      }
+      const L = c.lab;
+      labels.push({ x: c.x + L.dx, y: c.y + L.dy, t: c.label, mono: c.mono, dim: !!c.dim, tx: L.left ? "-100%" : "0", ty: L.below ? "0" : "-100%" });
+    });
+    const path = [[0, 1], [1, 2], [2, 3]];
+    path.forEach(([i, j]) => edges.push({ a: hubs[i], b: hubs[j], p: "solid", path: true }));
+    edges.push({ a: hubs[0], b: hubs[4], p: "dashed", dim: true });
+    edges.push({ a: hubs[3], b: hubs[4], p: "dotted", dim: true });
+    const onPath = new Set([0, 1, 2, 3]);
+
+    const dash = { solid: "", dashed: "4 3", dotted: "1 3" };
+    this.g = {
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      edges: edges.map(e => ({
+        x1: e.a.x.toFixed(1), y1: e.a.y.toFixed(1), x2: e.b.x.toFixed(1), y2: e.b.y.toFixed(1), dash: dash[e.p],
+        style: e.path ? "stroke: var(--text-primary); stroke-width: 2"
+          : e.dim ? "stroke: var(--border-subtle); stroke-width: 1"
+          : "stroke: var(--border-strong); stroke-width: 1"
+      })),
+      nodes: nodes.map(n => {
+        const ch = "var(--ch-" + T[n.t].ch + ")";
+        const isHub = n.r === 8;
+        const stroke = isHub && onPath.has(n.ci) && !n.dim ? "var(--text-primary)" : "var(--surface-app)";
+        const fill = n.dim ? `color-mix(in oklab, ${ch} 32%, var(--surface-panel))` : ch;
+        return { d: shape(T[n.t].shape, n.x, n.y, n.r), style: `fill: ${fill}; stroke: ${stroke}; stroke-width: ${isHub ? 1.5 : 1}` };
+      }),
+      sel: { x: hubs[1].x, y: hubs[1].y },
+      labels: labels.map(l => ({
+        x: l.x, y: l.y, t: l.t,
+        style: `position: absolute; left: ${(l.x / 680 * 100).toFixed(2)}%; top: ${(l.y / 400 * 100).toFixed(2)}%; transform: translate(${l.tx}, ${l.ty}); white-space: nowrap; pointer-events: none; font-family: ${l.mono ? "var(--mono)" : "var(--ui)"}; font-size: 11px; line-height: 14px; font-weight: 600; color: ${l.dim ? "var(--text-tertiary)" : "var(--text-primary)"}; background: var(--surface-app); padding: 0 3px; border-radius: 2px`
+      })),
+      legend: Object.keys(T).map(k => ({ name: T[k].name, d: shape(T[k].shape, 0, 0, 5), style: `fill: var(--ch-${T[k].ch})` }))
+    };
+    return this.g;
+  }
+
+  renderVals() {
+    const st = this.state;
+    const dark = this.theme() === "dark";
+    const marking = this.props.marking ?? "OFFICIAL";
+    const g = this.build();
+    const tone = st.msg ? (st.msg.tone === "error" ? "var(--error)" : "var(--success)") : "var(--border)";
+    return {
+      hasMarking: marking !== "None",
+      marking,
+      showAbout: this.props.showAbout ?? true,
+      themeLabel: dark ? "Light theme" : "Dark theme",
+      themeAria: dark ? "Switch to light theme" : "Switch to dark theme",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+
+      ...g,
+      caps: [
+        { name: "Network analysis", icon: "M4 4.5L11.5 6M4 4.5L6 12M11.5 6L6 12M3 3h2v3H3zM10.5 5h2v2h-2zM5 11h2v2H5z", d: "Expand, trace paths, find communities and the brokers between them." },
+        { name: "Geospatial", icon: "M8 14.5s-4.5-4.6-4.5-8a4.5 4.5 0 0 1 9 0c0 3.4-4.5 8-4.5 8zM8 8a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 8 8z", d: "Places on a basemap served from your own deployment." },
+        { name: "Timeline trends", icon: "M2 13.5h12M3.5 11V8M6.5 11V4.5M9.5 11V6.5M12.5 11V3", d: "Brush a window to dim what falls outside it, or fold a case onto one week." },
+        { name: "Reporting", icon: "M4 2h6l3 3v9H4zM10 2v3h3M6 8.5h5M6 11h5", d: "Trends, assessments and notes in report packs, each item under its own marking." }
+      ],
+      tl: this.tl().bars,
+      brushL: this.tl().l,
+      brushW: this.tl().w,
+      spark: [5, 7, 6, 9, 8, 12, 10, 15, 13, 18].map(v => `flex: 1; height: ${v}px; background: var(--seq-4); border-radius: 1px`),
+      strokes: [
+        { name: "From a record", dash: "" },
+        { name: "Inferred", dash: "4 3" },
+        { name: "Unresolved", dash: "1 3" }
+      ],
+
+      isSignin: st.view === "signin",
+      isForgot: st.view === "forgot",
+      isSent: st.view === "sent",
+      toForgot: () => this.setState({ view: "forgot", errs: {}, msg: null }),
+      toSignin: () => this.setState({ view: "signin", errs: {}, msg: null }),
+
+      ssoBusy: st.ssoBusy,
+      ssoLabel: st.ssoBusy ? "Opening your organisation's sign-in page…" : "Continue with organisation sign-in",
+      onSso: () => this.setState({ ssoBusy: true }),
+
+      email: st.email,
+      password: st.password,
+      onEmail: e => this.setState({ email: e.target.value, errs: { ...st.errs, email: null } }),
+      onPassword: e => this.setState({ password: e.target.value, errs: { ...st.errs, pw: null } }),
+      emailErr: st.errs.email || null,
+      pwErr: st.errs.pw || null,
+      emailInvalid: !!st.errs.email,
+      pwInvalid: !!st.errs.pw,
+      emailBorder: st.errs.email ? "var(--error)" : "var(--border)",
+      pwBorder: st.errs.pw ? "var(--error)" : "var(--border)",
+      pwType: st.pwShown ? "text" : "password",
+      pwShown: st.pwShown,
+      pwToggleLabel: st.pwShown ? "Hide" : "Show",
+      togglePw: () => this.setState({ pwShown: !st.pwShown }),
+      busy: st.busy,
+      submitLabel: st.busy ? "Signing in…" : "Sign in with email",
+      onSubmit: this.submit,
+      onReset: this.reset,
+      formMsg: st.msg ? st.msg.text : null,
+      formTone: tone,
+      formGlyph: st.msg && st.msg.tone === "error" ? "!" : "✓",
+
+      features: [
+        { slot: "welcome-graph", src: "assets/screen-structuring-ring.jpg", placeholder: "Drop a screenshot of the graph canvas",
+          title: "Structure found, not drawn by hand",
+          body: "Community detection finds the groups, and centrality finds the brokers who join them. Every expansion shows how much it will draw before drawing it, and an expansion over the working-set limit is refused with options. Nothing is cut silently." },
+        { slot: "welcome-timeline", src: "assets/screen-timeline-cyclical.jpg", placeholder: "Drop a screenshot of the timeline",
+          title: "When it happens",
+          body: "Brushing the timeline dims everything outside the window, so the network stays where you left it. The cyclical view folds a case onto a single week to show its rhythm, such as calls in the evening after visits and none on a Sunday." },
+        { slot: "welcome-communities", src: "assets/screen-communities.jpg", placeholder: "Drop a screenshot of communities and centrality",
+          title: "Who matters",
+          body: "Communities and centrality appear beside the canvas, counted only over what this analyst may see. Betweenness finds the people who join two groups. Pick a ranked name and the canvas centres on them." }
+      ],
+      lifecycle: [
+        { stage: "Prevent", what: "onboarding and KYC", d: "Applicants and their beneficial owners are screened as the file loads, before the customer goes live." },
+        { stage: "Detect", what: "transaction monitoring", d: "Structuring, rapid movement and circular flow run as rules, before or after the data is committed." },
+        { stage: "Investigate", what: "enhanced due diligence", d: "Ownership is traced through every layer, and risk is read factor by factor and across the neighbourhood." },
+        { stage: "Report", what: "decision and record", d: "Every alert is closed with a reason, and every rule decision is audited." }
+      ],
+      amlFeatures: [
+        { slot: "welcome-aml-queue", src: "assets/screen-aml-queue.jpg", placeholder: "Drop a screenshot of the alert queue",
+          title: "The queue says what fired",
+          body: "Alerts are raised as the data loads, before it is committed. Each one names its typology and explains itself in a sentence. A screening match is a suggestion until a person confirms it." },
+        { slot: "welcome-aml-ownership", src: "assets/screen-aml-ownership.jpg", placeholder: "Drop a screenshot of ownership tracing",
+          title: "Who stands behind the applicant",
+          body: "Cumulative beneficial ownership is traced through every layer, and circles of cross-holdings are traced only once. Each share is shown as arithmetic, for example 60% × 80% = 48%, so an auditor can redo it by hand." },
+        { slot: "welcome-aml-decision", src: "assets/screen-aml-decision.jpg", placeholder: "Drop a screenshot of an alert decision",
+          title: "A person decides",
+          body: "Closing an alert needs a reason. A true positive confirms both the alert and the match it found, which is the only way model-inferred data is promoted. Who decided, when and why stays with the alert." }
+      ],
+      safeguards: [
+        { t: "Filtered in the store", d: "A record you may not see is absent, and so is any count or path that would reveal it." },
+        { t: "Handling travels with the data", d: "Classification is set when data is ingested and is checked again, item by item, at export." },
+        { t: "Every read and write is recorded", d: "Each read carries the person who made it, and each write is added to an audit trail." },
+        { t: "Runs where your data lives", d: "It is open source throughout, runs air-gapped, and uses the same images from a laptop to a cluster." }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
