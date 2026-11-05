@@ -163,3 +163,25 @@ def test_every_trivy_scan_in_the_workflows_names_its_version() -> None:
         assert {str(s.get("with", {}).get("version")) for s in steps} == {
             TRIVY_VERSION
         }, workflow.name
+
+
+#: Every image we build on a Debian base, by the Dockerfile that builds it.
+DEBIAN_BASED = (
+    CORE / "services" / "api" / "Dockerfile",
+    CORE / "services" / "ingest" / "Dockerfile",
+    CORE / "services" / "worker" / "Dockerfile",
+    CORE / "services" / "report_sync" / "Dockerfile",
+    CORE / "services" / "ner" / "Dockerfile",
+    CORE / "deploy" / "superset" / "Dockerfile",
+)
+
+
+@pytest.mark.parametrize("dockerfile", DEBIAN_BASED, ids=lambda p: p.parent.name)
+def test_every_debian_image_takes_the_distributions_fixes(dockerfile: Path) -> None:
+    """Red before 5 November: the NER image alone had no `apt-get upgrade` in its final stage, so
+    when Debian fixed CVE-2026-109518 in apt (3.0.4) before `python:3.12-slim` was rebuilt, the
+    release's trivy gate stopped v0.4.11 on that image while every other one had the fix. A fresh
+    base (`--pull`) is not enough on its own; the final stage must upgrade what the base holds."""
+    text = dockerfile.read_text(encoding="utf-8")
+    final_stage = re.split(r"^FROM ", text, flags=re.MULTILINE)[-1]
+    assert re.search(r"apt-get update\b.*apt-get upgrade -y", final_stage), dockerfile

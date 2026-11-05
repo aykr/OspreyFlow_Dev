@@ -5,6 +5,10 @@ FROM python:3.12-slim
 ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 STANZA_RESOURCES_DIR=/models
 WORKDIR /srv
 
+# Debian's fixes that the base image does not carry yet, as every other image takes them (5 November:
+# apt's CVE-2026-109518 stopped v0.4.11's release on this image alone).
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # The CPU build of the runtime: a fraction of the size of the default, which carries GPU libraries.
 # 2.6.0, not 2.5.1: CVE-2025-32434, a weights-only load that was not (the release scan, 15 October
 # 2026). setuptools brought up to date for the same scan (it and the jaraco.context it bundles).
