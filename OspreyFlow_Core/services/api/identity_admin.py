@@ -22,6 +22,7 @@ import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import httpx
@@ -31,6 +32,7 @@ from schemas.admin import (
     AccessInput,
     DashboardIdentity,
     InviteInput,
+    OrganisationArrival,
     PersonAccount,
     RegisteredDashboard,
     SignInDelivery,
@@ -56,6 +58,13 @@ _PRINCIPAL_CLAIMS = (("clearance", False), ("org_unit", False),
 #: `test_identity_admin.py`). Never removed and never joined to an organisation account (ADR-112
 #: Amendment 3); a client's service account (`service-account-*`) is no person at all.
 CONDUIT_ACCOUNTS = frozenset({"osprey-verify-probe", "osprey-verify-revoked"})
+
+#: ADR-112 Amendment 3 (b): Keycloak's record of a refused first sign-in through the organisation
+#: (`harness/realm.py`'s `ARRIVAL_EVENT`, held equal by a test). Its `identity_provider_identity`
+#: is "<preferred_username> <sub>" — the username-template mapper the provider carries
+#: (`harness/realm.py`'s `organisation_provider_mappers`); measured on Keycloak 26.0, the record
+#: holds no other id for the person.
+ARRIVAL_EVENT = "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR"
 
 
 class IdentityAdminRefused(Exception):
@@ -131,6 +140,15 @@ def _first(attributes: dict[str, Any], key: str) -> str | None:
     return str(values[0]) if values else None
 
 
+def _arrival_identity(raw: object) -> tuple[str, str] | None:
+    """(provider username, subject) from a refusal's `identity_provider_identity`, or None for one
+    recorded before the provider carried the mapper (it holds the username alone)."""
+    if not isinstance(raw, str) or " " not in raw.strip():
+        return None
+    username, _, subject = raw.strip().rpartition(" ")
+    return (username.strip(), subject) if subject else None
+
+
 def _system(user: dict[str, Any]) -> bool:
     """An account OspreyFlow itself uses: a client's service account, or a `CONDUIT_ACCOUNTS`."""
     username = str(user.get("username", ""))
@@ -171,8 +189,13 @@ def _slug(name: str) -> str:
 class IdentityAdmin:
     """One per process, beside the `PrincipalResolver`; closed with it."""
 
-    def __init__(self, settings: OidcSettings, *, by_email: bool = False) -> None:
+    def __init__(
+        self, settings: OidcSettings, *, by_email: bool = False, organisation: str | None = None
+    ) -> None:
         self._settings = settings
+        #: ADR-112 Amendment 3 (b): the organisation's sign-in alias
+        #: (`OSPREY_ORGANISATION_SIGN_IN`), or None with no sign-in through an organisation.
+        self._organisation = organisation or None
         self._http = httpx.AsyncClient(timeout=10.0)
         #: ADR-114 Amendment 5: the deployment has a mail server, so a person with an address is
         #: signed in by the identity provider's own emailed link; anyone else by a one-time code.
@@ -227,8 +250,8 @@ class IdentityAdmin:
             raise IdentityAdminRefused(f"the identity provider could not be reached: {e}") from e
         if response.status_code in (401, 403):
             raise IdentityAdminRefused(
-                "the identity provider refused the Conduit — its account needs manage-users and "
-                "manage-clients"
+                "the identity provider refused the Conduit — its account needs manage-users, "
+                "manage-clients and view-events: run ospreyflow repair-sign-in"
             )
         return response
 
@@ -262,12 +285,28 @@ class IdentityAdmin:
             "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
         )
         users = response.json()
+        linked = await self._linked_ids()
         people = [
-            _person(u)
+            _person(u).model_copy(update={"organisation_linked": str(u.get("id")) in linked})
             for u in users
             if not str(u.get("username", "")).startswith("service-account-")
         ]
         return sorted(people, key=lambda p: p.username)
+
+    async def _linked_ids(self, subject: str | None = None) -> set[str]:
+        """The accounts joined to the organisation's provider — or, given `subject`, the one joined
+        to that organisation account. Empty without an organisation."""
+        if not self._organisation:
+            return set()
+        params: dict[str, Any] = {"idpAlias": self._organisation, "max": 500}
+        if subject is not None:
+            params["idpUserId"] = subject
+        found = await self._call("GET", "/users", params=params)
+        if found.status_code != 200:
+            raise IdentityAdminRefused(
+                f"the identity provider did not say who is joined ({found.status_code})"
+            )
+        return {str(u["id"]) for u in found.json()}
 
     async def set_roles(self, user_id: str, roles: list[str]) -> PersonAccount:
         refused = [r for r in roles if not allowed_role(r)]
@@ -457,6 +496,119 @@ class IdentityAdmin:
             )
         return person
 
+    # --- join an organisation account (ADR-112 Amendment 3 (b)) --------------------------------
+
+    async def list_arrivals(self) -> list[OrganisationArrival]:
+        """Everyone the organisation's sign-in refused for a held email address (step 28 (e)), from
+        Keycloak's own record of each refusal (kept seven days), newest first — one line a person,
+        and none for a person since joined to an account. Empty without an organisation."""
+        if not self._organisation:
+            return []
+        found = await self._call("GET", "/events", params={"type": ARRIVAL_EVENT, "max": 500})
+        if found.status_code != 200:
+            raise IdentityAdminRefused(
+                f"the identity provider did not give its record of refused sign-ins "
+                f"({found.status_code})"
+            )
+        arrivals: dict[str, OrganisationArrival] = {}
+        for event in found.json():
+            details = event.get("details") or {}
+            if (
+                event.get("type") != ARRIVAL_EVENT
+                or event.get("error") != "access_denied"
+                or details.get("identity_provider") != self._organisation
+            ):
+                continue
+            parsed = _arrival_identity(details.get("identity_provider_identity"))
+            if parsed is None:
+                continue
+            username, subject = parsed
+            when = datetime.fromtimestamp(int(event.get("time", 0)) / 1000, UTC)
+            held = arrivals.get(subject)
+            arrivals[subject] = (
+                OrganisationArrival(
+                    subject=subject, provider_username=username, last_refused=when, attempts=1
+                )
+                if held is None
+                else held.model_copy(
+                    update={"attempts": held.attempts + 1,
+                            "last_refused": max(held.last_refused, when)}
+                )
+            )  # fmt: skip
+        waiting = [a for s, a in arrivals.items() if not await self._linked_ids(s)]
+        return sorted(waiting, key=lambda a: a.last_refused, reverse=True)
+
+    async def link_organisation(
+        self, user_id: str, subject: str
+    ) -> tuple[PersonAccount, OrganisationArrival]:
+        """The refused arrival `subject` joined to the account `user_id` — Keycloak's own federated
+        identity link, made with the organisation's id for them — so their next sign-in through the
+        organisation lands in this account, with its roles. Refused, before anything changes: no
+        organisation; an account OspreyFlow itself uses; an account already joined to an
+        organisation account; and an id that is no refused arrival waiting to be joined (Keycloak
+        itself would join one organisation account to two people, and to a service account —
+        measured on 26.0). An invited account whose password was never set loses its one-time code:
+        it is reached through the organisation from now on."""
+        alias = self._organisation
+        if not alias:
+            raise PersonActionRefused(
+                "no_organisation_sign_in",
+                "This deployment has no sign-in through an organisation, so there is no "
+                "organisation account to join.",
+            )
+        found = await self._call("GET", f"/users/{user_id}")
+        user = found.json() if found.status_code == 200 else None
+        if not user:
+            raise IdentityAdminRefused("no such person")
+        person = _person(user)
+        if _system(user):
+            raise PersonActionRefused(
+                "not_a_person",
+                f"{person.username} is an account OspreyFlow itself uses, not a person's; it "
+                "cannot be joined to an organisation account.",
+            )
+        links = await self._call("GET", f"/users/{user_id}/federated-identity")
+        if any(link.get("identityProvider") == alias for link in links.json() or []):
+            raise PersonActionRefused(
+                "already_linked",
+                f"{person.username} is already joined to an organisation account. One OspreyFlow "
+                "account is joined to one organisation account.",
+            )
+        arrival = next((a for a in await self.list_arrivals() if a.subject == subject), None)
+        if arrival is None:
+            raise PersonActionRefused(
+                "no_such_arrival",
+                "No refused organisation sign-in with that id is waiting to be joined: it may "
+                "already be joined to an account. Ask the person to sign in through the "
+                "organisation once more, then look again.",
+            )
+        made = await self._call(
+            "POST", f"/users/{user_id}/federated-identity/{alias}",
+            json={"identityProvider": alias, "userId": subject,
+                  "userName": f"{arrival.provider_username} {subject}"},
+        )  # fmt: skip
+        if made.status_code == 409:
+            raise PersonActionRefused(
+                "already_linked", f"{person.username} is already joined to an organisation account."
+            )
+        if made.status_code not in (200, 201, 204):
+            raise IdentityAdminRefused(
+                f"the identity provider did not join the accounts ({made.status_code})"
+            )
+        actions = list(user.get("requiredActions") or [])
+        if "UPDATE_PASSWORD" in actions:
+            # Invited or reset and never signed in: the one-time code is withdrawn, and the person
+            # is not asked to set a password they will not use (measured on 26.0: the pending
+            # action stops the organisation sign-in at "Update password").
+            held = await self._call("GET", f"/users/{user_id}/credentials")
+            for credential in held.json() if held.status_code == 200 else []:
+                if credential.get("type") == "password":
+                    await self._call("DELETE", f"/users/{user_id}/credentials/{credential['id']}")
+            user = {**user, "requiredActions": [a for a in actions if a != "UPDATE_PASSWORD"]}
+            await self._put_user(user, "account")
+        joined = _person(user).model_copy(update={"organisation_linked": True})
+        return joined, arrival
+
     # --- dashboards ---------------------------------------------------------------------------
 
     def _client(self, client_id: str, audience: str) -> dict[str, Any]:
@@ -553,6 +705,7 @@ class IdentityAdmin:
 
 __all__ = [
     "CONDUIT_ACCOUNTS", "DashboardExistsError", "DashboardIdentity", "IdentityAdmin",
-    "IdentityAdminRefused", "PersonAccount", "PersonActionRefused", "RegisteredDashboard",
+    "IdentityAdminRefused", "OrganisationArrival", "PersonAccount", "PersonActionRefused",
+    "RegisteredDashboard",
     "UnknownRoleError", "allowed_role",
 ]  # fmt: skip

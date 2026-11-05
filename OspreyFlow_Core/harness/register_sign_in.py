@@ -274,6 +274,11 @@ def ensure_identity(
                     client_secret=organisation_secret,
                 )
             )  # fmt: skip
+            # ADR-112 Amendment 3 (b): the realm's record of a refused arrival, which Admin ->
+            # People reads to offer the join.
+            lines.append(
+                keycloak_admin.ensure_arrival_events(issuer=issuer, realm=realm, token=token)
+            )
             redirect, logout = organisation_redirect_uris(config, realm_name=realm)
             lines.append(
                 f"the organisation registers: redirect URI {redirect}; post-logout redirect URI "

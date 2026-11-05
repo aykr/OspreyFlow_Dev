@@ -35,6 +35,10 @@ async function serve(page: Page): Promise<string[]> {
                          delivery: "one_time_code", one_time_code: "ABCD-EFGH-JKLM-NPQR" });  // prettier-ignore
     }
     if (path === "people") return json(200, [PERSON]);
+    if (path === "organisation-arrivals")
+      return json(200, [{ subject: "sub-1", provider_username: "pat.example", last_refused: "2026-11-05T09:30:00Z", attempts: 1 }]);
+    if (path === "people/u1/organisation-link" && request.method() === "POST")
+      return json(200, { ...PERSON, organisation_linked: true });
     if (path === "people/u1/access") return json(200, { ...PERSON, ...(request.postDataJSON() as object) });
     if (path === "people/u1/disable") return json(200, { ...PERSON, enabled: false });
     if (path === "people/u1/enable") return json(200, { ...PERSON, enabled: true });
@@ -195,6 +199,23 @@ test("a person is removed by keyboard once the removal is confirmed", async ({ p
   await expect(page.getByText("Demo Analyst (osprey-demo-analyst) was removed.", { exact: false })).toBeVisible();
   expect(asked).toContain("DELETE people/u1");
   registerCovered(REGISTRY, "remove-a-person-by-keyboard");
+});
+
+// ADR-112 Amendment 3 (build order step 33 (b)): a refused organisation arrival joined, by keyboard.
+test("a refused organisation arrival is joined to an account by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/organisation-link")) sent.push(request.postDataJSON());
+  });
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Join pat.example");
+  await expect(page.getByRole("group", { name: "Join pat.example" })).toContainText("the same person");
+  await press(page, "Confirm joining pat.example");
+  await expect(page.getByText("pat.example is joined to osprey-demo-analyst.", { exact: false })).toBeVisible();
+  expect(asked).toContain("POST people/u1/organisation-link");
+  expect(sent).toEqual([{ subject: "sub-1" }]);
+  registerCovered(REGISTRY, "join-an-organisation-arrival-by-keyboard");
 });
 
 test("a demo pack's command is copied by keyboard", async ({ page, context }) => {

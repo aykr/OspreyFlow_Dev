@@ -459,6 +459,70 @@ def test_a_deployment_without_the_organisations_provider_gets_no_flow(
     assert _flow_writes(keycloak) == 0
 
 
+# --- ADR-112 Amendment 3 (b), build order step 33: the realm keeps its record of a refusal --------
+
+
+def test_a_realm_whose_events_were_off_records_refused_arrivals_and_nothing_else(
+    keycloak: FlowKeycloak,
+) -> None:
+    """Admin -> People reads Keycloak's record of each refused first sign-in to offer the join; the
+    realm keeps that one kind for seven days, and does not start recording everyone's sign-ins."""
+    from harness.realm import ARRIVAL_EVENT, ARRIVAL_EVENTS_SECONDS
+
+    lines = _identity(keycloak)
+    assert keycloak.events_config["eventsEnabled"] is True
+    assert keycloak.events_config["enabledEventTypes"] == [ARRIVAL_EVENT]
+    assert keycloak.events_config["eventsExpiration"] == ARRIVAL_EVENTS_SECONDS == 604800
+    assert keycloak.events_config["eventsListeners"] == ["jboss-logging"], "kept as it was"
+    assert any("recorded for seven days" in line for line in lines), lines
+    def writes() -> int:
+        return sum(1 for verb, path in keycloak.calls
+                   if verb == "PUT" and path.endswith("/events/config"))  # fmt: skip
+
+    before = writes()
+    assert any("already recorded" in line for line in _identity(keycloak))
+    assert writes() == before, "a second run writes nothing"
+
+
+def test_events_an_administrator_turned_on_are_kept_with_the_refusal_added(
+    keycloak: FlowKeycloak,
+) -> None:
+    from harness.realm import ARRIVAL_EVENT
+
+    keycloak.events_config.update(eventsEnabled=True, enabledEventTypes=["LOGIN_ERROR"],
+                                  eventsExpiration=3600)  # fmt: skip
+    _identity(keycloak)
+    assert keycloak.events_config["enabledEventTypes"] == ["LOGIN_ERROR", ARRIVAL_EVENT]
+    assert keycloak.events_config["eventsExpiration"] == 3600
+
+
+def test_a_deployment_without_the_organisations_provider_keeps_its_events_as_they_were(
+    keycloak: FlowKeycloak,
+) -> None:
+    before = dict(keycloak.events_config)
+    token = keycloak_admin.admin_token(
+        issuer=ISSUER, admin_user="admin", admin_password=ADMIN_PASSWORD
+    )
+    register_sign_in.ensure_identity(
+        issuer=ISSUER, realm="osprey", token=token,
+        config=OspreyConfig.model_validate({"network": {"public_origin": "http://localhost:9999"}}),
+        values={},
+    )  # fmt: skip
+    assert keycloak.events_config == before
+
+
+def test_the_conduit_is_told_the_organisations_sign_in_only_when_there_is_one() -> None:
+    from harness.render import render
+
+    def env(config: OspreyConfig) -> str:
+        return render(config, resolver=lambda _image: "sha256:" + "0" * 64).artefacts[
+            "deployment.env"
+        ]
+
+    assert f"OSPREY_ORGANISATION_SIGN_IN={ALIAS}" in env(_organisation_config())
+    assert "OSPREY_ORGANISATION_SIGN_IN" not in env(OspreyConfig.model_validate({}))
+
+
 @pytest.mark.parametrize("brand", ["ospreyflow", "govuk"])
 def test_the_sign_in_page_says_what_happened_and_what_to_do(brand: str) -> None:
     appearance = AppearanceConfig.model_validate(

@@ -523,18 +523,48 @@ def organisation_provider(config: OspreyConfig) -> dict[str, Any] | None:
     }
 
 
+#: ADR-112 Amendment 3 (b): Keycloak's record of a first sign-in through the organisation that
+#: the flow refused (step 28 (e)'s *Deny Access*), kept by the realm's events for
+#: `ARRIVAL_EVENTS_SECONDS` and read by Admin -> People to offer the join. Measured on Keycloak
+#: 26.0: its `identity_provider_identity` is the brokered username and nothing else names the
+#: person, so the provider's username-template mapper below puts their id there too.
+ARRIVAL_EVENT = "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR"
+#: Seven days: long enough for an administrator to act on a refusal, short enough that the record
+#: of who tried to sign in (with their address) is not kept beyond its use.
+ARRIVAL_EVENTS_SECONDS = 7 * 24 * 3600
+
+
 def organisation_provider_mappers(alias: str) -> list[dict[str, Any]]:
     """`ORGANISATION_ARRIVAL_ATTRIBUTES`, as Keycloak's hardcoded-attribute mappers on the
-    provider, applied once, when the person first arrives."""
+    provider, applied once, when the person first arrives; and two username-template mappers
+    (ADR-112 Amendment 3 (b)): the brokered username becomes "<preferred_username> <sub>", so a
+    refused arrival's record carries the organisation's id for them — what a join is made with —
+    while the new account's own username stays `preferred_username`, as before."""
     return [
+        *(
+            {
+                "name": f"osprey-arrival-{attribute.replace('_', '-')}",
+                "identityProviderAlias": alias,
+                "identityProviderMapper": "hardcoded-attribute-idp-mapper",
+                "config": {"attribute": attribute, "attribute.value": value, "syncMode": "IMPORT"},
+            }
+            for attribute, value in ORGANISATION_ARRIVAL_ATTRIBUTES.items()
+        ),
         {
-            "name": f"osprey-arrival-{attribute.replace('_', '-')}",
+            "name": "osprey-arrival-identity",
             "identityProviderAlias": alias,
-            "identityProviderMapper": "hardcoded-attribute-idp-mapper",
-            "config": {"attribute": attribute, "attribute.value": value, "syncMode": "IMPORT"},
-        }
-        for attribute, value in ORGANISATION_ARRIVAL_ATTRIBUTES.items()
-    ]
+            "identityProviderMapper": "oidc-username-idp-mapper",
+            "config": {"template": "${CLAIM.preferred_username} ${CLAIM.sub}",
+                       "target": "BROKER_USERNAME", "syncMode": "IMPORT"},
+        },
+        {
+            "name": "osprey-arrival-username",
+            "identityProviderAlias": alias,
+            "identityProviderMapper": "oidc-username-idp-mapper",
+            "config": {"template": "${CLAIM.preferred_username}", "target": "LOCAL",
+                       "syncMode": "IMPORT"},
+        },
+    ]  # fmt: skip
 
 
 def render_realm(

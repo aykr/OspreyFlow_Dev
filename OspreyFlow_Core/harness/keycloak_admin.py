@@ -26,7 +26,8 @@ from typing import Any
 
 #: `manage-users` and `manage-clients` (ADR-112 Amendment 1): the Admin area's People and roles and
 #: Dashboards, through the Conduit's own account so every change passes its right check and audit.
-REQUIRED_ROLES = ("impersonation", "view-users", "manage-users", "manage-clients")
+#: `view-events` (Amendment 3 (b)): the refused organisation arrivals People offers to join.
+REQUIRED_ROLES = ("impersonation", "view-users", "manage-users", "manage-clients", "view-events")
 
 
 class RealmConfigurationFailed(RuntimeError):
@@ -579,6 +580,38 @@ def ensure_identity_provider(
         f"organisation sign-in {alias}: {done}, its client credential set from the deployment's "
         "settings; people arriving through it have no role until an administrator grants one"
     )
+
+
+def ensure_arrival_events(*, issuer: str, realm: str, token: str) -> str:
+    """The realm keeps its record of a refused first sign-in through the organisation (ADR-112
+    Amendment 3 (b); `realm.ARRIVAL_EVENT`), for `realm.ARRIVAL_EVENTS_SECONDS`, so Admin -> People
+    can offer the join. A realm whose events were off keeps that one type and no other — it does
+    not start recording everyone's sign-ins; one whose events an administrator turned on keeps its
+    own choice, with this type added. Safe to repeat: a realm already so is not written."""
+    from harness.realm import ARRIVAL_EVENT, ARRIVAL_EVENTS_SECONDS
+
+    url = f"{issuer}/admin/realms/{realm}/events/config"
+    status, held = _call(url, token=token)
+    if status != 200 or not isinstance(held, dict):
+        raise RealmConfigurationFailed(
+            f"Keycloak did not give the realm's events settings ({status})"
+        )
+    wanted = dict(held)
+    if not held.get("eventsEnabled"):
+        wanted.update(eventsEnabled=True, enabledEventTypes=[ARRIVAL_EVENT])
+    elif ARRIVAL_EVENT not in (held.get("enabledEventTypes") or [ARRIVAL_EVENT]):
+        wanted["enabledEventTypes"] = [*held["enabledEventTypes"], ARRIVAL_EVENT]
+    if not held.get("eventsExpiration"):
+        wanted["eventsExpiration"] = ARRIVAL_EVENTS_SECONDS
+    if wanted == held:
+        return "refused organisation sign-ins: already recorded"
+    status, _ = _call(url, token=token, data=wanted, method="PUT")
+    if status not in (200, 204):
+        raise RealmConfigurationFailed(
+            f"Keycloak refused the realm's events settings ({status}); refused organisation "
+            "sign-ins would not be offered for joining in Admin, People and roles"
+        )
+    return "refused organisation sign-ins: recorded for seven days, for Admin to join"
 
 
 def ensure_first_sign_in_flow(*, issuer: str, realm: str, token: str, flow: dict[str, Any]) -> str:

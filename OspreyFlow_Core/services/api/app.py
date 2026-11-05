@@ -125,6 +125,8 @@ from schemas.admin import (
     DemoPackStatus,
     EmbeddedDashboard,
     InviteInput,
+    OrganisationArrival,
+    OrganisationLinkInput,
     PauseScheduleInput,
     PersonAccount,
     RegisteredDashboard,
@@ -1035,8 +1037,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-112: the Admin area's people and dashboards, through the Conduit's own account.
     # ADR-114 Amendment 5: invitations by the identity provider's own email when the deployment has
     # a mail server (rendered from the install answers), else by a one-time code.
+    # ADR-112 Amendment 3 (b): the organisation's sign-in, whose refused arrivals can be joined.
     app.state.identity_admin = IdentityAdmin(
-        config, by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true"
+        config,
+        by_email=os.environ.get("OSPREY_SIGN_IN_EMAIL", "").lower() == "true",
+        organisation=os.environ.get("OSPREY_ORGANISATION_SIGN_IN") or None,
     )
     # ADR-111 Amendment 3: Superset dashboards inside the Glass; None when not configured.
     superset_settings = SupersetSettings.from_env()
@@ -10257,6 +10262,44 @@ async def remove_person_route(
     await audit.record(principal=principal, action="remove_person",
                        resolved_query={"user_id": user_id, "username": person.username,
                                        "name": person.name, "email": person.email},
+                       result_cardinality=1)  # fmt: skip
+    return person
+
+
+@app.get(
+    "/v1/admin/organisation-arrivals", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def list_organisation_arrivals_route(
+    principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+) -> list[OrganisationArrival]:
+    """Who the organisation's sign-in refused for a held email address and who is not yet joined
+    to an account (ADR-112 Amendment 3 (b)), from the identity provider's own record; empty on a
+    deployment with no sign-in through an organisation."""
+    arrivals = await identity_admin.list_arrivals()
+    await audit.record(principal=principal, action="list_organisation_arrivals",
+                       resolved_query={}, result_cardinality=len(arrivals))  # fmt: skip
+    return arrivals
+
+
+@app.post(
+    "/v1/admin/people/{user_id}/organisation-link",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def link_organisation_account_route(
+    user_id: str,
+    body: OrganisationLinkInput,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> PersonAccount:
+    """A refused organisation arrival joined, deliberately, to this account (ADR-112 Amendment 3
+    (b)): their next sign-in through the organisation lands here, with its roles. Refused in words:
+    an account already joined, an account OspreyFlow itself uses, an id no refused arrival holds."""
+    person, arrival = await identity_admin.link_organisation(user_id, body.subject)
+    await audit.record(principal=principal, action="link_organisation_account",
+                       resolved_query={"user_id": user_id, "username": person.username,
+                                       "subject": arrival.subject,
+                                       "provider_username": arrival.provider_username},
                        result_cardinality=1)  # fmt: skip
     return person
 

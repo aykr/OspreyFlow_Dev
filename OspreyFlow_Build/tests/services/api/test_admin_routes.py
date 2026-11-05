@@ -51,6 +51,7 @@ class _Audit:
 
 
 LAST_ADMIN = "admin.last is the only enabled person who can manage people."
+ALREADY_JOINED = "joined is already joined to an organisation account."
 
 
 class _Identity:
@@ -96,6 +97,24 @@ class _Identity:
         self.made.append(("removed", user_id))
         return PersonAccount(id=user_id, username="leaver", name="Lee Leaver", enabled=True,
                              roles=["analyst"], email="leaver@example.org")  # fmt: skip
+
+    # ADR-112 Amendment 3 (b)
+    async def list_arrivals(self) -> list[Any]:
+        from datetime import UTC, datetime
+
+        from schemas.admin import OrganisationArrival
+
+        self.made.append(("arrivals", ""))
+        return [OrganisationArrival(subject="sub-1", provider_username="pat.example",
+                                    last_refused=datetime(2026, 11, 5, 9, tzinfo=UTC), attempts=2)]
+
+    async def link_organisation(self, user_id: str, subject: str) -> tuple[PersonAccount, Any]:
+        if user_id == "joined":
+            raise PersonActionRefused("already_linked", ALREADY_JOINED)
+        (arrival,) = [a for a in await self.list_arrivals() if a.subject == subject]
+        self.made.append(("linked", f"{user_id}:{subject}"))
+        return PersonAccount(id=user_id, username="pat.local", name="Pat Local", enabled=True,
+                             roles=["analyst"], organisation_linked=True), arrival  # fmt: skip
 
     async def list_dashboards(self) -> list[DashboardIdentity]:
         return [DashboardIdentity(client_id="osprey-dashboard-board", account_id="sa-1"),
@@ -510,3 +529,45 @@ def test_a_refused_removal_is_said_in_words_and_not_audited(client: Any) -> None
     assert response.status_code == 409
     assert response.json() == {"error": "last_administrator", "detail": LAST_ADMIN}
     assert client.audit.records == []
+
+
+# --- ADR-112 Amendment 3 (build order step 33 (b)): join a refused organisation arrival --------
+
+
+@pytest.mark.parametrize("role", _every_grant())
+def test_only_a_role_that_manages_people_sees_or_joins_a_refused_arrival(
+    client: Any, role: str
+) -> None:
+    """Rule 4, over every role: the refused arrivals (people's names at the organisation) and the
+    join are `manage_people`'s; everyone else is 403 and the identity provider is never asked."""
+    _as(Principal(id="p-1", clearance="SECRET", org_unit="verify", roles=[role] if role else []))
+    listed = client.get("/v1/admin/organisation-arrivals")
+    joined = client.post("/v1/admin/people/u1/organisation-link", json={"subject": "sub-1"})
+    if _manages_people(role):
+        assert listed.status_code == 200 and listed.json()[0]["provider_username"] == "pat.example"
+        assert joined.status_code == 200 and joined.json()["organisation_linked"] is True
+    else:
+        assert (listed.status_code, joined.status_code) == (403, 403)
+        assert "pat.example" not in listed.text
+        assert client.identity.made == [] and client.audit.records == []
+
+
+def test_a_join_is_audited_with_both_accounts(client: Any) -> None:
+    _as(ADMIN)
+    response = client.post("/v1/admin/people/u1/organisation-link", json={"subject": "sub-1"})
+    assert response.status_code == 200, response.text
+    (record,) = client.audit.records
+    assert record["action"] == "link_organisation_account"
+    assert record["resolved_query"] == {"user_id": "u1", "username": "pat.local",
+                                        "subject": "sub-1",
+                                        "provider_username": "pat.example"}  # fmt: skip
+
+
+def test_a_refused_join_is_said_in_words_and_not_audited(client: Any) -> None:
+    _as(ADMIN)
+    response = client.post("/v1/admin/people/joined/organisation-link", json={"subject": "sub-1"})
+    assert response.status_code == 409
+    assert response.json() == {"error": "already_linked", "detail": ALREADY_JOINED}
+    assert client.audit.records == []
+    empty = client.post("/v1/admin/people/u1/organisation-link", json={"subject": ""})
+    assert empty.status_code == 422

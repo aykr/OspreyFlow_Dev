@@ -286,6 +286,8 @@ ROUTE_RIGHTS = {
     "enable_person_route": "manage_people",
     "reset_person_sign_in_route": "manage_people",
     "remove_person_route": "manage_people",
+    "list_organisation_arrivals_route": "manage_people",
+    "link_organisation_account_route": "manage_people",
     "list_demo_packs_route": "administer_system",
     "list_dashboards_route": "manage_dashboards",
     "register_dashboard_route": "manage_dashboards",

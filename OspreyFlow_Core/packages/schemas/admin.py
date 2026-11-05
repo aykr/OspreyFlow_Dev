@@ -24,6 +24,9 @@ class PersonAccount(BaseModel):
     #: An account OspreyFlow itself uses (the deploy's verify probes), not a person's: never
     #: removed or joined to an organisation account (ADR-112 Amendment 3).
     system_account: bool = False
+    #: Joined to an account at the organisation's identity provider: signing in through the
+    #: organisation lands here (ADR-112 Amendment 3 (b)).
+    organisation_linked: bool = False
 
 
 #: A sign-in name the identity provider takes (measured: spaces and most punctuation are refused).
@@ -58,6 +61,27 @@ class InviteInput(AccessInput):
     last_name: str = Field(default="", max_length=60)
     email: str | None = Field(default=None, pattern=EMAIL_PATTERN, max_length=254)
     roles: list[str] = Field(default_factory=list, max_length=64)
+
+
+class OrganisationArrival(BaseModel):
+    """Someone the organisation's sign-in refused because an OspreyFlow account already holds their
+    email address (ADR-114 Amendment 33, "Step 28 (e)"), not yet joined to any account — read from
+    the identity provider's record of the refusal (ADR-112 Amendment 3 (b))."""
+
+    #: The organisation's own id for the person (its tokens' `sub`): what a join is made with.
+    subject: str
+    #: Their name at the organisation (its tokens' `preferred_username`); empty when it gave none.
+    provider_username: str
+    last_refused: datetime
+    #: How many times they were refused while the identity provider keeps its record (seven days).
+    attempts: int
+
+
+class OrganisationLinkInput(BaseModel):
+    """`POST /v1/admin/people/{user_id}/organisation-link`: the refused arrival to join to this
+    account, by the organisation's id for them (an `OrganisationArrival`'s `subject`)."""
+
+    subject: str = Field(min_length=1, max_length=255)
 
 
 class SignInDelivery(BaseModel):
@@ -317,5 +341,6 @@ ALL_MODELS: list[type[BaseModel]] = [
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, EngineStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
-    ChangeScheduleInput, AdminDataset, DatasetEgressInput,
+    ChangeScheduleInput, AdminDataset, DatasetEgressInput, OrganisationArrival,
+    OrganisationLinkInput,
 ]  # fmt: skip

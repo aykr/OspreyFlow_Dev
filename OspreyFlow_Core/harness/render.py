@@ -1416,6 +1416,14 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_DASHBOARDS_ORIGIN={sites(config).dashboards}",
         # ADR-114 Amendment 5: invitations and resets by the identity provider's emailed link.
         *(["OSPREY_SIGN_IN_EMAIL=true"] if config.mail is not None else []),
+        # ADR-112 Amendment 3 (b): the organisation's sign-in, whose refused arrivals Admin ->
+        # People can join to an account. Not a secret: its alias, in the address it registers.
+        *(
+            [f"OSPREY_ORGANISATION_SIGN_IN={config.governance.organisation_sign_in}"]
+            if config.governance.organisation_sign_in
+            and config.governance.organisation_provider is not None
+            else []
+        ),
         # ADR-133 ruling 3: a new hotlist's audience in the alert queue, and whether its owner may
         # change it.
         f"OSPREY_HOTLIST_AUDIENCE={config.monitoring.hotlist_audience}",

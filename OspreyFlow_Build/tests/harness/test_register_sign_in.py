@@ -85,8 +85,18 @@ class FakeKeycloak:
                                 }}]  # fmt: skip
         self.service_account = {"id": "uid-sa", "username": "service-account-osprey-conduit"}
         self.realm_management_roles = ["impersonation", "view-users", "manage-users", "manage-clients",
-                                       "query-users", "realm-admin"]  # fmt: skip
+                                       "query-users", "view-events", "manage-events",
+                                       "realm-admin"]  # fmt: skip
         self.granted: list[str] = ["impersonation", "view-users"]
+        # The realm's events settings as Keycloak 26.0 holds them on a new realm (measured, step
+        # 33): off, with its long default list of types.
+        self.events_config: dict[str, Any] = {
+            "eventsEnabled": False, "eventsListeners": ["jboss-logging"],
+            "enabledEventTypes": ["LOGIN", "LOGIN_ERROR", "REGISTER",
+                                  "IDENTITY_PROVIDER_FIRST_LOGIN",
+                                  "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR", "CODE_TO_TOKEN"],
+            "adminEventsEnabled": False, "adminEventsDetailsEnabled": False,
+        }  # fmt: skip
 
     def call(
         self,
@@ -141,6 +151,14 @@ class FakeKeycloak:
                 self.realm = {**self.realm, **data}
                 return 204, ""
             return 200, dict(self.realm)
+        if route == "/events/config":
+            if verb == "GET":
+                return 200, dict(self.events_config)
+            types = data.get("enabledEventTypes", []) if isinstance(data, dict) else None
+            if not isinstance(types, list):
+                return 400, {"error": "unknown events settings"}
+            self.events_config = dict(data)
+            return 204, ""
         if route.startswith("/clients?clientId="):
             wanted = route.split("=", 1)[1]
             return 200, [c for c in [*self.clients.values(), *self.system_clients] if c["clientId"] == wanted]
@@ -663,8 +681,9 @@ def test_a_refresh_grants_the_conduits_account_the_roles_it_lacks(tmp_path: Path
     `view-users` — grants are made at apply, and `make refresh` never revisited them, so the Admin
     area's People and roles and Dashboards would have been refused on any existing deployment."""
     lines = _register(_env(tmp_path))
-    assert "the Conduit's account granted manage-clients, manage-users" in lines
-    assert sorted(keycloak.granted) == ["impersonation", "manage-clients", "manage-users", "view-users"]
+    assert "the Conduit's account granted manage-clients, manage-users, view-events" in lines
+    assert sorted(keycloak.granted) == [
+        "impersonation", "manage-clients", "manage-users", "view-events", "view-users"]  # fmt: skip
     assert "realm-admin" not in keycloak.granted
     assert "the Conduit's account already holds its roles" in _register(_env(tmp_path))
 

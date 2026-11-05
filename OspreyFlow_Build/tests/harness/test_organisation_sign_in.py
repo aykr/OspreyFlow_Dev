@@ -560,7 +560,7 @@ def test_repair_sign_in_sets_the_brokers_client_secret_again(stack: Stack) -> No
     lines = _register(stack)
     assert any("organisation sign-in org: registered" in line for line in lines), lines
     status, mappers = keycloak_admin._call(f"{base}/mappers", token=token)
-    assert status == 200 and {m["config"]["attribute"] for m in mappers} == set(
+    assert status == 200 and {m["config"].get("attribute") for m in mappers} - {None} == set(
         ORGANISATION_ARRIVAL_ATTRIBUTES
     )
     outcome = sign_in(stack)
@@ -773,7 +773,7 @@ def _identity_admin(stack: Stack) -> Any:
         oidc_token_exchange_client_id=CONDUIT_CLIENT_ID,
         oidc_token_exchange_client_secret=stack.values["OSPREY_OIDC_CLIENT_SECRET"],
         oidc_admin_users_url=f"{stack.deployment.origin}/admin/realms/osprey/users",
-    ))  # fmt: skip
+    ), organisation=ALIAS)  # fmt: skip
 
 
 def _user_id(stack: Stack, username: str) -> str:
@@ -811,3 +811,63 @@ def test_a_removed_account_frees_its_email_for_the_organisation_arrival(stack: S
     arrived = sign_in(stack)
     assert arrived.tokens is not None, (arrived.visited, _said(arrived))
     assert _principal(stack, arrived.tokens["access_token"]).roles == []
+
+
+def _org_subject(stack: Stack) -> str:
+    """The organisation's own id for the person: its tokens' `sub`."""
+    token = _admin(stack.org)
+    status, found = keycloak_admin._call(
+        f"{stack.org.origin}/admin/realms/{ORG_REALM}/users?username={PERSON['username']}"
+        "&exact=true", token=token,
+    )  # fmt: skip
+    assert status == 200 and found, (status, found)
+    return str(found[0]["id"])
+
+
+def test_an_administrator_joins_a_refused_arrival_who_then_lands_in_the_account(
+    stack: Stack,
+) -> None:
+    """ADR-112 Amendment 3 (b), against Keycloak 26.0: the refusal is offered in Admin -> People
+    by the organisation's own id for the person (read from Keycloak's record of it); the join is
+    Keycloak's federated identity link; the next sign-in through the organisation lands in the
+    existing account, with its roles — and without stopping at "Update password" for a code the
+    person was never going to use. A second join of the same account is refused in words."""
+    from services.api.identity_admin import PersonActionRefused
+
+    _register(stack)
+    _forget(stack, PERSON["username"])
+    _forget(stack, "pat.local")
+    _invite(stack, "pat.local", PERSON["email"])
+    local = _user_id(stack, "pat.local")
+    subject = _org_subject(stack)
+    try:
+        assert sign_in(stack).tokens is None
+        admin = _identity_admin(stack)
+
+        async def join() -> None:
+            try:
+                waiting = {a.subject: a for a in await admin.list_arrivals()}
+                assert subject in waiting, waiting
+                assert waiting[subject].provider_username == PERSON["username"]
+                await admin.set_roles(local, ["analyst"])
+                person, _ = await admin.link_organisation(local, subject)
+                assert (person.username, person.organisation_linked) == ("pat.local", True)
+                with pytest.raises(PersonActionRefused) as again:
+                    await admin.link_organisation(local, subject)
+                assert again.value.error == "already_linked"
+                assert subject not in {a.subject for a in await admin.list_arrivals()}
+                people = {p.username: p for p in await admin.list_people()}
+                assert people["pat.local"].organisation_linked is True
+                assert people["osprey-verify-probe"].organisation_linked is False
+            finally:
+                await admin.aclose()
+
+        asyncio.run(join())
+        (link,) = _links(stack, "pat.local")
+        assert (link["identityProvider"], link["userId"]) == (ALIAS, subject)
+        joined = sign_in(stack)
+        assert joined.tokens is not None, (joined.visited, _said(joined))
+        principal = _principal(stack, joined.tokens["access_token"])
+        assert (principal.id, principal.roles) == (local, ["analyst"])
+    finally:
+        _forget(stack, "pat.local")

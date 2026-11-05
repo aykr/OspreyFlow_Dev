@@ -8,6 +8,7 @@ import type {
   DashboardIdentity,
   DemoPackStatus,
   InviteInput,
+  OrganisationArrival,
   PersonAccount,
   RegisteredDashboard,
   ScheduleRunView,
@@ -80,6 +81,10 @@ export const resetSignIn = (api: AdminApi, userId: string) =>
 // ADR-112 Amendment 3: a person's account removed from the identity provider.
 export const removePerson = (api: AdminApi, userId: string) =>
   call<PersonAccount>(api, `people/${encodeURIComponent(userId)}`, { method: "DELETE" });
+// ADR-112 Amendment 3 (b): the organisation's refused arrivals, and joining one to an account.
+export const listArrivals = (api: AdminApi) => call<OrganisationArrival[]>(api, "organisation-arrivals");
+export const linkOrganisation = (api: AdminApi, userId: string, subject: string) =>
+  call<PersonAccount>(api, person(userId, "organisation-link"), { method: "POST", body: JSON.stringify({ subject }) });
 export const listDashboards = (api: AdminApi) => call<DashboardIdentity[]>(api, "dashboards");
 export const registerDashboard = (api: AdminApi, name: string, clearance: string, orgUnit: string) =>
   call<RegisteredDashboard>(api, "dashboards", {

@@ -25,6 +25,7 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       const answered = handler(path, init);
       if (answered) return answered;
       if (path === "people") return json(200, [PERSON]);
+      if (path === "organisation-arrivals") return json(200, []);
       if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (JSON.parse(String(init?.body)) as { roles: string[] }).roles });
       if (path === "dashboards" && init?.method === "POST")
         return json(201, { dashboard: { client_id: "osprey-dashboard-board", account_id: "sa-1", clearance: "OFFICIAL", org_unit: "verify" }, secret: "s3cret" });
@@ -511,5 +512,69 @@ describe("people: remove", () => {
     place(["manage_people"]);
     await screen.findByRole("button", { name: "Remove osprey-demo-analyst" });
     expect(screen.queryByRole("button", { name: "Remove osprey-verify-probe" })).toBeNull();
+  });
+});
+
+// ADR-112 Amendment 3 (build order step 33 (b)): a refused organisation arrival joined to an account.
+const ARRIVAL = { subject: "sub-1", provider_username: "pat.example", last_refused: "2026-11-05T09:30:00Z", attempts: 2 };
+
+describe("people: join a refused organisation arrival", () => {
+  it("offers the arrival, and joins it only once the words are confirmed", async () => {
+    const sent = serve((path, init) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people/u1/organisation-link" && init?.method === "POST") return json(200, { ...PERSON, organisation_linked: true });
+      return null;
+    });
+    place(["manage_people"]);
+    const section = await screen.findByRole("region", { name: "Refused organisation sign-ins" });
+    expect(section.textContent).toContain("pat.example");
+    expect(section.textContent).toContain("Refused 2 times, last at 2026-11-05 09:30 UTC");
+    fireEvent.click(within(section).getByRole("button", { name: "Join pat.example" }));
+    const asked = screen.getByRole("group", { name: "Join pat.example" });
+    expect(asked.textContent).toContain("Join pat.example to Demo Analyst (osprey-demo-analyst)?");
+    expect(asked.textContent).toContain("only if you are sure they are the same person");
+    expect(sent.some((s) => s.path.endsWith("organisation-link"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm joining pat.example" }));
+    expect(await screen.findByText(/pat.example is joined to osprey-demo-analyst/)).toBeTruthy();
+    expect(sent.find((s) => s.path === "POST people/u1/organisation-link")?.body).toEqual({ subject: "sub-1" });
+    expect(screen.queryByRole("region", { name: "Refused organisation sign-ins" })).toBeNull();
+    expect(screen.getByText("Signs in through the organisation")).toBeTruthy();
+  });
+
+  it("offers no account OspreyFlow itself uses, and none already joined", async () => {
+    serve((path) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people")
+        return json(200, [
+          PERSON,
+          { id: "u8", username: "joined.person", name: "Joined Person", enabled: true, roles: [], organisation_linked: true },
+          { id: "u9", username: "osprey-verify-probe", name: "osprey-verify-probe", enabled: true, roles: [], system_account: true },
+        ]);
+      return null;
+    });
+    place(["manage_people"]);
+    const choice = (await screen.findByLabelText("Account to join pat.example to")) as HTMLSelectElement;
+    expect([...choice.options].map((o) => o.textContent)).toEqual(["Demo Analyst (osprey-demo-analyst)"]);
+  });
+
+  it("says a refused join in the Conduit's words", async () => {
+    const words = "osprey-demo-analyst is already joined to an organisation account.";
+    serve((path, init) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people/u1/organisation-link" && init?.method === "POST") return json(409, { error: "already_linked", detail: words });
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Join pat.example" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm joining pat.example" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+  });
+
+  it("shows nothing when nobody was refused", async () => {
+    serve();
+    place(["manage_people"]);
+    await screen.findByText("Demo Analyst");
+    expect(screen.queryByRole("region", { name: "Refused organisation sign-ins" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
