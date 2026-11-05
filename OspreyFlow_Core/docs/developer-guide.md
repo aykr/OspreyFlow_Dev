@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.25** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.26** · 2026-11-05 · For OspreyFlow v0.4.11 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.26 | 2026-11-05 | Describes v0.4.11. No change to its content. |
 | 1.25 | 2026-11-04 | The owner's rulings (build order step 30; spec 09 §5; ADR-127 Amendment 47): §3.8, Verify reads the files a run reads (a source node's own file included) and records each with a hash of its contents; §3.9, **Run now** runs on exactly the file Verify checked, and refuses in words, loading nothing, when that file has changed since or another file is named — the Run panel no longer takes a file; the run's answer no longer carries the server's path to the file. §3.6, the Map names each link type by its label ("Held at"), never its key. |
 | 1.24 | 2026-11-04 | As found on the first server (ADR-114 Amendment 35 point 7): §9.5, Valkey's data in its container is moved too (through a committed image); the move checks each store apart and never replaces a container or writes a file of the deployment's; a refused move has the caller put back every file it wrote (`FilesHeld`); and the tests that fail if any of it breaks. |
 | 1.23 | 2026-11-04 | New §9.5, where the stores keep their data in a Lite or Small `compose.yaml` (ADR-114 Amendment 35): each store's named volume, what stays on its image's unnamed volumes, the one-time move (`harness/store_volumes.py`) and the tests that fail if a store loses its volume. |

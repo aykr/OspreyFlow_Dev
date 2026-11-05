@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.53** · 2026-11-05 · For OspreyFlow v0.4.10 · Issued
+**Version 1.54** · 2026-11-05 · For OspreyFlow v0.4.11 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.54 | 2026-11-05 | Describes v0.4.11. No change to its content. |
 | 1.53 | 2026-11-05 | The owner's rulings (build order step 33; ADR-112 Amendment 3, ADR-114 Amendment 33 "Step 33"): §5a.1, someone whose email an account holds can be joined to that account in Admin → People, or the account removed; joining by email (`sign_in.organisation.trust_email`, off by default) and its account-takeover risk; §7 the answer; §8 what `repair-sign-in` now also does; §9.1 and new §9.7, removing someone and joining an organisation account; §16 the refusal's new answers, an empty *Refused organisation sign-ins*, the Conduit needing `view-events`, a refused removal, and the joining-by-email warning. Appendix A: `governance.organisation_provider.trust_email`. |
 | 1.52 | 2026-11-04 | The owner's ruling (build order step 29; ADR-114 Amendment 34): §14, an offline bundle carries one platform's images, `linux/amd64` unless `ospreyflow update --make-bundle FILE --platform linux/arm64` names the other, from any machine; any other platform is refused, and `update --from` refuses a bundle for another platform than its machine's, in words, before anything is checked or loaded. |
 | 1.51 | 2026-11-04 | The owner's rulings on sign-in (build order step 28): §5a.1, the welcome page's button names the organisation's provider by `sign_in.organisation.label` (ADR-115 Amendment 5), and someone whose email an OspreyFlow account already holds is told so in words and never joined to it (ADR-114 Amendment 33); §8, `repair-sign-in` also gives the workspace's client no refresh token (ADR-050 Amendment 2) and registers the organisation's first sign-in; §9.1, Admin → System's **Acting for people** says when the Conduit cannot act for people and to run `ospreyflow repair-sign-in` (ADR-114 Amendment 36); §16, that line, an arrival whose email is held, and windows that ask to sign in again after about half an hour left alone (a window renews only after the person has done something, ADR-050 Amendment 2). Appendix A: `governance.organisation_sign_in` and `governance.organisation_provider.label` name the button. |

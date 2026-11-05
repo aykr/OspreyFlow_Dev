@@ -6,6 +6,8 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.4.11 — 2026-11-05
+
 - **Remove a person in Admin → People.** *Remove*, once confirmed in words, deletes the account
   from the identity provider: they can no longer sign in, and their sign-in name and email address
   are free again. What they made keeps their id, shown in place of their name; the audit log says
@@ -116,6 +118,10 @@ update. Work not yet in a release is listed under *Unreleased*.
   OspreyFlow account and to sign in with it or ask their administrator. Nothing is made, and the
   accounts are never joined by email: an organisation's email is not proof of owning the account.
   `ospreyflow repair-sign-in` puts this in place on an existing deployment.
+- Update with `ospreyflow update`. The first update moves the stores' data to named volumes once,
+  after its backup, and prints the old volumes it leaves in place; remove them once the deployment
+  works as before. Run `ospreyflow repair-sign-in` afterwards on a deployment that signs in through
+  an organisation, so its realm gains the new sign-in settings.
 
 ## v0.4.10 — 2026-11-04
 

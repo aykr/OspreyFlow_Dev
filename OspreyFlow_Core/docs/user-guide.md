@@ -14,10 +14,11 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.36** · 2026-11-05 · For OspreyFlow v0.4.10 · Issued
+**Version 1.37** · 2026-11-05 · For OspreyFlow v0.4.11 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.37 | 2026-11-05 | Describes v0.4.11. No change to its content. |
 | 1.36 | 2026-11-05 | The owner's rulings (build order step 33; ADR-112 Amendment 3): §2, when the sign-in page says your email already belongs to an OspreyFlow account, your administrator can join your organisation account to it, after which your organisation's sign-in takes you straight into that account. |
 | 1.35 | 2026-11-04 | The owner's ruling (ADR-091 Amendment 1; build order step 30): §5.6, the Inspector shows no identifier meant for a machine — no node id, no link Type ID, and no internal reference such as a place's site reference; properties are named as you read them ("Prison number"); a link's end that is not on the canvas is named in words. Held rows name their source file by its file name. |
 | 1.34 | 2026-11-04 | The owner's rulings (ADR-115 Amendment 5, ADR-050 Amendment 2, ADR-114 Amendment 33; build order step 28): §2, the organisation's sign-in button names the organisation's provider; what it means when the sign-in page says your email already belongs to an OspreyFlow account; staying signed in — a window renews its sign-in only while you are working in it, so one left alone asks you to sign in again when you come back, the page kept. |
