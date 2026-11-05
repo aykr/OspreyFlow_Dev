@@ -6,7 +6,10 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
-## v0.4.11 — 2026-11-05
+## v0.4.12 — 2026-11-05
+
+v0.4.11 was tagged but never released: its security scan stopped it (the first bullet below), so
+nothing was published under it. Everything meant for v0.4.11 is in this release.
 
 - **The NER image takes Debian's security fixes**, as every other image does: it had no `apt-get
   upgrade`, so a fix Debian made before the Python base image was rebuilt (apt's CVE-2026-109518)
