@@ -140,6 +140,8 @@ resumed session starts here.
 | S10 and S11 (re-audit) | Bind Lite to `127.0.0.1`; refuse `http://` for Small and Enterprise and Lite for a `.gov.uk` address (step 9e) |
 | Everyday deployment for the v4 captures | **2 November:** `ospreyflow start --build` on current `main`, then reseed only the prison case and the Ledger pack; the Enron case and the others untouched |
 
+**State at the end of the session (5 November):** every step done (32 withdrawn); v0.4.12 is the latest release; the test server runs it (private to the owner's IP, likely decommissioned before its certificate expires on 4 December). The owner's everyday deployment was backed up (10:07 and 10:15, in the git-ignored `OspreyFlow_Core/backups/`) and moved to named volumes at 10:09; the owner confirmed every case is there. Its old anonymous volumes are to be removed after a week of normal use. GOV.UK is stopped; its move happens on its next `start --build`. The hourly heartbeat is stopped.
+
 ## Open questions found during the run
 
 **Answered by the owner, 5 November:** 31 — leave the stream as it is; 32 — build all three (step 33); 33 — leave the remaining identifiers; step 25's deployment-wide resolution switch for an install with the Prison Intelligence pack — keep it; the release of steps 25–30 — later (step 34). The hourly heartbeat restarted at the owner's word.
