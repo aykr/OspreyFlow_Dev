@@ -25495,3 +25495,26 @@ Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R3 and R8 o
 Tests (phase 5): a case's packs equal its dataset's live model's (red with the stored column read
 instead); a PATCH of a case's packs is refused; a *Make live* adding FIBO brings the KYC figures to
 every case reading the dataset.
+
+### ADR-140, Amendment 1 (5 November 2026) — open questions 2, 3 and 4 ruled
+
+Status: accepted 5 November 2026 (the owner's answers to three multiple-choice questions, each the
+recommended option). ADR-140 and ADR-099 Amendment 12 are unchanged except where this says so.
+
+1. **Open question 2 — the SQL dialect is DuckDB SQL as is.** An expert-mode SQL transform is written
+   in DuckDB's own SELECT syntax; nothing is translated or restricted to a subset. The sandbox of
+   ADR-140 decision 12 still holds whole: one statement, a SELECT, no file or network functions, the
+   `_ref` columns kept (an aggregate carrying every input row's), a time and memory limit, the
+   person's own principal. Built in phase 8.
+2. **Open question 3 — saved patterns, hotlists and monitors move to the case.** Each belongs to the
+   case it was made in and is shared with the case team, as alerts already are; *Promote to the
+   dataset* makes one apply in every case reading the dataset. This replaces ADR-099 Amendment 12 item
+   7's "still belong to a dataset" for these three (Studio recipes and source files stay the
+   dataset's). A watch still raises an alert only on data of its case's dataset. Built in phase 5,
+   with an access test on every moved route (rule 4) and the migration of existing records dry-run
+   first.
+3. **Open question 4 — guided mode is the default.** Every person starts in guided mode and may switch
+   to expert mode as a preference. The expert-only steps still need `write_sql_transforms` (ADR-140
+   decision 3). Built in phase 6.
+
+Open questions 1 and 5 to 8 stay open.
