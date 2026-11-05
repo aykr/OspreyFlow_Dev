@@ -8,6 +8,9 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## v0.4.11 — 2026-11-05
 
+- **The NER image takes Debian's security fixes**, as every other image does: it had no `apt-get
+  upgrade`, so a fix Debian made before the Python base image was rebuilt (apt's CVE-2026-109518)
+  stopped this release's security scan on that image alone.
 - **Remove a person in Admin → People.** *Remove*, once confirmed in words, deletes the account
   from the identity provider: they can no longer sign in, and their sign-in name and email address
   are free again. What they made keeps their id, shown in place of their name; the audit log says
