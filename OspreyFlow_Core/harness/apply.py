@@ -74,6 +74,7 @@ from harness.realm import (
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
     generate_client_secret,
+    organisation_provider,
     render_realm_json,
 )
 from harness.render import (
@@ -1014,6 +1015,9 @@ def reapply(
         )
     previous_env = (out_dir / SECRETS_FILE).read_text(encoding="utf-8")
     held = _env_pairs(previous_env)
+    # ADR-114 Amendment 33, "Step 33": the organisation's sign-in as installed, read before the
+    # deployment's own copy of `osprey.yaml` is replaced.
+    signed_in_through = _installed_organisation_sign_in(out_dir)
     config, images_from = _like_the_installed(config, out_dir)
     keys = _keys_for_new_providers(config, environ, held, ask_secret)
     stage = out_dir.parent / f".{out_dir.name}.staging"
@@ -1063,7 +1067,40 @@ def reapply(
         )
     if moved.services:
         _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
+    wanted = organisation_provider(config)
+    if wanted is not None and wanted != signed_in_through:
+        # ADR-114 Amendment 33, "Step 33": a changed organisation sign-in (joining by email turned
+        # on or off, among others) reaches Keycloak, which reads none of the rendered files.
+        _register_organisation_sign_in(config_path, out_root, out_dir.name, realm)
     return restart
+
+
+def _installed_organisation_sign_in(out_dir: Path) -> dict[str, Any] | None:
+    """The organisation's provider as the installed deployment's own `osprey.yaml` names it, or None
+    (none, or a file this checkout cannot read, which counts as changed)."""
+    try:
+        return organisation_provider(load_config(out_dir / "osprey.yaml"))
+    except (OSError, yaml.YAMLError, ValidationError):
+        return None
+
+
+def _register_organisation_sign_in(
+    config_path: Path, out_root: Path, folder: str, realm: str
+) -> None:
+    """What `ospreyflow repair-sign-in --no-demo-accounts` runs: the identity provider's settings
+    only — no demo account is made or changed."""
+    from harness import register_sign_in
+
+    status = register_sign_in.main(
+        ["--config", str(config_path), "--out-root", str(out_root), "--profile", folder,
+         "--realm", realm, "--no-demo-accounts"]
+    )  # fmt: skip
+    if status != 0:
+        raise ApplyFailed(
+            "sign-in",
+            "the settings are applied, but the organisation's sign-in could not be brought up to "
+            "date with them (said above); run ospreyflow repair-sign-in once Keycloak answers",
+        )
 
 
 def reapply_main(

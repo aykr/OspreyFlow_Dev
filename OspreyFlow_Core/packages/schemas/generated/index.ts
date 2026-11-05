@@ -198,6 +198,8 @@ export type { DataFeed } from "./DataFeed";
 export type { ChangeScheduleInput } from "./ChangeScheduleInput";
 export type { AdminDataset } from "./AdminDataset";
 export type { DatasetEgressInput } from "./DatasetEgressInput";
+export type { OrganisationArrival } from "./OrganisationArrival";
+export type { OrganisationLinkInput } from "./OrganisationLinkInput";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

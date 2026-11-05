@@ -12167,6 +12167,123 @@ identities (R2), which hold no `INVESTIGATE`, read a case's POLE summary in the 
 feed: per-type counts of what the case holds, filtered for the reader. They already read the KYC
 figures, which are of the same kind.
 
+### ADR-112, Amendment 3 (5 November 2026) — Admin → People removes a person and joins an organisation account (build order step 33)
+
+**The owner's rulings of 5 November 2026** (open question 32): build all three of — removing a
+person, joining a refused organisation arrival to the existing account, and an opt-in join by email.
+This amendment holds the first two as Admin → People actions; the opt-in, and what Keycloak needs for
+the second, are ADR-114 Amendment 33's "Step 33". Both actions are behind `manage_people`, like every
+other People action (Amendment 1), and audited.
+
+#### (a) Remove a person
+
+**Decided *(mine, within the ruling)*: removing deletes the account in the identity provider.**
+Keeping an account but stopping its sign-in is already *Disable* (ADR-114 Amendment 5), so a
+"remove" that only disabled would be the same action under a second name. Removal is the other
+thing: the account is gone, its sign-in name and email address are free again — which is also what
+step 28 (e)'s refused arrival needs, when the administrator would rather the person arrive afresh
+through the organisation than be joined to the old account.
+
+1. **What happens.** `DELETE /v1/admin/people/{user_id}` → `IdentityAdmin.remove_person` → Keycloak's
+   `DELETE /users/{id}`, which also ends the person's sessions. Nothing OspreyFlow stores changes:
+   cases, alerts, recipes, assessments and history keep the person's id, and ADR-106 shows the id
+   where it used to show the name (the owner chose to leave unknown people shown by id). Case grants
+   held by the id stay inert (Keycloak's ids are UUIDs, never reissued). A case whose last Author is
+   removed is not stranded: ADR-052 decision 4's administrator safety net still manages its access.
+2. **The audit record says who the id was** — `remove_person` with the id, sign-in name, display name
+   and email as they were — so a page showing a removed person's id can be traced to a person.
+3. **Refused in words, before anything changes** (409, the answer's `error` and the administrator's
+   words in `detail`):
+   - **your own account** (`cannot_remove_yourself`), in the route, before the identity provider is
+     asked — as *Disable* already refuses;
+   - **an account OspreyFlow itself uses** (`not_a_person`): a client's service account (Keycloak
+     marks it `serviceAccountClientId`; the Conduit's, the dashboards') and the deploy's verify
+     probes `osprey-verify-probe` and `osprey-verify-revoked` (`identity_admin.CONDUIT_ACCOUNTS`,
+     held equal to `harness/realm.py`'s by a test). `PersonAccount.system_account` marks them, and
+     the Glass offers no *Remove* for them;
+   - **the last administrator** (`last_administrator`): a person who is enabled and whose roles
+     confer `manage_people` (the Admin role, or the single right), when no *other* enabled person's
+     do. Disabled administrators do not count. (The caller holds the right in their token, but a
+     token can outlive a change of role, so the identity provider's own record is what is counted.)
+4. **The Glass.** *Remove* on each person's row opens a confirmation in words — the account is
+   deleted, they can no longer sign in, their name and address become free, what they made shows
+   their id in place of their name, it cannot be undone, and *Disable* is the way to keep the account
+   — with *Remove the account* and *Keep it*. A refusal is said in the Conduit's words.
+5. **Tests**, red first: `tests/services/api/test_identity_admin.py`
+   `::test_removing_a_person_deletes_their_account_and_says_who_they_were`,
+   `::test_an_account_ospreyflow_itself_uses_is_never_removed`,
+   `::test_the_last_person_who_can_manage_people_is_not_removed`,
+   `::test_the_conduits_own_accounts_are_the_realms_verify_probes`; `test_admin_routes.py`
+   `::test_only_a_role_that_manages_people_removes_a_person` (rule 4: every role, every single right,
+   no role), `::test_a_removal_is_audited_with_who_the_id_was`,
+   `::test_an_administrator_cannot_remove_their_own_account`,
+   `::test_a_refused_removal_is_said_in_words_and_not_audited`; `test_route_rights.py`'s table;
+   `AdminPlace.test.tsx`'s "people: remove"; `keyboard/admin.spec.ts` "a person is removed by keyboard
+   once the removal is confirmed" (`remove-a-person-by-keyboard`, rule 13). Against a real Keycloak
+   26.0: `tests/harness/test_organisation_sign_in.py`
+   `::test_a_removed_account_frees_its_email_for_the_organisation_arrival`.
+
+#### (b) Join a refused organisation arrival to the existing account
+
+The person step 28 (e) refuses — they arrived through the organisation, and an OspreyFlow account
+already holds their email address — can now be joined to that account by an administrator, on
+purpose, with Keycloak's own federated identity link (`POST /users/{id}/federated-identity/{alias}`,
+the organisation's id for the person and their username there). Their next sign-in through the
+organisation lands in the existing account, with its roles, clearance and cases.
+
+1. **How the administrator gets the organisation's id for the person — decided *(mine)*: from
+   Keycloak's own record of the refusal, offered as a list, never typed.** Measured on Keycloak 26.0
+   (step 33): the realm's event for the refusal (`IDENTITY_PROVIDER_FIRST_LOGIN_ERROR`, error
+   `access_denied`) carries the provider alias and the *brokered username* — and nothing else that
+   names the person; a link made with the username and a wrong id does not let them in. So the
+   provider is given a username-template mapper that makes the brokered username
+   "`<preferred_username> <sub>`" (a second keeps the new account's own username
+   `preferred_username`, as before); the realm keeps that one kind of event for seven days; and the
+   Conduit's account gains `view-events` (ADR-114 Amendment 33, "Step 33", has the Keycloak side). The
+   rejected alternatives: asking the person for their id (Entra ID's `sub` is pairwise — nobody can
+   read it out), an administrator typing an id (an error joins the wrong person, or no one), and
+   Keycloak's account-linking pages (the person's, not the administrator's, and the reason step
+   28 (e) refused in words).
+2. **Admin → People's *Refused organisation sign-ins*** (`GET /v1/admin/organisation-arrivals`): one
+   line per organisation account refused in the last seven days and not since joined to any account —
+   its username at the organisation, how often, and when last — newest first. Nothing is shown when
+   there is none, or on a deployment with no sign-in through an organisation. The events' other
+   details (the address it came from) are never shown.
+3. **The join** (`POST /v1/admin/people/{user_id}/organisation-link`, body `{subject}`): the
+   administrator chooses the account and confirms in words — from the next sign-in they land in that
+   account, with its roles, clearance and cases; do it only if sure they are the same person, because
+   the organisation said only that its account carries the same address. **The Conduit accepts only
+   an id that is on the list at that moment** — it re-reads the refusals — so no id is ever taken on
+   trust. Audited (`link_organisation_account`: the account, its username, the organisation's id and
+   username). **An invited account whose password was never set** (Keycloak's pending
+   `UPDATE_PASSWORD`) loses its one-time code and that pending action — measured on 26.0, the action
+   otherwise stops the organisation sign-in at "Update password" — so the account is reached through
+   the organisation; one whose holder chose a password keeps it. Admin → People marks a joined account
+   "Signs in through the organisation" (`PersonAccount.organisation_linked`, from Keycloak's
+   `GET /users?idpAlias=`).
+4. **Refused in words, before anything changes** (409): an account already joined to the
+   organisation (`already_linked`; Keycloak's own 409 is never reached); an account OspreyFlow itself
+   uses (`not_a_person`); an id that is no refused arrival waiting (`no_such_arrival`) — which covers
+   an organisation account already joined to someone else; and a deployment with no sign-in through
+   an organisation (`no_organisation_sign_in`). **Measured on Keycloak 26.0: Keycloak itself accepts a
+   link for an unknown provider, a link on a service account, and one organisation account linked to
+   a second person (each 204)** — those refusals are the Conduit's alone, so the stand-in in
+   `test_identity_admin.py` accepts them too (rule 15).
+5. **Tests**, red first: `test_identity_admin.py`
+   `::test_a_refused_arrival_is_listed_once_by_the_organisations_id`,
+   `::test_joining_links_the_arrival_by_its_id_and_withdraws_an_unused_code`,
+   `::test_a_person_who_chose_their_own_password_keeps_it_when_joined`,
+   `::test_each_refused_join_is_said_in_words_and_links_nothing`,
+   `::test_without_an_organisation_nothing_is_offered_and_nothing_joined`,
+   `::test_the_refusal_read_is_the_one_the_realm_records`; `test_admin_routes.py`
+   `::test_only_a_role_that_manages_people_sees_or_joins_a_refused_arrival` (rule 4, every role),
+   `::test_a_join_is_audited_with_both_accounts`, `::test_a_refused_join_is_said_in_words_and_not_audited`;
+   `AdminPlace.test.tsx`'s "people: join a refused organisation arrival"; `keyboard/admin.spec.ts`
+   "a refused organisation arrival is joined to an account by keyboard"
+   (`join-an-organisation-arrival-by-keyboard`). Against two real Keycloak 26.0:
+   `test_organisation_sign_in.py::test_an_administrator_joins_a_refused_arrival_who_then_lands_in_the_account`
+   (shown red without the mapper, without `view-events`, and with the pending action kept).
+
 ## ADR-113 — Trend reports, case report packs and their distribution; four demo personas — ACCEPTED
 
 Status: **accepted on the owner's rulings of 11 October 2026.** The owner asked that analysts "create
@@ -24043,6 +24160,92 @@ in OspreyFlow's words. **Decided (mine, within that ruling): never join by email
    `::test_the_sign_in_page_says_what_happened_and_what_to_do` (both brands). Against two real
    Keycloak 26.0, the login theme mounted as compose mounts it:
    `tests/harness/test_organisation_sign_in.py::test_an_arrival_whose_email_an_invited_account_holds_is_told_in_words_and_not_joined`.
+
+#### Step 33 (5 November 2026): joining a refused arrival, and an opt-in join by email
+
+**The owner's rulings of 5 November 2026** (open question 32) answer point 4's open question: Admin →
+People removes a person and joins a refused arrival to the existing account (ADR-112 Amendment 3),
+and a deployment may opt in to joining by email. What Keycloak needs for each:
+
+1. **The refusal's record carries the organisation's id for the person** (for ADR-112 Amendment 3
+   (b)). Measured on Keycloak 26.0: the event recorded for step 28 (e)'s refusal
+   (`IDENTITY_PROVIDER_FIRST_LOGIN_ERROR`, `access_denied`) names the person only by the brokered
+   username. `realm.organisation_provider_mappers` now adds two username-template mappers
+   (`oidc-username-idp-mapper`): `osprey-arrival-identity`, target `BROKER_USERNAME`, template
+   `${CLAIM.preferred_username} ${CLAIM.sub}` — the record reads "`pat.example 3514e934-…`" — and
+   `osprey-arrival-username`, target `LOCAL`, template `${CLAIM.preferred_username}`, so a new
+   account's username is what it was (both measured: the record carries the id; a new arrival is
+   `pat.example`). **Cost, disclosed:** the organisation must give `preferred_username` (Entra ID does,
+   with the `profile` scope this provider asks for); a provider that does not would make an account
+   with no username, refused by Keycloak, where before it fell back to the email.
+2. **The realm keeps that one record for seven days** (`keycloak_admin.ensure_arrival_events`,
+   `realm.ARRIVAL_EVENT`, `ARRIVAL_EVENTS_SECONDS`): on a realm whose events were off, events are
+   turned on for that one type only — the realm does not start recording everyone's sign-ins; on one
+   an administrator turned on, the type is added and their choice kept. Run by `ensure_identity`, so
+   by `install`, `repair-sign-in` and a restore, only with the organisation's provider.
+3. **The Conduit's account holds `view-events`** (`keycloak_admin.REQUIRED_ROLES`), granted by every
+   registration, and the Conduit is told the organisation's alias (`OSPREY_ORGANISATION_SIGN_IN` in
+   `deployment.env`, rendered only with the provider).
+4. **Tests**: `tests/harness/test_realm.py`
+   `::test_a_refused_arrivals_record_carries_the_organisations_id_not_the_accounts_name`;
+   `test_organisation_first_sign_in.py`
+   `::test_a_realm_whose_events_were_off_records_refused_arrivals_and_nothing_else`,
+   `::test_events_an_administrator_turned_on_are_kept_with_the_refusal_added`,
+   `::test_a_deployment_without_the_organisations_provider_keeps_its_events_as_they_were`,
+   `::test_the_conduit_is_told_the_organisations_sign_in_only_when_there_is_one`;
+   `test_register_sign_in.py::test_a_refresh_grants_the_conduits_account_the_roles_it_lacks` (now
+   with `view-events`); against real Keycloak 26.0, ADR-112 Amendment 3 (b)'s case.
+5. **Joining by email, opt-in (the owner's ruling (c)).** Point 1 of step 28 (e) said where a join by
+   email is safe and who decides; this is that switch, off by default.
+   - **The setting:** in the answers, `sign_in.organisation.trust_email: true` (only `true` or
+     `false` — "yes", the string "true", 1 and an empty value are refused in words); carried into
+     `osprey.yaml` as `governance.organisation_provider.trust_email`, written only when true, so a
+     deployment that never asked renders as before.
+   - **On:** the provider has `trustEmail: true` and names `ORGANISATION_JOIN_BY_EMAIL_FLOW`
+     (`osprey organisation first sign-in joined by email`, `realm.organisation_join_by_email_flow`):
+     *Review Profile*, then a REQUIRED sub-flow of *Create User If Unique* and *Automatically Set
+     Existing User* (`idp-auto-link`) as alternatives — Keycloak 26's own "automatically link
+     existing first login" shape. ***Review Profile* is `off`, not `missing`:** with `missing`, a
+     person whose provider gave no email would be asked to type one, and the account holding what
+     they typed would be joined to them; with `off` only the provider's own address is compared.
+     **Measured on 26.0:** the arrival lands in the account holding their email, no second account
+     is made; an invited account whose password was never set is joined and then asked for one
+     (its pending action — there is no administrator step to withdraw it, as there is in ADR-112
+     Amendment 3 (b)); a flow alias holding `,`, `(`, `:` or `;` is refused (400 — this flow's first
+     name had a comma; the stand-in now refuses the same).
+   - **Off (the default):** step 28 (e)'s refusal, `trustEmail: false`; and the join flow is
+     removed from the realm (`keycloak_admin.remove_first_sign_in_flow`, after the provider names
+     the refusal — Keycloak refuses to remove a flow a provider names), so no hand can point the
+     provider back at it unnoticed. The refusal flow is left in place while joining is on (unused,
+     harmless).
+   - **Kept matching the setting either way** by every path that registers the identity provider:
+     `ospreyflow install` and `repair-sign-in` (`ensure_identity`), a restore (its
+     `_register_sign_in` runs the same registration), and now **`ospreyflow apply`**: Keycloak reads
+     none of the rendered files, so `apply.reapply` compares the organisation's provider as the
+     installed `osprey.yaml` names it with the new one and, when they differ, runs `repair-sign-in
+     --no-demo-accounts`'s registration (identity settings only); a refusal there fails the apply
+     naming `ospreyflow repair-sign-in`.
+   - **Said, every time:** the doctor (`organisation-trust-email`, a warning that does not stop an
+     install — the security officer has decided it — from the answers' setting, or with no answers
+     from the installed `osprey.yaml`), the install again after the addresses to register, and every
+     registration's own output — each naming the account takeover and the 2023 "nOAuth" class, and
+     what keeping it on needs: the security officer's written sign-off that every address the
+     provider gives is verified and cannot be changed by its holder.
+   - **Tests**, red first: `test_organisation_first_sign_in.py`
+     `::test_with_joining_by_email_on_an_arrival_is_joined_to_the_account_holding_the_email`,
+     `::test_the_join_by_email_flow_never_asks_the_person_for_an_address`,
+     `::test_turning_joining_by_email_off_puts_the_refusal_back_and_removes_the_join`;
+     `tests/cli/test_answers.py::test_joining_by_email_is_off_unless_the_answers_say_true`,
+     `::test_joining_by_email_takes_only_true_or_false`; `tests/cli/test_doctor.py`
+     `::test_joining_by_email_is_warned_of_naming_the_takeover_and_never_stops_the_install`,
+     `::test_the_doctor_warns_of_an_installed_deployment_that_joins_by_email`;
+     `tests/cli/test_install_small_server.py`
+     `::test_an_install_that_joins_by_email_warns_at_the_doctor_and_again_at_the_end`;
+     `tests/harness/test_apply_changed_settings.py`
+     `::test_joining_by_email_turned_on_or_off_reaches_the_identity_provider`; against two real
+     Keycloak 26.0, `test_organisation_sign_in.py`
+     `::test_joining_by_email_joins_an_arrival_when_on_and_refuses_again_when_off` (shown red with
+     no auto-link step, and with the join flow left behind).
 
 ### ADR-114, Amendment 34 (3 November 2026) — the offline bundle carries cosign; the release's lock names every optional image (build order step 20a)
 

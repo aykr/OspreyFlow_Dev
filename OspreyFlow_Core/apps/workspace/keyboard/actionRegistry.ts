@@ -752,6 +752,9 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "edit-a-persons-access-by-keyboard",
   "disable-and-enable-a-person-by-keyboard",
   "reset-a-persons-sign-in-by-keyboard",
+  // ADR-112 Amendment 3 (build order step 33): remove a person.
+  "remove-a-person-by-keyboard",
+  "join-an-organisation-arrival-by-keyboard",
   // ADR-114 Amendment 5 (B4d): the Demo packs tab.
   "copy-a-demo-pack-command-by-keyboard",
   // ADR-110 decision 8 (D4): Schedules and runs.

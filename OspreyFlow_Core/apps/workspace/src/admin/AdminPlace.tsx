@@ -10,6 +10,7 @@ import type {
   DashboardIdentity,
   DemoPackStatus,
   EngineStatus,
+  OrganisationArrival,
   PersonAccount,
   SignInDelivery,
   SystemStatus,
@@ -22,12 +23,15 @@ import {
   disablePerson,
   enablePerson,
   invitePerson,
+  linkOrganisation,
+  listArrivals,
   listDashboards,
   listDatasets,
   listDemoPacks,
   listPeople,
   registerDashboard,
   removeDashboard,
+  removePerson,
   resetSignIn,
   setAccess,
   setDatasetEgress,
@@ -181,26 +185,79 @@ function AccessEditor({
   );
 }
 
+/** ADR-112 Amendment 3: what removing a person does, said before it is done. */
+export function removalWords(person: PersonAccount): string {
+  const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
+  return (
+    `Remove ${who}? Their account is deleted: they can no longer sign in, and their sign-in name and email address ` +
+    "become free to use again. Cases, alerts and recipes they made stay as they are and show their id in place of " +
+    "their name. This cannot be undone. To keep the account but stop them signing in, disable it instead."
+  );
+}
+
+function RemoveConfirmation({
+  api,
+  person,
+  onRemoved,
+  onCancel,
+}: {
+  api: AdminApi;
+  person: PersonAccount;
+  onRemoved: (p: PersonAccount) => void;
+  onCancel: () => void;
+}) {
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <div
+      role="group"
+      aria-label={`Remove ${person.username}`}
+      style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}
+    >
+      <p style={{ margin: 0 }}>{removalWords(person)}</p>
+      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+        <Button
+          aria-label={`Confirm removing ${person.username}`}
+          onClick={() =>
+            void removePerson(api, person.id)
+              .then(onRemoved)
+              .catch((e: Error) => setProblem(e.message))
+          }
+        >
+          Remove the account
+        </Button>
+        <Button aria-label={`Keep ${person.username}`} onClick={onCancel}>
+          Keep it
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PersonRow({
   api,
   person,
   scheme,
   onSaved,
   onDelivered,
+  onRemoved,
 }: {
   api: AdminApi;
   person: PersonAccount;
   scheme: Scheme;
   onSaved: (p: PersonAccount) => void;
   onDelivered: (d: SignInDelivery) => void;
+  onRemoved: (p: PersonAccount) => void;
 }) {
   const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
   const [said, setSaid] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
   const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
   const status = !person.enabled ? "Disabled" : person.must_set_password ? "Invited — must set a password" : null;
+  const joined = person.organisation_linked ? "Signs in through the organisation" : null;
   const act = (done: Promise<PersonAccount>) =>
     void done
       .then((saved) => {
@@ -219,6 +276,12 @@ function PersonRow({
             <>
               <br />
               <span className="label" style={!person.enabled ? { color: "var(--warning)" } : undefined}>{status}</span>
+            </>
+          )}
+          {joined && (
+            <>
+              <br />
+              <span className="label">{joined}</span>
             </>
           )}
         </td>
@@ -296,6 +359,11 @@ function PersonRow({
             >
               Reset sign-in
             </Button>
+            {!person.system_account && (
+              <Button aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
+                Remove
+              </Button>
+            )}
           </div>
           {said && <span role="status" className="label">{` ${said}`}</span>}
         </td>
@@ -307,7 +375,138 @@ function PersonRow({
           </td>
         </tr>
       )}
+      {removing && (
+        <tr>
+          <td colSpan={ROLES.length + 3}>
+            <RemoveConfirmation api={api} person={person} onRemoved={onRemoved} onCancel={() => setRemoving(false)} />
+          </td>
+        </tr>
+      )}
     </>
+  );
+}
+
+/** ADR-112 Amendment 3 (b): what joining does, said before it is done. */
+export function joinWords(arrival: OrganisationArrival, person: PersonAccount): string {
+  const them = arrival.provider_username || "this organisation account";
+  const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
+  return (
+    `Join ${them} to ${who}? From their next sign-in through the organisation they land in ${person.username}'s ` +
+    "account, with its roles, clearance and cases. Do this only if you are sure they are the same person: the " +
+    "organisation said only that its account carries the same email address."
+  );
+}
+
+function ArrivalRow({
+  api,
+  arrival,
+  people,
+  onJoined,
+}: {
+  api: AdminApi;
+  arrival: OrganisationArrival;
+  people: PersonAccount[];
+  onJoined: (arrival: OrganisationArrival, person: PersonAccount) => void;
+}) {
+  const them = arrival.provider_username || "(no name given)";
+  const eligible = people.filter((p) => !p.system_account && !p.organisation_linked);
+  const [target, setTarget] = useState(eligible[0]?.id ?? "");
+  const [confirming, setConfirming] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const chosen = eligible.find((p) => p.id === target);
+  return (
+    <tr>
+      <td>
+        <span className="value">{them}</span>
+        <br />
+        <span className="label">
+          {`Refused ${arrival.attempts} ${arrival.attempts === 1 ? "time" : "times"}, last at ${utc(arrival.last_refused)}`}
+        </span>
+      </td>
+      <td>
+        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
+            <Select aria-label={`Account to join ${them} to`} value={target} onChange={(e) => setTarget(e.target.value)}>
+              {eligible.map((p) => (
+                <option key={p.id} value={p.id}>{`${p.name} (${p.username})`}</option>
+              ))}
+            </Select>
+            <Button
+              aria-label={`Join ${them}`}
+              aria-expanded={confirming}
+              disabled={!chosen}
+              onClick={() => setConfirming(!confirming)}
+            >
+              Join
+            </Button>
+          </div>
+          {confirming && chosen && (
+            <div
+              role="group"
+              aria-label={`Join ${them}`}
+              style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}
+            >
+              <p style={{ margin: 0 }}>{joinWords(arrival, chosen)}</p>
+              {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+              <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+                <Button
+                  aria-label={`Confirm joining ${them}`}
+                  onClick={() =>
+                    void linkOrganisation(api, chosen.id, arrival.subject)
+                      .then((person) => onJoined(arrival, person))
+                      .catch((e: Error) => setProblem(e.message))
+                  }
+                >
+                  Join the accounts
+                </Button>
+                <Button aria-label={`Do not join ${them}`} onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** ADR-112 Amendment 3 (b): people the organisation's sign-in refused because an OspreyFlow
+ * account holds their email address, each offered for joining to an account. */
+function Arrivals({
+  api,
+  arrivals,
+  people,
+  onJoined,
+}: {
+  api: AdminApi;
+  arrivals: OrganisationArrival[];
+  people: PersonAccount[];
+  onJoined: (arrival: OrganisationArrival, person: PersonAccount) => void;
+}) {
+  if (!arrivals.length) return null;
+  return (
+    <section aria-label="Refused organisation sign-ins" style={{ display: "grid", gap: "var(--sp-8)" }}>
+      <h3 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h3>
+      <p className="label" style={{ margin: 0 }}>
+        These people signed in through the organisation and were refused, because an OspreyFlow account already holds
+        their email address. Join one to the account that is theirs, or remove that account so they arrive afresh.
+        The identity provider keeps this list for seven days.
+      </p>
+      <table className="table" aria-label="Refused organisation sign-ins">
+        <thead>
+          <tr>
+            <th>Organisation account</th>
+            <th>Join to</th>
+          </tr>
+        </thead>
+        <tbody>
+          {arrivals.map((a) => (
+            <ArrivalRow key={a.subject} api={api} arrival={a} people={people} onJoined={onJoined} />
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
@@ -434,9 +633,14 @@ function People({ api }: { api: AdminApi }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
+  const [removed, setRemoved] = useState<PersonAccount | null>(null);
+  const [arrivals, setArrivals] = useState<OrganisationArrival[]>([]);
+  const [arrivalsProblem, setArrivalsProblem] = useState<string | null>(null);
+  const [joined, setJoined] = useState<string | null>(null);
   const scheme = useScheme(api);
   useEffect(() => {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
+    listArrivals(api).then(setArrivals).catch((e: Error) => setArrivalsProblem(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken]);
   if (problem) return <p role="alert">{problem}</p>;
@@ -449,6 +653,30 @@ function People({ api }: { api: AdminApi }) {
         Other grants (single rights, older roles) are kept as they are.
       </p>
       {delivered && <Delivered delivery={delivered} />}
+      {joined && (
+        <p role="status" style={{ margin: 0 }}>
+          {joined}
+        </p>
+      )}
+      {arrivalsProblem && <p role="alert" style={{ margin: 0 }}>{`Refused organisation sign-ins could not be read: ${arrivalsProblem}`}</p>}
+      <Arrivals
+        api={api}
+        arrivals={arrivals}
+        people={people}
+        onJoined={(arrival, person) => {
+          saved(person);
+          setArrivals((current) => current.filter((a) => a.subject !== arrival.subject));
+          setJoined(
+            `${arrival.provider_username || "The organisation account"} is joined to ${person.username}. Their next sign-in ` +
+              "through the organisation lands in that account, with its roles.",
+          );
+        }}
+      />
+      {removed && (
+        <p role="status" style={{ margin: 0 }}>
+          {`${removed.name || removed.username} (${removed.username}) was removed. What they made now shows their id in place of their name.`}
+        </p>
+      )}
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>
@@ -462,7 +690,18 @@ function People({ api }: { api: AdminApi }) {
         </thead>
         <tbody>
           {people.map((p) => (
-            <PersonRow key={p.id} api={api} person={p} scheme={scheme} onSaved={saved} onDelivered={setDelivered} />
+            <PersonRow
+              key={p.id}
+              api={api}
+              person={p}
+              scheme={scheme}
+              onSaved={saved}
+              onDelivered={setDelivered}
+              onRemoved={(gone) => {
+                setRemoved(gone);
+                setPeople((current) => (current ?? []).filter((x) => x.id !== gone.id));
+              }}
+            />
           ))}
         </tbody>
       </table>

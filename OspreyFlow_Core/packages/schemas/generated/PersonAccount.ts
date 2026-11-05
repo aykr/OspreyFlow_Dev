@@ -10,6 +10,8 @@ export type OrgUnit = string | null;
 export type Email = string | null;
 export type ReceivableHandlingCodes = string[];
 export type MustSetPassword = boolean;
+export type SystemAccount = boolean;
+export type OrganisationLinked = boolean;
 
 export interface PersonAccount {
   id: Id;
@@ -22,5 +24,7 @@ export interface PersonAccount {
   email?: Email;
   receivable_handling_codes?: ReceivableHandlingCodes;
   must_set_password?: MustSetPassword;
+  system_account?: SystemAccount;
+  organisation_linked?: OrganisationLinked;
   [k: string]: unknown;
 }

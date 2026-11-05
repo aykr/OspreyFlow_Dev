@@ -29,6 +29,10 @@ export type Issuer = string;
  */
 export type ClientId = string;
 /**
+ * ADR-114 Amendment 33, 'Step 33': true joins a person arriving through the organisation to the OspreyFlow account holding the same email address, automatically, with its roles and clearance. Off by default: a person whose email an account holds is refused in words, and an administrator joins them in Admin, People and roles. Turn it on only with the organisation's security officer's written sign-off that every address its provider gives is verified and cannot be set by the person who holds it: anyone who can make the provider give an address takes over the account that holds it (the 2023 'nOAuth' account takeovers).
+ */
+export type TrustEmail = boolean;
+/**
  * The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher (ADR-115 decision 2). One of the handling scheme's classifications. Default: the scheme's lowest.
  */
 export type Marking = string | null;
@@ -72,4 +76,5 @@ export interface OrganisationProvider {
   label: Label;
   issuer: Issuer;
   client_id: ClientId;
+  trust_email?: TrustEmail;
 }

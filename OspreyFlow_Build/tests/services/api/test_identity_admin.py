@@ -3,7 +3,11 @@ Amendment 1): people's roles, and dashboard identities.
 
 The fixture is a small stateful Keycloak admin API that models the provider's **refusals**, not only
 its grants (`process/CLAUDE.md` rule 15): no bearer, or another bearer, is 401; an unknown user or
-client is 404; a second client of one `clientId` is 409. Two narrowings are the Conduit's own and are
+client is 404; a second client of one `clientId` is 409; a second link to one provider on one
+account is 409 ("User is already linked with provider"). **And what it does not refuse**, measured
+on Keycloak 26.0 (step 33): a link for an unknown provider, a link on a service account, and one
+organisation account linked to a second person are all accepted (204) — so what refuses those is
+the Conduit's. Two narrowings are the Conduit's own and are
 proved to refuse before any call: a role outside the known set, and a client not named
 `osprey-dashboard-*`.
 """
@@ -21,10 +25,12 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from services.api.identity_admin import (
     CODE_ALPHABET,
+    CONDUIT_ACCOUNTS,
     DashboardExistsError,
-    PersonExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    PersonActionRefused,
+    PersonExistsError,
     UnknownRoleError,
 )
 
@@ -40,7 +46,9 @@ class _Realm:
             "u-analyst": {"id": "u-analyst", "username": "osprey-demo-analyst", "firstName": "Demo",
                           "lastName": "Analyst", "enabled": True, "email": "analyst@example.org",
                           "attributes": {"roles": ["analyst"], "clearance": ["OFFICIAL"], "org_unit": ["verify"]}},
-            "u-sa": {"id": "u-sa", "username": "service-account-osprey-conduit", "enabled": True, "attributes": {}},
+            # Keycloak 26 marks a client's service account with the client it belongs to.
+            "u-sa": {"id": "u-sa", "username": "service-account-osprey-conduit", "enabled": True,
+                     "attributes": {}, "serviceAccountClientId": "osprey-conduit"},
         }  # fmt: skip
         self.clients: dict[str, dict[str, object]] = {}
         self.calls: list[str] = []
@@ -51,6 +59,10 @@ class _Realm:
         self.passwords: dict[str, tuple[str, bool]] = {}
         self.logged_out: list[str] = []
         self.token_requests = 0
+        # ADR-112 Amendment 3 (b): the realm's events (newest first, as Keycloak lists them) and
+        # each account's links to identity providers.
+        self.events: list[dict[str, object]] = []
+        self.links: dict[str, list[dict[str, str]]] = {}
 
 
 def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
@@ -111,6 +123,19 @@ def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
                     realm.passwords[uid] = (credential["value"], bool(credential.get("temporary")))
                 realm.users[uid] = {**user, "id": uid}
                 return self._send(201, None, {"Location": f"/users/{uid}"})
+            if "federated-identity" in url.path:
+                parts = url.path.split("/")
+                uid, alias = parts[-3], parts[-1]
+                if uid not in realm.users:
+                    return self._send(404, {"error": "User not found"})
+                if any(link["identityProvider"] == alias for link in realm.links.get(uid, [])):
+                    return self._send(409, {"errorMessage": "User is already linked with provider"})
+                body = self._body()
+                assert isinstance(body, dict)
+                realm.links.setdefault(uid, []).append({
+                    "identityProvider": alias, "userId": str(body["userId"]),
+                    "userName": str(body["userName"])})  # fmt: skip
+                return self._send(204)
             if url.path.endswith("/logout"):
                 parts = url.path.split("/")
                 if parts[-2] not in realm.users:
@@ -136,12 +161,30 @@ def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
             url = urlparse(self.path)
             parts = url.path.split("/")
             realm.calls.append(f"GET {url.path}")
+            if url.path.endswith("/events"):
+                kind = parse_qs(url.query).get("type", [None])[0]
+                events = [e for e in realm.events if kind is None or e["type"] == kind]
+                return self._send(200, events)
             if url.path.endswith("/users"):
-                wanted = parse_qs(url.query).get("username", [None])[0]
+                query = parse_qs(url.query)
+                wanted = query.get("username", [None])[0]
                 users = list(realm.users.values())
                 if wanted is not None:
                     users = [u for u in users if u["username"] == wanted]
+                alias, subject = query.get("idpAlias", [None])[0], query.get("idpUserId", [None])[0]
+                if alias is not None:
+                    users = [u for u in users if any(
+                        link["identityProvider"] == alias and subject in (None, link["userId"])
+                        for link in realm.links.get(str(u["id"]), []))]  # fmt: skip
                 return self._send(200, users)
+            if parts[-1] == "federated-identity":
+                if parts[-2] not in realm.users:
+                    return self._send(404, {"error": "User not found"})
+                return self._send(200, realm.links.get(parts[-2], []))
+            if parts[-1] == "credentials":
+                held = realm.passwords.get(parts[-2])
+                listed = [{"id": f"c-{parts[-2]}", "type": "password"}] if held else []
+                return self._send(200, listed)
             if "users" in parts:
                 user = realm.users.get(parts[-1])
                 return self._send(200, user) if user else self._send(404, {"error": "User not found"})
@@ -194,6 +237,9 @@ def _handler(realm: _Realm) -> type[BaseHTTPRequestHandler]:
                 return
             parts = urlparse(self.path).path.split("/")
             realm.calls.append(f"DELETE {self.path}")
+            if "credentials" in parts:
+                gone = realm.passwords.pop(parts[-3], None)
+                return self._send(204) if gone else self._send(404, {})
             if "users" in parts:
                 return self._send(204) if realm.users.pop(parts[-1], None) else self._send(404, {})
             client = realm.clients.pop(parts[-1], None)
@@ -219,6 +265,13 @@ def idp() -> Iterator[tuple[IdentityAdmin, _Realm]]:
     )  # fmt: skip
     yield IdentityAdmin(settings), realm
     server.shutdown()
+
+
+@pytest.fixture
+def idp_org(idp: tuple[IdentityAdmin, _Realm]) -> tuple[IdentityAdmin, _Realm]:
+    """The Admin area on a deployment with sign-in through the organisation `org`."""
+    admin, realm = idp
+    return IdentityAdmin(admin._settings, organisation="org"), realm  # noqa: SLF001
 
 
 @pytest.fixture
@@ -444,3 +497,188 @@ async def test_a_service_account_is_no_person_to_manage(idp: tuple[IdentityAdmin
             await act
     assert realm.users["u-sa"]["enabled"] is True
     await admin.aclose()
+
+
+# --- ADR-112 Amendment 3 (build order step 33 (a)): remove a person -----------------------------
+
+
+Idp = tuple[IdentityAdmin, _Realm]
+
+
+def _admin_user(
+    realm: _Realm, uid: str, *, enabled: bool = True, roles: list[str] | None = None
+) -> None:
+    realm.users[uid] = {"id": uid, "username": f"admin.{uid}", "firstName": "Ada", "lastName": uid,
+                        "enabled": enabled, "email": f"{uid}@example.org",
+                        "attributes": {"roles": roles or ["osprey-admin"]}}  # fmt: skip
+
+
+async def test_removing_a_person_deletes_their_account_and_says_who_they_were(idp: Idp) -> None:
+    admin, realm = idp
+    removed = await admin.remove_person("u-analyst")
+    assert (removed.username, removed.name, removed.email) == (
+        "osprey-demo-analyst", "Demo Analyst", "analyst@example.org")  # fmt: skip
+    assert "u-analyst" not in realm.users
+    assert "DELETE /admin/realms/osprey/users/u-analyst" in realm.calls
+    with pytest.raises(IdentityAdminRefused, match="no such person"):
+        await admin.remove_person("u-analyst")
+    await admin.aclose()
+
+
+async def test_an_account_ospreyflow_itself_uses_is_never_removed(idp: Idp) -> None:
+    """A client's service account (Keycloak marks it `serviceAccountClientId`) and the deploy's
+    verify probes: refused in words, and nothing is deleted."""
+    admin, realm = idp
+    realm.users["u-probe"] = {"id": "u-probe", "username": "osprey-verify-probe",
+                              "enabled": True, "attributes": {}}  # fmt: skip
+    for uid in ("u-sa", "u-probe"):
+        with pytest.raises(PersonActionRefused) as refused:
+            await admin.remove_person(uid)
+        assert refused.value.error == "not_a_person"
+        assert "OspreyFlow itself uses" in refused.value.words
+    assert not [c for c in realm.calls if c.startswith("DELETE")]
+    people = {p.username: p for p in await admin.list_people()}
+    assert people["osprey-verify-probe"].system_account is True
+    assert people["osprey-demo-analyst"].system_account is False
+    await admin.aclose()
+
+
+async def test_the_last_person_who_can_manage_people_is_not_removed(idp: Idp) -> None:
+    """Another administrator who is disabled, or who holds only another role, does not count; an
+    enabled one — by the Admin role or by the single right — does."""
+    admin, realm = idp
+    _admin_user(realm, "a1")
+    _admin_user(realm, "a2", enabled=False)
+    _admin_user(realm, "a3", roles=["analyst", "right:manage_dashboards"])
+    with pytest.raises(PersonActionRefused) as refused:
+        await admin.remove_person("a1")
+    assert refused.value.error == "last_administrator" and "Admin role" in refused.value.words
+    assert "a1" in realm.users and not [c for c in realm.calls if c.startswith("DELETE")]
+    _admin_user(realm, "a4", roles=["right:manage_people"])
+    assert (await admin.remove_person("a1")).username == "admin.a1"
+    assert "a1" not in realm.users
+    await admin.aclose()
+
+
+def test_the_conduits_own_accounts_are_the_realms_verify_probes() -> None:
+    from harness.realm import REVOKED_SUBJECT, VERIFY_SUBJECT
+
+    assert {VERIFY_SUBJECT, REVOKED_SUBJECT} == CONDUIT_ACCOUNTS
+
+
+# --- ADR-112 Amendment 3 (build order step 33 (b)): join a refused organisation arrival -----------
+
+SUBJECT = "3514e934-1a5a-4d27-9330-60cb8686abeb"
+
+
+def _refused(realm: _Realm, millis: int, identity: str, *, alias: str = "org",
+             error: str = "access_denied") -> None:  # fmt: skip
+    """A refusal as Keycloak 26.0 records it (measured, step 33): newest first."""
+    realm.events.append({"time": millis, "type": "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR",
+                         "clientId": "osprey-glass", "ipAddress": "172.25.0.1", "error": error,
+                         "details": {"identity_provider": alias, "auth_method": "openid-connect",
+                                     "identity_provider_identity": identity,
+                                     "code_id": "x"}})  # fmt: skip
+    realm.events.sort(key=lambda e: -int(str(e["time"])))
+
+
+def _invited(realm: _Realm) -> None:
+    realm.users["u-local"] = {"id": "u-local", "username": "pat.local", "firstName": "Pat",
+                              "lastName": "Local", "enabled": True, "email": "pat@example.org",
+                              "requiredActions": ["UPDATE_PASSWORD"],
+                              "attributes": {"roles": ["analyst"],
+                                             "clearance": ["OFFICIAL"]}}  # fmt: skip
+    realm.passwords["u-local"] = ("ABCD-EFGH-JKLM-NPQR", True)
+
+
+async def test_a_refused_arrival_is_listed_once_by_the_organisations_id(idp_org: Idp) -> None:
+    """One line a person, however often refused; never one of another provider, another error,
+    or a refusal recorded before the provider carried the mapper (the username alone)."""
+    admin, realm = idp_org
+    _refused(realm, 1_793_860_000_000, f"pat.example {SUBJECT}")
+    _refused(realm, 1_793_860_100_000, f"pat.example {SUBJECT}")
+    _refused(realm, 1_793_860_050_000, "sam.example other-subject", alias="elsewhere")
+    _refused(realm, 1_793_860_060_000, "lee.example lee-subject", error="invalid_user_credentials")
+    _refused(realm, 1_793_860_070_000, "old.format")
+    (arrival,) = await admin.list_arrivals()
+    assert (arrival.subject, arrival.provider_username, arrival.attempts) == (
+        SUBJECT, "pat.example", 2)  # fmt: skip
+    assert arrival.last_refused.timestamp() == 1_793_860_100
+    await admin.aclose()
+
+
+async def test_joining_links_the_arrival_by_its_id_and_withdraws_an_unused_code(
+    idp_org: Idp,
+) -> None:
+    admin, realm = idp_org
+    _invited(realm)
+    _refused(realm, 1_793_860_000_000, f"pat.example {SUBJECT}")
+    person, arrival = await admin.link_organisation("u-local", SUBJECT)
+    assert realm.links["u-local"] == [{"identityProvider": "org", "userId": SUBJECT,
+                                       "userName": f"pat.example {SUBJECT}"}]  # fmt: skip
+    assert (person.username, person.organisation_linked, person.must_set_password) == (
+        "pat.local", True, False)  # fmt: skip
+    assert arrival.provider_username == "pat.example"
+    assert "u-local" not in realm.passwords, "the one-time code no longer opens the account"
+    assert realm.users["u-local"]["requiredActions"] == []
+    assert realm.users["u-local"]["attributes"]["roles"] == ["analyst"]  # type: ignore[index]
+    assert await admin.list_arrivals() == [], "a joined arrival is no longer waiting"
+    assert {p.username: p.organisation_linked for p in await admin.list_people()} == {
+        "osprey-demo-analyst": False, "pat.local": True}  # fmt: skip
+    await admin.aclose()
+
+
+async def test_a_person_who_chose_their_own_password_keeps_it_when_joined(idp_org: Idp) -> None:
+    admin, realm = idp_org
+    realm.passwords["u-analyst"] = ("their-own", False)
+    _refused(realm, 1_793_860_000_000, f"pat.example {SUBJECT}")
+    await admin.link_organisation("u-analyst", SUBJECT)
+    assert realm.passwords["u-analyst"] == ("their-own", False)
+    await admin.aclose()
+
+
+async def test_each_refused_join_is_said_in_words_and_links_nothing(idp_org: Idp) -> None:
+    """What Keycloak 26.0 accepts and the Conduit refuses: an account already joined (Keycloak's
+    own 409 is never reached), a service account or verify probe, an id no refused arrival holds,
+    and an organisation account already joined to another person."""
+    admin, realm = idp_org
+    realm.users["u-probe"] = {"id": "u-probe", "username": "osprey-verify-probe",
+                              "enabled": True, "attributes": {}}  # fmt: skip
+    _invited(realm)
+    _refused(realm, 1_793_860_000_000, f"pat.example {SUBJECT}")
+    realm.links["u-analyst"] = [{"identityProvider": "org", "userId": "someone", "userName": "x"}]
+    refusals = {}
+    for uid, subject in (("u-analyst", SUBJECT), ("u-sa", SUBJECT), ("u-probe", SUBJECT),
+                         ("u-local", "not-a-refused-arrival")):  # fmt: skip
+        with pytest.raises(PersonActionRefused) as refused:
+            await admin.link_organisation(uid, subject)
+        refusals[uid] = refused.value.error
+    assert refusals == {"u-analyst": "already_linked", "u-sa": "not_a_person",
+                        "u-probe": "not_a_person", "u-local": "no_such_arrival"}  # fmt: skip
+    assert not [c for c in realm.calls if "federated-identity/org" in c and c.startswith("POST")]
+    # Joined to one person, the organisation account is no longer offered to a second.
+    await admin.link_organisation("u-local", SUBJECT)
+    realm.users["u-other"] = {"id": "u-other", "username": "other", "enabled": True,
+                              "attributes": {}}  # fmt: skip
+    with pytest.raises(PersonActionRefused) as refused:
+        await admin.link_organisation("u-other", SUBJECT)
+    assert refused.value.error == "no_such_arrival" and "u-other" not in realm.links
+    await admin.aclose()
+
+
+async def test_without_an_organisation_nothing_is_offered_and_nothing_joined(idp: Idp) -> None:
+    admin, realm = idp
+    _refused(realm, 1_793_860_000_000, f"pat.example {SUBJECT}")
+    assert await admin.list_arrivals() == []
+    with pytest.raises(PersonActionRefused) as refused:
+        await admin.link_organisation("u-analyst", SUBJECT)
+    assert refused.value.error == "no_organisation_sign_in"
+    assert not [c for c in realm.calls if "events" in c or "federated-identity" in c]
+    await admin.aclose()
+
+
+def test_the_refusal_read_is_the_one_the_realm_records() -> None:
+    from harness.realm import ARRIVAL_EVENT as RECORDED
+    from services.api.identity_admin import ARRIVAL_EVENT
+
+    assert ARRIVAL_EVENT == RECORDED

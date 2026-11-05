@@ -25,6 +25,7 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       const answered = handler(path, init);
       if (answered) return answered;
       if (path === "people") return json(200, [PERSON]);
+      if (path === "organisation-arrivals") return json(200, []);
       if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (JSON.parse(String(init?.body)) as { roles: string[] }).roles });
       if (path === "dashboards" && init?.method === "POST")
         return json(201, { dashboard: { client_id: "osprey-dashboard-board", account_id: "sa-1", clearance: "OFFICIAL", org_unit: "verify" }, secret: "s3cret" });
@@ -449,5 +450,131 @@ describe("the Datasets tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save egress for Enron corpus" }));
     expect(await screen.findByText("Your account does not hold the right for this.")).toBeTruthy();
     expect(screen.queryByText("Enron corpus: egress is now any.")).toBeNull();
+  });
+});
+
+// ADR-112 Amendment 3 (build order step 33 (a)): remove a person, only once confirmed in words.
+describe("people: remove", () => {
+  it("removes a person only once the words are confirmed, and says what became of their work", async () => {
+    const sent = serve((path, init) => (path === "people/u1" && init?.method === "DELETE" ? json(200, PERSON) : null));
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    const asked = screen.getByRole("group", { name: "Remove osprey-demo-analyst" });
+    expect(asked.textContent).toContain("Remove Demo Analyst (osprey-demo-analyst)? Their account is deleted");
+    expect(asked.textContent).toContain("show their id in place of their name");
+    expect(asked.textContent).toContain("disable it instead");
+    expect(sent.some((s) => s.path === "DELETE people/u1")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText(/Demo Analyst \(osprey-demo-analyst\) was removed/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove osprey-demo-analyst" })).toBeNull();
+    expect(sent.filter((s) => s.path === "DELETE people/u1")).toHaveLength(1);
+  });
+
+  it("keeps the person when the removal is not confirmed", async () => {
+    const sent = serve();
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep osprey-demo-analyst" }));
+    expect(screen.queryByRole("group", { name: "Remove osprey-demo-analyst" })).toBeNull();
+    expect(sent.some((s) => s.path.startsWith("DELETE"))).toBe(false);
+    expect(screen.getByText("Demo Analyst")).toBeTruthy();
+  });
+
+  it("says a refusal in the Conduit's words and keeps the person listed", async () => {
+    const words = "osprey-demo-analyst is the only enabled person who can manage people. Give someone else the Admin role first.";
+    serve((path, init) =>
+      path === "people/u1" && init?.method === "DELETE" ? json(409, { error: "last_administrator", detail: words }) : null,
+    );
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(screen.getByText("Demo Analyst")).toBeTruthy();
+  });
+
+  it("says removing your own account is refused", async () => {
+    serve((path, init) =>
+      path === "people/u1" && init?.method === "DELETE" ? json(409, { detail: { error: "cannot_remove_yourself" } }) : null,
+    );
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove osprey-demo-analyst" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm removing osprey-demo-analyst" }));
+    expect(await screen.findByText("You cannot remove your own account.")).toBeTruthy();
+  });
+
+  it("offers no removal of an account OspreyFlow itself uses", async () => {
+    serve((path) =>
+      path === "people"
+        ? json(200, [PERSON, { id: "u9", username: "osprey-verify-probe", name: "osprey-verify-probe", enabled: true, roles: [],
+                              system_account: true }])  // prettier-ignore
+        : null,
+    );
+    place(["manage_people"]);
+    await screen.findByRole("button", { name: "Remove osprey-demo-analyst" });
+    expect(screen.queryByRole("button", { name: "Remove osprey-verify-probe" })).toBeNull();
+  });
+});
+
+// ADR-112 Amendment 3 (build order step 33 (b)): a refused organisation arrival joined to an account.
+const ARRIVAL = { subject: "sub-1", provider_username: "pat.example", last_refused: "2026-11-05T09:30:00Z", attempts: 2 };
+
+describe("people: join a refused organisation arrival", () => {
+  it("offers the arrival, and joins it only once the words are confirmed", async () => {
+    const sent = serve((path, init) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people/u1/organisation-link" && init?.method === "POST") return json(200, { ...PERSON, organisation_linked: true });
+      return null;
+    });
+    place(["manage_people"]);
+    const section = await screen.findByRole("region", { name: "Refused organisation sign-ins" });
+    expect(section.textContent).toContain("pat.example");
+    expect(section.textContent).toContain("Refused 2 times, last at 2026-11-05 09:30 UTC");
+    fireEvent.click(within(section).getByRole("button", { name: "Join pat.example" }));
+    const asked = screen.getByRole("group", { name: "Join pat.example" });
+    expect(asked.textContent).toContain("Join pat.example to Demo Analyst (osprey-demo-analyst)?");
+    expect(asked.textContent).toContain("only if you are sure they are the same person");
+    expect(sent.some((s) => s.path.endsWith("organisation-link"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm joining pat.example" }));
+    expect(await screen.findByText(/pat.example is joined to osprey-demo-analyst/)).toBeTruthy();
+    expect(sent.find((s) => s.path === "POST people/u1/organisation-link")?.body).toEqual({ subject: "sub-1" });
+    expect(screen.queryByRole("region", { name: "Refused organisation sign-ins" })).toBeNull();
+    expect(screen.getByText("Signs in through the organisation")).toBeTruthy();
+  });
+
+  it("offers no account OspreyFlow itself uses, and none already joined", async () => {
+    serve((path) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people")
+        return json(200, [
+          PERSON,
+          { id: "u8", username: "joined.person", name: "Joined Person", enabled: true, roles: [], organisation_linked: true },
+          { id: "u9", username: "osprey-verify-probe", name: "osprey-verify-probe", enabled: true, roles: [], system_account: true },
+        ]);
+      return null;
+    });
+    place(["manage_people"]);
+    const choice = (await screen.findByLabelText("Account to join pat.example to")) as HTMLSelectElement;
+    expect([...choice.options].map((o) => o.textContent)).toEqual(["Demo Analyst (osprey-demo-analyst)"]);
+  });
+
+  it("says a refused join in the Conduit's words", async () => {
+    const words = "osprey-demo-analyst is already joined to an organisation account.";
+    serve((path, init) => {
+      if (path === "organisation-arrivals") return json(200, [ARRIVAL]);
+      if (path === "people/u1/organisation-link" && init?.method === "POST") return json(409, { error: "already_linked", detail: words });
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Join pat.example" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm joining pat.example" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+  });
+
+  it("shows nothing when nobody was refused", async () => {
+    serve();
+    place(["manage_people"]);
+    await screen.findByText("Demo Analyst");
+    expect(screen.queryByRole("region", { name: "Refused organisation sign-ins" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

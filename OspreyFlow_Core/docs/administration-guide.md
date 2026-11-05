@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.52** · 2026-11-04 · For OspreyFlow v0.4.10 · Issued
+**Version 1.53** · 2026-11-05 · For OspreyFlow v0.4.10 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.53 | 2026-11-05 | The owner's rulings (build order step 33; ADR-112 Amendment 3, ADR-114 Amendment 33 "Step 33"): §5a.1, someone whose email an account holds can be joined to that account in Admin → People, or the account removed; joining by email (`sign_in.organisation.trust_email`, off by default) and its account-takeover risk; §7 the answer; §8 what `repair-sign-in` now also does; §9.1 and new §9.7, removing someone and joining an organisation account; §16 the refusal's new answers, an empty *Refused organisation sign-ins*, the Conduit needing `view-events`, a refused removal, and the joining-by-email warning. Appendix A: `governance.organisation_provider.trust_email`. |
 | 1.52 | 2026-11-04 | The owner's ruling (build order step 29; ADR-114 Amendment 34): §14, an offline bundle carries one platform's images, `linux/amd64` unless `ospreyflow update --make-bundle FILE --platform linux/arm64` names the other, from any machine; any other platform is refused, and `update --from` refuses a bundle for another platform than its machine's, in words, before anything is checked or loaded. |
 | 1.51 | 2026-11-04 | The owner's rulings on sign-in (build order step 28): §5a.1, the welcome page's button names the organisation's provider by `sign_in.organisation.label` (ADR-115 Amendment 5), and someone whose email an OspreyFlow account already holds is told so in words and never joined to it (ADR-114 Amendment 33); §8, `repair-sign-in` also gives the workspace's client no refresh token (ADR-050 Amendment 2) and registers the organisation's first sign-in; §9.1, Admin → System's **Acting for people** says when the Conduit cannot act for people and to run `ospreyflow repair-sign-in` (ADR-114 Amendment 36); §16, that line, an arrival whose email is held, and windows that ask to sign in again after about half an hour left alone (a window renews only after the person has done something, ADR-050 Amendment 2). Appendix A: `governance.organisation_sign_in` and `governance.organisation_provider.label` name the button. |
 | 1.50 | 2026-11-04 | The owner's ruling (ADR-099 Amendment 11; build order step 27), "no role, no list": §5a.1 and §9.2, a person holding no role is told no dataset's name or id, even when their unit is set before a role; Home says *No cases to show* when they hold no case. |
@@ -727,11 +728,34 @@ address (Entra ID does not promise it is verified). So OspreyFlow **never joins 
 account already holds that email — someone you invited by that address, say — the sign-in page
 says "This email address already belongs to an OspreyFlow account, so your organisation account has
 not been joined to it. Sign in to that account with its username and password instead, or ask your
-OspreyFlow administrator." Nothing is made. They can go on with that account (**Sign in with an
-OspreyFlow account**); for them to use the organisation's sign-in instead, remove that account in
-the identity provider's own console (Admin → People and roles cannot remove a person) and ask them
-to sign in again — they arrive with no role, and you grant their roles again. To avoid it, invite
-only the people who cannot come through the organisation (the first administrator, outside staff).
+OspreyFlow administrator." Nothing is made. Then, in Admin → People and roles (section 9.7):
+
+- **Join them to that account**, if you are sure it is theirs: *Refused organisation sign-ins* lists
+  each person refused in the last seven days by their name at the organisation; choose the account
+  and confirm. Their next sign-in through the organisation lands in it, with its roles, clearance
+  and cases. An invited account whose password was never set loses its one-time code: it is reached
+  through the organisation from then on.
+- **Or remove that account**, and ask them to sign in again: they arrive as someone new, with no
+  role, and you grant their roles again.
+- **Or leave it**: they go on with that account (**Sign in with an OspreyFlow account**).
+
+To avoid it, invite only the people who cannot come through the organisation (the first
+administrator, outside staff).
+
+**Joining by email, for an organisation that verifies every address.** With
+`sign_in.organisation.trust_email: true` in the answers (`governance.organisation_provider.trust_email`
+in `osprey.yaml`; off by default), a person arriving through the organisation is **joined
+automatically** to the OspreyFlow account holding the same email address, with its roles and
+clearance, instead of being refused. **This hands any account to whoever the organisation's provider
+gives its address**: where a person can set their own address, or another tenant can claim one, it is
+an account takeover — the 2023 "nOAuth" takeovers of Entra ID applications were exactly this. Turn
+it on only with the organisation's security officer's written sign-off that every address its
+provider gives is verified and cannot be changed by the person who holds it. `ospreyflow doctor` and
+the install warn of it every time, and so does each `repair-sign-in`. Only the provider's own address
+is compared: a person is never asked to type one at first sign-in. An invited account whose password
+was never set is joined, then asks for a password once. To turn it off, set `trust_email: false` in
+`osprey.yaml` and run `ospreyflow apply` (it updates the identity provider too): people whose email
+an account holds are refused again, and you join them by hand.
 
 **The organisation's own certificate authority.** With `server.ca`, the identity provider trusts
 it as well as the usual public authorities, so a provider on the organisation's own certificates
@@ -923,7 +947,7 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `cluster.namespace`, `cluster.storage_class`, `cluster.shared_storage_class` | Enterprise: the namespace, and onto a cluster you already have its storage classes (section 6) |
 | `server`: `server.address`, `server.certificate`, `server.key`, `server.ca`, `server.ingest`, `server.redirect_http`, `server.listen_address`, `server.backups`, `server.memory_gib`, `server.gpu` | Small on your own server (section 5a); refused with `cloud` or `external`, and for Lite and Enterprise. `server.certificate` and `server.key` are required. `server.backups` is where backups are written (default `~/OspreyFlow/backups`); `server.memory_gib` is `auto` or a number of GiB, at least 16 (section 5a.2); `server.gpu` is `none` (the default) or `nvidia`, the local engine on the server's NVIDIA GPU (section 5a.4) |
 | `admin_email` | Small on your own server: the first administrator's email |
-| `sign_in.organisation`: `alias`, `label`, `issuer`, `client_id` | Small on your own server: sign-in through the organisation's identity provider (section 5a.1). `alias` defaults to `org`; `issuer` is `https://`. Its client secret is never here — `OSPREY_ORG_SIGN_IN_SECRET` in the terminal — and a setting naming a secret is refused |
+| `sign_in.organisation`: `alias`, `label`, `issuer`, `client_id`, `trust_email` | Small on your own server: sign-in through the organisation's identity provider (section 5a.1). `alias` defaults to `org`; `issuer` is `https://`. Its client secret is never here — `OSPREY_ORG_SIGN_IN_SECRET` in the terminal — and a setting naming a secret is refused. `trust_email` is `false` (the default) or `true`, joining by email — only with the security officer's sign-off (section 5a.1) |
 | `external` | The managed services the deployment runs on — written by OpenTofu, or by you for a cluster you already have |
 | `config` | Use this `osprey.yaml` exactly as it is, instead of `components`, `folders` and `models` |
 | `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
@@ -951,7 +975,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow open` | Opens the Glass in your browser |
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
-| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret and its first sign-in (section 5a.1); safe to run again, and prints no secret |
+| `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People lists (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
@@ -1033,7 +1057,7 @@ holding its right:
 
 | Tab | Right | What it does |
 | --- | --- | --- |
-| People and roles | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; disable, re-enable; reset a sign-in |
+| People and roles | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; disable, re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7) |
 | Dashboards | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
 | Schedules and runs | `operate_schedules` | Every scheduled or watched pipeline: pause, resume, run now, change its time, its runs |
 | System | `administer_system` | Each component's health — **Acting for people** among them, which says "The Conduit cannot act for people: run `ospreyflow repair-sign-in`" when the identity provider refuses the Conduit's own credential — the models in use, the version and whether an update exists |
@@ -1212,6 +1236,25 @@ Every proposal, approval and rejection is in the case's rule audit, and every ru
 — who proposed each and who decided it. **After upgrading to this version**, a whole-deployment rule
 that was running waits for a second person's approval before it runs again; Monitoring → Rules lists
 it as waiting, "deployed before a second person's approval was needed".
+
+### 9.7 Removing someone, and joining an organisation account
+
+**Remove** on a person's row deletes their account from the identity provider, once you confirm it:
+they can no longer sign in, and their sign-in name and email address are free again. Nothing they
+made is changed — cases, alerts, recipes and history keep their id, which is shown where their name
+was; the audit log's entry for the removal says whose id it was. A case whose last Author is removed
+is still reached by an administrator's access to its sharing. To keep the account but stop them
+signing in, **Disable** it instead. You cannot remove your own account, an account OspreyFlow itself
+uses (none is offered), or the last enabled person who can manage people.
+
+**Refused organisation sign-ins** shows, above the people, everyone who signed in through the
+organisation in the last seven days and was refused because an OspreyFlow account already holds
+their email address (section 5a.1) — by their name at the organisation, how often, and when last.
+Choose the account that is theirs and **Join**; confirm, and their next sign-in through the
+organisation lands in that account, with its roles, clearance and cases. Join only when you are
+sure they are the same person: the organisation said only that its account carries the same
+address. Each account joins one organisation account; an account already joined, or one OspreyFlow
+itself uses, is not offered. Every removal and every join is in the audit log.
 
 ## 10. Models
 
@@ -1597,7 +1640,11 @@ Admin → Schedules and runs lists every one.
 | The page does not open | `ospreyflow status`; that port 80 (Lite) or the DNS records (Small) are right |
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
 | Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped**, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
-| Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow never joins the two (section 5a.1). They sign in with that account, or you remove it and they arrive again |
+| Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow does not join the two by itself (section 5a.1). Join them in Admin → People and roles' *Refused organisation sign-ins*, or remove that account and they arrive again, or they sign in with that account (section 9.7) |
+| *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days, from a deployment updated to the release after v0.4.10 and repaired since (`ospreyflow repair-sign-in`, which also makes the identity provider record the refusals). Someone refused before that, or more than seven days ago, is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
+| Admin → People and roles says "the identity provider refused the Conduit — its account needs manage-users, manage-clients and view-events" | Run `ospreyflow repair-sign-in`, which grants the Conduit's account what it needs |
+| Removing someone is refused: "the only enabled person who can manage people" | Give someone else the Admin role (or the `manage_people` right) first, so the deployment is never left with no administrator. Your own account cannot be removed either: another administrator removes it |
+| `doctor`, the install or `repair-sign-in` warns "Sign-in through the organisation joins by email" | `sign_in.organisation.trust_email` is on (section 5a.1). Keep it only with the security officer's written sign-off; otherwise set `trust_email: false` in `osprey.yaml` and run `ospreyflow apply` |
 | Windows ask people to sign in again after about half an hour away | As intended: a window renews its sign-in only after the person has done something, so one left alone ends at the identity provider's idle limit (Keycloak's default, 30 minutes). The page is kept; they sign in again in a small window |
 | `doctor`, `install` or `apply` says "the certificate is refused" | Each reason is named, and nothing was changed. "does not match": the key is another certificate's. "encrypted with a passphrase": write the key unencrypted (`openssl pkey -in <encrypted> -out <key>`), mode 600. "does not cover id.…": a wildcard for the parent domain covers one label only; ask for `id.<host>` and `bi.<host>`, or `*.<host>` (section 5a). "expired" or "not valid until": a new certificate, or the server's clock. "does not reach the organisation's root": put the intermediates after the server certificate. "the identity provider … cannot" read the root: `chmod 644` the `ca` file. Then run the command again |
 | Nobody can sign in through the organisation (Small on your own server) | The organisation's page says the redirect URI is not registered: register exactly the address `ospreyflow doctor --mode small --config install.yaml` prints (section 5a.1). The sign-in comes back with "Unexpected error when authenticating with identity provider": the client secret is wrong (put the right one in `deployment.env`, then `ospreyflow repair-sign-in`) or the server cannot reach the provider (`login.microsoftonline.com` for Entra ID). `repair-sign-in` says "could not read the organisation's sign-in settings": the issuer is wrong, the provider cannot be reached, or — for a provider on the organisation's own certificates — `server.ca` is missing |
@@ -1670,6 +1717,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `governance.organisation_provider.label` | str | required | The provider's name as people know it, shown on the welcome page's button (Continue with <label>) and on the identity provider's own sign-in pages (for example 'Example Department account'). |
 | `governance.organisation_provider.issuer` | str | required | The provider's issuer, an https:// address; its discovery document is read from <issuer>/.well-known/openid-configuration (for Entra ID, https://login.microsoftonline.com/<tenant>/v2.0). |
 | `governance.organisation_provider.client_id` | str | required | The application (client) id the organisation registered for OspreyFlow. |
+| `governance.organisation_provider.trust_email` | bool | false | ADR-114 Amendment 33, 'Step 33': true joins a person arriving through the organisation to the OspreyFlow account holding the same email address, automatically, with its roles and clearance. Off by default: a person whose email an account holds is refused in words, and an administrator joins them in Admin, People and roles. Turn it on only with the organisation's security officer's written sign-off that every address its provider gives is verified and cannot be set by the person who holds it: anyone who can make the provider give an address takes over the account that holds it (the 2023 'nOAuth' account takeovers). |
 | `governance.marking` | str or none | none | The protective marking shown where no case data is on screen: the welcome page, Home, the Ingest Studio and the Admin area; inside a case, the strip shows this or the highest marking on screen, whichever is higher. One of the handling scheme's classifications. Default: the scheme's lowest. |
 | `governance.real_data_exceptions` | str | `config/real_data_exceptions.yaml` | A path to the gitignored list, never its contents. |
 | `cluster` | section | — | A Kubernetes deployment: its namespace, storage classes and machines. |

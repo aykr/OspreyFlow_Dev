@@ -38,10 +38,10 @@ from harness.realm import (
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
     glass_client,
-    organisation_first_sign_in_flow,
     organisation_provider,
     organisation_provider_mappers,
     organisation_redirect_uris,
+    organisation_sign_in_flows,
     render_realm,
     sign_in_rules,
     superset_client,
@@ -62,6 +62,14 @@ CONDUIT_SECRET_KEY = "OSPREY_OIDC_CLIENT_SECRET"
 #: from the installer's environment, kept in `deployment.env` by `apply`.
 ORGANISATION_SECRET_KEY = "OSPREY_ORG_SIGN_IN_SECRET"
 DEMO_ADMIN_PASSWORD_KEY = "OSPREY_DEMO_ADMIN_PASSWORD"
+#: ADR-114 Amendment 33, "Step 33": said by every registration while joining by email is on.
+TRUST_EMAIL_LINE = (
+    "WARNING: organisation sign-in joins by email (sign_in.organisation.trust_email): a person "
+    "arriving through the organisation is joined to the OspreyFlow account holding the same email "
+    "address. Anyone who can make the organisation's provider give that address takes the account "
+    "over (the 2023 \"nOAuth\" account takeovers). Keep it on only with the security officer's "
+    "sign-off that every address is verified."
+)
 #: ADR-113 decision 8: the two personas added beside the analyst and the admin.
 DEMO_PERSONA_PASSWORD_KEYS = {
     DEMO_ENGINEER_SUBJECT: "OSPREY_DEMO_ENGINEER_PASSWORD",
@@ -260,11 +268,12 @@ def ensure_identity(
         organisation_secret = values.get(ORGANISATION_SECRET_KEY)
         if organisation_secret:
             # Step 28 (e): the first sign-in the provider names, made before it names it — an
-            # arrival whose email an account already holds is refused in words, never joined.
+            # arrival whose email an account already holds is refused in words, never joined;
+            # Step 33: or, where the deployment opted in (trust_email), joined by email.
+            flow, unwanted = organisation_sign_in_flows(config)
             lines.append(
                 keycloak_admin.ensure_first_sign_in_flow(
-                    issuer=issuer, realm=realm, token=token,
-                    flow=organisation_first_sign_in_flow(),
+                    issuer=issuer, realm=realm, token=token, flow=flow,
                 )
             )  # fmt: skip
             lines.append(
@@ -274,6 +283,21 @@ def ensure_identity(
                     client_secret=organisation_secret,
                 )
             )  # fmt: skip
+            if unwanted is not None:
+                # Step 33: joining by email turned off (or never on) leaves no join flow behind,
+                # removed once the provider names the refusal instead.
+                removed = keycloak_admin.remove_first_sign_in_flow(
+                    issuer=issuer, realm=realm, token=token, alias=unwanted
+                )
+                if removed:
+                    lines.append(removed)
+            if provider["trustEmail"]:
+                lines.append(TRUST_EMAIL_LINE)
+            # ADR-112 Amendment 3 (b): the realm's record of a refused arrival, which Admin ->
+            # People reads to offer the join.
+            lines.append(
+                keycloak_admin.ensure_arrival_events(issuer=issuer, realm=realm, token=token)
+            )
             redirect, logout = organisation_redirect_uris(config, realm_name=realm)
             lines.append(
                 f"the organisation registers: redirect URI {redirect}; post-logout redirect URI "

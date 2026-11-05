@@ -424,7 +424,11 @@ def test_a_person_from_the_organisation_arrives_with_no_role_and_no_clearance() 
         organisation_provider_mappers,
     )
 
-    mappers = organisation_provider_mappers("org")
+    every = organisation_provider_mappers("org")
+    mappers = [m for m in every if m["identityProviderMapper"] == "hardcoded-attribute-idp-mapper"]
+    # ADR-112 Amendment 3 (b): the two username-template mappers set no attribute at all.
+    assert {m["identityProviderMapper"] for m in every} == {
+        "hardcoded-attribute-idp-mapper", "oidc-username-idp-mapper"}  # fmt: skip
     assert {m["config"]["attribute"]: m["config"]["attribute.value"] for m in mappers} == (
         ORGANISATION_ARRIVAL_ATTRIBUTES
     )
@@ -446,3 +450,16 @@ def test_the_addresses_the_organisation_registers_follow_the_identity_address() 
         "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint",
         "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint/logout_response",
     )
+
+
+def test_a_refused_arrivals_record_carries_the_organisations_id_not_the_accounts_name() -> None:
+    """ADR-112 Amendment 3 (b): the brokered username — what Keycloak records of a refused first
+    sign-in, measured on 26.0 — is "<preferred_username> <sub>"; the new account's own username is
+    `preferred_username` alone, as before the mapper. Both are read every sign-in from the token."""
+    from harness.realm import organisation_provider_mappers
+
+    templates = {m["config"]["target"]: m["config"]["template"]
+                 for m in organisation_provider_mappers("org")
+                 if m["identityProviderMapper"] == "oidc-username-idp-mapper"}  # fmt: skip
+    assert templates == {"BROKER_USERNAME": "${CLAIM.preferred_username} ${CLAIM.sub}",
+                         "LOCAL": "${CLAIM.preferred_username}"}  # fmt: skip

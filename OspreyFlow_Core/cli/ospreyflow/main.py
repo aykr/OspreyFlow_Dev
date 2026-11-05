@@ -46,8 +46,11 @@ from .doctor import (
     ServerPlan,
     SystemProbes,
     format_check,
+    TRUST_EMAIL_FIX,
+    TRUST_EMAIL_SAYS,
     gpu_checks,
     gpu_plan,
+    joins_by_email,
     run_doctor,
 )
 from .home import (
@@ -375,8 +378,13 @@ def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
         server = server_plan(answers)
         gpu = _gpu_of(answers, base)
     ok = _print_checks(
-        run_doctor(args.mode, probes, product=product, cloud=args.cloud, server=server, gpu=gpu)
-    )
+        run_doctor(
+            args.mode, probes, product=product, cloud=args.cloud, server=server, gpu=gpu,
+            # ADR-114 Amendment 33, "Step 33": the installed deployment's own setting, when the
+            # answers are not given (their own setting is checked with the server's).
+            joins_by_email=server is None and joins_by_email(base),
+        )
+    )  # fmt: skip
     return 0 if ok else 1
 
 
@@ -878,6 +886,9 @@ def _install_on_server(ctx: _Context, args: argparse.Namespace, answers: Answers
                 f"{logout}, assigned to the people who may sign in. A person signing in that way "
                 "has no role until an administrator grants one in Admin, People and roles."
             )
+            if plan.organisation.get("trust_email") == "true":
+                # ADR-114 Amendment 33, "Step 33": said again as the install ends.
+                print(f"WARNING: {TRUST_EMAIL_SAYS} {TRUST_EMAIL_FIX}")
     return 0
 
 

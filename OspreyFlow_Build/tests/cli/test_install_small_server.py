@@ -178,3 +178,20 @@ def test_organisation_sign_in_install_prints_what_the_organisation_registers(
     endpoint = "https://id.osprey.example.internal/realms/osprey/broker/org/endpoint"
     assert endpoint in out and f"{endpoint}/logout_response" in out
     assert "a-test-value" not in out
+
+
+def test_an_install_that_joins_by_email_warns_at_the_doctor_and_again_at_the_end(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 33, "Step 33": the setting reaches `osprey.yaml`, and the install says the
+    takeover risk twice — among the doctor's checks, and after the addresses to register."""
+    organisation = {"alias": "org", "label": "Example Organisation account",
+                    "issuer": "https://login.example.internal/realms/org", "client_id": "osprey",
+                    "trust_email": True}  # fmt: skip
+    answers = _answers(tmp_path, {**SERVER_ANSWERS, "sign_in": {"organisation": organisation}})
+    monkeypatch.setenv("OSPREY_ORG_SIGN_IN_SECRET", "a-test-value")
+    assert rig("install", "--mode", "small", "--config", str(answers), "--force") == 0
+    assert rig.config()["governance"]["organisation_provider"]["trust_email"] is True  # type: ignore[index]
+    out = capsys.readouterr().out
+    assert out.count("nOAuth") == 2, out
+    assert out.rindex("nOAuth") > out.index("logout_response")
