@@ -97,19 +97,29 @@ async def test_the_read_set_is_the_source_and_the_layer_and_nothing_else(
     assert layer.name == "Analyst layer: Case A"
 
 
+@pytest.mark.parametrize("defect", ["layer missing", "another case's layer added"])
 async def test_the_read_set_check_fails_with_the_layer_missing_or_another_layer_added(
-    store: InMemoryDatasetStore,
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch, defect: str
 ) -> None:
-    """Rule 15: the two wrong read sets, in the shape `ids_of_case` returns, are caught."""
+    """Rule 15: each defect planted in `datasets.read_set` itself, the function `ids_of_case` and
+    so `scope_to_case` build the principal from, is caught by the check the test above makes."""
     await store.set_for_case("case-a", ["enron"], ALICE)
     await store.set_for_case("case-b", ["enron"], BOB)
     layer_a = await store.layer_of_case("case-a")
     layer_b = await store.layer_of_case("case-b")
     assert layer_a and layer_b
+    real = datasets_module.read_set
+
+    def planted(chosen: Sequence[Dataset], layer: str | None) -> list[str]:
+        held = real(chosen, layer)
+        if defect == "layer missing":
+            return [d for d in held if d != layer]
+        return [*held, layer_b if layer == layer_a else layer_a]
+
+    monkeypatch.setattr(datasets_module, "read_set", planted)
+    scoped = await scope_to_case(ALICE, "case-a", store)
     with pytest.raises(AssertionError):
-        assert_read_set(["enron"], source=["enron"], layer=layer_a)
-    with pytest.raises(AssertionError):
-        assert_read_set(["enron", layer_a, layer_b], source=["enron"], layer=layer_a)
+        assert_read_set(scoped.datasets or [], source=["enron"], layer=layer_a)
 
 
 async def test_a_composite_case_reads_its_members_its_own_id_and_its_layer(
@@ -290,14 +300,21 @@ def client(store: InMemoryDatasetStore):  # type: ignore[no-untyped-def]
 
 
 def test_no_route_lists_a_layer(client, store: InMemoryDatasetStore) -> None:  # type: ignore[no-untyped-def]
-    http, _ = client
+    http, who = client
     made = http.post("/v1/investigations", json={"name": "A", "dataset_ids": ["enron"]}).json()
     layer = store.datasets[next(i for i, d in store.datasets.items() if d.kind == ANALYST_LAYER)]
     assert layer.layer_of == made["id"]
-    seen = str(http.get("/v1/datasets").json())
-    seen += str(http.get(f"/v1/investigations/{made['id']}/datasets").json())
-    seen += str(http.get("/v1/investigations").json())
+    seen = ""
+    for reader in READERS:  # an analyst, an administrator, and someone holding no role
+        who["principal"] = reader.model_copy(update={"id": "alice"})  # Alice's own case
+        seen += str(http.get("/v1/datasets").json())
+        seen += str(http.get(f"/v1/investigations/{made['id']}/datasets").json())
+        seen += str(http.get("/v1/investigations").json())
+        seen += str(http.get("/v1/admin/datasets").json())
     assert layer.id not in seen and layer.name not in seen
+    # ... and the administrator's list did answer (so the check above looked at something).
+    who["principal"] = ADMIN
+    assert http.get("/v1/admin/datasets").status_code == 200
 
 
 def test_a_layer_is_refused_at_the_route_as_a_missing_dataset(client, store) -> None:  # type: ignore[no-untyped-def]
@@ -358,3 +375,23 @@ def test_a_composite_is_made_of_the_units_sources_only(client, store) -> None:  
     assert {(r.status_code, str(r.json())) for r in answers.values()} == {
         (422, str({"error": "dataset_refused"}))
     }
+
+
+async def test_a_refusal_to_send_names_the_source_never_the_layer(
+    store: InMemoryDatasetStore,
+) -> None:
+    """ADR-136 and ADR-143 decision 1: a model request carries the case's read set, layer included;
+    the refusal names the source once and never the layer, and its verdict is the source's."""
+    from services.api.model_routing import Engine, dataset_refusal
+
+    await store.set_for_case("case-a", ["enron"], ALICE, case_name="Shipping")
+    reads = await store.ids_of_case("case-a")
+    engine = Engine(
+        name="hosted", label="Hosted", models={}, key_present=True, privacy_contract=False
+    )
+    refusal = dataset_refusal(engine, reads, await store.egress_of(reads))
+    assert refusal is not None
+    assert refusal.startswith("“Enron corpus” is set to egress none")
+    assert "Analyst layer" not in refusal and "Shipping" not in refusal
+    await store.set_egress("enron", "any")
+    assert dataset_refusal(engine, reads, await store.egress_of(reads)) is None

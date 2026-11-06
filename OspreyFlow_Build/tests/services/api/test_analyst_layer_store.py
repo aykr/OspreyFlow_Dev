@@ -68,6 +68,21 @@ async def test_a_case_reads_its_source_and_its_own_layer_and_lists_never_show_it
     assert (held.kind, held.layer_of) == (ANALYST_LAYER, case_a)
 
 
+async def test_the_list_check_fails_with_the_condition_planted_out(store, monkeypatch) -> None:
+    """Rule 15: with the one condition every Postgres list carries replaced by `TRUE`, the layer
+    is listed, by `list_for` and by `list_all` alike, so the test above could have seen it."""
+    from services.api import datasets as datasets_module
+
+    monkeypatch.setattr(datasets_module, "_OFFERED", "TRUE")
+    alice = _analyst()
+    source = await store.create(alice, "Source")
+    case = new_id()
+    await store.set_for_case(case, [source.id], alice)
+    layer = await store.layer_of_case(case)
+    assert layer in {d.id for d in await store.list_for(alice)}
+    assert layer in {d.id for d in await store.list_all()}
+
+
 async def test_a_layer_is_refused_as_a_missing_dataset_and_its_name_is_free(store) -> None:
     alice = _analyst()
     source = await store.create(alice, "Source")
@@ -80,7 +95,9 @@ async def test_a_layer_is_refused_as_a_missing_dataset_and_its_name_is_free(stor
             await store.set_for_case(new_id(), [named], alice)
         with pytest.raises(DatasetRefusedError):
             await store.create_composite(alice, f"With {named}", [source.id, named])
-    taken = (await store.egress_of([layer]))[layer].name
+    from services.api.datasets import layer_name
+
+    taken = layer_name("Shipping", case)  # the layer's own name, which no response carries
     assert (await store.create(alice, taken)).name == taken
 
 

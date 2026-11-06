@@ -249,7 +249,7 @@ class _Datasets:
     def __init__(self) -> None:
         self.copies: list[tuple[str, str]] = []
 
-    async def copy_case(self, source: str, new: str) -> None:
+    async def copy_case(self, source: str, new: str, *, case_name: str | None = None) -> None:
         self.copies.append((source, new))
 
 

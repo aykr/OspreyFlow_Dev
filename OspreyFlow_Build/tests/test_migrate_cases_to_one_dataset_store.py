@@ -63,3 +63,119 @@ async def test_the_migration_places_cases_naming_two_and_the_store_then_holds_th
         await store.close()
         await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
         await admin.close()
+
+
+#: A deployment as it stood before dataset kinds: no `kind`, `layer_of` or `composite_members`.
+_BEFORE_KINDS = """
+CREATE TABLE investigations (
+    id TEXT PRIMARY KEY, name TEXT, owning_unit TEXT NOT NULL, branched_from TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), removed_at TIMESTAMPTZ
+);
+CREATE TABLE datasets (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, owning_unit TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL, created_by TEXT NOT NULL,
+    egress TEXT NOT NULL DEFAULT 'none'
+);
+CREATE UNIQUE INDEX datasets_unit_name_unique
+    ON datasets (owning_unit, lower(regexp_replace(btrim(name), '\\s+', ' ', 'g')));
+CREATE TABLE investigation_datasets (
+    investigation_id TEXT NOT NULL, dataset_id TEXT NOT NULL REFERENCES datasets (id),
+    position INTEGER NOT NULL, PRIMARY KEY (investigation_id, dataset_id)
+);
+INSERT INTO investigations (id, name, owning_unit) VALUES ('one', 'One', 'u'), ('two', 'Two', 'u');
+INSERT INTO investigations (id, name, owning_unit, removed_at) VALUES ('gone', 'Gone', 'u', now());
+INSERT INTO datasets (id, name, owning_unit, created_at, created_by) VALUES
+    ('a', 'A', 'u', now(), 't'), ('b', 'B', 'u', now(), 't');
+INSERT INTO investigation_datasets VALUES
+    ('one', 'a', 0), ('two', 'a', 0), ('two', 'b', 1), ('gone', 'a', 0), ('gone', 'b', 1),
+    ('nobody', 'a', 0), ('nobody', 'b', 1);
+"""
+
+_SHAPE = """
+SELECT
+  (SELECT string_agg(table_name || '.' || column_name, ',' ORDER BY table_name, column_name)
+     FROM information_schema.columns WHERE table_schema = current_schema()),
+  (SELECT string_agg(indexdef, ',' ORDER BY indexdef)
+     FROM pg_indexes WHERE schemaname = current_schema()),
+  (SELECT string_agg(investigation_id || dataset_id, ',' ORDER BY investigation_id, dataset_id)
+     FROM investigation_datasets),
+  (SELECT string_agg(id || name, ',' ORDER BY id) FROM datasets)
+"""
+
+
+async def _old_deployment() -> tuple[asyncpg.Connection, str, str]:
+    base = PostgresConfig.from_env().dsn
+    schema = f"migrate_main_{new_id().lower()}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE SCHEMA "{schema}"')
+    dsn = f"{base}{'&' if '?' in base else '?'}search_path={schema}"
+    conn = await asyncpg.connect(dsn)
+    await conn.execute(_BEFORE_KINDS)
+    await conn.close()
+    return admin, schema, dsn
+
+
+async def test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row() -> None:
+    """`_main(["--dry-run"])` over a deployment made before kinds: the schema and every row are
+    exactly as before, and it still reports what it would do, a removed case and a row with no
+    case record among them."""
+    import scripts.migrate_cases_to_one_dataset as migration
+
+    admin, schema, dsn = await _old_deployment()
+    try:
+        conn = await asyncpg.connect(dsn)
+        before = await conn.fetchrow(_SHAPE)
+        code = await migration._main(["--dry-run"], dsn=dsn)
+        assert await conn.fetchrow(_SHAPE) == before
+        assert code == 1  # the row with no case record is reported
+        await conn.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()
+
+
+async def test_the_dry_run_check_fails_with_the_bootstrapping_store_opened(monkeypatch) -> None:
+    """Rule 15, at `_main`: the dry run handed the real store's `connect`, as it was before this
+    fix, is caught by the same comparison."""
+    import scripts.migrate_cases_to_one_dataset as migration
+
+    async def bootstrapping(conn: asyncpg.Connection, dsn: str) -> PostgresDatasetStore:
+        return await PostgresDatasetStore.connect(dsn)
+
+    monkeypatch.setattr(migration, "dry_run_store", bootstrapping)
+    admin, schema, dsn = await _old_deployment()
+    try:
+        conn = await asyncpg.connect(dsn)
+        before = await conn.fetchrow(_SHAPE)
+        await migration._main(["--dry-run"], dsn=dsn)
+        assert await conn.fetchrow(_SHAPE) != before
+        await conn.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()
+
+
+async def test_the_real_run_places_a_removed_case_and_reports_rows_with_no_case() -> None:
+    """A removed case naming two would keep the one-row index from being built, so it is placed
+    like any other; rows with no case record are reported, and the index then waits for them."""
+    import scripts.migrate_cases_to_one_dataset as migration
+
+    admin, schema, dsn = await _old_deployment()
+    try:
+        code = await migration._main([], dsn=dsn)
+        assert code == 1
+        store = await PostgresDatasetStore.connect(dsn)
+        try:
+            for case in ("one", "two", "gone"):
+                assert len(await store.chosen_of_case(case)) == 1
+                assert await store.layer_of_case(case) is not None
+        finally:
+            await store.close()
+        conn = await asyncpg.connect(dsn)
+        assert await index_one_dataset_per_case(conn) is False  # 'nobody' still names two
+        await conn.execute("DELETE FROM investigation_datasets WHERE investigation_id = 'nobody'")
+        assert await index_one_dataset_per_case(conn) is True
+        await conn.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()

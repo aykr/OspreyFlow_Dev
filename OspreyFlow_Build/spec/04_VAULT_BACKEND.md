@@ -245,10 +245,11 @@ egress `none` (every dataset's setting until an administrator changes it, those 
 included), `contracted` (only a provider marked `privacy_contract: true`) or `any`. Material whose
 datasets are not given or not found is `none`. Each caller names the datasets on its request (Ask the
 case: the case's; a Document: its own; an extraction in a case: the case's), and the routing reads
-their egress from the `datasets` table (`model_routing.dataset_refusal`). A case's analyst layer has
-no egress of its own: it reads as the strictest of what its case otherwise reads, and a composite made
-by the migration or a seed starts at the strictest of its members' (`datasets.layer_egress`,
-`datasets.compose_for_case`; ADR-143 decision 1; pending the owner's ruling on a layer's egress).
+their egress from the `datasets` table (`model_routing.dataset_refusal`). **Interim, pending the
+owner and an ADR-136 amendment** (`01_DOMAIN_MODEL.md` §2.2a): a case's analyst layer reads as the
+strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`); a
+composite made by the migration or a seed starts at the strictest of its members'
+(`datasets.compose_for_case`), so a migrated case may send exactly what it sent before.
 
 ## 5. Supporting services
 

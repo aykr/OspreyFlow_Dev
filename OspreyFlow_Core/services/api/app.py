@@ -3243,7 +3243,9 @@ async def branch_investigation(
         **({"branch_window": held_window} if held_window is not None else {}),
     )
     # ADR-099: a branch reads what its parent reads.
-    await datasets.copy_case(investigation.id, new_investigation.id)
+    await datasets.copy_case(
+        investigation.id, new_investigation.id, case_name=new_investigation.name
+    )
     if window is not None:
         outcome = await working_set.branch_add(
             new_investigation.id, lit_nodes, lit_links, principal
@@ -3317,7 +3319,9 @@ async def branch_investigation_by_filter(
         branched_from=investigation.id,
         domains=investigation.domains_to_inherit(),
     )
-    await datasets.copy_case(investigation.id, new_investigation.id)
+    await datasets.copy_case(
+        investigation.id, new_investigation.id, case_name=new_investigation.name
+    )
     outcome = await working_set.branch_add(new_investigation.id, nodes, edges, principal)
     await publish_delta(valkey, new_investigation.id, outcome.delta)
     await _record_history_step(
@@ -6383,12 +6387,12 @@ async def jump_alert_route(
     # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
     # neither, a dataset of its own.
     if alert.dataset_id is not None:
-        await datasets.set_for_case(branch.id, [alert.dataset_id], principal)
+        await datasets.set_for_case(branch.id, [alert.dataset_id], principal, case_name=branch.name)
     elif alert.investigation_id is not None:
-        await datasets.copy_case(alert.investigation_id, branch.id)
+        await datasets.copy_case(alert.investigation_id, branch.id, case_name=branch.name)
     if not await datasets.ids_of_case(branch.id):
         own = await datasets.create(principal, branch.name, suffix_if_taken=True)
-        await datasets.set_for_case(branch.id, [own.id], principal)
+        await datasets.set_for_case(branch.id, [own.id], principal, case_name=branch.name)
     principal = await scope_to_case(principal, branch.id, datasets)
     nodes = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
     outcome = await working_set.seed(branch.id, nodes, [], principal)
@@ -12490,8 +12494,13 @@ async def case_model_engines_route(
 
     ADR-099 Amendment 11: the datasets are those the store names to the caller, so a caller holding
     no right is given the reason for data not known — no name, and no count. For anyone else that is
-    every dataset of the case (`investigation_datasets` refers only to registered datasets)."""
-    case_datasets = [d.id for d in await datasets.of_case(investigation.id, principal)]
+    every dataset of the case (`investigation_datasets` refers only to registered datasets).
+
+    ADR-143 decision 1, ADR-099 Amendment 12: judged over the case's read set, as the routing judges
+    a request (a composite's members and its own id, and the case's layer, named as its source by
+    `datasets.as_its_case`), so an engine shown available is one the routing will not refuse."""
+    named = await datasets.of_case(investigation.id, principal)
+    case_datasets = await datasets.ids_of_case(investigation.id) if named else []
     held = await datasets.egress_of(case_datasets)
     return OfferedEngines(engines=routes.offered(case_datasets, held))
 

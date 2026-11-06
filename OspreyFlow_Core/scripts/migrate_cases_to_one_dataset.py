@@ -21,16 +21,24 @@ Then, on a real run, it builds the one-row-per-case index on `investigation_data
 makes "one dataset per case" a rule of the store rather than of the code; the index is refused while
 any case still names two, so it says whether it was built.
 
-**The dry run writes nothing by construction:** every write goes through the store it is handed,
-and a dry run is handed `DryRun`, which records each write and returns a stand-in instead of making
-it (`test_migrate_cases_to_one_dataset.py` shows it red with the real store handed in its place). A
-second real run finds every case placed and changes nothing.
+**The dry run writes nothing by construction,** twice over. It never opens `PostgresDatasetStore`,
+whose `connect` adds columns, tables and indexes: it reads a snapshot of the tables with plain
+`SELECT`s that work on a deployment made before dataset kinds (`snapshot`), and plans against that
+copy. And every write the plan makes goes through `DryRun`, which records it and makes nothing.
+`test_migrate_cases_to_one_dataset.py` shows the second red (the real store handed in);
+`test_migrate_cases_to_one_dataset_store.py` shows the first, at `_main` itself, red with the
+bootstrapping store opened instead. A second real run finds every case placed and changes nothing.
+
+**Every case that holds rows is considered,** a removed case (ADR-052 Amendment 7) included, since
+its rows would keep the one-row index from being built; rows naming no case record at all are
+reported, not placed.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -43,6 +51,7 @@ from services.api.datasets import (
     SOURCE,
     Dataset,
     DatasetStore,
+    InMemoryDatasetStore,
     PostgresDatasetStore,
     compose_for_case,
     index_one_dataset_per_case,
@@ -51,7 +60,7 @@ from services.api.datasets import (
 from schemas.admin import DatasetEgress
 from schemas.domain import Principal
 
-from .stamp_datasets import CaseRow, _cases
+from .stamp_datasets import CaseRow
 
 ACTOR = "migrate-cases-to-one-dataset"
 
@@ -222,29 +231,94 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def _main(argv: list[str] | None = None) -> int:
+async def all_cases(conn: asyncpg.Connection) -> tuple[list[CaseRow], list[str]]:
+    """Every case, removed ones included, oldest first; and the ids that hold rows in
+    `investigation_datasets` with no case record."""
+    rows = await conn.fetch(
+        "SELECT id, name, owning_unit, branched_from FROM investigations ORDER BY created_at, id"
+    )
+    cases = [CaseRow(r["id"], r["name"], r["owning_unit"], r["branched_from"]) for r in rows]
+    orphans = await conn.fetch(
+        "SELECT DISTINCT c.investigation_id FROM investigation_datasets c "
+        "LEFT JOIN investigations i ON i.id = c.investigation_id WHERE i.id IS NULL "
+        "ORDER BY c.investigation_id"
+    )
+    return cases, [r["investigation_id"] for r in orphans]
+
+
+async def snapshot(conn: asyncpg.Connection) -> InMemoryDatasetStore:
+    """The datasets, composites and what each case names, read with `SELECT`s only, into a store
+    the dry run can plan against. `to_jsonb` reads a row whatever columns it has, so a deployment
+    made before dataset kinds (no `kind`, no `layer_of`, no `composite_members`) reads too."""
+    held = InMemoryDatasetStore()
+    members: dict[str, list[str]] = {}
+    if await conn.fetchval("SELECT to_regclass('composite_members') IS NOT NULL"):
+        for r in await conn.fetch(
+            "SELECT composite_id, member_id FROM composite_members ORDER BY composite_id, position"
+        ):
+            members.setdefault(r["composite_id"], []).append(r["member_id"])
+    for r in await conn.fetch("SELECT to_jsonb(d) AS row FROM datasets d"):
+        row = json.loads(r["row"]) if isinstance(r["row"], str) else r["row"]
+        held.add(
+            Dataset(
+                id=row["id"],
+                name=row["name"],
+                owning_unit=row["owning_unit"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                created_by=row["created_by"],
+                egress=row.get("egress") or "none",
+                kind=row.get("kind") or SOURCE,
+                members=members.get(row["id"], []),
+                layer_of=row.get("layer_of"),
+            )
+        )
+    for r in await conn.fetch(
+        "SELECT investigation_id, dataset_id FROM investigation_datasets "
+        "ORDER BY investigation_id, position"
+    ):
+        held.cases.setdefault(r["investigation_id"], []).append(r["dataset_id"])
+    return held
+
+
+async def dry_run_store(conn: asyncpg.Connection, dsn: str) -> DatasetStore:
+    """What the dry run plans against: the snapshot, never the bootstrapping store."""
+    return await snapshot(conn)
+
+
+async def _main(argv: list[str] | None = None, *, dsn: str | None = None) -> int:
     args = _parse(argv)
     write = not args.dry_run
     print(
         "Dry run: nothing will be written." if not write else "Placing every case on one dataset."
     )
-    dsn = PostgresConfig.from_env().dsn
-    store = await PostgresDatasetStore.connect(dsn)
+    dsn = dsn or PostgresConfig.from_env().dsn
+    conn = await asyncpg.connect(dsn)
     try:
-        report = await migrate(store, await _cases(dsn), write=write)
-        if write:
-            conn = await asyncpg.connect(dsn)
+        cases, orphans = await all_cases(conn)
+        if not write:
+            report = await migrate(await dry_run_store(conn, dsn), cases, write=False)
+        else:
+            store = await PostgresDatasetStore.connect(dsn)
             try:
-                indexed = await index_one_dataset_per_case(conn)
+                report = await migrate(store, cases, write=True)
             finally:
-                await conn.close()
+                await store.close()
+        stray = [
+            f"(no case record) ({orphan}): its rows name datasets for a case that does not exist"
+            for orphan in orphans
+        ]
+        for line in stray:
+            print(f"  not placed: {line}")
+        report.unplaced.extend(stray)
+        if write:
+            indexed = await index_one_dataset_per_case(conn)
             print(
                 "One dataset per case is now a rule of the store."
                 if indexed
                 else "Some case still names two datasets; the one-per-case index is not built."
             )
     finally:
-        await store.close()
+        await conn.close()
     made = sum(1 for _, _, new in report.composed if new)
     print(
         f"{len(report.kept)} kept, {len(report.composed)} on a composite ({made} made), "

@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 
 import pytest
 from scripts.stamp_datasets import CaseRow, StampReport, _Sql, stamp
-from services.api.datasets import InMemoryDatasetStore
+from services.api.datasets import InMemoryDatasetStore, named_by_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
@@ -182,10 +182,10 @@ async def test_a_store_loaded_before_adr_099_is_given_its_datasets(store: _Store
     )
     assert link.datasets == ["enron"]
 
-    assert await store.datasets.ids_of_case(ENRON_CASE.id) == ["enron"]
-    assert await store.datasets.ids_of_case(FIXTURE_CASE.id) == ["fixture-corp"]
-    assert await store.datasets.ids_of_case(BRANCH.id) == ["fixture-corp"]
-    assert await store.datasets.ids_of_case(HMP_CASE.id) == ["hmp"]
+    assert await named_by_case(store.datasets, ENRON_CASE.id) == ["enron"]
+    assert await named_by_case(store.datasets, FIXTURE_CASE.id) == ["fixture-corp"]
+    assert await named_by_case(store.datasets, BRANCH.id) == ["fixture-corp"]
+    assert await named_by_case(store.datasets, HMP_CASE.id) == ["hmp"]
     analyst = EVERYONE.model_copy(update={"roles": ["analyst"]})  # ADR-099 Amendment 11
     (own,) = await store.datasets.of_case(SCRATCH.id, analyst)
     assert own.name == "Scratch" and own.owning_unit == "unit-1"

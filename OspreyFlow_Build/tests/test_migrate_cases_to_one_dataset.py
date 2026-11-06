@@ -157,3 +157,25 @@ async def test_a_case_it_cannot_place_is_reported_not_guessed(
         "Crossed (crossed-case)",
     ]
     assert _state(store) == before  # nothing written for either, not even a layer
+
+
+async def test_a_case_naming_a_composite_beside_another_dataset_is_reported(
+    store: InMemoryDatasetStore,
+) -> None:
+    both = Dataset(
+        id="both",
+        name="Both",
+        owning_unit=UNIT,
+        created_at=datetime(2026, 10, 1, tzinfo=UTC),
+        created_by="seed",
+        kind=COMPOSITE,
+        members=["enron", "fixture-corp"],
+    )
+    store.add(both)
+    store.cases["odd-case"] = ["both", "hmp"]
+    before = _state(store)
+    report = await migrate(
+        store, [CaseRow("odd-case", "Odd", UNIT, None)], write=True, say=lambda _: None
+    )
+    assert report.unplaced == ["Odd (odd-case): names a composite beside another dataset"]
+    assert _state(store) == before

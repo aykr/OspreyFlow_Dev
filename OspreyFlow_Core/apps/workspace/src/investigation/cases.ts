@@ -309,15 +309,15 @@ export function nestCases(
 }
 
 
-/** A dataset as the Glass names it: its name and its id, so two that read alike are told apart
- * (ADR-099 Amendment 6). An id of twelve characters or fewer (the seeds' `enron`) is shown whole;
- * a longer one (a ULID) by its last five. */
 /** How a dataset is offered in a choice: its name, and for a composite how many it joins. */
 export function datasetChoiceLabel(dataset: Dataset): string {
   const joins = dataset.kind === "composite" ? (dataset.members?.length ?? 0) : 0;
   return joins > 0 ? `${dataset.name} (a composite of ${joins} datasets)` : dataset.name;
 }
 
+/** A dataset as the Glass names it: its name and its id, so two that read alike are told apart
+ * (ADR-099 Amendment 6). An id of twelve characters or fewer (the seeds' `enron`) is shown whole;
+ * a longer one (a ULID) by its last five. */
 export function datasetLabel(id: string, name: string): string {
   return `${name} · ${id.length <= 12 ? id : `\u2026${id.slice(-5)}`}`;
 }

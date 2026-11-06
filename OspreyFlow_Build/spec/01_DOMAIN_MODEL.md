@@ -558,9 +558,12 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
     dataset), and its name takes no place in the unit's unique names. A branch has a layer of its
-    own (a layer is never shared with another case). Its egress (ADR-136) is not its own: it reads
-    as the strictest of what its case otherwise reads (`datasets.layer_egress`; pending the owner's
-    ruling on a layer's egress, raised at L3.1).
+    own (a layer is never shared with another case). **Interim, not a decision:** its egress
+    (ADR-136) is read as the strictest of what its case otherwise reads, under that dataset's name
+    (`datasets.as_its_case`), so it changes no verdict and its own name is in no refusal; ADR-136
+    decision 2's `none` would have stopped every case asking a hosted model. The owner rules on it
+    (raised at L3.1), and the ruling is recorded as an ADR-136 amendment before drawing (L3.3) puts
+    material in a layer.
 - **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
   decision 1); a branch takes its parent's; only the case's Author changes it, and each change is
   audited (decision 3). A new case names an existing dataset or a new one; the Conduit no longer

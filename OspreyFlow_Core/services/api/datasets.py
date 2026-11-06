@@ -114,6 +114,18 @@ def layer_egress(case_egresses: Sequence[DatasetEgress]) -> DatasetEgress:
     return strictest_egress(case_egresses)
 
 
+def as_its_case(layer: Dataset, others: Sequence[Dataset]) -> Dataset:
+    """A layer as an egress question sees it (ADR-136): the strictest egress of what its case
+    otherwise reads (`layer_egress`), under the name of the dataset it takes that egress from. It
+    then never changes a verdict on its own, and a refusal that names datasets names that one, as
+    it would without the layer: the layer's own name is never in a response (ADR-143 decision 1).
+    With nothing else to go by it is `none`, named as the case's own drawn data."""
+    egress = layer_egress([d.egress for d in others])
+    source = next((d for d in others if d.egress == egress), None)
+    name = source.name if source is not None else "this case's own drawn data"
+    return layer.model_copy(update={"egress": egress, "name": name})
+
+
 def read_set(chosen: Sequence[Dataset], layer: str | None) -> list[str]:
     """ADR-143 decision 1: what a request under a case reads, from what the case chose and its
     layer. A composite reads as its members then its own id (ADR-099 Amendment 12 item 3). A case
@@ -177,7 +189,9 @@ class DatasetStore(Protocol):
         *,
         case_name: str | None = None,
     ) -> list[Dataset]: ...
-    async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None: ...
+    async def copy_case(
+        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+    ) -> None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -254,6 +268,13 @@ def _members_of(dataset: Dataset) -> list[str]:
     return list(dataset.members) if dataset.kind == COMPOSITE else [dataset.id]
 
 
+async def named_by_case(store: DatasetStore, investigation_id: str) -> list[str]:
+    """The source datasets a case names, a composite as its members: its read set without the
+    composite's own id or the case's layer. For a script asking what a case *names* (to copy it, or
+    widen it), never `ids_of_case`, which is what it *reads* and holds the case's own layer."""
+    return [m for d in await store.chosen_of_case(investigation_id) for m in _members_of(d)]
+
+
 async def read_also(
     store: DatasetStore,
     investigation_id: str,
@@ -267,7 +288,7 @@ async def read_also(
     a case never names two). What a seed loaded into an existing case does; idempotent. Returns
     the id the case now chooses."""
     chosen = await store.chosen_of_case(investigation_id)
-    reads = [m for d in chosen for m in _members_of(d)]
+    reads = await named_by_case(store, investigation_id)
     if dataset_id in reads and len(chosen) == 1:
         return chosen[0].id
     members = list(dict.fromkeys([*reads, dataset_id]))
@@ -446,7 +467,9 @@ class InMemoryDatasetStore:
         )
         return await self.of_case(investigation_id, principal)
 
-    async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None:
+    async def copy_case(
+        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+    ) -> None:
         """A branch reads its parent's chosen dataset, and has a layer of its own: a layer is
         never shared with another case (ADR-143 decision 1), a branch included."""
         chosen = list(self.cases.get(from_investigation_id, []))
@@ -454,7 +477,10 @@ class InMemoryDatasetStore:
         if chosen:
             parent = self.datasets[chosen[0]]
             await self.ensure_layer(
-                to_investigation_id, unit=parent.owning_unit, created_by=parent.created_by
+                to_investigation_id,
+                unit=parent.owning_unit,
+                created_by=parent.created_by,
+                case_name=case_name,
             )
 
     async def list_all(self) -> list[Dataset]:
@@ -465,11 +491,11 @@ class InMemoryDatasetStore:
         for dataset_id, dataset in held.items():
             if dataset.kind == ANALYST_LAYER and dataset.layer_of is not None:
                 others = [
-                    self.datasets[i].egress
+                    self.datasets[i]
                     for i in await self.ids_of_case(dataset.layer_of)
                     if i != dataset_id and i in self.datasets
                 ]
-                held[dataset_id] = dataset.model_copy(update={"egress": layer_egress(others)})
+                held[dataset_id] = as_its_case(dataset, others)
         return held
 
     async def set_egress(
@@ -528,6 +554,9 @@ _COLUMNS = (
 _NAME_KEY_SQL = "lower(regexp_replace(btrim(name), '\\s+', ' ', 'g'))"
 #: Layers are left out of the names (module docstring): a refused name must not say one exists.
 _NAME_INDEX_WHERE = "WHERE kind <> 'analyst_layer'"
+#: ADR-143 decision 1: the condition every dataset list carries, so no list returns a layer. One
+#: constant, read at each query, so `test_analyst_layer_store.py` can plant it out (rule 15).
+_OFFERED = "d.kind <> 'analyst_layer'"
 #: ADR-099 Amendment 12: one row per case, built once no case names two.
 _ONE_PER_CASE_INDEX = "investigation_datasets_one_per_case"
 
@@ -693,7 +722,7 @@ class PostgresDatasetStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM datasets d WHERE d.owning_unit = $1 AND $2::boolean "
-                "AND d.kind <> 'analyst_layer' ORDER BY d.name",
+                f"AND {_OFFERED} ORDER BY d.name",
                 reader.org_unit,
                 reads_dataset_names(reader),
             )
@@ -704,7 +733,7 @@ class PostgresDatasetStore:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM investigation_datasets c "
                 "JOIN datasets d ON d.id = c.dataset_id "
-                "WHERE c.investigation_id = $1 AND $2::boolean AND d.kind <> 'analyst_layer' "
+                f"WHERE c.investigation_id = $1 AND $2::boolean AND {_OFFERED} "
                 "ORDER BY c.position",
                 investigation_id,
                 reads_dataset_names(reader),
@@ -827,8 +856,7 @@ class PostgresDatasetStore:
     async def list_all(self) -> list[Dataset]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT {_COLUMNS} FROM datasets d WHERE d.kind <> 'analyst_layer' "
-                "ORDER BY d.owning_unit, d.name"
+                f"SELECT {_COLUMNS} FROM datasets d WHERE {_OFFERED} ORDER BY d.owning_unit, d.name"
             )
         return [_row(r) for r in rows]
 
@@ -845,14 +873,12 @@ class PostgresDatasetStore:
             if dataset.kind == ANALYST_LAYER and dataset.layer_of is not None:
                 others = [i for i in await self.ids_of_case(dataset.layer_of) if i != dataset_id]
                 async with self._pool.acquire() as conn:
-                    egresses = await conn.fetch(
-                        "SELECT egress FROM datasets WHERE id = ANY($1::text[])", others
+                    rows = await conn.fetch(
+                        f"SELECT {_COLUMNS} FROM datasets d WHERE d.id = ANY($1::text[])", others
                     )
-                held[dataset_id] = dataset.model_copy(
-                    update={
-                        "egress": layer_egress([cast(DatasetEgress, r["egress"]) for r in egresses])
-                    }
-                )
+                order = {i: n for n, i in enumerate(others)}
+                ranked = sorted((_row(r) for r in rows), key=lambda d: order.get(d.id, 0))
+                held[dataset_id] = as_its_case(dataset, ranked)
         return held
 
     async def set_egress(
@@ -872,7 +898,9 @@ class PostgresDatasetStore:
             )
         return cast(DatasetEgress, before), _row(row)
 
-    async def copy_case(self, from_investigation_id: str, to_investigation_id: str) -> None:
+    async def copy_case(
+        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+    ) -> None:
         """A branch reads its parent's chosen dataset and has a layer of its own (ADR-143
         decision 1: a layer is never shared with another case)."""
         async with self._pool.acquire() as conn:
@@ -893,7 +921,10 @@ class PostgresDatasetStore:
             )
         if parent is not None:
             await self.ensure_layer(
-                to_investigation_id, unit=parent["owning_unit"], created_by=parent["created_by"]
+                to_investigation_id,
+                unit=parent["owning_unit"],
+                created_by=parent["created_by"],
+                case_name=case_name,
             )
 
 
@@ -921,7 +952,9 @@ __all__: Sequence[str] = (
     "index_one_dataset_per_case",
     "layer_egress",
     "layer_name",
+    "as_its_case",
     "compose_for_case",
+    "named_by_case",
     "read_also",
     "read_set",
     "CreateDatasetRequest",

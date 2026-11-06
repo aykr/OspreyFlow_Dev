@@ -5,8 +5,8 @@ Case A and case B read the same source dataset; each owns its own analyst layer.
 A's layer from a loaded node (to a drawn node, and between two loaded nodes) must leave everything
 case B can measure about that loaded node exactly as it was before they were written: its degree,
 its degree by link type (the bucket a histogram of the neighbourhood is drawn from), its rank and
-degree in the most-connected list, the type counts, its `expand` neighbourhood, and whether and at
-what length a path reaches another loaded node.
+degree in the most-connected list, the type counts, its `expand` neighbourhood, whether and at
+what length a path reaches another loaded node, and the links `edges_among` finds between the two.
 
 Nothing here is new machinery: the layer is a dataset like any other, filtered by
 `Principal.datasets` in the one access step (`AccessFilter.gremlin_has_step`). That is the point:
@@ -60,6 +60,8 @@ class _Seen:
     edge_counts: dict[str, int]
     expanded: frozenset[str]
     path_lengths: tuple[int, ...]
+    #: The links among what is on screen (ADR-098): the drawn hub-to-far link is one.
+    among: int
 
 
 async def _measure(adapter: GraphPort, hub: str, far: str, reader: Principal) -> _Seen:
@@ -68,6 +70,7 @@ async def _measure(adapter: GraphPort, hub: str, far: str, reader: Principal) ->
     counts = await adapter.type_counts(reader)
     expanded = await adapter.expand(ExpandRequest(node_ids=[hub], depth=2), reader)
     paths = await adapter.paths(PathRequest(source=hub, target=far, max_hops=4, k=5), reader)
+    among = await adapter.edges_among([hub, far], reader)
     return _Seen(
         degree=stats.degree,
         degree_by_type=dict(stats.degree_by_type),
@@ -77,6 +80,7 @@ async def _measure(adapter: GraphPort, hub: str, far: str, reader: Principal) ->
         edge_counts=dict(counts.edges),
         expanded=frozenset(n.id for n in expanded.nodes),
         path_lengths=tuple(sorted(p.length for p in paths)),
+        among=len(among),
     )
 
 
@@ -148,3 +152,4 @@ async def test_the_case_b_check_fails_with_case_a_layer_in_case_b_read_set(
         assert after.edge_counts != before.edge_counts
         assert after.expanded != before.expanded
         assert after.path_lengths != before.path_lengths
+        assert after.among != before.among

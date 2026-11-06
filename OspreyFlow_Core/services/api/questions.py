@@ -574,7 +574,13 @@ class QuestionsService:
                 else None
             ),
         )
-        labels = {d.id: d.name for d in await self._datasets.of_case(investigation_id, principal)}
+        named = await self._datasets.of_case(investigation_id, principal)
+        labels = {d.id: d.name for d in named}
+        # ADR-099 Amendment 12: a composite's links carry its members' ids, so its members are
+        # labelled too; only for a caller the store names datasets to (Amendment 11).
+        members = [m for d in named for m in d.members]
+        if members:
+            labels |= {i: d.name for i, d in (await self._datasets.egress_of(members)).items()}
         brief = write_brief(scope, labels)
         _fits(documents_chars, len(brief.text))
         months, event_handlings, event_scopes = await self._events_per_month(

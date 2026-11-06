@@ -44,7 +44,13 @@ from typing import Any
 
 import asyncpg
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.api.datasets import Dataset, DatasetStore, PostgresDatasetStore, read_also
+from services.api.datasets import (
+    Dataset,
+    DatasetStore,
+    PostgresDatasetStore,
+    named_by_case,
+    read_also,
+)
 from services.api.working_set.store import ValkeyWorkingSetStore, WorkingSetStorage
 from valkey.asyncio import Valkey
 
@@ -342,7 +348,9 @@ async def stamp(
 
     # 3 to 5, per case, parents first.
     for case in _parents_first(cases):
-        held = await datasets.ids_of_case(case.id)
+        # What the case names (a composite as its members), never its read set: that holds the
+        # case's own analyst layer, which no other case may name (ADR-143 decision 1).
+        held = await named_by_case(datasets, case.id)
         node_ids = sorted(await working_sets.node_ids(case.id))
         edge_ids = sorted(await working_sets.edge_ids(case.id))
         if not held:
@@ -361,7 +369,7 @@ async def stamp(
                         break
             if case.branched_from:
                 chosen.extend(report.case_datasets.get(case.branched_from, []))
-                chosen.extend(await datasets.ids_of_case(case.branched_from))
+                chosen.extend(await named_by_case(datasets, case.branched_from))
             on_canvas = await _datasets_by_id(sql, types, [*node_ids, *edge_ids])
             for in_these in on_canvas.values():
                 chosen.extend(in_these)
@@ -499,8 +507,12 @@ async def place_records(
     """Step 6. A record whose case reads no dataset yet is left as it is, and counted with the
     unplaced; one that already has a dataset is never moved, so a second run changes nothing."""
     report = RecordsReport()
+    # The first of the case's read set (`DatasetStore.ids_of_case`): its dataset, or a composite's
+    # first member (ADR-099 Amendment 12; where a composite case's records go is the owner's).
     first_dataset = (
-        "(SELECT d.dataset_id FROM investigation_datasets d "
+        "(SELECT COALESCE((SELECT m.member_id FROM composite_members m "
+        "WHERE m.composite_id = d.dataset_id ORDER BY m.position LIMIT 1), d.dataset_id) "
+        "FROM investigation_datasets d "
         "WHERE d.investigation_id = r.investigation_id ORDER BY d.position LIMIT 1)"
     )
     for table in (*_PLACED_BY_CASE, *_NO_CASE):

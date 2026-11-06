@@ -23,7 +23,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -144,7 +144,10 @@ async def _give_case(investigation_id: str, dataset_ids: list[str]) -> None:
                 )
             except Exception:  # noqa: BLE001 - already registered by an earlier run
                 pass
-        await store.set_for_case(investigation_id, dataset_ids, UNIT)
+        # ADR-099 Amendment 12: a case reading both reads a composite of them.
+        await store.set_for_case(investigation_id, dataset_ids[:1], UNIT)
+        for dataset_id in dataset_ids[1:]:
+            await read_also(store, investigation_id, dataset_id, UNIT)
     finally:
         await store.close()
 
