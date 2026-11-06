@@ -441,24 +441,8 @@ test("the deduplicate key is cleared in Connect by keyboard, and the PATCH carri
   registerCovered(REGISTRY, "clear-the-deduplicate-key-by-keyboard");
 });
 
-test("a second run's report says by keyboard how many rows the case already held", async ({ page }) => {
-  await serve(page, {}, {
-    published: true,
-    run: {
-      load_id: "L2", recipe_id: "r1", recipe_version: 1, rows_read: 40, rows_deduplicated: 0,
-      nodes_created: 0, nodes_referenced: 0, edges_created: 0, rejections: [], rows_already_loaded: 40,
-    },
-  });
-  const open = page.getByRole("button", { name: "Open Carrier B intake" });
-  await open.focus();
-  await page.keyboard.press("Enter");
-  const run = page.getByRole("button", { name: /Run now/ });
-  await run.focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("40 rows already loaded into this case, skipped")).toBeVisible();
-  await expect(page.getByText("Nodes created: 0")).toBeVisible();
-  registerCovered(REGISTRY, "read-rows-already-loaded-on-a-run-report-by-keyboard");
-});
+// "A second run's report says how many rows the case already held" moved to `ingest-studio.spec.ts`
+// with *Run now* (ADR-140 decision 14: Deploy neither runs nor schedules; running is the Runs tab's).
 
 test("verify says by keyboard how many rows the case already holds", async ({ page }) => {
   await serve(page, {}, {
@@ -468,9 +452,9 @@ test("verify says by keyboard how many rows the case already holds", async ({ pa
     },
   });
   await openPipeline(page);
-  await page.getByRole("button", { name: "Verify", exact: true }).focus();
+  await page.getByRole("button", { name: "Test", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Run verify" }).focus();
+  await page.getByRole("button", { name: "Run the test" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("40 rows already loaded into this case, would be skipped")).toBeVisible();
   registerCovered(REGISTRY, "read-rows-already-loaded-in-verify-by-keyboard");

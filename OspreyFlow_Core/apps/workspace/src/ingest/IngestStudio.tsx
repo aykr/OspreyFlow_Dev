@@ -1,34 +1,102 @@
-// The Ingest Studio (ADR-108 phase B): the pipelines home and canvas are the Studio — the 1–9
-// step wizard is replaced outright (the owner's ruling Q6). The unstructured path (ADR-094 step 3,
-// files straight into the case) keeps its own tab, unchanged.
-import { useState } from "react";
+// The Ingest Studio as four places with one method (ADR-140 decision 1, the owner's rulings R1 and
+// R7): 1 Model, 2 Sources, 3 Pipelines, 4 Runs, under a readiness strip, opened on a dataset. Until
+// phase 5 gives the Studio routes of its own, the dataset is reached through one of the person's
+// cases that loads into it (ADR-140 Amendment 2: "Dataset label, case behind"), so every route,
+// role and access check is the case's, exactly as before.
+import { useEffect, useState } from "react";
 
-import { AddFiles } from "../content/AddFiles";
+import { Select } from "../design/primitives/Select";
 import { Tabs } from "../design/primitives/Tabs";
-import { CaseSwitcher } from "../investigation/CaseSwitcher";
+import { type CaseListing, listCases } from "../investigation/cases";
 import { PipelineStudio } from "./dag/PipelineStudio";
+import { RunsTab } from "./runs/RunsTab";
+import { caseForDataset, currentDataset, studioDatasets } from "./studio/datasets";
+import { ModelTab } from "./studio/ModelTab";
+import { ReadinessStrip } from "./studio/ReadinessStrip";
+import { SourcesTab } from "./studio/SourcesTab";
+import { useStudioData } from "./studio/useStudioData";
 
 export interface IngestStudioProps {
   apiBaseUrl: string;
   bearerToken: string;
-  /** ADR-099 Amendment 3: a recipe and a source file belong to the dataset of the case they are
-   * made in, so the studio works only within a case. */
+  /** The case the Studio works through (ADR-099 Amendment 3: a recipe and a source file belong to
+   * the dataset of the case they are made in). */
   investigationId: string | null;
-  /** Switching to another case, or one just created, from the studio (owner, 29 September 2026). */
+  /** Opening the case that serves another dataset, chosen in the switcher. */
   onOpenCase: (id: string) => void;
+  /** The person's rights (`GET /v1/me/rights`): `revert_loads` shows a load's revert command. */
+  rights?: ReadonlySet<string> | null;
+  /** The person's user name, for the revert command's `--reverted-by`. */
+  username?: string | null;
 }
 
-type Stage = "pipelines" | "files";
+export type StudioPlace = "model" | "sources" | "pipelines" | "runs";
 
-export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenCase }: IngestStudioProps) {
-  const [stage, setStage] = useState<Stage>("pipelines");
+export const STUDIO_PLACES: { id: StudioPlace; label: string }[] = [
+  { id: "model", label: "1 Model" },
+  { id: "sources", label: "2 Sources" },
+  { id: "pipelines", label: "3 Pipelines" },
+  { id: "runs", label: "4 Runs" },
+];
 
+export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenCase, rights, username }: IngestStudioProps) {
   if (!investigationId) {
     return (
       <p className="label" style={{ padding: "var(--sp-16)" }}>
-        Open a case to use the Ingest Studio: what it loads goes into the case&apos;s data.
+        Open a case to use the Ingest Studio: it works on the dataset the case loads into.
       </p>
     );
+  }
+  return (
+    <Studio
+      apiBaseUrl={apiBaseUrl}
+      bearerToken={bearerToken}
+      investigationId={investigationId}
+      onOpenCase={onOpenCase}
+      rights={rights ?? null}
+      username={username ?? null}
+    />
+  );
+}
+
+function Studio({
+  apiBaseUrl,
+  bearerToken,
+  investigationId,
+  onOpenCase,
+  rights,
+  username,
+}: Omit<IngestStudioProps, "investigationId"> & { investigationId: string }) {
+  // The entry point is the person's (R7); Pipelines is where they were before the redesign.
+  const [place, setPlace] = useState<StudioPlace>("pipelines");
+  const [cases, setCases] = useState<CaseListing[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const data = useStudioData(apiBaseUrl, bearerToken, investigationId);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCases(apiBaseUrl, bearerToken)
+      .then((found) => !cancelled && setCases(found))
+      .catch(() => !cancelled && setCases([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken]);
+
+  const datasets = studioDatasets(cases ?? [], investigationId);
+  const datasetId = currentDataset(cases ?? [], investigationId);
+  const dataset = datasets.find((d) => d.id === datasetId);
+  const datasetName = dataset?.name ?? "this dataset";
+  const servingCase = (cases ?? []).find((c) => c.id === investigationId);
+
+  function choose(id: string) {
+    const caseId = caseForDataset(cases ?? [], id, investigationId);
+    if (caseId) {
+      setProblem(null);
+      if (caseId !== investigationId) onOpenCase(caseId);
+    } else {
+      setProblem("None of your cases loads into that dataset, so the Studio cannot open on it.");
+    }
   }
 
   return (
@@ -40,36 +108,49 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenC
           gap: "var(--sp-16)",
           padding: "var(--sp-8) var(--sp-16)",
           borderBottom: "1px solid var(--border-subtle)",
+          flexWrap: "wrap",
         }}
       >
-        <span className="label">Data loaded from this studio goes into</span>
-        <CaseSwitcher
-          apiBaseUrl={apiBaseUrl}
-          bearerToken={bearerToken}
-          currentId={investigationId}
-          onOpen={onOpenCase}
-        />
-      </div>
-      <Tabs
-        tabs={[
-          { id: "pipelines", label: "Pipelines" },
-          { id: "files", label: "Files" },
-        ]}
-        activeId={stage}
-        onChange={(id) => setStage(id === "files" ? "files" : "pipelines")}
-      />
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-        {stage === "pipelines" && (
-          <PipelineStudio apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} />
+        <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
+          <span className="label">Dataset</span>
+          <Select value={datasetId ?? ""} onChange={(e) => choose(e.target.value)} disabled={datasets.length === 0}>
+            {datasetId === null && <option value="">{cases === null ? "Reading…" : "This case loads into no dataset"}</option>}
+            {datasets.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+        {servingCase && (
+          <span className="label">{`Working through the case “${servingCase.name}”: what loads here goes into ${datasetName}.`}</span>
         )}
-        {stage === "files" && (
-          <AddFiles
+        {problem && <span role="alert">{problem}</span>}
+      </div>
+      <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} runs={data.runs} />
+      <Tabs tabs={STUDIO_PLACES} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
+        {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
+        {place === "sources" && (
+          <SourcesTab apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} pipelines={data.pipelines} />
+        )}
+        {place === "pipelines" && (
+          <PipelineStudio apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} onChanged={data.reload} />
+        )}
+        {place === "runs" && (
+          <RunsTab
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
             investigationId={investigationId}
-            // The canvas is not open here; the case's view gains each Document when it opens.
-            onDelta={() => undefined}
-            onClose={() => setStage("pipelines")}
+            datasetId={datasetId}
+            datasetName={datasetName}
+            pipelines={data.pipelines}
+            runs={data.runs}
+            level={servingCase?.level ?? null}
+            canRevert={rights?.has("revert_loads") ?? false}
+            username={username ?? null}
+            onChanged={data.reload}
           />
         )}
       </div>

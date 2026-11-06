@@ -530,7 +530,6 @@ export const PIPELINE_STUDIO_ACTIONS = defineActionRegistry("PIPELINE_STUDIO_ACT
   "remove-a-deduplicate-key-column-by-keyboard",
   "save-the-deduplicate-key-by-keyboard",
   "clear-the-deduplicate-key-by-keyboard",
-  "read-rows-already-loaded-on-a-run-report-by-keyboard",
   "read-rows-already-loaded-in-verify-by-keyboard",
   // ADR-127 Amendment 13 (B2-7b): the links of the row template in Map, reached by keys alone.
   "select-a-map-link-by-keyboard",
@@ -773,6 +772,21 @@ export const PUBLISH_ACTIONS = defineActionRegistry("PUBLISH_ACTIONS", [
   "pause-and-resume-a-schedule-by-keyboard",
   // ADR-110 Amendment 4: the folder watch.
   "set-a-folder-watch-by-keyboard",
+] as const);
+
+// ADR-140 decision 1 (redesign phase 2): the Ingest Studio's four places, its dataset switcher, the
+// Runs tab and Deploy.
+export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS", [
+  "move-between-the-four-places-by-keyboard",
+  "switch-dataset-by-keyboard",
+  "open-a-days-run-report-by-keyboard",
+  "open-held-rows-from-a-run-by-keyboard",
+  "run-a-pipeline-from-runs-by-keyboard",
+  "add-files-from-sources-by-keyboard",
+  "deploy-a-version-by-keyboard",
+  "deploy-and-run-now-by-keyboard",
+  // Moved from PIPELINE_STUDIO_ACTIONS with Run now (ADR-127 decision 5's count on a run report).
+  "read-rows-already-loaded-on-a-run-report-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.

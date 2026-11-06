@@ -1481,6 +1481,8 @@ export function App() {
             bearerToken={bearerToken}
             investigationId={investigationId}
             onOpenCase={(id) => openCase(id, "ingest")}
+            rights={rights}
+            username={principal?.username || null}
           />
         )}
         {view === "dossier" && dossierNodeId && (
