@@ -33,7 +33,7 @@ import json
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import asyncpg
 import yaml
@@ -1203,6 +1203,33 @@ class StudioRecipeStore:
                 StudioRecipeStatus.PUBLISHED.value,
                 dataset_id,
                 location,
+            )
+        return [row["label"] for row in rows]
+
+    async def follow_source(
+        self,
+        dataset_id: str,
+        location: str,
+        handling: dict[str, Any],
+        legal_basis: str | None,
+    ) -> list[str]:
+        """ADR-140 Amendment 4: a draft reading an edited source takes its new handling and legal
+        basis at once, and its Test no longer stands (as after any edit), so it is tested and
+        deployed under the new governance. A deployed recipe's committed governance is never
+        rewritten here: it is flagged instead (`flag_for_source`). Returns the labels."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE studio_recipes SET content = jsonb_set(jsonb_set(content::jsonb, "
+                "'{handling}', $3::jsonb), '{legal_basis}', "
+                "COALESCE(to_jsonb($4::text), 'null'::jsonb))::text, "
+                "verified_at = NULL, verified_sources = NULL "
+                "WHERE status = $5 AND dataset_id = $1 "
+                "AND content::jsonb ->> 'source_location' = $2 RETURNING label",
+                dataset_id,
+                location,
+                json.dumps(handling),
+                legal_basis,
+                StudioRecipeStatus.DRAFT.value,
             )
         return [row["label"] for row in rows]
 

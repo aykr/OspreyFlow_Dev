@@ -1934,7 +1934,9 @@ async def test_the_source_store_keeps_each_source_to_its_dataset_on_postgres() -
             await sources.register(dataset, body, AUTHOR)
         with pytest.raises(UnknownConnectionError):
             await sources.register(
-                dataset, body.model_copy(update={"connection_id": "nowhere", "location": "/x"}), AUTHOR
+                dataset,
+                body.model_copy(update={"connection_id": "nowhere", "location": "/x"}),
+                AUTHOR,
             )
         edited = await sources.edit_governance(
             dataset, made.id, SourceGovernanceInput(handling={"classification": "SECRET"}), AUTHOR
@@ -1945,3 +1947,27 @@ async def test_the_source_store_keeps_each_source_to_its_dataset_on_postgres() -
         assert named.id in {c.id for c in await sources.connections()}
     finally:
         await sources.close()
+
+
+async def test_a_draft_reading_the_source_follows_its_governance_and_must_be_tested_again(
+    store: StudioRecipeStore,
+) -> None:
+    """Red if a draft keeps the old marking (its next Test and Deploy would load under it), if its
+    Test still stands, or if a deployed recipe's committed marking is rewritten."""
+    dataset = f"ds-{new_id()}"
+    draft = await _verified_draft(store, label="Draft reading it")
+    deployed = await _published_with_pins(store, "Deployed reading it", {})
+    for recipe in (draft, deployed):
+        await _place(store, recipe.recipe_id, dataset, "/ingest/cells.csv")
+    deployed_before = (await store.get(deployed.recipe_id)).handling
+    raised = {
+        "classification": "SECRET", "handling_code": "P", "originator": "u", "owning_unit": "u"
+    }
+
+    followed = await store.follow_source(dataset, "/ingest/cells.csv", raised, "Synthetic, again")
+
+    assert followed == ["Draft reading it"]
+    now = await store.get(draft.recipe_id)
+    assert now.handling == raised and now.legal_basis == "Synthetic, again"
+    assert now.verified_at is None
+    assert (await store.get(deployed.recipe_id)).handling == deployed_before

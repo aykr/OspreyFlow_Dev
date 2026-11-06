@@ -1,7 +1,8 @@
 """Registered sources on dataset routes (`06_DECISIONS.md` ADR-140 Amendment 4; redesign phase 3).
 
 The real app and the real `get_principal` run, so the dataset scoping is what is tested, with only
-the token resolver and the stores standing in. What a mistake would do, and the case that catches it:
+the token resolver and the stores standing in. What a mistake would do, and the case that catches
+it:
 
 - a person reaching a dataset none of their cases loads into: one that a case only reads
   (`test_a_dataset_a_case_only_reads_is_not_reached`), another unit's, or none at all — each told
@@ -43,11 +44,14 @@ HANDLING = {
     "owning_unit": "unit-1",
 }
 PEOPLE = {
-    "engineer": Principal(id="eng-1", clearance="SECRET", org_unit="unit-1", roles=["data_engineer"]),
-    "reader": Principal(id="read-1", clearance="SECRET", org_unit="unit-1", roles=["data_engineer"]),
-    "stranger": Principal(id="str-1", clearance="SECRET", org_unit="unit-2", roles=["data_engineer"]),
-    "admin": Principal(id="adm-1", clearance="SECRET", org_unit="unit-1", roles=["osprey-admin"]),
-}  # fmt: skip
+    name: Principal(id=pid, clearance="SECRET", org_unit=unit, roles=[role])
+    for name, pid, unit, role in (
+        ("engineer", "eng-1", "unit-1", "data_engineer"),
+        ("reader", "read-1", "unit-1", "data_engineer"),
+        ("stranger", "str-1", "unit-2", "data_engineer"),
+        ("admin", "adm-1", "unit-1", "osprey-admin"),
+    )
+}
 #: The cases each person holds a level in, by the datasets each reads (its first loads into it).
 CASES = {
     "eng-1": {"case-a": ["ds-a"], "case-c": ["ds-c"]},
@@ -70,6 +74,7 @@ class _Cases:
 class _Recipes:
     def __init__(self) -> None:
         self.flagged: list[tuple[str, str, str]] = []
+        self.followed: list[tuple[str, str, str]] = []
 
     async def flag_for_source(self, dataset_id: str, location: str, reason: str) -> list[str]:
         self.flagged.append((dataset_id, location, reason))
@@ -77,6 +82,12 @@ class _Recipes:
 
     async def using_source(self, dataset_id: str, location: str) -> list[Any]:
         return []
+
+    async def follow_source(
+        self, dataset_id: str, location: str, handling: dict[str, Any], legal_basis: str | None
+    ) -> list[str]:
+        self.followed.append((dataset_id, location, handling["classification"]))
+        return ["Draft reading it"]
 
 
 class _Audit:
@@ -98,8 +109,14 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
     datasets = InMemoryDatasetStore()
     for d, unit in (("ds-a", "unit-1"), ("ds-c", "unit-1"), ("ds-x", "unit-1"), ("ds-s", "unit-2")):
         datasets.add(
-            Dataset(id=d, name=d, owning_unit=unit, created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="s")
-        )  # fmt: skip
+            Dataset(
+                id=d,
+                name=d,
+                owning_unit=unit,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                created_by="s",
+            )
+        )
     for person in CASES.values():
         for case, reads in person.items():
             datasets.cases[case] = reads
@@ -202,6 +219,7 @@ def test_editing_governance_is_a_new_version_flags_the_pipelines_and_is_audited(
     assert body["source"]["handling"]["classification"] == "SECRET"
     assert body["needs_attention"] == ["PIN calls"]
     assert world.recipes.flagged == [("ds-a", made["location"], SOURCE_GOVERNANCE_CHANGED)]
+    assert world.recipes.followed == [("ds-a", made["location"], "SECRET")]
     (entry,) = [e for e in world.audit.entries if e["action"] == "edit_dataset_source_governance"]
     query = entry["resolved_query"]
     assert query["handling_before"]["classification"] == "OFFICIAL"

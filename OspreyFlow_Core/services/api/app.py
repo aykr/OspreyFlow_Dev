@@ -7659,6 +7659,9 @@ async def edit_dataset_source_governance(
     flagged = await studio_recipes.flag_for_source(
         dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
     )
+    followed = await studio_recipes.follow_source(
+        dataset_id, edited.location, edited.handling, edited.legal_basis
+    )
     await audit.record(
         principal=principal,
         action="edit_dataset_source_governance",
@@ -7671,6 +7674,7 @@ async def edit_dataset_source_governance(
             "legal_basis_before": before.legal_basis,
             "legal_basis_after": edited.legal_basis,
             "pipelines_needing_attention": len(flagged),
+            "drafts_following": len(followed),
         },
         result_cardinality=1,
     )
