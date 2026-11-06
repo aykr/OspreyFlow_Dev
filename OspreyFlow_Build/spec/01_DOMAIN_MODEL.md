@@ -2218,7 +2218,7 @@ assignment and sentences in §3.8a.
 A **connection** is where sources are read from, owned by the deployment's administrators
 (`ingest_connections`; Admin area, `administer_system`). One kind today, `files`: the ingest root. Every
 deployment has the built-in one, `files` ("Files: the ingest root"); SQL, API and JSON-schema
-connections are phase 9's.
+connections are not built yet (ADR-140's connectors).
 
 A **source** (`SourceTable`, `ingest_sources`; `packages/schemas/sources.py`) is one file, table or
 endpoint on a connection, registered **once per dataset and location**, and carries what every pipeline

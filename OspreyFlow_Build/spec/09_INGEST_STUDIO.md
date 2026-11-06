@@ -85,7 +85,7 @@ transform remains a Knowledge Adapter with golden files, never an expression lan
 pipeline's name, version and status: Verify (§5) dry-runs the whole recipe, Publish (§6) commits it,
 schedules it and runs it.
 
-### 1.0 Working in the Studio (as built, 6 November 2026; ADR-140 phase 2)
+### 1.0 Working in the Studio (as built, 6 November 2026; ADR-140 Amendment 2)
 
 The Studio (`apps/workspace/src/ingest/IngestStudio.tsx`) is **four places with one method**, in the
 method's order — **1 Model**, **2 Sources**, **3 Pipelines**, **4 Runs** — under a **readiness strip**
@@ -93,8 +93,8 @@ method's order — **1 Model**, **2 Sources**, **3 Pipelines**, **4 Runs** — u
 registers named beside it (ADR-140 Amendment 6), the pipelines with how many drafts have not passed Test,
 and the last run). It opens on **3 Pipelines**; the person picks the entry point (ruling R7).
 
-- **The dataset switcher**, at the top, names the dataset the Studio works on. Until phase 5 gives the
-  Studio routes of its own, every Studio route is still a case's (ADR-099 Amendment 4 decision 5), so the
+- **The dataset switcher**, at the top, names the dataset the Studio works on. Until one dataset per case gives
+  the Studio routes of its own (ADR-140 Amendment 7, ADR-143 decision 1), every Studio route is still a case's (ADR-099 Amendment 4 decision 5), so the
   switcher works *through a case* (ADR-140 Amendment 2, the owner's ruling "Dataset label, case behind"):
   it offers each dataset one of the person's cases **loads into** (its first, ADR-099 decision 6), and
   choosing one opens the case that loads into it — the current case when it does, else a case before a
@@ -103,7 +103,7 @@ and the last run). It opens on **3 Pipelines**; the person picks the entry point
   the case the Studio is working through. Nothing is widened: the routes, roles and access checks are the
   case's, as before.
 - **1 Model** shows the target model in words — the POLE core and the case's packs (ADR-126) — until
-  phase 5 makes it the dataset's own.
+  the target model per dataset makes it the dataset's own (ADR-140 Amendment 7).
 - **2 Sources** (ADR-140 Amendments 4 and 5) lists the dataset's **registered sources** — each a file
   registered once, with its marking, units, legal basis and refresh — and *Register a source* (Connection,
   File, Governance and refresh, then Register, after which its profile shows). A source's page has its
@@ -113,7 +113,7 @@ and the last run). It opens on **3 Pipelines**; the person picks the entry point
 marking: a pipeline that marks rows higher describes its elements, not the file, and a file holding
 data above its source's marking is remedied by raising the source's (Amendment 6, the owner's ruling). Below, the unstructured path (*Add files*, ADR-094
   step 3). A pipeline's first source node chooses a registered source (*Use this source*), so no marking
-  is asked in the pipeline; *The draft's own settings* keeps the deduplication key until phase 6.
+  is asked in the pipeline; *The draft's own settings* keeps the deduplication key until the canvas becomes the editor (ADR-140).
 - **3 Pipelines** is the pipelines home and canvas below: name a pipeline, open one, edit it on the canvas.
   The canvas header's buttons are **Load rules** (§5a), **Test** (§5) and **Deploy** (§6).
 - **4 Runs** (`ingest/runs/RunsTab.tsx`) is the grid of deployed pipelines by day, read from the run
@@ -867,7 +867,7 @@ before, which stays readable in every case of its owner, Amendment 5).
 
 ### Scheduled runs (ADR-110, as built 13 October 2026)
 
-**A source's refresh** (ADR-110 Amendments 6 and 7, redesign phase 4). A registered source with a
+**A source's refresh** (ADR-110 Amendments 6 and 7). A registered source with a
 folder watch runs every deployed pipeline that reads it. Each pipeline takes each arriving file once,
 recorded under the trigger `source_refresh`:
 - it runs as the policy's owner, through the pipeline's case when that case loads into the dataset,
@@ -883,7 +883,7 @@ still rests on. The run says in words how many rows it withdrew, how many links 
 from a dropped row, and how many dropped rows were loaded before rows recorded what they wrote and
 were left in place. A row that comes back is loaded again. Reverting the refresh restores the rows,
 their events and their keys, and is refused while a row it withdrew has been loaded again. A pipeline
-reading more than one source cannot withdraw until phase 6.
+reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
 
 **An incremental refresh** (ADR-110 Amendment 10). The source names a watermark column. Each load
 records the highest value it read, and the next refresh by the same pipeline into the same case
@@ -892,7 +892,7 @@ compare as numbers, as instants, or as text, settled by the first read; a later 
 compared that way refuses the run, naming its row. Rows at or below the watermark are not read and
 are counted; rows with no value are read, counted, and kept from loading twice by their key. A load
 is not reverted while a later refresh has read past it. A pipeline reading more than one source
-cannot refresh incrementally until phase 6.
+cannot refresh incrementally until the canvas becomes the editor (ADR-140).
 
 **On the source's page** (ADR-110 Amendment 13) the policy is said in words: when it reads, how each
 file is read, whom it runs as, and whether it is paused and why. A person holding `schedule_pipelines`
@@ -903,7 +903,7 @@ under different patterns or for different owners, or read by a keyless pipeline,
 
 **What a run cost** (Amendment 12): every run records its wall time, the rows it read, the bytes it
 put to the object store and the elements it wrote to the graph, on its report and in the ledger.
-Rows staged and bytes to Parquet are *not measured* until phase 7's staging, and are said so, never
+Rows staged and bytes to Parquet are *not measured* until the staging catalogue is built (ADR-140), and are said so, never
 shown as 0. The run report, the Runs tab and Admin's run rows show them after the counts, and withhold
 them where the counts are withheld.
 
@@ -1059,7 +1059,7 @@ Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). The joins, 
 below are **not built yet** (redesign phases 7 and 8); until they are, a pipeline's sources are
 separate branches mapped row by row, as §1 describes.
 
-- **No scripting in guided mode; a sandboxed SELECT in expert mode** (`process/CLAUDE.md` rule 8).
+- **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
   Dedupe), each declared in the recipe's YAML, and every operation in it is a Knowledge Adapter with
   golden tests (§4). Expert mode, for a person holding `write_sql_transforms`, may declare an SQL

@@ -389,7 +389,7 @@ GET    /v1/ingest/connectors                               the connector catalog
 GET    /v1/ingest/packs                                    the domain packs a pipeline's root may name (09 §1.1)
 GET    /v1/ingest/connections                              the connections a source is registered on (ADR-140 Amendment 4; SOURCE_AUTHOR)
 GET    /v1/admin/connections                               the deployment's connections (administer_system)
-POST   /v1/admin/connections                               an administrator names a connection, audited (Files only until phase 9)
+POST   /v1/admin/connections                               an administrator names a connection, audited (Files only until ADR-140's other connectors are built)
 GET    /v1/datasets/{dataset_id}/source-files              the register wizard's files: the dataset's own, as Connect lists them
 GET    /v1/datasets/{dataset_id}/sources                   the dataset's registered sources
 POST   /v1/datasets/{dataset_id}/sources                   register a source once: a file the dataset's listing offers, else 422; 409 if registered

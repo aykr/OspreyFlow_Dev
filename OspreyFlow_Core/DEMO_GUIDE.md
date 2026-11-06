@@ -919,8 +919,8 @@ reports* pipeline as a draft holding the whole branch (source, Profile, Map, Loa
 not tested and not deployed. Chapter 4 opens it on the Studio's **3 Pipelines** tab, walks Profile and the
 map, runs **Test** (one row rejected: the teaching row's number written with a letter O), corrects that row,
 presses **Deploy** then **Deploy and run now**, then runs *Report incidents* from the **4 Runs** tab (choose it
-under *Pipeline to run or schedule*, **Run now or schedule**, **Run now**). Since the redesign's phase 2
-(ADR-140, 6 November 2026) Deploy commits a version and does not run it; running and scheduling are the
+under *Pipeline to run or schedule*, **Run now or schedule**, **Run now**). Since ADR-140 Amendment 2
+(6 November 2026) Deploy commits a version and does not run it; running and scheduling are the
 Runs tab's. The row is corrected by choosing a corrected copy of the file at the source
 (the source node's *The draft's own settings*, **Choose file…**, **Save**; a copy with `07700 900603` for `07700 900 6O3`, made
 before the demo): a value map refuses every value it does not list, so it cannot mend one row. Test then

@@ -34,10 +34,10 @@ today).
 4. Replace `process/CLAUDE.md` rule 14 with ADR-142's appendix. In `process/FDE_HANDOVER.md` §1, change
    "the owner pushes and you never do" to "the orchestrator pushes under ADR-142 decision 6; lanes never
    push".
-5. Build, each with its test shown red first, under `OspreyFlow_Build/`: `scripts/stack_lease.sh`
-   (`tests/test_stack_lease.py`, starting from this package's draft); `scripts/lanes_heartbeat.sh`
+5. Build, each with its test shown red first, under `OspreyFlow_Build/`: `OspreyFlow_Build/scripts/stack_lease.sh`
+   (`tests/test_stack_lease.py`, starting from this package's draft); `OspreyFlow_Build/scripts/lanes_heartbeat.sh`
    (`tests/test_lanes_heartbeat.py`, from this package's draft, ADR-142 decision 9);
-   `scripts/lanes_launch.sh` (`tests/test_lanes_launch.py`, from this package's draft, decision 10);
+   `OspreyFlow_Build/scripts/lanes_launch.sh` (`tests/test_lanes_launch.py`, from this package's draft, decision 10);
    `tools/friction_assemble.py` (`tests/test_friction_assemble.py`); the reservation check
    (`tests/test_adr_reservations.py`). Ask the owner to wire them into `make ci` (protected files).
 6. Save the runbook's Prompt L and Prompt R as `process/lanes/PROMPT_L.md` and `PROMPT_R.md`.
