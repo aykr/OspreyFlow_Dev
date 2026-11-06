@@ -186,6 +186,8 @@ ROUTE_RIGHTS = {
     "get_dataset_source_profile": "add_ingest_files",
     "get_dataset_source_lineage": "add_ingest_files",
     "edit_dataset_source_governance": "edit_pipelines",
+    "pause_source_refresh": "schedule_pipelines",
+    "resume_source_refresh": "schedule_pipelines",
     "upload_ingest_source_file": "add_ingest_files",
     "create_studio_recipe_draft": "edit_pipelines",
     "update_studio_recipe_draft": "edit_pipelines",

@@ -342,11 +342,13 @@ async def test_finish_hands_the_reports_markings_to_the_ledger() -> None:
     await store.finish("run-1", report=_report([OFFICIAL_ROW, SECRET_ROW]), now=NOW)
     ((sql, args),) = conn.executed
     assert "row_markings" in sql
-    kept = json.loads(args[-1])
+    # The markings, then the metering (ADR-110 Amendment 12: none on a report not yet metered).
+    kept, metering = json.loads(args[-2]), args[-1]
+    assert metering is None
     assert [Handling.model_validate(m) for m in kept] == [OFFICIAL_ROW, SECRET_ROW]
     pipeline = _pipeline([[OFFICIAL_ROW], [SECRET_ROW]])
     await store.finish("run-2", report=pipeline, now=NOW)
-    assert [Handling.model_validate(m) for m in json.loads(conn.executed[-1][1][-1])] == [
+    assert [Handling.model_validate(m) for m in json.loads(conn.executed[-1][1][-2])] == [
         OFFICIAL_ROW,
         SECRET_ROW,
     ]
@@ -360,7 +362,7 @@ def _record(markings: Any) -> dict[str, Any]:
         "source_handling": SOURCE.model_dump_json(), "started_at": NOW, "finished_at": NOW,
         "outcome": "succeeded", "rows_read": 5, "nodes_created": 0, "nodes_referenced": 0,
         "edges_created": 5, "rows_rejected": 0, "rows_held": 0, "load_id": "load-1",
-        "failure": None, "source_file": None, "row_markings": markings,
+        "failure": None, "source_file": None, "row_markings": markings, "metering": None,
     }  # fmt: skip
 
 

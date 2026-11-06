@@ -397,6 +397,8 @@ GET    /v1/datasets/{dataset_id}/sources/{source_id}        one source (404 thro
 GET    /v1/datasets/{dataset_id}/sources/{source_id}/profile   its profile, computed for the reader, never stored
 GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pipelines that read it
 PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention
+POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause   pauses its refresh, with why; not an edit; audited (schedule_pipelines; ADR-110 Amendment 13)
+POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume  resumes it; audited (schedule_pipelines)
 POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
 GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}                        load one draft

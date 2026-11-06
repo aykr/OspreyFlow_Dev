@@ -46,7 +46,8 @@ async def test_an_engine_it_does_not_know_is_refused_in_words(engine: str, tmp_p
 
 #: Every table the Conduit makes: the events and geometries, and the alert facts and their
 #: handlings (ADR-134 decision 3). Named, not counted, so an added table is seen to take the engine.
-TABLES = ["alert_fact_handlings", "alert_facts", "events", "geometries"]
+#: ADR-110 Amendment 8: `withdrawn_events`, a full snapshot's dropped links' events set aside.
+TABLES = ["alert_fact_handlings", "alert_facts", "events", "geometries", "withdrawn_events"]
 
 
 def _names(tables: list[str]) -> list[str]:
