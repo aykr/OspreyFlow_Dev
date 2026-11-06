@@ -57,6 +57,7 @@ class SourceStore(Protocol):
     async def edit_governance(
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable: ...
+    async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
 
 
 def _now() -> datetime:
@@ -199,6 +200,15 @@ class InMemorySourceStore:
         refresh = found.refresh.model_copy(
             update={"paused": paused, "paused_reason": reason if paused else None}
         )
+        self._sources[source_id] = found.model_copy(update={"refresh": refresh})
+
+    async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None:
+        """`scripts.migrate_sources` alone (ADR-110 Amendment 6 point 7): a pipeline's watch moved
+        onto its source, with its owner, time and pause. Not a governance edit: the pipelines ran by
+        that watch before, so none needs attention, and the version stays."""
+        found = self._sources.get(source_id)
+        if found is None:
+            raise SourceNotFoundError(source_id)
         self._sources[source_id] = found.model_copy(update={"refresh": refresh})
 
 
@@ -362,6 +372,16 @@ class PostgresSourceStore:
                 "|| jsonb_build_object('paused', $2::boolean, 'paused_reason', $3::text) "
                 "WHERE id = $1",
                 source_id, paused, reason if paused else None,
+            )  # fmt: skip
+        if done.endswith(" 0"):
+            raise SourceNotFoundError(source_id)
+
+    async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None:
+        """As `InMemorySourceStore.adopt_refresh`: `scripts.migrate_sources` alone."""
+        async with self._pool.acquire() as conn:
+            done = await conn.execute(
+                "UPDATE ingest_sources SET refresh = $2::jsonb WHERE id = $1",
+                source_id, refresh.model_dump_json(),
             )  # fmt: skip
         if done.endswith(" 0"):
             raise SourceNotFoundError(source_id)

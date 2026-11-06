@@ -26021,3 +26021,29 @@ this says so; *(mine)* marks a detail the rulings left open.
 - `tests/services/api/test_source_refresh_incremental_live.py` (2): live on ArcadeDB, Postgres and
   DuckDB, a poll loads only the rows past the watermark (a late correction at it is not loaded), a
   load a later poll read past is not reverted, and reverting the last poll reads its rows again once.
+
+### ADR-110, Amendment 11 (6 November 2026) — the watches move onto their sources, as built
+
+Status: built 6 November 2026, within Amendment 6 point 7 (the owner's ruling "Watches move; cron
+stays"). *(mine)* marks a detail the ruling left open.
+
+1. **`scripts.migrate_sources` moves the watches** after it registers the sources, in the same run
+   and the same dry run. Each deployed pipeline's folder watch becomes its source's refresh policy:
+   the pattern, the owner, the earliest time it was set (a file counts only if it arrived after)
+   and the pause with its reason. The source reads each file as before: a full snapshot keeping
+   every row. Chapter 9's paused watches become paused source policies.
+2. **The pipeline's own watch is cleared** (`StudioRecipeStore.clear_watch`); its cron schedule,
+   owner, case and pause stay. The source is written first: were the run to stop between, the
+   pipeline's own watch is set aside while its source watches (Amendment 7 point 2).
+3. **Not a governance edit** *(mine)*. `SourceStore.adopt_refresh` keeps the policy as given, with
+   no new version, so no pipeline needs attention: they ran by that watch already.
+4. **Left for a person, and named** *(mine, beyond the ruling's patterns)*: a source watched under
+   different patterns or for different owners; a source a keyless pipeline reads (Amendment 6 point
+   2); a source with a policy of its own; a file not registered.
+
+**Known limit:** `scripts.seed_pid` still sets chapter 9's watches on the pipelines; a deployment
+seeded afresh runs them by the pipelines' own watches until `migrate_sources` moves them.
+
+**Tests:** `tests/test_migrate_sources.py` (+5, each branch shown red by its own plant);
+`tests/services/api/test_studio_recipes_store.py` (+3: `adopt_refresh` on Postgres and in memory
+alike, refusing an unknown source; `clear_watch` keeping the cron, live Postgres).

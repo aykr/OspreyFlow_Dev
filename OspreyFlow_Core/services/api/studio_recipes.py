@@ -843,6 +843,18 @@ class StudioRecipeStore:
                 [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
             )
 
+    async def clear_watch(self, recipe_id: str) -> None:
+        """`scripts.migrate_sources` alone (ADR-110 Amendment 6 point 7): the recipe's folder watch,
+        moved onto its source, is cleared at its current version. Its cron schedule, owner, case and
+        pause stay; a recipe left with no schedule keeps them unused."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE studio_recipes SET schedule_watch = NULL "
+                "WHERE recipe_id = $1 AND status = ANY($2::text[])",
+                recipe_id,
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+            )
+
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
         """Pause (with the reason) or resume a schedule, at the recipe's current version."""
         async with self._pool.acquire() as conn:

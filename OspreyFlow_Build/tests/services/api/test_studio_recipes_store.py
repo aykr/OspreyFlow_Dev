@@ -2014,3 +2014,69 @@ async def test_a_draft_reading_the_source_follows_its_governance_and_must_be_tes
     assert now.handling == raised and now.legal_basis == "Synthetic, again"
     assert now.verified_at is None
     assert (await store.get(deployed.recipe_id)).handling == deployed_before
+
+
+@pytest.mark.parametrize("kind", ["postgres", "memory"])
+async def test_a_watch_moved_onto_a_source_is_adopted_whole_on_both_stores(kind: str) -> None:
+    """ADR-110 Amendment 6 point 7, `scripts.migrate_sources`: the moved policy is kept as given,
+    its owner, time and pause included, and it is not an edit (no new version). An unknown source
+    is refused on both stores alike (rule 15)."""
+    from services.api.sources import (
+        FILES_CONNECTION_ID,
+        InMemorySourceStore,
+        PostgresSourceStore,
+        SourceNotFoundError,
+    )
+
+    from schemas.sources import RegisterSourceInput, SourceRefresh
+
+    sources: Any = (
+        await PostgresSourceStore.connect(PostgresConfig.from_env().dsn)
+        if kind == "postgres"
+        else InMemorySourceStore()
+    )
+    try:
+        dataset = f"ds-{new_id()}"
+        made = await sources.register(
+            dataset,
+            RegisterSourceInput(
+                connection_id=FILES_CONNECTION_ID, name="pins.csv",
+                location=f"/ingest/{dataset}/pins.csv", handling={"classification": "OFFICIAL"},
+            ),
+            AUTHOR,
+        )  # fmt: skip
+        set_at = datetime(2026, 6, 1, 12, tzinfo=UTC)
+        moved = SourceRefresh(
+            trigger="watch", pattern="pins.csv", owner="engineer-1", set_at=set_at,
+            paused=True, paused_reason="waiting for its chapter 9 step",
+        )  # fmt: skip
+        await sources.adopt_refresh(made.id, moved)
+        kept = await sources.get(dataset, made.id)
+        assert kept.refresh == moved and kept.version == 1
+        assert [s.id for s in await sources.watched() if s.dataset_id == dataset] == [made.id]
+        with pytest.raises(SourceNotFoundError):
+            await sources.adopt_refresh(new_id(), moved)
+    finally:
+        if kind == "postgres":
+            await sources.close()
+
+
+async def test_clearing_a_moved_watch_keeps_the_cron_and_its_owner(store: StudioRecipeStore) -> None:
+    """ADR-110 Amendment 6 point 7 ("Watches move; cron stays"): the watch goes, nothing else."""
+    draft = await _verified_draft(store)
+    published = await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={}, git_path="recipes/w.yaml",
+        schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+    )  # fmt: skip
+    await store.update_schedule(
+        published.recipe_id, AUTHOR, schedule_cron="0 7 * * *", schedule_watch="pins.csv",
+        schedule_case="case-7",
+    )  # fmt: skip
+    await store.set_paused(published.recipe_id, paused=True, reason="chapter 9")
+    await store.clear_watch(published.recipe_id)
+    after = await store.get(published.recipe_id)
+    assert after.schedule_watch is None
+    assert (after.schedule_cron, after.schedule_owner, after.schedule_case) == (
+        "0 7 * * *", AUTHOR.id, "case-7",
+    )
+    assert after.schedule_paused is True
