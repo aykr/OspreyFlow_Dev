@@ -83,7 +83,10 @@ def _registered(dataset_id: str, body: RegisterSourceInput, principal: Principal
         connector_profile=body.connector_profile,
         handling=body.handling,
         legal_basis=body.legal_basis,
-        refresh=body.refresh,
+        # Amendment 6 point 6: the owner is whoever set it, and nothing starts paused.
+        refresh=body.refresh.model_copy(
+            update={"owner": principal.id, "paused": False, "paused_reason": None}
+        ),
         created_by=principal.id,
         created_at=_now(),
     )
@@ -96,10 +99,27 @@ def _governed(
         update={
             "handling": body.handling,
             "legal_basis": body.legal_basis,
-            "refresh": body.refresh or source.refresh,
+            "refresh": _refresh_after(source.refresh, body.refresh, principal),
             "version": source.version + 1,
             "updated_by": principal.id,
             "updated_at": _now(),
+        }
+    )
+
+
+def _refresh_after(
+    stored: SourceRefresh, given: SourceRefresh | None, principal: Principal
+) -> SourceRefresh:
+    """An edit's refresh: the stored policy when none is given or it is unchanged (its owner kept);
+    otherwise the new one, owned by the editor. Either way the pause is the stored one: only pause
+    and resume change it (ADR-110 Amendment 6 point 6)."""
+    if given is None or given.policy() == stored.policy():
+        return stored
+    return given.model_copy(
+        update={
+            "owner": principal.id,
+            "paused": stored.paused,
+            "paused_reason": stored.paused_reason,
         }
     )
 

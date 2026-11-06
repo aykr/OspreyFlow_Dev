@@ -86,13 +86,15 @@ class _Recipes:
     def __init__(self) -> None:
         self.flagged: list[tuple[str, str, str]] = []
         self.followed: list[tuple[str, str, str]] = []
+        #: What `using_source` answers: as the real store, every status but a previous version.
+        self.readers: list[Any] = []
 
     async def flag_for_source(self, dataset_id: str, location: str, reason: str) -> list[str]:
         self.flagged.append((dataset_id, location, reason))
         return ["PIN calls"]
 
     async def using_source(self, dataset_id: str, location: str) -> list[Any]:
-        return []
+        return list(self.readers)
 
     async def follow_source(
         self, dataset_id: str, location: str, handling: dict[str, Any], legal_basis: str | None
@@ -313,3 +315,129 @@ def test_only_an_administrator_reads_the_admin_list_of_connections(world: Simple
     listed = world.client.get("/v1/admin/connections", headers=_as("admin"))
     assert listed.status_code == 200, listed.text
     assert [c["id"] for c in listed.json()][0] == "files"
+
+
+# --- ADR-110 Amendment 6: the refresh policy ----------------------------------------------------
+
+WATCH = {
+    "trigger": "watch",
+    "pattern": "cells-*.csv",
+    "mode": "snapshot",
+    "dropped_rows": "withdraw",
+}
+
+
+def _reader(label: str, status: str, keyed: bool) -> Any:
+    from schemas.ingest import StudioRecipeStatus
+
+    return SimpleNamespace(
+        recipe_id=label,
+        label=label,
+        version=1,
+        status=StudioRecipeStatus(status),
+        deduplicate=SimpleNamespace(key=["prisoner"]) if keyed else None,
+    )
+
+
+def test_the_policys_owner_is_whoever_set_it_never_what_the_body_says(
+    world: SimpleNamespace,
+) -> None:
+    claimed = WATCH | {"owner": "someone-else", "paused": True, "paused_reason": "planted"}
+    made = _register(world, refresh=claimed)
+    assert made.status_code == 201, made.text
+    refresh = made.json()["refresh"]
+    assert refresh["owner"] == "eng-1"
+    assert refresh["paused"] is False
+    assert refresh["paused_reason"] is None
+
+
+def test_an_edit_that_changes_the_policy_takes_its_owner_and_keeps_its_pause(
+    world: SimpleNamespace,
+) -> None:
+    made = _register(world, refresh=WATCH).json()
+    stored = world.sources._sources[made["id"]]
+    world.sources._sources[made["id"]] = stored.model_copy(
+        update={"refresh": stored.refresh.model_copy(update={"paused": True, "paused_reason": "r"})}
+    )
+    path = f"/v1/datasets/ds-a/sources/{made['id']}/governance"
+    edited = world.client.patch(
+        path,
+        json={"handling": HANDLING, "refresh": WATCH | {"pattern": "stays-*.csv"}},
+        headers=_as("engineer"),
+    )
+    assert edited.status_code == 200, edited.text
+    refresh = edited.json()["source"]["refresh"]
+    assert refresh["owner"] == "eng-1"
+    assert (refresh["paused"], refresh["paused_reason"]) == (True, "r")
+
+
+def test_an_unchanged_policy_keeps_its_owner(world: SimpleNamespace) -> None:
+    made = _register(world, refresh=WATCH).json()
+    world.sources._sources[made["id"]] = world.sources._sources[made["id"]].model_copy(
+        update={
+            "refresh": world.sources._sources[made["id"]].refresh.model_copy(
+                update={"owner": "first-owner"}
+            )
+        }
+    )
+    edited = world.client.patch(
+        f"/v1/datasets/ds-a/sources/{made['id']}/governance",
+        json={"handling": HANDLING | {"classification": "SECRET"}, "refresh": WATCH},
+        headers=_as("engineer"),
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["source"]["refresh"]["owner"] == "first-owner"
+
+
+@pytest.mark.parametrize(
+    ("policy", "words"),
+    [
+        ({"trigger": "watch"}, "pattern"),
+        ({"trigger": "watch", "pattern": "a-*.csv", "mode": "incremental"}, "watermark"),
+    ],
+)
+def test_a_policy_missing_what_its_mode_needs_is_refused_in_words(
+    world: SimpleNamespace, policy: dict[str, str], words: str
+) -> None:
+    response = _register(world, refresh=policy)
+    assert response.status_code == 422
+    assert words in response.text
+    assert world.sources._sources == {}
+
+
+def test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source(
+    world: SimpleNamespace,
+) -> None:
+    world.recipes.readers = [
+        _reader("Keyless deployed", "published", keyed=False),
+        _reader("Keyless draft", "draft", keyed=False),
+        _reader("Keyed deployed", "published", keyed=True),
+    ]
+    refused = _register(world, refresh=WATCH)
+    assert refused.status_code == 422, refused.text
+    body = refused.json()["detail"]
+    assert body["error"] == "refresh_needs_a_key"
+    assert "Keyless deployed" in body["detail"]
+    assert "Keyless draft" not in body["detail"] and "Keyed deployed" not in body["detail"]
+    assert world.sources._sources == {}
+    # By hand is not a refresh policy: it is registered.
+    assert _register(world, refresh={"trigger": "manual"}).status_code == 201
+
+
+def test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one(
+    world: SimpleNamespace,
+) -> None:
+    world.recipes.readers = [
+        _reader("Keyless draft", "draft", keyed=False),
+        _reader("Keyed needing attention", "flagged", keyed=True),
+    ]
+    made = _register(world, refresh={"trigger": "manual"})
+    assert made.status_code == 201, made.text
+    world.recipes.readers.append(_reader("Keyless needing attention", "flagged", keyed=False))
+    edited = world.client.patch(
+        f"/v1/datasets/ds-a/sources/{made.json()['id']}/governance",
+        json={"handling": HANDLING, "refresh": WATCH},
+        headers=_as("engineer"),
+    )
+    assert edited.status_code == 422
+    assert "Keyless needing attention" in edited.json()["detail"]["detail"]

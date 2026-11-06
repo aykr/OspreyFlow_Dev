@@ -464,7 +464,10 @@ position and a literal suffix there would collide with it. `POST .../publish` wr
 own YAML and commits it before flipping the registry row to `published` — a published row never
 exists without a matching commit, the safer order given the repository is the record. `PATCH
 .../schedule` re-commits the same YAML with a new schedule without bumping the version — the
-mapping itself is unchanged, only when it runs.
+mapping itself is unchanged, only when it runs. `POST .../publish` refuses (422,
+`refresh_needs_a_key`) a pipeline with no deduplication key whose file is a registered source with a
+refresh policy other than by hand. A refresh would load its rows again (ADR-110 Amendment 6 point
+2); the dataset source routes refuse the policy itself in the same words.
 
 **Unstructured extraction and its review queue — `09_INGEST_STUDIO.md` §7's own mechanism, nested
 under an investigation for audit-context consistency with `run_studio_recipe` above, the identical

@@ -2233,7 +2233,8 @@ class SourceTable(BaseModel):
     connector_profile: str     # e.g. generic-csv
     handling: dict             # marking, units, the columns a row's marking is read from (ADR-127 decision 3)
     legal_basis: str | None
-    refresh: SourceRefresh     # trigger manual | watch (+ pattern); recorded here, executed in phase 4
+    refresh: SourceRefresh     # trigger manual | watch (+ pattern); mode snapshot (dropped rows keep |
+                               # withdraw) | incremental (+ watermark_column); owner, paused (+ reason)
     version: int               # each governance edit is a new version, audited
     created_by: str; created_at: datetime
     updated_by: str | None; updated_at: datetime | None
@@ -2246,6 +2247,15 @@ class SourceTable(BaseModel):
   its scheduled and watched runs blocked) until deployed again; every **draft** reading it takes the
   new handling and legal basis at once and must pass Test again. A deployed recipe's committed
   governance is never rewritten.
+- **The refresh policy** (ADR-110 Amendment 6). A folder watch needs a pattern, and an incremental
+  mode needs its watermark column; an incomplete policy is refused in words. The policy's `owner`
+  is whoever set or last changed it, and a refresh runs as that person. It is stamped by the
+  Conduit, never taken from the body; an edit that leaves the policy as it was keeps its owner.
+  `paused` and its reason are changed only by pausing and resuming, never by an edit.
+- **A refresh never runs a keyless pipeline** (Amendment 6 point 2). A policy other than by hand is
+  refused (`refresh_needs_a_key`) on a source that a *deployed* pipeline with no `deduplicate`
+  reads; a draft does not refuse it. Deploy refuses such a pipeline over a source with such a policy,
+  in the same words (`test_dataset_sources.py`, `test_studio_recipe_routes.py`).
 - A recipe reads a source by its location, which the source node writes to the draft.
 - Existing recipes' files became sources by `python -m scripts.migrate_sources` (dry run first); files
   read under different governance by different recipes are left for a person.

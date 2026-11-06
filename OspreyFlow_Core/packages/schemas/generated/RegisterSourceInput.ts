@@ -7,6 +7,12 @@ export type ConnectorProfile = string;
 export type LegalBasis = string | null;
 export type Trigger = "manual" | "watch";
 export type Pattern = string | null;
+export type Mode = "snapshot" | "incremental";
+export type DroppedRows = "keep" | "withdraw";
+export type WatermarkColumn = string | null;
+export type Owner = string | null;
+export type Paused = boolean;
+export type PausedReason = string | null;
 
 export interface RegisterSourceInput {
   connection_id: ConnectionId;
@@ -29,5 +35,11 @@ export interface Handling {
 export interface SourceRefresh {
   trigger?: Trigger;
   pattern?: Pattern;
+  mode?: Mode;
+  dropped_rows?: DroppedRows;
+  watermark_column?: WatermarkColumn;
+  owner?: Owner;
+  paused?: Paused;
+  paused_reason?: PausedReason;
   [k: string]: unknown;
 }

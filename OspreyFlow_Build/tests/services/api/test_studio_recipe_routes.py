@@ -12,6 +12,7 @@ import csv
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,6 +24,7 @@ from services.api.app import (
     get_ontology,
     get_principal,
     get_principal_names,
+    get_sources,
     get_studio_recipes,
 )
 from services.api.studio_recipes import (
@@ -229,9 +231,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             return {}
 
     app.dependency_overrides[get_principal_names] = _NoNames
+    from services.api.sources import InMemorySourceStore
+
+    sources = InMemorySourceStore()
+    app.dependency_overrides[get_sources] = lambda: sources
 
     test_client = TestClient(app)
     test_client.studio_recipes = studio_recipes  # type: ignore[attr-defined]
+    test_client.sources = sources  # type: ignore[attr-defined]
     try:
         yield test_client
     finally:
@@ -737,3 +744,59 @@ def test_patch_judges_the_deduplicate_by_the_columns_when_the_source_cannot_be_r
     assert ok.status_code == 200
     bad = client.patch(_URL, json={**_PATCH_BODY, "deduplicate": {"key": [{"literal": "x"}]}})
     assert bad.status_code == 422
+
+
+# --- ADR-110 Amendment 6 point 2: Deploy refuses a keyless pipeline over a refreshing source ------
+
+
+def _register_source(client: TestClient, location: str, trigger: str) -> None:
+    import asyncio
+
+    from schemas.sources import RegisterSourceInput, SourceRefresh
+
+    refresh = SourceRefresh(trigger=trigger, pattern="calls-*.csv" if trigger == "watch" else None)  # type: ignore[arg-type]
+    body = RegisterSourceInput(
+        connection_id="files", name="Calls", location=location, refresh=refresh
+    )
+    asyncio.run(client.sources.register("ds-a", body, SOURCE_AUTHOR))  # type: ignore[attr-defined]
+
+
+def _publish_unmapped(client: TestClient, **draft: object) -> Any:
+    """Unmapped on purpose: the key check comes before the mapping check, so a draft the key check
+    lets through answers `recipe_not_mapped`, and nothing is written either way."""
+    from pathlib import Path as _Path
+
+    from services.api.app import get_recipes_repo_root
+
+    fields: dict[str, object] = {"dataset_id": "ds-a", "source_location": "ds-a/calls.csv"}
+    client.studio_recipes.draft = _draft(**(fields | draft))  # type: ignore[attr-defined]
+    approver = SOURCE_AUTHOR.model_copy(update={"roles": [*SOURCE_AUTHOR.roles, "source_approver"]})
+    app.dependency_overrides[get_principal] = lambda: approver
+    app.dependency_overrides[get_recipes_repo_root] = lambda: _Path("/tmp/never-written")
+    return client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/publish", json={})
+
+
+def test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words(
+    client: TestClient,
+) -> None:
+    _register_source(client, "ds-a/calls.csv", "watch")
+    response = _publish_unmapped(client)
+    assert response.status_code == 422, response.text
+    body = response.json()["detail"]
+    assert body["error"] == "refresh_needs_a_key"
+    assert "Carrier A — CDR" in body["detail"]
+
+
+def test_deploy_lets_a_keyed_pipeline_or_one_over_a_source_read_by_hand_through(
+    client: TestClient,
+) -> None:
+    from schemas.ingest import DeduplicateConfig, FieldBinding
+
+    _register_source(client, "ds-a/calls.csv", "watch")
+    keyed = _publish_unmapped(client, deduplicate=DeduplicateConfig(key=[FieldBinding(field="a")]))
+    assert keyed.json()["error"] == "recipe_not_mapped"
+    by_hand = _publish_unmapped(client, source_location="ds-a/other.csv")
+    assert by_hand.json()["error"] == "recipe_not_mapped"
+    _register_source(client, "ds-a/other.csv", "manual")
+    still = _publish_unmapped(client, source_location="ds-a/other.csv")
+    assert still.json()["error"] == "recipe_not_mapped"

@@ -289,6 +289,7 @@ from schemas.sources import (
     RegisterSourceInput,
     SourceGovernanceInput,
     SourceLineage,
+    SourceRefresh,
     SourceTable,
 )
 from schemas.strength import (
@@ -7432,6 +7433,39 @@ def _source_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
 
 
+def refresh_needs_a_key(labels: Sequence[str]) -> HTTPException:
+    """ADR-110 Amendment 6 point 2 (the owner's ruling): a refresh re-reads rows, which only a
+    pipeline with a deduplication key reads once. Refused in the same words at the policy and at
+    Deploy."""
+    names = ", ".join(sorted(labels))
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={
+            "error": "refresh_needs_a_key",
+            "detail": f"This source is read again by its refresh policy, and {names} has no "
+            "deduplication key, so each refresh would load its rows again. Give the pipeline a "
+            "deduplication key, or set the source's refresh to by hand.",
+        },
+    )
+
+
+async def _refuse_a_keyless_refresh(
+    studio_recipes: Any, dataset_id: str, location: str, refresh: SourceRefresh
+) -> None:
+    """Before a refreshing policy is stored: the deployed pipelines reading the source that have no
+    key. A draft is not run by a refresh, so it does not refuse; Deploy refuses it later."""
+    if refresh.trigger == "manual":
+        return
+    keyless = [
+        r.label
+        for r in await studio_recipes.using_source(dataset_id, location)
+        if r.status in (StudioRecipeStatus.PUBLISHED, StudioRecipeStatus.FLAGGED)
+        and r.deduplicate is None
+    ]
+    if keyless:
+        raise refresh_needs_a_key(keyless)
+
+
 async def _source_of(sources: SourceStore, dataset_id: str, source_id: str) -> SourceTable:
     try:
         return await sources.get(dataset_id, source_id)
@@ -7520,6 +7554,7 @@ async def register_dataset_source(
     body: RegisterSourceInput,
     principal: SourceAuthorDep,
     sources: SourcesDep,
+    studio_recipes: StudioRecipesDep,
     audit: AuditDep,
 ) -> SourceTable:
     """Registers a source once (ADR-140 decision 7). A Files source must be a file the dataset's
@@ -7536,6 +7571,7 @@ async def register_dataset_source(
                 "Choose it from the dataset's files, or upload it.",
             },
         )
+    await _refuse_a_keyless_refresh(studio_recipes, dataset_id, body.location, body.refresh)
     try:
         made = await sources.register(dataset_id, body, principal)
     except UnknownConnectionError as exc:
@@ -7655,6 +7691,8 @@ async def edit_dataset_source_governance(
     scheduled and watched runs blocked until it is deployed again under the new governance
     (ADR-140 Amendment 4, the owner's ruling)."""
     before = await _source_of(sources, dataset_id, source_id)
+    if body.refresh is not None:
+        await _refuse_a_keyless_refresh(studio_recipes, dataset_id, before.location, body.refresh)
     edited = await sources.edit_governance(dataset_id, source_id, body, principal)
     flagged = await studio_recipes.flag_for_source(
         dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
@@ -8376,6 +8414,7 @@ async def publish_studio_recipe(
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
     body: PublishRecipeInput,
+    sources: SourcesDep,
 ) -> StudioRecipeDraft:
     """§6/§8: draft → published, source-approver only — this same gate is
     what §8's "approve a mapping that changes an existing recipe's
@@ -8396,6 +8435,16 @@ async def publish_studio_recipe(
                 status_code=422,
                 content={"error": "pipeline_not_runnable", "problems": unrunnable},
             )
+    # ADR-110 Amendment 6 point 2 (the owner's ruling): a refresh would run this pipeline again
+    # over rows it has loaded, which only a deduplication key makes harmless.
+    if recipe.deduplicate is None and recipe.dataset_id and recipe.source_location:
+        refreshing = [
+            s
+            for s in await sources.list_for(recipe.dataset_id)
+            if s.location == recipe.source_location and s.refresh.trigger != "manual"
+        ]
+        if refreshing:
+            raise refresh_needs_a_key([recipe.label])
     # A draft Map has not been done on has nothing to load: refused in words, not by an `assert`
     # (a 500, found 31 October 2026 on the Prison Intelligence demo's reports recipe, which is
     # seeded unmapped for the presenter to map live).

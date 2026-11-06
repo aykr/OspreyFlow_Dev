@@ -18,13 +18,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .ingest import check_source_declarations
 
 ConnectionKind = Literal["files"]
 #: Phase 3 records a refresh policy; phase 4 executes it (ADR-140 decision 15).
 RefreshTrigger = Literal["manual", "watch"]
+#: ADR-110 Amendment 6 point 1: how each read of the source is taken.
+RefreshMode = Literal["snapshot", "incremental"]
+#: On a full snapshot, a row the new file no longer carries: its elements kept, or withdrawn
+#: (`GraphPort.withdraw_elements`, restored by the refresh's revert).
+DroppedRows = Literal["keep", "withdraw"]
 
 
 class Connection(BaseModel):
@@ -47,6 +52,28 @@ class SourceRefresh(BaseModel):
 
     trigger: RefreshTrigger = "manual"
     pattern: str | None = None
+    mode: RefreshMode = "snapshot"
+    dropped_rows: DroppedRows = "keep"
+    #: For `incremental`: the column whose values only grow; rows at or below the highest value a
+    #: run has kept for the source are not read.
+    watermark_column: str | None = None
+    #: Set by the Conduit, never by the body: the person who set the policy, whom a refresh runs
+    #: as (ADR-110 Amendment 5 item 4), and whether it is paused, with why (Amendment 6 point 6).
+    owner: str | None = None
+    paused: bool = False
+    paused_reason: str | None = None
+
+    @model_validator(mode="after")
+    def _complete(self) -> SourceRefresh:
+        if self.trigger == "watch" and not (self.pattern or "").strip():
+            raise ValueError("a folder watch needs a filename pattern to watch for")
+        if self.mode == "incremental" and not (self.watermark_column or "").strip():
+            raise ValueError("an incremental refresh needs its watermark column")
+        return self
+
+    def policy(self) -> tuple[object, ...]:
+        """What the person chose: an edit that changes it takes a new owner."""
+        return (self.trigger, self.pattern, self.mode, self.dropped_rows, self.watermark_column)
 
 
 class SourceTable(BaseModel):
