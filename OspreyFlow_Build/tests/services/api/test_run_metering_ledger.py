@@ -58,8 +58,8 @@ async def _run(runs: RecipeRunStore, monkeypatch: pytest.MonkeyPatch, fail: bool
 
     async def execute(deps: Any, **kwargs: Any) -> LoadReport:
         # What a load puts: a held content item's bytes, twice (content-addressed, kept once).
-        await deps.media.put(b"0123456789", "text/plain")
-        await deps.media.put(b"0123456789", "text/plain")
+        await kwargs["media"].put(b"0123456789", "text/plain")
+        await kwargs["media"].put(b"0123456789", "text/plain")
         if fail:
             raise RuntimeError("the events could not be written")
         return LoadReport(

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
 from datetime import UTC, datetime
 from pathlib import Path
@@ -158,7 +158,7 @@ async def run_recipe_as(
     clock = time.perf_counter()
     try:
         report = await _execute_recipe_run(
-            replace(deps, media=media),
+            deps,
             principal=principal,
             recipe=recipe,
             investigation_id=investigation_id,
@@ -166,6 +166,7 @@ async def run_recipe_as(
             trigger=trigger,
             sink=sink,
             refresh=refresh,
+            media=media,
         )
     except Exception as error:
         await deps.recipe_runs.fail(
@@ -192,9 +193,13 @@ async def _execute_recipe_run(
     trigger: RunTrigger,
     sink: LoadSink,
     refresh: RefreshRead | None = None,
+    media: MediaStore | None = None,
 ) -> LoadReport | PipelineRunReport:
-    """The load itself, `run_studio_recipe`'s docstring has what each step is for."""
+    """`media`: the store the run puts to, counted for its metering; `deps.media` when not given.
+
+    The load itself, `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
+    media = media if media is not None else deps.media
     # ADR-109 ruling 1: the case's typology rules judge this load, at the point each declares.
     rules = await _rule_gate(
         investigation_id,
@@ -233,7 +238,7 @@ async def _execute_recipe_run(
             recogniser_for=deps.recogniser_for,
             candidates=deps.extraction_candidates,
             analytics=deps.analytics,
-            media=deps.media,
+            media=media,
             source_location=source_location,
             online_geocode=deps.online_geocode,
             rules=rules,
@@ -259,7 +264,7 @@ async def _execute_recipe_run(
             source_location=source_location,
             repo_root=deps.recipe_repo_root,
             analytics=deps.analytics,
-            media=deps.media,
+            media=media,
             rules=rules,
             scheme=deps.handling_scheme,
             sink=sink,
