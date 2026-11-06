@@ -116,7 +116,12 @@ describe("CasePicker", () => {
 
     await waitFor(() => expect(onOpen).toHaveBeenCalledWith("fresh"));
     const post = mock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
-    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({ name: "Enron review", domains: [] });
+    // ADR-099 Amendment 12 item 6: the default choice makes a new dataset, named after the case.
+    expect(JSON.parse((post![1] as RequestInit).body as string)).toEqual({
+      name: "Enron review",
+      new_dataset_name: "Enron review",
+      domains: [],
+    });
   });
 
   it("will not create a case with a blank name", async () => {

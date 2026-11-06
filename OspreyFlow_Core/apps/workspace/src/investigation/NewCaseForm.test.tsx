@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 //
-// ADR-099 Amendment 8 (owner, 9 October 2026): what a new case can see is a first-class choice —
-// "Start empty" (the default) or "Read existing data…", which reveals the datasets. The old form
-// led with a bare tick list whose purpose was explained only in fine print at the bottom.
+// ADR-099 Amendment 12 item 6 (R16; Amendment 8 withdrawn): a new case reads exactly one dataset,
+// chosen as "Use an existing dataset…" (one radio among the unit's datasets) or "Make a new
+// dataset" (named in the form; the default). There is no third choice: the Conduit no longer gives a
+// case a dataset of its own, so every create names one or the other.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,55 +53,69 @@ function sentDatasets(fetchMock: ReturnType<typeof serve>): unknown {
 }
 
 describe("NewCaseForm", () => {
-  it("leads with the choice, Start empty the default, and the datasets hidden", async () => {
+  it("leads with the choice, Make a new dataset the default, and the datasets hidden", async () => {
     serve();
     mount();
-    const empty = (await screen.findByRole("radio", { name: /Start empty/ })) as HTMLInputElement;
-    expect(empty.checked).toBe(true);
-    expect(screen.getByRole("radio", { name: /Read existing data/ })).toBeTruthy();
-    // The datasets are hidden; the domain models (ADR-126) are not datasets and are always shown.
-    expect(screen.queryByRole("checkbox", { name: "Enron corpus" })).toBeNull();
-    expect(screen.queryByRole("checkbox", { name: "Carrier B intake" })).toBeNull();
+    const fresh = (await screen.findByRole("radio", { name: /Make a new dataset/ })) as HTMLInputElement;
+    expect(fresh.checked).toBe(true);
+    expect(screen.getByRole("radio", { name: /Use an existing dataset/ })).toBeTruthy();
+    expect(screen.getByLabelText("Name of the new dataset")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: "Enron corpus" })).toBeNull();
   });
 
-  it("creates an empty case without ever showing the dataset list", async () => {
+  it("makes a new dataset named in the form, or after the case when left empty", async () => {
     const fetchMock = serve();
     mount();
-    await screen.findByRole("radio", { name: /Start empty/ });
+    await screen.findByRole("radio", { name: /Make a new dataset/ });
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
-    // No `dataset_ids` key at all: the Conduit then gives the case a dataset of its own.
-    await vi.waitFor(() => expect(sentDatasets(fetchMock)).toBeUndefined());
+    await vi.waitFor(() =>
+      expect(sentBody(fetchMock)).toEqual({ name: "Op Example", new_dataset_name: "Op Example", domains: [] }),
+    );
   });
 
-  it("Read existing data reveals the datasets, named without raw ids", async () => {
+  it("sends the new dataset's own name when one is given", async () => {
+    const fetchMock = serve();
+    mount();
+    fireEvent.change(await screen.findByLabelText("Name of the new dataset"), { target: { value: "Carrier C" } });
+    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    await vi.waitFor(() => expect(sentBody(fetchMock).new_dataset_name).toBe("Carrier C"));
+    expect(sentDatasets(fetchMock)).toBeUndefined();
+  });
+
+  it("Use an existing dataset offers one choice among the datasets, named without raw ids", async () => {
     serve();
     mount();
-    fireEvent.click(await screen.findByRole("radio", { name: /Read existing data/ }));
-    const carrier = await screen.findByRole("checkbox", { name: "Carrier B intake" });
-    expect(carrier).toBeTruthy();
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
+    expect(await screen.findByRole("radio", { name: "Carrier B intake" })).toBeTruthy();
     expect(screen.queryByText(/5D5GG/)).toBeNull();
+    // Nothing chosen yet: the case cannot be made.
+    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
+    expect((screen.getByRole("button", { name: "Create case" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("switching back to Start empty forgets the ticked datasets", async () => {
+  it("switching back to Make a new dataset forgets the chosen dataset", async () => {
     const fetchMock = serve();
     mount();
-    fireEvent.click(await screen.findByRole("radio", { name: /Read existing data/ }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Enron corpus" }));
-    fireEvent.click(screen.getByRole("radio", { name: /Start empty/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Enron corpus" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Make a new dataset/ }));
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
-    await vi.waitFor(() => expect(sentDatasets(fetchMock)).toBeUndefined());
+    await vi.waitFor(() => expect(sentBody(fetchMock).new_dataset_name).toBe("Op Example"));
+    expect(sentDatasets(fetchMock)).toBeUndefined();
   });
 
-  it("creates with the ticked datasets when reading existing data", async () => {
+  it("creates over the one dataset chosen", async () => {
     const fetchMock = serve();
     mount();
-    fireEvent.click(await screen.findByRole("radio", { name: /Read existing data/ }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Enron corpus" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Enron corpus" }));
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
     await vi.waitFor(() => expect(sentDatasets(fetchMock)).toEqual(["enron"]));
+    expect(sentBody(fetchMock).new_dataset_name).toBeUndefined();
   });
 
   // ADR-126 decision 1: the case's domain packs are chosen when it is made.
@@ -128,7 +143,7 @@ describe("NewCaseForm", () => {
   it("sends domains: [] when none is ticked, so the case counts as chosen POLE", async () => {
     const fetchMock = serve();
     mount();
-    await screen.findByRole("radio", { name: /Start empty/ });
+    await screen.findByRole("radio", { name: /Make a new dataset/ });
     fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Op Example" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
     await vi.waitFor(() => expect(sentBody(fetchMock).domains).toEqual([]));

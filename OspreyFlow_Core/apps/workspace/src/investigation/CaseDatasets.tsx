@@ -1,5 +1,6 @@
 // What the open case reads (ADR-099): every reader sees it; the case's Author changes it. Nothing
-// else widens what a case reads, and a case always reads at least one dataset.
+// else widens what a case reads, and a case reads exactly one dataset, a source or a composite
+// (Amendment 12). Its analyst layer is never shown: the Conduit does not send it (ADR-143).
 import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
@@ -32,7 +33,7 @@ export function CaseDatasets({
   const [canChange, setCanChange] = useState(false);
   const [reads, setReads] = useState<Dataset[] | null>(null);
   const [offered, setOffered] = useState<Dataset[]>([]);
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function CaseDatasets({
       .then((found) => {
         if (cancelled) return;
         setReads(found);
-        setChosen(found.map((d) => d.id));
+        setChosen(found[0]?.id ?? null);
       })
       .catch((err: unknown) => !cancelled && setProblem(err instanceof Error ? err.message : String(err)));
     return () => {
@@ -85,7 +86,8 @@ export function CaseDatasets({
     setBusy(true);
     setProblem(null);
     try {
-      const saved = await setCaseDatasets(apiBaseUrl, bearerToken, investigationId, chosen);
+      if (chosen === null) return;
+      const saved = await setCaseDatasets(apiBaseUrl, bearerToken, investigationId, [chosen]);
       setReads(saved);
       setEditing(false);
       onChanged?.();
@@ -108,24 +110,24 @@ export function CaseDatasets({
       {editing && (
         <>
           <DatasetChoice
+            name="case-dataset"
             datasets={offered}
             chosen={chosen}
             onChange={setChosen}
-            legend="Read only these datasets"
-            disabled={busy}
+            legend="Read only this dataset"
           />
           <span className="label">
-            Search, expansion and the query builder in this case reach only these.
+            Search, expansion and the query builder in this case reach only this dataset.
           </span>
           <span style={{ display: "flex", gap: "var(--sp-8)" }}>
-            <Button variant="primary" disabled={busy || chosen.length === 0} onClick={() => void save()}>
+            <Button variant="primary" disabled={busy || chosen === null} onClick={() => void save()}>
               Save
             </Button>
             <Button
               disabled={busy}
               onClick={() => {
                 setEditing(false);
-                setChosen((reads ?? []).map((d) => d.id));
+                setChosen(reads?.[0]?.id ?? null);
               }}
             >
               Cancel
