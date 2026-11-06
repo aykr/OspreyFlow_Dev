@@ -25,7 +25,7 @@ evidence and this file is wrong; say so and fix the file.
   complete commands to run, never "add this line" fragments. Keep replies short; one or two sentences on an
   outcome, not a recap.
 - **Git.** Since 4 October 2026 the owner lets the session commit directly ("can you start running the commit
-  commands"), naming each file; the owner pushes and you never do. Never stage `OspreyFlow_Core/osprey.yaml`
+  commands"), naming each file; the orchestrator pushes under ADR-142 decision 6; lanes never push. Never stage `OspreyFlow_Core/osprey.yaml`
   or `OspreyFlow_Core/data/`. Conventional Commits; each commit's message ends "record <previous hash>" and
   fills the previous friction-log row's hash. **No `Co-Authored-By` or `Claude-Session` lines in commit
   messages.**
@@ -40,6 +40,10 @@ evidence and this file is wrong; say so and fix the file.
 
 > Never admit a real dataset, push anywhere public, create a public repository, claim the reserved name,
 > restructure the tree, or touch the airbyte container on port 8000.
+
+`origin` (`aykr/OspreyFlow_Dev`) is public, and the owner confirmed on 6 November 2026 that this is
+intended ("Public is intended", ADR-142 P4): pushing to `origin` under ADR-142 decision 6 is not a push
+"anywhere public" in this sense. No other remote is pushed to.
 
 Also: no credentials in any file or message. `OspreyFlow_Core/Makefile` and `.github/workflows/ci.yml` are
 protected: give the owner the change as a command or a diff and do not edit them (a new live-service test
