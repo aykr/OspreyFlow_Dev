@@ -142,9 +142,12 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
 created by, branched from, whether the caller has closed the case's tab, and the names of the
-datasets it reads). `POST /v1/investigations` takes `dataset_ids`, at least one of the caller's unit;
-with none it makes a dataset of the case's own, named after it (ADR-099 decision 3). A branch reads its
-parent's datasets. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+dataset it chose, never its analyst layer). `POST /v1/investigations` takes either `dataset_ids`, exactly
+one source or composite dataset of the caller's unit, or `new_dataset_name`, an empty dataset of the
+caller's unit made first; neither, both, or two ids is 422 `dataset_refused` and no case is made (ADR-099
+Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). The case's analyst layer
+is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). A branch reads its parent's chosen
+dataset and gets a layer of its own. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
 among them, `name` names the new case. Without a body it forks the whole working set, as before. The
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
@@ -223,8 +226,9 @@ in the store) is left out of every read.
 
 ```
 POST   /v1/investigations/{id}/search      federated search across graph, documents, index, within the case's datasets (ADR-099)
-GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099); none to a caller holding no right (Amendment 11)
-POST   /v1/datasets                     a new, empty dataset of the caller's unit (`{"name": ...}`), audited (ADR-099); `POST /v1/investigations` takes `dataset_ids`, and with none makes the case a dataset of its own named after it
+GET    /v1/datasets                     the source and composite datasets of the caller's unit, for a new case to name (ADR-099); never an analyst layer, for any role (ADR-143 decision 1); none to a caller holding no right (Amendment 11)
+POST   /v1/datasets                     a new, empty source dataset of the caller's unit (`{"name": ...}`), audited (ADR-099)
+POST   /v1/datasets/composites          a composite of two or more of the caller's unit's source datasets (`{"name", "member_ids"}`), audited; a member of another unit, a missing one, a composite or an analyst layer is 422 `dataset_refused`, one answer for all (ADR-099 Amendment 12 item 2)
 POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers start with what is typed (ADR-059), within the case's datasets (ADR-099)
 GET    /v1/investigations/{id}/explore/counts          nodes per entity type and links per link type the analyst can see, within the case's datasets (ADR-100)
 GET    /v1/investigations/{id}/explore/most-connected  nodes by visible degree, most first, with the total ranked; ?entity_type, ?limit (1-50), ?offset (ADR-100)
@@ -260,8 +264,8 @@ POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   e
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, Editor (ADR-098)
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098); with `degree` 2–6 and 2–8 named nodes, also the routes between them within it (Amendment 4)
-GET    /v1/investigations/{investigation_id}/datasets   the datasets the case reads, in order, Viewer (ADR-099)
-PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [...]}`, at least one, all of the Author's unit; else 422 `dataset_refused`, one answer for another unit's and a missing one), audited before and after, Author (ADR-099)
+GET    /v1/investigations/{investigation_id}/datasets   the dataset the case chose (a source or a composite; never its analyst layer), Viewer (ADR-099, ADR-143)
+PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [one]}`, a source or composite of the Author's unit; else 422 `dataset_refused`, one answer for two ids, another unit's, a missing one and an analyst layer), audited before and after, Author (ADR-099 Amendment 12)
 POST   /v1/investigations/{investigation_id}/questions   a question to the model about every Document in the case's view the analyst can see, whole, and the graph facts around the selection (one hop) or the whole view, within the timeline window when one is set; the answer cites Documents and `[G-n]` facts and its proposals are pending findings; documents and facts together past the budget refused 409 `limit_exceeded` with its three options, never trimmed (ADR-129 decision 1, Amendment 1), none `no_documents` (422), Editor (ADR-098 decision 4)
 GET    /v1/investigations/{investigation_id}/questions   the case's questions and answers: citations of Documents the reader can see, proposals of their unit in their present state, Viewer (ADR-098 decision 4)
 POST   /v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept   one proposal accepted: an inferred node and its `MENTIONED_IN` link onto the canvas, Editor (ADR-098 decision 4)

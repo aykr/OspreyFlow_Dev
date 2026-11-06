@@ -387,7 +387,9 @@ from .dataset_scope import (
     scope_to_dataset,
 )
 from .datasets import (
+    MAX_DATASET_NAME,
     CaseDatasetsRequest,
+    CreateCompositeRequest,
     CreateDatasetRequest,
     Dataset,
     DatasetRefusedError,
@@ -2679,9 +2681,12 @@ DEFAULT_CASE_NAME = "Untitled case"
 
 class CreateInvestigationInput(BaseModel):
     name: str | None = None
-    #: ADR-099: the datasets the case reads, all of the creator's unit. Left out, the case gets a
-    #: new dataset of its own, named after it, for the data that will be added to it.
+    #: ADR-099 Amendment 12 item 6 (R16): *Use an existing dataset* names exactly one, a source or a
+    #: composite of the creator's unit; *Make a new dataset* names it instead (`new_dataset_name`,
+    #: an empty dataset of the creator's unit). One or the other; neither, or both, is refused.
+    #: The Conduit no longer makes a case a dataset of its own when it names none.
     dataset_ids: list[str] | None = None
+    new_dataset_name: str | None = Field(default=None, max_length=MAX_DATASET_NAME)
     #: ADR-126: the domain packs the case carries. Left out, the column stays NULL, "never chosen",
     #: which reads as the POLE core model; a list, empty included, is a choice. An unknown pack is a
     #: 422.
@@ -2702,19 +2707,25 @@ async def create_investigation(
 ) -> Investigation:
     """Needs no grant: whoever creates a case is its first Author (ADR-052 §4). The name is
     optional here only until the Glass proposes one (stage 3), after which it is required.
-    ADR-099: the datasets named are checked before the case exists, so a refusal leaves none."""
+    ADR-099 Amendment 12: the case reads exactly one dataset, named or made here, checked before
+    the case exists, so a refusal leaves none. ADR-143 decision 1: the case's analyst layer is made
+    with it (`set_for_case`)."""
     name = (body.name if body is not None else None) or DEFAULT_CASE_NAME
-    named = body.dataset_ids if body is not None else None
+    named = list(dict.fromkeys(body.dataset_ids or [])) if body is not None else []
+    new_name = (body.new_dataset_name or "").strip() if body is not None else ""
+    if bool(named) == bool(new_name) or len(named) > 1:
+        raise DatasetRefusedError("a case reads exactly one dataset: name one, or a new one")
     if named:
         own = {d.id for d in await datasets.list_for(principal)}
         if not set(named) <= own:
             raise DatasetRefusedError("not every dataset is one of this unit's")
+    else:
+        # Made before the case, so a name already taken refuses the whole request.
+        named = [(await datasets.create(principal, new_name)).id]
     investigation = await investigations.create(
         principal, name=name, domains=body.domains if body is not None else None
     )
-    if not named:
-        named = [(await datasets.create(principal, investigation.name, suffix_if_taken=True)).id]
-    await datasets.set_for_case(investigation.id, named, principal)
+    await datasets.set_for_case(investigation.id, named, principal, case_name=investigation.name)
     await audit.record(
         principal=principal,
         action="create_investigation",
@@ -2751,6 +2762,27 @@ async def create_dataset_route(
     return dataset
 
 
+@app.post(
+    "/v1/datasets/composites",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE))],
+)
+async def create_composite_route(
+    body: CreateCompositeRequest, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
+) -> Dataset:
+    """ADR-099 Amendment 12 item 2: a composite of the caller's unit's source datasets, read at read
+    time as its members; nothing is copied. A member of another unit, a missing one, a composite and
+    an analyst layer are refused alike (`dataset_refused`)."""
+    composite = await datasets.create_composite(principal, body.name, body.member_ids)
+    await audit.record(
+        principal=principal,
+        action="create_composite_dataset",
+        resolved_query={"dataset_id": composite.id, "member_ids": composite.members},
+        result_cardinality=len(composite.members),
+    )
+    return composite
+
+
 @app.get("/v1/investigations/{investigation_id}/datasets")
 async def case_datasets_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, datasets: DatasetsDep
@@ -2772,8 +2804,10 @@ async def set_case_datasets_route(
 ) -> list[Dataset]:
     """Changes what the case reads: its Author's, audited, every dataset of the Author's unit
     (ADR-099). Nothing else widens a case's datasets."""
-    before = await datasets.ids_of_case(investigation.id)
-    changed = await datasets.set_for_case(investigation.id, body.dataset_ids, principal)
+    before = [d.id for d in await datasets.of_case(investigation.id, principal)]
+    changed = await datasets.set_for_case(
+        investigation.id, body.dataset_ids, principal, case_name=investigation.name
+    )
     await audit.record(
         principal=principal,
         action="set_case_datasets",

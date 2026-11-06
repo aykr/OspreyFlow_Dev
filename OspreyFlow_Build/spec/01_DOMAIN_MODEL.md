@@ -548,11 +548,40 @@ ADR-099 section; `test_bulk_loader.py`). `Principal.datasets` carries the case's
 and only the Conduit's own background work reads so; an empty list sees nothing.
 
 - **A dataset** is a named body of data held by one unit, kept in Postgres (`datasets`,
-  `investigation_datasets`). A case names at least one, all of its own unit; a branch takes its
-  parent's; only the case's Author changes them, and each change is audited (decision 3).
-- **What a case writes joins its first dataset** unless the load names another (decision 6). The
-  Conduit's own writes for a case are stamped so by `DatasetStampingGraph` (Amendment 1 decision 2),
-  and an element's properties are the latest write's (decision 2).
+  `investigation_datasets`, `composite_members`). It is of one of three kinds (`datasets.kind`;
+  ADR-099 Amendments 12 and 13, ADR-143 decision 1):
+  - **`source`**: loaded through the Studio or a seed;
+  - **`composite`**: names two or more of its unit's source datasets (`members`) and holds none of
+    their data; read at read time as its members and its own id (so `SAME_AS` links written into
+    it are read). Made by `POST /v1/datasets/composites`, or by the migration;
+  - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
+    it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
+    returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
+    dataset), and its name takes no place in the unit's unique names. A branch has a layer of its
+    own (a layer is never shared with another case). Its egress (ADR-136) is not its own: it reads
+    as the strictest of what its case otherwise reads (`datasets.layer_egress`; pending the owner's
+    ruling on a layer's egress, raised at L3.1).
+- **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
+  decision 1); a branch takes its parent's; only the case's Author changes it, and each change is
+  audited (decision 3). A new case names an existing dataset or a new one; the Conduit no longer
+  makes one for a case that names none (Amendment 12 item 6).
+- **A case's read set** (`Principal.datasets` for a request under it, `DatasetStore.ids_of_case`)
+  is its chosen dataset (a composite as its members, then its own id) **plus** its analyst layer,
+  and nothing else; a case that has chosen nothing reads nothing. Case views (ADR-144) will read
+  the same set. A link drawn in one case's layer, even between two loaded nodes, is in no count,
+  degree, bucket, neighbourhood or path read under another case of the same source
+  (`tests/conformance/graph_port/test_analyst_layer.py`, shown red with the layer added to the other
+  case's read set); the read set itself is `tests/services/api/test_analyst_layer.py`.
+- **What a case writes joins the first of its read set** unless the load names another (decision
+  6): the source, or a composite's first member, as before composites existed. Where analyst writes
+  go once the layer exists (ADR-143 open question 1) and where a composite case's writes go
+  (Amendment 12 item 5) wait for the owner. The Conduit's own writes for a case are stamped so by
+  `DatasetStampingGraph` (Amendment 1 decision 2), and an element's properties are the latest
+  write's (decision 2).
+- **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
+  gives each case that names several datasets a composite of them (one composite per distinct set),
+  gives every case its layer, reports a case it cannot place rather than guessing, and then builds
+  the one-row index on `investigation_datasets`.
 - **A correction keeps its datasets**: `supersede_node` and `supersede_edge` give the new revision
   every dataset of the old one (Amendment 2 decision 2).
 - **A `SAME_AS` link is in the datasets both its records share**, so a match across two datasets is

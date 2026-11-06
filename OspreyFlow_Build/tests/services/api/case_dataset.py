@@ -35,3 +35,15 @@ async def give_case_its_dataset(investigation_id: str, principal: Principal) -> 
         await store.set_for_case(investigation_id, [dataset_for(principal)], principal)
     finally:
         await store.close()
+
+
+def new_case(name: str | None = None, **body: object) -> dict[str, object]:
+    """A `POST /v1/investigations` body for a case over a new, empty dataset of the caller's unit
+    (ADR-099 Amendment 12 item 6: a case names one dataset, or a new one; the Conduit no longer
+    makes one for a case that names none). The dataset's name is unique, so a test may make many."""
+    from uuid import uuid4
+
+    made: dict[str, object] = {"new_dataset_name": f"Test data {uuid4().hex[:12]}", **body}
+    if name is not None:
+        made["name"] = name
+    return made

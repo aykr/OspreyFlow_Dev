@@ -163,6 +163,8 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
+from tests.services.api.case_dataset import new_case
+from tools.layout import REPO as REPO_ROOT
 
 from demo_fixtures.fixture_corp import _synthetic_nino
 from demo_fixtures.hmp import generate_hmp_events
@@ -171,7 +173,6 @@ from demo_fixtures.hmp_population import (
     RELAY_GROUP_PRISON_NUMBERS,
     SECOND_SUBJECT_PRISON_NUMBER,
 )
-from tools.layout import REPO as REPO_ROOT
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("OSPREY_TEST_OVER_THE_WIRE") != "1",
@@ -372,7 +373,7 @@ def _find(analyst: httpx.Client, identifier: str) -> dict:
 
 
 def _new_investigation(analyst: httpx.Client) -> str:
-    created = analyst.post("/v1/investigations")
+    created = analyst.post("/v1/investigations", json=new_case())
     assert created.status_code == 201, created.text
     return str(created.json()["id"])
 

@@ -44,6 +44,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.case_dataset import new_case
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
@@ -215,7 +216,7 @@ def client() -> TestClient:
 
 
 def test_create_investigation_returns_201_and_audits(client: TestClient) -> None:
-    response = client.post("/v1/investigations")
+    response = client.post("/v1/investigations", json=new_case())
 
     assert response.status_code == 201
     assert response.json()["id"] == "inv-1"

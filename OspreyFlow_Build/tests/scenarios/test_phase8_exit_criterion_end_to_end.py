@@ -72,6 +72,8 @@ from services.ingest.recipe_loader import load_recipe
 from services.resolve.projection import THRESHOLD_BALANCED, THRESHOLD_STRICT
 from services.resolve.resolver import resolve_entity_type
 from services.resolve.same_as_writer import write_same_as_edges
+from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import new_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -98,7 +100,6 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.ingest import FieldBinding, RecipeEdge, RecipeEntity, RowTemplate
-from tests.conftest import default_claims, sign_token
 
 
 def _fresh_uk_msisdn_raw() -> str:
@@ -741,7 +742,7 @@ def test_phase8_exit_criterion_end_to_end(
     b_graph = asyncio.run(_build_b_graph())
 
     with TestClient(app) as client:
-        investigation_b = client.post("/v1/investigations", headers=headers)
+        investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
         assert investigation_b.status_code == 201, investigation_b.text
         inv_b_id = investigation_b.json()["id"]
 
@@ -783,7 +784,7 @@ def test_phase8_exit_criterion_end_to_end(
         assert cdr_ids["b_party_endpoint_id"] in expanded_node_ids
 
         # === B7: repeat for the second cohort — a shared messaging handle common to it.
-        investigation_b2 = client.post("/v1/investigations", headers=headers)
+        investigation_b2 = client.post("/v1/investigations", headers=headers, json=new_case())
         assert investigation_b2.status_code == 201, investigation_b2.text
         inv_b2_id = investigation_b2.json()["id"]
         cohort_2_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_2_person_ids"]]
@@ -1175,7 +1176,7 @@ def test_phase8_exit_criterion_end_to_end(
     a_result = asyncio.run(_build_a_graph())
 
     with TestClient(app) as client:
-        investigation_a = client.post("/v1/investigations", headers=headers)
+        investigation_a = client.post("/v1/investigations", headers=headers, json=new_case())
         assert investigation_a.status_code == 201, investigation_a.text
         inv_a_id = investigation_a.json()["id"]
 
