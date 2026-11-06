@@ -26102,3 +26102,798 @@ refusals, each shown red); `src/ingest/sources/sources.test.tsx` (+4),
 `src/ingest/publish/PublishScreen.test.tsx` (+2), `src/admin/Schedules.test.tsx` (+3), each shown red
 by its own plant; `keyboard/ingest-studio.spec.ts` (+2 registered actions: the mode set and the
 pause and resume, rule 13); `a11y/every-harness.spec.ts`'s source page and its edit, axe-clean.
+
+## ADR-142 — Parallel lanes: one agent per worktree, one leased dev stack, an orchestrator that merges — ACCEPTED (process)
+
+Status: accepted from the owner's rulings P1–P10 of 6 November 2026, each put to the owner as a
+multiple-choice question and answered in chat; P7 confirmed at step 0 (6 November 2026) as an
+interactive lane. **Not built.** Built in step 0 of
+`process/BUILD_PLAN_PARALLEL_LANES.md` by the orchestrator, alone against the tree, before any lane
+starts. Amends `process/CLAUDE.md` rule 14 and `process/FDE_HANDOVER.md` §1 (who pushes). Nothing else
+in rules 1–15 changes.
+
+### Context
+
+The owner is working towards three outcomes at once: (1) a more usable Ingest Studio (ADR-140, in
+flight); (2) a Glass whose navigation is refined continually, with a clear move between the Glass and
+the Studio and a mapped alerts journey; (3) i2-style drawing for field analysts, which needs the case
+and dataset contract made bulletproof (ADR-143). One agent against one tree (rule 14) makes these
+strictly serial. The tree also has two files every change touches: `process/07_BUILD_PLAN.md`, whose
+friction-log rows end "record <previous hash>" and so chain commits one after another, and
+`spec/06_DECISIONS.md`, whose ADR and amendment numbers are handed out in order. The dev stack
+(`deploy/compose/dev.yaml`) binds fixed host ports and has no project name, so only one copy can run
+per machine. A maker/checker queue (`Claude outputs/handoff/`) ran in September and was closed on
+29 September; its protocol (briefs, `HOLD`, `DECISION_NEEDED.md`, the owner's `DECISIONS.md`) is the
+model for what follows.
+
+### The owner's rulings of 6 November 2026
+
+- **P1.** "Orchestrator + lanes": one orchestrator session that writes no product code, plus builder
+  sessions in separate worktrees.
+- **P2.** Three builder lanes at once, accepted knowing they cost about one and a half times the tokens
+  of two, bring three streams of questions to the owner and raise merge conflicts.
+- **P3.** "One stack, leased": one shared `make dev-up` stack; lanes take turns through a lock the
+  orchestrator oversees; every lane may run live tests in its turn. (Put to the owner after he asked
+  whether a single stack would mean fewer folders: it does not — every lane needs its own worktree
+  either way; the stack choice saves containers, not folders.)
+- **P4.** "Yes, with conditions": the orchestrator may push, to `origin` only, only after
+  `make ci` passes on the merge commit, and every push is logged with its hash. (`origin` is
+  `aykr/OspreyFlow_Dev`, which is public: the owner confirmed at step 0, 6 November 2026, that this
+  is intended — "Public is intended" — so pushing to it under decision 6 is not a push "anywhere
+  public" in the standing constraint's sense; no other public remote is.)
+- **P5.** "Orchestrator reserves": ADR and amendment numbers are reserved by a one-line commit to main
+  before a lane writes the record; `06_DECISIONS.md` stays one file, so its gates keep working.
+- **P6.** "Fragment files": each change writes its friction-log row as its own file; a tool assembles
+  them into the table at merge.
+- **P7.** A fourth lane, documentation and collateral (the user, developer and administration guides,
+  the website, the deck), follows features as they merge; the website and deck may start from the
+  design reference, saying "coming" for what is not built. *(Recommended and not contradicted;
+  confirmed by the owner at step 0, 6 November 2026, as "Confirm, interactive": the documentation
+  lane opens as an interactive session in its own tab like the others, not headless, and it opens
+  after the first feature lane merges.)*
+- **P8.** A heartbeat monitor, so the owner stays on top of the build ("can you also ask the
+  orchestrator to create a heart beat monitor so that i can stay on top of the build").
+- **P9.** "C: opens interactive lanes": the orchestrator runs the runbook itself and opens each lane as
+  an interactive Claude Code session in its own Terminal tab, so the owner can still answer a lane
+  directly; the documentation lane may run headless (superseded by the owner's step 0 answer to P7:
+  it is interactive too). (Asked after the owner said: "instead of me
+  running the sessions runbook manually, can the orchestrator execute these?")
+- **P10.** Without asking first, the orchestrator may: set up worktrees and their environments
+  (`git worktree`, `uv sync --frozen`, `npm ci`, `graphify update` — the owner's standing "downloads
+  need an explicit yes" is given in advance for these installs from the lock files, and for nothing
+  else); merge, run `make ci` and push under decision 6; write and send each lane its next brief after
+  a merge; and nudge, or restart with Prompt R, a lane the heartbeat shows quiet or stuck.
+
+### What is not reopened
+
+Rules 1–13 and 15 bind every lane exactly as before. Spec gaps are fixed in `spec/` (rule 11). ADRs
+are never edited, only amended. No `Co-Authored-By` or `Claude-Session` line in any commit
+(`FDE_HANDOVER.md` §1). `OspreyFlow_Core/osprey.yaml` and `OspreyFlow_Core/data/` are never staged.
+`OspreyFlow_Core/Makefile` and `.github/workflows/ci.yml` stay protected: a lane that needs a change
+there asks the orchestrator, who brings it to the owner. Nothing is pushed anywhere but `origin` (P4); the
+airbyte container on port 8000 is never touched.
+
+### Decision
+
+1. **Roles.**
+   - **The owner** rules on design questions, answers the multiple-choice questions lanes raise, and
+     may stop any lane.
+   - **The orchestrator** (Opus, at the repository root on `main`) writes each lane's brief, reserves
+     ADR numbers, reviews every lane's work against its brief and rules 1–15 before merging, merges in
+     the order the build plan sets, assembles the friction log and pushes under decision 6. It writes
+     no product code; it may write process tooling and spec text.
+   - **A lane** (one Claude Code session, or one person, in its own worktree on its own branch
+     `lane/<name>`) builds what its brief says and nothing beyond it, commits on its branch, never
+     merges to `main` and never pushes.
+   - **A reviewer** (the read-only `pid-reviewer` agent, generalised as `lane-reviewer`) may run at
+     any time against any branch: it reads, never writes and never touches the stack.
+2. **Rule 14, reworded** (`process/CLAUDE.md`; full text in this ADR's appendix): one agent per
+   worktree, and one holder of the dev stack's lease at a time. The worked example of 23 September
+   stays, as does the instruction to treat "handed back a report" as distinct from "stopped running".
+3. **Worktrees.** Each lane works in `git worktree add <outside iCloud>/osprey-wt/<lane> -b lane/<lane>
+   main`, outside `~/Documents` so iCloud does not sync `.venv` and `node_modules`. A worktree has its
+   own `.venv`, `node_modules` and `graphify-out/`. The orchestrator stays in the original checkout.
+4. **The leased stack.** One `make dev-up` stack for the whole machine. `OspreyFlow_Build/scripts/stack_lease.sh`
+   (`acquire <lane> <purpose>`, `release <lane>`, `status`) keeps an atomic lock outside every worktree
+   (`~/.ospreyflow/stack.lease`) naming the holder, the purpose, the time and the worktree. A lane
+   brings the stack up only while it holds the lease and runs `make dev-down` before releasing it.
+   A measurement (timing, reliability) is valid only if its report names the lease it was taken
+   under. A lease held for more than two hours without a word in the holder's report is the
+   orchestrator's to ask about, never to break silently.
+5. **Records that every lane touches.**
+   - **ADR numbers** are reserved in `spec/ADR_RESERVATIONS.md` (number or "ADR-n Amendment m",
+     title, lane, date, status) by the orchestrator, committed to `main` before the lane writes.
+     ADR-142 to ADR-145 are reserved by step 0. Amendments to an existing ADR are reserved the same
+     way, since they are numbered in order.
+   - **The friction log.** A lane writes one file per change, `process/friction/<yyyy-mm-dd>-<lane>-<slug>.md`,
+     holding exactly one row of the friction-log table, its last cell "Hash: recorded at merge."
+     `OspreyFlow_Build/tools/friction_assemble.py` (built at step 0, shown red first, rule 15) appends the rows to
+     `07_BUILD_PLAN.md`'s friction log in date order, fills each hash from the merge, and removes the
+     fragments; only the orchestrator runs it. The "record <previous hash>" chain ends with the last
+     serial commit; the merge commit is the record.
+   - **Generated TypeScript types** (from `packages/schemas`) are regenerated on every rebase, never
+     merged by hand.
+   - **Keyboard specs.** Each surface keeps its own `keyboard/<surface>.spec.ts` and action list;
+     `keyboard/actionRegistry.ts` is changed only by small commits the orchestrator merges first.
+6. **Merging and pushing** (P4). Before a merge the orchestrator: confirms the lane's session reports
+   done and nothing of it runs in the background (rule 14); has the lane rebase on `main` and re-run its
+   touched tests; holds the lease; merges with `--no-ff`; runs `make ci` (and Floor B when the lane
+   touched a live-store path); assembles the friction log; commits. It then pushes to `origin` only,
+   never `backup` or `old-origin`, and appends a line to `process/lanes/PUSH_LOG.md` (date, merge
+   hash, `git ls-remote origin refs/heads/main` matching `git rev-parse HEAD`). A red `make ci` is never
+   pushed; two failed attempts become a question to the owner (the September queue's churn cap).
+7. **Questions to the owner.** A lane that meets a design question stops that piece of work, writes the
+   question as multiple choice (at most four, recommendation first) in its report, and carries on with
+   anything independent of it. The orchestrator batches the lanes' questions so the owner answers them
+   in one round.
+8. **Briefs.** Each brief names: the lane; the ADRs and spec sections that bind it; the files it owns
+   (the build plan's ownership map); the tests to write first; the exit criteria; and the end-of-brief
+   report (exit criteria met, proving tests, commits, open questions, one hand check for the owner).
+
+9. **The heartbeat** (P8). `OspreyFlow_Build/scripts/lanes_heartbeat.sh`:
+   - **Each lane beats** — `beat <lane> <state> "<note>"` — when it starts planning, starts work,
+     starts tests, asks the owner something (`waiting-for-owner`), is blocked, is ready to merge, and
+     after every commit. States are a closed list: `planning`, `working`, `testing`,
+     `waiting-for-owner`, `blocked`, `ready-to-merge`, `idle`. A beat is one line outside every
+     worktree (`~/.ospreyflow/lanes/<lane>.beat`, with a running `<lane>.log`).
+   - **The owner's monitor** — `show`, or `watch [seconds]` in its own Terminal tab — prints one table:
+     each lane's state, how long since its last beat, how far its branch is ahead of and behind `main`,
+     its last commit and its note; the lease's holder and age; how many Claude sessions are running;
+     and a **Needs you** list. The list holds: a lane waiting for the owner or blocked; a lane ready to
+     merge; a lane quiet for 45 minutes while planning, working or testing; a lane five or more commits
+     behind `main`; the lease held for two hours; a lane that never beat. `watch` sends a macOS
+     notification for each line newly on the list.
+   - **The orchestrator** reads the same table at the start of every session (Prompt O) and puts
+     what it shows in its status table. A beat is a claim, not evidence: the orchestrator still
+     reads the branch (decision 1).
+
+10. **The orchestrator runs the lanes** (P9, P10). `OspreyFlow_Build/scripts/lanes_launch.sh`:
+    `setup <lane>` (worktree, `osprey.yaml` copied and marked skip-worktree so it can never be staged,
+    `.venv`, `node_modules`, the graph); `open <lane> [model]` (a new Terminal tab in the worktree with
+    Claude Code started on Prompt L and the lane's brief, `process/lanes/PROMPT_L.md` and
+    `process/lanes/<lane>/BRIEF.md`); `resume <lane>` (the same on Prompt R); `alive <lane>` (is a
+    Claude Code session running in that worktree); `headless docs` (the documentation lane only,
+    `claude -p` under its worktree's permission allowlist, never `--dangerously-skip-permissions`;
+    kept for open question 1's queue mode — since the owner's step 0 answer to P7 the documentation
+    lane opens with `open docs` like the others).
+    `open` refuses while a session is already running in the worktree (rule 14). The orchestrator
+    cannot type into a session it did not start: to reach a lane that is running but quiet it leaves a
+    **nudge** (`lanes_heartbeat.sh nudge <lane> "<message>"`), which the lane is shown at its next
+    beat, and tells the owner; to a lane whose session has ended (`alive` says no) it opens Prompt R.
+    It still asks the owner for design rulings, for any other download, for the protected `Makefile`
+    and `ci.yml` lines, and before closing a session the owner opened. Approvals asked inside a lane's
+    session are the owner's. The orchestrator acts only while it runs a turn: its prompt ends in a
+    **watch mode** that checks the heartbeat every ten minutes and acts, until the owner interrupts it
+    or eight hours pass with nothing changing (the September queue's polling rule).
+
+### Standing rules, as they apply
+
+- **Rule 14** is replaced as decision 2 says; its intent — no two agents against one tree or one set of
+  containers — is unchanged.
+- **Rule 15.** `stack_lease.sh` and `friction_assemble.py` are gates. Each is shown red by a planted
+  violation of the shape its real call site produces (a lease already held by another lane; two
+  fragments for one row) before it is relied on.
+- **Rule 12.** "One holder of the stack at a time" is an invariant; its test is decision 4's
+  `test_stack_lease.py` case "a second acquire while one is held is refused and names the holder".
+
+### Tests to write first, named
+
+- `tests/test_stack_lease.py`: a second `acquire` while a lease is held is refused and prints the
+  holder (red with the lock removed); `release` by a lane not holding it is refused; `release` with the
+  dev stack still up is refused.
+- `tests/test_friction_assemble.py`: fragments become rows in date order; a fragment with two rows, or
+  none, is refused; a hash already filled is never overwritten; the fragments are removed only after
+  the table is written.
+- `tests/test_lanes_heartbeat.py`: an unknown state is refused; a `working` beat older than the quiet
+  limit, a `waiting-for-owner` beat and a lease older than its limit each appear under *Needs you*
+  (red with the check removed, planted as real beat files of the shape `beat` writes); `watch`
+  notifies once per new line, not on every pass.
+- `tests/test_lanes_launch.py`: `open` refuses when `alive` reports a session in the worktree (red
+  with the check removed, planted with a process whose working directory is the worktree); `headless`
+  refuses any lane but `docs`; `setup` leaves `osprey.yaml` marked skip-worktree (red with the mark
+  removed: `git add -A` would stage it).
+- `tests/test_adr_reservations.py`: a heading `## ADR-n` or `### ADR-n, Amendment m` in
+  `06_DECISIONS.md` with no reservation row is reported (shown red with a planted unreserved heading).
+
+### Steps
+
+Step 0 (orchestrator, alone): this ADR and ADR-143 to ADR-145 into `06_DECISIONS.md`;
+`spec/ADR_RESERVATIONS.md`; `process/CLAUDE.md` rule 14; `FDE_HANDOVER.md` §1's push line;
+`process/lanes/` (one folder per lane for briefs and reports, and `PUSH_LOG.md`); `process/friction/`;
+`OspreyFlow_Build/scripts/stack_lease.sh` with its test; `OspreyFlow_Build/scripts/lanes_heartbeat.sh` and
+`OspreyFlow_Build/scripts/lanes_launch.sh` with their tests; `process/lanes/PROMPT_L.md` and `PROMPT_R.md`
+(the runbook's prompts as files); `OspreyFlow_Build/tools/friction_assemble.py` with its test; the reservations
+check; `.claude/agents/lane-reviewer.md`. Then the worktrees, and the lanes' first briefs.
+
+### Open questions
+
+1. Queue mode (briefs in `process/lanes/<lane>/queue/`, run unattended as in September) for Lane 4's
+   mechanical work: later, on the owner's word.
+2. GitHub Actions has not been confirmed running on this repository (round 13cg, 28 September). Until
+   it is, `make ci` on the merge commit is the only gate (P4).
+
+### Cost
+
+Three lanes' tokens; the owner's attention split across three streams of questions; a merge step that
+takes the orchestrator's time and the stack's. Two serial habits end: the hash chain in the friction log
+and "the owner pushes". The owner accepted both for three outcomes in parallel.
+
+### Appendix: rule 14, as it will read
+
+> **14. One agent per worktree, and one holder of the local dev stack at a time.** Each builder works
+> in its own git worktree on its own `lane/<name>` branch (ADR-142); no two agents ever work in the same
+> worktree. The dev stack (`make dev-up`) is one set of containers for the whole machine, used only by
+> the lane holding its lease (`OspreyFlow_Build/scripts/stack_lease.sh`), which brings it down before releasing it. A
+> subagent that has handed back its report is not necessarily finished — it can keep running, keep
+> committing and keep re-running tests in the background — so before resuming work in a worktree, or
+> taking the lease, confirm no other agent is still active there (`ListAgents`,
+> `pgrep -alf '(^|/)claude(-ayan)?( |$)'` — on macOS `pgrep` leaves out its own ancestors unless given
+> `-a` — and `docker ps`). Worked example, 23 September 2026: *(the existing paragraph, unchanged)*. A reliability
+> or timing measurement taken against the dev stack is recorded with the lease it was taken under; one
+> taken without a lease, or under someone else's, is not a measurement of the thing it claims to
+> measure. Only the orchestrator merges to `main`, and it pushes only as ADR-142 decision 6 says.
+
+## ADR-143 — The case and dataset contract: a case's analyst layer, drawing boards, and promotion into a dataset as a load — ACCEPTED (design)
+
+Status: accepted from the owner's rulings C1–C13 and C18 of 6 November 2026, and C14–C17 confirmed by
+the owner at step 0 the same day, each put to the owner as a
+multiple-choice question, or tried in the navigation prototype and agreed in chat. **Not built.**
+Built in Lane 3 of `process/BUILD_PLAN_PARALLEL_LANES.md`. Holds ADR-140's phase 5 and rebuilds it
+under this record (ADR-140 Amendment 7, below). ADR-099, ADR-090, ADR-105 and ADR-133 are amended as
+their amendments below say, and are otherwise unchanged; ADR-127 is relied on, not amended.
+
+**Design reference.** The navigation prototype, a Claude Design canvas
+(https://claude.ai/artifact/4z5QbBrPRpcnSEr5ywztc4), with its source copied into
+`spec/glass_redesign/navigation_prototype.dc.html` at step 0 so the reference is version-controlled.
+Sign in as *Analyst* or *Super user*, navigation *B*, then *The Glass › Boards*. Where the prototype and
+this ADR differ, this ADR governs.
+
+### Context
+
+Field analysts at the owner's clients build networks in i2 by declaring a node and drawing links.
+The Glass has no such feature; the nearest is `manual_link` (`working_set/service.py`), which writes a
+manual `SAME_AS`. Adding hand-drawn data meets ADR-099 decision 2 head on: every node carries the
+*union* of the datasets it belongs to, and one person seen in two datasets is one node. A node or link
+drawn straight into a case's dataset would therefore be seen by every other case reading that dataset,
+would sit beside loaded data that has revert and withdrawal rules (ADR-127, ADR-110 Amendment 6) with
+no load of its own, and could not be told from source data afterwards. ADR-140 phase 5 (one dataset per
+case, composites) was about to fix the case-to-dataset model without knowing any of this.
+
+### The owner's rulings of 6 November 2026
+
+- **C1.** "Hold for the contract": phase 5 waits for this ADR; Lane 1 goes on with phases 4, 6 and 7a.
+- **C2.** "Case-owned analyst layer": what an analyst draws is kept in a dataset only that case sees,
+  read with the case's source data as a composite; source datasets stay clean.
+- **C3.** "SAME_AS proposal": a drawn node that looks like a loaded one is offered to the analyst as a
+  proposal, confirmed or rejected; `inferred` until confirmed (rule 5); never merged (rule 6).
+- **C4.** "Grading + note, configurable": every drawn node and link carries a handling marking, a
+  grading in the deployment's scheme, and a source note.
+- **C5.** "Author promotes" (later made per dataset by A3 of ADR-145: author promotes, or a second
+  person reviews).
+- **C6.** Drawing happens on an explicit **drawing board**, opened blank, from a case view or from a
+  selection; the analysis canvas does not draw. (The owner: "an analyst should be given an explicit
+  feature like a drawing board that can open a blank canvas or a caseview canvas.")
+- **C7.** Moving and linking: dragging an item moves it; a link is drawn by dragging the item's link
+  handle onto another item, by Alt-dragging the item, or by right-click *Draw a link from here*; the
+  *Draw a link* button stays as the keyboard route. ("I agree with the idea.")
+- **C8.** Several items and links may be promoted together, as one load; a link goes only when both its
+  ends will be in the dataset.
+- **C9.** After *Send for review*, the promotion waits in the **Ingest Studio › Runs › Analyst
+  promotions** list, where a reviewer approves and commits it or rejects it with a reason; with *Author
+  promotes* it is committed at once and recorded in the same list.
+- **C10.** Analysts may define their own link types ("Need the ability to define my own link type as
+  well"): usable on boards at once, marked *proposed*, joining the dataset's model only when a data
+  engineer accepts it on the Studio's Model tab; links of a proposed or declined type cannot be
+  promoted. ("yes agreed")
+- **C11.** Reviewers of a promotion: a data engineer of the dataset **or** an Author of the case, never
+  the person who proposed it (ADR-145 R4).
+- **C12.** A dataset's highest allowed marking, and its promotion policy, are set per dataset (ADR-145
+  A3).
+- **C13.** The grading scheme changes only by a command with an old-to-new mapping, a dry run first and
+  an audit record, every item keeping its original grade beside the new one (ADR-145 O1).
+- **C18.** The first release of drawing holds: declaring nodes and drawing links; editing and
+  withdrawing one's own items; attaching a source; and importing an i2 chart (open question 5). It is
+  piloted first on a synthetic case on the owner's own machine (rule 9).
+
+Recommended, shown in the prototype, and not contradicted (the owner said "I like the proposed design
+now" and "this looks good to me"); **each confirmed by the owner at step 0, 6 November 2026**:
+
+- **C14.** Node types on a board come only from the dataset's model, with *Need another type? Ask a
+  data engineer*; analyst-defined *node* types may follow later by the C10 route.
+- **C15.** Drawn items show on the case's analysis canvas, dashed and read-only, with *Edit on board*.
+- **C16.** A new load that matches a drawn item raises an alert to the case, pointing at the board.
+- **C17.** Pictures on drawn nodes: (a) upload an image, held as evidence under ADR-105 in the analyst
+  layer; (b) choose an image the case already holds; (c) an icon (ADR-079) as a display choice only.
+
+### What is not reopened
+
+Rule 6: nothing is merged in storage. Rule 5: a proposal is `inferred` until a person confirms it.
+Rule 3: access lives in the adapter's query; the analyst layer is filtered exactly as any dataset is,
+by `Principal.datasets` in the one access step (`AccessFilter.gremlin_has_step`). ADR-099's union of
+datasets on an element (decision 2), its hard limit on every read (decisions 4 and 5) and its
+existence rules stay. ADR-140's R8 (one dataset per case) stays: a case has one *source* dataset, or a
+composite of several; the analyst layer is not a second chosen dataset but part of the case.
+
+### Decision
+
+1. **A case reads its source data and its own analyst layer.** Each case owns exactly one dataset of
+   kind `analyst_layer` (`datasets.kind`, beside ADR-140 phase 5's `composite`), created with the case,
+   named for it, of the case's unit, never offered in any dataset list, never chosen, never shared with
+   another case. A case's read set (`Principal.datasets` for a request under the case) is its source
+   dataset (or a composite's members) **plus** its analyst layer. Case views (ADR-144) read the same
+   set.
+2. **What goes into the analyst layer.** Everything drawn on a board: declared nodes, drawn links,
+   their pictures (`DEPICTS`, decision 7), confirmed or rejected `SAME_AS`/`NOT_SAME_AS` between a drawn
+   and a loaded item, and analyst-defined link types' links. A drawn link may join a drawn item to a
+   loaded one: the link lives in the analyst layer, the loaded item stays in its dataset untouched.
+   Where earlier analyst writes go (ADR-098's hand-marking, `manual_link`, accepted question proposals)
+   is open question 1.
+3. **Nothing in an analyst layer is visible outside its case**, including by inference: a loaded
+   node's degree, its neighbourhood, a path length, a histogram bucket or a status-bar count read from
+   another case does not include links that live in this case's layer (rule 3; tests below).
+4. **A drawn item is always attributed and graded.** Each carries `asserted_by` (the person),
+   `asserted_on` (the board and the case), a handling marking, a grading in the deployment's scheme
+   (decision 11), a source note (free text, a document the case already holds, or both), and the
+   provenance class `analyst_drawn`, drawn dashed in amber
+   everywhere it appears. A node's type is a type of the dataset's model (C14); a link's type is the
+   model's or an analyst-defined one (decision 9). A drawn item is **asserted by its author**, not
+   model-derived: rule 5's `inferred` applies to the `SAME_AS` proposals it raises, not to the item.
+5. **Drawing boards.** A board is a case view with drawing switched on (ADR-144); it always belongs to
+   a case, and *New drawing board* with no case open asks which case, or offers to make one (ADR-140
+   R16). It starts blank, from the current view (its loaded items as live references, drawn grey and not
+   editable there), or from a selection (replacing *Branch selected*). The board keeps its own layout.
+   Gestures as C7. The author edits their own drawn items' properties and **withdraws** them (never
+   deleted: superseded and kept in the audit, as ADR-105 supersedes a picture); a promoted item is
+   changed only by reverting its promotion. Every board action has its keyboard case (rule 13): declare, the link form opened
+   from the selected item, move by arrow keys, inspect, withdraw, promote.
+6. **Matching.** When a drawn item's type and key properties resemble a loaded item, the board's
+   *Looks like a loaded item* panel offers the pair; *Same* writes a confirmed `SAME_AS` (score 1.0, as
+   a manual link, `01_DOMAIN_MODEL.md` §4) in the analyst layer; *Not the same* writes `NOT_SAME_AS`.
+   Neither changes the loaded item. The suggestion itself is `inferred` and never acts on its own.
+7. **Pictures (C17).** (a) An uploaded image becomes an image `Document` in the analyst layer with a
+   `DEPICTS` link to the drawn node, carrying its own marking and source note (ADR-105, unchanged
+   otherwise): a reader not cleared for the picture sees no picture. (b) A picture the case already
+   holds is linked by a `DEPICTS` written into the analyst layer; the image stays in its dataset. (c) An
+   icon is a display setting, not evidence. No automatic face matching (rule 5). Upload size and formats
+   are deployment settings (ADR-145, Policies › Uploads).
+8. **Promotion is a load.** *Promote…* opens a sheet listing the board's drawn items not yet promoted,
+   each ticked or not; links follow their items and go only when both ends will be in the dataset
+   (loaded already, ticked, or promoted before). The sheet shows: what goes; the checks (each marking
+   within the dataset's highest allowed marking, ADR-145 A3; each type in the dataset's model; each
+   item graded with a source note; no link without both ends); undecided matches as warnings; and how
+   it will be recorded. Promoting writes **one load** (`load_id`, trigger `analyst_promotion`, acting
+   as the proposer) through the dataset's load rules (`09_INGEST_STUDIO.md` §5a): each item's
+   `datasets` **gains** the source dataset (ADR-099 decision 2's union — never a copy, never a merge),
+   it stays `analyst_drawn` for good, and the audit stub names the board, the case and the proposer.
+   Rows the load rules hold wait in held rows like any load's. A promotion is reverted like any load.
+9. **Analyst-defined link types (C10).** The link form's *+ Define a new link type* asks for a name as a
+   verb phrase, a sentence on what it means, and whether it has a direction; a name already in the model
+   or proposed is refused. The type is usable at once on that case's boards, labelled *proposed*. The
+   proposal goes to the dataset's data engineers on the Studio's **1 Model** tab (ADR-090, as amended
+   below), who *Add it to the draft model* (made live with the next model version, ADR-140 R12) or
+   *Decline* it. Until accepted, links of the type stay in the analyst layer and the promotion sheet says
+   why; once declined, they stay there for good.
+10. **Where a promotion goes (C9).** Every promotion is listed in **Ingest Studio › 4 Runs › Analyst
+    promotions** (load, what it adds, who, the board and case, status) with *Details*, the revert
+    command for a data engineer, and, when the dataset requires review, *Review* → *Approve and commit*
+    or *Reject with a reason*. The analyst sees the outcome on the board's *Promotions from this
+    board* list and in each item's provenance. The run grid shows promotions as their own row.
+    Operations counts them and their age (ADR-145 O3).
+11. **The grading scheme** is one deployment setting (`grading.scheme`: `5x5x5`, `3x5x2`, or a scheme
+    file), chosen at install (`install.yaml`) and shown read-only in Admin. Changing it is a command
+    (`ospreyflow grading change --to <scheme> --mapping <file> [--dry-run]`) that reports how many items
+    each mapping affects, then rewrites grades, keeping each item's original grade and scheme beside
+    the new one, audited (C13). Under 3x5x2 the handling code (P or C) is part of the grade and is not
+    merged with the protective marking.
+12. **Alerts when a load meets a drawn item (C16).** After any load into a source dataset, items it
+    loaded that resemble a drawn item in a case reading that dataset raise one alert in that case
+    (Monitoring, its own rule kind), whose action is *Open the board*. Nothing is merged.
+13. **Under the GOV.UK brand (ADR-132)** every board screen uses the GOV.UK forms: the item and link
+    forms as GOV.UK fields with an error summary; statuses as GOV.UK tags; the promotion sheet's lists
+    as a summary list; the type buttons as radios. Both themes and GOV.UK are axe-scanned (the existing
+    harness's three variants).
+
+### Standing rules, as they apply
+
+- **Rule 2.** The promotion sheet names every item and link it leaves out and why; nothing is dropped
+  silently.
+- **Rule 3.** The analyst layer is filtered in the store like any dataset; decision 3's inference
+  cases are tested, not assumed.
+- **Rule 4.** Every new read path (boards, board items, promotions, proposed link types, pictures)
+  gets an access test, including another case of the same unit and the same dataset.
+- **Rule 5.** Match suggestions are `inferred`; only *Same* confirms.
+- **Rule 6.** Promotion adds a dataset to an element's list; it never merges two elements.
+- **Rule 7.** No source-system identifier reaches the Glass through a board or a promotion.
+- **Rule 13.** Every board action has a keyboard case in `keyboard/boards.spec.ts`.
+
+### Tests to write first, named (rules 1, 4, 12, 15)
+
+- Conformance (graph port): a drawn link from a loaded node into case A's layer leaves that node's
+  degree, `expand` result, path length and histogram bucket **unchanged when read under case B** of the
+  same dataset (red with the layer id added to case B's principal).
+- Access: board, board-item, promotion, proposed-type and picture routes refuse a principal outside the
+  case exactly as a missing case (one refusal, ADR-099 decision 5), including a member of another case
+  reading the same source dataset.
+- Promotion: one load per promotion, all or nothing (red with the load committed item by item); a link
+  whose drawn end is not promoted is left out and listed (red with the end check removed); the element
+  after promotion is one element whose `datasets` holds both ids (red if a second node exists); the
+  revert of the load leaves the element in the analyst layer only.
+- Policy: in a dataset requiring review, the proposer cannot approve (red with the check removed);
+  an Author of the case or a data engineer of the dataset can; a marking above the dataset's highest
+  allowed is refused at the sheet and again at the route (rule 15: the route's refusal shown red with
+  the sheet's check bypassed).
+- Types: a link of a proposed type cannot be promoted; after acceptance it can; a declined type's links
+  stay in the layer.
+- Grading: the change command's dry run writes nothing (red with it writing); every item keeps its
+  original grade.
+- Keyboard: every action in decision 5, by keyboard, in `keyboard/boards.spec.ts`.
+
+### Steps (Lane 3)
+
+L3.1 phase 5 as amended (one dataset per case, composites, the analyst layer, the read set) with its
+migration dry run; L3.2 case views and the branch migration (ADR-144); L3.3 drawing boards (decisions
+4–7); L3.4 promotion (decisions 8 and 10) with the Studio's promotions list built with Lane 1's
+agreement on `ingest/runs/`; L3.5 analyst link types (decision 9) with the Model tab's proposals block
+and the data engineer's notifications (ADR-145 A2); L3.6 alerts on matches (decision 12); L3.7 the
+grading command (decision 11). Each step rewrites its slice of `01_DOMAIN_MODEL.md` (the analyst layer,
+board, drawn item, promotion), `02_GLASS_FRONTEND.md` (boards) and `03_CONDUIT_MIDDLEWARE.md` (routes).
+
+### Open questions
+
+1. Where do the analyst writes that exist today go once the layer exists: ADR-098's hand-marking,
+   `manual_link`'s `SAME_AS`, accepted question proposals, accepted extractions? Recommendation: the
+   analyst-originated ones (hand-marking, manual links) into the layer; model and pipeline output into
+   the dataset as today. For the owner at L3.1.
+2. **Revert of a promotion online.** A revert today runs as an operator command with the Conduit
+   stopped (ADR-127 Amendment 9). The prototype lets an analyst revert their own promotion from the
+   board. An online path for promotion loads (small, one case's items) or the operator command only?
+   For the owner at L3.4.
+3. Should the dataset's highest allowed marking (ADR-145 A3) bind pipeline loads as well as promotions?
+   Recommendation: yes, as a load rule; its own amendment to ADR-140.
+4. Moving versus linking (C7): to be confirmed with one of the owner's field analysts before L3.3's
+   exit, since i2's own split was not verified.
+5. i2 chart import (`.anx`) as a new board: wanted for the first release (owner, 6 November), but needs
+   a synthetic sample chart in-repo (rule 9) and its own design round. Its own ADR.
+
+### Cost
+
+A new kind of dataset per case and a wider read set on every case read; a new surface (boards) with
+its own keyboard spec; promotion through the load path; a second route for type proposals; a
+deployment setting that cannot be changed lightly. ADR-140 phase 5 is rebuilt rather than built as
+written. The deck, the website and all three guides gain a drawing-board chapter (Lane 4).
+
+---
+
+### ADR-140, Amendment 7 (6 November 2026) — phase 5 held, and rebuilt under ADR-143
+
+Status: accepted from ADR-143's C1. Phase 5 ("target model per dataset; one dataset per case;
+composites") is not built as written. Its target model, reference lists and ADR-126 derivation stand
+and are built in Lane 3 step L3.1 together with ADR-143 decision 1: each case gains its own
+`analyst_layer` dataset and reads its source dataset (or composite) plus that layer. The migration
+`scripts.migrate_cases_to_one_dataset` also creates each case's empty analyst layer. ADR-140 decision 1
+("the Studio opens on a dataset, never a case") stands; the analyst layer is never offered in the
+Studio's dataset switcher.
+
+### ADR-099, Amendment 13 (6 November 2026) — a case's analyst layer
+
+Status: accepted from ADR-143. Decision 3 ("a case names its datasets … a branch takes its parent's")
+reads: a case names its source dataset (or a composite) and owns one analyst layer; branches are
+replaced by case views (ADR-144), which read the case's set. Decision 6 ("data added to a case joins
+one of its datasets") reads: data loaded through the Studio joins the source dataset; what an analyst
+draws joins the case's analyst layer (ADR-143 decision 2; open question 1 there for the writes that
+exist today).
+
+### ADR-090, Amendment 4 (6 November 2026) — proposed types are decided on the Studio's Model tab
+
+Status: accepted from ADR-143's C10 and ADR-145's A2. Decision 1 (*Proposed types* in the Glass, for
+`osprey-admin`) is superseded: proposals are decided on the **Ingest Studio › 1 Model** tab of the
+dataset they would join, by holders of `accept_types` for that dataset, and written into the dataset's
+draft target model (ADR-140 R12) rather than a deployment-wide overlay. The rail's *Proposed types* is
+retired. Decision 4 (usable wherever their links are seen) stands, within the case. A link of a proposed
+type is never promoted into a dataset (ADR-143 decision 9). The data engineer is told of a new proposal
+by a count on the Model tab, a reminder above the Studio's other tabs and an entry in their *Needs you*
+list, each with a tooltip (ADR-145 A2). Decision 6 (Direct or Probabilistic at promotion) stands for the
+accepting data engineer.
+
+### ADR-105, Amendment 3 (6 November 2026) — pictures on drawn items
+
+Status: accepted from ADR-143 decision 7. A drawn node may have a picture by upload or by choosing an
+image the case already holds; the `Document` (when uploaded) and the `DEPICTS` link are written into the
+case's analyst layer with their own marking. Everything else in ADR-105 stands.
+
+### ADR-133, Amendment 8 (6 November 2026) — a fourth decision for a second person
+
+Status: accepted from ADR-143's C11 and ADR-145's R4. Decision 7's list of decisions that wait for a
+second person gains: promoting drawn items into a dataset whose policy requires review. The proposer is
+the analyst who sends it; the approver is a data engineer of the dataset or an Author of the case, never
+the proposer. Admin › Policies › Approval rights shows how many people can approve each, and warns when
+fewer than two can.
+
+## ADR-144 — Case views replace branches: a case is the only container, a view is a saved lens on it — ACCEPTED (design)
+
+Status: accepted from the owner's rulings V1–V5 of 6 November 2026, put as multiple-choice questions
+and answered in chat. **Not built.** Built in Lane 3 step L3.2 of `process/BUILD_PLAN_PARALLEL_LANES.md`,
+after ADR-143's L3.1. Supersedes ADR-084 in part (amendment below); ADR-090 decision 3 and ADR-099
+decision 3 follow (their amendments in ADR-143).
+
+**Design reference.** The navigation prototype (ADR-143's reference): *The Glass › Case*, the *Views in
+this case* panel; *Every current element* shows the Cases drawer with views and boards under each case.
+
+### Context
+
+Today a branch (ADR-084) is a full case: a copy made at one moment, with its own Author and sharing,
+its own resolution threshold, layout and timeline, events borrowed from its parent, and its own place
+in the Cases tree. *Jump from an alert* and *Ask the model about these* also make branches. It looks
+like a view but behaves like a separate case, and the owner found the concept confusing: "I think the
+branch concept is very confusing, can we rationalise everything to case and datasets. I would like to
+introduce the idea of case views that specific slices of a cases. These views are saved under a case
+and can be deleted by the analysts who created them."
+
+### The owner's rulings of 6 November 2026
+
+- **V1.** A case is the only container. A **case view** is a saved slice of a case, saved under it, and
+  deleted only by the analyst who created it.
+- **V2.** "Live": a view shows the case's current data through its saved selection or filter, layout,
+  timeline range and threshold; new data appears in it.
+- **V3.** "Private until shared": only its creator sees a view until they share it with the case's
+  members.
+- **V4.** "Convert to views": each existing branch becomes a view under its original case; anything
+  only in the branch moves to that case's analyst layer, tagged; dry run first.
+- **V5.** A drawing board is a view with drawing switched on (ADR-143 decision 5).
+
+### What is not reopened
+
+Access is the case's (ADR-099): a view never widens what its reader may see, and every read through a
+view is re-checked against the reader's principal. Nothing is deleted from storage by deleting a view.
+
+### Decision
+
+1. **What a view holds:** a name; its creator; shared or private; a node selection or a filter (the
+   query builder's pattern, Explore's slice, an alert's subjects); a layout; a timeline range; a
+   resolution threshold (*Match strictness*); and, for a board, `drawing: true` and the board's own
+   layout. It holds **no data**: it is a lens on the case's read set (ADR-143 decision 1).
+2. **Live, not a copy.** A view re-reads the case each time it opens. Items that no longer exist or no
+   longer pass its filter are simply absent; the view says how many of its selected items it could not
+   show, without saying why (rule 2, ADR-099's existence rules).
+3. **Private until shared.** A view is visible to its creator; *Share with the case* makes it visible to
+   the case's members at their own levels. Only the creator deletes it; deleting never deletes anything
+   drawn on it (ADR-143 decision 2), which stays in the analyst layer and on the case canvas.
+4. **What makes views.** *Save what I see as a view*; *Branch to a new case* on the selection bar becomes
+   *Save as a view* and *Draw from the selection*; an alert's jump opens the alert as a private view
+   (`A14 Shared visitor`); *Ask the model about these* opens its documents as a view. ADR-084's "Branch
+   of <case>" naming becomes the view's default name.
+5. **Where views appear.** In the case's *Views in this case* panel and, under each case, in the Cases
+   drawer, with boards listed separately. The Cases drawer no longer shows a tree of branches.
+6. **The migration** (`scripts.migrate_branches_to_views`, dry run first): each branch becomes a view of
+   its original case holding the branch's node set, layout, timeline and threshold; any element that
+   exists only in the branch is written into the original case's analyst layer, tagged
+   `from_branch: <name>`; the branch's own audit is kept and linked from the view. A branch whose original
+   its owner can no longer read becomes a private view of a case they can, or is reported for an
+   administrator. After the upgrade Admin › System shows how many branches became views, in how many
+   cases, with the dry-run report (ADR-145).
+7. **Under the GOV.UK brand,** the views panel is a GOV.UK list with tags for *private* and *shared*,
+   and *Save what I see as a view* opens a GOV.UK form.
+
+### Tests to write first, named
+
+- A view's read under a principal that has lost access to some items shows the rest and the count of
+  the missing, never their names (red with the view returning stored items).
+- Deleting a view leaves every element drawn on it in place (red with a cascading delete).
+- A private view is invisible to another member of the case; shared, it is visible at their level.
+- The migration's dry run writes nothing; its real run leaves no branch, one view per branch, and every
+  branch-only element in the analyst layer with its tag.
+- Keyboard: save, share, delete and open a view, in `keyboard/views.spec.ts`.
+
+### Open questions
+
+1. Can a shared view be *copied* by another member into a private one? Recommendation: yes.
+2. ADR-090 decision 3 (a branch takes its parent's proposals) has nothing to apply to once branches go;
+   proposals are the case's, so every view of the case sees them.
+
+### Cost
+
+Every place that makes, lists or reads a branch changes; the keyboard specs for *Branch selected*
+(`keyboard/selection.spec.ts`) become view cases; the Cases drawer and the deck's branching chapter are
+redone. A one-off migration on upgrade.
+
+---
+
+### ADR-084, Amendment 5 (6 November 2026) — superseded in part by ADR-144
+
+Status: accepted from ADR-144. Branches are no longer made. *Branch to a new case* and *Branch
+selected (n)* become *Save as a view* and *Draw from the selection*; the tree of cases and branches
+(Amendment 4) becomes a list of cases, each with its views and boards. Existing branches are converted
+by ADR-144 decision 6. ADR-084's side-by-side canvases ("later") are not reopened.
+
+## ADR-145 — Three places (the Glass, the Ingest Studio, Admin), the Admin area regrouped, and roles an administrator can define — ACCEPTED (design)
+
+Status: accepted from the owner's rulings N1–N6, A1–A4, R1–R4 and O1–O4 of 6 November 2026, put as
+multiple-choice questions and tried in the navigation prototype. **Not built.** Built in Lane 2 of
+`process/BUILD_PLAN_PARALLEL_LANES.md`, except where a step names Lane 3. Amends ADR-132 (the GOV.UK
+header), the Admin area's ADR-110 Amendment 1, and ADR-112 (roles built from named rights), below.
+
+**Design reference.** The navigation prototype (ADR-143's reference). *Navigation* B; *Detail*
+"Every current element" for density; *Signed in as* Administrator for Admin.
+
+### Context
+
+Today the Ingest Studio and Admin are both reached from the Glass's rail; "there is no application
+switch" (`02_GLASS_FRONTEND.md` §2.0). The owner found the move between the Glass and the Studio
+confusing. Three approaches were prototyped for an analyst, a data engineer and a super user (both
+roles): A, the Studio as a mode of the case; B, separate places with a context banner; and today's,
+as built. With every current element placed, the case screen was the crowded one: some 25 controls
+before the canvas, and a right-hand column of three panels with 15 parts. The Admin area grows by the
+work of ADR-143 and ADR-144 to some ten tabs.
+
+### The owner's rulings of 6 November 2026
+
+Navigation:
+- **N1.** Approach B: "it shows a clear separation of concerns and keeps the navigation of Glass clean
+  and focused on analysis. Whereas the Studio focusses on data mapping and ingestion."
+- **N2.** Admin is a third place in the switcher, shown only to someone holding an administration right.
+- **N3.** Under the GOV.UK brand the switch between the places sits inside the GOV.UK header; the service
+  navigation band stays removed (ADR-132 Amendment 5). ("I agree with this approach.")
+- **N4.** Navigation is refined in rounds: a clickable prototype, the owner's review and rulings, then a
+  build round to match.
+- **N5.** Alerts: map what exists against ADR-109, ADR-130 and ADR-134 before designing anything.
+- **N6.** Each person sees only the places their roles open.
+
+Admin:
+- **A1.** "Third place": Admin leaves the Glass rail.
+- **A2.** Type proposals are decided on the Studio's Model tab only (ADR-090 as amended in ADR-143),
+  "but with tool tips and notification / alert icons so that the developer role can look at it".
+- **A3.** "Per dataset": a dataset's promotion policy (author promotes, or a second person reviews) and
+  its highest allowed marking are set on its row, with a deployment default for new datasets; changes
+  audited.
+- **A4.** "List and transfer": disabling a person first lists everything they own and asks who receives
+  each item.
+
+Roles:
+- **R1.** "Keep per case, make visible": Author stays a level within each case; People shows each
+  person's case levels, and an administrator can name a new Author for a case left without one.
+- **R2.** "Yes, with guard rails": administrators may define roles as named bundles of existing rights.
+- **R3.** "Roles, places, case levels": each person's row shows their roles, the places they open and
+  their case levels, rights one click away.
+- **R4.** "Either": a promotion requiring review is approved by a data engineer of the dataset or an
+  Author of the case, never the proposer.
+
+Oversight:
+- **O1.** The grading scheme changes only by command (ADR-143 decision 11).
+- **O2.** "Audit section with filters".
+- **O3.** "Operations + alert after N days" for promotions waiting for review.
+- **O4.** "Grouped sections".
+
+Recommended and not contradicted; **each confirmed by the owner at step 0, 6 November 2026**: an upload limit and formats
+under Policies; the analyst layers' and pictures' share of storage on Operations; the after-upgrade
+notice of branches converted to views under System; the Prison Intelligence demo pack gaining views,
+boards, drawn items and a promotion awaiting review.
+
+### What is not reopened
+
+Every place is behind the same sign-in. Rule 3: the switch hides a place a person cannot open, but the
+place's routes refuse them anyway; hiding is never the control. The set-up console on port 7000
+is untouched. Connections, Dashboards and the sign-in work in People are unchanged.
+
+### Decision
+
+1. **Three places.** *The Glass* (analysis: Case · Boards · Monitoring), *Ingest Studio* (data: 1 Model
+   · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. A switcher in the top bar lists the places the
+   person's roles open (N6); Home lists the same as cards. The Glass's rail loses *Ingest Studio*,
+   *Admin* and *Proposed types*; the Studio has no rail.
+2. **The context banner.** Under the top bar, one line names where the person is and what they are
+   working on: "You are in the Glass · Case Kestrel ▾ · reads Prison intel + Kestrel analyst layer",
+   with the Glass's Case · Boards · Monitoring; "You are in the Ingest Studio · Dataset Prison intel ▾ ·
+   feeds 2 cases"; "You are in Admin". A person who holds both the Glass and the Studio gets a cross-link
+   (*Open Prison intel in the Ingest Studio ↗*; *← Back to case Kestrel in the Glass*) that keeps the
+   case they came from.
+3. **Under the GOV.UK brand (N3)**, the switcher is part of the GOV.UK header and the banner is a GOV.UK
+   notification banner. The header's navigation markup is checked against the `govuk-frontend` version
+   the workspace pins (6.6.0 on 6 November 2026): if that version no longer offers navigation in the
+   header, the header is a small local extension of it, recorded in this ADR's amendment when built.
+4. **The case screen, lighter** (N4, first round): the right-hand column opens with the Inspector only;
+   Metrics and the Query builder are one click away, keeping their order and folding (ADR-085, ADR-096).
+   The analysis canvas is read-only for drawing (ADR-143 C6). Further cuts are prototype rounds.
+5. **The Admin area, grouped (O4).** A side list of sections, each shown only to a holder of its right:
+   - **People:** People and roles; Roles; Dashboard identities.
+   - **Data:** Datasets; Connections.
+   - **Running:** Operations; System.
+   - **Policies:** Grading scheme; Approval rights; Uploads.
+   - **Audit.**
+   - **Demo packs.**
+6. **People and roles (R1, R3, A4).** Each row: name and access (clearance, unit); roles as tags; the
+   places they open; their case levels ("Author of Kestrel, Harrier"); state. Warnings above the table
+   for a case with no Author (*Name an Author*) and for a dataset requiring review with fewer than two
+   possible approvers. **Disable…** lists everything the person owns: private views and boards,
+   promotions they proposed that wait for review, reviews waiting on them, proposed types, schedules
+   whose runs act as them (ADR-110 decision 3), cases where they are the only Author. Each item needs a
+   *Transfer to…* choice before *Transfer and disable* is accepted; nothing is deleted; every transfer is
+   audited.
+7. **Roles (R2).** The four built-in roles (Analyst, Data Engineer, Admin, Reports Viewer) and the
+   *Super user* preset (Analyst + Data Engineer) are listed with the places they open and their rights,
+   each with *Copy into a new role*; none can be edited. A custom role is a name and a set of existing
+   rights, grouped by place. Refused: a name already used; no rights; a role holding both
+   `promote_to_dataset` and `review_promotions`, or both `propose_types` and `accept_types` (no role both
+   proposes and approves the same kind of decision). Giving a role still follows "nobody can give more
+   than they hold". Each role is versioned (v1, v2 …) and audited. New rights this work adds:
+   `draw_on_boards`, `promote_to_dataset`, `propose_types` (Analyst), `review_promotions`,
+   `accept_types` (Data Engineer).
+8. **Datasets (A3).** Each row: unit; egress (ADR-136); the cases reading it; **Highest marking it may
+   hold**; **Promotion of drawn items** (*Author promotes* or *Second person reviews*), with how many
+   people can approve and a warning below two. A deployment default applies to new datasets.
+9. **Operations (O3).** Runs today by trigger, including analyst promotions; rows held; **promotions
+   waiting for review**, each with its age, flagged overdue after the configurable *Alert the reviewers
+   and administrators after N days* (default 3), which raises an alert to them; storage, naming the
+   analyst layers' and analysts' pictures' share. ADR-141's phase 10 content joins this section when
+   built.
+10. **Audit (O2).** One view over the records that already exist (case audit, rule audit, the run ledger,
+    model history, the people and dataset audits), filtered by person, case, dataset and kind
+    (*Analyst assertions*, *Loads and promotions*, *Types*, *People and roles*, *Datasets*), each entry
+    linking to the record that holds it. It reads under the administrator's own principal (rule 3): an
+    administrator of one unit sees another unit's entries only as ADR-052 allows.
+11. **The data engineer's notifications (A2).** A *Needs you · n* control in the top bar lists proposed
+    types and promotions to review, each with a tooltip saying what it is and what follows; the Studio's
+    Model tab reads *1 Model · n proposed*, and a reminder line shows above the Studio's other tabs.
+12. **Policies.** *Grading scheme* (read-only, with the change command); *Approval rights* (ADR-133
+    decision 7's table with its fourth row, ADR-143); *Uploads* (picture size limit and formats).
+13. **Under the GOV.UK brand,** Admin's sections are a GOV.UK side navigation; tables are GOV.UK
+    tables; statuses GOV.UK tags; *Disable…* and the role form GOV.UK forms with an error summary;
+    warnings GOV.UK warning text. Every new control has its keyboard case (`keyboard/admin.spec.ts`,
+    `ADMIN_ACTIONS`) and passes axe in dark, light and GOV.UK.
+
+### Tests to write first, named
+
+- The switcher shows only the places a principal's rights open, and each hidden place's routes refuse
+  that principal (red with the routes' check removed: hiding alone must not pass).
+- Disable is refused while any owned item has no recipient; after it, every item has its new owner and
+  an audit entry (red with an item skipped).
+- A custom role holding both rights of a propose/approve pair is refused at the route as well as the
+  form.
+- Audit: an administrator of unit A sees no entry about unit B's cases unless ADR-052 allows it; filters
+  never widen the read.
+- The overdue alert fires once at N days and names the load, not its contents (rule 7).
+- Keyboard and axe (dark, light, GOV.UK) for every new screen.
+
+### Steps (Lane 2, with Lane 3 where named)
+
+L2.1 the alerts gap map (no code; N5); L2.2 three places, the switcher, the banner and the GOV.UK header
+(decisions 1–3); L2.3 the case screen's first lightening (decision 4); L2.4 Admin regrouped (decision 5)
+with Datasets' new columns (decision 8, the fields from Lane 3's L3.1); L2.5 People and roles (decisions
+6–7), the transfer list reading Lane 3's ownership route once L3.2–L3.5 are merged; L2.6 Operations and
+Audit (decisions 9–10); L2.7 the notifications (decision 11).
+
+### Open questions
+
+1. The alerts gap map's findings (N5) become their own ADR.
+2. Should the Reports place (Reports Viewer) join the switcher as a fourth place? Recommendation: yes,
+   in a later round.
+3. Whether the four built-in roles gain the new rights automatically on upgrade (recommendation: yes,
+   as listed in decision 7, announced in the upgrade notice).
+
+### Cost
+
+The rail, the top bar and Home change on every screen; every capture of the Glass and the Studio is
+taken again; `keyboard/shell.spec.ts`, `admin.spec.ts` and the GOV.UK harness gain cases; the
+administration guide's §9 is rewritten. The owner accepted this for three places that each do one job.
+
+---
+
+### ADR-132, Amendment 6 (6 November 2026) — the place switch in the GOV.UK header
+
+Status: accepted from ADR-145's N3. Amendment 5 (no service navigation band) stands. The switch between
+the Glass, the Ingest Studio and Admin sits inside the GOV.UK header, showing only the places the person
+opens; the context banner is a GOV.UK notification banner.
+
+### ADR-110, Amendment 14 (6 November 2026) — the Admin area becomes a place of its own, in sections
+
+Status: accepted from ADR-145's A1 and O4. The Admin area (Amendment 1; ADR-112's post-launch home) is
+reached from the place switcher and Home, not the Glass's rail or Start's *Admin* tile, and is organised
+into the sections of ADR-145 decision 5. Each section keeps the right its tab required.
+
+### ADR-112, Amendment 4 (6 November 2026) — roles an administrator defines, and five new rights
+
+Status: accepted from ADR-145's R2. The four roles built from named rights stand and can no longer be
+edited, only copied. An administrator may define further roles as named bundles of existing rights,
+versioned and audited, under ADR-145 decision 7's refusals; "nobody can be given more than the person
+giving it holds" applies to giving a custom role as to any right. Five rights are added:
+`draw_on_boards`, `promote_to_dataset` and `propose_types` (in the Analyst role), `review_promotions`
+and `accept_types` (in the Data Engineer role).

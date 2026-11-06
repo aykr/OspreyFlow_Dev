@@ -14,19 +14,19 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 
 | Number | Title | Lane | Date | Status |
 | --- | --- | --- | --- | --- |
-| ADR-142 | Parallel lanes: one agent per worktree, one leased dev stack, an orchestrator that merges | orchestrator | 2026-11-06 | reserved |
-| ADR-143 | The case and dataset contract: a case's analyst layer, drawing boards, and promotion into a dataset as a load | orchestrator | 2026-11-06 | reserved |
-| ADR-144 | Case views replace branches | orchestrator | 2026-11-06 | reserved |
-| ADR-145 | Three places, the Admin area regrouped, and roles an administrator can define | orchestrator | 2026-11-06 | reserved |
-| ADR-140 Amendment 7 | Phase 5 held, and rebuilt under ADR-143 | orchestrator | 2026-11-06 | reserved |
-| ADR-099 Amendment 13 | A case's analyst layer | orchestrator | 2026-11-06 | reserved |
-| ADR-090 Amendment 4 | Proposed types are decided on the Studio's Model tab | orchestrator | 2026-11-06 | reserved |
-| ADR-105 Amendment 3 | Pictures on drawn items | orchestrator | 2026-11-06 | reserved |
-| ADR-133 Amendment 8 | A fourth decision for a second person | orchestrator | 2026-11-06 | reserved |
-| ADR-084 Amendment 5 | Superseded in part by ADR-144 | orchestrator | 2026-11-06 | reserved |
-| ADR-132 Amendment 6 | The place switch in the GOV.UK header | orchestrator | 2026-11-06 | reserved |
-| ADR-110 Amendment 14 | The Admin area becomes a place of its own, in sections | orchestrator | 2026-11-06 | reserved |
-| ADR-112 Amendment 4 | Roles an administrator defines, and five new rights | orchestrator | 2026-11-06 | reserved |
+| ADR-142 | Parallel lanes: one agent per worktree, one leased dev stack, an orchestrator that merges | orchestrator | 2026-11-06 | written |
+| ADR-143 | The case and dataset contract: a case's analyst layer, drawing boards, and promotion into a dataset as a load | orchestrator | 2026-11-06 | written |
+| ADR-144 | Case views replace branches | orchestrator | 2026-11-06 | written |
+| ADR-145 | Three places, the Admin area regrouped, and roles an administrator can define | orchestrator | 2026-11-06 | written |
+| ADR-140 Amendment 7 | Phase 5 held, and rebuilt under ADR-143 | orchestrator | 2026-11-06 | written |
+| ADR-099 Amendment 13 | A case's analyst layer | orchestrator | 2026-11-06 | written |
+| ADR-090 Amendment 4 | Proposed types are decided on the Studio's Model tab | orchestrator | 2026-11-06 | written |
+| ADR-105 Amendment 3 | Pictures on drawn items | orchestrator | 2026-11-06 | written |
+| ADR-133 Amendment 8 | A fourth decision for a second person | orchestrator | 2026-11-06 | written |
+| ADR-084 Amendment 5 | Superseded in part by ADR-144 | orchestrator | 2026-11-06 | written |
+| ADR-132 Amendment 6 | The place switch in the GOV.UK header | orchestrator | 2026-11-06 | written |
+| ADR-110 Amendment 14 | The Admin area becomes a place of its own, in sections | orchestrator | 2026-11-06 | written |
+| ADR-112 Amendment 4 | Roles an administrator defines, and five new rights | orchestrator | 2026-11-06 | written |
 
 ## Baseline
 

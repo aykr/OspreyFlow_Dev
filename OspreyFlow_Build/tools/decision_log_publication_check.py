@@ -63,6 +63,10 @@ PROCESS_ADR_NUMBERS: frozenset[str] = frozenset(
         # about how this build was scoped, phased, released or published," ADR-034 §B10's own rule,
         # not the product's behaviour. Added 24 September 2026, the day the record was written.
         "049",
+        # ADR-142 (parallel lanes: worktrees, the leased dev stack, the orchestrator who merges and
+        # pushes) is how this build is run, not how the product behaves. Added 6 November 2026, the
+        # day the record was written (step 0 of process/BUILD_PLAN_PARALLEL_LANES.md).
+        "142",
     }
 )
 
