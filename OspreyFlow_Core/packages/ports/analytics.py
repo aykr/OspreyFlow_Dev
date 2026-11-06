@@ -162,6 +162,21 @@ class AnalyticsPort(Protocol):
         counts a retracted event."""
         ...
 
+    async def withdraw_events(self, edge_ids: Sequence[str], load_id: str) -> int:
+        """Sets aside every event on these links, marked with `load_id` (ADR-110 Amendment 8 point
+        1: a full snapshot's refresh withdrawing a dropped row's links), and returns how many.
+        Afterwards no read, for any principal, returns or counts one of them. An event already set
+        aside stays with the load that set it aside. Idempotent; no links set aside nothing. A
+        backend write, not principal-scoped, like `retract_load`. `retract_load` of the load that
+        wrote an event removes it wherever it is, set aside included."""
+        ...
+
+    async def restore_withdrawn_events(self, load_id: str) -> int:
+        """Puts back exactly the events `load_id` set aside, as they were, and returns how many
+        (the revert of the refresh). Idempotent: a second call, or one for a load that set none
+        aside, puts back nothing and returns 0."""
+        ...
+
     async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
         """Which of `event_ids` are events `load_id` wrote, **whatever the marking and whatever the
         caller may read**: no principal, no access step. For the revert alone (ADR-127 Amendment 8),

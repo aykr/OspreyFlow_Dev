@@ -2014,6 +2014,103 @@ async def test_a_retract_does_not_cross_investigations_it_was_not_asked_about(
         assert page.total == 1
 
 
+# --- withdraw_events (ADR-110 Amendment 8 point 1): a full snapshot's dropped links ---------------
+#
+# A refresh that withdraws a dropped row's links withdraws their events with them, so no trend,
+# histogram or timeline counts a row the snapshot no longer carries. The events are set aside, not
+# deleted: reverting the refresh puts back exactly those. As `retract_load`, every read after a
+# withdrawal answers, for every principal, as a store that never held the events.
+
+REFRESH = "load-refresh"
+REFRESH_2 = "load-refresh-2"
+
+
+def _three_principals() -> list[Principal]:
+    receives_r = Principal(id="a-r", clearance="OFFICIAL", org_unit="unit-1", receivable_handling_codes=["R"])
+    return [OFFICIAL, CLEARED, receives_r]  # fmt: skip
+
+
+async def _reads_of(factory: AnalyticsAdapterFactory, events: list[EventRecord]) -> dict[str, object]:
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        return {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
+
+
+async def test_withdraw_events_takes_every_event_on_those_links_out_of_every_read(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Rule 4: the withdrawn events include one on a SECRET marking, counted in the answer and left
+    out of every read for every principal, including those who could never read it."""
+    events = _a_and_b_and_unattributed()
+    survivors = [e for e in events if e.edge_id not in {"ea", "ea2"}]
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        assert await adapter.withdraw_events(["ea", "ea2", "e-none"], REFRESH) == 3
+        after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
+    assert after == await _reads_of(factory, survivors)
+
+
+async def test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    events = _a_and_b_and_unattributed()
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        await adapter.withdraw_events(["ea", "ea2"], REFRESH)
+        await adapter.withdraw_events(["eb"], REFRESH_2)
+        assert await adapter.restore_withdrawn_events(REFRESH) == 3
+        restored = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
+    # Each event comes back as it was, its id and its load included; the other refresh's stay out.
+    assert restored == await _reads_of(factory, [e for e in events if e.edge_id != "eb"])
+
+
+async def test_withdraw_and_restore_are_idempotent_and_ask_nothing_of_no_links(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    async with factory.context(_a_and_b_and_unattributed()) as adapter:
+        assert await adapter.withdraw_events([], REFRESH) == 0
+        assert await adapter.withdraw_events(["ea"], REFRESH) == 2
+        assert await adapter.withdraw_events(["ea"], REFRESH) == 0
+        # An event already set aside stays with the load that set it aside.
+        assert await adapter.withdraw_events(["ea"], REFRESH_2) == 0
+        assert await adapter.restore_withdrawn_events(REFRESH_2) == 0
+        assert await adapter.restore_withdrawn_events("never-withdrew") == 0
+        assert (await adapter.histogram(_HOUR, CLEARED)).total == 4
+        assert await adapter.restore_withdrawn_events(REFRESH) == 2
+        assert await adapter.restore_withdrawn_events(REFRESH) == 0
+        assert (await adapter.histogram(_HOUR, CLEARED)).total == 6
+
+
+async def test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to_restore(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Amendment 8 point 1, as Amendment 6 point 3 has it for the graph: reverting the load that
+    created the events removes them wherever they are, so a later restore cannot bring back an event
+    of a reverted load. The count includes the ones set aside."""
+    events = _a_and_b_and_unattributed()
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        await adapter.withdraw_events(["ea"], REFRESH)
+        assert await adapter.retract_load(LOAD_A) == 3
+        assert await adapter.restore_withdrawn_events(REFRESH) == 0
+        after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
+    assert after == await _reads_of(factory, [e for e in events if e.load_id != LOAD_A])
+
+
+async def test_retracting_the_withdrawing_load_takes_its_own_events_and_no_other_loads(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The refresh's own events (its new rows') carry its load id and go with its revert; the events
+    it set aside belong to the loads that wrote them and are put back by the restore alone."""
+    own = _event(occurred_at=_week(6), source_id="r1", target_id="r2", edge_id="er", load_id=REFRESH)
+    async with factory.context([*_a_and_b_and_unattributed(), own]) as adapter:
+        await adapter.withdraw_events(["eb"], REFRESH)
+        assert await adapter.retract_load(REFRESH) == 1
+        assert await adapter.restore_withdrawn_events(REFRESH) == 2
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)
+        assert sorted(str(e.load_id) for e in page.events) == sorted([LOAD_A] * 3 + [LOAD_B] * 2 + ["None"])
+
+
 # --- retract_geometries (ADR-127 decision 6, B2-4c): taking back the points a load inserted ----
 #
 # A load records the refs of the points it inserted that were not already there, so a revert can

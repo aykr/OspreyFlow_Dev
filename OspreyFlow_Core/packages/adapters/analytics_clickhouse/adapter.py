@@ -69,6 +69,7 @@ from schemas.analytics import (
 from schemas.domain import Handling, Interval, Principal
 
 from .client import ClickHouseClient, utc_text
+from .schema import EVENT_COLUMNS
 
 #: The same columns a `CATEGORICAL` dimension may bucket by directly as the DuckDB adapter's.
 _TOP_LEVEL_FIELDS = frozenset({"edge_type", "source_id", "target_id", "cell_site", "direction"})
@@ -898,7 +899,57 @@ class AnalyticsClickHouseAdapter:
         removed = int(row[0])
         if removed:
             await self._ch.command("ALTER TABLE events DELETE WHERE load_id = ?" + _SYNC, [load_id])
-        return removed
+        # ADR-110 Amendment 8 point 1: those set aside too, so no restore brings them back.
+        (row,) = await self._ch.rows(
+            "SELECT count() FROM withdrawn_events WHERE load_id = ?", [load_id]
+        )
+        aside = int(row[0])
+        if aside:
+            await self._ch.command(
+                "ALTER TABLE withdrawn_events DELETE WHERE load_id = ?" + _SYNC, [load_id]
+            )
+        return removed + aside
+
+    async def withdraw_events(self, edge_ids: Sequence[str], load_id: str) -> int:
+        """`AnalyticsPort.withdraw_events`: every event on these links copied to `withdrawn_events`,
+        marked with `load_id`, then deleted from `events` (the mutation waited for). ClickHouse has
+        no transaction across the two, so each step is safe to repeat: an event already copied is
+        not copied again, and a rerun after a failure between them finishes the move."""
+        ids = list(dict.fromkeys(edge_ids))
+        if not ids:
+            return 0
+        (row,) = await self._ch.rows("SELECT count() FROM events WHERE has(?, edge_id)", [ids])
+        moved = int(row[0])
+        if moved:
+            await self._ch.command(
+                f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
+                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, edge_id) "
+                "AND event_id NOT IN (SELECT event_id FROM withdrawn_events)",
+                [load_id, ids],
+            )
+            await self._ch.command(
+                "ALTER TABLE events DELETE WHERE has(?, edge_id)" + _SYNC, [ids]
+            )
+        return moved
+
+    async def restore_withdrawn_events(self, load_id: str) -> int:
+        """`AnalyticsPort.restore_withdrawn_events`: the events `load_id` set aside, copied back as
+        they were, then deleted from `withdrawn_events`; each step safe to repeat, as above."""
+        (row,) = await self._ch.rows(
+            "SELECT count() FROM withdrawn_events WHERE withdrawn_by_load = ?", [load_id]
+        )
+        moved = int(row[0])
+        if moved:
+            await self._ch.command(
+                f"INSERT INTO events ({EVENT_COLUMNS}) "
+                f"SELECT {EVENT_COLUMNS} FROM withdrawn_events "
+                "WHERE withdrawn_by_load = ? AND event_id NOT IN (SELECT event_id FROM events)",
+                [load_id],
+            )
+            await self._ch.command(
+                "ALTER TABLE withdrawn_events DELETE WHERE withdrawn_by_load = ?" + _SYNC, [load_id]
+            )
+        return moved
 
     async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
         """`AnalyticsPort.events_of_load_among`: by `event_id` and `load_id`, no access step.

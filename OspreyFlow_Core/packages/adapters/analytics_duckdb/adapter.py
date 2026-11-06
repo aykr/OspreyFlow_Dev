@@ -61,6 +61,7 @@ from schemas.domain import Handling, Interval, Principal
 
 from .access_filter import AccessFilter, SqlPredicate
 from .alert_facts import FACT_COLUMNS, HANDLING_COLUMNS, alert_predicate, series_expression
+from .schema import EVENT_COLUMNS
 
 #: Event columns a `CATEGORICAL` dimension may bucket by directly. Anything
 #: else is looked up inside the JSON `properties` column — validated as a
@@ -869,12 +870,60 @@ class AnalyticsDuckDBAdapter:
         )
 
     async def retract_load(self, load_id: str) -> int:
-        """`AnalyticsPort.retract_load`: the rows this load wrote, by its id alone. A row with no
-        `load_id` is `NULL`, which `= ?` never matches, so unattributed events stay."""
+        """`AnalyticsPort.retract_load`: the rows this load wrote, by its id alone, those a refresh
+        set aside included (ADR-110 Amendment 8 point 1). A row with no `load_id` is `NULL`, which
+        `= ?` never matches, so unattributed events stay."""
         removed = self._con.execute(
             "DELETE FROM events WHERE load_id = ? RETURNING event_id", [load_id]
         ).fetchall()
-        return len(removed)
+        aside = self._con.execute(
+            "DELETE FROM withdrawn_events WHERE load_id = ? RETURNING event_id", [load_id]
+        ).fetchall()
+        return len(removed) + len(aside)
+
+    async def withdraw_events(self, edge_ids: Sequence[str], load_id: str) -> int:
+        """`AnalyticsPort.withdraw_events`: every event on these links moved to `withdrawn_events`,
+        marked with `load_id`, in one transaction; no access step. An event already set aside is not
+        in `events`, so it stays with the load that set it aside."""
+        ids = list(dict.fromkeys(edge_ids))
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        self._con.execute("BEGIN TRANSACTION")
+        try:
+            self._con.execute(
+                f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
+                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE edge_id IN ({placeholders})",
+                [load_id, *ids],
+            )
+            moved = self._con.execute(
+                f"DELETE FROM events WHERE edge_id IN ({placeholders}) RETURNING event_id", ids
+            ).fetchall()
+            self._con.execute("COMMIT")
+        except BaseException:
+            self._con.execute("ROLLBACK")
+            raise
+        return len(moved)
+
+    async def restore_withdrawn_events(self, load_id: str) -> int:
+        """`AnalyticsPort.restore_withdrawn_events`: the events `load_id` set aside, moved back
+        exactly as they were, in one transaction."""
+        self._con.execute("BEGIN TRANSACTION")
+        try:
+            self._con.execute(
+                f"INSERT INTO events ({EVENT_COLUMNS}) "
+                f"SELECT {EVENT_COLUMNS} FROM withdrawn_events WHERE withdrawn_by_load = ?",
+                [load_id],
+            )
+            moved = self._con.execute(
+                "DELETE FROM withdrawn_events WHERE withdrawn_by_load = ? RETURNING event_id",
+                [load_id],
+            ).fetchall()
+            self._con.execute("COMMIT")
+        except BaseException:
+            self._con.execute("ROLLBACK")
+            raise
+        return len(moved)
 
     async def events_of_load_among(self, load_id: str, event_ids: Sequence[str]) -> set[str]:
         """`AnalyticsPort.events_of_load_among`: by `event_id` and `load_id`, no access step."""

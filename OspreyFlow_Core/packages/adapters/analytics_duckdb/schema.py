@@ -63,6 +63,41 @@ CREATE TABLE IF NOT EXISTS events (
 #: does nothing to a store that has it (ADR-127 decision 6).
 ADD_EVENTS_LOAD_ID = "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id VARCHAR"
 
+#: The columns of an event, named, so a move between `events` and `withdrawn_events` never rests on
+#: the order a store's columns were added in.
+EVENT_COLUMNS = (
+    "event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site, lat, "
+    "lon, direction, properties, investigation_scope, handling_classification, handling_code, "
+    "owning_unit, originator, load_id"
+)
+
+#: ADR-110 Amendment 8 point 1: the events of links a full snapshot withdrew, set aside with the
+#: withdrawing load so its revert can put back exactly those. No read touches this table: every read
+#: is of `events`, so a withdrawn event is out of every read for every principal.
+CREATE_WITHDRAWN_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS withdrawn_events (
+    event_id VARCHAR,
+    edge_id VARCHAR,
+    edge_type VARCHAR,
+    source_id VARCHAR,
+    target_id VARCHAR,
+    occurred_at TIMESTAMP,
+    duration_s DOUBLE,
+    cell_site VARCHAR,
+    lat DOUBLE,
+    lon DOUBLE,
+    direction VARCHAR,
+    properties JSON,
+    investigation_scope VARCHAR,
+    handling_classification VARCHAR,
+    handling_code VARCHAR,
+    owning_unit VARCHAR,
+    originator VARCHAR,
+    load_id VARCHAR,
+    withdrawn_by_load VARCHAR
+)
+"""
+
 #: No `investigation_scope` column — `GeometryRecord`'s own docstring
 #: records why: reference data is versioned as a whole rather than scoped
 #: per investigation. `handling_*` mirrors `events`' flattening exactly, so
@@ -132,6 +167,7 @@ def create_events_table(con: duckdb.DuckDBPyConnection) -> None:
     for an alert trend, so the two are made together."""
     con.execute(CREATE_EVENTS_TABLE)
     con.execute(ADD_EVENTS_LOAD_ID)
+    con.execute(CREATE_WITHDRAWN_EVENTS_TABLE)
     con.execute(CREATE_ALERT_FACTS_TABLE)
     con.execute(CREATE_ALERT_FACT_HANDLINGS_TABLE)
 

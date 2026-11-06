@@ -59,6 +59,41 @@ ORDER BY (edge_id, occurred_at)
 #: `system.columns` is asked first. On a cluster the change reaches every node.
 ADD_EVENTS_LOAD_ID = "ALTER TABLE events ADD COLUMN IF NOT EXISTS load_id Nullable(String)"
 
+#: The columns of an event, named, so a move between `events` and `withdrawn_events` never rests on
+#: the order a store's columns were added in.
+EVENT_COLUMNS = (
+    "event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site, lat, "
+    "lon, direction, properties, investigation_scope, handling_classification, handling_code, "
+    "owning_unit, originator, load_id"
+)
+
+#: ADR-110 Amendment 8 point 1: the events of links a full snapshot withdrew, set aside with the
+#: withdrawing load so its revert can put back exactly those. No read touches this table.
+CREATE_WITHDRAWN_EVENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS withdrawn_events (
+    event_id String,
+    edge_id String,
+    edge_type String,
+    source_id String,
+    target_id String,
+    occurred_at DateTime64(6, 'UTC'),
+    duration_s Nullable(Float64),
+    cell_site Nullable(String),
+    lat Nullable(Float64),
+    lon Nullable(Float64),
+    direction Nullable(String),
+    properties String,
+    investigation_scope String,
+    handling_classification String,
+    handling_code String,
+    owning_unit String,
+    originator String,
+    load_id Nullable(String),
+    withdrawn_by_load String
+) ENGINE = MergeTree
+ORDER BY (withdrawn_by_load, edge_id)
+"""
+
 CREATE_GEOMETRIES_TABLE = """
 CREATE TABLE IF NOT EXISTS geometries (
     geometry_ref String,
@@ -131,6 +166,7 @@ def drop_database(database: str, cluster: str | None) -> str:
 async def create_tables(client: ClickHouseClient) -> None:
     for statement in (
         CREATE_EVENTS_TABLE,
+        CREATE_WITHDRAWN_EVENTS_TABLE,
         CREATE_GEOMETRIES_TABLE,
         CREATE_ALERT_FACTS_TABLE,
         CREATE_ALERT_FACT_HANDLINGS_TABLE,

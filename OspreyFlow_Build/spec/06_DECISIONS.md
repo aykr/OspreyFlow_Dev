@@ -25854,3 +25854,56 @@ this says so.
 - `test_source_refresh.py` (the pairing);
 - `test_studio_recipes_store.py` (the watched sources and the pause, on Postgres and in memory alike);
 - `test_scheduler_lifespan.py`: the real Conduit's tick, with the source watches wired.
+
+### ADR-110, Amendment 8 (6 November 2026) — a full snapshot's withdrawal, events included; the per-row record
+
+Status: accepted 6 November 2026. The owner ruled "Withdraw them too", put as a multiple-choice
+question. **Being built** (Ingest Studio redesign phase 4). Amendments 6 and 7 are unchanged except
+where this says so; *(mine)* marks a detail the ruling left open.
+
+1. **A withdrawn link's events are withdrawn with it** (the owner's ruling; fills a gap in
+   Amendment 6 point 3, which withdrew only graph elements, so every trend, histogram and timeline
+   still counted a dropped row). `AnalyticsPort` gains:
+   - `withdraw_events(edge_ids, load_id) -> int`: every event on these links is set aside, marked
+     with the withdrawing load, and left out of every read for every principal; returns how many;
+   - `restore_withdrawn_events(load_id) -> int`: puts back exactly the events that load set aside.
+   - `retract_load(load_id)` also removes that load's own events from those set aside, so reverting
+     the load that *created* them leaves nothing for a later restore to bring back (as point 3 has it
+     for the graph).
+
+   Both are backend writes, not principal-scoped, like `retract_load`. **Conformance first** (rule 1),
+   against DuckDB and ClickHouse alike. The events are set aside after the graph commits; a failure
+   between the two leaves the elements withdrawn and their events counted until the refresh is
+   reverted or runs again, and the run fails, in words.
+2. **The per-row record** *(mine; Amendment 6 point 4 as built)*. Each kept row key
+   (`loaded_row_keys`) records the nodes its row wrote or matched and the links it wrote, created or
+   merged into (`node_ids`, `edge_ids`). A key kept before this amendment records neither (`NULL`).
+3. **Which elements a dropped row withdraws** *(mine)*. The dropped keys are the pipeline's kept keys
+   for the case that no row of the snapshot carries (a held or rejected row still carries its key).
+   Of their elements, every one is kept that is also:
+   - in the record of a kept key that is not dropped, of any pipeline and any case;
+   - written or matched by the refresh's own rows;
+   - in the record of an unreverted load other than the ones that kept the dropped keys;
+   - for a node, an end of a live link that is not being withdrawn (`GraphPort.live_edges_touching`),
+     which catches a load that keeps no keys.
+
+   A link kept by the first two is counted for the report ("2 links kept an occurrence from a dropped
+   row"). A dropped key kept before this amendment withdraws nothing and is counted in words ("3
+   dropped rows were loaded before rows recorded what they wrote, and were left in place").
+4. **The marked key** *(mine)*. A dropped key is marked `withdrawn_by_load` and a run treats it as not
+   kept, so a row that comes back is loaded again: its key's entry is replaced, unmarked, with the new
+   load and record. The withdrawing load's record lists how many keys it withdrew and the elements it
+   withdrew.
+5. **The revert of a withdrawing load** *(mine)* restores, in its graph step, the elements it withdrew
+   (`restore_withdrawn`), then their events (`restore_withdrawn_events`) before its own are retracted,
+   and unmarks its keys. It is refused, in words, while a key it withdrew has been loaded again by a
+   later load: restoring would hold the row twice. Revert that load first.
+6. **Working sets** *(mine)*. A withdrawn element stays in a working set until it is read: every read
+   by id already leaves out a reverted element. It is not removed as a revert removes one. That waits
+   for phase 5's refresh notices.
+
+**Tests (written first):** the analytics conformance cases of point 1 (a withdrawal compared whole
+with a store that never held the events, for three principals; the restore compared with the store
+before; idempotence; the retract of the creating load); the engine's per-row record; a second snapshot
+missing one row withdraws exactly its elements and events, a shared link stays and is counted, and the
+revert restores both; the revert refused after the row came back.
