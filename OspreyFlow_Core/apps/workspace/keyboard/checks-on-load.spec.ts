@@ -100,8 +100,8 @@ async function press(page: Page, target: Locator) {
 
 async function openChecks(page: Page) {
   await press(page, page.getByRole("button", { name: "Open Customer onboarding" }));
-  await press(page, page.getByRole("button", { name: "Checks on load" }));
-  await expect(page.getByRole("heading", { name: "Checks on load" })).toBeVisible();
+  await press(page, page.getByRole("button", { name: "Load rules" }));
+  await expect(page.getByRole("heading", { name: "Load rules" })).toBeVisible();
 }
 
 test("the Checks on load step opens from a pipeline, by keyboard", async ({ page }) => {
@@ -121,7 +121,7 @@ test("a rule is attached, left off and set to hold on a hit, and the choice save
   await expect(page.getByRole("checkbox", { name: "Apply Listed people" })).not.toBeChecked();
   await page.getByRole("combobox", { name: "A hit of Large cash" }).selectOption("hold");
   registerCovered(REGISTRY, "attach-a-rule-and-hold-on-a-hit-by-keyboard");
-  await press(page, page.getByRole("button", { name: "Save the checks" }));
+  await press(page, page.getByRole("button", { name: "Save the load rules" }));
   await expect(page.getByRole("status")).toContainText("Saved: 1 rule(s) attached to this pipeline.");
   const put = sent.find((s) => s.method === "PUT");
   expect(put?.body).toEqual({ checks: [{ rule_id: "r-cash", on_hit: "hold" }] });
@@ -131,8 +131,8 @@ test("a rule is attached, left off and set to hold on a hit, and the choice save
 test("Verify's would-be alerts are read beside the rejections, by keyboard", async ({ page }) => {
   await serveChecks(page);
   await press(page, page.getByRole("button", { name: "Open Customer onboarding" }));
-  await press(page, page.getByRole("button", { name: "Verify" }));
-  await press(page, page.getByRole("button", { name: "Run verify" }));
+  await press(page, page.getByRole("button", { name: "Test", exact: true }));
+  await press(page, page.getByRole("button", { name: "Run the test" }));
   const raised = page.getByRole("list", { name: "Alerts this sample would raise" });
   await expect(raised).toContainText("Large cash · medium severity · Callum Okafor (Person) would hold its rows for review");
   await expect(page.getByRole("list", { name: "Checks a dry run cannot judge" })).toContainText("It counts events");

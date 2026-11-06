@@ -14,7 +14,7 @@ export function WouldRaisePanel({ report }: { report: VerifyReport }) {
     <div style={{ display: "grid", gap: "var(--sp-8)" }}>
       <p className="label" style={{ margin: 0 }}>
         {judged === 0 && notJudged.length === 0
-          ? "No rule checks this pipeline's loads. Attach rules in Checks on load."
+          ? "No rule checks this pipeline's loads. Attach rules in Load rules."
           : `${judged} check(s) judged the rows you may read in full, as they would at the load. Nothing was raised, held or written.`}
       </p>
       {raised.length > 0 ? (

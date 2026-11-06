@@ -1,4 +1,4 @@
-// The Admin area's Schedules and runs (`06_DECISIONS.md` ADR-110 decision 8, Amendment 2): every
+// The Admin area's Operations (formerly Schedules and runs; ADR-141 decision 1) (`06_DECISIONS.md` ADR-110 decision 8, Amendment 2): every
 // scheduled recipe across the deployment — its schedule in words, case, owner, next run and last
 // outcome — with Pause, Resume and its run history. A run's counts appear only where the Conduit sent
 // them; where it withheld them (the source is above the administrator's clearance, rule 3) that is
@@ -123,12 +123,12 @@ export function Schedules({ api }: { api: AdminApi }) {
       </p>
       {problem && <p role="alert">{problem}</p>}
       {said && <p role="status">{said}</p>}
-      {schedules?.length === 0 && <p className="label" style={{ margin: 0 }}>No recipe is scheduled.</p>}
+      {schedules?.length === 0 && <p className="label" style={{ margin: 0 }}>No pipeline is scheduled.</p>}
       {schedules && schedules.length > 0 && (
-        <table className="table" aria-label="Scheduled recipes">
+        <table className="table" aria-label="Scheduled pipelines">
           <thead>
             <tr>
-              <th>Recipe</th>
+              <th>Pipeline</th>
               <th>Case</th>
               <th>Schedule</th>
               <th>Owner</th>
@@ -142,7 +142,7 @@ export function Schedules({ api }: { api: AdminApi }) {
               <tr key={s.recipe_id}>
                 <td>
                   <span className="value">{s.label}</span>
-                  {s.flagged && <div className="label">Blocked: the ontology changed since it was published</div>}
+                  {s.flagged && <div className="label">Needs attention: the ontology changed since it was deployed</div>}
                   {s.paused && <div className="label">{s.paused_reason ?? "paused"}</div>}
                   {open === s.recipe_id && <History api={api} schedule={s} />}
                   {editing?.recipeId === s.recipe_id && (

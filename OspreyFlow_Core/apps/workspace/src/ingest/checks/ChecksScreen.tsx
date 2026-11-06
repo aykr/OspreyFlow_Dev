@@ -79,7 +79,7 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
       .then((saved) => {
         setView(saved);
         setChoice(initialChoice(saved));
-        setSaid(`Saved: ${(saved.checks ?? []).length} rule(s) attached to this pipeline. Run Verify to see the alerts its sample would raise.`);
+        setSaid(`Saved: ${(saved.checks ?? []).length} rule(s) attached to this pipeline. Run Test to see the alerts its sample would raise.`);
       })
       .catch((e: Error) => setProblem(e.message))
       .finally(() => setBusy(false));
@@ -90,7 +90,7 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16)", padding: "var(--sp-16)", height: "100%", overflow: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
         <Button onClick={onBack}>← Back to the pipeline</Button>
-        <h1 style={{ fontSize: "1.1em", margin: 0 }}>Checks on load</h1>
+        <h1 style={{ fontSize: "1.1em", margin: 0 }}>Load rules</h1>
       </div>
       <p className="label" style={{ margin: 0, maxWidth: 720 }}>
         Choose which rules judge this pipeline&apos;s loads and what a hit does here. Rules are written by
@@ -168,7 +168,7 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
       )}
       <div>
         <Button variant="primary" disabled={busy || !view} onClick={save}>
-          Save the checks
+          Save the load rules
         </Button>
       </div>
     </div>

@@ -24,6 +24,7 @@ import { ConnectScreen } from "../ConnectScreen";
 import { MapScreen } from "../map/MapScreen";
 import { ProfileScreen } from "../ProfileScreen";
 import { PublishScreen } from "../publish/PublishScreen";
+import { statusWords } from "../studio/vocabulary";
 import { VerifyScreen } from "../verify/VerifyScreen";
 import { PipelineCanvas } from "./PipelineCanvas";
 import {
@@ -38,6 +39,8 @@ export interface PipelineStudioProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
+  /** A pipeline was deployed or reopened: the readiness strip and the Runs tab read again. */
+  onChanged?: () => void;
 }
 
 type View =
@@ -45,7 +48,7 @@ type View =
   | { at: "canvas"; recipeId: string }
   | { at: "connect" | "profile" | "map" | "checks" | "verify" | "publish"; recipeId: string; fromHome?: boolean };
 
-export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: PipelineStudioProps) {
+export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onChanged }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
 
   if (view.at === "home") {
@@ -88,7 +91,11 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId }: Pip
         recipeId={view.recipeId}
         onBack={back}
         onSelectRecipe={() => undefined}
-        onReopenedForEditing={() => back()}
+        onReopenedForEditing={() => {
+          onChanged?.();
+          back();
+        }}
+        onRan={onChanged}
       />
     );
   }
@@ -149,8 +156,9 @@ function PipelinesHome({
   return (
     <div style={{ padding: "var(--sp-16)", display: "grid", gap: "var(--sp-16)", alignContent: "start" }}>
       <p className="label" style={{ margin: 0 }}>
-        A pipeline is one source's journey into this case's graph: a domain model, the source, its
-        profile, its mapping, and the load. Name one and the canvas starts you with that chain.
+        A pipeline is one source's journey into this dataset's graph: a domain model, the source, its
+        profile, its mapping, and the load. Name one and the canvas starts you with that chain. Test it,
+        then deploy it; it runs from the Runs tab.
       </p>
       <section aria-label="New pipeline" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
         <Input
@@ -173,7 +181,7 @@ function PipelinesHome({
             <li key={`${draft.recipe_id}:${draft.version}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--sp-8)" }}>
               <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                 {draft.label}
-                <span style={{ color: "var(--text-tertiary)" }}>{` · v${draft.version} · ${draft.status}`}</span>
+                <span style={{ color: "var(--text-tertiary)" }}>{` · v${draft.version} · ${statusWords(draft.status)}`}</span>
               </span>
               <Button aria-label={`Open ${draft.label}`} onClick={() => onOpen(draft)}>
                 Open
@@ -262,11 +270,11 @@ function PipelineEditor({
         <header style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
           <Button onClick={onHome}>Pipelines</Button>
           <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>{draft.label}</h2>
-          <span className="label">{`v${draft.version} · ${draft.status}`}</span>
+          <span className="label">{`v${draft.version} · ${statusWords(draft.status)}`}</span>
           <span style={{ flex: 1 }} />
-          <Button onClick={() => onOpenStage("checks")}>Checks on load</Button>
-          <Button onClick={() => onOpenStage("verify")}>Verify</Button>
-          <Button onClick={() => onOpenStage("publish")}>Publish</Button>
+          <Button onClick={() => onOpenStage("checks")}>Load rules</Button>
+          <Button onClick={() => onOpenStage("verify")}>Test</Button>
+          <Button onClick={() => onOpenStage("publish")}>Deploy</Button>
         </header>
         <div role="toolbar" aria-label="Pipeline stages" style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap" }}>
           <Button disabled={busy} onClick={() => change(addSourceChain(pipeline, "New source"))}>

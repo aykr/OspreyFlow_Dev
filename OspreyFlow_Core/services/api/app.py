@@ -8086,8 +8086,8 @@ async def publish_studio_recipe(
             status_code=422,
             content={
                 "error": "recipe_not_mapped",
-                "detail": "Map has not been done on this recipe yet: map its fields to the "
-                "domain model, run Verify, then publish.",
+                "detail": "Map has not been done on this pipeline yet: map its fields to the "
+                "domain model, run Test, then deploy.",
             },
         )
     # ADR-120 D10, Amendment 1: the pins come from the live ontology, for the packs the recipe

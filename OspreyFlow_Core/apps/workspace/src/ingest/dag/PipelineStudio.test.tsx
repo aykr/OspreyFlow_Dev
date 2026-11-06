@@ -114,7 +114,7 @@ describe("PipelineStudio", () => {
     serve({ registry: [published, flagged, superseded] as StudioRecipeDraft[] });
     mount();
     expect(await screen.findByText(/Onboarding applications/)).toBeTruthy();
-    expect(screen.getByText(/· published/)).toBeTruthy();
+    expect(screen.getByText(/· deployed/)).toBeTruthy();
     expect(screen.queryByText(/Old intake/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Carrier B subscribers" }));
     expect(await screen.findByText("publish-screen")).toBeTruthy();

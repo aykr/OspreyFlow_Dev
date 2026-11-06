@@ -112,5 +112,5 @@ const pressButton = (name: string) => {
 };
 const view = new URLSearchParams(window.location.search).get("view") ?? "checks";
 for (let i = 0; i < 40 && !pressButton("Open Customer onboarding (weekly file)"); i++) await settle();
-for (let i = 0; i < 40 && !pressButton(view === "verify" ? "Verify" : "Checks on load"); i++) await settle();
-if (view === "verify") for (let i = 0; i < 40 && !pressButton("Run verify"); i++) await settle();
+for (let i = 0; i < 40 && !pressButton(view === "verify" ? "Test" : "Load rules"); i++) await settle();
+if (view === "verify") for (let i = 0; i < 40 && !pressButton("Run the test"); i++) await settle();

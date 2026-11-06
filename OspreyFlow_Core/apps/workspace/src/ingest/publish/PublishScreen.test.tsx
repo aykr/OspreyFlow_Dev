@@ -86,7 +86,7 @@ describe("PublishScreen", () => {
         bearerToken="t"
         recipeId="r1"
         investigationId="inv-1"
-        onBack={() => undefined}
+        onBack={() => undefined} mode="operate"
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
@@ -103,9 +103,9 @@ describe("PublishScreen", () => {
     // load that simply made nothing.
     serve({ ...PIPELINE_RUN, nodes_created: 0, rows_held: 2,
             rule_notes: ["Rule “Onboarding screen” could not judge 2 row(s): held for review."] });  // prettier-ignore
-    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
     fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
-    expect(await screen.findByText("Rows held for review: 2 — a reviewer releases or rejects them in Monitoring › Held rows")).toBeTruthy();
+    expect(await screen.findByText("Rows held for review: 2 — a reviewer releases or rejects them on the Runs tab or in Monitoring › Held rows")).toBeTruthy();
     const rules = screen.getByRole("list", { name: "What the case's rules did" });
     expect(rules.textContent).toContain("could not judge 2 row(s)");
   });
@@ -117,7 +117,7 @@ describe("PublishScreen", () => {
     serve({ load_id: "L9", recipe_id: "r1", recipe_version: 2, withheld: true, rows_read: 0,
             nodes_created: 0, nodes_referenced: 0, edges_created: 0, rejections: [], rows_held: 0,
             rule_notes: [] });  // prettier-ignore
-    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
     fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
     expect(await screen.findByText(/Counts withheld — .*above your clearance.*another unit/)).toBeTruthy();
     expect(screen.getByText("Load id: L9")).toBeTruthy();
@@ -132,7 +132,7 @@ describe("PublishScreen", () => {
   // the refusal is swallowed.
   it("offers no other file to run on, and says why a changed source is refused", async () => {
     const said =
-      "reports.csv has changed since Verify checked it. Nothing was loaded. Run Verify again, then run.";
+      "reports.csv has changed since Test checked it. Nothing was loaded. Run Test again, then run.";
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -146,20 +146,71 @@ describe("PublishScreen", () => {
         return json(404, { error: "not_found" });
       }),
     );
-    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
     const run = await screen.findByRole("button", { name: /Run now/ });
     expect(screen.queryByRole("textbox", { name: /Source file/ })).toBeNull();
-    expect(screen.getByText(/Runs on the file Verify checked/)).toBeTruthy();
+    expect(screen.getByText(/Runs on the file Test checked/)).toBeTruthy();
     fireEvent.click(run);
     expect(await screen.findByText(said)).toBeTruthy();
   });
 
   it("withholds a withheld pipeline run's branches too", async () => {
     serve({ ...PIPELINE_RUN, withheld: true, rows_read: 0, nodes_created: 0, branches: [], extracts: [], enriches: [] });
-    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
     fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
     expect(await screen.findByText(/Counts withheld/)).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Pipeline stages" })).toBeNull();
     expect(screen.queryByText(/Rows read/)).toBeNull();
+  });
+});
+
+// ADR-140 decision 14 (redesign phase 2): Deploy commits a version and neither runs nor schedules it.
+// Red if the deploy sends the schedule editor's choice, if Deploy runs, or if the run controls stay.
+describe("Deploy", () => {
+  const DRAFT = { ...PUBLISHED, status: "draft", version: 3, schedule_cron: "0 6 * * *", schedule_timezone: "Europe/London" };
+
+  function serveDeploy() {
+    const calls: { path: string; method: string; body: unknown }[] = [];
+    let current: unknown = DRAFT;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const path = String(url);
+        const method = init?.method ?? "GET";
+        calls.push({ path, method, body: init?.body ? JSON.parse(String(init.body)) : null });
+        const json = (status: number, payload: unknown) =>
+          ({ ok: status < 400, status, json: async () => payload }) as Response;
+        if (path.endsWith("/publish") && method === "POST") {
+          current = { ...DRAFT, status: "published" };
+          return json(200, current);
+        }
+        if (path.endsWith("/run") && method === "POST") return json(200, { ...PIPELINE_RUN, load_id: "L7" });
+        if (/\/ingest\/recipes\/r1$/.test(path)) return json(200, current);
+        return json(404, { error: "not_found" });
+      }),
+    );
+    return calls;
+  }
+
+  it("deploys as the draft's version, keeping the schedule the draft holds, and does not run", async () => {
+    const calls = serveDeploy();
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    expect(screen.queryByRole("button", { name: /Run now/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Update schedule/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Deploy as v3" }));
+    await screen.findByText("Deployed");
+    const publish = calls.find((c) => c.path.endsWith("/publish"));
+    expect(publish?.body).toEqual({ schedule_cron: "0 6 * * *", schedule_watch: null, schedule_timezone: "Europe/London" });
+    expect(calls.some((c) => c.path.endsWith("/run"))).toBe(false);
+    expect(screen.getByText(/run, and\s+its schedule and folder watch are set, on the Runs tab/)).toBeTruthy();
+  });
+
+  it("deploys and runs at once when asked to", async () => {
+    const calls = serveDeploy();
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Deploy and run now" }));
+    expect(await screen.findByText("Load id: L7")).toBeTruthy();
+    const order = calls.filter((c) => c.method === "POST").map((c) => c.path.split("/").pop());
+    expect(order).toEqual(["publish", "run"]);
   });
 });

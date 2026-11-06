@@ -69,11 +69,11 @@ describe("Schedules and runs", () => {
   it("is a tab only for an account holding operate_schedules", async () => {
     serve();
     place(["administer_system"]);
-    expect(screen.queryByRole("tab", { name: "Schedules and runs" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Operations" })).toBeNull();
     cleanup();
     serve();
     place(["operate_schedules"]);
-    expect(await screen.findByRole("table", { name: "Scheduled recipes" })).toBeTruthy();
+    expect(await screen.findByRole("table", { name: "Scheduled pipelines" })).toBeTruthy();
   });
 
   it("shows each schedule in words with its case, owner and last outcome", async () => {
@@ -148,7 +148,7 @@ describe("Schedules and runs", () => {
   it("says when nothing is scheduled, and says a refusal", async () => {
     serve((path) => (path === "schedules" ? json(200, []) : null));
     place(["operate_schedules"]);
-    expect(await screen.findByText("No recipe is scheduled.")).toBeTruthy();
+    expect(await screen.findByText("No pipeline is scheduled.")).toBeTruthy();
     cleanup();
     serve((path) => (path === "schedules" ? json(403, {}) : null));
     place(["operate_schedules"]);

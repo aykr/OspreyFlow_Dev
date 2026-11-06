@@ -71,7 +71,7 @@ describe("the step", () => {
     expect(screen.queryByLabelText("A hit of Listed people")).toBeNull(); // runs after commit: it cannot hold
     fireEvent.click(screen.getByLabelText("Apply Listed people"));
     fireEvent.change(screen.getByLabelText("A hit of Large cash, before commit"), { target: { value: "hold" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save the checks" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the load rules" }));
     await screen.findByText(/Saved: 1 rule\(s\) attached/);
     expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ checks: [{ rule_id: "r-pre", on_hit: "hold" }] });
   });
@@ -86,7 +86,7 @@ describe("the step", () => {
       ),
     );
     render(<ChecksScreen apiBaseUrl="http://api" bearerToken="t" investigationId="c1" recipeId="recipe-1" onBack={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Save the checks" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save the load rules" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("There is no rule “r-gone” in this case to attach."));
   });
 });
@@ -110,6 +110,6 @@ describe("Verify's would-be alerts", () => {
 
   it("says when no rule checks the pipeline", () => {
     render(<WouldRaisePanel report={{ ...REPORT, checks_judged: 0, would_raise: [], checks_not_judged: [] } as VerifyReport} />);
-    expect(screen.getByText("No rule checks this pipeline's loads. Attach rules in Checks on load.")).toBeTruthy();
+    expect(screen.getByText("No rule checks this pipeline's loads. Attach rules in Load rules.")).toBeTruthy();
   });
 });

@@ -158,9 +158,9 @@ def test_a_run_naming_another_file_than_verify_checked_is_refused_in_words(
     body = response.json()
     assert body["error"] == "source_changed_since_verify"
     assert body["detail"] == (
-        "Verify checked reports.csv; this run would read reports_corrected.csv. Nothing was "
-        "loaded. A run reads only the file Verify checked: choose this file as the source and run "
-        "Verify again, then run."
+        "Test checked reports.csv; this run would read reports_corrected.csv. Nothing was "
+        "loaded. A run reads only the file Test checked: choose this file as the source and run "
+        "Test again, then run."
     )
     assert str(tmp_path) not in body["detail"]  # file names, never the server's path (rule 7)
     assert studio.read == []
@@ -196,7 +196,7 @@ def test_a_file_changed_since_verify_is_refused_until_verify_runs_again(
 
     assert response.status_code == 409, response.text
     assert response.json()["detail"] == (
-        "reports.csv has changed since Verify checked it. Nothing was loaded. Run Verify again, "
+        "reports.csv has changed since Test checked it. Nothing was loaded. Run Test again, "
         "then run."
     )
     assert studio.read == []

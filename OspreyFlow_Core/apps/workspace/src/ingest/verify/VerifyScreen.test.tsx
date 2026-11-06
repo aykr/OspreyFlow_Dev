@@ -26,7 +26,7 @@ afterEach(cleanup);
 describe("the Verify preview", () => {
   it("draws the dry run on a canvas that asks the Conduit nothing", async () => {
     render(<VerifyScreen apiBaseUrl="http://x" investigationId="case-1" bearerToken="t" recipeId="recipe-1" onBack={() => undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Run verify/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Run the test/i }));
     await screen.findByText("preview canvas");
     await waitFor(() => expect(canvasProps.length).toBeGreaterThan(0));
     const props = canvasProps.at(-1) ?? {};

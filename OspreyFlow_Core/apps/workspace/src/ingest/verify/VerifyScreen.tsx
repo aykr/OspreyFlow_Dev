@@ -42,7 +42,7 @@ export interface VerifyScreenProps {
 
 const ERROR_MESSAGES: Record<string, string> = {
   recipe_not_ready_for_profile:
-    "This source isn't ready for Verify yet — go back to Connect and answer the location, handling marking and legal basis.",
+    "This source isn't ready for Test yet — go back to Connect and answer the location, handling marking and legal basis.",
   row_template_missing:
     "This source has no mapping yet — go to Map and save a row template before verifying.",
   connector_not_available: "This source's connector has no reader yet, so it can't be verified.",
@@ -146,10 +146,10 @@ export function VerifyScreen({ apiBaseUrl,
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
         <Button onClick={onBack}>← Back to the pipeline</Button>
-        <h1 style={{ fontSize: "1.1em", margin: 0 }}>Verify{draft ? ` — ${draft.label}` : ""}</h1>
+        <h1 style={{ fontSize: "1.1em", margin: 0 }}>Test{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
         <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>
-          {running ? "Running…" : "Run verify"}
+          {running ? "Testing…" : "Run the test"}
         </Button>
       </div>
 
@@ -171,7 +171,7 @@ export function VerifyScreen({ apiBaseUrl,
         <p style={{ color: "var(--text-secondary)" }}>
           A dry run over the profiled sample. Nothing is written, but an entity set to reference
           an existing one is looked up in the live graph, at your own clearance. Nothing is
-          published until Verify passes.
+          deployed until Test passes.
         </p>
       )}
 

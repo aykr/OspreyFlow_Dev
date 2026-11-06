@@ -45,7 +45,7 @@ function serve(verify: { status: number; body: unknown }) {
 
 async function runVerify() {
   render(<VerifyScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Run verify/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /Run the test/i }));
 }
 
 describe("Verify: a dry run into a case that already holds rows", () => {

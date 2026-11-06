@@ -41,7 +41,7 @@ describe("Verify: rejected rows", () => {
       }),
     );
     render(<VerifyScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Run verify/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Run the test/i }));
     expect(await screen.findByText("row 1: {'a': ''}")).toBeTruthy();
   });
 });

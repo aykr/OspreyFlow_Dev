@@ -147,15 +147,15 @@ def changed_since_verify(
     for source in now:
         if source.location in checked and checked[source.location] != source.sha256:
             return (
-                f"{_name(source.location)} has changed since Verify checked it. Nothing was "
-                "loaded. Run Verify again, then run."
+                f"{_name(source.location)} has changed since Test checked it. Nothing was "
+                "loaded. Run Test again, then run."
             )
     return _another_file(was, ", ".join(_name(s.location) for s in now) or "no file")
 
 
 def _another_file(was: str, would: str) -> str:
     return (
-        f"Verify checked {was}; this run would read {would}. Nothing was loaded. A run reads "
-        "only the file Verify checked: choose this file as the source and run Verify again, "
+        f"Test checked {was}; this run would read {would}. Nothing was loaded. A run reads "
+        "only the file Test checked: choose this file as the source and run Test again, "
         "then run."
     )

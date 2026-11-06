@@ -60,7 +60,7 @@ function serve(run: { status: number; body: unknown }) {
 
 async function runNow() {
   render(
-    <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />,
+    <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />,
   );
   fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
 }

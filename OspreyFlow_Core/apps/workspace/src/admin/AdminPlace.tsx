@@ -1114,7 +1114,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const tabs = [
     ...(rights.has("manage_people") ? [{ id: "people", label: "People and roles" }] : []),
     ...(rights.has("manage_dashboards") ? [{ id: "dashboards", label: "Dashboards" }] : []),
-    ...(rights.has("operate_schedules") ? [{ id: "schedules", label: "Schedules and runs" }] : []),
+    ...(rights.has("operate_schedules") ? [{ id: "schedules", label: "Operations" }] : []),
     ...(rights.has("administer_system") ? [{ id: "system", label: "System" }] : []),
     ...(rights.has("administer_system") ? [{ id: "datasets", label: "Datasets" }] : []),
     ...(rights.has("administer_system") ? [{ id: "demo-packs", label: "Demo packs" }] : []),

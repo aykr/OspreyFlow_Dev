@@ -7,5 +7,5 @@ import "../src/design/primitives.css";
 import { PublishScreen } from "../src/ingest/publish/PublishScreen";
 
 createRoot(document.getElementById("root")!).render(
-  <PublishScreen apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" recipeId="r1" investigationId="c1" onBack={() => {}} />,
+  <PublishScreen apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" recipeId="r1" investigationId="c1" onBack={() => {}} mode="operate" />,
 );

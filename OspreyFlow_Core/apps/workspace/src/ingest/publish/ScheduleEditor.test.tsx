@@ -52,7 +52,7 @@ function serve(draft: StudioRecipeDraft = PUBLISHED, runs: unknown[] = [RUN]) {
 }
 
 function place() {
-  render(<PublishScreen apiBaseUrl="http://x" bearerToken="t" recipeId="r1" investigationId="c1" onBack={() => {}} />);
+  render(<PublishScreen apiBaseUrl="http://x" bearerToken="t" recipeId="r1" investigationId="c1" onBack={() => {}} mode="operate" />);
 }
 
 describe("the structured schedule", () => {
