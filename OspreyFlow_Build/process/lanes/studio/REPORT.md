@@ -1,3 +1,14 @@
-# studio lane · report
+# studio lane · report · L1.1 (make ci green), 6 November 2026
 
-No report yet. The lane writes its end-of-brief report here (Prompt L), at most twenty lines.
+1. **Met: `ruff check .` is clean** in `OspreyFlow_Core` (`b4e5bea`). The cause was I001, import order, not unused imports: `TRUST_EMAIL_*` is used at `main.py:891`.
+2. **Met: `mypy packages services harness` is clean** (373 files). Both faults were typing gaps, not real faults. The geometric `_offset`'s only caller ran at import, before the rebind; `apply.py`'s env `held` is last used before its rebind. So no red-first test was needed. Fixes: `_fraction_of` (`b39ae1f`) and `files_held` (`bcf5e25`).
+3. **Met: the touched tests are green.** 228 passed, 10 skipped: `tests/test_pid_*`, `tests/demo_fixtures`, `harness/test_store_volumes`, `test_update_apply`, `test_apply_*`, `cli/test_doctor`, `test_apply_verb`, `test_install`.
+4. **Open (owner's file): `make -C OspreyFlow_Build test-file-coverage-check`.** It flags six unwired live files, not one: `test_pin_calls_refresh_live`, `test_row_key_withdrawal_ledger`, `test_run_metering_ledger`, `test_source_refresh_{incremental,snapshot}_live` and `test_source_watermark_ledger`. All six use the throwaway Postgres. The fix is the diff below.
+5. **Met: the friction fragment** is `process/friction/2026-11-06-studio-make-ci-green.md`.
+6. **Request (diff):** `OspreyFlow_Build/process/lanes/studio/L1.1_ci_makefile.diff`. Apply it from the repository root with `git apply OspreyFlow_Build/process/lanes/studio/L1.1_ci_makefile.diff`. It adds the six files to `ci.yml`'s `conformance` job (which has Postgres, ArcadeDB, ClickHouse and Valkey) after `test_load_checks.py`, to the `test` job's ignores, and to the `Makefile`'s `test:` ignores. The gate fails on today's files and passes on the patched copies; `git apply --check` is clean.
+7. **Request (found, not fixed; outside the brief):** `tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval` and `test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval` fail the same way at HEAD. Since `2f24d85` (3 November) a date gets a time of day, but both tests still expect midnight (`_start_of`). They run in the live `conformance` job, so the full `make ci` will be red there too. Suggest a nudge to this lane: should the assertion follow ADR-120 Amendment 18?
+8. **Noted:** `ruff format --check` would reformat `main.py` and `pid_plan.py`, as it already did before this step. CI doesn't run `ruff format`, so I left both alone.
+9. **Commits:** `b4e5bea`, `b39ae1f`, `bcf5e25`, plus a docs commit for this report, the fragment and the diff.
+10. **Questions for the owner:** none.
+11. **Hand check for the owner:** after applying the diff, run `make -C OspreyFlow_Build test-file-coverage-check` from the repository root. It should print "733 test file(s), 0 allowlisted, no new drift."
+12. **Running:** nothing of mine. No dev stack, no lease, no background jobs.
