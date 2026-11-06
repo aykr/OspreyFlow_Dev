@@ -47,6 +47,9 @@ class StoredSourceWatches:
                 owner=source.refresh.owner,
                 set_at=source.refresh.set_at,
                 paused=source.refresh.paused,
+                mode=source.refresh.mode,
+                dropped_rows=source.refresh.dropped_rows,
+                watermark_column=source.refresh.watermark_column,
             )
             for recipe in await self._recipes.using_source(source.dataset_id, source.location):
                 if recipe.status in _DEPLOYED:

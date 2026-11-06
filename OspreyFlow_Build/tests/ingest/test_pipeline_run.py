@@ -33,6 +33,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from services.api.config import PostgresConfig
+from services.api.pipeline_run import run_published_pipeline
+from services.api.review import CandidateStatus, ExtractionCandidateStore
+from services.api.studio_publish import build_recipe, write_and_commit_recipe
+from services.api.studio_recipes import StudioRecipeStore
+from services.ingest.recipe_rules import RecipeRuleError
+from services.ingest.watermark import RefreshRead
+
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from adapters.media_objectstore.testing import InMemoryMediaStore
 from adapters.recognise_spacy.adapter import RecogniseSpacyAdapter
@@ -48,15 +56,7 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.ingest import PipelineGraph, RowTemplate
-from services.api.config import PostgresConfig
-from services.api.pipeline_run import run_published_pipeline
-from services.api.review import CandidateStatus, ExtractionCandidateStore
-from services.api.studio_publish import build_recipe, write_and_commit_recipe
-from services.api.studio_recipes import StudioRecipeStore
-from services.ingest.recipe_rules import RecipeRuleError
-
 from tests.ingest.test_studio_run_geometries import RecordingAnalytics
-
 
 #: The extract tests run spaCy itself; where it is not installed (CI, which does not install the
 #: `extraction` extra) they skip, as the recogniser conformance suite does.
@@ -317,11 +317,31 @@ async def test_two_source_branches_both_load_each_under_its_own_load_id(
             assert node.audit.load_id == branch.report.load_id
 
 
+@pytest.mark.parametrize(
+    ("refresh", "words"),
+    [
+        (None, "a full snapshot of one would withdraw"),
+        (
+            RefreshRead(source_id="src-1", mode="snapshot", dropped_rows="withdraw"),
+            "a full snapshot of one would withdraw",
+        ),
+        (
+            RefreshRead(source_id="src-1", mode="incremental", watermark_column="notes"),
+            "watermark is one source's",
+        ),
+    ],
+)
 async def test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_before_any_load(
-    store: StudioRecipeStore, tmp_path: Path, git_repo: Path
+    store: StudioRecipeStore,
+    tmp_path: Path,
+    git_repo: Path,
+    refresh: RefreshRead | None,
+    words: str,
 ) -> None:
     """ADR-110 Amendment 8 point 3: the branches keep their row keys under one recipe, so one
-    branch's snapshot would take the other's rows for dropped and withdraw them."""
+    branch's snapshot would take the other's rows for dropped and withdraw them; and Amendment 6
+    point 1: one source's watermark is no measure of the other's rows. Refused either way, whether
+    asked as `withdraw_dropped` or as the source's read."""
     ontology = load_default_ontology()
     a = _csv(tmp_path / "a.csv", ["a_party", "notes"], [{"a_party": "07960112001", "notes": "x"}])
     b = _csv(tmp_path / "b.csv", ["a_party", "notes"], [{"a_party": "07960112002", "notes": "y"}])
@@ -331,12 +351,14 @@ async def test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_befo
         pipeline=_chain(second_source=str(b)), ontology_version=ontology.version,
     )  # fmt: skip
     async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
-        with pytest.raises(RecipeRuleError, match="reads 2 sources"):
+        with pytest.raises(RecipeRuleError, match="reads 2 sources") as refused:
             await run_published_pipeline(
                 published, LOADER, graph=graph, ontology=ontology, scheme=load_uk_le_scheme(),
                 load_id="pipeline-load-1", investigation_scope="case-1", repo_root=git_repo,
-                recogniser_for=_recognisers, media=InMemoryMediaStore(), withdraw_dropped=True,
+                recogniser_for=_recognisers, media=InMemoryMediaStore(),
+                withdraw_dropped=refresh is None, refresh=refresh,
             )  # fmt: skip
+        assert words in str(refused.value)
         assert await graph.find_node("Endpoint", "value_normalised", "07960112001", LOADER) is None
 
 

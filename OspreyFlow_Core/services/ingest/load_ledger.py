@@ -51,4 +51,5 @@ def load_record_from_report(
         rows_withdrawn=report.rows_withdrawn,
         withdrawn_node_ids=list(report.withdrawn_node_ids),
         withdrawn_edge_ids=list(report.withdrawn_edge_ids),
+        watermark=report.watermark,
     )

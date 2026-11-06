@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -25,6 +25,7 @@ from services.api.load_records import LedgerSink
 from services.api.recipe_runs import RecipeRunStore
 from services.api.studio_publish import run_published_recipe
 from services.ingest.load_revert import RevertDeps, RevertRefused, revert
+from services.ingest.watermark import RefreshRead
 
 from adapters.analytics_duckdb.testing import duckdb_adapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
@@ -68,12 +69,19 @@ class Refresh:
         self.draft = draft.model_copy(update={"recipe_id": draft.recipe_id})
         self.file = Path(draft.source_location or "")
         self.runs, self.graph, self.analytics = runs, graph, analytics
+        #: Each refresh starts after the one before, as the executor's lock makes them.
+        self.started = NOW
 
-    async def snapshot(self, rows: list[dict[str, str]]) -> object:
+    async def snapshot(
+        self, rows: list[dict[str, str]], read: RefreshRead | None = None
+    ) -> object:
+        """One refresh of the file: a full snapshot with *withdraw*, or as `read` says."""
         _write(self.file, rows)
+        self.started += timedelta(minutes=1)
         run_id = await self.runs.start(
             recipe_id=self.draft.recipe_id, recipe_version=1, investigation_id=self.case,
-            trigger="source_refresh", slot=None, run_as=LOADER.id, source=SOURCE, now=NOW,
+            trigger="source_refresh", slot=None, run_as=LOADER.id, source=SOURCE,
+            now=self.started,
         )  # fmt: skip
         sink = LedgerSink(
             self.runs, run_id, created_by=LOADER.id, investigation_id=self.case, started_at=NOW
@@ -91,9 +99,10 @@ class Refresh:
             media=InMemoryMediaStore(),
             scheme=SCHEME,
             sink=sink,
-            withdraw_dropped=True,
+            withdraw_dropped=read is None,
+            refresh=read,
         )
-        await self.runs.finish(run_id, report=report, now=NOW)
+        await self.runs.finish(run_id, report=report, now=self.started)
         return report
 
     async def values(self) -> set[str]:

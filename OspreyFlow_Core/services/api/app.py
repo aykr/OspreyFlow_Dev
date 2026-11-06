@@ -80,6 +80,7 @@ from services.ingest.recipe_rules import (
 )
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.transforms import STRUCTURED_PARTS
+from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import (
     JOB_TYPE_RESOLVE_ENTITY_TYPE,
     run_resolve_entity_type_job,
@@ -8802,6 +8803,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         slot: datetime | None,
         source_file: WatchedFile | None = None,
         trigger: RunTrigger | None = None,
+        refresh: RefreshRead | None = None,
     ) -> Any:
         return await run_recipe_as(
             RecipeRunDeps.from_state(state),
@@ -8812,6 +8814,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
             trigger=trigger or ("watch" if source_file else "schedule" if slot else "manual"),
             slot=slot,
             source_file=source_file.identity if source_file else None,
+            refresh=refresh,
         )
 
     async def watch_files(recipe: StudioRecipeDraft, now: datetime) -> list[WatchedFile]:

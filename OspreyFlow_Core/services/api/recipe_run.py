@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from services.ingest.watermark import RefreshRead
 from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_id
@@ -120,8 +121,12 @@ async def run_recipe_as(
     trigger: RunTrigger,
     slot: datetime | None = None,
     source_file: str | None = None,
+    refresh: RefreshRead | None = None,
 ) -> LoadReport | PipelineRunReport:
-    """One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
+    """`refresh`: a source refresh's read of the file (ADR-110 Amendment 6 point 1), its mode and
+    watermark column from the source's policy.
+
+    One run of a published recipe as `principal` (ADR-110 decision 1): the route's *Run now* and
     the scheduler both come here, so a scheduled load is judged, published, watched and resolved
     exactly as a manual one, and every run is in the ledger (decision 6) — started before it
     loads, so one that dies with its Conduit shows as never finished rather than as nothing."""
@@ -155,6 +160,7 @@ async def run_recipe_as(
             source_location=source_location,
             trigger=trigger,
             sink=sink,
+            refresh=refresh,
         )
     except Exception as error:
         await deps.recipe_runs.fail(
@@ -177,6 +183,7 @@ async def _execute_recipe_run(
     source_location: str | None,
     trigger: RunTrigger,
     sink: LoadSink,
+    refresh: RefreshRead | None = None,
 ) -> LoadReport | PipelineRunReport:
     """The load itself, `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
@@ -223,6 +230,7 @@ async def _execute_recipe_run(
             online_geocode=deps.online_geocode,
             rules=rules,
             sink=sink,
+            refresh=refresh,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(
@@ -247,6 +255,7 @@ async def _execute_recipe_run(
             rules=rules,
             scheme=deps.handling_scheme,
             sink=sink,
+            refresh=refresh,
         )
         await resolution_trigger_module.submit_post_ingest_resolution_jobs(
             report,

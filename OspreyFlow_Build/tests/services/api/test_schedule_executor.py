@@ -22,11 +22,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conduit_common.identity import new_id
-from ontology.handling import load_uk_le_scheme
-from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
-from schemas.domain import Principal
-from schemas.ingest import LoadReport, StudioRecipeDraft, StudioRecipeStatus
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.folder_watch import WatchedFile
 from services.api.investigations import AccessLevel, InsufficientAccessError
@@ -34,6 +29,12 @@ from services.api.recipe_runs import RecipeRunStore
 from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused, SourceWatch
 from services.ingest.engine import RowKeyRunInProgress
 from valkey.asyncio import Valkey
+
+from conduit_common.identity import new_id
+from ontology.handling import load_uk_le_scheme
+from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
+from schemas.domain import Principal
+from schemas.ingest import LoadReport, StudioRecipeDraft, StudioRecipeStatus
 
 SCHEME = load_uk_le_scheme()
 OWNER = Principal(
@@ -103,6 +104,8 @@ class _Edges:
     waiting: list[WatchedFile] = field(default_factory=list)
     files_run: list[str] = field(default_factory=list)
     cases_run: list[str] = field(default_factory=list)
+    #: Amendment 6 point 1: the read each run was given (`None` for a pipeline's own watch).
+    reads: list[Any] = field(default_factory=list)
     #: ADR-110 Amendment 6 point 6: the owner's case that loads into a dataset, as
     #: `scope_to_dataset` finds it; `None` when they have none.
     case_loading_into: dict[str, str] = field(default_factory=lambda: {"ds-1": "case-1"})
@@ -165,9 +168,11 @@ def _executor(
         slot: datetime | None,
         source_file: WatchedFile | None = None,
         trigger: str | None = None,
+        refresh: Any = None,
     ) -> LoadReport:
         """What `run_recipe_as` does to the ledger, around a load that writes nothing."""
         edges.runs_made.append((owner.id, slot))
+        edges.reads.append(refresh)
         edges.cases_run.append(case)
         if source_file is not None:
             edges.files_run.append(source_file.location)
@@ -777,6 +782,33 @@ async def test_a_source_watch_runs_each_pipeline_reading_it_once_on_the_file_as_
     rows = [r for recipe in (calls, visits) for r in await runs.for_recipe(recipe.recipe_id)]
     load_ids = {r.load_id for r in rows}
     assert len(load_ids) == 2, "each pipeline under its own load"
+
+
+async def test_a_source_watch_runs_its_pipelines_in_the_sources_mode(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """Amendment 6 point 1: each file is read as the source's policy says, not as a full snapshot
+    that keeps every row; a pipeline's own watch has no source, so no read."""
+    from services.ingest.watermark import RefreshRead
+
+    snapshot = replace(WATCH, dropped_rows="withdraw")
+    incremental = replace(
+        WATCH, source_id="src-2", pattern="visits-*.csv", mode="incremental",
+        watermark_column="seq",
+    )  # fmt: skip
+    calls, visits = _keyed(label="Calls"), _keyed(label="Visits")
+    own = _keyed(schedule_watch="other-*.csv", schedule_owner=OWNER.id, schedule_set_at=SET_AT)
+    edges = _Edges(
+        waiting=[_file("calls-0601.csv"), _file("visits-0601.csv"), _file("other-0601.csv")]
+    )
+    watches = _SourceWatches([(calls, snapshot), (visits, incremental)])
+    executor = _executor(_Recipes([own]), edges, runs, valkey, watches)
+    await executor.tick(FIRST_SLOT)
+    assert edges.reads == [
+        RefreshRead(source_id="src-1", mode="snapshot", dropped_rows="withdraw"),
+        RefreshRead(source_id="src-2", mode="incremental", watermark_column="seq"),
+        None,
+    ]
 
 
 async def test_a_pipeline_reading_a_watched_source_runs_by_the_source_not_by_its_own_watch(

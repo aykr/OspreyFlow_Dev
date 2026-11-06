@@ -63,6 +63,7 @@ from services.ingest.pipeline import (
     SUPPORTED_GEOCODERS,
 )
 from services.ingest.recipe_rules import RecipeRuleError
+from services.ingest.watermark import RefreshRead
 
 from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
@@ -489,12 +490,15 @@ async def run_published_pipeline(
     rules: RuleGate | None = None,
     sink: LoadSink | None = None,
     withdraw_dropped: bool = False,
+    refresh: RefreshRead | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
     `withdraw_dropped` (ADR-110 Amendment 8 point 3) is a full snapshot's: refused for a pipeline
     with more than one source, whose branches keep their row keys under one recipe, so one
-    branch's snapshot would take every other branch's rows for dropped.
+    branch's snapshot would take every other branch's rows for dropped. `refresh` is a source
+    refresh's read (Amendment 6 point 1), refused the same way when it withdraws or reads
+    incrementally: one source's watermark is no measure of another's rows.
 
     `source_location`, when given, overrides the location of every source node that does not
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
@@ -509,12 +513,22 @@ async def run_published_pipeline(
     )
     ordered = _topological(pipeline)
     sources = [n for n in ordered if n.kind is PipelineNodeKind.SOURCE]
+    withdraw_dropped = withdraw_dropped or (refresh is not None and refresh.withdraws)
     if withdraw_dropped and len(sources) > 1:
         raise RecipeRuleError(
             [
                 f"This pipeline reads {len(sources)} sources, whose rows share one deduplication "
                 "key, so a full snapshot of one would withdraw the others' rows. Set the refresh "
                 "to keep dropped rows until each source has a key of its own (redesign phase 6)."
+            ]
+        )
+    if refresh is not None and refresh.incremental and len(sources) > 1:
+        raise RecipeRuleError(
+            [
+                f"This pipeline reads {len(sources)} sources, and an incremental refresh's "
+                "watermark is one source's: it would leave the others' rows unread. Set the "
+                "refresh to a full snapshot until each source has a key of its own (redesign "
+                "phase 6)."
             ]
         )
 
@@ -537,6 +551,7 @@ async def run_published_pipeline(
             scheme=scheme,
             sink=sink,
             withdraw_dropped=withdraw_dropped,
+            refresh=refresh if refresh is not None and refresh.incremental else None,
         )
         report.branches.append(
             BranchRunReport(

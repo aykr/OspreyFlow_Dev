@@ -32,6 +32,8 @@ export type RowsWithdrawn = number;
 export type LinksKeptAnOccurrence = number;
 export type RowsLeftInPlace = number;
 export type RefreshNotes = string[];
+export type RowsBelowWatermark = number;
+export type RowsWithoutWatermark = number;
 export type Withheld = boolean;
 export type Branches = BranchRunReportView[];
 export type NodeId = string;
@@ -119,6 +121,8 @@ export interface LoadReportView {
   links_kept_an_occurrence?: LinksKeptAnOccurrence;
   rows_left_in_place?: RowsLeftInPlace;
   refresh_notes?: RefreshNotes;
+  rows_below_watermark?: RowsBelowWatermark;
+  rows_without_watermark?: RowsWithoutWatermark;
   withheld?: Withheld;
   [k: string]: unknown;
 }

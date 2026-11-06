@@ -102,6 +102,7 @@ RefusalReason = Literal[
     "rewritten_by_another_writer",
     "superseded_by_a_correction",
     "withdrawn_rows_loaded_again",
+    "read_past_by_a_later_refresh",
 ]
 
 
@@ -141,6 +142,11 @@ class Refusal:
             "withdrawn_rows_loaded_again": (
                 f"{self.count} row(s) it withdrew were loaded again by a later load, and restoring "
                 "them would hold them twice; revert that load first"
+            ),
+            "read_past_by_a_later_refresh": (
+                f"{self.count} later incremental refresh(es) of its source read past its "
+                "watermark, and reverting it would leave its rows unread for good; revert them "
+                "first"
             ),
             "rewritten_by_another_writer": (
                 f"{self.count} node(s) it created were written again by a load outside this "
@@ -250,6 +256,9 @@ class RevertLedger(Protocol):
     async def withdrawn_keys_kept_again(self, load_id: str) -> int: ...
 
     async def restore_withdrawn_row_keys(self, load_id: str) -> int: ...
+
+    # ADR-110 Amendment 6 point 1: asked only of a load an incremental refresh made.
+    async def reads_past(self, load_id: str) -> int: ...
 
 
 class HeldRowDiscard(Protocol):
@@ -475,6 +484,12 @@ async def _later_refusals(
             again = await deps.ledger.withdrawn_keys_kept_again(record.load_id)
             if again:
                 refusals.append(Refusal(record.load_id, "withdrawn_rows_loaded_again", again))
+        # Amendment 6 point 1: a later incremental refresh read past this load's watermark; were
+        # it reverted, the next refresh would start from theirs, and its rows would never be read.
+        if record.watermark is not None:
+            later = await deps.ledger.reads_past(record.load_id)
+            if later:
+                refusals.append(Refusal(record.load_id, "read_past_by_a_later_refresh", later))
     merged_into: set[str] = set()
     for record in await deps.ledger.records_merging(sorted(plan_nodes), sorted(plan_links)):
         if record.load_id in in_plan:

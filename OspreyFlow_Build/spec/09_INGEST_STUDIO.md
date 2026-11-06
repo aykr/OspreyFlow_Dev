@@ -885,6 +885,15 @@ were left in place. A row that comes back is loaded again. Reverting the refresh
 their events and their keys, and is refused while a row it withdrew has been loaded again. A pipeline
 reading more than one source cannot withdraw until phase 6.
 
+**An incremental refresh** (ADR-110 Amendment 10). The source names a watermark column. Each load
+records the highest value it read, and the next refresh by the same pipeline into the same case
+reads only rows past the latest such value from a succeeded run that has not been reverted. Values
+compare as numbers, as instants, or as text, settled by the first read; a later value that cannot be
+compared that way refuses the run, naming its row. Rows at or below the watermark are not read and
+are counted; rows with no value are read, counted, and kept from loading twice by their key. A load
+is not reverted while a later refresh has read past it. A pipeline reading more than one source
+cannot refresh incrementally until phase 6.
+
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
 offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
 London by default), or an advanced cron expression; before anything is saved the Conduit explains it

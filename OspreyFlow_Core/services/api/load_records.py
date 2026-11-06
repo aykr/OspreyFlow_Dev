@@ -42,6 +42,7 @@ from schemas.ingest import (
     PipelineRunReportView,
     RejectionRecord,
     RowElements,
+    SourceWatermark,
 )
 
 
@@ -76,6 +77,10 @@ class _RunLedger(Protocol):
     ) -> None: ...
 
     async def mark_uncovered(self, run_id: str, load_id: str) -> None: ...
+
+    async def watermark(
+        self, recipe_id: str, case: str, source_id: str
+    ) -> SourceWatermark | None: ...
 
     async def dropped_row_keys(
         self, recipe_id: str, case: str, *, present: Collection[str]
@@ -177,6 +182,11 @@ class LedgerSink:
         return await self._ledger.elements_in_other_records(
             node_ids, edge_ids, excluding_loads=excluding_loads
         )
+
+    async def watermark(
+        self, recipe_id: str, case: str, source_id: str
+    ) -> SourceWatermark | None:
+        return await self._ledger.watermark(recipe_id, case, source_id)
 
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None:
         await self._ledger.add_geometries(self._run_id, load_id, list(refs))

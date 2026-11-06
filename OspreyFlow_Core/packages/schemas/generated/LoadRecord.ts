@@ -26,6 +26,10 @@ export type RevertedAt = string | null;
 export type RowsWithdrawn = number;
 export type WithdrawnNodeIds = NodeId[];
 export type WithdrawnEdgeIds = EdgeId[];
+export type SourceId = string;
+export type Column = string;
+export type Kind = "number" | "time" | "text";
+export type Value = string;
 
 /**
  * One execution of a recipe against a source — the persisted form of
@@ -68,5 +72,20 @@ export interface LoadRecord {
   rows_withdrawn?: RowsWithdrawn;
   withdrawn_node_ids?: WithdrawnNodeIds;
   withdrawn_edge_ids?: WithdrawnEdgeIds;
+  watermark?: SourceWatermark | null;
+  [k: string]: unknown;
+}
+/**
+ * The highest value of an incremental source's watermark column a run read (ADR-110 Amendment
+ * 6 point 1), kept with the load's record: the next refresh of the source, by the same pipeline
+ * into the same case, reads only rows past it. `value` is the value as the file held it;
+ * `kind` says how it compares (as a number, as an instant, or as text). For the ledger alone: a
+ * value of the loader's own source, never in a route's answer.
+ */
+export interface SourceWatermark {
+  source_id: SourceId;
+  column: Column;
+  kind: Kind;
+  value: Value;
   [k: string]: unknown;
 }

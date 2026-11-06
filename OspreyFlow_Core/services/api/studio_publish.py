@@ -36,6 +36,7 @@ from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_reference_matches
 from services.ingest.snapshot_withdrawal import DroppedRow, plan_withdrawal
+from services.ingest.watermark import RefreshRead, WatermarkRead, WatermarkRefused, read_past
 
 from conduit_common.transactions import rollback_keeping_failure
 from ontology.handling import HandlingScheme, merge_handling
@@ -60,6 +61,7 @@ from schemas.ingest import (
     RejectionRecord,
     RowTemplate,
     ScheduleConfig,
+    SourceWatermark,
     StudioRecipeDraft,
     StudioRecipeStatus,
 )
@@ -374,6 +376,11 @@ class LoadSink(Protocol):
         self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
     ) -> tuple[set[str], set[str]]: ...
 
+    # ADR-110 Amendment 6 point 1: asked only by an incremental refresh.
+    async def watermark(
+        self, recipe_id: str, case: str, source_id: str
+    ) -> SourceWatermark | None: ...
+
 
 async def run_published_recipe(
     draft: StudioRecipeDraft,
@@ -391,8 +398,14 @@ async def run_published_recipe(
     scheme: HandlingScheme | None = None,
     sink: LoadSink | None = None,
     withdraw_dropped: bool = False,
+    refresh: RefreshRead | None = None,
 ) -> LoadReport:
-    """§8: "Loader: run a published recipe against a file at or below their
+    """`refresh` (ADR-110 Amendment 6 point 1): how a source refresh reads the file. A full
+    snapshot with *withdraw* withdraws its dropped rows (as `withdraw_dropped`); an incremental one
+    loads only the rows past the watermark this pipeline last reached for the case
+    (`watermark.read_past`), and its record keeps the one it reaches.
+
+    §8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
     pointed at: a Loader's ordinary use of a schedule/watch recipe is
     against whatever the day's fresh export is. `source_location` is that
@@ -419,6 +432,12 @@ async def run_published_recipe(
     # The whole file, read and parsed in a worker thread (ADR-127 Amendment 29): held on the event
     # loop it starves the keep-alive of the transaction the run opens next.
     rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+    withdraw_dropped = withdraw_dropped or (refresh is not None and refresh.withdraws)
+    past: WatermarkRead | None = None
+    row_numbers: list[int] | None = None
+    if refresh is not None and refresh.incremental:
+        past = await _rows_past_the_watermark(recipe, rows, refresh, sink, investigation_scope)
+        rows, row_numbers = past.rows, past.row_numbers
     report, events, held_rows = await load_with_rules(
         recipe,
         rows,
@@ -433,6 +452,8 @@ async def run_published_recipe(
         scheme=scheme,
         sink=sink,
         withdraw_dropped=withdraw_dropped,
+        row_numbers=row_numbers,
+        past=past,
     )
     # ADR-110 Amendment 8 point 1: the events of the links a full snapshot withdrew leave every
     # read with them, after the graph has committed. A failure here fails the run, in words; the
@@ -452,7 +473,11 @@ async def run_published_recipe(
     points = await asyncio.to_thread(
         lambda: point_geometries(
             recipe,
-            [r for i, r in enumerate(rows) if i not in held_rows],
+            [
+                r
+                for n, r in zip(row_numbers or range(len(rows)), rows, strict=True)
+                if n not in held_rows
+            ],
             scheme=scheme or (rules.scheme if rules is not None else None),
         )
     )
@@ -493,6 +518,7 @@ async def load_with_rules(
     scheme: HandlingScheme | None = None,
     sink: LoadSink | None = None,
     withdraw_dropped: bool = False,
+    past: WatermarkRead | None = None,
 ) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
     """One load in one graph transaction, judged by the case's pre-commit rules before it commits
     (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
@@ -625,6 +651,12 @@ async def load_with_rules(
                 await _withdraw_dropped_rows(
                     recipe, rows, report, sink, graph, tx, principal, investigation_scope
                 )
+            if past is not None:
+                # Before the commit, so the record the commit writes keeps the watermark reached.
+                report.watermark = past.reached
+                report.rows_below_watermark = past.below
+                report.rows_without_watermark = past.without
+                report.refresh_notes = [*past.notes, *report.refresh_notes]
         except BaseException:
             # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
             # transaction rolled back, not abandoned: nothing of this load is committed.
@@ -650,6 +682,35 @@ async def load_with_rules(
         rules.last_written = written
         await rules.record_expiries(written)
     return report, events, skip
+
+
+async def _rows_past_the_watermark(
+    recipe: Recipe,
+    rows: list[dict[str, str]],
+    refresh: RefreshRead,
+    sink: LoadSink | None,
+    case: str,
+) -> WatermarkRead:
+    """ADR-110 Amendment 6 point 1: the rows of an incremental refresh past the watermark this
+    pipeline last reached for the case, off the event loop. Refused in words, before anything
+    loads, without a ledger to ask, for a keyless pipeline (point 2), or for a file the watermark
+    cannot judge."""
+    if sink is None or recipe.deduplicate is None:
+        raise RecipeRuleError(
+            [
+                "An incremental refresh reads past a watermark and keeps rows by their "
+                "deduplication key: this pipeline has none, or the run keeps no ledger."
+            ]
+        )
+    assert refresh.watermark_column is not None
+    kept = await sink.watermark(recipe.id, case, refresh.source_id)
+    column = refresh.watermark_column
+    try:
+        return await asyncio.to_thread(
+            read_past, rows, source_id=refresh.source_id, column=column, kept=kept
+        )
+    except WatermarkRefused as refused:
+        raise RecipeRuleError([f"The incremental refresh was refused: {refused}."]) from refused
 
 
 async def _withdraw_dropped_rows(

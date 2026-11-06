@@ -25973,3 +25973,51 @@ this says so.
   and DuckDB. The second snapshot withdraws exactly the dropped row's two nodes, its link and its
   event; the revert restores all three; a row that comes back is loaded again once, and the refresh's
   revert is then refused.
+
+### ADR-110, Amendment 10 (6 November 2026) — the incremental watermark and the executor's read, as built
+
+Status: built 6 November 2026, within Amendment 6's rulings. Amendment 6 is unchanged except where
+this says so; *(mine)* marks a detail the rulings left open.
+
+1. **The source's read reaches the load** *(mine)*. `SourceWatch` carries the policy's mode, its
+   dropped rows and its watermark column; the executor passes them as a `RefreshRead` through
+   `RunAs`, `run_recipe_as` and `_execute_recipe_run` to `run_published_recipe` or
+   `run_published_pipeline`. A pipeline's own watch passes none, and reads as before.
+2. **The watermark is kept with the load's record, per source, pipeline and case** *(mine; refines
+   Amendment 6 point 1's "per source")*. One value per source would let one pipeline's success skip
+   rows for another whose run failed. `LoadRecord.watermark` (`SourceWatermark`: source, column,
+   kind, value) is written with the record before the commit; `RecipeRunStore.watermark` reads the
+   latest unreverted record of a succeeded run, by the run's start. A failed run's watermark is not
+   kept, so its rows are read again; a reverted load's is not either.
+3. **How values compare** *(mine)*. As numbers if every value read is one, as instants if every value
+   is an ISO 8601 date or time (all with an offset or all without), else as text; settled by the
+   first read and kept as the watermark's `kind`. A later value that cannot be compared in that kind
+   refuses the run, in words, naming its row and never its value (rule 7). A changed column starts
+   afresh, and says so.
+4. **Rows with no value** *(mine)* are read every time and counted: a refresh never runs a keyless
+   pipeline (point 2 of Amendment 6), so the key keeps them from loading twice.
+5. **The revert** of a load an incremental refresh made is refused (`read_past_by_a_later_refresh`)
+   while an unreverted later refresh of the same source, pipeline and case read past it: the next
+   refresh would start from the later one's watermark and never read this load's rows.
+6. **One source per pipeline**, as for withdrawal (Amendment 9 point 3): an incremental refresh of a
+   pipeline reading more than one source is refused in words before anything loads.
+7. **What the run says**: `rows_below_watermark` and `rows_without_watermark` on the report and its
+   route view, and the words in `refresh_notes`. The watermark's value is for the ledger alone.
+   The file's own row numbers are kept for rejections and held rows.
+
+**Known limits** (recorded, not built):
+- A row rejected past the watermark is not read again: the watermark has moved past it. Correcting
+  it means a full snapshot, or reverting the load.
+- The watermark is read before the run takes its row-key lock; the executor's per-pipeline lock
+  serialises refreshes, and a concurrent manual run reads no watermark.
+
+**Tests:**
+- `tests/ingest/test_watermark.py` (12): the comparison, the counts, the refusals, the route view
+  (rules 3, 4 and 7); each branch shown red by its own plant;
+- `tests/services/api/test_source_watermark_ledger.py` (3, live Postgres);
+- `tests/services/api/test_source_refresh_wiring.py` (4): each hand from the stored policy to the load;
+- `tests/services/api/test_schedule_executor.py`: the executor passes the source's read;
+- `tests/ingest/test_pipeline_run.py`: the two-source refusals;
+- `tests/services/api/test_source_refresh_incremental_live.py` (2): live on ArcadeDB, Postgres and
+  DuckDB, a poll loads only the rows past the watermark (a late correction at it is not loaded), a
+  load a later poll read past is not reverted, and reverting the last poll reads its rows again once.

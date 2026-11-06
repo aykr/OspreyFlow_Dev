@@ -889,6 +889,23 @@ class RowElements(BaseModel):
     edge_ids: list[EdgeId] = Field(default_factory=list)
 
 
+#: ADR-110 Amendment 6 point 1: how an incremental refresh compares its watermark column's values.
+WatermarkKind = Literal["number", "time", "text"]
+
+
+class SourceWatermark(BaseModel):
+    """The highest value of an incremental source's watermark column a run read (ADR-110 Amendment
+    6 point 1), kept with the load's record: the next refresh of the source, by the same pipeline
+    into the same case, reads only rows past it. `value` is the value as the file held it;
+    `kind` says how it compares (as a number, as an instant, or as text). For the ledger alone: a
+    value of the loader's own source, never in a route's answer."""
+
+    source_id: str
+    column: str
+    kind: WatermarkKind
+    value: str
+
+
 class LoadReport(BaseModel):
     load_id: str
     recipe_id: str
@@ -927,6 +944,12 @@ class LoadReport(BaseModel):
     links_kept_an_occurrence: int = 0
     rows_left_in_place: int = 0
     refresh_notes: list[str] = Field(default_factory=list)
+    #: ADR-110 Amendment 6 point 1, an incremental refresh: the watermark this load reached (kept
+    #: with its record, for the ledger alone), and the rows it did not read because they lay at or
+    #: below the kept one, and those it read with no value in the column (counts a route answers).
+    watermark: SourceWatermark | None = None
+    rows_below_watermark: int = 0
+    rows_without_watermark: int = 0
     #: Only the nodes THIS load created — never a node it merely
     #: referenced, and never an edge it only extended (§9.1, when this
     #: becomes a `LoadRecord`, records only what revert may safely
@@ -993,6 +1016,10 @@ class LoadReportView(BaseModel):
     links_kept_an_occurrence: int = 0
     rows_left_in_place: int = 0
     refresh_notes: list[str] = Field(default_factory=list)
+    #: ADR-110 Amendment 6 point 1: an incremental refresh's rows left unread, and read without a
+    #: watermark value. The watermark itself is a value of the source, and never answered.
+    rows_below_watermark: int = 0
+    rows_without_watermark: int = 0
     #: Rule 3, ADR-127 Amendment 23: set where the reader may not view every marking the load's
     #: rows were written at. Every count above is then zero and the lists empty: a count of what a
     #: load wrote is a read.
@@ -1241,6 +1268,10 @@ class LoadRecord(BaseModel):
     rows_withdrawn: int = 0
     withdrawn_node_ids: list[NodeId] = Field(default_factory=list)
     withdrawn_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-110 Amendment 6 point 1: the watermark an incremental refresh's load reached. The next
+    #: refresh reads from the latest such record of a succeeded run that is not reverted; the
+    #: revert is refused while a later refresh read past it.
+    watermark: SourceWatermark | None = None
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
@@ -1253,6 +1284,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     StudioRecipeDraft,
     RecipeConnector,
     RowElements,
+    SourceWatermark,
     RecipeDefaults,
     DeduplicateConfig,
     FieldBinding,

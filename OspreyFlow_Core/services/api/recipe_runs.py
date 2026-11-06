@@ -27,7 +27,7 @@ from services.ingest.engine import RowKeyRunInProgress
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
-from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport, RowElements
+from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport, RowElements, SourceWatermark
 
 #: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
 RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh"]
@@ -483,6 +483,52 @@ class RecipeRunStore:
                 load_id,
             )
         return int(status.split()[-1])
+
+    async def watermark(
+        self, recipe_id: str, case: str, source_id: str
+    ) -> SourceWatermark | None:
+        """The watermark an incremental refresh of `source_id` by this pipeline into this case reads
+        from (ADR-110 Amendment 6 point 1): the one the latest unreverted load of a *succeeded* run
+        reached. A failed run's is not kept, so the rows it did not finish are read again; a
+        reverted load's is not, so the rows it took back are read again. Latest by the run's start:
+        the executor's lock serialises a pipeline's runs. `None`: read every row."""
+        async with self._pool.acquire() as conn:
+            kept = await conn.fetchval(
+                "SELECT rec->'watermark' FROM recipe_runs, "
+                "jsonb_array_elements(load_records) AS rec "
+                "WHERE load_records IS NOT NULL AND outcome = 'succeeded' "
+                "AND rec->>'recipe_id' = $1 AND rec->>'investigation_id' = $2 "
+                "AND rec->>'reverted_at' IS NULL AND rec->'watermark'->>'source_id' = $3 "
+                "ORDER BY started_at DESC, rec->>'load_id' DESC LIMIT 1",
+                recipe_id,
+                case,
+                source_id,
+            )
+        return None if kept is None else SourceWatermark.model_validate_json(kept)
+
+    async def reads_past(self, load_id: str) -> int:
+        """How many unreverted loads of later runs read the same source incrementally, for the same
+        pipeline and case, past this load's watermark. The revert refuses while there is one: their
+        watermark would leave this load's rows unread for good. No record, or one with no
+        watermark: none."""
+        async with self._pool.acquire() as conn:
+            return int(
+                await conn.fetchval(
+                    "WITH me AS (SELECT r.started_at, mine.value AS mine FROM recipe_runs r, "
+                    "jsonb_array_elements(r.load_records) AS mine "
+                    "WHERE r.load_records IS NOT NULL AND mine.value->>'load_id' = $1 "
+                    "AND jsonb_typeof(mine.value->'watermark') = 'object' "
+                    "LIMIT 1) "
+                    "SELECT count(*) FROM me, recipe_runs r, "
+                    "jsonb_array_elements(r.load_records) AS rec "
+                    "WHERE r.load_records IS NOT NULL AND r.started_at > me.started_at "
+                    "AND rec->>'reverted_at' IS NULL "
+                    "AND rec->>'recipe_id' = me.mine->>'recipe_id' "
+                    "AND rec->>'investigation_id' = me.mine->>'investigation_id' "
+                    "AND rec->'watermark'->>'source_id' = me.mine->'watermark'->>'source_id'",
+                    load_id,
+                )
+            )
 
     async def kept_row_keys(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
         """Which of `keys` the case has kept for the recipe, whatever version and whichever load:

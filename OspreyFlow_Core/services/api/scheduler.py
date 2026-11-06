@@ -23,6 +23,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
+from services.ingest.watermark import RefreshRead
 from valkey.asyncio import Valkey
 
 from conduit_common.identity import new_id
@@ -184,6 +185,19 @@ class SourceWatch:
     owner: str | None
     set_at: datetime | None
     paused: bool = False
+    #: How each file is read (Amendment 6 point 1), from the source's policy.
+    mode: str = "snapshot"
+    dropped_rows: str = "keep"
+    watermark_column: str | None = None
+
+    @property
+    def read(self) -> RefreshRead:
+        return RefreshRead(
+            source_id=self.source_id,
+            mode=self.mode,
+            dropped_rows=self.dropped_rows,
+            watermark_column=self.watermark_column,
+        )
 
 
 class SourceWatches(Protocol):
@@ -205,7 +219,8 @@ KEYLESS_REFRESH = (
 class RunAs(Protocol):
     """`run_recipe_as` with the deployment's dependencies, as the owner: trigger `schedule` for a
     slot, `manual` for the Admin area's *Run now* (`slot` `None`), `watch` for a file
-    (`source_file`, read from its location)."""
+    (`source_file`, read from its location). `refresh`: a source refresh's read of the file, in
+    the source's mode (Amendment 6 point 1)."""
 
     async def __call__(
         self,
@@ -215,6 +230,7 @@ class RunAs(Protocol):
         slot: datetime | None,
         source_file: WatchedFile | None = None,
         trigger: RunTrigger | None = None,
+        refresh: RefreshRead | None = None,
     ) -> Any: ...
 
 
@@ -420,7 +436,10 @@ class ScheduleExecutor:
                 await self._pause_if_refused_again(recipe, refused, source=source)
                 return
             try:
-                await self.run(owner, recipe, case, None, file, trigger=trigger)
+                await self.run(
+                    owner, recipe, case, None, file, trigger=trigger,
+                    refresh=source.read if source is not None else None,
+                )  # fmt: skip
             except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
                 log.exception("watched run of recipe %s failed", recipe.recipe_id)
                 await self._tell_owner(recipe, f"{words} failed: {error}")
