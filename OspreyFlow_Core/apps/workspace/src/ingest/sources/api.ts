@@ -80,3 +80,15 @@ export const editGovernance = (api: SourcesApi, datasetId: string, sourceId: str
     method: "PATCH",
     body: JSON.stringify(body),
   });
+
+/** ADR-110 Amendment 13: pausing a source's refresh is not an edit (no new version, the owner kept). */
+export const pauseRefresh = (api: SourcesApi, datasetId: string, sourceId: string, reason: string) =>
+  call<SourceTable>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/refresh/pause`, "Pausing the refresh", {
+    method: "POST",
+    body: JSON.stringify({ reason: reason.trim() || null }),
+  });
+
+export const resumeRefresh = (api: SourcesApi, datasetId: string, sourceId: string) =>
+  call<SourceTable>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/refresh/resume`, "Resuming the refresh", {
+    method: "POST",
+  });

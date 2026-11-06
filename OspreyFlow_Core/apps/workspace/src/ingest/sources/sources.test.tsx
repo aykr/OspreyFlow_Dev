@@ -106,6 +106,79 @@ describe("the source page", () => {
   });
 });
 
+// ADR-110 Amendments 6 and 13 (redesign phase 4): the refresh policy's mode, said in words, and its
+// pause. What would fail: an incremental policy saved without its column; the mode not sent; the
+// page not saying whom a refresh runs as or why it is paused; a pause or resume not reaching its route.
+describe("the source page's refresh", () => {
+  const PAGE_ROUTES = {
+    "GET /v1/datasets/ds-a/sources/s1/profile": { rows_sampled: 0, sample_is_whole_source: true, values_masked: false, columns: [] },
+    "GET /v1/datasets/ds-a/sources/s1/lineage": [],
+  };  // prettier-ignore
+  const WATCHED: SourceTable = {
+    ...SOURCE,
+    refresh: { trigger: "watch", pattern: "cells-*.csv", mode: "snapshot", dropped_rows: "withdraw", owner: "eng-1", paused: false },
+  };
+
+  it("says how each file is read, whom it runs as, and that it is running", async () => {
+    serve(PAGE_ROUTES);
+    render(<SourcePage api={API} datasetId="ds-a" source={WATCHED} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />);
+    expect(
+      await screen.findByText(
+        "when a file matching cells-*.csv arrives, reading the whole file and withdrawing what rows it no longer carries had loaded",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("eng-1")).toBeTruthy();
+    expect(screen.getByText("running")).toBeTruthy();
+  });
+
+  it("refuses an incremental refresh without its watermark column, and sends the mode chosen", async () => {
+    const calls = serve({
+      ...PAGE_ROUTES,
+      "PATCH /v1/datasets/ds-a/sources/s1/governance": { source: { ...WATCHED, version: 2 }, needs_attention: [] },
+    });
+    render(<SourcePage api={API} datasetId="ds-a" source={WATCHED} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit governance" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "How each file is read" }), { target: { value: "incremental" } });
+    expect(screen.queryByRole("combobox", { name: "Rows a new file no longer carries" })).toBeNull();
+    expect(screen.getByText(/Still to give: a watermark column/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save the governance" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.change(screen.getByRole("textbox", { name: "Watermark column (its values only grow)" }), { target: { value: "booked_at" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the governance" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    const sent = calls.find((c) => c.method === "PATCH")?.body as { refresh: { mode: string; watermark_column: string } };
+    expect([sent.refresh.mode, sent.refresh.watermark_column]).toEqual(["incremental", "booked_at"]);
+  });
+
+  it("pauses with the reason given, says so, and resumes", async () => {
+    const pausedSource = { ...WATCHED, refresh: { ...WATCHED.refresh, paused: true, paused_reason: "waiting for the visits step" } };
+    const calls = serve({
+      ...PAGE_ROUTES,
+      "POST /v1/datasets/ds-a/sources/s1/refresh/pause": pausedSource,
+      "POST /v1/datasets/ds-a/sources/s1/refresh/resume": WATCHED,
+    });
+    const onChanged = vi.fn();
+    const { rerender } = render(
+      <SourcePage api={API} datasetId="ds-a" source={WATCHED} scheme={SCHEME} onBack={() => undefined} onChanged={onChanged} onOpenInPipeline={() => undefined} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "Why pause it (optional)" }), { target: { value: "waiting for the visits step" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pause the refresh" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(pausedSource));
+    expect(calls.find((c) => c.path.endsWith("/refresh/pause"))?.body).toEqual({ reason: "waiting for the visits step" });
+    rerender(<SourcePage api={API} datasetId="ds-a" source={pausedSource} scheme={SCHEME} onBack={() => undefined} onChanged={onChanged} onOpenInPipeline={() => undefined} />);
+    expect(screen.getByText("paused: waiting for the visits step")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Resume the refresh" }));
+    await waitFor(() => expect(onChanged).toHaveBeenLastCalledWith(WATCHED));
+    expect(screen.getByRole("status").textContent).toBe("The refresh is resumed.");
+  });
+
+  it("offers no pause for a source refreshed by hand", async () => {
+    serve(PAGE_ROUTES);
+    render(<SourcePage api={API} datasetId="ds-a" source={SOURCE} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />);
+    expect(await screen.findByText("by hand")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pause the refresh" })).toBeNull();
+  });
+});
+
 describe("a pipeline's source chooser", () => {
   const DRAFT = { recipe_id: "r9", version: 1, status: "draft", label: "New pipeline", owning_unit: "u", created_by: "e",
     created_at: "", ready_for_profile: false, dataset_id: "ds-a", handling: {} } as unknown as StudioRecipeDraft;  // prettier-ignore

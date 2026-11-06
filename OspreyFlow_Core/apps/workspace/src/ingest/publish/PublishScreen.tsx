@@ -16,7 +16,7 @@ import type {
   ScheduleRunView,
   StudioRecipeDraft,
 } from "../../../../../packages/schemas/generated";
-import { COUNTS_WITHHELD_REASON, runInWords, triggerInWords } from "../../admin/Schedules";
+import { COUNTS_WITHHELD_REASON, meteringInWords, runInWords, triggerInWords } from "../../admin/Schedules";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
@@ -545,6 +545,18 @@ export function PublishScreen({
               </li>
             )}
           </ul>
+          {/* ADR-110 Amendments 8 and 10: what a source refresh withdrew or left unread, in words. */}
+          {[...((loadReport as LoadReportView).refresh_notes ?? []),
+            ...(pipelineRunOf(loadReport)?.branches ?? []).flatMap((b) => b.report.refresh_notes ?? [])].length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }} aria-label="What the refresh did">
+              {[...((loadReport as LoadReportView).refresh_notes ?? []),
+                ...(pipelineRunOf(loadReport)?.branches ?? []).flatMap((b) => b.report.refresh_notes ?? [])].map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          )}
+          {/* ADR-110 Amendment 6 point 9: what the run cost. */}
+          {loadReport.metering && <p className="label" style={{ margin: 0 }}>{`Cost: ${meteringInWords(loadReport.metering)}.`}</p>}
           {/* ADR-109 ruling 1: what the case's rules did to this load, in words — a held load must
               never read as a load that simply made nothing (rule 2). */}
           {(loadReport.rule_notes ?? []).length > 0 && (

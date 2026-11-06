@@ -125,6 +125,12 @@ class SourceGovernanceInput(BaseModel):
         return check_source_declarations(value)
 
 
+class PauseRefreshInput(BaseModel):
+    """Pausing a source's refresh (ADR-110 Amendment 13): why, in words; none says who paused it."""
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class SourceLineage(BaseModel):
     """A pipeline that uses a source: what the source page lists under *Lineage*."""
 

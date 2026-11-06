@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "./AdminPlace";
+import { runInWords, triggerInWords } from "./Schedules";
 
 afterEach(() => {
   cleanup();
@@ -153,5 +154,30 @@ describe("Schedules and runs", () => {
     serve((path) => (path === "schedules" ? json(403, {}) : null));
     place(["operate_schedules"]);
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Your account does not hold the right for this.");
+  });
+});
+
+
+// ADR-110 Amendments 6 and 12 (redesign phase 4): a source refresh named as one, with its file; and
+// what a run cost, a figure not yet measured said so, never 0, and nothing where it is withheld.
+describe("a run's words", () => {
+  const RUN = { run_id: "x", trigger: "source_refresh", started_at: "2026-11-06T09:00:00Z", outcome: "succeeded",
+    run_as: "eng-1", rows_read: 4, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, file: "calls-0601.csv",
+    metering: { wall_ms: 400, rows_read: 4, rows_staged: null, parquet_bytes: null, object_store_bytes: 0, graph_writes: 3 } } as const;  // prettier-ignore
+
+  it("names a source refresh and its file", () => {
+    expect(triggerInWords(RUN as never)).toBe("source refresh, calls-0601.csv");
+    expect(triggerInWords({ ...RUN, file: null } as never)).toBe("source refresh");
+  });
+
+  it("says what the run cost after its counts", () => {
+    expect(runInWords(RUN as never)).toBe(
+      "Succeeded: 4 rows read, 2 created, 0 referenced, 0 rejected (took 0.4 s, 4 rows read, rows staged not measured, " +
+        "bytes to Parquet not measured, 0 bytes to the object store, 3 graph writes)",
+    );
+  });
+
+  it("says nothing of the cost where the counts are withheld", () => {
+    expect(runInWords({ ...RUN, withheld: true, metering: null } as never)).not.toContain("took");
   });
 });

@@ -55,6 +55,7 @@ PEOPLE = {
         ("reader", "read-1", "unit-1", "data_engineer"),
         ("stranger", "str-1", "unit-2", "data_engineer"),
         ("admin", "adm-1", "unit-1", "osprey-admin"),
+        ("author", "aut-1", "unit-1", "source_author"),
     )
 } | {
     # Below the SECRET a source may be marked: the profile is masked for this reader alone.
@@ -69,6 +70,7 @@ CASES = {
     "str-1": {"case-s": ["ds-s"]},
     "adm-1": {},
     "jun-1": {"case-j": ["ds-a"]},
+    "aut-1": {"case-n": ["ds-a"]},
 }
 
 
@@ -441,3 +443,61 @@ def test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one(
     )
     assert edited.status_code == 422
     assert "Keyless needing attention" in edited.json()["detail"]["detail"]
+
+
+# --- ADR-110 Amendment 13: pausing and resuming a source's refresh ------------------------------
+
+
+def test_a_refresh_is_paused_with_its_reason_and_resumed_neither_an_edit_and_both_audited(
+    world: SimpleNamespace,
+) -> None:
+    made = _register(world, refresh=WATCH).json()
+    path = f"/v1/datasets/ds-a/sources/{made['id']}/refresh"
+    paused = world.client.post(
+        f"{path}/pause", json={"reason": "waiting for the visits step"}, headers=_as("engineer")
+    )
+    assert paused.status_code == 200, paused.text
+    refresh = paused.json()["refresh"]
+    assert (refresh["paused"], refresh["paused_reason"]) == (True, "waiting for the visits step")
+    assert (paused.json()["version"], refresh["owner"]) == (1, "eng-1"), "not an edit"
+    resumed = world.client.post(f"{path}/resume", headers=_as("engineer"))
+    assert resumed.status_code == 200, resumed.text
+    assert (resumed.json()["refresh"]["paused"], resumed.json()["refresh"]["paused_reason"]) == (
+        False, None,
+    )
+    actions = [e["action"] for e in world.audit.entries]
+    assert actions[-2:] == ["pause_source_refresh", "resume_source_refresh"]
+    assert world.recipes.flagged == [], "no pipeline needs attention"
+
+
+def test_a_pause_without_a_reason_says_who_paused_it(world: SimpleNamespace) -> None:
+    made = _register(world, refresh=WATCH).json()
+    paused = world.client.post(
+        f"/v1/datasets/ds-a/sources/{made['id']}/refresh/pause", headers=_as("engineer")
+    )
+    assert paused.json()["refresh"]["paused_reason"] == "paused by eng-1"
+
+
+def test_a_refresh_is_not_paused_through_another_datasets_route_nor_by_one_without_the_right(
+    world: SimpleNamespace,
+) -> None:
+    """Rules 3 and 4: another dataset's source answers as a missing one; a person who may not
+    schedule pipelines is refused, and nothing is paused either way."""
+    made = _register(world, refresh=WATCH).json()
+    other = world.client.post(
+        f"/v1/datasets/ds-c/sources/{made['id']}/refresh/pause", headers=_as("engineer")
+    )
+    assert other.status_code == 404
+    refused = world.client.post(
+        f"/v1/datasets/ds-a/sources/{made['id']}/refresh/pause", headers=_as("author")
+    )
+    assert refused.status_code == 403
+    resumed = world.client.post(
+        f"/v1/datasets/ds-a/sources/{made['id']}/refresh/resume", headers=_as("author")
+    )
+    assert resumed.status_code == 403
+    missing = world.client.post(
+        "/v1/datasets/ds-a/sources/no-such-source/refresh/resume", headers=_as("engineer")
+    )
+    assert missing.status_code == 404
+    assert world.sources._sources[made["id"]].refresh.paused is False

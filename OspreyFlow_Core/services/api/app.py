@@ -287,6 +287,7 @@ from schemas.sources import (
     Connection,
     ConnectionInput,
     GovernanceEdited,
+    PauseRefreshInput,
     RegisterSourceInput,
     SourceGovernanceInput,
     SourceLineage,
@@ -7719,6 +7720,65 @@ async def edit_dataset_source_governance(
         result_cardinality=1,
     )
     return GovernanceEdited(source=edited, needs_attention=flagged)
+
+
+async def _set_source_refresh_paused(
+    dataset_id: str,
+    source_id: str,
+    principal: Principal,
+    sources: SourceStore,
+    audit: AuditWriter,
+    *,
+    reason: str | None,
+) -> SourceTable:
+    source = await _source_of(sources, dataset_id, source_id)
+    await sources.set_refresh_paused(source.id, paused=reason is not None, reason=reason)
+    await audit.record(
+        principal=principal,
+        action="pause_source_refresh" if reason is not None else "resume_source_refresh",
+        resolved_query={"dataset_id": dataset_id, "source_id": source.id},
+        result_cardinality=1,
+    )
+    return await _source_of(sources, dataset_id, source_id)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def pause_source_refresh(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+    body: PauseRefreshInput | None = None,
+) -> SourceTable:
+    """ADR-110 Amendment 13: a source's refresh paused on its page, with why in words; not an edit
+    (no new version, the owner kept, no pipeline needing attention), as a schedule's pause is not.
+    Its waiting files wait; *Resume* below."""
+    reason = (body.reason or "").strip() if body is not None else ""
+    return await _set_source_refresh_paused(
+        dataset_id, source_id, principal, sources, audit,
+        reason=reason or f"paused by {principal.id}",
+    )  # fmt: skip
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def resume_source_refresh(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+) -> SourceTable:
+    """Resumes a paused refresh, chapter 9's included: its next tick takes the files waiting."""
+    return await _set_source_refresh_paused(
+        dataset_id, source_id, principal, sources, audit, reason=None
+    )
 
 
 @app.get("/v1/ingest/packs")

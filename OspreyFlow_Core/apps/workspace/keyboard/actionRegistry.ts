@@ -798,6 +798,10 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   "use-a-registered-source-in-a-pipeline-by-keyboard",
   // ADR-140 Amendment 6: phase 3's exit, a file registered and used in a new pipeline, no marking asked.
   "register-a-source-and-use-it-in-a-new-pipeline-by-keyboard",
+  // ADR-110 Amendments 6 and 13 (redesign phase 4): a source's refresh mode set, and its refresh
+  // paused with why and resumed.
+  "set-a-sources-refresh-mode-by-keyboard",
+  "pause-and-resume-a-sources-refresh-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.

@@ -58,6 +58,9 @@ class SourceStore(Protocol):
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable: ...
     async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
+    async def set_refresh_paused(
+        self, source_id: str, *, paused: bool, reason: str | None
+    ) -> None: ...
 
 
 def _now() -> datetime:

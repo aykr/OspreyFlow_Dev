@@ -141,6 +141,42 @@ test("a source's governance is edited by keyboard, and says which pipelines need
   registerCovered(REGISTRY, "edit-a-sources-governance-by-keyboard");
 });
 
+test("a source's refresh is set to read only rows past a watermark, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  await press(page, "Edit governance");
+  const mode = page.getByRole("combobox", { name: "How each file is read" });
+  await mode.focus();
+  await mode.selectOption("incremental");
+  await expect(page.getByText(/Still to give: a watermark column/)).toBeVisible();
+  const column = page.getByRole("textbox", { name: "Watermark column (its values only grow)" });
+  await column.focus();
+  await page.keyboard.type("called_at");
+  await press(page, "Save the governance");
+  const patch = (await asked(page)).find((a) => a.method === "PATCH" && a.path.endsWith("/governance"));
+  const sent = JSON.parse(patch?.body ?? "{}") as { refresh?: { mode?: string; watermark_column?: string } };
+  expect([sent.refresh?.mode, sent.refresh?.watermark_column]).toEqual(["incremental", "called_at"]);
+  await expect(page.getByText(/reading only the rows past the highest called_at already loaded/)).toBeVisible();
+  registerCovered(REGISTRY, "set-a-sources-refresh-mode-by-keyboard");
+});
+
+test("a source's refresh is paused with why and resumed, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  const why = page.getByRole("textbox", { name: "Why pause it (optional)" });
+  await why.focus();
+  await page.keyboard.type("waiting for the visits step");
+  await press(page, "Pause the refresh");
+  await expect(page.getByText("paused: waiting for the visits step")).toBeVisible();
+  await press(page, "Resume the refresh");
+  await expect(page.getByRole("status").filter({ hasText: "The refresh is resumed." })).toBeVisible();
+  const posted = (await asked(page)).filter((a) => a.method === "POST" && a.path.includes("/refresh/")).map((a) => a.path.split("/").pop());
+  expect(posted).toEqual(["pause", "resume"]);
+  registerCovered(REGISTRY, "pause-and-resume-a-sources-refresh-by-keyboard");
+});
+
 test("a source is re-profiled and opened in a pipeline by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await tab(page, "2 Sources");

@@ -6,10 +6,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { SourceLineage, SourceProfile, SourceTable } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
+import { Input } from "../../design/primitives/Input";
 import type { HandlingScheme } from "../api";
 import { statusWords } from "../studio/vocabulary";
-import { editGovernance, sourceLineage, sourceProfile, type SourcesApi } from "./api";
-import { type Governance, GovernanceFields, governanceOf, handlingOf, missing } from "./GovernanceFields";
+import { editGovernance, pauseRefresh, resumeRefresh, sourceLineage, sourceProfile, type SourcesApi } from "./api";
+import { type Governance, GovernanceFields, governanceOf, handlingOf, missing, refreshInWords } from "./GovernanceFields";
 
 export interface SourcePageProps {
   api: SourcesApi;
@@ -33,6 +34,8 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
   const [editing, setEditing] = useState<Governance | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // ADR-110 Amendment 13: why the refresh is being paused, said before it is.
+  const [pauseReason, setPauseReason] = useState("");
 
   const reprofile = useCallback(() => {
     setProfile(null);
@@ -73,6 +76,24 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
     }
   }
 
+  async function setPaused(paused: boolean) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const changed = paused
+        ? await pauseRefresh(api, datasetId, source.id, pauseReason)
+        : await resumeRefresh(api, datasetId, source.id);
+      setPauseReason("");
+      setSaid(paused ? "The refresh is paused; its files wait until it is resumed." : "The refresh is resumed.");
+      onChanged(changed);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "The refresh could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const refresh = source.refresh;
   return (
     <section aria-label={`Source ${source.name}`} style={{ display: "grid", gap: "var(--sp-12)" }}>
       <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
@@ -112,10 +133,34 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
               <dt>Legal basis</dt>
               <dd style={{ margin: 0 }}>{source.legal_basis || "not given"}</dd>
               <dt>Refresh</dt>
-              <dd style={{ margin: 0 }}>
-                {source.refresh?.trigger === "watch" ? `when a file matching ${source.refresh.pattern ?? ""} arrives` : "by hand"}
-              </dd>
+              <dd style={{ margin: 0 }}>{refreshInWords(refresh)}</dd>
+              {refresh?.trigger === "watch" && (
+                <>
+                  <dt>Runs as</dt>
+                  <dd style={{ margin: 0 }}>{refresh.owner ?? "nobody: set the refresh again"}</dd>
+                  <dt>State</dt>
+                  <dd style={{ margin: 0 }}>{refresh.paused ? `paused: ${refresh.paused_reason ?? "by hand"}` : "running"}</dd>
+                </>
+              )}
             </dl>
+            {refresh?.trigger === "watch" &&
+              (refresh.paused ? (
+                <div>
+                  <Button disabled={busy} onClick={() => void setPaused(false)}>
+                    Resume the refresh
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
+                  <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+                    <span className="label">Why pause it (optional)</span>
+                    <Input value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} />
+                  </label>
+                  <Button disabled={busy} onClick={() => void setPaused(true)}>
+                    Pause the refresh
+                  </Button>
+                </div>
+              ))}
             <div>
               <Button onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
                 Edit governance

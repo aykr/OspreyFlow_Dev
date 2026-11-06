@@ -110,6 +110,35 @@ describe("PublishScreen", () => {
     expect(rules.textContent).toContain("could not judge 2 row(s)");
   });
 
+  // ADR-110 Amendments 8, 10 and 12 (redesign phase 4): what a source refresh withdrew or left
+  // unread, and what the run cost, a figure not yet measured said so and never drawn as 0.
+  it("says what a refresh withdrew or left unread, per branch, and what the run cost", async () => {
+    const [first] = PIPELINE_RUN.branches;
+    const branch = { ...first, report: { ...first?.report,
+      refresh_notes: ["3 rows at or below the watermark (paid_at) were not read"] } };  // prettier-ignore
+    serve({ ...PIPELINE_RUN, branches: [branch],
+            metering: { wall_ms: 1250, rows_read: 6, rows_staged: null, parquet_bytes: null,
+                        object_store_bytes: 20, graph_writes: 7 } });  // prettier-ignore
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
+    const refresh = await screen.findByRole("list", { name: "What the refresh did" });
+    expect(refresh.textContent).toContain("3 rows at or below the watermark (paid_at) were not read");
+    expect(
+      screen.getByText(
+        "Cost: took 1.3 s, 6 rows read, rows staged not measured, bytes to Parquet not measured, 20 bytes to the object store, 7 graph writes.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("draws no refresh words and no cost where the run has none", async () => {
+    serve();
+    render(<PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Run now/ }));
+    await screen.findByRole("list", { name: "Pipeline stages" });
+    expect(screen.queryByRole("list", { name: "What the refresh did" })).toBeNull();
+    expect(screen.queryByText(/^Cost:/)).toBeNull();
+  });
+
   // Rule 3, ADR-127 Amendment 25 (ADR-124 option A′): a run whose rows include a marking the
   // loader may not view comes back `withheld`, with every count zero. Drawn as zeros it would read
   // as a load that made nothing; it says it withholds instead.

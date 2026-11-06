@@ -1,6 +1,8 @@
 // A source's governance as a form (ADR-140 decision 7): its marking (classification and handling
 // code, the originator and the owning unit), the units its rows may name, its legal basis and its
-// refresh policy (recorded; phase 4 runs it). Used to register a source and to edit one.
+// refresh policy (ADR-110 Amendment 6): when it is read again, and how each file is read — the whole
+// file each time, keeping or withdrawing the rows it no longer carries, or only the rows past a
+// watermark column. Used to register a source and to edit one.
 import type { SourceRefresh } from "../../../../../packages/schemas/generated";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
@@ -61,7 +63,20 @@ export function missing(g: Governance): string[] {
   if (!g.owningUnit.trim()) out.push("an owning unit");
   if (!g.legalBasis.trim()) out.push("a legal basis");
   if (g.refresh.trigger === "watch" && !(g.refresh.pattern ?? "").trim()) out.push("a filename pattern to watch for");
+  if (g.refresh.trigger === "watch" && g.refresh.mode === "incremental" && !(g.refresh.watermark_column ?? "").trim())
+    out.push("a watermark column");
   return out;
+}
+
+/** A refresh policy in words, as the source's page says it (ADR-110 Amendment 6 point 1). */
+export function refreshInWords(refresh: SourceRefresh | null | undefined): string {
+  if (!refresh || refresh.trigger !== "watch") return "by hand";
+  const when = `when a file matching ${refresh.pattern ?? ""} arrives`;
+  if (refresh.mode === "incremental")
+    return `${when}, reading only the rows past the highest ${refresh.watermark_column ?? ""} already loaded`;
+  return refresh.dropped_rows === "withdraw"
+    ? `${when}, reading the whole file and withdrawing what rows it no longer carries had loaded`
+    : `${when}, reading the whole file and keeping what rows it no longer carries had loaded`;
 }
 
 export function GovernanceFields({
@@ -125,18 +140,54 @@ export function GovernanceFields({
         </Select>
       </label>
       {value.refresh.trigger === "watch" && (
-        <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-          <span className="label">Filename pattern to watch for</span>
-          <Input
-            value={value.refresh.pattern ?? ""}
-            placeholder="*.csv"
-            onChange={(e) => set({ refresh: { ...value.refresh, pattern: e.target.value } })}
-          />
-        </label>
+        <>
+          <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+            <span className="label">Filename pattern to watch for</span>
+            <Input
+              value={value.refresh.pattern ?? ""}
+              placeholder="*.csv"
+              onChange={(e) => set({ refresh: { ...value.refresh, pattern: e.target.value } })}
+            />
+          </label>
+          <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+            <span className="label">How each file is read</span>
+            <Select
+              value={value.refresh.mode ?? "snapshot"}
+              onChange={(e) =>
+                set({ refresh: { ...value.refresh, mode: e.target.value === "incremental" ? "incremental" : "snapshot" } })
+              }
+            >
+              <option value="snapshot">The whole file each time (full snapshot)</option>
+              <option value="incremental">Only rows past a watermark column (incremental)</option>
+            </Select>
+          </label>
+          {(value.refresh.mode ?? "snapshot") === "snapshot" ? (
+            <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+              <span className="label">Rows a new file no longer carries</span>
+              <Select
+                value={value.refresh.dropped_rows ?? "keep"}
+                onChange={(e) =>
+                  set({ refresh: { ...value.refresh, dropped_rows: e.target.value === "withdraw" ? "withdraw" : "keep" } })
+                }
+              >
+                <option value="keep">Keep what they loaded</option>
+                <option value="withdraw">Withdraw what they loaded (reverting the refresh restores it)</option>
+              </Select>
+            </label>
+          ) : (
+            <label style={{ display: "grid", gap: "var(--sp-2)" }}>
+              <span className="label">Watermark column (its values only grow)</span>
+              <Input
+                value={value.refresh.watermark_column ?? ""}
+                onChange={(e) => set({ refresh: { ...value.refresh, watermark_column: e.target.value } })}
+              />
+            </label>
+          )}
+        </>
       )}
       <p className="label" style={{ margin: 0 }}>
-        The refresh policy is recorded with the source; the pipelines that read it run by it from the
-        next stage of the Studio.
+        Each file the watch takes runs every deployed pipeline that reads the source, as whoever set the
+        refresh; a pipeline with no deduplication key is never run by it.
       </p>
     </div>
   );

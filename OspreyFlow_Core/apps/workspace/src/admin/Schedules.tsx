@@ -5,7 +5,7 @@
 // said, and nothing is shown in their place.
 import { useEffect, useState } from "react";
 
-import type { AdminSchedule, ScheduleRunView } from "../../../../packages/schemas/generated";
+import type { AdminSchedule, RunMetering, ScheduleRunView } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives";
 import { DEFAULT_TIMEZONE, ScheduleEditor } from "../ingest/publish/ScheduleEditor";
 import { choiceOf, cronOf, type ScheduleChoice } from "../ingest/publish/scheduleChoice";
@@ -38,7 +38,22 @@ const when = (iso: string | null | undefined) =>
 export const COUNTS_WITHHELD_REASON =
   "some of what it loaded is above your clearance or restricted to another unit";
 
-/** One run in words: its outcome, then its counts, or why there are none. */
+/** What a run cost, in words (ADR-110 Amendment 6 point 9): a figure not yet measured says so, and
+ * is never shown as 0. */
+export function meteringInWords(m: RunMetering): string {
+  const seconds = (m.wall_ms / 1000).toLocaleString("en-GB", { maximumFractionDigits: 1 });
+  const measured = (n: number | null | undefined, what: string) => (n === null || n === undefined ? `${what} not measured` : `${n} ${what}`);
+  return [
+    `took ${seconds} s`,
+    `${m.rows_read} rows read`,
+    measured(m.rows_staged, "rows staged"),
+    measured(m.parquet_bytes, "bytes to Parquet"),
+    measured(m.object_store_bytes, "bytes to the object store"),
+    `${m.graph_writes} graph writes`,
+  ].join(", ");
+}
+
+/** One run in words: its outcome, then its counts and what it cost, or why there are none. */
 export function runInWords(run: ScheduleRunView): string {
   const outcome = OUTCOME[run.outcome];
   if (run.withheld) return `${outcome}: counts withheld — ${COUNTS_WITHHELD_REASON}`;
@@ -46,16 +61,19 @@ export function runInWords(run: ScheduleRunView): string {
     return (
       `${outcome}: ${run.rows_read} rows read, ${run.nodes_created ?? 0} created, ` +
       `${run.nodes_referenced ?? 0} referenced, ${run.rows_rejected ?? 0} rejected` +
-      (run.rows_held ? `, ${run.rows_held} held` : "")
+      (run.rows_held ? `, ${run.rows_held} held` : "") +
+      (run.metering ? ` (${meteringInWords(run.metering)})` : "")
     );
   }
   return run.failure ? `${outcome}: ${run.failure}` : outcome;
 }
 
 /** What started a run, for a list of runs: a watched run names its file (ADR-110 Amendment 4),
- * which the Conduit leaves out where the reader may not view the source. */
+ * which the Conduit leaves out where the reader may not view the source; a source's refresh says so
+ * (Amendment 6 point 5). */
 export function triggerInWords(run: ScheduleRunView): string {
   if (run.trigger === "watch") return run.file ? `watch, ${run.file}` : "watch";
+  if (run.trigger === "source_refresh") return run.file ? `source refresh, ${run.file}` : "source refresh";
   return run.trigger;
 }
 

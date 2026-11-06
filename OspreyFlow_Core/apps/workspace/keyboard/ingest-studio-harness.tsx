@@ -77,7 +77,8 @@ const HANDLING = { classification: "OFFICIAL", handling_code: "P", originator: "
 let SOURCES: Record<string, unknown>[] = [
   { id: "src-calls", dataset_id: "harbour-extract", connection_id: "files", name: "Wing phone calls file",
     location: "harbour-extract/calls.csv", connector_profile: "generic-csv", handling: HANDLING,
-    legal_basis: "Synthetic demonstration", refresh: { trigger: "watch", pattern: "calls-*.csv" }, version: 1,
+    legal_basis: "Synthetic demonstration", refresh: { trigger: "watch", pattern: "calls-*.csv", mode: "snapshot",
+      dropped_rows: "keep", owner: "engineer-1", paused: false }, version: 1,
     created_by: "engineer-1", created_at: day(9) },
 ];  // prettier-ignore
 const PROFILE = { rows_sampled: 3, sample_is_whole_source: true, values_masked: false, columns: [
@@ -116,6 +117,14 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/profile$/.test(path)) return reply(PROFILE);
   if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/lineage$/.test(path))
     return reply([{ recipe_id: "r-calls", label: "Wing phone calls", version: 2, status: "published" }]);
+  // ADR-110 Amendment 13: a refresh paused (with why) and resumed, neither an edit of the source.
+  if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/refresh\/(pause|resume)$/.test(path) && method === "POST") {
+    const pausing = path.endsWith("/pause");
+    const reason = pausing ? ((JSON.parse(String(init?.body ?? "{}")) as { reason?: string | null }).reason ?? "paused by engineer-1") : null;
+    const refresh = { ...(SOURCES[0].refresh as object), paused: pausing, paused_reason: reason };
+    SOURCES = [{ ...SOURCES[0], refresh }, ...SOURCES.slice(1)];
+    return reply(SOURCES[0]);
+  }
   if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/governance$/.test(path)) {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     const edited = { ...SOURCES[0], ...body, version: 2 };

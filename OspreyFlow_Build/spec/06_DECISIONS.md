@@ -26075,3 +26075,30 @@ either byte figure; phase 7's staging measures them.
 **Tests:** `tests/ingest/test_metering.py` (6, the counting and the route views);
 `tests/services/api/test_run_metering_ledger.py` (3, live Postgres: the run path, the ledger, the
 Admin view). Each branch shown red by its own plant.
+
+### ADR-110, Amendment 13 (6 November 2026) — the refresh on the source's page, and what a run says, as built
+
+Status: built 6 November 2026, within Amendment 6 points 1, 6 and 9 and Amendment 5 item 6 (the
+screens move). *(mine)* marks a detail the amendments left open.
+
+1. **Pause and resume a source's refresh** *(mine: the routes)*.
+   `POST /v1/datasets/{d}/sources/{s}/refresh/pause` (with an optional reason) and `…/resume`, for a
+   person holding `schedule_pipelines` who reaches the dataset, audited (`pause_source_refresh`,
+   `resume_source_refresh`). Not an edit: no new version, the owner kept, no pipeline needing
+   attention. A pause without a reason says who paused it. Another dataset's source answers as a
+   missing one (rule 3). Chapter 9's paused policies, once moved (Amendment 11), are resumed here.
+2. **The source's page** says the policy in words: when it reads, how each file is read (the whole
+   file, keeping or withdrawing what rows it no longer carries had loaded; or only rows past the
+   watermark column), whom it runs as, and whether it is paused and why. Its governance editor sets
+   the mode, the dropped rows and the watermark column; an incremental policy without its column is
+   refused before it is sent.
+3. **What a run says, in the Glass**: a source refresh's trigger is named as one, with its file; a
+   run's report lists what the refresh withdrew or left unread (`refresh_notes`, per branch for a
+   pipeline) and what it cost; Admin's and the Runs tab's run rows add the cost after the counts. A
+   figure not yet measured says *not measured*; a withheld run says nothing of its cost.
+
+**Tests:** `tests/services/api/test_dataset_sources.py` (+3: the routes, their audit, their
+refusals, each shown red); `src/ingest/sources/sources.test.tsx` (+4),
+`src/ingest/publish/PublishScreen.test.tsx` (+2), `src/admin/Schedules.test.tsx` (+3), each shown red
+by its own plant; `keyboard/ingest-studio.spec.ts` (+2 registered actions: the mode set and the
+pause and resume, rule 13); `a11y/every-harness.spec.ts`'s source page and its edit, axe-clean.
