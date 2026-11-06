@@ -1,19 +1,36 @@
 // The readiness strip (ADR-140 decision 1): where the dataset stands at a glance — its model, its
-// sources, its pipelines with how many drafts have not passed Test, and its last run.
-import type { ScheduleRunView, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
+// registered sources (ADR-140 Amendment 6), its pipelines with how many drafts have not passed Test,
+// and its last run.
+import type { ScheduleRunView, SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import type { DomainPack } from "../../investigation/cases";
 import { modelInWords } from "./packs";
 
 export interface ReadinessStripProps {
   packs: readonly DomainPack[] | undefined;
   pipelines: readonly StudioRecipeDraft[] | null;
+  /** The dataset's registered sources; `null` while read, `"unreadable"` when the read failed. */
+  sources: readonly SourceTable[] | null | "unreadable";
   runs: Record<string, ScheduleRunView[]>;
 }
 
-/** The sources the pipelines read: each distinct file, by its name. */
-export function sourcesOf(pipelines: readonly StudioRecipeDraft[]): string[] {
+/** The files the pipelines read: each distinct location. */
+export function filesRead(pipelines: readonly StudioRecipeDraft[]): string[] {
   const names = pipelines.map((p) => p.source_location).filter((s): s is string => !!s);
   return [...new Set(names)];
+}
+
+/** The registered sources in words, and any file a pipeline reads that no source registers: named,
+ * never folded into the count, since such a pipeline inherits nothing from a source. */
+export function sourcesInWords(
+  sources: readonly SourceTable[] | null | "unreadable",
+  pipelines: readonly StudioRecipeDraft[],
+): string {
+  if (sources === "unreadable") return "sources could not be read";
+  if (sources === null) return "reading the sources…";
+  const registered = new Set(sources.map((s) => s.location));
+  const loose = filesRead(pipelines).filter((f) => !registered.has(f)).length;
+  const count = `${sources.length} ${sources.length === 1 ? "source" : "sources"}`;
+  return loose ? `${count} · ${loose} ${loose === 1 ? "file" : "files"} not registered` : count;
 }
 
 /** A draft that has not passed Test since its last edit. */
@@ -32,13 +49,12 @@ function lastRunInWords(run: ScheduleRunView | null): string {
   return `last run ${at}, ${run.outcome}`;
 }
 
-export function ReadinessStrip({ packs, pipelines, runs }: ReadinessStripProps) {
+export function ReadinessStrip({ packs, pipelines, sources, runs }: ReadinessStripProps) {
   const list = pipelines ?? [];
   const untested = list.filter(isUntested).length;
-  const sources = sourcesOf(list).length;
   const items = [
     `Model: ${modelInWords(packs)}`,
-    `${sources} ${sources === 1 ? "source" : "sources"}`,
+    sourcesInWords(sources, list),
     `${list.length} ${list.length === 1 ? "pipeline" : "pipelines"}${untested ? ` · ${untested} untested` : ""}`,
     lastRunInWords(lastRun(runs)),
   ];

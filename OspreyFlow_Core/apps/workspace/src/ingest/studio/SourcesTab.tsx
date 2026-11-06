@@ -19,6 +19,8 @@ export interface SourcesTabProps {
   /** The dataset the Studio is open on; `null` when the case loads into none. */
   datasetId: string | null;
   onOpenPipelines: () => void;
+  /** A source was registered or its governance edited: the readiness strip reads them again. */
+  onSourcesChanged?: () => void;
 }
 
 function markingOf(s: SourceTable): string {
@@ -26,7 +28,7 @@ function markingOf(s: SourceTable): string {
   return typeof c === "string" && c ? c : "not marked";
 }
 
-export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId, onOpenPipelines }: SourcesTabProps) {
+export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId, onOpenPipelines, onSourcesChanged }: SourcesTabProps) {
   const api = useMemo(() => ({ apiBaseUrl, bearerToken }), [apiBaseUrl, bearerToken]);
   const [sources, setSources] = useState<SourceTable[] | null>(null);
   const [scheme, setScheme] = useState<HandlingScheme | null>(null);
@@ -63,6 +65,7 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
           onChanged={(s) => {
             setOpen(s);
             replace(s);
+            onSourcesChanged?.();
           }}
           onOpenInPipeline={onOpenPipelines}
         />
@@ -77,6 +80,7 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
             setSources((all) => [...(all ?? []), made]);
             setRegistering(false);
             setOpen(made);
+            onSourcesChanged?.();
           }}
         />
       ) : (

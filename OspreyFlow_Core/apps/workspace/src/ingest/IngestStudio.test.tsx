@@ -35,18 +35,27 @@ const REGISTRY = [
     owning_unit: "u", created_by: "e", created_at: "", ready_for_profile: false },
 ];  // prettier-ignore
 
-function serve() {
+const PIN_SOURCE = { id: "s1", dataset_id: "prison-intelligence", connection_id: "files", name: "PIN calls file",
+  location: "/ingest/pin.csv", connector_profile: "generic-csv",
+  handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" },
+  legal_basis: "Prison Act", refresh: { trigger: "manual" }, version: 1, created_by: "e", created_at: "" };  // prettier-ignore
+
+function serve({ sourcesRefused = false }: { sourcesRefused?: boolean } = {}) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       const path = String(url);
       const json = (payload: unknown) => ({ ok: true, status: 200, json: async () => payload }) as Response;
+      if (init?.method === "PATCH" && path.endsWith("/sources/s1/governance"))
+        return json({ source: { ...PIN_SOURCE, version: 2 }, needs_attention: [] });
+      if (path.endsWith("/sources/s1/profile"))
+        return json({ rows_sampled: 0, sample_is_whole_source: true, values_masked: false, columns: [], anomalies: [] });
       if (path.endsWith("/v1/investigations")) return json(CASES);
       if (path.endsWith("/ingest/recipe-registry")) return json(REGISTRY);
+      if (sourcesRefused && path.endsWith("/v1/datasets/prison-intelligence/sources"))
+        return { ok: false, status: 404, json: async () => ({ detail: "not_found" }) } as Response;
       if (path.endsWith("/v1/datasets/prison-intelligence/sources"))
-        return json([{ id: "s1", dataset_id: "prison-intelligence", connection_id: "files", name: "PIN calls file",
-          location: "/ingest/pin.csv", connector_profile: "generic-csv", handling: { classification: "OFFICIAL" },
-          legal_basis: "Prison Act", refresh: { trigger: "manual" }, version: 1, created_by: "e", created_at: "" }]);  // prettier-ignore
+        return json([PIN_SOURCE]);
       if (path.endsWith("/v1/handling-scheme")) return json({ name: "uk", classification: ["OFFICIAL"], handling_codes: {} });
       if (path.endsWith("/ingest/recipes/r1/runs"))
         return json([{ run_id: "x", trigger: "manual", started_at: "2026-11-05T18:39:00Z", outcome: "succeeded", run_as: "e" }]);
@@ -75,8 +84,33 @@ describe("IngestStudio: four places", () => {
     const strip = screen.getByRole("list", { name: "Where this dataset stands" });
     expect(await within(strip).findByText(/last run 5 Nov 2026, \d\d:\d\d, succeeded/)).toBeTruthy();
     expect(within(strip).getByText("Model: POLE core + Crime case analysis (NIEM)")).toBeTruthy();
-    expect(within(strip).getByText("2 sources")).toBeTruthy();
+    // ADR-140 Amendment 6: the registered sources, as the Sources tab lists them (one), and the file
+    // a pipeline reads that no source registers (reports.csv) named, never folded into the count.
+    expect(await within(strip).findByText("1 source · 1 file not registered")).toBeTruthy();
     expect(within(strip).getByText("2 pipelines · 1 untested")).toBeTruthy();
+  });
+
+  it("reads the registered sources again for the strip when the Sources tab edits one", async () => {
+    serve();
+    open();
+    const strip = screen.getByRole("list", { name: "Where this dataset stands" });
+    await within(strip).findByText("1 source · 1 file not registered");
+    fireEvent.click(screen.getByRole("tab", { name: "2 Sources" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open source PIN calls file" }));
+    const reads = () =>
+      vi.mocked(fetch).mock.calls.filter(([u, i]) => String(u).endsWith("/prison-intelligence/sources") && !i?.method).length;
+    const before = reads();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit governance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save the governance" }));
+    await vi.waitFor(() => expect(reads()).toBe(before + 1));
+  });
+
+  it("says so in the strip when the registered sources cannot be read, rather than counting none", async () => {
+    serve({ sourcesRefused: true });
+    open();
+    const strip = screen.getByRole("list", { name: "Where this dataset stands" });
+    expect(await within(strip).findByText("sources could not be read")).toBeTruthy();
+    expect(within(strip).queryByText(/^0 sources/)).toBeNull();
   });
 
   it("switches dataset through the case that loads into it, and offers no dataset a case only reads", async () => {

@@ -14,6 +14,7 @@ import { caseForDataset, currentDataset, studioDatasets } from "./studio/dataset
 import { ModelTab } from "./studio/ModelTab";
 import { ReadinessStrip } from "./studio/ReadinessStrip";
 import { SourcesTab } from "./studio/SourcesTab";
+import { useRegisteredSources } from "./studio/useRegisteredSources";
 import { useStudioData } from "./studio/useStudioData";
 
 export interface IngestStudioProps {
@@ -72,6 +73,8 @@ function Studio({
   const [cases, setCases] = useState<CaseListing[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const data = useStudioData(apiBaseUrl, bearerToken, investigationId);
+  // Read again when the Sources tab registers or edits one, so the strip counts what the tab lists.
+  const [sourcesGeneration, setSourcesGeneration] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +91,7 @@ function Studio({
   const dataset = datasets.find((d) => d.id === datasetId);
   const datasetName = dataset?.name ?? "this dataset";
   const servingCase = (cases ?? []).find((c) => c.id === investigationId);
+  const sources = useRegisteredSources(apiBaseUrl, bearerToken, datasetId, cases !== null, sourcesGeneration);
 
   function choose(id: string) {
     const caseId = caseForDataset(cases ?? [], id, investigationId);
@@ -127,7 +131,7 @@ function Studio({
         )}
         {problem && <span role="alert">{problem}</span>}
       </div>
-      <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} runs={data.runs} />
+      <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} sources={sources} runs={data.runs} />
       <Tabs tabs={STUDIO_PLACES} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
@@ -139,6 +143,7 @@ function Studio({
             investigationId={investigationId}
             datasetId={datasetId}
             onOpenPipelines={() => setPlace("pipelines")}
+            onSourcesChanged={() => setSourcesGeneration((g) => g + 1)}
           />
         )}
         {place === "pipelines" && (
