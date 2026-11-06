@@ -433,6 +433,9 @@ class StudioRecipeDraft(BaseModel):
     #: ADR-110 decisions 3 and 8: paused by a person, or by three refused runs in a row, and why.
     schedule_paused: bool = False
     schedule_paused_reason: str | None = None
+    #: ADR-140 Amendment 4: why a `flagged` recipe needs attention, in words; `None` when it does
+    #: not, or for one flagged before the reason was kept.
+    flagged_reason: str | None = None
     #: ADR-099 Amendment 3: the dataset of the case it was made in; found, listed and run only in a
     #: case reading it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None

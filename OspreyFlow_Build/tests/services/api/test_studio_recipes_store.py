@@ -1839,3 +1839,109 @@ async def test_a_restore_from_the_file_puts_back_the_label_connect_and_the_map(
     assert restored.deduplicate == rec.deduplicate
     assert restored.pipeline == starting_pipeline()
     assert restored.dataset_id == "prison-intelligence" and restored.verified_at is None
+
+
+# --- ADR-140 Amendment 4: registered sources, and the recipes a governance edit flags -------------
+
+
+async def _place(store: StudioRecipeStore, recipe_id: str, dataset_id: str, location: str) -> None:
+    """A recipe of `dataset_id` reading `location`, as the source node writes it to the draft."""
+    async with store._pool.acquire() as conn:  # type: ignore[attr-defined]
+        await conn.execute(
+            "UPDATE studio_recipes SET dataset_id = $2, "
+            "content = jsonb_set(content::jsonb, '{source_location}', to_jsonb($3::text))::text "
+            "WHERE recipe_id = $1",
+            recipe_id,
+            dataset_id,
+            location,
+        )
+
+
+async def test_a_governance_edit_flags_only_the_deployed_recipes_reading_that_source(
+    store: StudioRecipeStore,
+) -> None:
+    """Red if a draft, another dataset's recipe or one reading another file is flagged, or if the
+    reason is not kept (the Studio would say the ontology changed)."""
+    from services.api.studio_recipes import SOURCE_GOVERNANCE_CHANGED
+
+    dataset, other = f"ds-{new_id()}", f"ds-{new_id()}"
+    reading = await _published_with_pins(store, "Reads the cells", {})
+    elsewhere = await _published_with_pins(store, "Another dataset", {})
+    other_file = await _published_with_pins(store, "Another file", {})
+    draft = await _verified_draft(store, label="A draft reading it")
+    await _place(store, reading.recipe_id, dataset, "/ingest/cells.csv")
+    await _place(store, elsewhere.recipe_id, other, "/ingest/cells.csv")
+    await _place(store, other_file.recipe_id, dataset, "/ingest/visits.csv")
+    await _place(store, draft.recipe_id, dataset, "/ingest/cells.csv")
+
+    flagged = await store.flag_for_source(dataset, "/ingest/cells.csv", SOURCE_GOVERNANCE_CHANGED)
+
+    assert flagged == ["Reads the cells"]
+    now = await store.get(reading.recipe_id)
+    assert now.status is StudioRecipeStatus.FLAGGED
+    assert now.flagged_reason == SOURCE_GOVERNANCE_CHANGED
+    for untouched in (elsewhere, other_file):
+        assert (await store.get(untouched.recipe_id)).status is StudioRecipeStatus.PUBLISHED
+    assert (await store.get(draft.recipe_id)).status is StudioRecipeStatus.DRAFT
+    using = await store.using_source(dataset, "/ingest/cells.csv")
+    assert {r.label for r in using} == {"Reads the cells", "A draft reading it"}
+
+
+async def test_the_ontology_flag_keeps_its_own_reason(store: StudioRecipeStore) -> None:
+    from services.api.studio_recipes import ONTOLOGY_CHANGED
+
+    stale = await store.publish(
+        (await _verified_draft(store, label="Stale")).recipe_id,
+        AUTHOR,
+        ontology_version=_CORE_VERSION - 1,
+        pack_versions={},
+        git_path="recipes/stale.yaml",
+        schedule_cron=None,
+        schedule_watch=None,
+        now=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+    await store.flag_stale(_CORE_VERSION, {})
+    assert (await store.get(stale.recipe_id)).flagged_reason == ONTOLOGY_CHANGED
+
+
+async def test_the_source_store_keeps_each_source_to_its_dataset_on_postgres() -> None:
+    """Rule 3 in the query: a source asked for through another dataset is not found. And the
+    deployment's own Files connection exists after start-up."""
+    from services.api.sources import (
+        FILES_CONNECTION_ID,
+        PostgresSourceStore,
+        SourceAlreadyRegisteredError,
+        SourceNotFoundError,
+        UnknownConnectionError,
+    )
+
+    from schemas.sources import ConnectionInput, RegisterSourceInput, SourceGovernanceInput
+
+    sources = await PostgresSourceStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        assert (await sources.connections())[0].id == FILES_CONNECTION_ID
+        dataset, other = f"ds-{new_id()}", f"ds-{new_id()}"
+        body = RegisterSourceInput(
+            connection_id=FILES_CONNECTION_ID, name="Cell stays", location=f"/ingest/{dataset}.csv",
+            handling={"classification": "OFFICIAL"}, legal_basis="Synthetic",
+        )  # fmt: skip
+        made = await sources.register(dataset, body, AUTHOR)
+        assert [s.id for s in await sources.list_for(dataset)] == [made.id]
+        assert await sources.list_for(other) == []
+        with pytest.raises(SourceNotFoundError):
+            await sources.get(other, made.id)
+        with pytest.raises(SourceAlreadyRegisteredError):
+            await sources.register(dataset, body, AUTHOR)
+        with pytest.raises(UnknownConnectionError):
+            await sources.register(
+                dataset, body.model_copy(update={"connection_id": "nowhere", "location": "/x"}), AUTHOR
+            )
+        edited = await sources.edit_governance(
+            dataset, made.id, SourceGovernanceInput(handling={"classification": "SECRET"}), AUTHOR
+        )
+        assert edited.version == 2
+        assert (await sources.get(dataset, made.id)).handling == {"classification": "SECRET"}
+        named = await sources.add_connection(ConnectionInput(name="Second folder"), AUTHOR)
+        assert named.id in {c.id for c in await sources.connections()}
+    finally:
+        await sources.close()

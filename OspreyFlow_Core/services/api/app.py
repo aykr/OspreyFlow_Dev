@@ -282,6 +282,15 @@ from schemas.sentences import (
     SentenceRuleInput,
     SentenceRuleParams,
 )
+from schemas.sources import (
+    Connection,
+    ConnectionInput,
+    GovernanceEdited,
+    RegisterSourceInput,
+    SourceGovernanceInput,
+    SourceLineage,
+    SourceTable,
+)
 from schemas.strength import (
     ActiveInfluencer,
     CaseInfluencers,
@@ -372,6 +381,7 @@ from .dataset_scope import (
     made_in,
     outside_any_case,
     scope_to_case,
+    scope_to_dataset,
 )
 from .datasets import (
     CaseDatasetsRequest,
@@ -660,6 +670,14 @@ from .site_images import (
     write_site_image,
 )
 from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
+from .sources import (
+    InMemorySourceStore,
+    PostgresSourceStore,
+    SourceAlreadyRegisteredError,
+    SourceNotFoundError,
+    SourceStore,
+    UnknownConnectionError,
+)
 from .strength_influencers import (
     InfluencerChangeRefused,
     InfluencerRefused,
@@ -695,6 +713,7 @@ from .studio_publish import (
     write_and_commit_recipe,
 )
 from .studio_recipes import (
+    SOURCE_GOVERNANCE_CHANGED,
     SourceDeclarationsInvalidError,
     StudioRecipeCannotVersionError,
     StudioRecipeNotADraftError,
@@ -832,6 +851,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     trend_store = await TrendStore.connect(config.postgres.dsn)
     pack_store = await PackStore.connect(config.postgres.dsn)
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
+    # ADR-140 Amendment 4: connections and the sources registered on them.
+    source_store = await PostgresSourceStore.connect(config.postgres.dsn)
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -994,6 +1015,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.trend_store = trend_store
     app.state.pack_store = pack_store
     app.state.studio_recipes = studio_recipes
+    app.state.sources = source_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = resources.recipe_repo_root
@@ -1088,6 +1110,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         monitoring_task.cancel()
         await investigations.close()
         await history.close()
+        await source_store.close()
         await sites.close()
         await judgements_store.close()
         await link_notes_store.close()
@@ -1196,6 +1219,19 @@ def get_datasets(request: Request) -> DatasetStore:
 
 
 DatasetsDep = Annotated[DatasetStore, Depends(get_datasets)]
+
+
+def get_sources(request: Request) -> SourceStore:
+    """ADR-140 Amendment 4. The lifespan sets the Postgres store; a test app with no lifespan gets
+    an in-memory one holding the built-in Files connection."""
+    store = getattr(request.app.state, "sources", None)
+    if store is None:
+        store = InMemorySourceStore()
+        request.app.state.sources = store
+    return store
+
+
+SourcesDep = Annotated[SourceStore, Depends(get_sources)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -1360,6 +1396,19 @@ async def get_principal(
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     investigation_id = request.path_params.get("investigation_id")
+    dataset_id = request.path_params.get("dataset_id")
+    if (
+        investigation_id is None
+        and dataset_id is not None
+        and request.url.path.startswith("/v1/datasets/")
+    ):
+        # ADR-140 Amendment 4: a Studio route of a dataset reads that dataset alone, and only for
+        # someone one of whose cases loads into it; for anyone else it reads none, and
+        # `require_studio_dataset` answers 404.
+        scoped = await scope_to_dataset(
+            identity, dataset_id, get_investigations(request), get_datasets(request)
+        )
+        return scoped if scoped is not None else outside_any_case(identity)
     if investigation_id is None:
         return outside_any_case(identity)
     return await scope_to_case(identity, investigation_id, get_datasets(request))
@@ -7361,6 +7410,271 @@ async def list_connectors(principal: PrincipalDep) -> list[ConnectorCatalogueEnt
     investigation-scoped and not audited, since nothing here is a node, a
     property value or a count."""
     return list(CONNECTOR_CATALOGUE)
+
+
+# --- ingest studio: connections and registered sources (ADR-140 Amendment 4) ----------------
+
+
+def require_studio_dataset(dataset_id: str, principal: PrincipalDep) -> str:
+    """A dataset route's own gate: `get_principal` scoped the principal to `dataset_id` only when
+    one of their cases loads into it. Anyone else is told 404, the same answer as for a dataset that
+    does not exist, so the refusal says nothing of another unit's data (rule 3)."""
+    if list(principal.datasets or []) != [dataset_id]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    return dataset_id
+
+
+StudioDatasetDep = Annotated[str, Depends(require_studio_dataset)]
+SourceAuthorDep = Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))]
+
+
+def _source_not_found() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+
+
+async def _source_of(sources: SourceStore, dataset_id: str, source_id: str) -> SourceTable:
+    try:
+        return await sources.get(dataset_id, source_id)
+    except SourceNotFoundError as exc:
+        raise _source_not_found() from exc
+
+
+@app.get("/v1/ingest/connections", dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))])
+async def list_ingest_connections(
+    principal: SourceAuthorDep, sources: SourcesDep
+) -> list[Connection]:
+    """The connections a source may be registered on (the register wizard's first step). The
+    deployment's, not a dataset's: names and kinds only, nothing read through them."""
+    return await sources.connections()
+
+
+@app.get(
+    "/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))]
+)
+async def list_admin_connections(sources: SourcesDep) -> list[Connection]:
+    return await sources.connections()
+
+
+@app.post(
+    "/v1/admin/connections",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def add_admin_connection(
+    body: ConnectionInput, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
+) -> Connection:
+    """An administrator names a connection (ADR-140 Amendment 4). Files only until phase 9."""
+    made = await sources.add_connection(body, principal)
+    await audit.record(
+        principal=principal,
+        action="add_ingest_connection",
+        resolved_query={"connection_id": made.id, "kind": made.kind, "name": made.name},
+        result_cardinality=1,
+    )
+    return made
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/source-files",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def list_dataset_source_files(
+    dataset_id: StudioDatasetDep, principal: SourceAuthorDep, audit: AuditDep
+) -> IngestSourceListing:
+    """The register wizard's file step: the dataset's own files under the ingest root, and those
+    placed before ADR-099 Amendment 3 (`list_source_files`), exactly as Connect lists them."""
+    listing = list_source_files(datasets=[dataset_id])
+    await audit.record(
+        principal=principal,
+        action="list_dataset_source_files",
+        resolved_query={"dataset_id": dataset_id},
+        result_cardinality=len(listing.files),
+    )
+    return listing
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/sources",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def list_dataset_sources(
+    dataset_id: StudioDatasetDep, principal: SourceAuthorDep, sources: SourcesDep, audit: AuditDep
+) -> list[SourceTable]:
+    found = await sources.list_for(dataset_id)
+    await audit.record(
+        principal=principal,
+        action="list_dataset_sources",
+        resolved_query={"dataset_id": dataset_id},
+        result_cardinality=len(found),
+    )
+    return found
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/sources",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def register_dataset_source(
+    dataset_id: StudioDatasetDep,
+    body: RegisterSourceInput,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+) -> SourceTable:
+    """Registers a source once (ADR-140 decision 7). A Files source must be a file the dataset's
+    listing offers: the same confinement Connect has (`ingest_sources.list_source_files`), so a path
+    outside the ingest root, or another dataset's folder, is refused in the same words whether or
+    not it exists."""
+    offered = {f.source_location for f in list_source_files(datasets=[dataset_id]).files}
+    if body.location not in offered:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "source_not_offered",
+                "detail": "That file is not one of this dataset's files in the ingest folder. "
+                "Choose it from the dataset's files, or upload it.",
+            },
+        )
+    try:
+        made = await sources.register(dataset_id, body, principal)
+    except UnknownConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "unknown_connection", "detail": "There is no such connection."},
+        ) from exc
+    except SourceAlreadyRegisteredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "source_already_registered",
+                "detail": "This dataset already has a source reading that file.",
+            },
+        ) from exc
+    await audit.record(
+        principal=principal,
+        action="register_dataset_source",
+        resolved_query={"dataset_id": dataset_id, "source_id": made.id},
+        result_cardinality=1,
+    )
+    return made
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/sources/{source_id}",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def get_dataset_source(
+    dataset_id: StudioDatasetDep, source_id: str, principal: SourceAuthorDep, sources: SourcesDep
+) -> SourceTable:
+    return await _source_of(sources, dataset_id, source_id)
+
+
+def source_as_draft(source: SourceTable, owning_unit: str) -> StudioRecipeDraft:
+    """The source as the profiler's bridge reads a source (`studio_profile.profile_recipe_source`
+    takes a draft): its location, connector, handling and legal basis, nothing else."""
+    return StudioRecipeDraft(
+        recipe_id=f"source:{source.id}",
+        version=source.version,
+        status=StudioRecipeStatus.DRAFT,
+        label=source.name,
+        connector_profile=source.connector_profile,
+        source_location=source.location,
+        handling=source.handling,
+        legal_basis=source.legal_basis,
+        owning_unit=owning_unit,
+        created_by=source.created_by,
+        created_at=source.created_at,
+        ready_for_profile=False,
+        dataset_id=source.dataset_id,
+    )
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/profile",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def get_dataset_source_profile(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> SourceProfile:
+    """The source's profile, computed for this reader and never stored (`schemas.sources`): a sample
+    value is shape-masked by its marking against this reader's clearance, as Profile is."""
+    source = await _source_of(sources, dataset_id, source_id)
+    draft = source_as_draft(source, principal.org_unit)
+    profile = await profile_recipe_source(draft, principal, scheme)
+    await audit.record(
+        principal=principal,
+        action="get_dataset_source_profile",
+        resolved_query={"dataset_id": dataset_id, "source_id": source_id},
+        result_cardinality=len(profile.columns),
+    )
+    return profile
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/lineage",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+)
+async def get_dataset_source_lineage(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    studio_recipes: StudioRecipesDep,
+) -> list[SourceLineage]:
+    """The pipelines of the dataset that read the source."""
+    source = await _source_of(sources, dataset_id, source_id)
+    return [
+        SourceLineage(
+            recipe_id=r.recipe_id, label=r.label, version=r.version, status=r.status.value
+        )
+        for r in await studio_recipes.using_source(dataset_id, source.location)
+    ]
+
+
+@app.patch(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def edit_dataset_source_governance(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    body: SourceGovernanceInput,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> GovernanceEdited:
+    """Edits a source's marking, units, legal basis or refresh: a new version of the source,
+    audited with the old and the new. Every deployed pipeline reading it then needs attention, its
+    scheduled and watched runs blocked until it is deployed again under the new governance
+    (ADR-140 Amendment 4, the owner's ruling)."""
+    before = await _source_of(sources, dataset_id, source_id)
+    edited = await sources.edit_governance(dataset_id, source_id, body, principal)
+    flagged = await studio_recipes.flag_for_source(
+        dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
+    )
+    await audit.record(
+        principal=principal,
+        action="edit_dataset_source_governance",
+        resolved_query={
+            "dataset_id": dataset_id,
+            "source_id": source_id,
+            "version": edited.version,
+            "handling_before": before.handling,
+            "handling_after": edited.handling,
+            "legal_basis_before": before.legal_basis,
+            "legal_basis_after": edited.legal_basis,
+            "pipelines_needing_attention": len(flagged),
+        },
+        result_cardinality=1,
+    )
+    return GovernanceEdited(source=edited, needs_attention=flagged)
 
 
 @app.get("/v1/ingest/packs")

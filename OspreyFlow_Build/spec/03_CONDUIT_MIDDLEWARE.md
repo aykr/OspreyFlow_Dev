@@ -387,6 +387,16 @@ disclosed historical illustration alongside the real surface.
 ```
 GET    /v1/ingest/connectors                               the connector catalogue (09_INGEST_STUDIO.md §2)
 GET    /v1/ingest/packs                                    the domain packs a pipeline's root may name (09 §1.1)
+GET    /v1/ingest/connections                              the connections a source is registered on (ADR-140 Amendment 4; SOURCE_AUTHOR)
+GET    /v1/admin/connections                               the deployment's connections (administer_system)
+POST   /v1/admin/connections                               an administrator names a connection, audited (Files only until phase 9)
+GET    /v1/datasets/{dataset_id}/source-files              the register wizard's files: the dataset's own, as Connect lists them
+GET    /v1/datasets/{dataset_id}/sources                   the dataset's registered sources
+POST   /v1/datasets/{dataset_id}/sources                   register a source once: a file the dataset's listing offers, else 422; 409 if registered
+GET    /v1/datasets/{dataset_id}/sources/{source_id}        one source (404 through another dataset's route)
+GET    /v1/datasets/{dataset_id}/sources/{source_id}/profile   its profile, computed for the reader, never stored
+GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pipelines that read it
+PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention
 POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
 GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}                        load one draft

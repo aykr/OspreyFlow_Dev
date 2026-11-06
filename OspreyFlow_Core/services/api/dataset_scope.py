@@ -51,6 +51,25 @@ async def scope_to_case(
     return principal.model_copy(update={"datasets": datasets})
 
 
+class _CasesOf(Protocol):
+    async def list_for(self, principal: Principal) -> Sequence[tuple[Any, Any]]: ...
+
+
+async def scope_to_dataset(
+    principal: Principal, dataset_id: str, cases: _CasesOf, store: DatasetStore
+) -> Principal | None:
+    """`principal`, reading `dataset_id` alone, when one of the cases it holds a level in loads into
+    that dataset (the case's first, ADR-099 decision 6); otherwise `None`. The reach is exactly the
+    Studio's dataset switcher's (ADR-140 Amendment 2): a dataset a case of theirs only reads, and
+    another unit's, are not reached. Writes made through it are stamped with the dataset."""
+    for case, _level in await cases.list_for(principal):
+        ids = await store.ids_of_case(case.id)
+        if ids and ids[0] == dataset_id:
+            set_case_datasets([dataset_id])
+            return principal.model_copy(update={"datasets": [dataset_id]})
+    return None
+
+
 def reach_clause(principal: Principal, position: int) -> tuple[str, list[object]]:
     """ADR-099 Amendment 3, for a Postgres store of things made in a case (a saved pattern, a
     watch, an alert): the SQL that keeps a read to the case's datasets, as `AND (...)` with its

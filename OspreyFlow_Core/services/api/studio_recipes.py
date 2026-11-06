@@ -89,6 +89,9 @@ ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_set_at TIMESTAMPTZ;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_case TEXT;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS schedule_paused_reason TEXT;
+-- ADR-140 Amendment 4: why a deployed recipe needs attention (the ontology, or its source's
+-- governance); NULL when it does not, or for one flagged before the reason was kept.
+ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS flagged_reason TEXT;
 -- ADR-120 D10, Amendment 1: the pack versions it was published against; NULL until published
 -- (and for one published before pinning, until the start-up backfill stamps it).
 ALTER TABLE studio_recipes ADD COLUMN IF NOT EXISTS pack_versions JSONB;
@@ -398,8 +401,15 @@ def _row_to_draft(row: asyncpg.Record) -> StudioRecipeDraft:
         schedule_paused=bool(data.get("schedule_paused") or False),
         schedule_paused_reason=data.get("schedule_paused_reason"),
         dataset_id=data.get("dataset_id"),
+        flagged_reason=data.get("flagged_reason"),
     )
 
+
+#: Why a deployed recipe needs attention (ADR-140 Amendment 4), in the words the Studio shows.
+ONTOLOGY_CHANGED = "the ontology changed since it was deployed"
+SOURCE_GOVERNANCE_CHANGED = (
+    "its source's governance changed since it was deployed: deploy it again under the new marking"
+)
 
 _SOURCE_DECLARATIONS = ("units", "handling_columns")
 
@@ -1158,7 +1168,7 @@ class StudioRecipeStore:
         log/audit."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "UPDATE studio_recipes SET status = $1 "
+                "UPDATE studio_recipes SET status = $1, flagged_reason = $5 "
                 "WHERE status = $2 AND ("
                 "(ontology_version IS NOT NULL AND ontology_version != $3) "
                 "OR (pack_versions IS NOT NULL AND jsonb_typeof(pack_versions) = 'object' "
@@ -1171,8 +1181,44 @@ class StudioRecipeStore:
                 StudioRecipeStatus.PUBLISHED.value,
                 current_ontology_version,
                 json.dumps(current_pack_versions),
+                ONTOLOGY_CHANGED,
             )
         return [row["recipe_id"] for row in rows]
+
+    async def flag_for_source(self, dataset_id: str, location: str, reason: str) -> list[str]:
+        """ADR-140 Amendment 4 (the owner's ruling): a source's governance was edited, so every
+        deployed recipe of its dataset reading it needs attention, its scheduled and watched runs
+        blocked (ADR-110 decision 4) until it is deployed again under the new governance. A recipe
+        reads the source it names by location (the source node writes it to the draft). Returns
+        the labels flagged, for the route to say."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE studio_recipes SET status = $1, flagged_reason = $2 "
+                # The draft keeps its location inside `content` (`_content_json`), not a column.
+                "WHERE status = $3 AND dataset_id = $4 "
+                "AND content::jsonb ->> 'source_location' = $5 "
+                "RETURNING label",
+                StudioRecipeStatus.FLAGGED.value,
+                reason,
+                StudioRecipeStatus.PUBLISHED.value,
+                dataset_id,
+                location,
+            )
+        return [row["label"] for row in rows]
+
+    async def using_source(self, dataset_id: str, location: str) -> list[StudioRecipeDraft]:
+        """The source page's lineage: each recipe of the dataset reading `location`, at its latest
+        version but a previous one."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes WHERE dataset_id = $1 "
+                "AND content::jsonb ->> 'source_location' = $2 "
+                "AND status <> $3 ORDER BY label, version",
+                dataset_id,
+                location,
+                StudioRecipeStatus.SUPERSEDED.value,
+            )
+        return [_row_to_draft(r) for r in rows]
 
     async def backfill_pack_versions(
         self,
