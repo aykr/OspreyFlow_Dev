@@ -104,6 +104,69 @@ test("Add files opens on Sources by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "add-files-from-sources-by-keyboard");
 });
 
+test("a source is registered by keyboard, through every step", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Register a source");
+  await press(page, "Next");
+  const file = page.getByRole("combobox", { name: "File" });
+  await file.focus();
+  await file.selectOption("harbour-extract/cell_stays.csv");
+  await press(page, "Next");
+  for (const [name, value] of [["Classification", "OFFICIAL"], ["Handling code", "P"]] as const) {
+    const field = page.getByRole("combobox", { name });
+    await field.focus();
+    await field.selectOption(value);
+  }
+  for (const [name, value] of [["Originator", "unit-a"], ["Owning unit", "unit-a"], ["Legal basis", "Synthetic demonstration"]] as const) {
+    await page.getByRole("textbox", { name, exact: true }).focus();
+    await page.keyboard.type(value);
+  }
+  await press(page, "Register");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/harbour-extract/sources"))).toBe(true);
+  await expect(page.getByRole("region", { name: "Source cell_stays.csv" })).toBeVisible();
+  registerCovered(REGISTRY, "register-a-source-by-keyboard");
+});
+
+test("a source's governance is edited by keyboard, and says which pipelines need attention", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  await press(page, "Edit governance");
+  const classification = page.getByRole("combobox", { name: "Classification" });
+  await classification.focus();
+  await classification.selectOption("SECRET");
+  await press(page, "Save the governance");
+  await expect(page.getByRole("status").filter({ hasText: "need attention" })).toContainText("Wing phone calls");
+  registerCovered(REGISTRY, "edit-a-sources-governance-by-keyboard");
+});
+
+test("a source is re-profiled and opened in a pipeline by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Open source Wing phone calls file");
+  await expect(page.getByRole("region", { name: "Profile" })).toContainText("caller");
+  const before = (await asked(page)).filter((a) => a.path.endsWith("/profile")).length;
+  await press(page, "Re-profile");
+  await expect.poll(async () => (await asked(page)).filter((a) => a.path.endsWith("/profile")).length).toBeGreaterThan(before);
+  await press(page, "Open in a pipeline");
+  await expect(page.getByRole("tab", { name: "3 Pipelines" })).toHaveAttribute("aria-selected", "true");
+  registerCovered(REGISTRY, "re-profile-a-source-and-open-it-in-a-pipeline-by-keyboard");
+});
+
+test("a pipeline's source is chosen from the registered sources by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await press(page, "Open Visit bookings");
+  await press(page, "Source: Call log");
+  const chooser = page.getByRole("combobox", { name: "Registered source" });
+  await chooser.focus();
+  await chooser.selectOption("src-calls");
+  await press(page, "Use this source");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "PATCH" && a.path.endsWith("/r-visits"))).toBe(true);
+  await expect(page.getByRole("status").filter({ hasText: "Reads Wing phone calls file" })).toBeVisible();
+  registerCovered(REGISTRY, "use-a-registered-source-in-a-pipeline-by-keyboard");
+});
+
 async function openDeploy(page: Page) {
   await page.goto(HARNESS);
   await press(page, "Open Visit bookings");

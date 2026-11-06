@@ -922,7 +922,7 @@ presses **Deploy** then **Deploy and run now**, then runs *Report incidents* fro
 under *Pipeline to run or schedule*, **Run now or schedule**, **Run now**). Since the redesign's phase 2
 (ADR-140, 6 November 2026) Deploy commits a version and does not run it; running and scheduling are the
 Runs tab's. The row is corrected by choosing a corrected copy of the file at the source
-(*Open source settings*, **Choose file…**, **Save**; a copy with `07700 900603` for `07700 900 6O3`, made
+(the source node's *The draft's own settings*, **Choose file…**, **Save**; a copy with `07700 900603` for `07700 900 6O3`, made
 before the demo): a value map refuses every value it does not list, so it cannot mend one row. Test then
 reads 350 reports and rejects none, and the run and Test read the same file (the source node names none
 of its own). Walked on GOV.UK on 3 November: about 55 seconds of clicks and waits for the reports (40 of

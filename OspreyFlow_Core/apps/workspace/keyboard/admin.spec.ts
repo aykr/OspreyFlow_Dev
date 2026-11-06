@@ -64,6 +64,10 @@ async function serve(page: Page): Promise<string[]> {
     if (path === "datasets") return json(200, [{ id: "enron", name: "Enron corpus", owning_unit: "verify", egress: "none" }]);
     if (path === "datasets/enron/egress" && request.method() === "PUT")
       return json(200, { id: "enron", name: "Enron corpus", owning_unit: "verify", ...(request.postDataJSON() as object) });
+    // ADR-140 Amendment 4: the Connections tab.
+    if (path === "connections" && request.method() === "POST")
+      return json(201, { id: "c2", kind: "files", name: "Second folder", created_by: "admin-1", created_at: "" });
+    if (path === "connections") return json(200, [{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" }]);
     if (path === "schedules") return json(200, [SCHEDULE]);
     if (path === "schedules/feed/pause") return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1" });
     if (path === "schedules/feed/resume") return json(200, SCHEDULE);
@@ -279,6 +283,20 @@ test("a schedule is changed by keyboard, keeping its owner", async ({ page }) =>
   await expect(page.getByText("now runs every weekday at 07:30 (Europe/London), still as approver-1")).toBeVisible();
   expect(asked).toContain("PUT schedules/feed");
   registerCovered(REGISTRY, "change-a-schedule-by-keyboard");
+});
+
+test("a connection is named by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await page.getByRole("tab", { name: "Connections" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Files: the ingest root")).toBeVisible();
+  await page.getByRole("textbox", { name: "New Files connection" }).focus();
+  await page.keyboard.type("Second folder");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Second folder.")).toBeVisible();
+  expect(asked).toContain("POST connections");
+  registerCovered(REGISTRY, "name-a-connection-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

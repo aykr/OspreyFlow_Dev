@@ -365,7 +365,7 @@ test("studio — the source's Connect gate", async ({ page }) => {
   await serveStudio(page);
   await openLedger(page);
   await page.getByRole("button", { name: "Source: Bank transactions" }).click();
-  await page.getByRole("button", { name: "Open source settings" }).click();
+  await page.getByRole("button", { name: "The draft's own settings" }).click();
   await expect(page.getByRole("button", { name: "Back to the pipeline" })).toBeVisible();
   // "Save" (not "Create draft") proves the screen resumed the pinned draft's own form.
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();

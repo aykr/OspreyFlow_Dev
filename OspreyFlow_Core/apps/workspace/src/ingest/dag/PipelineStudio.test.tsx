@@ -171,7 +171,7 @@ describe("PipelineStudio", () => {
     mount();
     await openPipeline();
     fireEvent.click(screen.getByRole("button", { name: "Source: Carrier B" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open source settings" }));
+    fireEvent.click(await screen.findByRole("button", { name: "The draft's own settings" }));
     expect(await screen.findByText("connect-screen")).toBeTruthy();
   });
 

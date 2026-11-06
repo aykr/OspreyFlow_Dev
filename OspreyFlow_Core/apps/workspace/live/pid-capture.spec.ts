@@ -542,7 +542,7 @@ test("CAP-A2-C4", async ({ page }) => {
   await page.getByRole("button", { name: /^Open Intelligence reports/ }).click();
   await page.getByRole("button", { name: "Source: Intelligence reports" }).click();
   await page.waitForTimeout(2000);
-  await page.getByRole("button", { name: "Open source settings" }).click();
+  await page.getByRole("button", { name: "The draft's own settings" }).click();
   await page.waitForTimeout(3000);
   // The source's settings: the file, its marking and the columns that carry each row's marking.
   // (The fallback-published recipe shows no entity Map stage on the canvas: a finding.)

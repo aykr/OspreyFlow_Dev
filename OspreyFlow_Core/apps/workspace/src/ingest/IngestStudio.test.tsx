@@ -43,6 +43,11 @@ function serve() {
       const json = (payload: unknown) => ({ ok: true, status: 200, json: async () => payload }) as Response;
       if (path.endsWith("/v1/investigations")) return json(CASES);
       if (path.endsWith("/ingest/recipe-registry")) return json(REGISTRY);
+      if (path.endsWith("/v1/datasets/prison-intelligence/sources"))
+        return json([{ id: "s1", dataset_id: "prison-intelligence", connection_id: "files", name: "PIN calls file",
+          location: "/ingest/pin.csv", connector_profile: "generic-csv", handling: { classification: "OFFICIAL" },
+          legal_basis: "Prison Act", refresh: { trigger: "manual" }, version: 1, created_by: "e", created_at: "" }]);  // prettier-ignore
+      if (path.endsWith("/v1/handling-scheme")) return json({ name: "uk", classification: ["OFFICIAL"], handling_codes: {} });
       if (path.endsWith("/ingest/recipes/r1/runs"))
         return json([{ run_id: "x", trigger: "manual", started_at: "2026-11-05T18:39:00Z", outcome: "succeeded", run_as: "e" }]);
       return json([]);
@@ -84,16 +89,17 @@ describe("IngestStudio: four places", () => {
     expect(onOpenCase).toHaveBeenCalledWith("inv-2");
   });
 
-  it("shows the target model on Model, and the sources with their marking on Sources", async () => {
+  it("shows the target model on Model, and the registered sources with their marking on Sources", async () => {
     serve();
     open();
     fireEvent.click(screen.getByRole("tab", { name: "1 Model" }));
     expect(await screen.findByText("POLE core + Crime case analysis (NIEM)")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "2 Sources" }));
     const sources = await screen.findByRole("region", { name: "Sources" });
-    expect(await within(sources).findByText("pin.csv")).toBeTruthy();
+    expect(await within(sources).findByRole("button", { name: "Open source PIN calls file" })).toBeTruthy();
+    expect(within(sources).getByText("pin.csv")).toBeTruthy();
     expect(within(sources).getByText("OFFICIAL")).toBeTruthy();
-    expect(within(sources).getByText("not yet marked")).toBeTruthy();
+    expect(within(sources).getByRole("button", { name: "Register a source" })).toBeTruthy();
   });
 
   it("keeps the files added straight to the dataset on Sources, behind Add files", async () => {

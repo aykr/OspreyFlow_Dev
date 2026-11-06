@@ -24,6 +24,7 @@ import { ConnectScreen } from "../ConnectScreen";
 import { MapScreen } from "../map/MapScreen";
 import { ProfileScreen } from "../ProfileScreen";
 import { PublishScreen } from "../publish/PublishScreen";
+import { SourceChooser } from "../sources/SourceChooser";
 import { statusWords } from "../studio/vocabulary";
 import { VerifyScreen } from "../verify/VerifyScreen";
 import { PipelineCanvas } from "./PipelineCanvas";
@@ -334,14 +335,20 @@ function PipelineEditor({
             // gate rehosted whole (file, connector catalogue, marking, legal basis — spec 09 §2),
             // found missing from phase B on 10 October 2026, when the start felt like naming a
             // pipeline into a void.
-            <StagePanel
-              title="Source"
-              words="Where the data comes from: the file, its connector, its handling marking and its legal basis. Profile and Map read what is set here."
-            >
-              <Button variant="primary" onClick={() => onOpenStage("connect")}>
-                Open source settings
-              </Button>
-            </StagePanel>
+            // ADR-140 Amendment 4: the first source names a registered source, whose governance
+            // comes with it; the Connect gate's marking questions leave the pipeline.
+            <SourceChooser
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              draft={draft}
+              disabled={busy}
+              onUsed={(updated, source) => {
+                setDraft(updated);
+                change(withNodeConfig(pipeline, selected.id, { ...(selected.config ?? {}), source_id: source.id }));
+              }}
+              onOpenDraftSettings={() => onOpenStage("connect")}
+            />
           ) : (
             <SourcePanel
               draft={draft}

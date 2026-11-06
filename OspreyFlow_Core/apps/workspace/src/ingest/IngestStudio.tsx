@@ -133,7 +133,13 @@ function Studio({
         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
         {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
         {place === "sources" && (
-          <SourcesTab apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} pipelines={data.pipelines} />
+          <SourcesTab
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            datasetId={datasetId}
+            onOpenPipelines={() => setPlace("pipelines")}
+          />
         )}
         {place === "pipelines" && (
           <PipelineStudio apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} onChanged={data.reload} />

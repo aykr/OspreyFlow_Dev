@@ -74,7 +74,14 @@ const EXTRA_STATES: Record<string, string[]> = {
   "checks-on-load-harness.html": ["view=verify"],
   // ADR-140 decision 1 (redesign phase 2): the Studio's Model, Sources and Runs places, a day's run
   // report with its revert command, and the held rows opened from it (Pipelines is the default).
-  "ingest-studio-harness.html": ["tab=model", "tab=sources", "tab=runs", "tab=runs&cell=1", "tab=runs&cell=1&held=1"],
+  "ingest-studio-harness.html": [
+    "tab=model", "tab=sources", "tab=runs", "tab=runs&cell=1", "tab=runs&cell=1&held=1",
+    // ADR-140 Amendment 4: the register wizard's governance step, a source's page, and a source
+    // chosen in a pipeline.
+    "tab=sources&register=1", "tab=sources&source=1", "tab=sources&source=1&edit=1", "pipeline=source",
+  ],
+  // ADR-140 Amendment 4: the Connections tab, served by the page itself.
+  "admin-harness.html": ["open=connections&rights=administer_system"],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

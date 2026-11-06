@@ -73,6 +73,20 @@ const HELD = [
     status: "pending" },
 ];  // prettier-ignore
 
+const HANDLING = { classification: "OFFICIAL", handling_code: "P", originator: "unit-a", owning_unit: "unit-a" };
+let SOURCES: Record<string, unknown>[] = [
+  { id: "src-calls", dataset_id: "harbour-extract", connection_id: "files", name: "Wing phone calls file",
+    location: "harbour-extract/calls.csv", connector_profile: "generic-csv", handling: HANDLING,
+    legal_basis: "Synthetic demonstration", refresh: { trigger: "watch", pattern: "calls-*.csv" }, version: 1,
+    created_by: "engineer-1", created_at: day(9) },
+];  // prettier-ignore
+const PROFILE = { rows_sampled: 3, sample_is_whole_source: true, values_masked: false, columns: [
+  { name: "caller", sample_size: 3, null_count: 0, distinct_count: 3, inferred_type: "string", type_confidence: 1 },
+  { name: "called", sample_size: 3, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
+] };  // prettier-ignore
+const SCHEME = { name: "uk-le", classification: ["OFFICIAL", "SECRET"],
+  handling_codes: { P: { label: "Permitted", dissemination: "permitted" } } };  // prettier-ignore
+
 const asked: { method: string; path: string }[] = [];
 (window as unknown as { __asked: typeof asked }).__asked = asked;
 
@@ -82,6 +96,37 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   asked.push({ method, path });
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   if (path === "/v1/investigations") return reply(CASES);
+  if (path === "/v1/handling-scheme") return reply(SCHEME);
+  if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);
+  if (path === "/v1/datasets/harbour-extract/source-files")
+    return reply({ root: "/ingest", files: [
+      { name: "calls.csv", source_location: "harbour-extract/calls.csv", size_bytes: 10, modified_at: 1 },
+      { name: "cell_stays.csv", source_location: "harbour-extract/cell_stays.csv", size_bytes: 10, modified_at: 2 },
+    ] });  // prettier-ignore
+  if (path === "/v1/datasets/harbour-extract/sources" && method === "POST") {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const made = { ...body, id: "src-new", dataset_id: "harbour-extract", version: 1, created_by: "engineer-1", created_at: day(0) };
+    SOURCES = [...SOURCES, made];
+    return reply(made, 201);
+  }
+  if (path === "/v1/datasets/harbour-extract/sources") return reply(SOURCES);
+  if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/profile$/.test(path)) return reply(PROFILE);
+  if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/lineage$/.test(path))
+    return reply([{ recipe_id: "r-calls", label: "Wing phone calls", version: 2, status: "published" }]);
+  if (/\/v1\/datasets\/harbour-extract\/sources\/[^/]+\/governance$/.test(path)) {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const edited = { ...SOURCES[0], ...body, version: 2 };
+    SOURCES = [edited, ...SOURCES.slice(1)];
+    return reply({ source: edited, needs_attention: ["Wing phone calls"] });
+  }
+  if (path.endsWith("/ingest/recipes/r-visits/pipeline") && method === "PUT") {
+    draft = { ...draft, pipeline: JSON.parse(String(init?.body)) };
+    return reply(draft);
+  }
+  if (path.endsWith("/ingest/recipes/r-visits") && method === "PATCH") {
+    draft = { ...draft, ...(JSON.parse(String(init?.body)) as object) };
+    return reply(draft);
+  }
   if (path.endsWith("/ingest/recipe-registry")) return reply([deployed, draft]);
   if (path.endsWith("/ingest/recipes/r-calls/runs")) return reply(RUNS);
   if (path.endsWith("/ingest/recipes/r-calls/run") && method === "POST")
@@ -149,3 +194,37 @@ if (tab === "runs" && params.get("cell"))
     await settle();
   }
 if (params.get("held")) for (let i = 0; i < 40 && !press((b) => b.textContent === "Open held rows"); i++) await settle();
+// ADR-140 Amendment 4's states: the register wizard at its governance step, a source's page (with
+// its governance being edited), and a pipeline's source chosen from the registered sources.
+const pressNamed = async (name: string) => {
+  for (let i = 0; i < 40 && !press((b) => b.textContent === name || b.getAttribute("aria-label") === name); i++) await settle();
+};
+/** Chooses `value` in the select labelled `label`, as React hears a person choose it. */
+const choose = async (label: string, value: string) => {
+  for (let i = 0; i < 40; i++) {
+    const select = [...document.querySelectorAll("label")]
+      .find((l) => l.textContent?.startsWith(label))
+      ?.querySelector("select");
+    if (select && [...select.options].some((o) => o.value === value)) {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+    await settle();
+  }
+};
+if (tab === "sources" && params.get("register")) {
+  await pressNamed("Register a source");
+  await pressNamed("Next");
+  await choose("File", "harbour-extract/cell_stays.csv");
+  await settle();
+  await pressNamed("Next");
+}
+if (tab === "sources" && params.get("source")) {
+  await pressNamed("Open source Wing phone calls file");
+  if (params.get("edit")) await pressNamed("Edit governance");
+}
+if (params.get("pipeline") === "source") {
+  await pressNamed("Open Visit bookings");
+  await pressNamed("Source: Call log");
+}

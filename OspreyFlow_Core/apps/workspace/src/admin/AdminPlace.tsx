@@ -18,6 +18,7 @@ import type {
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select, Tabs } from "../design/primitives";
 import { Schedules } from "./Schedules";
+import { Connections } from "./Connections";
 import { updateWords } from "./updateNotice";
 import {
   disablePerson,
@@ -1108,7 +1109,7 @@ function DemoPacks({ api }: { api: AdminApi }) {
   );
 }
 
-type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "demo-packs";
+type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "connections" | "demo-packs";
 
 export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const tabs = [
@@ -1117,6 +1118,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
     ...(rights.has("operate_schedules") ? [{ id: "schedules", label: "Operations" }] : []),
     ...(rights.has("administer_system") ? [{ id: "system", label: "System" }] : []),
     ...(rights.has("administer_system") ? [{ id: "datasets", label: "Datasets" }] : []),
+    ...(rights.has("administer_system") ? [{ id: "connections", label: "Connections" }] : []),
     ...(rights.has("administer_system") ? [{ id: "demo-packs", label: "Demo packs" }] : []),
   ];
   const [tab, setTab] = useState<Tab>((tabs[0]?.id as Tab) ?? "system");
@@ -1130,6 +1132,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
       {tab === "schedules" && rights.has("operate_schedules") && <Schedules api={api} />}
       {tab === "system" && rights.has("administer_system") && <System api={api} />}
       {tab === "datasets" && rights.has("administer_system") && <Datasets api={api} />}
+      {tab === "connections" && rights.has("administer_system") && <Connections api={api} />}
       {tab === "demo-packs" && rights.has("administer_system") && <DemoPacks api={api} />}
     </section>
   );

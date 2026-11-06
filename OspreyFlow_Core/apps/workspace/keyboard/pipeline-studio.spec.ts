@@ -278,7 +278,7 @@ test("the source settings open from the first source's node by keyboard", async 
   await openPipeline(page);
   await page.getByRole("button", { name: "Source: Carrier B" }).focus();
   await page.keyboard.press("Enter");
-  const open = page.getByRole("button", { name: "Open source settings" });
+  const open = page.getByRole("button", { name: "The draft's own settings" });
   await open.focus();
   await page.keyboard.press("Enter");
   // The Connect gate whole: the file, the marking, the legal basis — proven by its own unit
@@ -294,7 +294,7 @@ async function openSourceSettings(page: Page) {
   await openPipeline(page);
   await page.getByRole("button", { name: "Source: Carrier B" }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Open source settings" }).focus();
+  await page.getByRole("button", { name: "The draft's own settings" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Choose file…" })).toBeVisible();
 }

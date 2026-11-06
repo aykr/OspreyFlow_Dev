@@ -1,59 +1,129 @@
-// 2 Sources (ADR-140 decision 7), thin until phase 3: each file a pipeline of the dataset reads, with
-// the marking and legal basis its pipeline gave it, and the files added straight to the dataset (the
-// unstructured path, ADR-094 step 3). Phase 3 registers a source once, with its own governance.
-import { useState } from "react";
+// 2 Sources (ADR-140 decision 7, Amendment 4): the dataset's registered sources, each registered once
+// with its governance, the register wizard, and a source's own page. Below, the files added straight
+// to the dataset (the unstructured path, ADR-094 step 3).
+import { useEffect, useMemo, useState } from "react";
 
-import type { StudioRecipeDraft } from "../../../../../packages/schemas/generated";
+import type { SourceTable } from "../../../../../packages/schemas/generated";
 import { AddFiles } from "../../content/AddFiles";
 import { Button } from "../../design/primitives/Button";
 import { sourceName } from "../../inspector/sourceLocator";
+import { fetchHandlingScheme, type HandlingScheme } from "../api";
+import { listSources } from "../sources/api";
+import { RegisterSourceWizard } from "../sources/RegisterSourceWizard";
+import { SourcePage } from "../sources/SourcePage";
 
 export interface SourcesTabProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
-  pipelines: readonly StudioRecipeDraft[] | null;
+  /** The dataset the Studio is open on; `null` when the case loads into none. */
+  datasetId: string | null;
+  onOpenPipelines: () => void;
 }
 
-function markingOf(p: StudioRecipeDraft): string {
-  const classification = (p.handling as { classification?: unknown } | undefined)?.classification;
-  return typeof classification === "string" && classification ? classification : "not yet marked";
+function markingOf(s: SourceTable): string {
+  const c = (s.handling as { classification?: unknown } | undefined)?.classification;
+  return typeof c === "string" && c ? c : "not marked";
 }
 
-export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, pipelines }: SourcesTabProps) {
-  const read = (pipelines ?? []).filter((p) => p.source_location);
+export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId, onOpenPipelines }: SourcesTabProps) {
+  const api = useMemo(() => ({ apiBaseUrl, bearerToken }), [apiBaseUrl, bearerToken]);
+  const [sources, setSources] = useState<SourceTable[] | null>(null);
+  const [scheme, setScheme] = useState<HandlingScheme | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [open, setOpen] = useState<SourceTable | null>(null);
   const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    if (!datasetId) return;
+    setSources(null);
+    listSources(api, datasetId)
+      .then(setSources)
+      .catch((e: Error) => setProblem(e.message));
+    fetchHandlingScheme(apiBaseUrl, bearerToken)
+      .then(setScheme)
+      .catch(() => setScheme(null));
+  }, [api, apiBaseUrl, bearerToken, datasetId]);
+
+  if (!datasetId) {
+    return <p className="label" style={{ padding: "var(--sp-16)" }}>This case loads into no dataset, so it has no sources.</p>;
+  }
+  const replace = (s: SourceTable) => setSources((all) => (all ?? []).map((x) => (x.id === s.id ? s : x)));
+
   return (
     <div style={{ padding: "var(--sp-16)", display: "grid", gap: "var(--sp-16)", alignContent: "start" }}>
-      <section aria-label="Sources" style={{ display: "grid", gap: "var(--sp-8)" }}>
-        <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>Source tables</h2>
-        {pipelines === null && <p className="label">Reading the sources…</p>}
-        {pipelines !== null && read.length === 0 && (
-          <p className="label">No pipeline reads a source yet. Set a source up on a pipeline&apos;s canvas.</p>
-        )}
-        {read.length > 0 && (
-          <table className="table">
-            <thead>
-              <tr>
-                <th scope="col">Source</th>
-                <th scope="col">Pipeline</th>
-                <th scope="col">Marking</th>
-                <th scope="col">Legal basis</th>
-              </tr>
-            </thead>
-            <tbody>
-              {read.map((p) => (
-                <tr key={`${p.recipe_id}:${p.version}`}>
-                  <td>{sourceName(p.source_location ?? "")}</td>
-                  <td>{p.label}</td>
-                  <td>{markingOf(p)}</td>
-                  <td>{p.legal_basis || "not given"}</td>
+      {open ? (
+        <SourcePage
+          api={api}
+          datasetId={datasetId}
+          source={open}
+          scheme={scheme}
+          onBack={() => setOpen(null)}
+          onChanged={(s) => {
+            setOpen(s);
+            replace(s);
+          }}
+          onOpenInPipeline={onOpenPipelines}
+        />
+      ) : registering ? (
+        <RegisterSourceWizard
+          api={api}
+          datasetId={datasetId}
+          scheme={scheme}
+          registered={(sources ?? []).map((s) => s.location)}
+          onCancel={() => setRegistering(false)}
+          onRegistered={(made) => {
+            setSources((all) => [...(all ?? []), made]);
+            setRegistering(false);
+            setOpen(made);
+          }}
+        />
+      ) : (
+        <section aria-label="Sources" style={{ display: "grid", gap: "var(--sp-8)" }}>
+          <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            <h2 style={{ margin: 0, fontSize: "var(--fs-16)", flex: 1 }}>Source tables</h2>
+            <Button variant="primary" onClick={() => setRegistering(true)}>
+              Register a source
+            </Button>
+          </div>
+          <p className="label" style={{ margin: 0 }}>
+            Each source is registered once, with its marking, legal basis and refresh; every pipeline that reads it
+            inherits them.
+          </p>
+          {problem && <p role="alert">{problem}</p>}
+          {sources === null && !problem && <p className="label">Reading the sources…</p>}
+          {sources?.length === 0 && <p className="label">No source is registered for this dataset yet.</p>}
+          {sources && sources.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Source</th>
+                  <th scope="col">File</th>
+                  <th scope="col">Marking</th>
+                  <th scope="col">Legal basis</th>
+                  <th scope="col">Version</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <Button aria-label={`Open source ${s.name}`} onClick={() => setOpen(s)}>
+                        {s.name}
+                      </Button>
+                    </td>
+                    <td>{sourceName(s.location)}</td>
+                    <td>{markingOf(s)}</td>
+                    <td>{s.legal_basis || "not given"}</td>
+                    <td>{s.version}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
       <section aria-label="Files added to the dataset" style={{ display: "grid", gap: "var(--sp-8)" }}>
         <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>Files added to the dataset</h2>
         <p className="label" style={{ margin: 0 }}>

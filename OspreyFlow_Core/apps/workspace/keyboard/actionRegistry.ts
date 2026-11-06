@@ -764,6 +764,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "change-a-schedule-by-keyboard",
   // ADR-136 decision 2: a dataset's egress, set by an administrator.
   "set-a-datasets-egress-by-keyboard",
+  // ADR-140 Amendment 4: a connection named by an administrator.
+  "name-a-connection-by-keyboard",
 ] as const);
 
 // ADR-110 decision 7 (D5): the Publish screen's structured schedule.
@@ -789,6 +791,11 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   "read-rows-already-loaded-on-a-run-report-by-keyboard",
   // ADR-140 Amendment 3: chapter 9's paused watch resumed, and the runs read again.
   "resume-a-watch-and-read-the-runs-again-by-keyboard",
+  // ADR-140 Amendment 4: registered sources.
+  "register-a-source-by-keyboard",
+  "edit-a-sources-governance-by-keyboard",
+  "re-profile-a-source-and-open-it-in-a-pipeline-by-keyboard",
+  "use-a-registered-source-in-a-pipeline-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
