@@ -40,14 +40,14 @@ from .answers import (
 )
 from .cloud import build_enterprise, build_small
 from .doctor import (
+    TRUST_EMAIL_FIX,
+    TRUST_EMAIL_SAYS,
     Check,
     GpuPlan,
     Probes,
     ServerPlan,
     SystemProbes,
     format_check,
-    TRUST_EMAIL_FIX,
-    TRUST_EMAIL_SAYS,
     gpu_checks,
     gpu_plan,
     joins_by_email,
