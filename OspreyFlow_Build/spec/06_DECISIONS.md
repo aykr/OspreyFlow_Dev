@@ -25655,3 +25655,34 @@ reach and confinement cases shown red by plants); `test_studio_recipes_store.py`
 flag only on deployed recipes of that dataset and file — red first on a real defect, the location being
 in `content`; drafts following; the ontology's own reason; the source store keyed by dataset);
 `tests/test_migrate_sources.py`.
+
+### ADR-140, Amendment 5 (6 November 2026) — phase 3's Glass: the Sources tab, the register wizard, a pipeline's source
+
+Status: built 6 November 2026 within Amendment 4's rulings. ADR-140 is unchanged except where this
+says so. Spec 09 §1.0 has the screens.
+
+1. **The register wizard's order is Connection, File, Governance and refresh, then Register, after
+   which the profile is shown** *(mine)*. The build plan put Profile before Governance; the profiler
+   masks sample values by the source's marking and refuses a source with none, so the governance has
+   to come first. Back on every step; nothing is written until Register; a file already registered is
+   not offered.
+2. **The Sources tab** lists the dataset's registered sources; a source's page has its profile (for
+   this reader), its governance with *Edit governance* (saying which deployed pipelines now need
+   attention), its lineage, *Re-profile* and *Open in a pipeline*.
+3. **A pipeline's first source names a registered source** (*Use this source*), which writes the
+   source's file, connector, marking and legal basis to the draft: no marking is asked in the
+   pipeline. *The draft's own settings* (the Connect screen) stays one press away *(mine)*: the
+   deduplication key is still the draft's until phase 6 gives it to the Load node, and chapter 4
+   corrects its teaching row by choosing a corrected copy there.
+4. **The Admin area's *Connections* tab** lists the deployment's connections and names a new Files one.
+5. **Not done:** Map's left pane still reads the draft's profile, which for a pipeline using a
+   registered source is the same file under the same governance; reading the source's own profile
+   there is phase 6's, with the three-pane Map editor. The readiness strip still counts the files the
+   pipelines read, not the registered sources.
+
+**Tests:** `src/ingest/sources/sources.test.tsx` (the wizard's steps, Back, the body sent, a
+registered file not offered; the source page's edit naming the pipelines that need attention; the
+chooser writing the source's marking, shown red with the marking dropped), `src/admin/Connections.test.tsx`,
+`IngestStudio.test.tsx` (Sources); keyboard `ingest-studio.spec.ts` (+4) and `admin.spec.ts` (+1); the
+axe scan of the wizard's governance step, a source's page and its edit, the chooser, and Connections,
+in both themes and GOV.UK.

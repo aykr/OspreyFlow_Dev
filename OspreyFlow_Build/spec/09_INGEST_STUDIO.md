@@ -103,9 +103,14 @@ last run). It opens on **3 Pipelines**; the person picks the entry point (ruling
   case's, as before.
 - **1 Model** shows the target model in words — the POLE core and the case's packs (ADR-126) — until
   phase 5 makes it the dataset's own.
-- **2 Sources** lists each file a pipeline of the dataset reads, with the marking and legal basis its
-  pipeline gave it, and holds the unstructured path (*Add files*, ADR-094 step 3; once the Files tab) —
-  until phase 3 registers a source once, with its own governance.
+- **2 Sources** (ADR-140 Amendments 4 and 5) lists the dataset's **registered sources** — each a file
+  registered once, with its marking, units, legal basis and refresh — and *Register a source* (Connection,
+  File, Governance and refresh, then Register, after which its profile shows). A source's page has its
+  profile (computed for the reader, never stored), its governance with an audited *Edit governance*
+  (deployed pipelines reading it then need attention; drafts follow and must be tested again), its
+  lineage, *Re-profile* and *Open in a pipeline*. Below, the unstructured path (*Add files*, ADR-094
+  step 3). A pipeline's first source node chooses a registered source (*Use this source*), so no marking
+  is asked in the pipeline; *The draft's own settings* keeps the deduplication key until phase 6.
 - **3 Pipelines** is the pipelines home and canvas below: name a pipeline, open one, edit it on the canvas.
   The canvas header's buttons are **Load rules** (§5a), **Test** (§5) and **Deploy** (§6).
 - **4 Runs** (`ingest/runs/RunsTab.tsx`) is the grid of deployed pipelines by day, read from the run
