@@ -906,6 +906,21 @@ class SourceWatermark(BaseModel):
     value: str
 
 
+class RunMetering(BaseModel):
+    """What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
+    `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
+    rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
+    rows and writes: a route withholds them as it withholds every count (rule 3)."""
+
+    wall_ms: int
+    rows_read: int
+    rows_staged: int | None = None
+    parquet_bytes: int | None = None
+    #: What the run put to the object store; a file already kept is kept once (content-addressed).
+    object_store_bytes: int | None = None
+    graph_writes: int
+
+
 class LoadReport(BaseModel):
     load_id: str
     recipe_id: str
@@ -988,6 +1003,9 @@ class LoadReport(BaseModel):
     #: none of the counts (`services/api/load_records.report_view`, `_schedule_run_view`). Kept in
     #: the run ledger beside the run; never in a route's answer.
     markings: list[Handling] = Field(default_factory=list)
+    #: Metering, part 1: set by `run_recipe_as` when the run ends; `None` for a load run any
+    #: other way (a release of held rows, a seed's own loader).
+    metering: RunMetering | None = None
 
 
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
@@ -1020,6 +1038,8 @@ class LoadReportView(BaseModel):
     #: watermark value. The watermark itself is a value of the source, and never answered.
     rows_below_watermark: int = 0
     rows_without_watermark: int = 0
+    #: Metering, part 1: withheld with the counts.
+    metering: RunMetering | None = None
     #: Rule 3, ADR-127 Amendment 23: set where the reader may not view every marking the load's
     #: rows were written at. Every count above is then zero and the lists empty: a count of what a
     #: load wrote is a read.
@@ -1097,6 +1117,8 @@ class PipelineRunReport(BaseModel):
     rule_notes: list[str] = Field(default_factory=list)
     #: The union of the branches' `markings`, each once (rule 3, ADR-127 Amendment 23).
     markings: list[Handling] = Field(default_factory=list)
+    #: Metering, part 1, for the whole run (`run_recipe_as`).
+    metering: RunMetering | None = None
 
 
 class BranchRunReportView(BaseModel):
@@ -1127,6 +1149,7 @@ class PipelineRunReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    metering: RunMetering | None = None
     #: As `LoadReportView.withheld`: the reader may not view every marking the run's rows were
     #: written at, so the counts are zero and the branches and stages are left out.
     withheld: bool = False
@@ -1285,6 +1308,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RecipeConnector,
     RowElements,
     SourceWatermark,
+    RunMetering,
     RecipeDefaults,
     DeduplicateConfig,
     FieldBinding,

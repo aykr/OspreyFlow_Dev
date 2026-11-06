@@ -55,6 +55,12 @@ export type RuleMergedEdgeIds = EdgeId[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 export type Markings = Handling[];
+export type WallMs = number;
+export type RowsRead1 = number;
+export type RowsStaged = number | null;
+export type ParquetBytes = number | null;
+export type ObjectStoreBytes = number | null;
+export type GraphWrites = number;
 
 /**
  * One source branch's run: which source node fed it, where it read from, and the branch's
@@ -104,6 +110,7 @@ export interface LoadReport {
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   markings?: Markings;
+  metering?: RunMetering | null;
   [k: string]: unknown;
 }
 /**
@@ -153,5 +160,20 @@ export interface SourceWatermark {
   column: Column;
   kind: Kind;
   value: Value;
+  [k: string]: unknown;
+}
+/**
+ * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
+ * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
+ * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
+ * rows and writes: a route withholds them as it withholds every count (rule 3).
+ */
+export interface RunMetering {
+  wall_ms: WallMs;
+  rows_read: RowsRead1;
+  rows_staged?: RowsStaged;
+  parquet_bytes?: ParquetBytes;
+  object_store_bytes?: ObjectStoreBytes;
+  graph_writes: GraphWrites;
   [k: string]: unknown;
 }

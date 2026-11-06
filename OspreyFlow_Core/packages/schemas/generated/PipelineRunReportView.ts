@@ -34,6 +34,12 @@ export type RowsLeftInPlace = number;
 export type RefreshNotes = string[];
 export type RowsBelowWatermark = number;
 export type RowsWithoutWatermark = number;
+export type WallMs = number;
+export type RowsRead1 = number;
+export type RowsStaged = number | null;
+export type ParquetBytes = number | null;
+export type ObjectStoreBytes = number | null;
+export type GraphWrites = number;
 export type Withheld = boolean;
 export type Branches = BranchRunReportView[];
 export type NodeId = string;
@@ -55,7 +61,7 @@ export type MatchedOnline = number;
 export type Unmatched = number;
 export type Refusals1 = string[];
 export type Enriches = EnrichStageReport[];
-export type RowsRead1 = number;
+export type RowsRead2 = number;
 export type RowsAlreadyLoaded1 = number;
 export type NodesCreated1 = number;
 export type NodesReferenced1 = number;
@@ -76,7 +82,7 @@ export interface PipelineRunReportView {
   branches?: Branches;
   extracts?: Extracts;
   enriches?: Enriches;
-  rows_read?: RowsRead1;
+  rows_read?: RowsRead2;
   rows_already_loaded?: RowsAlreadyLoaded1;
   nodes_created?: NodesCreated1;
   nodes_referenced?: NodesReferenced1;
@@ -84,6 +90,7 @@ export interface PipelineRunReportView {
   rejections?: Rejections1;
   rows_held?: RowsHeld1;
   rule_notes?: RuleNotes1;
+  metering?: RunMetering | null;
   withheld?: Withheld1;
   [k: string]: unknown;
 }
@@ -123,6 +130,7 @@ export interface LoadReportView {
   refresh_notes?: RefreshNotes;
   rows_below_watermark?: RowsBelowWatermark;
   rows_without_watermark?: RowsWithoutWatermark;
+  metering?: RunMetering | null;
   withheld?: Withheld;
   [k: string]: unknown;
 }
@@ -147,6 +155,21 @@ export interface Handling {
   owning_unit: OrgUnitId;
   review_date?: ReviewDate;
   legal_basis?: LegalBasis;
+  [k: string]: unknown;
+}
+/**
+ * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
+ * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
+ * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
+ * rows and writes: a route withholds them as it withholds every count (rule 3).
+ */
+export interface RunMetering {
+  wall_ms: WallMs;
+  rows_read: RowsRead1;
+  rows_staged?: RowsStaged;
+  parquet_bytes?: ParquetBytes;
+  object_store_bytes?: ObjectStoreBytes;
+  graph_writes: GraphWrites;
   [k: string]: unknown;
 }
 /**

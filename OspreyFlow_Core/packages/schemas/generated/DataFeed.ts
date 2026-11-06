@@ -23,6 +23,12 @@ export type RowsHeld = number | null;
 export type LoadId = string | null;
 export type Failure = string | null;
 export type File = string | null;
+export type WallMs = number;
+export type RowsRead1 = number;
+export type RowsStaged = number | null;
+export type ParquetBytes = number | null;
+export type ObjectStoreBytes = number | null;
+export type GraphWrites = number;
 
 /**
  * A pipeline feeding a case's datasets, as the Glass's *Data feeds* shows it (ADR-110
@@ -62,5 +68,21 @@ export interface ScheduleRunView {
   load_id?: LoadId;
   failure?: Failure;
   file?: File;
+  metering?: RunMetering | null;
+  [k: string]: unknown;
+}
+/**
+ * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
+ * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
+ * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
+ * rows and writes: a route withholds them as it withholds every count (rule 3).
+ */
+export interface RunMetering {
+  wall_ms: WallMs;
+  rows_read: RowsRead1;
+  rows_staged?: RowsStaged;
+  parquet_bytes?: ParquetBytes;
+  object_store_bytes?: ObjectStoreBytes;
+  graph_writes: GraphWrites;
   [k: string]: unknown;
 }

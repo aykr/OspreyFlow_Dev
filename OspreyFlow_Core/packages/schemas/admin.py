@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from .ingest import RunMetering
+
 
 class PersonAccount(BaseModel):
     id: str
@@ -287,6 +289,8 @@ class ScheduleRunView(BaseModel):
     failure: str | None = None
     #: ADR-110 Amendment 4: the name of the file a watched run took; withheld like the counts.
     file: str | None = None
+    #: ADR-110 Amendment 6 point 9: what the run cost; withheld like the counts.
+    metering: RunMetering | None = None
 
 
 class AdminSchedule(BaseModel):

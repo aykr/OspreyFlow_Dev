@@ -10823,6 +10823,7 @@ def _schedule_run_view(
             "load_id": run.load_id,
             "failure": run.failure,
             "file": run.source_file.rsplit("|", 2)[0] if run.source_file else None,
+            "metering": run.metering,
         }
     )
 

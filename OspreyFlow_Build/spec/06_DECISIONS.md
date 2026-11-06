@@ -26047,3 +26047,31 @@ seeded afresh runs them by the pipelines' own watches until `migrate_sources` mo
 **Tests:** `tests/test_migrate_sources.py` (+5, each branch shown red by its own plant);
 `tests/services/api/test_studio_recipes_store.py` (+3: `adopt_refresh` on Postgres and in memory
 alike, refusing an unknown source; `clear_watch` keeping the cron, live Postgres).
+
+### ADR-110, Amendment 12 (6 November 2026) — metering, part 1, as built
+
+Status: built 6 November 2026, within Amendment 6 point 9 (ADR-141 decision 2). *(mine)* marks a
+detail the amendment left open.
+
+1. **Where it is measured** *(mine)*: in `run_recipe_as`, the one run path, so every run the
+   ledger records is metered alike, whatever started it. The figures (`RunMetering`) are set on the
+   report when the run succeeds and kept on the ledger row (`recipe_runs.metering`). A failed run
+   records none: it did not finish what the figures would count.
+2. **What each figure is** (`services/ingest/metering.py`):
+   - *wall time*, the run's own, in milliseconds;
+   - *rows read*, every row of the file, an incremental refresh's rows below the watermark included;
+   - *rows staged* and *bytes written to Parquet*: `None`, not measured, until phase 7's staging;
+   - *bytes put to the object store*: what the run gave the media store, counted by a wrapper around
+     it. The store is content-addressed, so this is what was put, not what the store grew by
+     *(mine)*;
+   - *graph writes*: each element written once, created, merged into, written by the case's rules,
+     withdrawn, or by an extract or enrich stage. A node matched by reference is not a write.
+3. **Who sees them**: they are counts of the run's own rows and writes, so a route withholds them
+   with the counts (rule 3): the run report's views and Admin's run rows (`ScheduleRunView`).
+
+**Known limit:** the raw rows a load stages to Parquet in the object store are not counted in
+either byte figure; phase 7's staging measures them.
+
+**Tests:** `tests/ingest/test_metering.py` (6, the counting and the route views);
+`tests/services/api/test_run_metering_ledger.py` (3, live Postgres: the run path, the ledger, the
+Admin view). Each branch shown red by its own plant.

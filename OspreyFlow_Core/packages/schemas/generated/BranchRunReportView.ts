@@ -31,6 +31,12 @@ export type RowsLeftInPlace = number;
 export type RefreshNotes = string[];
 export type RowsBelowWatermark = number;
 export type RowsWithoutWatermark = number;
+export type WallMs = number;
+export type RowsRead1 = number;
+export type RowsStaged = number | null;
+export type ParquetBytes = number | null;
+export type ObjectStoreBytes = number | null;
+export type GraphWrites = number;
 export type Withheld = boolean;
 
 /**
@@ -69,6 +75,7 @@ export interface LoadReportView {
   refresh_notes?: RefreshNotes;
   rows_below_watermark?: RowsBelowWatermark;
   rows_without_watermark?: RowsWithoutWatermark;
+  metering?: RunMetering | null;
   withheld?: Withheld;
   [k: string]: unknown;
 }
@@ -93,5 +100,20 @@ export interface Handling {
   owning_unit: OrgUnitId;
   review_date?: ReviewDate;
   legal_basis?: LegalBasis;
+  [k: string]: unknown;
+}
+/**
+ * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
+ * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
+ * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
+ * rows and writes: a route withholds them as it withholds every count (rule 3).
+ */
+export interface RunMetering {
+  wall_ms: WallMs;
+  rows_read: RowsRead1;
+  rows_staged?: RowsStaged;
+  parquet_bytes?: ParquetBytes;
+  object_store_bytes?: ObjectStoreBytes;
+  graph_writes: GraphWrites;
   [k: string]: unknown;
 }

@@ -27,7 +27,14 @@ from services.ingest.engine import RowKeyRunInProgress
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
-from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport, RowElements, SourceWatermark
+from schemas.ingest import (
+    LoadRecord,
+    LoadReport,
+    PipelineRunReport,
+    RowElements,
+    RunMetering,
+    SourceWatermark,
+)
 
 #: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
 RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh"]
@@ -173,13 +180,15 @@ ALTER TABLE recipe_runs ADD CONSTRAINT recipe_runs_trigger_check
     CHECK (trigger IN ({", ".join(f"'{t}'" for t in get_args(RunTrigger))}));
 {_ADD_LOAD_RECORDS}
 {_ADD_ROW_MARKINGS}
+-- ADR-110 Amendment 6 point 9: what a succeeded run cost (`RunMetering`); NULL before it.
+ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS metering JSONB;
 {_LOADED_ROW_KEYS}
 """
 
 _COLUMNS = (
     "run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source_handling, "
     "started_at, finished_at, outcome, rows_read, nodes_created, nodes_referenced, edges_created, "
-    "rows_rejected, rows_held, load_id, failure, source_file, row_markings"
+    "rows_rejected, rows_held, load_id, failure, source_file, row_markings, metering"
 )
 
 
@@ -210,6 +219,9 @@ class RecipeRun(BaseModel):
     #: marking alone, as it did before the column existed; a finished run that wrote no row has an
     #: empty list (the view still judges the source). Markings, never ids.
     markings: list[Handling] = Field(default_factory=list)
+    #: ADR-110 Amendment 6 point 9: a succeeded run's metering; `None` for any other, and for one
+    #: from before. Counts of the run's own: withheld with the others by every route.
+    metering: RunMetering | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -226,6 +238,8 @@ def _row(record: asyncpg.Record) -> RecipeRun:
     # asyncpg hands JSONB back as text unless a codec is set, and this pool sets none.
     recorded = json.loads(raw) if isinstance(raw, str) else raw
     data["markings"] = None if recorded is None else [Handling.model_validate(m) for m in recorded]
+    metered = data.pop("metering")
+    data["metering"] = None if metered is None else RunMetering.model_validate_json(metered)
     return RecipeRun.model_validate(data)
 
 
@@ -276,8 +290,8 @@ class RecipeRunStore:
             await conn.execute(
                 "UPDATE recipe_runs SET outcome = 'succeeded', finished_at = $2, rows_read = $3, "
                 "nodes_created = $4, nodes_referenced = $5, edges_created = $6, "
-                "rows_rejected = $7, rows_held = $8, load_id = $9, row_markings = $10::jsonb "
-                "WHERE run_id = $1",
+                "rows_rejected = $7, rows_held = $8, load_id = $9, row_markings = $10::jsonb, "
+                "metering = $11::jsonb WHERE run_id = $1",
                 run_id,
                 now,
                 report.rows_read,
@@ -288,6 +302,7 @@ class RecipeRunStore:
                 report.rows_held,
                 report.load_id,
                 json.dumps([m.model_dump(mode="json") for m in report.markings]),
+                None if report.metering is None else report.metering.model_dump_json(),
             )
 
     async def add_record(

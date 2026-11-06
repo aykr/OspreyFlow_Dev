@@ -107,7 +107,18 @@ async def test_the_run_path_passes_the_read_to_the_load(
 
     runs.start, runs.finish = started, nothing
     monkeypatch.setattr(run_module, "resolve_source_handling", lambda recipe: None)
-    deps = MagicMock(recipe_runs=runs, audit=SimpleNamespace(record=nothing))
+    import dataclasses
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+
+    stand_ins: dict[str, Any] = {
+        "recipe_runs": runs,
+        "audit": SimpleNamespace(record=nothing),
+        "media": InMemoryMediaStore(),
+        "config": SimpleNamespace(post_ingest_resolution=False),
+    }
+    names = [f.name for f in dataclasses.fields(run_module.RecipeRunDeps)]
+    deps = run_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})
     recipe = SimpleNamespace(
         recipe_id="r", version=1, pipeline=object() if pipeline else None, row_template=None
     )

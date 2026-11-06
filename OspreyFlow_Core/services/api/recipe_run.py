@@ -15,13 +15,15 @@ not the route must make its own (the scheduler's `check_case` does; the seed del
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from services.ingest.metering import CountingMedia, metering_of
 from services.ingest.watermark import RefreshRead
 from valkey.asyncio import Valkey
 
@@ -151,9 +153,12 @@ async def run_recipe_as(
         investigation_id=investigation_id,
         started_at=started_at,
     )
+    # ADR-110 Amendment 6 point 9: the run is timed, and what it puts to the object store counted.
+    media = CountingMedia(deps.media)
+    clock = time.perf_counter()
     try:
         report = await _execute_recipe_run(
-            deps,
+            replace(deps, media=media),
             principal=principal,
             recipe=recipe,
             investigation_id=investigation_id,
@@ -170,6 +175,9 @@ async def run_recipe_as(
             markings=sink.markings,
         )
         raise
+    report.metering = metering_of(
+        report, wall_seconds=time.perf_counter() - clock, object_store_bytes=media.bytes_written
+    )
     await deps.recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
     return report
 
