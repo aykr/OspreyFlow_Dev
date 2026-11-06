@@ -28,7 +28,8 @@ from conduit_common.identity import new_id
 from schemas.domain import Handling
 from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport
 
-RunTrigger = Literal["manual", "schedule", "watch", "release"]
+#: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
+RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh"]
 RunOutcome = Literal["running", "succeeded", "failed", "refused", "blocked", "skipped", "missed"]
 NotRunOutcome = Literal["refused", "blocked", "skipped", "missed"]
 _NOT_RUN = frozenset(get_args(NotRunOutcome))
@@ -121,6 +122,11 @@ ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS counts_toward_pause BOOLEAN NOT
 -- taken once.
 ALTER TABLE recipe_runs ADD COLUMN IF NOT EXISTS source_file TEXT;
 CREATE INDEX IF NOT EXISTS recipe_runs_recipe_idx ON recipe_runs (recipe_id, started_at DESC);
+-- The trigger's CHECK is the column's own, so a ledger made before a trigger was added refuses it:
+-- connecting puts the current list back (ADR-110 Amendment 6, `source_refresh`).
+ALTER TABLE recipe_runs DROP CONSTRAINT IF EXISTS recipe_runs_trigger_check;
+ALTER TABLE recipe_runs ADD CONSTRAINT recipe_runs_trigger_check
+    CHECK (trigger IN ({", ".join(f"'{t}'" for t in get_args(RunTrigger))}));
 {_ADD_LOAD_RECORDS}
 {_ADD_ROW_MARKINGS}
 {_LOADED_ROW_KEYS}
@@ -656,7 +662,7 @@ class RecipeRunStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT DISTINCT source_file FROM recipe_runs WHERE recipe_id = $1 "
-                "AND trigger = 'watch' AND source_file IS NOT NULL",
+                "AND trigger IN ('watch', 'source_refresh') AND source_file IS NOT NULL",
                 recipe_id,
             )
         return {row["source_file"] for row in rows}
@@ -669,7 +675,7 @@ class RecipeRunStore:
         async with self._pool.acquire() as conn:
             outcomes = await conn.fetch(
                 "SELECT outcome, counts_toward_pause FROM recipe_runs WHERE recipe_id = $1 "
-                "AND trigger IN ('schedule', 'watch') "
+                "AND trigger IN ('schedule', 'watch', 'source_refresh') "
                 "ORDER BY started_at DESC, run_id DESC LIMIT 50",
                 recipe_id,
             )

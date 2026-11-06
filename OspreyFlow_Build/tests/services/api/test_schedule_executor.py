@@ -17,7 +17,7 @@ import asyncio
 import multiprocessing
 import os
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -31,7 +31,7 @@ from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.folder_watch import WatchedFile
 from services.api.investigations import AccessLevel, InsufficientAccessError
 from services.api.recipe_runs import RecipeRunStore
-from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused
+from services.api.scheduler import ScheduleExecutor, ScheduleRunRefused, SourceWatch
 from services.ingest.engine import RowKeyRunInProgress
 from valkey.asyncio import Valkey
 
@@ -102,9 +102,21 @@ class _Edges:
     #: ADR-110 Amendment 4: the files the recipe's folder watch finds waiting, earliest first.
     waiting: list[WatchedFile] = field(default_factory=list)
     files_run: list[str] = field(default_factory=list)
+    cases_run: list[str] = field(default_factory=list)
+    #: ADR-110 Amendment 6 point 6: the owner's case that loads into a dataset, as
+    #: `scope_to_dataset` finds it; `None` when they have none.
+    case_loading_into: dict[str, str] = field(default_factory=lambda: {"ds-1": "case-1"})
+
+    async def case_for_dataset(self, owner: Principal, dataset_id: str) -> str | None:
+        return self.case_loading_into.get(dataset_id)
 
     async def watch_files(self, recipe: StudioRecipeDraft, now: datetime) -> list[WatchedFile]:
-        return list(self.waiting)
+        """As `folder_watch.waiting_files`: only the files whose whole name the watch's pattern
+        matches (a fake that ignored the pattern hid a pipeline running by two watches at once)."""
+        import fnmatch
+
+        pattern = recipe.schedule_watch or ""
+        return [f for f in self.waiting if fnmatch.fnmatchcase(f.name, pattern)]
 
     async def notify(self, owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
         self.notices.append((owner_id, recipe.recipe_id, words))
@@ -140,7 +152,11 @@ async def valkey() -> AsyncIterator[Valkey]:
 
 
 def _executor(
-    recipes: _Recipes, edges: _Edges, runs: RecipeRunStore, valkey: Valkey
+    recipes: _Recipes,
+    edges: _Edges,
+    runs: RecipeRunStore,
+    valkey: Valkey,
+    source_watches: Any = None,
 ) -> ScheduleExecutor:
     async def run(
         owner: Principal,
@@ -148,12 +164,14 @@ def _executor(
         case: str,
         slot: datetime | None,
         source_file: WatchedFile | None = None,
+        trigger: str | None = None,
     ) -> LoadReport:
         """What `run_recipe_as` does to the ledger, around a load that writes nothing."""
         edges.runs_made.append((owner.id, slot))
+        edges.cases_run.append(case)
         if source_file is not None:
             edges.files_run.append(source_file.location)
-        trigger = "watch" if source_file else "schedule" if slot else "manual"
+        trigger = trigger or ("watch" if source_file else "schedule" if slot else "manual")
         run_id = await runs.start(
             recipe_id=recipe.recipe_id, recipe_version=recipe.version, investigation_id=case,
             trigger=trigger, slot=slot, run_as=owner.id, source=_source(recipe),
@@ -178,6 +196,8 @@ def _executor(
         run=run,
         notify=edges.notify,
         watch_files=edges.watch_files,
+        source_watches=source_watches,
+        case_for_dataset=edges.case_for_dataset,
     )
 
 
@@ -688,3 +708,229 @@ async def test_a_replica_that_read_the_ledger_before_anothers_run_began_does_not
     stale = _executor(_Recipes([recipe]), edges, _StaleLedger(runs), valkey)  # type: ignore[arg-type]
     await stale.tick(FIRST_SLOT + timedelta(seconds=30))
     assert len(edges.files_run) == 1
+
+
+# --- ADR-110 Amendment 6 point 5: a source's watch runs every pipeline that reads it -------------
+
+
+@dataclass
+class _SourceWatches:
+    """The deployed pipelines reading a watched source, as the Postgres stores answer them: every
+    published or needing-attention recipe of the source's dataset reading its location."""
+
+    pairs: list[tuple[StudioRecipeDraft, SourceWatch]]
+    paused: dict[str, str] = field(default_factory=dict)
+
+    async def watching(self) -> list[tuple[StudioRecipeDraft, SourceWatch]]:
+        return [
+            (r, replace(w, paused=True)) if w.source_id in self.paused else (r, w)
+            for r, w in self.pairs
+        ]
+
+    async def set_paused(self, source_id: str, *, paused: bool, reason: str | None) -> None:
+        if paused:
+            self.paused[source_id] = reason or ""
+        else:
+            self.paused.pop(source_id, None)
+
+
+def _keyed(**overrides: Any) -> StudioRecipeDraft:
+    from schemas.ingest import DeduplicateConfig, FieldBinding
+
+    fields: dict[str, Any] = {
+        "schedule_cron": None,
+        "schedule_owner": None,
+        "schedule_set_at": None,
+        "dataset_id": "ds-1",
+        "deduplicate": DeduplicateConfig(key=[FieldBinding(field="caller")]),
+    }
+    return _recipe(**(fields | overrides))
+
+
+WATCH = SourceWatch(
+    source_id="src-1", dataset_id="ds-1", pattern="calls-*.csv", owner=OWNER.id, set_at=SET_AT
+)
+
+
+async def _refresh_rows(runs: RecipeRunStore, recipe: StudioRecipeDraft) -> list[tuple[str, Any]]:
+    return [
+        (r.outcome, r.source_file)
+        for r in reversed(await runs.for_recipe(recipe.recipe_id))
+        if r.trigger == "source_refresh"
+    ]
+
+
+async def test_a_source_watch_runs_each_pipeline_reading_it_once_on_the_file_as_its_owner(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    calls, visits = _keyed(label="Calls"), _keyed(label="Visits")
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    watches = _SourceWatches([(calls, WATCH), (visits, WATCH)])
+    executor = _executor(_Recipes([]), edges, runs, valkey, watches)
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert edges.runs_made == [(OWNER.id, None), (OWNER.id, None)]
+    assert edges.cases_run == ["case-1", "case-1"]
+    taken = _file("calls-0601.csv").identity
+    for recipe in (calls, visits):
+        assert await _refresh_rows(runs, recipe) == [("succeeded", taken)]
+    rows = [r for recipe in (calls, visits) for r in await runs.for_recipe(recipe.recipe_id)]
+    load_ids = {r.load_id for r in rows}
+    assert len(load_ids) == 2, "each pipeline under its own load"
+
+
+async def test_a_pipeline_reading_a_watched_source_runs_by_the_source_not_by_its_own_watch(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    both = _keyed(schedule_watch="*.csv", schedule_owner=OWNER.id, schedule_set_at=SET_AT)
+    # visits.csv matches the pipeline's own pattern and not the source's: it must wait.
+    edges = _Edges(waiting=[_file("calls-0601.csv"), _file("visits.csv", minute=1)])
+    executor = _executor(_Recipes([both]), edges, runs, valkey, _SourceWatches([(both, WATCH)]))
+    for minute in range(3):
+        await executor.tick(FIRST_SLOT + timedelta(minutes=minute))
+    assert edges.files_run == ["/var/lib/osprey/ingest/ds-1/calls-0601.csv"]
+    assert [r.trigger for r in await runs.for_recipe(both.recipe_id)] == ["source_refresh"]
+
+
+async def test_a_needs_attention_pipeline_is_recorded_blocked_and_the_others_run(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    flagged = _keyed(label="Flagged", status=StudioRecipeStatus.FLAGGED)
+    fine = _keyed(label="Fine")
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    watches = _SourceWatches([(flagged, WATCH), (fine, WATCH)])
+    executor = _executor(_Recipes([]), edges, runs, valkey, watches)
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    taken = _file("calls-0601.csv").identity
+    assert await _refresh_rows(runs, flagged) == [("blocked", taken)]
+    assert await _refresh_rows(runs, fine) == [("succeeded", taken)]
+    assert len(edges.files_run) == 1
+
+
+async def test_a_keyless_pipeline_is_refused_in_words_and_never_run(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    keyless = _keyed(deduplicate=None)
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(keyless, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert edges.files_run == []
+    (row,) = await runs.for_recipe(keyless.recipe_id)
+    assert (row.outcome, row.trigger) == ("refused", "source_refresh")
+    assert "deduplication key" in (row.failure or "")
+
+
+async def test_a_paused_source_watch_takes_nothing(runs: RecipeRunStore, valkey: Valkey) -> None:
+    recipe = _keyed()
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    watches = _SourceWatches([(recipe, WATCH)], paused={"src-1": "waiting for chapter 9"})
+    executor = _executor(_Recipes([]), edges, runs, valkey, watches)
+    await executor.tick(FIRST_SLOT)
+    assert edges.files_run == []
+    assert await runs.for_recipe(recipe.recipe_id) == []
+
+
+async def test_a_refresh_whose_owner_lost_clearance_or_their_account_is_refused(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """The fakes refuse what the real ones refuse (rule 15): a source marked above the owner's
+    clearance, and an owner the identity provider has disabled (`PrincipalRevoked`)."""
+    secret = _keyed(label="Secret", handling=dict(_HANDLING, classification="SECRET"))
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(secret, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    (row,) = await runs.for_recipe(secret.recipe_id)
+    assert (row.outcome, row.trigger) == ("refused", "source_refresh")
+    assert "clearance" in (row.failure or "")
+
+    revoked = _keyed(label="Revoked")
+    edges = _Edges(waiting=[_file("calls-0602.csv")], owner=PrincipalRevoked(OWNER.id))
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(revoked, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    (row,) = await runs.for_recipe(revoked.recipe_id)
+    assert row.outcome == "refused"
+    assert "can no longer sign in" in (row.failure or "")
+    assert edges.files_run == []
+
+
+async def test_three_refused_refreshes_pause_the_sources_policy_not_the_pipeline(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    recipe = _keyed(handling=dict(_HANDLING, classification="SECRET"))
+    recipes = _Recipes([])
+    watches = _SourceWatches([(recipe, WATCH)])
+    for minute in range(3):
+        edges = _Edges(waiting=[_file(f"calls-{minute}.csv", minute=minute)])
+        executor = _executor(recipes, edges, runs, valkey, watches)
+        await executor.tick(FIRST_SLOT + timedelta(minutes=minute))
+    assert "three refused runs in a row" in watches.paused["src-1"]
+    assert recipes.paused == {}
+
+
+async def test_the_run_goes_through_the_owners_case_loading_into_the_dataset_or_is_refused(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 6 point 6: a pipeline that names no case runs through a case of the owner's
+    that loads into the source's dataset; with none, it is refused in words and reads nothing."""
+    caseless = _keyed(schedule_case=None)
+    edges = _Edges(waiting=[_file("calls-0601.csv")], case_loading_into={"ds-1": "case-9"})
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(caseless, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    assert edges.cases_run == ["case-9"]
+
+    stranded = _keyed(schedule_case=None, label="Stranded")
+    edges = _Edges(waiting=[_file("calls-0602.csv")], case_loading_into={})
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(stranded, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    assert edges.files_run == []
+    (row,) = await runs.for_recipe(stranded.recipe_id)
+    assert row.outcome == "refused"
+    assert "loads into" in (row.failure or "")
+
+
+async def test_a_file_a_refresh_took_is_not_taken_again_once_valkey_lost_its_claims(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """As Amendment 4 point 5 for a pipeline's own watch: the ledger remembers the file a source
+    refresh took, so a lost claim never runs the pipeline on it twice."""
+    recipe = _keyed()
+    edges = _Edges(waiting=[_file("calls-0601.csv")])
+    executor = _executor(_Recipes([]), edges, runs, valkey, _SourceWatches([(recipe, WATCH)]))
+    await executor.tick(FIRST_SLOT)
+    async for key in valkey.scan_iter(match=f"schedule:watch:{recipe.recipe_id}:*"):
+        await valkey.delete(key)
+    await executor.tick(FIRST_SLOT + timedelta(minutes=1))
+    assert len(edges.files_run) == 1
+
+
+async def test_a_ledger_made_before_source_refresh_takes_it_once_connected(
+    runs: RecipeRunStore,
+) -> None:
+    """The trigger's CHECK is the column's own: a ledger made before `source_refresh` existed
+    refuses it until connecting puts the current list back."""
+    import asyncpg
+
+    dsn = PostgresConfig.from_env().dsn
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute(
+            "ALTER TABLE recipe_runs DROP CONSTRAINT IF EXISTS recipe_runs_trigger_check; "
+            "ALTER TABLE recipe_runs ADD CONSTRAINT recipe_runs_trigger_check "
+            # NOT VALID: the old list for new rows, whatever earlier cases have written.
+            "CHECK (trigger IN ('manual', 'schedule', 'watch', 'release')) NOT VALID"
+        )
+    finally:
+        await conn.close()
+    store = await RecipeRunStore.connect(dsn)
+    try:
+        recipe = _keyed()
+        run_id = await store.start(
+            recipe_id=recipe.recipe_id, recipe_version=2, investigation_id="case-1",
+            trigger="source_refresh", slot=None, run_as=OWNER.id, source=_source(recipe),
+            now=datetime.now(UTC),
+        )  # fmt: skip
+        assert run_id
+    finally:
+        await store.close()

@@ -85,7 +85,12 @@ def _registered(dataset_id: str, body: RegisterSourceInput, principal: Principal
         legal_basis=body.legal_basis,
         # Amendment 6 point 6: the owner is whoever set it, and nothing starts paused.
         refresh=body.refresh.model_copy(
-            update={"owner": principal.id, "paused": False, "paused_reason": None}
+            update={
+                "owner": principal.id,
+                "set_at": _now(),
+                "paused": False,
+                "paused_reason": None,
+            }
         ),
         created_by=principal.id,
         created_at=_now(),
@@ -118,6 +123,7 @@ def _refresh_after(
     return given.model_copy(
         update={
             "owner": principal.id,
+            "set_at": _now(),
             "paused": stored.paused,
             "paused_reason": stored.paused_reason,
         }
@@ -178,6 +184,22 @@ class InMemorySourceStore:
         edited = _governed(await self.get(dataset_id, source_id), body, principal)
         self._sources[source_id] = edited
         return edited
+
+    async def watched(self) -> list[SourceTable]:
+        """Every source, of any dataset, whose refresh is a folder watch (the executor's alone)."""
+        return sorted(
+            (s for s in self._sources.values() if s.refresh.trigger == "watch"), key=lambda s: s.id
+        )
+
+    async def set_refresh_paused(self, source_id: str, *, paused: bool, reason: str | None) -> None:
+        """Pausing is not an edit: no new version, the owner kept (Amendment 6 point 6)."""
+        found = self._sources.get(source_id)
+        if found is None:
+            raise SourceNotFoundError(source_id)
+        refresh = found.refresh.model_copy(
+            update={"paused": paused, "paused_reason": reason if paused else None}
+        )
+        self._sources[source_id] = found.model_copy(update={"refresh": refresh})
 
 
 _BOOTSTRAP_SQL = """
@@ -324,3 +346,22 @@ class PostgresSourceStore:
                 edited.updated_at,
             )  # fmt: skip
         return edited
+
+    async def watched(self) -> list[SourceTable]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_SOURCE_COLUMNS} FROM ingest_sources "
+                "WHERE refresh ->> 'trigger' = 'watch' ORDER BY id"
+            )
+        return [_source(r) for r in rows]
+
+    async def set_refresh_paused(self, source_id: str, *, paused: bool, reason: str | None) -> None:
+        async with self._pool.acquire() as conn:
+            done = await conn.execute(
+                "UPDATE ingest_sources SET refresh = refresh "
+                "|| jsonb_build_object('paused', $2::boolean, 'paused_reason', $3::text) "
+                "WHERE id = $1",
+                source_id, paused, reason if paused else None,
+            )  # fmt: skip
+        if done.endswith(" 0"):
+            raise SourceNotFoundError(source_id)

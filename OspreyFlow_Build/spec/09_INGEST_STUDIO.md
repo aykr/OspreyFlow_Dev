@@ -867,6 +867,15 @@ before, which stays readable in every case of its owner, Amendment 5).
 
 ### Scheduled runs (ADR-110, as built 13 October 2026)
 
+**A source's refresh** (ADR-110 Amendments 6 and 7, redesign phase 4). A registered source with a
+folder watch runs every deployed pipeline that reads it. Each pipeline takes each arriving file once,
+recorded under the trigger `source_refresh`:
+- it runs as the policy's owner, through the pipeline's case when that case loads into the dataset,
+  else through a case of the owner's that does;
+- it has the checks below, and its own watch is set aside;
+- a pipeline needing attention is recorded *blocked*, and a keyless one *refused* in words;
+- three refusals in a row pause the source's policy, not the pipeline.
+
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
 offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
 London by default), or an advanced cron expression; before anything is saved the Conduit explains it

@@ -25816,3 +25816,41 @@ this says so; *(mine)* marks a detail the rulings left open.
 - the PIN-call file re-read creates nothing and holds each event once;
 - an access case on every new read path (rule 4);
 - a keyboard case for every new action (rule 13).
+
+### ADR-110, Amendment 7 (6 November 2026) — the source refresh's executor, as built; Amendment 6 point 6 corrected
+
+Status: built 6 November 2026, within Amendment 6's rulings. Amendment 6 is unchanged except where
+this says so.
+
+1. **The case** *(mine; corrects Amendment 6 point 6)*. A draft records no case it was made in, so
+   point 6's fallback had nothing to read. A refresh's run goes through:
+   - the pipeline's `schedule_case`, when that case loads into the source's dataset;
+   - otherwise a case the owner is an Editor of that loads into it (`scope_to_dataset`'s reach),
+     looked up at run time, so it follows the owner's cases as they change;
+   - with neither, the run is refused in words.
+2. **A pipeline reading a watched source runs by the source's watch, never by its own as well.**
+   Its own pattern would otherwise take files the source's pattern leaves.
+3. **A needs-attention pipeline's file is recorded *blocked*** under the trigger `source_refresh`,
+   and the other pipelines reading the source run (Amendment 5 item 3). A pipeline's own watch keeps
+   Amendment 4's rule: its files wait.
+4. **A keyless pipeline met by a refresh** (one deployed before Amendment 6 point 2) is recorded
+   *refused* in words. The refusal does not count toward the pause: it says nothing of the owner.
+5. **The policy records `set_at`**, stamped with the owner: a file counts only if it arrived after
+   it (Amendment 4). Pausing is not an edit: no new version, and the owner is kept.
+6. **The ledger's trigger `CHECK`** is put back by every connect. A ledger made before
+   `source_refresh` existed refused it.
+
+**Found by the tests:**
+- The real ledger's two watch questions, "which files were taken" and "refusals in a row", filtered
+  `trigger = 'watch'`. A source refresh would have taken a file again once Valkey lost its claim,
+  and would never have paused. Both are now red-first cases.
+- The executor tests' fake folder listing ignored the watch's pattern, which the real
+  `waiting_files` applies. A pipeline running by two watches at once passed until the fake refused
+  what the real one refuses (rule 15).
+
+**Tests:**
+- `tests/services/api/test_schedule_executor.py` (+10, live Valkey and Postgres; each branch shown
+  red by its own plant);
+- `test_source_refresh.py` (the pairing);
+- `test_studio_recipes_store.py` (the watched sources and the pause, on Postgres and in memory alike);
+- `test_scheduler_lifespan.py`: the real Conduit's tick, with the source watches wired.

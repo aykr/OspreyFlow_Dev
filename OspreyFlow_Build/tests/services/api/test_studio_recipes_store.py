@@ -1949,6 +1949,49 @@ async def test_the_source_store_keeps_each_source_to_its_dataset_on_postgres() -
         await sources.close()
 
 
+@pytest.mark.parametrize("kind", ["postgres", "memory"])
+async def test_the_watched_sources_and_a_policys_pause_on_both_stores(kind: str) -> None:
+    """ADR-110 Amendment 6 points 5 and 6, on Postgres and on the in-memory store, which must answer
+    alike: only a watched source is listed, and pausing is not an edit (no version, owner kept)."""
+    from services.api.sources import FILES_CONNECTION_ID, InMemorySourceStore, PostgresSourceStore
+
+    from schemas.sources import RegisterSourceInput, SourceRefresh
+
+    sources: Any = (
+        await PostgresSourceStore.connect(PostgresConfig.from_env().dsn)
+        if kind == "postgres"
+        else InMemorySourceStore()
+    )
+    try:
+        dataset = f"ds-{new_id()}"
+
+        def body(name: str, refresh: SourceRefresh) -> RegisterSourceInput:
+            return RegisterSourceInput(
+                connection_id=FILES_CONNECTION_ID, name=name, location=f"/ingest/{dataset}/{name}",
+                handling={"classification": "OFFICIAL"}, refresh=refresh,
+            )  # fmt: skip
+
+        watched = await sources.register(
+            dataset, body("w.csv", SourceRefresh(trigger="watch", pattern="w-*.csv")), AUTHOR
+        )
+        await sources.register(dataset, body("m.csv", SourceRefresh()), AUTHOR)
+        mine = [s for s in await sources.watched() if s.dataset_id == dataset]
+        assert [s.id for s in mine] == [watched.id]
+        assert mine[0].refresh.set_at is not None
+
+        await sources.set_refresh_paused(watched.id, paused=True, reason="waiting for chapter 9")
+        paused = await sources.get(dataset, watched.id)
+        assert paused.refresh.paused is True
+        assert paused.refresh.paused_reason == "waiting for chapter 9"
+        assert (paused.version, paused.refresh.owner) == (1, AUTHOR.id)
+        await sources.set_refresh_paused(watched.id, paused=False, reason=None)
+        resumed = (await sources.get(dataset, watched.id)).refresh
+        assert (resumed.paused, resumed.paused_reason) == (False, None)
+    finally:
+        if kind == "postgres":
+            await sources.close()
+
+
 async def test_a_draft_reading_the_source_follows_its_governance_and_must_be_tested_again(
     store: StudioRecipeStore,
 ) -> None:

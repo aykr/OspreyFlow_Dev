@@ -7,6 +7,7 @@ export type Mode = "snapshot" | "incremental";
 export type DroppedRows = "keep" | "withdraw";
 export type WatermarkColumn = string | null;
 export type Owner = string | null;
+export type SetAt = string | null;
 export type Paused = boolean;
 export type PausedReason = string | null;
 
@@ -34,6 +35,7 @@ export interface SourceRefresh {
   dropped_rows?: DroppedRows;
   watermark_column?: WatermarkColumn;
   owner?: Owner;
+  set_at?: SetAt;
   paused?: Paused;
   paused_reason?: PausedReason;
   [k: string]: unknown;

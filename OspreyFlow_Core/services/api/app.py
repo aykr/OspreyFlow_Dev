@@ -603,7 +603,7 @@ from .recipe_run import (
     _rule_gate,
     run_recipe_as,
 )
-from .recipe_runs import RecipeRun, RecipeRunStore
+from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
 from .release_notice import read_update_notice
 from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
@@ -671,6 +671,7 @@ from .site_images import (
     write_site_image,
 )
 from .sites import ControlPointQuad, Site, SiteNotFoundError, SiteStore
+from .source_refresh import StoredSourceWatches
 from .sources import (
     InMemorySourceStore,
     PostgresSourceStore,
@@ -8800,6 +8801,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         case: str,
         slot: datetime | None,
         source_file: WatchedFile | None = None,
+        trigger: RunTrigger | None = None,
     ) -> Any:
         return await run_recipe_as(
             RecipeRunDeps.from_state(state),
@@ -8807,7 +8809,7 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
             recipe=recipe,
             investigation_id=case,
             source_location=source_file.location if source_file else None,
-            trigger="watch" if source_file else "schedule" if slot else "manual",
+            trigger=trigger or ("watch" if source_file else "schedule" if slot else "manual"),
             slot=slot,
             source_file=source_file.identity if source_file else None,
         )
@@ -8819,6 +8821,18 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
     async def notify(owner_id: str, recipe: StudioRecipeDraft, words: str) -> None:
         await state.alerts_store.save(schedule_notice(owner_id, recipe, words, datetime.now(UTC)))
 
+    async def case_for_dataset(owner: Principal, dataset_id: str) -> str | None:
+        """ADR-110 Amendment 6 point 6: a case the owner is an Editor of that loads into the
+        dataset (its first, the same reach as `scope_to_dataset`); the executor's own checks then
+        run against it as against any case."""
+        for case, level in await state.investigations.list_for(owner):
+            if level.rank < AccessLevel.EDITOR.rank:
+                continue
+            ids = await state.datasets.ids_of_case(case.id)
+            if ids and ids[0] == dataset_id:
+                return str(case.id)
+        return None
+
     return ScheduleExecutor(
         recipes=state.studio_recipes,
         runs=state.recipe_runs,
@@ -8829,6 +8843,8 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         run=run,
         notify=notify,
         watch_files=watch_files,
+        source_watches=StoredSourceWatches(state.sources, state.studio_recipes),
+        case_for_dataset=case_for_dataset,
     )
 
 

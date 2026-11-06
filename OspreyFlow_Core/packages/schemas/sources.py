@@ -60,6 +60,8 @@ class SourceRefresh(BaseModel):
     #: Set by the Conduit, never by the body: the person who set the policy, whom a refresh runs
     #: as (ADR-110 Amendment 5 item 4), and whether it is paused, with why (Amendment 6 point 6).
     owner: str | None = None
+    #: When the policy was set: a watched file counts only if it arrived after (Amendment 4).
+    set_at: datetime | None = None
     paused: bool = False
     paused_reason: str | None = None
 
