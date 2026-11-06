@@ -14,9 +14,14 @@ it:
 - one location registered twice (`test_a_location_is_registered_once_per_dataset`);
 - a governance edit that leaves deployed pipelines loading under the old marking, or goes
   unaudited (`test_editing_governance_is_a_new_version_flags_the_pipelines_and_is_audited`);
-- a profile stored and shown to another reader (`test_the_profile_is_computed_for_the_reader`);
-- a connection named by someone who is not an administrator
-  (`test_only_an_administrator_names_a_connection`).
+- a profile stored and shown to another reader (`test_the_profile_is_computed_for_the_reader`), or
+  one computed for a cleared reader shown unmasked to a reader below the source's marking
+  (`test_the_profile_is_masked_for_a_reader_below_the_sources_marking`);
+- the register wizard's file listing reached for another unit's dataset, or listing another
+  dataset's files (`test_the_dataset_files_are_listed_only_for_a_reached_dataset_and_only_its_own`);
+- a connection named, or the Admin list of connections read, by someone who is not an
+  administrator (`test_only_an_administrator_names_a_connection`,
+  `test_only_an_administrator_reads_the_admin_list_of_connections`).
 """
 
 from __future__ import annotations
@@ -51,6 +56,11 @@ PEOPLE = {
         ("stranger", "str-1", "unit-2", "data_engineer"),
         ("admin", "adm-1", "unit-1", "osprey-admin"),
     )
+} | {
+    # Below the SECRET a source may be marked: the profile is masked for this reader alone.
+    "junior": Principal(
+        id="jun-1", clearance="OFFICIAL", org_unit="unit-1", roles=["data_engineer"]
+    )
 }
 #: The cases each person holds a level in, by the datasets each reads (its first loads into it).
 CASES = {
@@ -58,6 +68,7 @@ CASES = {
     "read-1": {"case-r": ["ds-x", "ds-a"]},
     "str-1": {"case-s": ["ds-s"]},
     "adm-1": {},
+    "jun-1": {"case-j": ["ds-a"]},
 }
 
 
@@ -244,9 +255,12 @@ def test_the_profile_is_computed_for_the_reader(world: SimpleNamespace) -> None:
     )
     assert response.status_code == 200, response.text
     assert [c["name"] for c in response.json()["columns"]] == ["prisoner", "cell"]
-    assert "profile" not in world.client.get(
-        f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("engineer")
-    ).json()
+    assert (
+        "profile"
+        not in world.client.get(
+            f"/v1/datasets/ds-a/sources/{made['id']}", headers=_as("engineer")
+        ).json()
+    )
 
 
 def test_only_an_administrator_names_a_connection(world: SimpleNamespace) -> None:
@@ -262,3 +276,40 @@ def test_only_an_administrator_names_a_connection(world: SimpleNamespace) -> Non
     assert [c["id"] for c in listed][0] == "files"
     assert "Second folder" in [c["name"] for c in listed]
     assert any(e["action"] == "add_ingest_connection" for e in world.audit.entries)
+
+
+def test_the_profile_is_masked_for_a_reader_below_the_sources_marking(
+    world: SimpleNamespace,
+) -> None:
+    """The cleared engineer reads first, so a profile kept from that read would reach the junior
+    reader unmasked. Both reach ds-a through a case of their own that loads into it."""
+    made = _register(world, handling=HANDLING | {"classification": "SECRET"}).json()
+    path = f"/v1/datasets/ds-a/sources/{made['id']}/profile"
+    cleared = world.client.get(path, headers=_as("engineer"))
+    junior = world.client.get(path, headers=_as("junior"))
+    assert cleared.status_code == junior.status_code == 200, (cleared.text, junior.text)
+    assert cleared.json()["values_masked"] is False
+    assert junior.json()["values_masked"] is True
+    samples = [v for c in junior.json()["columns"] for v in c.get("sample_values") or []]
+    assert "SYN-1" not in samples
+
+
+def test_the_dataset_files_are_listed_only_for_a_reached_dataset_and_only_its_own(
+    world: SimpleNamespace,
+) -> None:
+    own = world.client.get("/v1/datasets/ds-a/source-files", headers=_as("engineer"))
+    assert own.status_code == 200, own.text
+    names = [f["source_location"].rsplit("/", 1)[-1] for f in own.json()["files"]]
+    assert names == ["cells.csv"]
+    other = world.client.get("/v1/datasets/ds-s/source-files", headers=_as("engineer"))
+    missing = world.client.get("/v1/datasets/no-such/source-files", headers=_as("engineer"))
+    only_read = world.client.get("/v1/datasets/ds-a/source-files", headers=_as("reader"))
+    assert other.status_code == missing.status_code == only_read.status_code == 404
+    assert other.json() == missing.json()
+
+
+def test_only_an_administrator_reads_the_admin_list_of_connections(world: SimpleNamespace) -> None:
+    assert world.client.get("/v1/admin/connections", headers=_as("engineer")).status_code == 403
+    listed = world.client.get("/v1/admin/connections", headers=_as("admin"))
+    assert listed.status_code == 200, listed.text
+    assert [c["id"] for c in listed.json()][0] == "files"
