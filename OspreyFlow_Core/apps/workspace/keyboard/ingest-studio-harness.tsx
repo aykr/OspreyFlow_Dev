@@ -87,13 +87,16 @@ const PROFILE = { rows_sampled: 3, sample_is_whole_source: true, values_masked: 
 const SCHEME = { name: "uk-le", classification: ["OFFICIAL", "SECRET"],
   handling_codes: { P: { label: "Permitted", dissemination: "permitted" } } };  // prettier-ignore
 
-const asked: { method: string; path: string }[] = [];
+const asked: { method: string; path: string; body?: string }[] = [];
+// Phase 3's exit (ADR-140 Amendment 6): a pipeline named on the canvas, created here, then given a
+// registered source. Absent until created, so every other case sees the registry it always saw.
+let created: Record<string, unknown> | null = null;
 (window as unknown as { __asked: typeof asked }).__asked = asked;
 
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const path = new URL(String(input)).pathname;
   const method = init?.method ?? "GET";
-  asked.push({ method, path });
+  asked.push({ method, path, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   if (path === "/v1/investigations") return reply(CASES);
   if (path === "/v1/handling-scheme") return reply(SCHEME);
@@ -127,7 +130,23 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     draft = { ...draft, ...(JSON.parse(String(init?.body)) as object) };
     return reply(draft);
   }
-  if (path.endsWith("/ingest/recipe-registry")) return reply([deployed, draft]);
+  if (path.endsWith("/ingest/recipes") && method === "POST") {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    created = { ...base, ...body, recipe_id: "r-new", version: 1, status: "draft", source_location: null, handling: {},
+      legal_basis: null, ready_for_profile: false, created_at: day(0),
+      pipeline: { ...CHAIN, nodes: CHAIN.nodes.map((n) => (n.id === "source" ? { ...n, label: "New source" } : n)) } };  // prettier-ignore
+    return reply(created, 201);
+  }
+  if (created && path.endsWith("/ingest/recipes/r-new/pipeline") && method === "PUT") {
+    created = { ...created, pipeline: JSON.parse(String(init?.body)) };
+    return reply(created);
+  }
+  if (created && path.endsWith("/ingest/recipes/r-new") && method === "PATCH") {
+    created = { ...created, ...(JSON.parse(String(init?.body)) as object), ready_for_profile: true };
+    return reply(created);
+  }
+  if (created && path.endsWith("/ingest/recipes/r-new")) return reply(created);
+  if (path.endsWith("/ingest/recipe-registry")) return reply(created ? [deployed, draft, created] : [deployed, draft]);
   if (path.endsWith("/ingest/recipes/r-calls/runs")) return reply(RUNS);
   if (path.endsWith("/ingest/recipes/r-calls/run") && method === "POST")
     return reply({ load_id: "SYN-LOAD-4", recipe_id: "r-calls", recipe_version: 2, rows_read: 120, rows_deduplicated: 0,

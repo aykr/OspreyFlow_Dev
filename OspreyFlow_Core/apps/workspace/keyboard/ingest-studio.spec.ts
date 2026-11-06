@@ -20,8 +20,8 @@ async function tab(page: Page, name: string) {
   await expect(page.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
 }
 
-function asked(page: Page): Promise<{ method: string; path: string }[]> {
-  return page.evaluate(() => (window as unknown as { __asked: { method: string; path: string }[] }).__asked);
+function asked(page: Page): Promise<{ method: string; path: string; body?: string }[]> {
+  return page.evaluate(() => (window as unknown as { __asked: { method: string; path: string; body?: string }[] }).__asked);
 }
 
 test("each of the four places opens by keyboard", async ({ page }) => {
@@ -165,6 +165,48 @@ test("a pipeline's source is chosen from the registered sources by keyboard", as
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "PATCH" && a.path.endsWith("/r-visits"))).toBe(true);
   await expect(page.getByRole("status").filter({ hasText: "Reads Wing phone calls file" })).toBeVisible();
   registerCovered(REGISTRY, "use-a-registered-source-in-a-pipeline-by-keyboard");
+});
+
+// Phase 3's exit criterion (ADR-140 Amendment 6): cell_stays registered from the ingest root, then
+// used in a new pipeline, with no marking asked inside the pipeline — the draft carries the source's.
+test("a file is registered as a source and used in a new pipeline by keyboard, asking no marking there", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "2 Sources");
+  await press(page, "Register a source");
+  await press(page, "Next");
+  const file = page.getByRole("combobox", { name: "File" });
+  await file.focus();
+  await file.selectOption("harbour-extract/cell_stays.csv");
+  await press(page, "Next");
+  for (const [name, value] of [["Classification", "SECRET"], ["Handling code", "P"]] as const) {
+    const field = page.getByRole("combobox", { name });
+    await field.focus();
+    await field.selectOption(value);
+  }
+  for (const [name, value] of [["Originator", "unit-a"], ["Owning unit", "unit-a"], ["Legal basis", "Synthetic demonstration"]] as const) {
+    await page.getByRole("textbox", { name, exact: true }).focus();
+    await page.keyboard.type(value);
+  }
+  await press(page, "Register");
+  await press(page, "Open in a pipeline");
+  await expect(page.getByRole("tab", { name: "3 Pipelines" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("textbox", { name: "Pipeline name" }).focus();
+  await page.keyboard.type("Cell stays");
+  await press(page, "New pipeline");
+  await press(page, "Source: New source");
+  const chooser = page.getByRole("combobox", { name: "Registered source" });
+  await chooser.focus();
+  await chooser.selectOption("src-new");
+  // Nothing in the pipeline asks for a marking: the source brings it.
+  await expect(page.getByRole("combobox", { name: /Classification/ })).toHaveCount(0);
+  await press(page, "Use this source");
+  await expect(page.getByRole("status").filter({ hasText: "Reads cell_stays.csv" })).toBeVisible();
+  const patch = (await asked(page)).find((a) => a.method === "PATCH" && a.path.endsWith("/ingest/recipes/r-new"));
+  const sent = JSON.parse(patch?.body ?? "{}") as { source_location?: string; handling?: { classification?: string }; legal_basis?: string };
+  expect(sent.source_location).toBe("harbour-extract/cell_stays.csv");
+  expect(sent.handling?.classification).toBe("SECRET");
+  expect(sent.legal_basis).toBe("Synthetic demonstration");
+  registerCovered(REGISTRY, "register-a-source-and-use-it-in-a-new-pipeline-by-keyboard");
 });
 
 async function openDeploy(page: Page) {
