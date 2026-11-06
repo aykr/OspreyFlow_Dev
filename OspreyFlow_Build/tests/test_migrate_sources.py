@@ -26,7 +26,8 @@ it is paused, and the pipeline's own watch is cleared; its cron stays.
 - a watch moved onto a source a keyless pipeline reads, which a refresh never runs
   (`test_a_source_a_keyless_pipeline_reads_is_left_in_words`);
 - a source's own policy overwritten (`test_a_source_with_a_policy_of_its_own_is_left`);
-- a dry run that moves, or a second run that moves again (`test_a_dry_run_moves_nothing_and_a_run_moves_each_once`).
+- a dry run that moves, or a second run that moves again
+  (`test_a_dry_run_moves_nothing_and_a_run_moves_each_once`).
 """
 
 from __future__ import annotations
@@ -196,7 +197,8 @@ async def test_a_source_with_a_policy_of_its_own_is_left() -> None:
     await store.register(
         "ds-a",
         RegisterSourceInput(
-            connection_id=migrate_sources.FILES_CONNECTION_ID, name="a.csv", location="/in/a.csv", handling=OFFICIAL,
+            connection_id=migrate_sources.FILES_CONNECTION_ID, name="a.csv", location="/in/a.csv",
+            handling=OFFICIAL,
             legal_basis="Synthetic", refresh=own,
         ),
         migrate_sources.MIGRATION,

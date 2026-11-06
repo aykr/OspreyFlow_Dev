@@ -2061,7 +2061,9 @@ async def test_a_watch_moved_onto_a_source_is_adopted_whole_on_both_stores(kind:
             await sources.close()
 
 
-async def test_clearing_a_moved_watch_keeps_the_cron_and_its_owner(store: StudioRecipeStore) -> None:
+async def test_clearing_a_moved_watch_keeps_the_cron_and_its_owner(
+    store: StudioRecipeStore,
+) -> None:
     """ADR-110 Amendment 6 point 7 ("Watches move; cron stays"): the watch goes, nothing else."""
     draft = await _verified_draft(store)
     published = await store.publish(
