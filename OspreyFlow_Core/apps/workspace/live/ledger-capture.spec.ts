@@ -150,13 +150,13 @@ test("CAP-L-A1-c: Checks on load and Verify on the week's pipeline", async ({ pa
   await page.getByRole("button", { name: /Open Ingest Studio/ }).or(page.getByRole("link", { name: /Open Ingest Studio/ })).first().click();
   await page.getByRole("button", { name: CASE_NAME, exact: true }).click();
   await page.getByRole("button", { name: new RegExp(`^Open ${WEEK_PIPELINE}`) }).click();
-  await page.getByRole("button", { name: "Checks on load", exact: true }).click();
+  await page.getByRole("button", { name: "Load rules", exact: true }).click();
   await expect(page.getByRole("table", { name: "Rules this pipeline may be checked by" })).toBeVisible({ timeout: 60_000 });
   await page.waitForTimeout(1000);
   await shot(page, "CAP-L-A1-c");
   await page.getByRole("button", { name: "← Back to the pipeline" }).click();
-  await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await page.getByRole("button", { name: "Run verify" }).click();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await page.getByRole("button", { name: "Run the test" }).click();
   const would = page.getByRole("heading", { name: "Alerts this sample would raise" });
   await expect(would).toBeVisible({ timeout: 240_000 });
   await would.scrollIntoViewIfNeeded();

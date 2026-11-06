@@ -881,9 +881,9 @@ the report viewer and the admin (the case's Author).
    after each load commits), **Show the drawn pattern**, **Preview on the last 90 days**, **Deploy the
    sentence**. Only after step 3: deployed before the bookings load, it would also flag the coordinator's
    number.
-5. Engineer: the *Intelligence reports* pipeline's **Checks on load** lists the rule, and its **Verify** says
+5. Engineer: the *Intelligence reports* pipeline's **Load rules** lists the rule, and its **Test** says
    the rule cannot be judged in a dry run (it reads links from the stored graph). *PIN phone first contacts*
-   was published by the seed with no canvas, so its own Checks on load is reached only through **Reopen for
+   was deployed by the seed with no canvas, so its own Load rules are reached only through **Reopen for
    editing** (a new version); every case rule judges it while nothing is chosen.
 6. Engineer: run *PIN phone first contacts* over `pid_pin_new_contacts.csv`. **S1**, high, for the case team,
    on the number nobody owns, which the third group member's PIN account called twice.
@@ -909,12 +909,15 @@ Amendment 45) it leaves chapter 9's three files released ("kept …"), so they n
 
 **Chapter 4's draft** (ADR-127 Amendment 45, 3 November): the seed, and every reset, leave the *Intelligence
 reports* pipeline as a draft holding the whole branch (source, Profile, Map, Load) and the committed map,
-not verified and not published. Chapter 4 opens it, walks Profile and the map, runs **Verify** (one row
-rejected: the teaching row's number written with a letter O), corrects that row, publishes and runs it, then
-runs *Report incidents*. The row is corrected by choosing a corrected copy of the file at the source
+not tested and not deployed. Chapter 4 opens it on the Studio's **3 Pipelines** tab, walks Profile and the
+map, runs **Test** (one row rejected: the teaching row's number written with a letter O), corrects that row,
+presses **Deploy** then **Deploy and run now**, then runs *Report incidents* from the **4 Runs** tab (choose it
+under *Pipeline to run or schedule*, **Run now or schedule**, **Run now**). Since the redesign's phase 2
+(ADR-140, 6 November 2026) Deploy commits a version and does not run it; running and scheduling are the
+Runs tab's. The row is corrected by choosing a corrected copy of the file at the source
 (*Open source settings*, **Choose file…**, **Save**; a copy with `07700 900603` for `07700 900 6O3`, made
-before the demo): a value map refuses every value it does not list, so it cannot mend one row. Verify then
-reads 350 reports and rejects none, and the run and Verify read the same file (the source node names none
+before the demo): a value map refuses every value it does not list, so it cannot mend one row. Test then
+reads 350 reports and rejects none, and the run and Test read the same file (the source node names none
 of its own). Walked on GOV.UK on 3 November: about 55 seconds of clicks and waits for the reports (40 of
 them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The reset puts the draft back exactly, its name included. The fallback
 (`--publish-reports-fallback`) publishes the committed file over whatever was left on the draft, a renamed

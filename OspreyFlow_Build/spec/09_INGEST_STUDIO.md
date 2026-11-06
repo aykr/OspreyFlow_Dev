@@ -85,21 +85,59 @@ transform remains a Knowledge Adapter with golden files, never an expression lan
 pipeline's name, version and status: Verify (§5) dry-runs the whole recipe, Publish (§6) commits it,
 schedules it and runs it.
 
-### 1.0 Working in the Studio (as built, 11 October 2026)
+### 1.0 Working in the Studio (as built, 6 November 2026; ADR-140 phase 2)
 
-The Studio opens on the **pipelines home** (`apps/workspace/src/ingest/dag/PipelineStudio.tsx`,
-beside the **Files** tab, §4 "Files"):
+The Studio (`apps/workspace/src/ingest/IngestStudio.tsx`) is **four places with one method**, in the
+method's order — **1 Model**, **2 Sources**, **3 Pipelines**, **4 Runs** — under a **readiness strip**
+(the target model, the number of sources, the pipelines with how many drafts have not passed Test, and the
+last run). It opens on **3 Pipelines**; the person picks the entry point (ruling R7).
+
+- **The dataset switcher**, at the top, names the dataset the Studio works on. Until phase 5 gives the
+  Studio routes of its own, every Studio route is still a case's (ADR-099 Amendment 4 decision 5), so the
+  switcher works *through a case* (ADR-140 Amendment 2, the owner's ruling "Dataset label, case behind"):
+  it offers each dataset one of the person's cases **loads into** (its first, ADR-099 decision 6), and
+  choosing one opens the case that loads into it — the current case when it does, else a case before a
+  branch, the higher level first (`studio/datasets.ts`). A dataset a case only reads is not offered: through
+  that case a load would go into another dataset than the label names. The line beside the switcher names
+  the case the Studio is working through. Nothing is widened: the routes, roles and access checks are the
+  case's, as before.
+- **1 Model** shows the target model in words — the POLE core and the case's packs (ADR-126) — until
+  phase 5 makes it the dataset's own.
+- **2 Sources** lists each file a pipeline of the dataset reads, with the marking and legal basis its
+  pipeline gave it, and holds the unstructured path (*Add files*, ADR-094 step 3; once the Files tab) —
+  until phase 3 registers a source once, with its own governance.
+- **3 Pipelines** is the pipelines home and canvas below: name a pipeline, open one, edit it on the canvas.
+  The canvas header's buttons are **Load rules** (§5a), **Test** (§5) and **Deploy** (§6).
+- **4 Runs** (`ingest/runs/RunsTab.tsx`) is the grid of deployed pipelines by day, read from the run
+  ledger (ADR-110 decision 6): a cell per day — succeeded; *needs a person* (rows held, or a run failed,
+  was refused or was blocked); scheduled, not yet run (today, with a schedule or watch set); skipped or
+  missed; or no run — each named in words for a screen reader and coloured from the tokens. A cell opens
+  that day's run reports; a run that held rows opens the held rows (Monitoring's panel, the same rights);
+  a holder of `revert_loads` is shown each load's revert **as the operator's command**, never a button,
+  since a revert runs with the Conduit stopped (ADR-127 Amendment 9; ADR-140 Amendment 2). *Pipeline to
+  run or schedule* with **Run now or schedule** opens a deployed pipeline's run controls — **Run now**,
+  the schedule editor and folder watch (ADR-110 decisions 5 and 7), pause and resume, and its runs — and
+  *Schedules and folder watches* lists every deployed pipeline's.
+
+**The words a person reads** (ADR-140 decision 2; `ingest/studio/vocabulary.ts`): a recipe is a
+*pipeline*; Verify is **Test**; Publish is **Deploy as vN**, which commits a version and **neither runs
+nor schedules it** (it carries whatever schedule the draft holds), with **Deploy and run now** beside it;
+checks on load are **load rules**; *published* reads *deployed*, *flagged* reads *needs attention*,
+*superseded* reads *previous version*. The Admin area's *Schedules and runs* is **Operations** (ADR-141).
+Routes, YAML keys and stored statuses keep their names.
+
+The pipelines home and canvas are as built on 11 October 2026:
 
 - **Name a pipeline** and press *New pipeline*: a draft is created on the generic CSV connector with
   the canonical chain drawn, and opens on its canvas.
 - **The list** is the case's recipe registry (`GET …/ingest/recipe-registry`) at every status but
-  *superseded* — each row "label · vN · status" with *Open*. A published pipeline stays here to be run
-  again, rescheduled or reopened; a *flagged* one (§6, ontology moved) to be republished. Listing
-  drafts only lost a pipeline from the Studio the moment it was published (found live, 11 October
-  2026; `PipelineStudio.test.tsx` "keeps a published pipeline listed, and opens a recipe from before
-  pipelines at Publish").
-- **Open** puts a draft, or any recipe with a pipeline, on its canvas. A published or flagged recipe
-  written before pipelines has no canvas of its own: it opens at Publish, whose back returns home.
+  a previous version — each row "label · vN · status" with *Open*. A deployed pipeline stays here to be
+  reopened; one needing attention (§6, ontology moved) to be deployed again. Listing drafts only lost a
+  pipeline from the Studio the moment it was deployed (found live, 11 October 2026;
+  `PipelineStudio.test.tsx` "keeps a published pipeline listed, and opens a recipe from before pipelines
+  at Publish").
+- **Open** puts a draft, or any recipe with a pipeline, on its canvas. A deployed recipe written before
+  pipelines has no canvas of its own: it opens at Deploy, whose back returns home.
 
 On the **canvas**, the *Pipeline stages* toolbar holds **+ Source** (a whole source → profile → map →
 load branch), **+ Extract** and **+ Enrich** (each after the last map) and **Remove selected** (never
@@ -110,15 +148,22 @@ library, media and where findings go, the enrich's geocoder.
 
 **Two gates, both in words (rule 2).** Saving a pipeline refuses a graph that breaks the rules
 (a cycle, a second domain root, a source reaching no load, an extract not fed by a map, an unknown
-pack — `pipeline_rule_violations`); publishing refuses stage *configuration* the runner cannot run
+pack — `pipeline_rule_violations`); deploying refuses stage *configuration* the runner cannot run
 (`pipeline_run_violations`): an unrunnable library or media kind, an unknown geocoder, a handling
-override with no reason. Nothing is published and silently part-run.
+override with no reason. Nothing is deployed and silently part-run.
 
 **A v1 recipe is read as its canonical chain** — `domain model → source → profile → map → load` —
 derived at read time and never stored back, so a recipe written by the old wizard is byte-for-byte
-what it always was. The published YAML carries the pipeline, so a run is provably against exactly
-what was published. The run of a pipeline answers a `PipelineRunReport`: every branch's own
+what it always was. The deployed YAML carries the pipeline, so a run is provably against exactly
+what was deployed. The run of a pipeline answers a `PipelineRunReport`: every branch's own
 `LoadReport`, every extract and enrich stage's own account, refusals included.
+
+**Tests:** `IngestStudio.test.tsx` (the four places, the strip, the switcher, Sources),
+`runs/RunsTab.test.tsx` and `runs/runsGrid.test.ts` (the grid, a report, held rows, the revert command
+only for `revert_loads`), `studio/datasets.test.ts`, `publish/PublishScreen.test.tsx` "Deploy" (deploys
+without running or scheduling; deploys and runs); keyboard `keyboard/ingest-studio.spec.ts` with
+`INGEST_STUDIO_ACTIONS` (rule 13); the axe scan of `keyboard/ingest-studio-harness.html` in both themes
+and GOV.UK, with Model, Sources, Runs, a report and its held rows.
 
 ### 1.1 Domain packs (ADR-108 phase D)
 

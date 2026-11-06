@@ -25547,3 +25547,43 @@ except where this says so.
 nothing is kept: 6 events held, not 3; restored byte for byte) and
 `::test_a_keyless_recipe_reloads_its_events_and_its_occurrences_together`. `tests/ingest/test_row_keys.py`
 already proved the same at `load_with_rules`.
+
+### ADR-140, Amendment 2 (6 November 2026) — phase 2 built: four places, the dataset switcher, Runs, Deploy
+
+Status: accepted 6 November 2026 (the owner's rulings "Dataset label, case behind" and "Show the
+command", each put as a multiple-choice question before building). ADR-140 is unchanged except where
+this says so. Spec 09 §1.0 has the screens.
+
+1. **Open question 6, for now: the dataset is reached through a case.** Phase 2 changes no route, and
+   every Studio route is a case's (ADR-099 Amendment 4 decision 5). The dataset switcher offers each
+   dataset one of the person's cases loads into (its first dataset, ADR-099 decision 6) and opens that
+   case: the current one when it loads into the dataset, else a case before a branch, the higher level
+   first. A dataset a case only reads is not offered, since through that case a load would go elsewhere.
+   Routes, roles and access are the case's, unchanged; dataset-scoped Studio routes remain phase 5's, with
+   an access test on each (rule 4).
+2. **The revert is shown, not run** (ADR-127 Amendment 9 stands: a revert runs with the Conduit
+   quiesced; on DuckDB that is required). The Runs tab shows a holder of `revert_loads` each load's revert
+   as the operator's full command, `python -m scripts.seed_internal <pack> --revert-load <id>
+   --reverted-by <them> --stop-api`, with a line saying why it is not a button. An in-product revert
+   needs its own ADR. **Found:** `seed_internal` requires a demo pack's name before it will revert,
+   though the revert reads only the load's own record; the command names `prison-intelligence` for the
+   Prison Intelligence dataset and `ledger` otherwise. A revert command that takes no pack name is left
+   for a later step.
+3. **Deploy commits only.** *Deploy as vN* sends the schedule the draft already holds (none for a new
+   draft), never one chosen on its screen, and does not run; *Deploy and run now* deploys, then makes the
+   run *Run now* makes. The schedule editor, folder watch, pause, *Run now* and the runs list are the
+   Publish screen's `operate` half, reached from the Runs tab. Three Conduit messages a person reads now
+   say Test and deploy (`run_source.py`'s two refusals, the unmapped-recipe refusal).
+4. **The renames are labels only**, through one module (`ingest/studio/vocabulary.ts`): pipeline, Test,
+   Deploy, load rules, deployed, needs attention, previous version; the Admin area's tab is *Operations*.
+5. **Found, not caused, and not fixed here — chapter 9 cannot be walked as the guide says.** DEMO_GUIDE
+   §8c has the engineer "run *Visit bookings* over `pid_visit_bookings.csv`" (and the seized media and
+   first contacts over their files). Since build-order step 30 (ADR-127 Amendment 47, 4 November) a run
+   reads only the file Verify (now Test) checked and *Run now* takes no file, and a pipeline the seed
+   deployed with no canvas has no source settings in which to choose another; `live/pid-capture.spec.ts`'s
+   `loadIncoming` still fills a *Source file* field step 30 removed. How chapter 9's three files are loaded
+   (a folder watch on the source, which phase 4's refresh policy makes the source's; or Reopen, choose the
+   file, Test and Deploy) is put to the owner.
+
+**Tests:** spec 09 §1.0's list. Shown red: the switcher test with every dataset a case reads offered
+(it then offered one only read).

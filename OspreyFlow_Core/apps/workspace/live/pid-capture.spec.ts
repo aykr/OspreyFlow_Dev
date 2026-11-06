@@ -548,42 +548,48 @@ test("CAP-A2-C4", async ({ page }) => {
   // (The fallback-published recipe shows no entity Map stage on the canvas: a finding.)
   await shot(page, "CAP-A2-C4-a");
   await page.getByRole("button", { name: "Back to the pipeline" }).click();
-  await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await page.getByRole("button", { name: "Run verify" }).click();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await page.getByRole("button", { name: "Run the test" }).click();
   // A dry run over the profiled sample: nothing is written.
   await page.waitForTimeout(20000);
   await scrollAllToTop(page);
   await shot(page, "CAP-A2-C4-b");
 });
 
-/** Runs a published pipeline from its Publish screen and waits for the run's own outcome. */
+/** Runs a pipeline and waits for the run's own outcome (ADR-140 decision 14, redesign phase 2). A
+ * draft, on the Pipelines list, is opened and run with **Deploy and run now** on its Deploy screen; a
+ * deployed one is run from the **4 Runs** tab, chosen by its name. Either way the Studio ends on its
+ * Pipelines tab's list. */
 async function runNow(page: Page, open: RegExp): Promise<string> {
-  await page.getByRole("button", { name: open }).click();
-  const publish = page.getByRole("button", { name: "Publish", exact: true });
-  const run = page.getByRole("button", { name: "Run now" });
-  // A published recipe opens on its Publish screen; a draft opens on its canvas first. There the
-  // first "Publish" is the pipeline's Publish stage, which only moves to the Publish screen; the
-  // Publish button on that screen is what publishes it. On a deployment whose recipes were all
-  // published in earlier rehearsals the second press was never needed (found capturing a fresh
-  // GOV.UK-brand deployment, 31 October 2026).
-  try {
-    await run.waitFor({ timeout: 10_000 });
-  } catch {
-    await publish.click();
-    try {
-      await run.waitFor({ timeout: 10_000 });
-    } catch {
-      await publish.click();
-    }
+  const opener = page.getByRole("button", { name: open });
+  const row = page.getByRole("listitem").filter({ has: opener });
+  const isDraft = /· draft/.test((await row.textContent()) ?? "");
+  let runs: string;
+  if (isDraft) {
+    await opener.click();
+    // A draft with a canvas opens on it; its header's Deploy opens the Deploy screen.
+    await page.getByRole("button", { name: "Deploy", exact: true }).click();
+    runs = await runNowAndWait(page, page.getByRole("button", { name: "Deploy and run now" }), 240_000);
+    await page.waitForTimeout(3000);
+    await page.getByRole("button", { name: "← Back", exact: true }).click();
+  } else {
+    const label = open.source.replace(/^\^Open /, "").replace(/\\/g, "");
+    await page.getByRole("tab", { name: "4 Runs" }).click();
+    const choose = page.getByRole("combobox", { name: "Pipeline to run or schedule" });
+    const value = await choose
+      .locator("option")
+      .filter({ hasText: new RegExp(`^${label}`) })
+      .first()
+      .getAttribute("value");
+    await choose.selectOption(value ?? "");
+    await page.getByRole("button", { name: "Run now or schedule" }).click();
+    // The new run's own answer, never the runs list's older "Succeeded:" (step 9d finding 7).
+    runs = await runNowAndWait(page, page.getByRole("button", { name: "Run now", exact: true }), 240_000);
+    await page.waitForTimeout(3000);
   }
-  // The new run's own answer, never the runs list's older "Succeeded:" (step 9d finding 7).
-  const runs = await runNowAndWait(page, run, 240_000);
-  await page.waitForTimeout(3000);
-  // The Publish screen's own way back to the recipe list, by its exact name: `/Back/` also matched
-  // the rail's "Back to the investigation", which left the Studio (31 October 2026).
-  await page.getByRole("button", { name: "← Back", exact: true }).click();
-  // A pipeline with a canvas (the reports pipeline once published by the fallback) goes back to its
-  // canvas, not to the list: its "Pipelines" button is the way to the list (2 November 2026).
+  await page.getByRole("tab", { name: "3 Pipelines" }).click();
+  // A pipeline with a canvas goes back to its canvas, not to the list: its "Pipelines" button is the
+  // way to the list (2 November 2026).
   const toList = page.getByRole("button", { name: "Pipelines", exact: true });
   if (await toList.isVisible().catch(() => false)) await toList.click();
   return runs;
@@ -843,7 +849,7 @@ test("CAP-A2-C9S", async ({ page }) => {
   test.setTimeout(600_000);
   await studio(page);
   await page.getByRole("button", { name: /^Open Intelligence reports/ }).click();
-  await page.getByRole("button", { name: "Checks on load", exact: true }).click();
+  await page.getByRole("button", { name: "Load rules", exact: true }).click();
   const table = page.getByRole("table", { name: "Rules this pipeline may be checked by" });
   await expect(table.or(page.getByText(/No rule of this case/)).first()).toBeVisible({ timeout: 60_000 });
   // The Studio has no `main` landmark: waiting on one hung the test for its whole timeout
@@ -852,8 +858,8 @@ test("CAP-A2-C9S", async ({ page }) => {
   await page.waitForTimeout(1000);
   await shot(page, "CAP-A2-C9S-a");
   await page.getByRole("button", { name: "← Back to the pipeline" }).click();
-  await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await page.getByRole("button", { name: "Run verify" }).click();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await page.getByRole("button", { name: "Run the test" }).click();
   const would = page.getByRole("heading", { name: "Alerts this sample would raise" });
   await expect(would).toBeVisible({ timeout: 240_000 });
   await would.scrollIntoViewIfNeeded();
