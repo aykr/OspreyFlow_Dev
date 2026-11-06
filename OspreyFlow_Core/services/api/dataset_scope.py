@@ -216,6 +216,17 @@ class DatasetStampingGraph:
         await self._inner.revert_elements(node_ids, edge_ids, tx)
         await self._written()
 
+    async def withdraw_elements(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], load_id: str, tx: Any
+    ) -> None:
+        await self._inner.withdraw_elements(node_ids, edge_ids, load_id, tx)
+        await self._written()
+
+    async def restore_withdrawn(self, load_id: str, tx: Any) -> Any:
+        restored = await self._inner.restore_withdrawn(load_id, tx)
+        await self._written()
+        return restored
+
     async def strip_provenance_references(self, prefix: str) -> int:
         changed: int = await self._inner.strip_provenance_references(prefix)
         await self._written()

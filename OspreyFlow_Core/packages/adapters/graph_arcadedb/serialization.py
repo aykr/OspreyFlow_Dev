@@ -158,6 +158,8 @@ def node_from_element_map(record: Mapping[str, Any], principal: Principal | None
     audit_data: dict[str, Any] = dict(record["audit"])
     if "superseded_by" in record:
         audit_data["superseded_by"] = record["superseded_by"]
+    # As `superseded_by`: set on the top level by `withdraw_elements` without rewriting the blob.
+    audit_data["withdrawn_by_load"] = record.get("withdrawn_by_load")
     node = Node(
         id=record["id"],
         type=logical_type_name(record["label"]),
@@ -192,7 +194,9 @@ def edge_from_element_map(record: Mapping[str, Any], principal: Principal | None
         basis=record.get("basis"),
         provenance=Provenance.model_validate(record["provenance"]),
         handling=Handling.model_validate(record["handling"]),
-        audit=AuditStub.model_validate(record["audit"]),
+        audit=AuditStub.model_validate(
+            {**record["audit"], "withdrawn_by_load": record.get("withdrawn_by_load")}
+        ),
         datasets=list(record.get("datasets") or []),
     )
     return edge if principal is None else withhold_sources(edge, principal)

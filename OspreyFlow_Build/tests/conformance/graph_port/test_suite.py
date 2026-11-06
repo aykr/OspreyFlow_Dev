@@ -2977,6 +2977,152 @@ async def test_revert_elements_on_an_empty_or_unknown_id_is_a_safe_no_op(
         await adapter.commit_transaction(tx)
 
 
+# --- withdrawal by a full snapshot (ADR-110 Amendment 6 point 3) ---------------
+#
+# A full-snapshot refresh withdraws the elements only a dropped row made: `withdraw_elements` marks
+# them withdrawn by the refresh's load (and reverted, so every read leaves them out for every
+# reader), and `restore_withdrawn` brings back exactly what that load withdrew, when that load is
+# reverted.
+
+
+async def _withdraw(adapter: Any, nodes: list[str], edges: list[str], load_id: str) -> None:
+    tx = await adapter.begin_transaction()
+    await adapter.withdraw_elements(nodes, edges, load_id, tx)
+    await adapter.commit_transaction(tx)
+
+
+async def _restore(adapter: Any, load_id: str) -> Any:
+    tx = await adapter.begin_transaction()
+    restored = await adapter.restore_withdrawn(load_id, tx)
+    await adapter.commit_transaction(tx)
+    return restored
+
+
+async def _calling_pair(adapter: Any) -> tuple[str, str, str]:
+    (a, b), _ = await _write(
+        adapter,
+        [
+            _node("Endpoint", classification="OFFICIAL", value_normalised=number, load_id="load-1")
+            for number in ("+441111111111", "+442222222222")
+        ],
+        [],
+    )
+    _, (edge,) = await _write(
+        adapter, [], [_edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", load_id="load-1")]
+    )
+    return a, b, edge
+
+
+async def test_a_withdrawn_element_leaves_every_read_for_every_reader_and_its_load_restores_it(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        a, b, edge = await _calling_pair(adapter)
+        await _withdraw(adapter, [b], [edge], "load-snap-2")
+
+        assert await adapter.get_node(b, CLEARED) is None
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 0
+        assert (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges == []
+
+        restored = await _restore(adapter, "load-snap-2")
+        assert (set(restored.node_ids), set(restored.edge_ids)) == ({b}, {edge})
+        node = await adapter.get_node(b, CLEARED)
+        assert node is not None
+        assert node.audit.withdrawn_by_load is None
+        assert node.audit.reverted is False
+        assert (await adapter.neighbourhood_stats(a, CLEARED)).degree == 1
+
+
+async def test_restore_brings_back_only_what_that_load_withdrew_and_never_a_reverted_element(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (one, two, three), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", load_id="load-1") for _ in range(3)],
+            [],
+        )
+        await _withdraw(adapter, [one], [], "load-snap-2")
+        await _withdraw(adapter, [two], [], "load-snap-3")
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([three], [], tx)
+        await adapter.commit_transaction(tx)
+        # Already reverted: not this refresh's to withdraw, so not its to restore.
+        await _withdraw(adapter, [three], [], "load-snap-2")
+
+        restored = await _restore(adapter, "load-snap-2")
+        assert list(restored.node_ids) == [one]
+        assert await adapter.get_node(one, CLEARED) is not None
+        assert await adapter.get_node(two, CLEARED) is None
+        assert await adapter.get_node(three, CLEARED) is None
+
+
+async def test_reverting_the_load_that_made_a_withdrawn_element_means_no_restore_brings_it_back(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The creating load's revert takes the element back for good: its withdrawal is cleared, so the
+    snapshot's later revert cannot resurrect what the earlier revert retracted."""
+    async with factory.context() as adapter:
+        made = _node("Person", classification="OFFICIAL", load_id="load-1")
+        (node,), _ = await _write(adapter, [made], [])
+        await _withdraw(adapter, [node], [], "load-snap-2")
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([node], [], tx)
+        await adapter.commit_transaction(tx)
+
+        restored = await _restore(adapter, "load-snap-2")
+        assert list(restored.node_ids) == []
+        assert await adapter.get_node(node, CLEARED) is None
+
+
+async def test_a_write_onto_a_withdrawn_node_is_a_fresh_create_and_no_longer_withdrawn(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A row that comes back in a later snapshot is loaded again (ADR-127 Amendment 6's fresh
+    create); the snapshot's revert then has nothing of its own left to restore."""
+    async with factory.context() as adapter:
+        made = _node("Person", classification="OFFICIAL", load_id="load-1")
+        (node,), _ = await _write(adapter, [made], [])
+        await _withdraw(adapter, [node], [], "load-snap-2")
+        again = _node("Person", classification="OFFICIAL", load_id="load-snap-3")
+        again = again.model_copy(update={"id": node})
+        await _write(adapter, [again], [])
+
+        read = await adapter.get_node(node, CLEARED)
+        assert read is not None
+        assert read.audit.withdrawn_by_load is None
+        assert read.audit.load_id == "load-snap-3"
+        assert list((await _restore(adapter, "load-snap-2")).node_ids) == []
+
+
+async def test_restore_leaves_withdrawn_a_link_whose_pair_was_written_again_since(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A write over a withdrawn link's pair starts a link of its own; restoring the old one too
+    would leave two live links for one pair, which each link written once forbids."""
+    async with factory.context() as adapter:
+        a, b, edge = await _calling_pair(adapter)
+        await _withdraw(adapter, [], [edge], "load-snap-2")
+        link = _edge("COMMUNICATED_WITH", a, b, classification="OFFICIAL", load_id="load-snap-3")
+        _, (fresh,) = await _write(adapter, [], [link])
+        assert fresh != edge
+
+        restored = await _restore(adapter, "load-snap-2")
+        assert list(restored.edge_ids) == []
+        (live,) = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        assert live.id == fresh
+
+
+async def test_withdrawing_nothing_or_an_unknown_id_is_a_safe_no_op(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        await _withdraw(adapter, [], [], "load-snap-2")
+        await _withdraw(adapter, ["not-a-real-id"], ["not-a-real-id-either"], "load-snap-2")
+        restored = await _restore(adapter, "load-snap-2")
+        assert (list(restored.node_ids), list(restored.edge_ids)) == ([], [])
+
+
 # --- supersession (corrections) ------------------------------------------------
 
 

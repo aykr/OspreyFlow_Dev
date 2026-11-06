@@ -41,6 +41,7 @@ from ports.graph import (
     FindLimitExceeded,
     NodeSuggestions,
     RarityTooLarge,
+    RestoredElements,
     StoredLink,
     StoredNode,
     SubgraphTooLarge,
@@ -376,6 +377,11 @@ class GraphArcadeDBAdapter:
             )
             type_name = groovy_identifier(physical_type_name(write.type))
             set_clause = ", ".join(f"{key} = :{key}" for key in props)
+            if replaces_reverted:
+                # A fresh create is no longer withdrawn (ADR-110 Amendment 6 point 3): the row came
+                # back, and the snapshot's revert has nothing of its own left here.
+                props["withdrawn_by_load"] = None
+                set_clause = ", ".join(f"{key} = :{key}" for key in props)
             if existing is not None:  # live (merged above) or reverted (replaced whole)
                 await self._client.sql(
                     f"UPDATE {type_name} SET {set_clause} WHERE id = :id",
@@ -1697,12 +1703,83 @@ class GraphArcadeDBAdapter:
             *[("node", t, ids) for t, ids in await self._holders("vertex", node_ids, tx)],
             *[("link", t, ids) for t, ids in await self._holders("edge", edge_ids, tx)],
         ]
+        # A revert clears `withdrawn_by_load` too (ADR-110 Amendment 6 point 3): reverting the load
+        # that made an element takes it back for good, so the withdrawing refresh's later revert
+        # cannot restore it.
         for _, type_name, ids in plan:
             await self._client.sql(
-                f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true WHERE id IN :ids",
+                f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
+                "withdrawn_by_load = null WHERE id IN :ids",
                 params={"ids": ids},
                 session_id=tx,
             )
+
+    async def withdraw_elements(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
+    ) -> None:
+        # Resolved as a revert resolves (an ambiguous id refused before anything is written), and
+        # only a live element is withdrawn: one already reverted is not this refresh's to restore.
+        plan = [
+            *[t_ids for t_ids in await self._holders("vertex", node_ids, tx)],
+            *[t_ids for t_ids in await self._holders("edge", edge_ids, tx)],
+        ]
+        for type_name, ids in plan:
+            await self._client.sql(
+                f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
+                "withdrawn_by_load = :load WHERE id IN :ids AND reverted = false",
+                params={"ids": ids, "load": load_id},
+                session_id=tx,
+            )
+
+    async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:
+        nodes: list[NodeId] = []
+        for type_name in await self._types_with_unique_id("vertex"):
+            name = groovy_identifier(type_name)
+            rows = await self._client.sql(
+                f"SELECT id FROM `{name}` WHERE withdrawn_by_load = :load",
+                params={"load": load_id},
+                session_id=tx,
+            )
+            ids = [str(r["id"]) for r in rows]
+            for chunk in _id_chunks(ids):
+                await self._client.sql(
+                    f"UPDATE `{name}` SET reverted = false, withdrawn_by_load = null "
+                    "WHERE id IN :ids",
+                    params={"ids": chunk},
+                    session_id=tx,
+                )
+            nodes.extend(ids)
+        edges: list[EdgeId] = []
+        for type_name in await self._types_with_unique_id("edge"):
+            name = groovy_identifier(type_name)
+            rows = await self._client.sql(
+                f"SELECT id, source, target FROM `{name}` WHERE withdrawn_by_load = :load",
+                params={"load": load_id},
+                session_id=tx,
+            )
+            back: list[str] = []
+            for row in rows:
+                # Each link written once: a live link of this type between the same ends, written
+                # since, keeps the pair, and the withdrawn one stays withdrawn (either direction,
+                # since an undirected type may store the pair either way round).
+                live = await self._client.sql(
+                    f"SELECT count(*) AS n FROM `{name}` WHERE reverted = false "
+                    "AND superseded_by IS NULL AND id <> :id AND ((source = :s AND target = :t) "
+                    "OR (source = :t AND target = :s))",
+                    params={"id": row["id"], "s": row["source"], "t": row["target"]},
+                    session_id=tx,
+                )
+                if not live or int(live[0].get("n", 0)) == 0:
+                    back.append(str(row["id"]))
+            for chunk in _id_chunks(back):
+                await self._client.sql(
+                    f"UPDATE `{name}` SET reverted = false, withdrawn_by_load = null "
+                    "WHERE id IN :ids",
+                    params={"ids": chunk},
+                    session_id=tx,
+                )
+            edges.extend(back)
+        return RestoredElements(node_ids=tuple(nodes), edge_ids=tuple(edges))
 
     async def _holders(
         self, kind: str, ids: Sequence[str], tx: TxId | None = None

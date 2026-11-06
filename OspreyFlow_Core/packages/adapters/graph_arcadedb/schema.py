@@ -177,6 +177,11 @@ async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[
     # against rather than one that only ever appears schemaless.
     await _create_property(client, type_name, "superseded_by", "STRING")
     await _create_index(client, type_name, "superseded_by", unique=False)
+    # `withdrawn_by_load` — sparse, as `superseded_by` (ADR-110 Amendment 6 point 3): present only
+    # on an element a full-snapshot refresh withdrew, and looked up by that refresh's load id when
+    # its revert restores them.
+    await _create_property(client, type_name, "withdrawn_by_load", "STRING")
+    await _create_index(client, type_name, "withdrawn_by_load", unique=False)
     # `datasets` (ADR-099 decision 2, Amendment 6): a list, indexed by each of its items, so a read
     # by dataset (`WHERE datasets CONTAINS ...`) is answered from the index. The access step's
     # Gremlin filter tests the list itself (`AccessFilter.gremlin_dataset_step`).
@@ -186,6 +191,7 @@ async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[
         *(f"{type_name}.{name}" for name in names),
         f"{type_name}.reverted",
         f"{type_name}.superseded_by",
+        f"{type_name}.withdrawn_by_load",
         f"{type_name}.datasets",
     ]
 

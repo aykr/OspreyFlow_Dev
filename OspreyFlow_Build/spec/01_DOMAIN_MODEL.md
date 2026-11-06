@@ -587,6 +587,7 @@ class AuditStub(BaseModel):
     recipe_id: str | None = None
     recipe_version: int | None = None
     reverted: bool = False
+    withdrawn_by_load: str | None = None  # the full-snapshot refresh that withdrew it, ADR-110 Amendment 6
 ```
 
 Nodes are versioned, not overwritten. A correction writes a new revision and points the old one
@@ -606,6 +607,14 @@ every read, any clearance, the same way a classification a principal cannot see 
 them — `services/ingest`'s `revert_load` is the only writer, via `GraphPort.revert_elements`. It
 is never deleted, only flagged, so the audit trail stays intact and the same element ID can be
 cited in an audit query after the fact.
+
+**`withdrawn_by_load`** (ADR-110 Amendment 6 point 3) names the full-snapshot refresh that withdrew
+the element, because the only source row that made it was dropped from the snapshot. It is written
+only by `GraphPort.withdraw_elements`, which sets `reverted` with it, so every read already leaves
+the element out for every reader. `restore_withdrawn`, called when that refresh's load is reverted,
+clears both. The revert of the load that *made* the element clears `withdrawn_by_load` and leaves it
+reverted, so no later restore brings it back; a fresh create over it clears it too. It is not
+`superseded_by`: a withdrawn element has no successor.
 
 **`superseded_by`** is written only by `GraphPort.supersede_node`/`supersede_edge` (§8.2). A
 superseded element is excluded from ordinary reads by default, the same as a reverted one, and
@@ -1392,7 +1401,14 @@ are on the port too, each taking the principal like every other read.
   elements; `services/ingest`'s `revert_load` is the only caller. No `principal` argument, unlike
   every read method — this is a backend write attributed by the caller's own audit trail (the
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
-  afterwards, any clearance, and is never actually deleted.
+  afterwards, any clearance, and is never actually deleted. It also clears `withdrawn_by_load`.
+- **`withdraw_elements(node_ids, edge_ids, load_id, tx) -> None`** and **`restore_withdrawn(load_id,
+  tx) -> RestoredElements`** (ADR-110 Amendment 6 point 3). The first marks each *live* given
+  element reverted and withdrawn by `load_id`; one already reverted is left alone. The second brings
+  back exactly what `load_id` withdrew, except a link whose pair (type and ends) has a live link
+  written since: each link is written once. No `principal`, as `revert_elements`; `services/ingest/`
+  is the only caller. Conformance: `tests/conformance/graph_port/test_suite.py`'s withdrawal
+  section, six cases, each branch shown red by a plant.
 
 These reads take a set of nodes or links, or the whole case, rather than one seed, each with the access step on
 every node, every link and each link's other end, so a link counts only when both its ends can be

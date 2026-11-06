@@ -330,6 +330,12 @@ class AuditStub(BaseModel):
     #: is the only writer, via `GraphPort.revert_elements`
     #: (Phase 2; `01_DOMAIN_MODEL.md` §2.4).
     reverted: bool = False
+    #: ADR-110 Amendment 6 point 3: the full-snapshot refresh (its `load_id`) that withdrew this
+    #: element because the only row that made it was dropped. Set with `reverted` by
+    #: `GraphPort.withdraw_elements`, so every read leaves it out; cleared by `restore_withdrawn`
+    #: (that load reverted), by the revert of the load that made it, and by a fresh create.
+    #: Distinct from `superseded_by`, which names a successor.
+    withdrawn_by_load: str | None = None
 
 
 # --- The node and edge records (01_DOMAIN_MODEL.md §2-3) ----------------

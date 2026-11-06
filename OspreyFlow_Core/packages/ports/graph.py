@@ -76,6 +76,16 @@ class StoredNode:
 
 
 @dataclass(frozen=True)
+class RestoredElements:
+    """What `GraphPort.restore_withdrawn` brought back: the nodes and links that load had withdrawn
+    and that are live again. A link left withdrawn because its pair was written again since is not
+    among them."""
+
+    node_ids: tuple[NodeId, ...] = ()
+    edge_ids: tuple[EdgeId, ...] = ()
+
+
+@dataclass(frozen=True)
 class StoredLink:
     """What `GraphPort.stored_link_states` says of one link: whether it is reverted, and whether it
     is superseded (an analyst's link change replaced it; the replacement is a link of its own)."""
@@ -666,6 +676,25 @@ class GraphPort(Protocol):
         the vertex types and links among the edge types only, and set reverted by SQL on that
         type, in chunks. An id held by two types of one kind raises `AmbiguousElementId` before
         anything is written. Setting the flag again changes nothing, so a rerun is safe."""
+        ...
+
+    async def withdraw_elements(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
+    ) -> None:
+        """ADR-110 Amendment 6 point 3: a full-snapshot refresh (`load_id`) withdraws the elements
+        only its dropped rows made. Each live one of `node_ids`/`edge_ids` is set reverted, so every
+        read leaves it out for every reader with no read changed, and `audit.withdrawn_by_load`
+        records the refresh. An element already reverted is left as it is (it is not this load's to
+        restore). Unknown ids and none are a safe no-op; resolved as `revert_elements` resolves
+        them, refusing an ambiguous id. `services/ingest/` is the only caller."""
+        ...
+
+    async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:
+        """The revert of the refresh `load_id`: every element it withdrew is live again, its
+        `withdrawn_by_load` cleared. Nothing else is touched, never an element reverted for another
+        reason (the revert of the load that made it clears `withdrawn_by_load`, so it is not found
+        here), and never a link whose pair (type and ends) has a live link written since: each link
+        is written once, so that one stays withdrawn. Running it again restores nothing."""
         ...
 
     async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:

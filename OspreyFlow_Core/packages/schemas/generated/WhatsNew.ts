@@ -40,6 +40,7 @@ export type LoadId1 = string | null;
 export type RecipeId1 = string | null;
 export type RecipeVersion1 = number | null;
 export type Reverted = boolean;
+export type WithdrawnByLoad = string | null;
 export type Datasets = string[];
 export type ConfirmedAt = string;
 export type ConfirmedBy = string;
@@ -144,6 +145,7 @@ export interface AuditStub {
   recipe_id?: RecipeId1;
   recipe_version?: RecipeVersion1;
   reverted?: Reverted;
+  withdrawn_by_load?: WithdrawnByLoad;
   [k: string]: unknown;
 }
 /**
