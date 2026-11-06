@@ -1,0 +1,2022 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OspreyFlow navigation prototype</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#f6f8f9}
+a{color:#005299}a:hover{color:#003a6e}
+button,input,select{font:inherit}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #f6f8f9; color: #17262b; font-family: 'Atkinson Hyperlegible Next', system-ui, sans-serif; font-size: 14px; line-height: 1.45">
+
+<div style="background: #e9eef0; border-bottom: 1px solid #cfd8dc; padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center">
+<span style="font-size: 12px; font-weight: 700; color: #5f6f76; letter-spacing: 0.04em">PROTOTYPE CONTROLS</span>
+<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+<span style="font-size: 13px; color: #3d4c52">Signed in as</span>
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="3">
+<button type="button" style="{{r.style}}" onClick="{{r.pick}}">{{r.label}}</button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+<span style="font-size: 13px; color: #3d4c52">Navigation</span>
+<sc-for list="{{models}}" as="m" hint-placeholder-count="3">
+<button type="button" style="{{m.style}}" onClick="{{m.pick}}">{{m.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{showDetail}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+<span style="font-size: 13px; color: #3d4c52">Promotion</span>
+<sc-for list="{{reviewModes}}" as="d" hint-placeholder-count="2">
+<button type="button" style="{{d.style}}" onClick="{{d.pick}}">{{d.label}}</button>
+</sc-for>
+</div>
+<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+<span style="font-size: 13px; color: #3d4c52">Detail</span>
+<sc-for list="{{details}}" as="d" hint-placeholder-count="2">
+<button type="button" style="{{d.style}}" onClick="{{d.pick}}">{{d.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<button type="button" onClick="{{reset}}" style="margin-left: auto; background: transparent; border: 1px solid #9fb0b7; border-radius: 6px; padding: 6px 12px; color: #17262b; cursor: pointer; min-height: 36px">Start again</button>
+</div>
+
+<sc-if value="{{isFull}}" hint-placeholder-val="{{ false }}">
+<div role="note" aria-label="Protective marking" style="height: 20px; background: #2b3a3f; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; display: flex; align-items: center; justify-content: center">OFFICIAL-SENSITIVE — THE HIGHEST MARKING IN VIEW</div>
+<div style="background: #053238; color: #e8f3f5; height: 40px; padding: 0 12px; display: flex; gap: 10px; align-items: center; border-bottom: {{barUnderline}}">
+<button type="button" onClick="{{goHome}}" style="background: transparent; border: 0; color: #e0b75a; font-weight: 700; font-size: 15px; cursor: pointer; padding: 4px 6px">◆ Osprey</button>
+<sc-if value="{{fullAppSwitch}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 2px; background: #0b4a52; border-radius: 6px; padding: 2px">
+<sc-for list="{{appTabs}}" as="t" hint-placeholder-count="2">
+<button type="button" style="{{t.style}}" onClick="{{t.go}}">{{t.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{fullCaseMenu}}" hint-placeholder-val="{{ true }}">
+<span style="min-width: 200px; background: #0b4a52; border-radius: 4px; padding: 5px 10px; font-size: 13px; color: #ffffff">{{fullMenuLabel}} ▾</span>
+</sc-if>
+<sc-if value="{{fullGlassBar}}" hint-placeholder-val="{{ true }}">
+<span style="width: 280px; background: #ffffff; color: #5f6f76; border-radius: 4px; padding: 5px 10px; font-size: 13px; display: flex; justify-content: space-between"><span>Search…  /</span><span style="color: #17262b">⚲ Filters</span></span>
+<div role="group" aria-label="View" style="display: flex; gap: 2px">
+<span style="padding: 5px 10px; font-size: 13px; border-bottom: 2px solid #ffffff; color: #ffffff">Graph</span>
+<span style="padding: 5px 10px; font-size: 13px; color: #cfe3e8">Map</span>
+<span style="padding: 5px 10px; font-size: 13px; color: #cfe3e8">Messages</span>
+</div>
+<span style="padding: 5px 10px; font-size: 13px; border: 1px solid #2f6a73; border-radius: 4px">Export ▾</span>
+</sc-if>
+<span style="flex: 1"></span>
+<sc-if value="{{hasNotes}}" hint-placeholder-val="{{ false }}">
+<div style="position: relative">
+<button type="button" onClick="{{toggleNotes}}" title="{{notesTitle}}" style="background: #e0b75a; color: #2b1d00; border: 0; border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 700">Needs you · {{notesCount}}</button>
+<sc-if value="{{notesOpen}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; right: 0; top: 32px; z-index: 20; width: 320px; background: #ffffff; color: #17262b; border: 1px solid #cfd8dc; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); padding: 6px">
+<sc-for list="{{notes}}" as="n" hint-placeholder-count="2">
+<button type="button" onClick="{{n.go}}" title="{{n.tip}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid #eef2f4; padding: 8px; cursor: pointer; color: #17262b; font-size: 13px"><b style="font-weight: 700">{{n.title}}</b><br><span style="color: #5f6f76; font-size: 12px">{{n.sub}}</span></button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<span style="font-size: 12px; border: 1px solid #2f6a73; border-radius: 4px; padding: 4px 8px">{{account}}</span>
+</div>
+</sc-if>
+
+<sc-if value="{{isSimple}}" hint-placeholder-val="{{ true }}">
+<div style="background: #053238; color: #e8f3f5; padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+<button type="button" onClick="{{goHome}}" style="background: transparent; border: 0; color: #ffffff; font-weight: 700; font-size: 16px; cursor: pointer; padding: 6px 4px; min-height: 40px">OspreyFlow</button>
+<sc-if value="{{showContext}}" hint-placeholder-val="{{ false }}">
+<span style="background: #0b4a52; border-radius: 6px; padding: 7px 12px; color: #ffffff; font-size: 13px">{{contextLabel}} ▾</span>
+</sc-if>
+<div style="display: flex; gap: 4px; flex-wrap: wrap">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" style="{{t.style}}" onClick="{{t.go}}">{{t.label}}</button>
+</sc-for>
+</div>
+<span style="flex: 1"></span>
+<sc-if value="{{hasNotes}}" hint-placeholder-val="{{ false }}">
+<div style="position: relative">
+<button type="button" onClick="{{toggleNotes}}" title="{{notesTitle}}" style="background: #e0b75a; color: #2b1d00; border: 0; border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 700">Needs you · {{notesCount}}</button>
+<sc-if value="{{notesOpen}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; right: 0; top: 32px; z-index: 20; width: 320px; background: #ffffff; color: #17262b; border: 1px solid #cfd8dc; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); padding: 6px">
+<sc-for list="{{notes}}" as="n" hint-placeholder-count="2">
+<button type="button" onClick="{{n.go}}" title="{{n.tip}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid #eef2f4; padding: 8px; cursor: pointer; color: #17262b; font-size: 13px"><b style="font-weight: 700">{{n.title}}</b><br><span style="color: #5f6f76; font-size: 12px">{{n.sub}}</span></button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<span style="font-size: 13px; color: #cfe3e8">{{who}}</span>
+</div>
+</sc-if>
+
+<sc-if value="{{showBanner}}" hint-placeholder-val="{{ true }}">
+<div style="background: #dff1f3; border-bottom: 1px solid #9fd3d9; padding: 6px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<span style="font-weight: 700; color: #053238">{{bannerPlace}}</span>
+<span style="color: #17262b">{{bannerContext}}</span>
+<div style="display: flex; gap: 4px; flex-wrap: wrap">
+<sc-for list="{{subtabs}}" as="t" hint-placeholder-count="3">
+<button type="button" style="{{t.style}}" onClick="{{t.go}}">{{t.label}}</button>
+</sc-for>
+</div>
+<span style="flex: 1"></span>
+<sc-if value="{{showCross}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{cross}}" style="background: #ffffff; border: 1px solid #005299; color: #005299; border-radius: 6px; padding: 5px 12px; cursor: pointer; min-height: 32px; font-weight: 700">{{crossLabel}}</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="background: #fff4e0; border-bottom: 1px solid #e7c58c; padding: 8px 20px; color: #5c3b06; display: flex; gap: 12px; align-items: center">
+<span>{{toast}}</span>
+<button type="button" onClick="{{clearToast}}" style="margin-left: auto; background: transparent; border: 0; color: #5c3b06; cursor: pointer; text-decoration: underline">Dismiss</button>
+</div>
+</sc-if>
+
+<div style="display: flex; align-items: stretch">
+<sc-if value="{{showRail}}" hint-placeholder-val="{{ false }}">
+<div style="width: 48px; flex: none; background: #e3eaec; border-right: 1px solid #cfd8dc; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; min-height: 720px">
+<sc-for list="{{rail}}" as="r" hint-placeholder-count="8">
+<button type="button" onClick="{{r.go}}" aria-label="{{r.label}}" title="{{r.label}}" style="{{r.style}}">{{r.glyph}}</button>
+</sc-for>
+<span style="flex: 1"></span>
+<button type="button" aria-label="Help" title="Help" onClick="{{showWelcome}}" style="width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; color: #17262b">?</button>
+<button type="button" aria-label="Show names" title="Show names" style="width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; color: #17262b">»</button>
+</div>
+</sc-if>
+<sc-if value="{{hasDrawer}}" hint-placeholder-val="{{ false }}">
+<div style="width: 280px; flex: none; background: #ffffff; border-right: 1px solid #cfd8dc; padding: 12px">
+<div style="display: flex; align-items: center; margin-bottom: 8px">
+<span style="font-weight: 700">{{drawer.title}}</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{closeDrawer}}" aria-label="Close" style="background: transparent; border: 0; cursor: pointer; font-size: 16px; color: #17262b">×</button>
+</div>
+<sc-for list="{{drawer.lines}}" as="l" hint-placeholder-count="4">
+<div style="{{l.style}}">{{l.text}}</div>
+</sc-for>
+</div>
+</sc-if>
+
+<div style="flex: 1; min-width: 0">
+
+<sc-if value="{{onGlassFull}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: stretch; min-height: 720px">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div style="height: 36px; border-bottom: 1px solid #cfd8dc; background: #ffffff; display: flex; gap: 12px; align-items: center; padding: 0 10px; font-size: 12px">
+<span style="color: #5f6f76">Match strictness</span>
+<span>○ Strict</span><span style="font-weight: 700">● Balanced</span><span>○ Broad</span>
+<span style="color: #cfd8dc">|</span>
+<span>Layout: Force ▾</span>
+<span>Labels ▾</span>
+<span>Icons ▾</span>
+<span style="color: #cfd8dc">|</span>
+<span>{{viewName}}</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{toggleDetails}}" style="background: #ffffff; border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 12px">Details</button>
+</div>
+<div style="position: relative; flex: 1; min-height: 480px; background: #fbfcfc; overflow: hidden">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<line x1="28" y1="28" x2="46" y2="58" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="64" y1="22" x2="46" y2="58" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="28" y1="28" x2="18" y2="66" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="64" y1="22" x2="80" y2="54" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="46" y1="58" x2="62" y2="84" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="28" y1="28" x2="64" y2="22" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+</svg>
+<sc-for list="{{glassLinks}}" as="l" hint-placeholder-count="0">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<line x1="{{l.x1}}" y1="{{l.y1}}" x2="{{l.x2}}" y2="{{l.y2}}" stroke="#b47b2b" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></line>
+</svg>
+</sc-for>
+<sc-for list="{{glassNodes}}" as="n" hint-placeholder-count="6">
+<button type="button" onClick="{{n.pick}}" aria-label="{{n.label}}" style="{{n.style}}">
+<span style="font-size: 11px; color: {{n.kindInk}}; display: block">{{n.kind}}</span>
+<span style="font-weight: 700">{{n.label}}</span>
+</button>
+</sc-for>
+<sc-if value="{{welcome}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 12px; top: 12px; width: 300px; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.16); padding: 12px; font-size: 12px">
+<div style="display: flex; align-items: center; margin-bottom: 6px"><b style="font-weight: 700; font-size: 13px">Welcome to case Kestrel</b><span style="flex: 1"></span><button type="button" onClick="{{closeWelcome}}" aria-label="Close" style="background: transparent; border: 0; cursor: pointer">×</button></div>
+<div style="color: #3d4c52; margin-bottom: 6px">This canvas holds 6 of 2,140 items in the case. Pick up from:</div>
+<div style="color: #005299">· Expanded Z1042AB, 14:02</div>
+<div style="color: #005299">· Filtered to visits, 13:40</div>
+<div style="color: #005299; margin-bottom: 6px">· Opened alert A14, 09:15</div>
+<div style="color: #5f6f76">Keys: / search · arrows · Enter · F · Esc · ?</div>
+</div>
+</sc-if>
+<sc-if value="{{hasSelBar}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: #17262b; color: #ffffff; border-radius: 6px; padding: 6px 10px; display: flex; gap: 12px; align-items: center; font-size: 12px; white-space: nowrap">
+<span>1 selected</span><span>Expand</span>
+<sc-if value="{{isToday}}" hint-placeholder-val="{{ false }}"><span>Branch to a new case</span></sc-if>
+<sc-if value="{{notToday}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{drawFromSel}}" style="background: transparent; border: 1px solid #e0b75a; color: #e0b75a; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 12px">Draw from the selection</button><span>Save as a view</span></sc-if>
+<span>Remove from view</span><span>Clear  Esc</span>
+</div>
+</sc-if>
+</div>
+<div style="border-top: 1px solid #cfd8dc; background: #ffffff">
+<button type="button" onClick="{{toggleTimeline}}" style="width: 100%; height: 34px; display: flex; gap: 10px; align-items: center; padding: 0 10px; background: transparent; border: 0; cursor: pointer; font-size: 12px; color: #17262b">
+<span>{{timelineChevron}} Timeline</span>
+<span style="font-family: 'IBM Plex Mono', monospace; color: #5f6f76">▁▂▅▃▁▆▂▃▅▂</span>
+<span style="font-family: 'IBM Plex Mono', monospace; color: #5f6f76">2026-08-01 to 2026-11-05</span>
+</button>
+<sc-if value="{{timelineOpen}}" hint-placeholder-val="{{ false }}">
+<div style="height: 130px; padding: 0 10px 10px; display: flex; gap: 3px; align-items: flex-end">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="20">
+<span style="flex: 1; background: #9fd3d9; height: {{b.h}}"></span>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="height: 26px; border-top: 1px solid #cfd8dc; background: #eef2f4; display: flex; gap: 16px; align-items: center; padding: 0 10px; font-size: 12px; white-space: nowrap; overflow: hidden">
+<span><span style="font-family: 'IBM Plex Mono', monospace">2,140</span> nodes</span>
+<span><span style="font-family: 'IBM Plex Mono', monospace">6,912</span> links</span>
+<span><span style="font-family: 'IBM Plex Mono', monospace">{{dimmed}}</span> dimmed by filter</span>
+<span>This case holds material you are not cleared to see.</span>
+<span style="flex: 1"></span>
+<span style="color: #5f6f76">Tip: press F to frame the selection · Next tip</span>
+</div>
+</div>
+<sc-if value="{{rightOpen}}" hint-placeholder-val="{{ true }}">
+<div style="width: 340px; flex: none; border-left: 1px solid #cfd8dc; background: #ffffff; font-size: 12px; display: flex; flex-direction: column">
+<sc-for list="{{panels}}" as="p" hint-placeholder-count="3">
+<div style="border-bottom: 1px solid #cfd8dc">
+<div style="height: 28px; display: flex; align-items: center; padding: 0 8px; border-bottom: 1px solid #e3e9eb">
+<button type="button" onClick="{{p.fold}}" aria-expanded="{{p.open}}" style="background: transparent; border: 0; cursor: pointer; font-size: 12px; font-weight: 700; color: #3d4c52; padding: 0">{{p.chev}} {{p.name}}</button>
+<span style="flex: 1"></span>
+<span style="color: #5f6f76">Hide · ⋯</span>
+</div>
+<sc-if value="{{p.open}}" hint-placeholder-val="{{ true }}">
+<div style="padding: 6px 8px; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{p.parts}}" as="pt" hint-placeholder-count="4">
+<div style="border: 1px solid #e3e9eb; border-radius: 4px">
+<div style="padding: 4px 6px; font-weight: 700; color: #3d4c52">{{pt.chev}} {{pt.name}}</div>
+<sc-if value="{{pt.open}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 0 6px 6px; color: #3d4c52; white-space: pre-line">{{pt.body}}</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{onStudioFull}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 12px 16px">
+<sc-if value="{{isToday}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px">
+<span style="font-weight: 700">Ingest Studio</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">Dataset: Prison intel ▾</span>
+<span style="color: #5f6f76">Working through case Kestrel · Data loaded from this studio goes into: Prison intel</span>
+</div>
+</sc-if>
+<div style="background: #eef2f4; border-radius: 999px; padding: 6px 14px; font-size: 12px; color: #3d4c52; display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px">
+<span>Model: <b style="font-weight: 500; color: #17262b">POLE + NIEM v3</b></span>
+<span>Sources: <b style="font-weight: 500; color: #17262b">3</b> · pin_calls_2.csv not registered</span>
+<span>Pipelines: <b style="font-weight: 500; color: #17262b">3</b>, 1 draft not tested</span>
+<span>Last run: <b style="font-weight: 500; color: #17262b">06:10 today</b></span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px">
+<sc-for list="{{stabs}}" as="t" hint-placeholder-count="4">
+<button type="button" style="{{t.style}}" onClick="{{t.go}}">{{t.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{studioTypeHint}}" hint-placeholder-val="{{ false }}">
+<div title="Analysts proposed link types for Prison intel. Accept or decline them on 1 Model." style="background: #f6f5fe; border: 1px solid #cecbf6; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 13px; color: #26215c">{{studioTypeHintText}} <button type="button" onClick="{{goModelTab}}" style="background: transparent; border: 0; color: #534ab7; text-decoration: underline; cursor: pointer">Open 1 Model</button></div>
+</sc-if>
+<sc-if value="{{tabPipelines}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; font-size: 13px">
+<label for="pname">Name a pipeline</label>
+<input id="pname" type="text" placeholder="Visits and contacts" style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 5px 8px; width: 220px">
+<button type="button" style="background: #ffffff; border: 1px solid #005299; color: #005299; border-radius: 4px; padding: 5px 10px">New pipeline</button>
+<span style="color: #cfd8dc">|</span>
+<span>Visits and contacts · v3 · deployed <u>Open</u></span>
+<span>Intelligence reports · v2 · deployed <u>Open</u></span>
+<span>PIN calls · v1 · draft <u>Open</u></span>
+</div>
+<div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch">
+<div style="flex: 999 1 600px; min-width: 0; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px">
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px; border-bottom: 1px solid #e3e9eb; font-size: 12px">
+<span style="color: #5f6f76">Pipeline stages</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">+ Source</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">+ Extract</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">+ Enrich</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">Remove selected</span>
+<span style="flex: 1"></span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">Load rules</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 3px 8px">Test</span>
+<span style="background: #005299; color: #ffffff; border-radius: 4px; padding: 3px 8px">Deploy as v4</span>
+<span style="border: 1px solid #005299; color: #005299; border-radius: 4px; padding: 3px 8px">Deploy and run now</span>
+</div>
+<div style="padding: 8px; font-size: 12px; color: #b3261e">Save gate: a load needs a deduplication key before it can be deployed.</div>
+<div style="position: relative; height: 340px; background-color: #fbfcfc; background-image: radial-gradient(#dfe6e8 1px, transparent 1px); background-size: 18px 18px">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<line x1="14" y1="30" x2="34" y2="30" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="34" y1="30" x2="54" y2="30" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="54" y1="30" x2="76" y2="30" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="14" y1="66" x2="34" y2="66" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="34" y1="66" x2="54" y2="30" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="76" y1="30" x2="90" y2="56" stroke="#7a8c93" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+</svg>
+<sc-for list="{{dagNodes}}" as="n" hint-placeholder-count="7">
+<span style="{{n.style}}"><span style="display: block; font-size: 10px; color: #5f6f76">{{n.kind}}</span>{{n.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1 1 260px; max-width: 320px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px">
+<b style="font-weight: 700; font-size: 13px">Stage settings · Map</b>
+<span style="color: #5f6f76">Domain pack</span><span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 4px 6px">NIEM v3 ▾</span>
+<span style="color: #5f6f76">Columns → template</span>
+<span>visitor_name → Person.name</span><span>visit_date → Visit.date</span><span>prisoner_no → Prisoner.id</span>
+<span style="color: #5f6f76">Match on · On match · Link when</span>
+<span>Prisoner.id · keep both · same session</span>
+<span style="color: #5f6f76">The draft's own settings</span><span>Deduplication key: — (needed)</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{tabSources}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Source</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Connection</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Refresh</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Marking · units · legal basis</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Used by</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Last arrived</th>
+</tr></thead>
+<tbody>
+<sc-for list="{{sources}}" as="s" hint-placeholder-count="3">
+<tr>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb; font-family: 'IBM Plex Mono', monospace">{{s.name}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">{{s.conn}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">{{s.refresh}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">OFFICIAL-SENSITIVE · Intel unit · s.29</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">{{s.used}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb; color: #5f6f76">{{s.last}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; font-size: 13px">
+<span style="background: #005299; color: #ffffff; border-radius: 4px; padding: 6px 12px">Register a source</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 6px 12px">Re-profile</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 6px 12px">Edit governance</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 6px 12px">Open in a pipeline</span>
+<span style="color: #cfd8dc">|</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 6px 12px">Add files (documents, images, video)</span>
+</div>
+</sc-if>
+
+<sc-if value="{{tabRuns}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 12px; overflow-x: auto">
+<sc-for list="{{runs}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; min-width: 520px">
+<span style="width: 200px; flex: none">{{r.name}}</span>
+<sc-for list="{{r.days}}" as="d" hint-placeholder-count="7">
+<span title="{{d.words}}" style="width: 44px; height: 28px; border-radius: 4px; background: {{d.bg}}; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: {{d.ink}}">{{d.day}}</span>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px">
+<div style="flex: 1 1 300px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; font-size: 13px">
+<b style="font-weight: 700">Pipeline to run or schedule</b>
+<div style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap"><span style="border: 1px solid #9fb0b7; border-radius: 4px; padding: 4px 8px">Visits and contacts v3 ▾</span><span style="border: 1px solid #005299; color: #005299; border-radius: 4px; padding: 4px 8px">Run now or schedule</span></div>
+<div style="margin-top: 8px; color: #5f6f76">Run now · Schedule (cron) · Folder watch · Pause · Resume</div>
+</div>
+<div style="flex: 1 1 300px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; font-size: 13px">
+<b style="font-weight: 700">Schedules and folder watches</b>
+<div style="margin-top: 6px">Visits and contacts · hourly · owner D. Engineer</div>
+<div>Intelligence reports · folder watch · paused (refused 3 in a row)</div>
+</div>
+<div style="flex: 1 1 300px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; font-size: 13px">
+<b style="font-weight: 700">Held rows · Revert</b>
+<div style="margin-top: 6px">Tue load: 4 rows held by “visit without booking”</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #3d4c52; margin-top: 4px">python -m scripts.revert_load --load 8812</div>
+</div>
+</div>
+<sc-if value="{{hasPromos}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 12px; background: #ffffff; border: 1px solid #afa9ec; border-radius: 8px; padding: 12px; font-size: 13px">
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px"><b style="font-weight: 700">Analyst promotions into Prison intel</b><span style="font-size: 12px; background: #eeedfe; color: #3c3489; border-radius: 999px; padding: 2px 9px">trigger: analyst promotion</span><span style="color: #5f6f76">Each one is a load: the same load rules, held rows, ledger and revert as any other.</span></div>
+<sc-for list="{{promoRows}}" as="p" hint-placeholder-count="1">
+<div style="padding: 8px 0; border-top: 1px solid #eef2f4">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">load {{p.load}}</span>
+<span style="font-weight: 700">{{p.what}}</span>
+<span style="color: #5f6f76">by A. Field · case Kestrel · board “{{p.board}}”</span>
+<span style="{{p.chip}}">{{p.statusText}}</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{p.toggleOpen}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 5px 10px; cursor: pointer">{{p.openLabel}}</button>
+<sc-if value="{{p.showCmd}}" hint-placeholder-val="{{ false }}">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #3d4c52; background: #eef2f4; border-radius: 4px; padding: 2px 6px">python -m scripts.revert_load --load {{p.load}}</span>
+</sc-if>
+</div>
+<sc-if value="{{p.open}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 8px; background: #f6f5fe; border: 1px solid #cecbf6; border-radius: 6px; padding: 10px">
+<div style="font-size: 11px; font-weight: 700; color: #3c3489; letter-spacing: 0.05em; margin-bottom: 4px">WHAT THIS LOAD ADDS TO PRISON INTEL</div>
+<sc-for list="{{p.goes}}" as="g" hint-placeholder-count="2">
+<div style="padding: 2px 0">· {{g}}</div>
+</sc-for>
+<div style="margin-top: 6px; color: #3d4c52">Load rules: ran, nothing held. Matches: {{p.matchNote}}</div>
+<sc-if value="{{p.canReview}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap">
+<button type="button" onClick="{{p.approve}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 700">Approve and commit load {{p.load}}</button>
+<button type="button" onClick="{{p.reject}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 6px 12px; cursor: pointer">Reject with a reason</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{tabModel}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 12px; font-size: 13px">
+<b style="font-weight: 700">The target model, in words</b>
+<div style="color: #5f6f76; margin: 4px 0 8px">POLE core plus the case's packs: NIEM v3 (prison intelligence). Becomes the dataset's own in phase 5.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Person</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Object</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Location</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Event</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Prisoner</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Visit</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Cell</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Custody</span>
+</div>
+<sc-if value="{{hasCustomTypes}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 12px; border-top: 1px solid #e3e9eb; padding-top: 10px">
+<div style="font-weight: 700; margin-bottom: 6px">Link types proposed by analysts</div>
+<sc-for list="{{customTypeRows}}" as="t" hint-placeholder-count="1">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 0; border-top: 1px solid #eef2f4; font-size: 13px">
+<b style="font-weight: 700">{{t.name}}</b>
+<span style="color: #5f6f76">{{t.desc}} · {{t.dir}} · by A. Field, case Kestrel · used by {{t.uses}}</span>
+<span style="{{t.chip}}">{{t.statusText}}</span>
+<span style="flex: 1"></span>
+<sc-if value="{{t.canDecide}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{t.accept}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer">Add to the draft model</button>
+<button type="button" onClick="{{t.decline}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 5px 10px; cursor: pointer">Decline</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{onMonitoringFull}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 12px 16px">
+<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px">
+<span style="font-weight: 700; margin-right: 8px">Monitoring</span>
+<span style="border-bottom: 2px solid #005299; padding: 4px 8px; font-weight: 700">Alerts (3 open)</span>
+<span style="padding: 4px 8px">Rules</span><span style="padding: 4px 8px">Watches</span><span style="padding: 4px 8px">Lists</span><span style="padding: 4px 8px">Held rows</span><span style="padding: 4px 8px">Rule changes</span>
+</div>
+<div style="display: flex; gap: 12px; flex-wrap: wrap">
+<div style="flex: 999 1 560px; min-width: 0; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Alert</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">What happened</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Severity</th>
+<th style="text-align: left; padding: 8px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Where it stands</th>
+<th style="padding: 8px; border-bottom: 1px solid #cfd8dc"></th>
+</tr></thead>
+<tbody>
+<sc-for list="{{allAlerts}}" as="a" hint-placeholder-count="3">
+<tr>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb; font-weight: 700">{{a.id}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">{{a.title}}</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">High</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb">Open</td>
+<td style="padding: 8px; border-bottom: 1px solid #e3e9eb; text-align: right"><button type="button" onClick="{{a.open}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 4px; padding: 4px 8px; cursor: pointer">{{a.fullAction}}</button></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<div style="flex: 1 1 280px; max-width: 340px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px">
+<b style="font-weight: 700; font-size: 13px">A14 · what fired this alert</b>
+<span>Rule: shared visitor within 7 days · typology: prison contact</span>
+<span>What this alert concerns: Z1042AB, Z2217CD, L. Marsh</span>
+<span style="color: #5f6f76">Claim · Release · Put on the canvas · Close with a reason (True match, False positive, Duplicate, No further action, Referred)</span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{onAdmin}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; padding: 16px 20px">
+<nav aria-label="Admin sections" style="flex: 1 1 200px; max-width: 220px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 8px">
+<sc-for list="{{adminNav}}" as="g" hint-placeholder-count="6">
+<div style="font-size: 11px; font-weight: 700; color: #5f6f76; letter-spacing: 0.05em; padding: 8px 8px 2px">{{g.group}}</div>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+<button type="button" onClick="{{it.go}}" style="{{it.style}}">{{it.label}}</button>
+</sc-for>
+</sc-for>
+</nav>
+<div style="flex: 999 1 640px; min-width: 0">
+
+<sc-if value="{{adm.people}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px"><h1 style="font-size: 20px; margin: 0">People and roles</h1><span style="color: #5f6f76">Each person’s roles, the places they open and their level in each case.</span><span style="flex: 1"></span><span style="background: #005299; color: #ffffff; border-radius: 6px; padding: 6px 12px; font-size: 13px">Invite a person</span></div>
+<sc-for list="{{peopleWarnings}}" as="w" hint-placeholder-count="1">
+<div style="background: #faeeda; border: 1px solid #ecd3a8; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; color: #5c3b06; display: flex; gap: 10px; align-items: center; flex-wrap: wrap"><span>{{w.text}}</span><span style="flex: 1"></span><sc-if value="{{w.hasAction}}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{w.act}}" style="background: #ffffff; border: 1px solid #b47b2b; color: #5c3b06; border-radius: 6px; padding: 4px 10px; cursor: pointer">{{w.actLabel}}</button></sc-if></div>
+</sc-for>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Person</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Roles</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Opens</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">In cases</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">State</th>
+<th style="padding: 8px 10px; border-bottom: 1px solid #cfd8dc"></th>
+</tr></thead>
+<tbody>
+<sc-for list="{{people}}" as="p" hint-placeholder-count="5">
+<tr>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb"><b style="font-weight: 700">{{p.name}}</b><br><span style="font-size: 12px; color: #5f6f76">{{p.access}}</span></td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb"><sc-for list="{{p.roles}}" as="r" hint-placeholder-count="1"><span style="display: inline-block; font-size: 12px; background: #e3f2fd; color: #0c3d6b; border-radius: 999px; padding: 2px 9px; margin: 0 4px 4px 0">{{r}}</span></sc-for></td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{p.opens}}</td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{p.levels}}</td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb"><span style="{{p.stateChip}}">{{p.state}}</span></td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; text-align: right; white-space: nowrap"><span style="color: #005299; margin-right: 10px">Rights</span><span style="color: #005299; margin-right: 10px">Access</span><sc-if value="{{p.canDisable}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{p.disable}}" style="background: #ffffff; border: 1px solid #9fb0b7; color: #17262b; border-radius: 6px; padding: 4px 10px; cursor: pointer">Disable…</button></sc-if></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<sc-if value="{{hasDisabling}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 14px; background: #ffffff; border: 2px solid #b3261e; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #791f1f; letter-spacing: 0.05em; margin-bottom: 4px">DISABLE {{disabling.nameUpper}}</div>
+<div style="color: #3d4c52; margin-bottom: 10px">Before {{disabling.name}} is disabled, everything they own is handed to someone, so nothing is lost or stuck. Nothing they drew or loaded is deleted.</div>
+<sc-for list="{{disabling.owned}}" as="o" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-top: 1px solid #eef2f4">
+<span style="flex: 1 1 260px"><b style="font-weight: 700">{{o.kind}}</b> {{o.text}}</span>
+<span style="color: #5f6f76; font-size: 12px">Transfer to</span>
+<sc-for list="{{o.targets}}" as="t" hint-placeholder-count="2">
+<button type="button" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+</div>
+</sc-for>
+<sc-if value="{{disabling.none}}" hint-placeholder-val="{{ false }}"><div style="color: #5f6f76">They own nothing that needs handing over.</div></sc-if>
+<sc-if value="{{disabling.hasError}}" hint-placeholder-val="{{ false }}"><p style="color: #b3261e; margin: 8px 0 0">{{disabling.error}}</p></sc-if>
+<div style="display: flex; gap: 8px; margin-top: 12px">
+<button type="button" onClick="{{disabling.confirm}}" style="background: #b3261e; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700">Transfer and disable</button>
+<button type="button" onClick="{{disabling.cancel}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px 14px; cursor: pointer">Cancel</button>
+</div>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{adm.roles}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px"><h1 style="font-size: 20px; margin: 0">Roles</h1><span style="color: #5f6f76">A role is a named bundle of rights. The four built-in roles can be copied, not changed.</span></div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Role</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Opens</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Rights</th>
+<th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Kind</th>
+<th style="padding: 8px 10px; border-bottom: 1px solid #cfd8dc"></th>
+</tr></thead>
+<tbody>
+<sc-for list="{{roleRows}}" as="r" hint-placeholder-count="5">
+<tr>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; font-weight: 700">{{r.name}}</td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{r.opens}}</td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; color: #3d4c52">{{r.rights}}</td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb"><span style="{{r.chip}}">{{r.kind}}</span></td>
+<td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; text-align: right"><button type="button" onClick="{{r.copy}}" style="background: #ffffff; border: 1px solid #005299; color: #005299; border-radius: 6px; padding: 4px 10px; cursor: pointer">Copy into a new role</button></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<sc-if value="{{hasRoleDraft}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 14px; background: #ffffff; border: 2px solid #005299; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 8px">NEW ROLE, FROM {{roleDraft.baseUpper}}</div>
+<label for="rd-name" style="display: block; font-size: 13px; margin-bottom: 4px">Name</label>
+<input id="rd-name" type="text" value="{{roleDraft.name}}" onChange="{{setRoleName}}" placeholder="Field analyst" style="width: 100%; max-width: 360px; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 7px; margin-bottom: 10px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px">
+<sc-for list="{{roleDraft.groups}}" as="g" hint-placeholder-count="3">
+<div style="border: 1px solid #e3e9eb; border-radius: 8px; padding: 8px">
+<div style="font-size: 12px; font-weight: 700; color: #3d4c52; margin-bottom: 4px">{{g.place}}</div>
+<sc-for list="{{g.rights}}" as="x" hint-placeholder-count="4">
+<label style="display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 2px 0; cursor: pointer"><input type="checkbox" checked="{{x.on}}" onChange="{{x.toggle}}"> {{x.label}}</label>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="font-size: 12px; color: #3d4c52; margin-top: 8px">Guard rails: a role can’t both propose and approve the same kind of decision; nobody can give a role holding more than they hold themselves; every version is kept and audited.</div>
+<sc-if value="{{roleDraft.hasError}}" hint-placeholder-val="{{ false }}"><p style="color: #b3261e; margin: 8px 0 0">{{roleDraft.error}}</p></sc-if>
+<div style="display: flex; gap: 8px; margin-top: 12px">
+<button type="button" onClick="{{saveRole}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700">Save role as v1</button>
+<button type="button" onClick="{{cancelRole}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px 14px; cursor: pointer">Cancel</button>
+</div>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{adm.datasets}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px"><h1 style="font-size: 20px; margin: 0">Datasets</h1><span style="color: #5f6f76">Each dataset’s unit, egress, the highest marking it may hold and how drawn items are promoted into it. Every change is audited.</span></div>
+<sc-for list="{{dsRows}}" as="d" hint-placeholder-count="2">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; font-size: 13px">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-bottom: 8px"><b style="font-weight: 700; font-size: 15px">{{d.name}}</b><span style="color: #5f6f76">{{d.meta}}</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px"><span style="width: 190px; color: #5f6f76">Highest marking it may hold</span>
+<sc-for list="{{d.marks}}" as="m" hint-placeholder-count="3"><button type="button" onClick="{{m.pick}}" style="{{m.style}}">{{m.label}}</button></sc-for></div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px"><span style="width: 190px; color: #5f6f76">Promotion of drawn items</span>
+<sc-for list="{{d.policies}}" as="m" hint-placeholder-count="2"><button type="button" onClick="{{m.pick}}" style="{{m.style}}">{{m.label}}</button></sc-for></div>
+<div style="{{d.reviewStyle}}">{{d.reviewers}}</div>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{adm.operations}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px"><h1 style="font-size: 20px; margin: 0">Operations</h1><span style="color: #5f6f76">What the deployment ran today, what waits for a person, and what it stores.</span></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px">
+<sc-for list="{{opsCards}}" as="c" hint-placeholder-count="4">
+<div style="background: #eef2f4; border-radius: 8px; padding: 12px"><div style="font-size: 12px; color: #5f6f76">{{c.label}}</div><div style="font-size: 22px; font-weight: 500">{{c.value}}</div><div style="font-size: 12px; color: #3d4c52">{{c.note}}</div></div>
+</sc-for>
+</div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 10px">
+<b style="font-weight: 700">Promotions waiting for review</b>
+<sc-for list="{{waitRows}}" as="w" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 0; border-top: 1px solid #eef2f4"><span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">load {{w.load}}</span><span>{{w.what}}</span><span style="color: #5f6f76">{{w.dataset}} · waiting {{w.age}}</span><span style="{{w.chip}}">{{w.flag}}</span></div>
+</sc-for>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px"><span style="color: #5f6f76">Alert the reviewers and administrators after</span>
+<sc-for list="{{ageOpts}}" as="m" hint-placeholder-count="4"><button type="button" onClick="{{m.pick}}" style="{{m.style}}">{{m.label}}</button></sc-for></div>
+</div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px 14px; font-size: 13px">
+<b style="font-weight: 700">Storage</b>
+<div style="margin-top: 6px">Graph: 41.2 GB · Staging Parquet: 6.8 GB · Object store: 19.5 GB, of which <b style="font-weight: 700">analyst layers 1.1 GB</b> across 9 cases and <b style="font-weight: 700">analysts’ pictures 380 MB</b></div>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.system}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">System</h1>
+<div style="background: #e1f5ee; border: 1px solid #5dcaa5; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; color: #04342c"><b style="font-weight: 700">After upgrading to v0.5.0:</b> branches converted to case views: 14, in 6 cases. Anything only in a branch moved to its case’s analyst layer, tagged. <span style="text-decoration: underline">Read the dry-run report</span></div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px 14px; font-size: 13px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px">
+<span>● Conduit: healthy</span><span>● Graph store (ArcadeDB 26.10.1): healthy</span><span>● Analytics store: healthy</span><span>● Object store: healthy</span><span>● Identity provider: healthy</span><span>● Acting for people: healthy</span><span>● Model engine (local): healthy · private</span><span>● Scheduler: healthy, queue 0</span>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.grading}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">Grading scheme</h1>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; font-size: 13px">
+<div style="font-size: 15px"><b style="font-weight: 700">5x5x5</b> · chosen at install, 12 Sep</div>
+<div style="color: #5f6f76; margin: 4px 0 10px">Every drawn item and link is graded on this scheme. 1,204 items are graded today.</div>
+<div style="color: #3d4c52">Changing scheme is deliberate: a mapping from each old grade to a new one, a dry run that says how many items each mapping affects, then the change, audited. Every item keeps its original grade beside the new one.</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef2f4; border-radius: 6px; padding: 8px; margin-top: 8px">ospreyflow grading change --to 3x5x2 --mapping grading-map.yaml --dry-run</div>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.approvals}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">Approval rights: a second person</h1>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Decision</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Who proposes</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Who approves (never the proposer)</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Can approve now</th></tr></thead>
+<tbody>
+<tr><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">A rule for the whole deployment</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">An Author with deploy_rules and administer_system</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">Another with the same rights</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">2 people</td></tr>
+<tr><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">Closing a high-severity alert</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">A member who triages alerts</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">Another member who triages alerts</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">per case</td></tr>
+<tr><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">Connection-strength influencers</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">A holder of manage_strength_influencers</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">Another holder</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">3 people</td></tr>
+<tr style="background: #f6f5fe"><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb"><b style="font-weight: 700">New:</b> promoting drawn items into a dataset that needs review</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">The analyst who drew them</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">A data engineer of the dataset, or an Author of the case</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{approversNow}}</td></tr>
+</tbody>
+</table>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.uploads}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">Uploads</h1>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; font-size: 13px">Pictures analysts add to drawn items: up to <b style="font-weight: 700">20 MB</b> each; JPEG, PNG and WebP. Each picture is held as evidence with its own marking (ADR-105).</div>
+</sc-if>
+
+<sc-if value="{{adm.audit}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px"><h1 style="font-size: 20px; margin: 0">Audit</h1><span style="color: #5f6f76">One place to ask what changed and who did it. Each entry links to the record that holds it.</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px">
+<sc-for list="{{auditFilters}}" as="f" hint-placeholder-count="5"><button type="button" onClick="{{f.pick}}" style="{{f.style}}">{{f.label}}</button></sc-for>
+<span style="border: 1px solid #9fb0b7; border-radius: 999px; padding: 6px 12px; font-size: 13px">Person: anyone ▾</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 999px; padding: 6px 12px; font-size: 13px">Case: any ▾</span>
+<span style="border: 1px solid #9fb0b7; border-radius: 999px; padding: 6px 12px; font-size: 13px">Dataset: any ▾</span>
+</div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">When</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Who</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">What</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Where</th><th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Record</th></tr></thead>
+<tbody>
+<sc-for list="{{auditRows}}" as="a" hint-placeholder-count="5">
+<tr><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; color: #5f6f76; white-space: nowrap">{{a.when}}</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{a.who}}</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{a.what}}</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb">{{a.where}}</td><td style="padding: 8px 10px; border-bottom: 1px solid #e3e9eb; color: #005299; white-space: nowrap">{{a.record}} ↗</td></tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.packs}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">Demo packs</h1>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; font-size: 13px; display: flex; flex-direction: column; gap: 8px">
+<div><b style="font-weight: 700">Prison intelligence</b> · loaded, in case Kestrel · includes 3 views, 2 drawing boards with 9 drawn items, one promotion awaiting review</div>
+<div><b style="font-weight: 700">Fixture Corp</b> · loaded, in case Fixture Corp</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef2f4; border-radius: 6px; padding: 8px">ospreyflow demo add prison-intelligence</div>
+</div>
+</sc-if>
+
+<sc-if value="{{adm.other}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 10px">{{admOtherTitle}}</h1>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; font-size: 13px; color: #3d4c52">{{admOtherBody}}</div>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+<div style="{{simpleWrapStyle}}">
+
+<sc-if value="{{onHome}}" hint-placeholder-val="{{ true }}">
+<h1 style="font-size: 20px; margin: 0 0 4px">{{homeTitle}}</h1>
+<p style="margin: 0 0 18px; color: #5f6f76">{{homeSub}}</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px">
+<sc-if value="{{canGlass}}" hint-placeholder-val="{{ true }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+<span style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em">YOUR CASES</span>
+<span style="flex: 1"></span>
+<sc-if value="{{notToday}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{homeNewBoard}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; font-weight: 700; min-height: 36px">+ New drawing board</button>
+</sc-if>
+</div>
+<sc-if value="{{homePick}}" hint-placeholder-val="{{ false }}">
+<div style="background: #e3f2fd; border: 1px solid #005299; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px">
+<div style="font-weight: 700; margin-bottom: 6px">Which case is this board for?</div>
+<div style="font-size: 12px; color: #3d4c52; margin-bottom: 8px">A board always belongs to a case: what you draw is kept in that case's analyst layer.</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<button type="button" onClick="{{pickKestrel}}" style="background: #ffffff; border: 1px solid #005299; color: #005299; border-radius: 6px; padding: 6px 12px; cursor: pointer">Kestrel</button>
+<button type="button" onClick="{{pickHarrier}}" style="background: #ffffff; border: 1px solid #9fb0b7; color: #17262b; border-radius: 6px; padding: 6px 12px; cursor: pointer">Harrier</button>
+<button type="button" onClick="{{pickNewCase}}" style="background: #ffffff; border: 1px dashed #9fb0b7; color: #17262b; border-radius: 6px; padding: 6px 12px; cursor: pointer">Make a new case</button>
+</div>
+</div>
+</sc-if>
+<sc-for list="{{cases}}" as="c" hint-placeholder-count="2">
+<button type="button" onClick="{{c.open}}" style="display: flex; width: 100%; text-align: left; gap: 12px; align-items: center; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; color: #17262b; min-height: 56px">
+<span style="flex: 1"><span style="font-weight: 700">{{c.name}}</span><br><span style="font-size: 12px; color: #5f6f76">{{c.reads}}</span></span>
+<span style="font-size: 12px; background: #fdecd4; color: #7a4a06; border-radius: 999px; padding: 2px 9px">{{c.alerts}}</span>
+</button>
+</sc-for>
+<button type="button" onClick="{{goAlerts}}" style="background: transparent; border: 0; color: #005299; cursor: pointer; padding: 6px 0; text-decoration: underline">All alerts on your cases</button>
+</div>
+</sc-if>
+<sc-if value="{{canAdminFlag}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 16px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 10px">ADMIN</div>
+<sc-for list="{{adminHome}}" as="h" hint-placeholder-count="3">
+<button type="button" onClick="{{h.go}}" style="display: flex; width: 100%; text-align: left; gap: 12px; align-items: center; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; color: #17262b; min-height: 52px"><span style="flex: 1"><b style="font-weight: 700">{{h.title}}</b><br><span style="font-size: 12px; color: #5f6f76">{{h.sub}}</span></span><span style="font-size: 12px; background: #fdecd4; color: #7a4a06; border-radius: 999px; padding: 2px 9px">{{h.chip}}</span></button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{canStudio}}" hint-placeholder-val="{{ true }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 16px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 10px">YOUR DATASETS</div>
+<sc-for list="{{datasets}}" as="d" hint-placeholder-count="2">
+<button type="button" onClick="{{d.open}}" style="display: flex; width: 100%; text-align: left; gap: 12px; align-items: center; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; color: #17262b; min-height: 56px">
+<span style="flex: 1"><span style="font-weight: 700">{{d.name}}</span><br><span style="font-size: 12px; color: #5f6f76">{{d.used}}</span></span>
+<span style="font-size: 12px; background: {{d.chipBg}}; color: {{d.chipInk}}; border-radius: 999px; padding: 2px 9px">{{d.state}}</span>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{onGlass}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 12px">
+<h1 style="font-size: 20px; margin: 0">Case Kestrel</h1>
+<span style="color: #5f6f76">Reads <b style="color: #17262b; font-weight: 500">Prison intel</b> plus <b style="color: #17262b; font-weight: 500">Kestrel analyst layer</b></span>
+<sc-if value="{{analystB}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 12px; background: #eef2f4; border-radius: 999px; padding: 2px 9px">Data last refreshed 06:10 today · 3 sources</span>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div style="flex: 1 1 240px; max-width: 280px; min-width: 220px; display: flex; flex-direction: column; gap: 14px">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 8px">VIEWS IN THIS CASE</div>
+<sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+<button type="button" onClick="{{v.pick}}" style="{{v.style}}">
+<span style="flex: 1">{{v.name}}</span>
+<span style="font-size: 11px; color: #5f6f76">{{v.who}}</span>
+</button>
+</sc-for>
+<button type="button" onClick="{{saveView}}" style="margin-top: 6px; width: 100%; background: #ffffff; border: 1px dashed #005299; color: #005299; border-radius: 6px; padding: 8px; cursor: pointer; min-height: 40px">Save what I see as a view</button>
+<p style="font-size: 12px; color: #5f6f76; margin: 8px 0 0">A view is a saved slice of this case. Deleting it never deletes data.</p>
+</div>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 8px">ALERTS IN THIS CASE</div>
+<sc-for list="{{caseAlerts}}" as="a" hint-placeholder-count="2">
+<button type="button" onClick="{{a.open}}" style="display: block; width: 100%; text-align: left; background: #fffaf2; border: 1px solid #ecd3a8; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; color: #17262b">
+<span style="font-weight: 700">{{a.id}}</span> {{a.title}}
+</button>
+</sc-for>
+</div>
+</div>
+<div style="flex: 999 1 560px; min-width: 0; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px">
+<span style="font-weight: 700">{{viewName}}</span>
+<span style="font-size: 12px; background: #eef2f4; border-radius: 999px; padding: 2px 9px; color: #3d4c52">Analysis canvas: read-only</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{drawFromView}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 700; min-height: 40px">Draw on a board from this view</button>
+<sc-if value="{{hasLoadedSel}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{drawFromSel}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 8px 12px; cursor: pointer; min-height: 40px">Draw from the selection</button>
+</sc-if>
+</div>
+<div style="position: relative; height: 440px; background: #fbfcfc; border: 1px solid #e3e9eb; border-radius: 8px; overflow: hidden">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<line x1="28" y1="28" x2="46" y2="58" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="64" y1="22" x2="46" y2="58" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="28" y1="28" x2="18" y2="66" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="64" y1="22" x2="80" y2="54" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="46" y1="58" x2="62" y2="84" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+<line x1="28" y1="28" x2="64" y2="22" stroke="#9fb0b7" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+</svg>
+<sc-for list="{{glassLinks}}" as="l" hint-placeholder-count="0">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<line x1="{{l.x1}}" y1="{{l.y1}}" x2="{{l.x2}}" y2="{{l.y2}}" stroke="#b47b2b" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></line>
+</svg>
+</sc-for>
+<sc-for list="{{glassNodes}}" as="n" hint-placeholder-count="6">
+<button type="button" onClick="{{n.pick}}" aria-label="{{n.label}}" style="{{n.style}}">
+<span style="font-size: 11px; color: {{n.kindInk}}; display: block">{{n.kind}}</span>
+<span style="font-weight: 700">{{n.label}}</span>
+</button>
+</sc-for>
+</div>
+<p style="font-size: 12px; color: #5f6f76; margin: 8px 0 0">Solid outline: loaded from a dataset. Dashed amber: drawn by an analyst on a board, shown here in context.</p>
+</div>
+<sc-if value="{{hasGlassSel}}" hint-placeholder-val="{{ false }}">
+<div style="flex: 1 1 260px; max-width: 320px; min-width: 240px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 6px">INSPECTOR</div>
+<div style="font-weight: 700; font-size: 16px; margin-bottom: 8px">{{gsel.label}}</div>
+<sc-if value="{{gsel.drawn}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div><span style="color: #5f6f76">Drawn by</span> you, on board “{{gsel.board}}”</div>
+<div><span style="color: #5f6f76">Grading</span> {{gsel.grading}} · <span style="color: #5f6f76">Marking</span> OFFICIAL-SENSITIVE</div>
+<div><span style="color: #5f6f76">Source note</span> {{gsel.source}}</div>
+<div><span style="color: #5f6f76">Status</span> {{gsel.status}}</div>
+<button type="button" onClick="{{gsel.edit}}" style="margin-top: 6px; background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 8px; cursor: pointer; min-height: 40px; font-weight: 700">Edit on board ↗</button>
+</div>
+</sc-if>
+<sc-if value="{{gsel.loaded}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div><span style="color: #5f6f76">From</span> Prison intel dataset</div>
+<div><span style="color: #5f6f76">Pipeline</span> Visits and contacts, v3</div>
+<div><span style="color: #5f6f76">Loaded</span> 5 Nov, 06:10</div>
+<div><span style="color: #5f6f76">Marking</span> OFFICIAL-SENSITIVE</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{onBoards}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 4px">
+<h1 style="font-size: 20px; margin: 0">Drawing boards in case Kestrel</h1>
+<span style="color: #5f6f76">Everything drawn is kept in the Kestrel analyst layer. Deleting a board never deletes what was drawn.</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin-top: 14px">
+<div style="flex: 999 1 520px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px">
+<sc-for list="{{boardCards}}" as="b" hint-placeholder-count="2">
+<button type="button" onClick="{{b.open}}" style="text-align: left; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; cursor: pointer; color: #17262b; min-height: 110px">
+<span style="display: block; font-weight: 700; font-size: 15px">{{b.name}}</span>
+<span style="display: block; font-size: 12px; color: #5f6f76; margin: 4px 0 10px">{{b.start}}</span>
+<span style="font-size: 12px; background: #eef2f4; border-radius: 999px; padding: 2px 9px">{{b.who}}</span>
+<span style="font-size: 12px; background: #fff3df; color: #7a4a06; border-radius: 999px; padding: 2px 9px; margin-left: 4px">{{b.count}}</span>
+</button>
+</sc-for>
+</div>
+<div style="flex: 1 1 280px; max-width: 340px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 10px">NEW BOARD</div>
+<button type="button" onClick="{{newBlank}}" style="display: block; width: 100%; text-align: left; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; color: #17262b"><b style="font-weight: 700">Blank</b><br><span style="font-size: 12px; color: #5f6f76">Start from nothing, i2-style</span></button>
+<button type="button" onClick="{{newFromView}}" style="display: block; width: 100%; text-align: left; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; color: #17262b"><b style="font-weight: 700">From the view “{{curViewName}}”</b><br><span style="font-size: 12px; color: #5f6f76">Its loaded items, as live references</span></button>
+<button type="button" onClick="{{newFromSel}}" style="display: block; width: 100%; text-align: left; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; color: #17262b"><b style="font-weight: 700">From a selection</b><br><span style="font-size: 12px; color: #5f6f76">Replaces “Branch selected”</span></button>
+<button type="button" onClick="{{importI2}}" style="display: block; width: 100%; text-align: left; background: #f6f8f9; border: 1px dashed #9fb0b7; border-radius: 8px; padding: 10px 12px; cursor: pointer; color: #17262b"><b style="font-weight: 700">Import an i2 chart (.anx)</b><br><span style="font-size: 12px; color: #5f6f76">Lands as a new board; its own design round</span></button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{onBoard}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px">
+<button type="button" onClick="{{backToBoards}}" style="background: transparent; border: 0; color: #005299; cursor: pointer; text-decoration: underline; padding: 4px 0">← All boards</button>
+<h1 style="font-size: 20px; margin: 0">Board: {{board.name}}</h1>
+<span style="font-size: 12px; background: #eef2f4; border-radius: 999px; padding: 2px 9px">{{board.who}}</span>
+<span style="color: #5f6f76">Case Kestrel · drawn items kept in the Kestrel analyst layer</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{promoteBoard}}" style="background: #534ab7; color: #ffffff; border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; min-height: 36px; font-weight: 700">Promote from this board…</button>
+<button type="button" onClick="{{shareBoard}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 7px 12px; cursor: pointer; min-height: 36px">Share with the case</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div style="flex: 1 1 200px; max-width: 230px; min-width: 190px; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 4px">DECLARE</div>
+<div style="font-size: 12px; color: #5f6f76; margin-bottom: 8px">Types from Prison intel's model</div>
+<sc-for list="{{palette}}" as="p" hint-placeholder-count="5">
+<button type="button" onClick="{{p.pick}}" style="display: flex; width: 100%; gap: 8px; align-items: center; background: #f6f8f9; border: 1px solid #cfd8dc; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; color: #17262b; min-height: 40px">+ {{p.label}}</button>
+</sc-for>
+<button type="button" onClick="{{toggleLink}}" style="{{linkBtnStyle}}">{{linkBtnLabel}}</button>
+<button type="button" onClick="{{requestType}}" style="margin-top: 8px; background: transparent; border: 0; color: #005299; cursor: pointer; text-decoration: underline; padding: 4px 0; text-align: left">Need another type? Ask a data engineer</button>
+</div>
+<div style="flex: 999 1 520px; min-width: 0; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 12px">
+<sc-if value="{{linkMode}}" hint-placeholder-val="{{ false }}">
+<div style="background: #e3f2fd; border: 1px solid #005299; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; color: #0c3d6b">{{linkHint}}</div>
+</sc-if>
+<div data-board="1" onPointerDown="{{boardDown}}" onPointerMove="{{boardMove}}" onPointerUp="{{boardUp}}" onPointerLeave="{{boardLeave}}" style="position: relative; height: 460px; background-color: #fbfcfc; background-image: radial-gradient(#dfe6e8 1px, transparent 1px); background-size: 18px 18px; border: 1px solid #e3e9eb; border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; cursor: {{boardCursor}}">
+<sc-if value="{{dragging}}" hint-placeholder-val="{{ false }}">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none">
+<line x1="{{rubber.x1}}" y1="{{rubber.y1}}" x2="{{rubber.x2}}" y2="{{rubber.y2}}" stroke="#005299" stroke-width="2" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+</svg>
+</sc-if>
+<sc-if value="{{hasPending}}" hint-placeholder-val="{{ false }}">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none">
+<line x1="{{pending.x1}}" y1="{{pending.y1}}" x2="{{pending.x2}}" y2="{{pending.y2}}" stroke="#005299" stroke-width="2" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+</svg>
+</sc-if>
+<sc-if value="{{boardEmpty}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5f6f76; text-align: center; padding: 20px">A blank board. Pick a type on the left to declare your first item.</div>
+</sc-if>
+<sc-for list="{{boardLinks}}" as="l" hint-placeholder-count="0">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none">
+<line x1="{{l.x1}}" y1="{{l.y1}}" x2="{{l.x2}}" y2="{{l.y2}}" stroke="{{l.color}}" stroke-width="2" stroke-dasharray="{{l.dash}}" vector-effect="non-scaling-stroke"></line>
+</svg>
+</sc-for>
+<sc-for list="{{linkLabels}}" as="t" hint-placeholder-count="0">
+<span style="{{t.style}}">{{t.text}}</span>
+</sc-for>
+<sc-for list="{{boardNodes}}" as="n" hint-placeholder-count="3">
+<div data-node="{{n.id}}" style="{{n.wrap}}">
+<button type="button" onPointerDown="{{n.down}}" onClick="{{n.pick}}" onContextMenu="{{n.menu}}" aria-label="{{n.label}}" style="{{n.style}}">
+<span style="font-size: 11px; color: {{n.kindInk}}; display: block">{{n.kind}}</span>
+<span style="font-weight: 700">{{n.label}}</span>
+</button>
+<span onPointerDown="{{n.linkDown}}" title="Drag to draw a link" aria-hidden="true" style="position: absolute; right: -13px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; background: #005299; color: #ffffff; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: crosshair; box-shadow: 0 0 0 2px #ffffff">⟶</span>
+</div>
+</sc-for>
+<sc-if value="{{hasMenu}}" hint-placeholder-val="{{ false }}">
+<div data-menu="1" role="menu" style="{{menu.style}}">
+<button type="button" role="menuitem" onClick="{{menu.link}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 12px; cursor: pointer; color: #17262b">Draw a link from here</button>
+<button type="button" role="menuitem" onClick="{{menu.inspect}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 12px; cursor: pointer; color: #17262b">Inspect</button>
+<sc-if value="{{menu.drawn}}" hint-placeholder-val="{{ false }}">
+<button type="button" role="menuitem" onClick="{{menu.withdraw}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 12px; cursor: pointer; color: #17262b">Withdraw</button>
+</sc-if>
+<sc-if value="{{menu.loaded}}" hint-placeholder-val="{{ true }}">
+<button type="button" role="menuitem" onClick="{{menu.openInCase}}" style="display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 12px; cursor: pointer; color: #17262b">Show in the case</button>
+</sc-if>
+</div>
+</sc-if>
+</div>
+<p style="font-size: 12px; color: #5f6f76; margin: 8px 0 0">Drag an item to move it. Drag its blue ⟶ handle onto another item to draw a link (or hold Alt while dragging, or right-click: Draw a link from here). Grey solid: loaded items, live references you can link to but not edit here. Dashed amber: what you drew.</p>
+</div>
+<div style="flex: 1 1 280px; max-width: 340px; min-width: 250px; display: flex; flex-direction: column; gap: 14px">
+<sc-if value="{{hasDraft}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 2px solid #005299; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 8px">NEW {{draftTypeUpper}}</div>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="d-label">What do you call it?</label>
+<input id="d-label" type="text" value="{{draft.label}}" onChange="{{setLabel}}" placeholder="Unknown male “Tall”" style="width: 100%; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px; margin-bottom: 10px">
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="d-mark">Handling marking</label>
+<select id="d-mark" style="width: 100%; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #ffffff">
+<option>OFFICIAL-SENSITIVE</option>
+<option>OFFICIAL</option>
+</select>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="d-grade">Grading (this deployment's scheme)</label>
+<select id="d-grade" value="{{draft.grading}}" onChange="{{setGrading}}" style="width: 100%; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #ffffff">
+<option>A1</option><option>B2</option><option>C3</option><option>D4</option><option>E5</option>
+</select>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="d-src">Source note</label>
+<input id="d-src" type="text" value="{{draft.source}}" onChange="{{setSource}}" placeholder="Wing officer report, 4 Nov" style="width: 100%; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px">
+<sc-if value="{{hasDraftError}}" hint-placeholder-val="{{ false }}">
+<p style="font-size: 13px; color: #b3261e; margin: 8px 0 0">{{draft.error}}</p>
+</sc-if>
+<div style="display: flex; gap: 8px; margin-top: 12px">
+<button type="button" onClick="{{saveDraft}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700; min-height: 40px">Add to board</button>
+<button type="button" onClick="{{cancelDraft}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px 14px; cursor: pointer; min-height: 40px">Cancel</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{hasPromoSheet}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 2px solid #534ab7; border-radius: 10px; padding: 14px; font-size: 13px">
+<div style="font-size: 12px; font-weight: 700; color: #3c3489; letter-spacing: 0.05em; margin-bottom: 4px">PROMOTE TO PRISON INTEL</div>
+<div style="font-weight: 700; font-size: 15px; margin-bottom: 10px">{{sheet.title}}</div>
+<div style="display: flex; align-items: stretch; gap: 4px; margin-bottom: 12px">
+<div style="flex: 1; background: #fff8ec; border: 1px dashed #b47b2b; border-radius: 6px; padding: 6px; font-size: 11px; color: #5c3b06"><b style="font-weight: 700; display: block">Kestrel analyst layer</b>{{sheet.countText}}</div>
+<div style="display: flex; align-items: center; color: #534ab7; font-weight: 700">→</div>
+<div style="flex: 1; background: #eeedfe; border: 1px solid #7f77dd; border-radius: 6px; padding: 6px; font-size: 11px; color: #26215c"><b style="font-weight: 700; display: block">load {{sheet.load}}</b>one load, all or nothing</div>
+<div style="display: flex; align-items: center; color: #534ab7; font-weight: 700">→</div>
+<div style="flex: 1; background: #e1f5ee; border: 1px solid #1d9e75; border-radius: 6px; padding: 6px; font-size: 11px; color: #04342c"><b style="font-weight: 700; display: block">Prison intel</b>seen by Kestrel and Harrier</div>
+</div>
+<div style="font-size: 11px; font-weight: 700; color: #5f6f76; letter-spacing: 0.05em; margin-bottom: 4px">ITEMS (choose)</div>
+<sc-for list="{{sheet.itemRows}}" as="r" hint-placeholder-count="2">
+<label style="display: flex; gap: 8px; align-items: center; padding: 3px 0; cursor: pointer"><input type="checkbox" checked="{{r.on}}" onChange="{{r.toggle}}"> <span>{{r.text}}</span></label>
+</sc-for>
+<sc-for list="{{sheet.doneRows}}" as="r" hint-placeholder-count="0">
+<div style="padding: 3px 0 3px 24px; color: #5f6f76">{{r}}</div>
+</sc-for>
+<div style="font-size: 11px; font-weight: 700; color: #5f6f76; letter-spacing: 0.05em; margin: 10px 0 4px">LINKS (follow their items)</div>
+<sc-for list="{{sheet.linkRows}}" as="r" hint-placeholder-count="2">
+<div style="{{r.style}}">{{r.mark}} {{r.text}}</div>
+</sc-for>
+<sc-if value="{{sheet.noLinks}}" hint-placeholder-val="{{ false }}">
+<div style="color: #5f6f76">No drawn links on these items.</div>
+</sc-if>
+<div style="font-size: 11px; font-weight: 700; color: #5f6f76; letter-spacing: 0.05em; margin: 10px 0 4px">CHECKS</div>
+<sc-for list="{{sheet.checks}}" as="c" hint-placeholder-count="4">
+<div style="{{c.style}}">{{c.mark}} {{c.text}}</div>
+</sc-for>
+<div style="font-size: 11px; font-weight: 700; color: #5f6f76; letter-spacing: 0.05em; margin: 10px 0 4px">WHAT HAPPENS NEXT</div>
+<div style="color: #3d4c52">{{sheet.how}}</div>
+<sc-if value="{{sheet.blocked}}" hint-placeholder-val="{{ false }}">
+<p style="color: #b3261e; margin: 8px 0 0">{{sheet.blockedWhy}}</p>
+</sc-if>
+<div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap">
+<sc-if value="{{sheet.canGo}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{sheet.go}}" style="background: #534ab7; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700; min-height: 40px">{{sheet.cta}}</button>
+</sc-if>
+<button type="button" onClick="{{closeSheet}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px 14px; cursor: pointer; min-height: 40px">Cancel</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{hasLinkDraft}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 2px solid #005299; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 4px">NEW LINK</div>
+<div style="font-weight: 700; margin-bottom: 10px">{{linkDraft.aLabel}} → {{linkDraft.bLabel}}</div>
+<div style="font-size: 13px; margin-bottom: 6px">What links them?</div>
+<div role="radiogroup" aria-label="Link type" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px">
+<sc-for list="{{linkTypePills}}" as="t" hint-placeholder-count="5">
+<button type="button" role="radio" aria-checked="{{t.on}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+<button type="button" onClick="{{openDefine}}" style="background: #ffffff; color: #534ab7; border: 1px dashed #534ab7; border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px">+ Define a new link type</button>
+</div>
+<sc-if value="{{defining}}" hint-placeholder-val="{{ false }}">
+<div style="background: #f6f5fe; border: 1px solid #cecbf6; border-radius: 8px; padding: 10px; margin-bottom: 10px">
+<div style="font-size: 12px; font-weight: 700; color: #3c3489; letter-spacing: 0.05em; margin-bottom: 6px">NEW LINK TYPE</div>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="nt-name">Name it as a verb phrase</label>
+<input id="nt-name" type="text" value="{{newType.name}}" onChange="{{setNtName}}" placeholder="Passed an item to" style="width: 100%; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 7px; margin-bottom: 8px">
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="nt-desc">What it means, in a sentence</label>
+<input id="nt-desc" type="text" value="{{newType.desc}}" onChange="{{setNtDesc}}" placeholder="One person handed a physical item to another" style="width: 100%; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 7px; margin-bottom: 8px">
+<label style="display: flex; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 8px; cursor: pointer"><input type="checkbox" checked="{{newType.directed}}" onChange="{{toggleNtDirected}}"> It has a direction (from → to)</label>
+<div style="font-size: 12px; color: #3d4c52; margin-bottom: 8px">Usable on boards in case Kestrel at once, marked “proposed”. It joins Prison intel’s model only when a data engineer accepts it; until then links of this type stay in the analyst layer.</div>
+<sc-if value="{{hasNtError}}" hint-placeholder-val="{{ false }}">
+<p style="font-size: 13px; color: #b3261e; margin: 0 0 8px">{{newType.error}}</p>
+</sc-if>
+<div style="display: flex; gap: 8px">
+<button type="button" onClick="{{saveNewType}}" style="background: #534ab7; color: #ffffff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 700">Use this type</button>
+<button type="button" onClick="{{cancelDefine}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 6px 12px; cursor: pointer">Cancel</button>
+</div>
+</div>
+</sc-if>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="l-grade">Grading (this deployment's scheme)</label>
+<select id="l-grade" value="{{linkDraft.grading}}" onChange="{{setLinkGrading}}" style="width: 100%; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #ffffff">
+<option>A1</option><option>B2</option><option>C3</option><option>D4</option><option>E5</option>
+</select>
+<label style="display: block; font-size: 13px; margin-bottom: 4px" for="l-src">Source note</label>
+<input id="l-src" type="text" value="{{linkDraft.source}}" onChange="{{setLinkSource}}" placeholder="Visits log, 2 Nov" style="width: 100%; box-sizing: border-box; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px">
+<div style="font-size: 12px; color: #5f6f76; margin-top: 6px">Marking: OFFICIAL-SENSITIVE (the higher of its two ends)</div>
+<sc-if value="{{hasLinkError}}" hint-placeholder-val="{{ false }}">
+<p style="font-size: 13px; color: #b3261e; margin: 8px 0 0">{{linkDraft.error}}</p>
+</sc-if>
+<div style="display: flex; gap: 8px; margin-top: 12px">
+<button type="button" onClick="{{saveLink}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700; min-height: 40px">Add the link</button>
+<button type="button" onClick="{{cancelLink}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 8px 14px; cursor: pointer; min-height: 40px">Cancel</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{hasBoardSel}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #00727f; letter-spacing: 0.05em; margin-bottom: 6px">INSPECTOR</div>
+<div style="font-weight: 700; font-size: 16px; margin-bottom: 8px">{{bsel.label}}</div>
+<sc-if value="{{bsel.drawn}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div><span style="color: #5f6f76">Type</span> {{bsel.type}} · <span style="color: #5f6f76">Grading</span> {{bsel.grading}}</div>
+<div><span style="color: #5f6f76">Marking</span> OFFICIAL-SENSITIVE</div>
+<div><span style="color: #5f6f76">Source note</span> {{bsel.source}}</div>
+<div><span style="color: #5f6f76">Status</span> {{bsel.status}}</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px">
+<button type="button" onClick="{{bsel.promote}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 7px 10px; cursor: pointer">Promote…</button>
+<button type="button" onClick="{{bsel.withdraw}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 7px 10px; cursor: pointer">Withdraw</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{bsel.loaded}}" hint-placeholder-val="{{ true }}">
+<div style="font-size: 13px; color: #3d4c52">Loaded from Prison intel by the Visits and contacts pipeline. Live reference: link to it here, but change it only through the Ingest Studio.</div>
+</sc-if>
+</div>
+</sc-if>
+<div style="background: #ffffff; border: 1px solid #ecd3a8; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #7a4a06; letter-spacing: 0.05em; margin-bottom: 6px">LOOKS LIKE A LOADED ITEM</div>
+<sc-if value="{{hasMatches}}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{matches}}" as="m" hint-placeholder-count="1">
+<div style="font-size: 13px; margin-bottom: 8px">
+<b style="font-weight: 700">{{m.drawn}}</b> may be <b style="font-weight: 700">{{m.loaded}}</b> in Prison intel ({{m.why}}). A proposal until you decide; nothing is merged.
+<div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+<button type="button" onClick="{{m.same}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer">Same</button>
+<button type="button" onClick="{{m.not}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 6px 10px; cursor: pointer">Not the same</button>
+</div>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{noMatches}}" hint-placeholder-val="{{ true }}">
+<div style="font-size: 13px; color: #5f6f76">Nothing you have drawn looks like a loaded item yet.</div>
+</sc-if>
+</div>
+<div style="background: #ffffff; border: 1px solid #afa9ec; border-radius: 10px; padding: 14px">
+<div style="font-size: 12px; font-weight: 700; color: #3c3489; letter-spacing: 0.05em; margin-bottom: 6px">PROMOTIONS FROM THIS BOARD</div>
+<sc-if value="{{hasBoardPromos}}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{boardPromos}}" as="p" hint-placeholder-count="1">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; padding: 6px 0; border-top: 1px solid #eef2f4">
+<span style="font-weight: 700">{{p.what}}</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5f6f76">load {{p.load}}</span>
+<span style="{{p.chip}}">{{p.statusText}}</span>
+<span style="flex: 1"></span>
+<sc-if value="{{p.canRevert}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{p.revert}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 4px 8px; cursor: pointer">Revert</button>
+</sc-if>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{noBoardPromos}}" hint-placeholder-val="{{ true }}">
+<div style="font-size: 13px; color: #5f6f76">Nothing promoted yet. Select a drawn item and choose Promote… in the inspector.</div>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{onAlerts}}" hint-placeholder-val="{{ false }}">
+<h1 style="font-size: 20px; margin: 0 0 4px">Alerts on your cases</h1>
+<p style="margin: 0 0 16px; color: #5f6f76">Opening an alert saves it as a private view in its case, or opens the board it concerns.</p>
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Alert</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">What happened</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Case</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Raised</th>
+<th style="padding: 10px; border-bottom: 1px solid #cfd8dc"></th>
+</tr></thead>
+<tbody>
+<sc-for list="{{allAlerts}}" as="a" hint-placeholder-count="3">
+<tr>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb; font-weight: 700">{{a.id}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb">{{a.title}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb">{{a.case}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb; color: #5f6f76">{{a.when}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb; text-align: right"><button type="button" onClick="{{a.open}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 6px 10px; cursor: pointer">{{a.action}}</button></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+
+<sc-if value="{{onStudio}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 4px">
+<h1 style="font-size: 20px; margin: 0">{{studioTitle}}</h1>
+<span style="color: #5f6f76">{{studioSub}}</span>
+</div>
+<sc-if value="{{readOnly}}" hint-placeholder-val="{{ false }}">
+<div style="background: #eef2f4; border-radius: 8px; padding: 10px 12px; margin: 10px 0; color: #17262b">Read-only. You can see where this case's data comes from and when it last arrived. Changing a pipeline needs a data engineer.</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 14px">
+<sc-for list="{{stabs}}" as="t" hint-placeholder-count="4">
+<button type="button" style="{{t.style}}" onClick="{{t.go}}">{{t.label}}</button>
+</sc-for>
+<span style="flex: 1"></span>
+<sc-if value="{{canEdit}}" hint-placeholder-val="{{ true }}">
+<span style="background: #eef2f4; border-radius: 999px; padding: 6px 12px; font-size: 12px; color: #3d4c52">Model v4 live · 3 sources · 1 draft untested · last run 06:10</span>
+</sc-if>
+</div>
+<sc-if value="{{studioTypeHint}}" hint-placeholder-val="{{ false }}">
+<div title="Analysts proposed link types for Prison intel. Accept or decline them on 1 Model." style="background: #f6f5fe; border: 1px solid #cecbf6; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 13px; color: #26215c">{{studioTypeHintText}} <button type="button" onClick="{{goModelTab}}" style="background: transparent; border: 0; color: #534ab7; text-decoration: underline; cursor: pointer">Open 1 Model</button></div>
+</sc-if>
+<sc-if value="{{tabSources}}" hint-placeholder-val="{{ true }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; overflow-x: auto">
+<table style="border-collapse: collapse; width: 100%; font-size: 13px">
+<thead><tr>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Source</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Connection</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Refresh</th>
+<th style="text-align: left; padding: 10px; border-bottom: 1px solid #cfd8dc; color: #5f6f76">Last arrived</th>
+</tr></thead>
+<tbody>
+<sc-for list="{{sources}}" as="s" hint-placeholder-count="3">
+<tr>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb; font-family: 'IBM Plex Mono', monospace">{{s.name}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb">{{s.conn}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb">{{s.refresh}}</td>
+<td style="padding: 10px; border-bottom: 1px solid #e3e9eb; color: #5f6f76">{{s.last}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</sc-if>
+<sc-if value="{{tabPipelines}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px">
+<sc-for list="{{pipelines}}" as="p" hint-placeholder-count="3">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-weight: 700">{{p.name}}</div>
+<div style="font-size: 13px; color: #5f6f76; margin: 4px 0 8px">{{p.reads}}</div>
+<span style="font-size: 12px; background: {{p.chipBg}}; color: {{p.chipInk}}; border-radius: 999px; padding: 2px 9px">{{p.state}}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{tabRuns}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px; overflow-x: auto">
+<sc-for list="{{runs}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px; min-width: 520px">
+<span style="width: 200px; flex: none">{{r.name}}</span>
+<sc-for list="{{r.days}}" as="d" hint-placeholder-count="7">
+<span title="{{d.words}}" style="width: 44px; height: 28px; border-radius: 4px; background: {{d.bg}}; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: {{d.ink}}">{{d.day}}</span>
+</sc-for>
+</div>
+</sc-for>
+<sc-if value="{{runsMatchNote}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 10px; background: #fff8ec; border: 1px solid #ecd3a8; border-radius: 6px; padding: 8px 10px; font-size: 13px">Today's Visits and contacts load matches 1 item an analyst drew in case Kestrel. The analyst has been alerted; nothing was merged.</div>
+</sc-if>
+<sc-if value="{{hasPromos}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 12px; background: #ffffff; border: 1px solid #afa9ec; border-radius: 8px; padding: 12px; font-size: 13px">
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px"><b style="font-weight: 700">Analyst promotions into Prison intel</b><span style="font-size: 12px; background: #eeedfe; color: #3c3489; border-radius: 999px; padding: 2px 9px">trigger: analyst promotion</span><span style="color: #5f6f76">Each one is a load: the same load rules, held rows, ledger and revert as any other.</span></div>
+<sc-for list="{{promoRows}}" as="p" hint-placeholder-count="1">
+<div style="padding: 8px 0; border-top: 1px solid #eef2f4">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">load {{p.load}}</span>
+<span style="font-weight: 700">{{p.what}}</span>
+<span style="color: #5f6f76">by A. Field · case Kestrel · board “{{p.board}}”</span>
+<span style="{{p.chip}}">{{p.statusText}}</span>
+<span style="flex: 1"></span>
+<button type="button" onClick="{{p.toggleOpen}}" style="background: #ffffff; color: #005299; border: 1px solid #005299; border-radius: 6px; padding: 5px 10px; cursor: pointer">{{p.openLabel}}</button>
+<sc-if value="{{p.showCmd}}" hint-placeholder-val="{{ false }}">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #3d4c52; background: #eef2f4; border-radius: 4px; padding: 2px 6px">python -m scripts.revert_load --load {{p.load}}</span>
+</sc-if>
+</div>
+<sc-if value="{{p.open}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 8px; background: #f6f5fe; border: 1px solid #cecbf6; border-radius: 6px; padding: 10px">
+<div style="font-size: 11px; font-weight: 700; color: #3c3489; letter-spacing: 0.05em; margin-bottom: 4px">WHAT THIS LOAD ADDS TO PRISON INTEL</div>
+<sc-for list="{{p.goes}}" as="g" hint-placeholder-count="2">
+<div style="padding: 2px 0">· {{g}}</div>
+</sc-for>
+<div style="margin-top: 6px; color: #3d4c52">Load rules: ran, nothing held. Matches: {{p.matchNote}}</div>
+<sc-if value="{{p.canReview}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap">
+<button type="button" onClick="{{p.approve}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 700">Approve and commit load {{p.load}}</button>
+<button type="button" onClick="{{p.reject}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 6px 12px; cursor: pointer">Reject with a reason</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{tabModel}}" hint-placeholder-val="{{ false }}">
+<div style="background: #ffffff; border: 1px solid #cfd8dc; border-radius: 10px; padding: 14px">
+<div style="font-weight: 700; margin-bottom: 6px">Target model v4 (live)</div>
+<div style="font-size: 13px; color: #5f6f76; margin-bottom: 10px">Pack: NIEM v3 · These types are also the drawing boards' palette.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Person</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Phone</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Address</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Vehicle</span>
+<span style="background: #eef2f4; border-radius: 999px; padding: 3px 10px; font-size: 12px">Cell</span>
+</div>
+<sc-if value="{{hasCustomTypes}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 12px; border-top: 1px solid #e3e9eb; padding-top: 10px">
+<div style="font-weight: 700; margin-bottom: 6px">Link types proposed by analysts</div>
+<sc-for list="{{customTypeRows}}" as="t" hint-placeholder-count="1">
+<div style="display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 0; border-top: 1px solid #eef2f4; font-size: 13px">
+<b style="font-weight: 700">{{t.name}}</b>
+<span style="color: #5f6f76">{{t.desc}} · {{t.dir}} · by A. Field, case Kestrel · used by {{t.uses}}</span>
+<span style="{{t.chip}}">{{t.statusText}}</span>
+<span style="flex: 1"></span>
+<sc-if value="{{t.canDecide}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{t.accept}}" style="background: #005299; color: #ffffff; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer">Add to the draft model</button>
+<button type="button" onClick="{{t.decline}}" style="background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 6px; padding: 5px 10px; cursor: pointer">Decline</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{typeRequested}}" hint-placeholder-val="{{ false }}">
+<div style="margin-top: 10px; background: #e3f2fd; border: 1px solid #005299; border-radius: 6px; padding: 8px 10px; font-size: 13px">Request from case Kestrel: add a type “Gang affiliation”. Goes into the next draft model.</div>
+</sc-if>
+</div>
+</sc-if>
+</sc-if>
+
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = this.fresh('super', 'B', 'simple');
+}
+fresh(role, model, detail) {
+return { role: role, model: model, detail: detail, place: 'home', from: '', view: 'all', alertView: false, stab: 'sources', gsel: '', bsel: '', extraViews: 0, toast: '', homePick: false,
+boards: [{ id: 'b1', name: 'Visits sketch', who: 'shared with the case', refs: ['n1', 'n2', 'n3'], start: 'Started from the view “Visits network”' }],
+board: '', items: [], links: [], linkMode: false, linkFrom: '', draft: null, decided: {}, typeRequested: false,
+drag: null, hover: '', linkDraft: null, layout: {}, menu: null, suppressClick: false, promoSheet: '', promoPick: {}, promotions: [], reviewMode: 'author', reviewOpen: '', adminSec: 'people', disabling: '', transfers: {}, disabledIds: {}, disableError: '', authorFixed: false, customRoles: [], roleDraft: null, telMark: 'OFFICIAL-SENSITIVE', piMark: 'OFFICIAL-SENSITIVE', telPolicy: 'review', alertDays: 3, auditFilter: 'all', auditExtra: [], notesOpen: false, customTypes: [], defining: false, newType: { name: '', desc: '', directed: true, error: '' },
+drawer: '', welcome: true, timeline: false, rightOpen: true, folded: { metrics: false, query: false } };
+}
+renderVals() {
+const S = this.state;
+const set = (o) => this.setState(o);
+const R = S.role, M = S.model, P = S.place;
+const isToday = M === 'T';
+const isA = M === 'A';
+const isFull = isToday || S.detail === 'full';
+const canGlass = R === 'analyst' || R === 'super';
+const canStudio = R === 'developer' || R === 'super';
+const canAdmin = R === 'admin';
+const canData = canStudio || (isA && canGlass);
+const pill = (on) => on
+? 'background: #005299; color: #ffffff; border: 1px solid #005299; border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 36px; font-weight: 700'
+: 'background: #ffffff; color: #17262b; border: 1px solid #9fb0b7; border-radius: 999px; padding: 6px 12px; cursor: pointer; min-height: 36px';
+const topTab = (on) => on
+? 'background: #0097a7; color: #ffffff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 700; min-height: 40px'
+: 'background: transparent; color: #e8f3f5; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; min-height: 40px';
+const appTab = (on) => on
+? 'background: #0097a7; color: #ffffff; border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-weight: 700; font-size: 13px'
+: 'background: transparent; color: #e8f3f5; border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px';
+const subTab = (on) => on
+? 'background: #053238; color: #ffffff; border: 0; border-radius: 6px; padding: 4px 12px; cursor: pointer; font-weight: 700; min-height: 30px'
+: 'background: transparent; color: #053238; border: 1px solid #7fc2ca; border-radius: 6px; padding: 4px 12px; cursor: pointer; min-height: 30px';
+const placeTab = (on) => on
+? 'background: #ffffff; color: #005299; border: 2px solid #005299; border-radius: 8px; padding: 6px 16px; cursor: pointer; font-weight: 700; min-height: 36px'
+: 'background: #eef2f4; color: #17262b; border: 1px solid #cfd8dc; border-radius: 8px; padding: 6px 16px; cursor: pointer; min-height: 36px';
+const inGlass = P === 'glass' || P === 'alerts' || P === 'boards' || P === 'board';
+const go = (place, extra) => () => set(Object.assign({ place: place, homePick: false, drawer: '', from: place === 'studio' ? (inGlass ? 'kestrel' : S.from) : '' }, extra || {}));
+
+const roles = [['analyst', 'Analyst'], ['developer', 'Data engineer'], ['super', 'Super user (both)'], ['admin', 'Administrator']]
+.map(([id, label]) => ({ label: label, style: pill(R === id), pick: () => set(this.fresh(id, S.model, S.detail)) }));
+const models = [['B', 'B · Separate places (chosen)'], ['A', 'A · Studio as a mode of the case'], ['T', 'Today, as built']]
+.map(([id, label]) => ({ label: label, style: pill(M === id), pick: () => set({ model: id, place: (id === 'T' && (P === 'boards' || P === 'board')) ? 'glass' : P, drawer: '' }) }));
+const reviewModes = [['author', 'Author promotes'], ['review', 'Second person reviews']].map(([id, label]) => ({ label: label, style: pill(S.reviewMode === id), pick: () => set({ reviewMode: id }) }));
+const details = [['simple', 'Simplified'], ['full', 'Every current element']]
+.map(([id, label]) => ({ label: label, style: pill(S.detail === id), pick: () => set({ detail: id, drawer: '' }) }));
+
+const tabs = [{ label: 'Home', style: topTab(P === 'home'), go: go('home') }];
+let subtabs = [];
+if (isA) {
+if (canGlass) {
+tabs.push({ label: 'Analyse', style: topTab(P === 'glass'), go: go('glass') });
+tabs.push({ label: 'Boards', style: topTab(P === 'boards' || P === 'board'), go: go('boards') });
+tabs.push({ label: 'Alerts', style: topTab(P === 'alerts'), go: go('alerts') });
+}
+if (canData) tabs.push({ label: R === 'analyst' ? 'Data (read-only)' : 'Data', style: topTab(P === 'studio'), go: go('studio') });
+} else if (!isToday) {
+if (canGlass) tabs.push({ label: 'The Glass', style: topTab(inGlass), go: go('glass') });
+if (canStudio) tabs.push({ label: 'Ingest Studio', style: topTab(P === 'studio'), go: go('studio') });
+}
+if (canAdmin) tabs.push({ label: 'Admin', style: topTab(P === 'admin'), go: go('admin') });
+if (M === 'B' && inGlass) subtabs = [
+{ label: 'Case', style: subTab(P === 'glass'), go: go('glass') },
+{ label: 'Boards', style: subTab(P === 'boards' || P === 'board'), go: go('boards') },
+{ label: isFull ? 'Monitoring' : 'Alerts', style: subTab(P === 'alerts'), go: go('alerts') }];
+const appTabs = [];
+if (canGlass) appTabs.push({ label: 'The Glass', style: appTab(inGlass), go: go('glass') });
+if (canStudio) appTabs.push({ label: 'Ingest Studio', style: appTab(P === 'studio'), go: go('studio') });
+if (canAdmin) appTabs.push({ label: 'Admin', style: appTab(P === 'admin'), go: go('admin') });
+if (isA && isFull) {
+appTabs.length = 0;
+if (canGlass) { appTabs.push({ label: 'Analyse', style: appTab(P === 'glass'), go: go('glass') }); appTabs.push({ label: 'Boards', style: appTab(P === 'boards' || P === 'board'), go: go('boards') }); appTabs.push({ label: 'Monitoring', style: appTab(P === 'alerts'), go: go('alerts') }); }
+if (canData) appTabs.push({ label: R === 'analyst' ? 'Data (read-only)' : 'Data', style: appTab(P === 'studio'), go: go('studio') });
+if (canAdmin) appTabs.push({ label: 'Admin', style: appTab(P === 'admin'), go: go('admin') });
+}
+
+const showContext = isA && P !== 'home' && P !== 'admin';
+const contextLabel = R === 'developer' ? 'Dataset: Prison intel · used by Kestrel, Harrier' : 'Case: Kestrel · Prison intel';
+const showBanner = M === 'B' && P !== 'home';
+let bannerPlace = '', bannerContext = '', showCross = false, crossLabel = '', cross = () => {};
+if (showBanner && P === 'studio') {
+bannerPlace = 'You are in the Ingest Studio';
+bannerContext = 'Dataset Prison intel ▾ · feeds 2 cases: Kestrel, Harrier';
+if (R === 'super' && S.from === 'kestrel') { showCross = true; crossLabel = '← Back to case Kestrel in the Glass'; cross = go('glass'); }
+} else if (showBanner && P === 'admin') {
+bannerPlace = 'You are in Admin';
+bannerContext = 'Deployment Northmoor intelligence · your rights: people, system, schedules';
+} else if (showBanner) {
+bannerPlace = 'You are in the Glass';
+bannerContext = 'Case Kestrel ▾ · reads Prison intel + Kestrel analyst layer';
+if (R === 'super') { showCross = true; crossLabel = 'Open Prison intel in the Ingest Studio ↗'; cross = go('studio', { from: 'kestrel' }); }
+}
+
+const railBtn = (on) => 'width: 36px; height: 36px; border: 0; border-radius: 6px; cursor: pointer; font-size: 15px; color: ' + (on ? '#ffffff' : '#17262b') + '; background: ' + (on ? '#005299' : 'transparent');
+const openDrawer = (id) => () => set({ drawer: S.drawer === id ? '' : id });
+let rail = [];
+if (isToday && P === 'studio') {
+rail = [{ glyph: '↩', label: 'Back to the investigation', go: go('glass'), style: railBtn(false) }];
+} else {
+rail = [
+{ glyph: '▣', label: 'Cases', go: openDrawer('cases'), style: railBtn(S.drawer === 'cases') },
+{ glyph: '◉', label: 'Monitoring, 3 open', go: go('alerts'), style: railBtn(P === 'alerts') },
+{ glyph: '⌂', label: 'Ownership', go: openDrawer('ownership'), style: railBtn(S.drawer === 'ownership') },
+{ glyph: '◷', label: 'History', go: openDrawer('history'), style: railBtn(S.drawer === 'history') },
+{ glyph: '✧', label: 'Explore', go: openDrawer('explore'), style: railBtn(S.drawer === 'explore') },
+{ glyph: '?⃝', label: 'Questions', go: openDrawer('questions'), style: railBtn(S.drawer === 'questions') }];
+if (R === 'super') rail.push({ glyph: '⊕', label: 'Proposed types', go: openDrawer('types'), style: railBtn(S.drawer === 'types') });
+if (isToday && canStudio) rail.push({ glyph: '⇪', label: 'Ingest Studio', go: go('studio'), style: railBtn(P === 'studio') });
+}
+const showRail = isFull && P !== 'home' && (inGlass || (isToday && P === 'studio')) && canGlass;
+const L = (t, s) => ({ text: t, style: s || 'padding: 6px 4px; border-bottom: 1px solid #eef2f4; font-size: 13px' });
+const indent = 'padding: 6px 4px 6px 18px; border-bottom: 1px solid #eef2f4; font-size: 12px; color: #3d4c52';
+const head = 'padding: 8px 4px 2px; font-size: 11px; font-weight: 700; color: #00727f; letter-spacing: 0.05em';
+const drawers = {
+cases: { title: 'Cases', lines: isToday
+? [L('Kestrel (open)'), L('↳ Branch of Kestrel (2 nodes · 14 Oct 16:40)', indent), L('↳ Ask the model about 3 documents', indent), L('↳ Alert A14 jump', indent), L('Harrier'), L('↳ Branch of Harrier', indent), L('Browse all cases', 'padding: 8px 4px; color: #005299; font-size: 13px')]
+: [L('Kestrel (open)'), L('VIEWS', head), L('Whole case · Visits network · Weekly brief', indent), L('BOARDS', head), L('Visits sketch', indent), L('Harrier'), L('Browse all cases', 'padding: 8px 4px; color: #005299; font-size: 13px')] },
+ownership: { title: 'Ownership', lines: [L('Beneficial ownership and due diligence'), L('No company in this case yet', indent)] },
+history: { title: 'History', lines: [L('Expanded Z1042AB · 14:02'), L('Filtered to visits · 13:40'), L('Opened alert A14 · 09:15')] },
+explore: { title: 'Explore', lines: [L('What’s new since you last looked'), L('Most connected'), L('By type'), L('Busiest links')] },
+questions: { title: 'Questions to the model', lines: [L('Who visited both prisoners? · answered'), L('Ask about the selected documents…', indent)] },
+types: { title: 'Proposed types', lines: S.customTypes.map((t) => L('Link type “' + t.name + '” · ' + t.status, indent)).concat([L('“Gang affiliation” from case Kestrel'), L('“Wing” from an extraction', indent)]) } };
+const hasDrawer = showRail && !!drawers[S.drawer];
+
+const base = {
+n1: { kind: 'Prisoner', label: 'Z1042AB', x: 28, y: 28 },
+n2: { kind: 'Prisoner', label: 'Z2217CD', x: 64, y: 22 },
+n3: { kind: 'Visitor', label: 'L. Marsh', x: 46, y: 58 },
+n4: { kind: 'Phone', label: '07700 900412', x: 18, y: 66 },
+n5: { kind: 'Cell', label: 'B2-14 Northmoor', x: 80, y: 54 },
+n6: { kind: 'Address', label: '14 Ferry Lane', x: 62, y: 84 } };
+const pos = (id) => { if (base[id]) return base[id]; const it = S.items.find((i) => i.id === id); return it || { x: 0, y: 0, label: '' }; };
+const labelOf = (id) => pos(id).label;
+
+const viewDefs = [
+{ id: 'all', name: 'Whole case', who: 'everyone', nodes: null },
+{ id: 'visits', name: 'Visits network', who: 'private', nodes: ['n1', 'n2', 'n3', 'n6'] },
+{ id: 'brief', name: 'Weekly brief', who: 'shared', nodes: ['n1', 'n2', 'n5'] }];
+if (S.alertView) viewDefs.push({ id: 'alert14', name: 'A14 Shared visitor', who: 'private', nodes: ['n1', 'n2', 'n3'] });
+for (let i = 1; i <= S.extraViews; i++) viewDefs.push({ id: 'mine' + i, name: 'My view ' + i, who: 'private', nodes: null });
+const cur = viewDefs.find((v) => v.id === S.view) || viewDefs[0];
+const views = viewDefs.map((v) => ({
+name: v.name, who: v.who, pick: () => set({ view: v.id }),
+style: (v.id === cur.id ? 'background: #e3f2fd; border: 1px solid #005299;' : 'background: #ffffff; border: 1px solid #e3e9eb;') + ' display: flex; width: 100%; gap: 8px; align-items: center; text-align: left; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; color: #17262b; min-height: 40px'
+}));
+
+const nodeStyle = (n, opts) => 'position: absolute; left: ' + n.x + '%; top: ' + n.y + '%; transform: translate(-50%, -50%); background: ' + (opts.drawn ? '#fff8ec' : (opts.ref ? '#f1f4f5' : '#ffffff')) + '; border: ' + (opts.drawn ? '2px dashed #b47b2b' : (opts.sel ? '2px solid #005299' : '1px solid #7a8c93')) + '; border-radius: 8px; padding: 6px 10px; text-align: left; cursor: pointer; color: #17262b; opacity: ' + (opts.dim ? 0.25 : 1) + '; box-shadow: ' + (opts.sel ? '0 0 0 3px #b9dcf7' : 'none') + '; max-width: 200px';
+const live = S.items.filter((i) => !i.withdrawn);
+const glassNodes = Object.keys(base).map((id) => {
+const n = base[id];
+return { kind: n.kind, label: n.label, kindInk: '#5f6f76', pick: () => set({ gsel: id }), style: nodeStyle(n, { sel: S.gsel === id, dim: cur.nodes && cur.nodes.indexOf(id) < 0 }) };
+}).concat(isToday ? [] : live.map((it) => ({ kind: it.type + ' · drawn', label: it.label, kindInk: '#7a4a06', pick: () => set({ gsel: it.id }), style: nodeStyle(it, { drawn: true, sel: S.gsel === it.id }) })));
+const lineOf = (l, color, dash) => { const a = pos(l.a), b = pos(l.b); return { x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: color, dash: dash }; };
+const liveIds = (id) => base[id] || live.find((i) => i.id === id);
+const glassLinks = isToday ? [] : S.links.filter((l) => liveIds(l.a) && liveIds(l.b)).map((l) => lineOf(l, '#b47b2b', '6 4'));
+const gItem = live.find((i) => i.id === S.gsel);
+const gBase = base[S.gsel];
+const boardOf = (bid) => (S.boards.find((b) => b.id === bid) || { name: '' }).name;
+const gsel = gItem ? { label: gItem.label, drawn: true, loaded: false, board: boardOf(gItem.board), grading: gItem.grading, source: gItem.source, status: gItem.status, edit: () => set({ place: 'board', board: gItem.board, bsel: gItem.id }) }
+: (gBase ? { label: gBase.label, drawn: false, loaded: true } : { label: '', drawn: false, loaded: false });
+
+const part = (name, open, body) => ({ name: name, open: open, chev: open ? '▾' : '▸', body: body || '' });
+const selName = gItem ? gItem.label : (gBase ? gBase.label : '');
+const inspParts = (gBase || gItem)
+? [part('Properties', true, 'type    ' + (gBase ? gBase.kind : gItem.type) + '\nname    ' + selName + '\nmarking OFFICIAL-SENSITIVE'), part('Picture', false), part('Relationships', false), part('Shares contacts', false), part('Neighbourhood risk', false), (gItem ? part('Provenance', true, 'Drawn by A. Field on board “' + boardOf(gItem.board) + '”, case Kestrel\nGraded ' + gItem.grading + ' · source: ' + gItem.source + '\n' + gItem.status) : part('Provenance', false)), part('Source', false), part('Judgements', false)]
+: [part('Select a node, or press / to search.', false), part('Judgements', true, 'No judgements on this case yet.')];
+const panels = [
+{ id: 'insp', name: 'Inspector', parts: inspParts },
+{ id: 'metrics', name: 'Metrics', parts: [part('Ranking', true, 'Degree · 1 Z1042AB 4 · 2 L. Marsh 3 · 3 Z2217CD 3'), part('Community detection', false), part('Filter', false)] },
+{ id: 'query', name: 'Query builder', parts: [part('Pattern', true, 'Prisoner —visited by→ Person\nPreview · Run'), part('Add to the pattern', false), part('Connect', false), part('Save and load', false)] }]
+.map((p) => { const open = !S.folded[p.id]; return Object.assign(p, { open: open, chev: open ? '▾' : '▸', fold: () => set({ folded: Object.assign({}, S.folded, { [p.id]: open }) }) }); });
+const bars = [3, 5, 9, 4, 2, 7, 12, 6, 3, 8, 10, 4, 2, 5, 9, 11, 6, 3, 7, 4].map((v) => ({ h: (v * 8) + 'px' }));
+
+let boardSeq = S.boards.length + 1;
+const makeBoard = (refs, start) => {
+const id = 'b' + boardSeq;
+const b = { id: id, name: 'New board ' + (boardSeq - 1), who: 'private to you', refs: refs, start: start };
+set({ boards: S.boards.concat([b]), board: id, place: 'board', bsel: '', draft: null, linkMode: false, homePick: false, drawer: '', toast: 'Board created in case Kestrel, private to you.' });
+};
+const newBlank = () => makeBoard([], 'Started blank');
+const newFromView = () => makeBoard(cur.nodes ? cur.nodes.slice() : Object.keys(base), 'Started from the view “' + cur.name + '”');
+const newFromSel = () => base[S.gsel] ? makeBoard([S.gsel, 'n3'].filter((v, i, a) => a.indexOf(v) === i), 'Started from a selection of ' + base[S.gsel].label) : set({ place: 'glass', toast: 'Select a loaded item on the case canvas first, then choose “Draw from the selection”.' });
+
+const boardCards = S.boards.map((b) => ({ name: b.name, who: b.who, start: b.start, count: live.filter((i) => i.board === b.id).length + ' drawn', open: () => set({ place: 'board', board: b.id, bsel: '', draft: null, linkMode: false }) }));
+const bd = S.boards.find((b) => b.id === S.board) || S.boards[0];
+const slots = [[30, 86], [84, 82], [12, 40], [86, 30], [46, 10], [10, 88], [40, 72], [74, 40]];
+const onBoardItems = live.filter((i) => i.board === bd.id);
+const shownIds = bd.refs.concat(onBoardItems.map((i) => i.id));
+const modelLinkTypes = ['Visited with', 'Called', 'Associate of', 'Lives at', 'Uses'];
+const ctOf = (name) => S.customTypes.find((t) => t.name === name);
+const typeInModel = (name) => modelLinkTypes.indexOf(name) >= 0 || (ctOf(name) && ctOf(name).status === 'accepted');
+const typeTag = (name) => { const t = ctOf(name); return t ? (t.status === 'accepted' ? '' : (t.status === 'declined' ? ' (declined)' : ' (proposed)')) : ''; };
+const startLinkDraft = (a, b) => set({ linkDraft: { a: a, b: b, type: 'Visited with', grading: 'B2', source: '', error: '' }, linkFrom: '', linkMode: false, drag: null, hover: '', draft: null, bsel: '' });
+const clickNode = (id) => () => {
+if (S.linkMode) {
+if (!S.linkFrom) set({ linkFrom: id });
+else if (S.linkFrom !== id) startLinkDraft(S.linkFrom, id);
+} else set({ bsel: id, draft: null });
+};
+const nodeAt = (e) => {
+const el = document.elementFromPoint(e.clientX, e.clientY);
+const hit = el && el.closest ? el.closest('[data-node]') : null;
+return hit ? hit.getAttribute('data-node') : '';
+};
+const pointIn = (e) => {
+const r = e.currentTarget.getBoundingClientRect();
+return { x: Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)), y: Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100)) };
+};
+const lay = S.layout || {};
+const bpos = (id) => { const p = pos(id); const o = lay[bd.id + ':' + id]; return o ? { x: o.x, y: o.y, label: p.label } : p; };
+const boardRect = (e) => { const b = e.currentTarget.closest ? e.currentTarget.closest('[data-board]') : null; return (b || e.currentTarget).getBoundingClientRect(); };
+const rel = (e, r) => ({ x: Math.max(3, Math.min(97, ((e.clientX - r.left) / r.width) * 100)), y: Math.max(4, Math.min(96, ((e.clientY - r.top) / r.height) * 100)) });
+const begin = (id, mode) => (e) => {
+if (e.button !== undefined && e.button !== 0) return;
+if (S.linkMode) return;
+e.preventDefault();
+e.stopPropagation();
+const r = boardRect(e);
+const p = rel(e, r);
+const np = bpos(id);
+const linkNow = mode === 'link' || e.altKey;
+set({ drag: { from: id, mode: linkNow ? 'link' : 'move', x: p.x, y: p.y, dx: np.x - p.x, dy: np.y - p.y, moved: false }, hover: '', menu: null });
+};
+const boardDown = (e) => {
+const inMenu = e.target && e.target.closest ? e.target.closest('[data-menu]') : null;
+if (S.menu && !inMenu) set({ menu: null });
+};
+const boardMove = (e) => {
+if (!S.drag) return;
+const p = pointIn(e);
+if (S.drag.mode === 'move') {
+const key = bd.id + ':' + S.drag.from;
+const nx = Math.max(4, Math.min(96, p.x + S.drag.dx)), ny = Math.max(5, Math.min(95, p.y + S.drag.dy));
+set({ drag: Object.assign({}, S.drag, { x: p.x, y: p.y, moved: true }), layout: Object.assign({}, lay, { [key]: { x: nx, y: ny } }) });
+} else {
+const t = nodeAt(e);
+set({ drag: Object.assign({}, S.drag, { x: p.x, y: p.y, moved: true }), hover: t && t !== S.drag.from ? t : '' });
+}
+};
+const boardUp = (e) => {
+if (!S.drag) return;
+if (S.drag.mode === 'move') return set({ drag: null, suppressClick: S.drag.moved });
+const t = nodeAt(e);
+if (S.drag.moved && t && t !== S.drag.from) startLinkDraft(S.drag.from, t);
+else if (S.drag.moved) set({ drag: null, hover: '', toast: 'Let go on another item to draw a link.' });
+else set({ drag: null, hover: '' });
+};
+const boardLeave = () => { if (S.drag) set({ drag: null, hover: '' }); };
+const openMenu = (id, drawn) => (e) => {
+e.preventDefault();
+const r = boardRect(e);
+const p = rel(e, r);
+set({ menu: { id: id, drawn: drawn, x: p.x, y: p.y }, drag: null });
+};
+const hl = (id) => S.bsel === id || S.linkFrom === id || S.hover === id || (S.drag && S.drag.moved && S.drag.from === id) || (S.linkDraft && (S.linkDraft.a === id || S.linkDraft.b === id));
+const pick = (id) => () => { if (S.suppressClick) return set({ suppressClick: false }); clickNode(id)(); };
+const card = (opts) => 'background: ' + (opts.drawn ? '#fff8ec' : '#f1f4f5') + '; border: ' + (opts.drawn ? '2px dashed #b47b2b' : (opts.sel ? '2px solid #005299' : '1px solid #7a8c93')) + '; border-radius: 8px; padding: 6px 18px 6px 10px; text-align: left; cursor: ' + (S.drag && S.drag.mode === 'move' ? 'grabbing' : 'grab') + '; color: #17262b; box-shadow: ' + (opts.sel ? '0 0 0 3px #b9dcf7' : 'none') + '; max-width: 200px; touch-action: none';
+const wrap = (id) => { const p = bpos(id); return 'position: absolute; left: ' + p.x + '%; top: ' + p.y + '%; transform: translate(-50%, -50%); z-index: ' + (S.drag && S.drag.from === id ? 3 : 1); };
+const boardNodes = bd.refs.map((id) => { const n = base[id]; return { id: id, wrap: wrap(id), down: begin(id, 'move'), linkDown: begin(id, 'link'), menu: openMenu(id, false), kind: n.kind + ' · loaded', label: n.label, kindInk: '#5f6f76', pick: pick(id), style: card({ sel: hl(id) }) }; })
+.concat(onBoardItems.map((it) => ({ id: it.id, wrap: wrap(it.id), down: begin(it.id, 'move'), linkDown: begin(it.id, 'link'), menu: openMenu(it.id, true), kind: it.type + ' · ' + it.grading, label: it.label, kindInk: '#7a4a06', pick: pick(it.id), style: card({ drawn: true, sel: hl(it.id) }) })));
+const dragging = !!(S.drag && S.drag.moved && S.drag.mode === 'link');
+const rubber = dragging ? { x1: bpos(S.drag.from).x, y1: bpos(S.drag.from).y, x2: S.drag.x, y2: S.drag.y } : { x1: 0, y1: 0, x2: 0, y2: 0 };
+const LD = S.linkDraft;
+const pending = LD ? { x1: bpos(LD.a).x, y1: bpos(LD.a).y, x2: bpos(LD.b).x, y2: bpos(LD.b).y } : { x1: 0, y1: 0, x2: 0, y2: 0 };
+const M0 = S.menu;
+const menu = M0 ? {
+style: 'position: absolute; left: ' + Math.min(M0.x, 78) + '%; top: ' + Math.min(M0.y, 70) + '%; z-index: 5; background: #ffffff; border: 1px solid #cfd8dc; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.16); min-width: 200px; padding: 4px 0; font-size: 13px',
+drawn: M0.drawn, loaded: !M0.drawn,
+link: () => set({ menu: null, linkMode: true, linkFrom: M0.id, toast: 'Now click the item to link ' + labelOf(M0.id) + ' to.' }),
+inspect: () => set({ menu: null, bsel: M0.id, draft: null, linkDraft: null }),
+withdraw: () => set({ menu: null, items: S.items.map((i) => i.id === M0.id ? Object.assign({}, i, { withdrawn: true }) : i), toast: '“' + labelOf(M0.id) + '” withdrawn. Kept in the audit record, not deleted.' }),
+openInCase: () => set({ menu: null, place: 'glass', gsel: M0.id })
+} : { style: '', drawn: false, loaded: false };
+const saveLink = () => {
+if (!LD.source.trim()) return set({ linkDraft: Object.assign({}, LD, { error: 'Add a source note: where this link comes from.' }) });
+set({ links: S.links.concat([{ a: LD.a, b: LD.b, board: bd.id, type: LD.type, grading: LD.grading, source: LD.source.trim() }]), linkDraft: null, toast: LD.type + ': ' + labelOf(LD.a) + ' → ' + labelOf(LD.b) + ', graded ' + LD.grading + '. Kept in the Kestrel analyst layer.' });
+};
+const blineOf = (l, color, dash) => { const a = bpos(l.a), b = bpos(l.b); return { x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: color, dash: dash }; };
+const linkLabels = S.links.filter((l) => l.type && shownIds.indexOf(l.a) >= 0 && shownIds.indexOf(l.b) >= 0).map((l) => {
+const a = bpos(l.a), b = bpos(l.b);
+return { text: l.type + typeTag(l.type) + ' · ' + l.grading, style: 'position: absolute; left: ' + ((a.x + b.x) / 2) + '%; top: ' + ((a.y + b.y) / 2) + '%; transform: translate(-50%, -50%); background: #fff8ec; border: 1px solid #ecd3a8; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: #7a4a06; pointer-events: none; white-space: nowrap' };
+});
+const boardLinks = S.links.filter((l) => shownIds.indexOf(l.a) >= 0 && shownIds.indexOf(l.b) >= 0).map((l) => blineOf(l, '#b47b2b', '6 4'))
+.concat([['n1', 'n3'], ['n2', 'n3'], ['n1', 'n2'], ['n1', 'n4'], ['n2', 'n5'], ['n3', 'n6']].filter(([a, b]) => bd.refs.indexOf(a) >= 0 && bd.refs.indexOf(b) >= 0).map(([a, b]) => blineOf({ a: a, b: b }, '#9fb0b7', '0')));
+
+const palette = ['Person', 'Phone', 'Address', 'Vehicle', 'Cell'].map((t) => ({ label: t, pick: () => set({ draft: { type: t, label: '', grading: 'B2', source: '', error: '' }, bsel: '', linkMode: false }) }));
+const D = S.draft;
+const saveDraft = () => {
+if (!D.label.trim()) return set({ draft: Object.assign({}, D, { error: 'Give it a name first.' }) });
+if (!D.source.trim()) return set({ draft: Object.assign({}, D, { error: 'Add a source note: where this comes from.' }) });
+const n = S.items.length;
+const slot = slots[n % slots.length];
+const it = { id: 'd' + (n + 1), type: D.type, label: D.label.trim(), grading: D.grading, source: D.source.trim(), x: slot[0], y: slot[1], board: bd.id, status: 'In the Kestrel analyst layer', withdrawn: false };
+set({ items: S.items.concat([it]), draft: null, bsel: it.id, toast: D.type + ' “' + it.label + '” added, graded ' + it.grading + '.' });
+};
+const bItem = live.find((i) => i.id === S.bsel);
+const bsel = bItem ? {
+label: bItem.label, drawn: true, loaded: false, type: bItem.type, grading: bItem.grading, source: bItem.source, status: bItem.status,
+promote: () => set({ promoSheet: 'item', promoPick: { [bItem.id]: true }, draft: null, linkDraft: null }),
+withdraw: () => set({ items: S.items.map((i) => i.id === bItem.id ? Object.assign({}, i, { withdrawn: true }) : i), bsel: '', toast: '“' + bItem.label + '” withdrawn. It is kept in the audit record, not deleted.' })
+} : (base[S.bsel] ? { label: base[S.bsel].label, drawn: false, loaded: true } : { label: '', drawn: false, loaded: false });
+const matches = live.filter((i) => i.type === 'Person' && !S.decided[i.id]).map((i) => ({
+drawn: i.label, loaded: 'L. Marsh', why: 'seen at the same visit sessions',
+same: () => set({ decided: Object.assign({}, S.decided, { [i.id]: 'same' }), toast: 'Recorded as SAME_AS, confirmed by you. Neither item was merged.' }),
+not: () => set({ decided: Object.assign({}, S.decided, { [i.id]: 'not' }), toast: 'Recorded as not the same person.' })
+}));
+const hasDrawnPerson = !isToday && live.some((i) => i.type === 'Person');
+
+
+const statusOf = { promoted: ['Promoted', 'background: #e1f5ee; color: #085041'], awaiting: ['Awaiting a second person', 'background: #faeeda; color: #633806'], reverted: ['Reverted', 'background: #eef2f4; color: #3d4c52'], rejected: ['Rejected', 'background: #fcebeb; color: #791f1f'] };
+const chipOf = (st) => 'font-size: 12px; border-radius: 999px; padding: 2px 9px; ' + statusOf[st][1];
+const reviewer = R === 'developer' ? 'D. Engineer' : 'S. Lead';
+const setPromo = (pid, st, itemStatus, toast) => {
+const q = S.promotions.find((x) => x.pid === pid);
+set({ promotions: S.promotions.map((x) => x.pid === pid ? Object.assign({}, x, { status: st }) : x),
+items: S.items.map((i) => q && q.itemIds.indexOf(i.id) >= 0 ? Object.assign({}, i, { status: itemStatus }) : i), toast: toast });
+};
+const promoView = (q) => Object.assign({}, q, {
+statusText: statusOf[q.status][0], chip: chipOf(q.status),
+canRevert: q.status === 'promoted', canReview: q.status === 'awaiting' && R !== 'analyst', showCmd: q.status === 'promoted' && R !== 'analyst',
+open: S.reviewOpen === q.pid, openLabel: S.reviewOpen === q.pid ? 'Close' : (q.status === 'awaiting' && R !== 'analyst' ? 'Review' : 'Details'),
+toggleOpen: () => set({ reviewOpen: S.reviewOpen === q.pid ? '' : q.pid }),
+revert: () => setPromo(q.pid, 'reverted', 'Reverted from Prison intel (load ' + q.load + '), audited; still in the Kestrel analyst layer', 'Load ' + q.load + ' reverted: Prison intel no longer holds these ' + q.itemIds.length + ' item(s). They stay on the board.'),
+approve: () => setPromo(q.pid, 'promoted', 'Promoted to Prison intel as load ' + q.load + ', proposed by A. Field, approved by ' + reviewer + ' (audited, revertible); still marked analyst-drawn', 'Approved by ' + reviewer + ': load ' + q.load + ' committed to Prison intel. The analyst is told on the board.'),
+reject: () => setPromo(q.pid, 'rejected', 'Promotion rejected by ' + reviewer + ': “needs a second source”; still in the Kestrel analyst layer', 'Rejected with the reason “needs a second source”. The items stay on the board; the analyst is told.')
+});
+const promoRows = S.promotions.map(promoView);
+const boardPromos = S.promotions.filter((q) => q.board === bd.name).map(promoView);
+const promotedIds = {};
+S.promotions.forEach((q) => { if (q.status === 'promoted' || q.status === 'awaiting') q.itemIds.forEach((i) => { promotedIds[i] = q; }); });
+const promotedLinkIdx = {};
+S.promotions.forEach((q) => { if (q.status === 'promoted' || q.status === 'awaiting') q.linkIdx.forEach((k) => { promotedLinkIdx[k] = q; }); });
+const PS = S.promoSheet;
+let sheet = { title: '', countText: '', load: '', itemRows: [], doneRows: [], linkRows: [], noLinks: true, checks: [], how: '', blocked: false, blockedWhy: '', canGo: false, cta: '', go: () => {} };
+if (PS) {
+const nextLoad = 8813 + S.promotions.length;
+const author = S.reviewMode === 'author';
+const candidates = onBoardItems.filter((i) => !promotedIds[i.id]);
+const picked = S.promoPick || {};
+const chosen = candidates.filter((i) => picked[i.id]);
+const inDataset = (id) => !!base[id] || !!picked[id] && candidates.some((c) => c.id === id) || !!promotedIds[id];
+const boardLinkIdx = S.links.map((l, k) => k).filter((k) => S.links[k].board === bd.id && !promotedLinkIdx[k]);
+const relevant = boardLinkIdx.filter((k) => { const l = S.links[k]; return chosen.some((c) => c.id === l.a || c.id === l.b) || (base[l.a] && base[l.b]) || candidates.some((c) => c.id === l.a || c.id === l.b); });
+const linkGoes = (k) => { const l = S.links[k]; const touches = chosen.some((c) => c.id === l.a || c.id === l.b) || (base[l.a] && base[l.b]); return touches && inDataset(l.a) && inDataset(l.b) && (!l.type || typeInModel(l.type)); };
+const goingLinks = relevant.filter(linkGoes);
+const linkText = (l) => (l.type || 'link') + typeTag(l.type) + ': ' + labelOf(l.a) + ' → ' + labelOf(l.b) + (l.grading ? ', ' + l.grading : '');
+const missingEnd = (l) => [l.a, l.b].filter((id) => !inDataset(id)).map(labelOf).join(' and ');
+const undecided = chosen.filter((i) => i.type === 'Person' && !S.decided[i.id]);
+const ok = 'padding: 2px 0; color: #085041';
+const warn = 'padding: 4px 6px; margin: 2px 0; color: #633806; background: #faeeda; border-radius: 4px';
+const goes = chosen.map((i) => i.type + ' “' + i.label + '”, graded ' + i.grading + ', source: ' + i.source).concat(goingLinks.map((k) => 'Link ' + linkText(S.links[k])));
+sheet = {
+title: chosen.length + ' item' + (chosen.length === 1 ? '' : 's') + ' and ' + goingLinks.length + ' link' + (goingLinks.length === 1 ? '' : 's') + ' from board “' + bd.name + '”',
+countText: chosen.length + ' items, ' + goingLinks.length + ' links',
+load: String(nextLoad),
+itemRows: candidates.map((i) => ({ on: !!picked[i.id], text: i.type + ' “' + i.label + '” · ' + i.grading, toggle: () => set({ promoPick: Object.assign({}, picked, { [i.id]: !picked[i.id] }) }) })),
+doneRows: onBoardItems.filter((i) => promotedIds[i.id]).map((i) => i.label + ': already ' + statusOf[promotedIds[i.id].status][0].toLowerCase() + ' (load ' + promotedIds[i.id].load + ')'),
+linkRows: relevant.map((k) => { const l = S.links[k]; const g = linkGoes(k); return { mark: g ? '✓' : '–', text: linkText(l) + (g ? '' : (l.type && !typeInModel(l.type) ? ' (stays on the board: “' + l.type + '” is ' + (ctOf(l.type) && ctOf(l.type).status === 'declined' ? 'declined' : 'proposed, not yet in Prison intel’s model') + ')' : ' (stays on the board: ' + missingEnd(l) + ' would not be in the dataset)')), style: g ? ok : 'padding: 2px 0; color: #5f6f76' }; }),
+noLinks: relevant.length === 0,
+checks: [
+{ mark: '✓', text: 'Every marking is within what Prison intel may hold', style: ok },
+{ mark: '✓', text: 'Every type is in Prison intel’s model', style: ok },
+{ mark: '✓', text: 'Every item and link has a grading and a source note', style: ok },
+{ mark: '✓', text: 'No link would arrive without both its ends', style: ok }]
+.concat(undecided.map((i) => ({ mark: '!', text: '“' + i.label + '” may be L. Marsh: decide on the board first, or promote it as a separate person.', style: warn }))),
+how: author
+? 'Committed straight away as load ' + nextLoad + ' (trigger: analyst promotion), all or nothing, through Prison intel’s load rules. Nothing is copied or merged: each item’s datasets gain Prison intel and it stays marked analyst-drawn. It is recorded in the Ingest Studio’s Runs, where it can be reverted.'
+: 'Goes to the Ingest Studio › 4 Runs › Analyst promotions as load ' + nextLoad + ', not yet committed. A data engineer (or a second analyst with the role) reviews what it adds and approves or rejects it there. You see the outcome here.',
+blocked: chosen.length === 0 && goingLinks.length === 0, blockedWhy: 'Choose at least one item.',
+canGo: chosen.length + goingLinks.length > 0, cta: author ? 'Promote as load ' + nextLoad : 'Send for review',
+go: () => {
+const q = { pid: 'p' + (S.promotions.length + 1), itemIds: chosen.map((i) => i.id), linkIdx: goingLinks, goes: goes, load: nextLoad,
+what: chosen.length + ' item' + (chosen.length === 1 ? '' : 's') + (goingLinks.length ? ' + ' + goingLinks.length + ' link' + (goingLinks.length === 1 ? '' : 's') : ''),
+matchNote: undecided.length ? undecided.length + ' undecided at the time of sending' : 'none undecided',
+board: bd.name, status: author ? 'promoted' : 'awaiting' };
+set({ promotions: S.promotions.concat([q]), promoSheet: '', promoPick: {},
+items: S.items.map((i) => q.itemIds.indexOf(i.id) >= 0 ? Object.assign({}, i, { status: author ? 'Promoted to Prison intel as load ' + nextLoad + ' by you, 6 Nov (audited, revertible); still marked analyst-drawn' : 'Awaiting a second person’s review in the Ingest Studio (load ' + nextLoad + ' not yet committed)' }) : i),
+toast: author ? 'Load ' + nextLoad + ' committed: ' + q.what + ' are now in Prison intel. See it in the Ingest Studio › 4 Runs.' : 'Sent for review as load ' + nextLoad + '. It waits in the Ingest Studio › 4 Runs › Analyst promotions.' });
+}
+};
+}
+
+const admSecs = [
+{ group: 'PEOPLE', items: [['people', 'People and roles'], ['roles', 'Roles'], ['dashboards', 'Dashboard identities']] },
+{ group: 'DATA', items: [['datasets', 'Datasets'], ['connections', 'Connections']] },
+{ group: 'RUNNING', items: [['operations', 'Operations'], ['system', 'System']] },
+{ group: 'POLICIES', items: [['grading', 'Grading scheme'], ['approvals', 'Approval rights'], ['uploads', 'Uploads']] },
+{ group: 'AUDIT', items: [['audit', 'Audit']] },
+{ group: 'DEMO', items: [['packs', 'Demo packs']] }];
+const adminNav = admSecs.map((g) => ({ group: g.group, items: g.items.map(([id, label]) => ({ label: label, go: () => set({ adminSec: id, disabling: '', roleDraft: null }),
+style: 'display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 7px 10px; cursor: pointer; font-size: 13px; ' + (S.adminSec === id ? 'background: #e3f2fd; color: #005299; font-weight: 700' : 'background: transparent; color: #17262b') })) }));
+const AS = S.adminSec;
+const adm = { people: AS === 'people', roles: AS === 'roles', datasets: AS === 'datasets', operations: AS === 'operations', system: AS === 'system', grading: AS === 'grading', approvals: AS === 'approvals', uploads: AS === 'uploads', audit: AS === 'audit', packs: AS === 'packs', other: AS === 'dashboards' || AS === 'connections' };
+const audit = (who, what, where, record, kind) => ({ when: 'today ' + (19 + Math.floor(S.auditExtra.length / 6)) + ':' + String(10 + (S.auditExtra.length * 7) % 50).padStart(2, '0'), who: who, what: what, where: where, record: record, kind: kind });
+const addAudit = (rows) => S.auditExtra.concat(rows);
+const peopleDefs = [
+{ id: 'af', name: 'A. Field', access: 'OFFICIAL-SENSITIVE · Intel unit', roles: ['Analyst'], opens: 'The Glass', levels: 'Editor of Kestrel' },
+{ id: 'de', name: 'D. Engineer', access: 'OFFICIAL-SENSITIVE · Intel unit', roles: ['Data Engineer'], opens: 'Ingest Studio', levels: '—' },
+{ id: 'sl', name: 'S. Lead', access: 'SECRET · Intel unit', roles: ['Super user (Analyst + Data Engineer)'], opens: 'The Glass · Ingest Studio', levels: 'Author of Kestrel, Harrier' },
+{ id: 'rv', name: 'R. Viewer', access: 'OFFICIAL · Intel unit', roles: ['Reports Viewer'], opens: 'Reports', levels: 'Viewer of Kestrel' },
+{ id: 'ka', name: 'K. Admin', access: 'SECRET · Headquarters', roles: ['Admin'], opens: 'Admin', levels: '—' },
+{ id: 'jm', name: 'J. Moss', access: 'OFFICIAL-SENSITIVE · Intel unit', roles: ['Analyst'], opens: 'The Glass', levels: 'was Author of Wren', preDisabled: true }];
+S.customRoles.forEach((r) => { if (r.assignedTo) { const p = peopleDefs.find((x) => x.id === r.assignedTo); if (p) p.roles = p.roles.concat([r.name + ' (custom)']); } });
+const ownedBy = (pid) => {
+if (pid === 'af') {
+const own = [{ id: 'v-visits', kind: 'Private view', text: '“Visits network” in Kestrel' }];
+for (let i = 1; i <= S.extraViews; i++) own.push({ id: 'v-mine' + i, kind: 'Private view', text: '“My view ' + i + '” in Kestrel' });
+S.boards.filter((b) => b.who === 'private to you').forEach((b) => own.push({ id: 'b-' + b.id, kind: 'Private board', text: '“' + b.name + '” in Kestrel, with what is drawn on it' }));
+S.promotions.filter((q) => q.status === 'awaiting').forEach((q) => own.push({ id: 'q-' + q.pid, kind: 'Promotion they proposed', text: 'load ' + q.load + ', awaiting review' }));
+S.customTypes.filter((t) => t.status === 'proposed').forEach((t) => own.push({ id: 't-' + t.name, kind: 'Proposed link type', text: '“' + t.name + '”' }));
+return own;
+}
+if (pid === 'de') return [{ id: 's-visits', kind: 'Schedule owner', text: 'Visits and contacts, hourly (runs act as its owner)' }, { id: 'r-tel', kind: 'Review waiting on them', text: 'load 8807 into Telco call records' }];
+if (pid === 'sl') return [{ id: 'a-kestrel', kind: 'Sole Author', text: 'case Harrier (Kestrel has another Author)' }];
+return [];
+};
+const targetsFor = (pid) => ['af', 'de', 'sl'].filter((x) => x !== pid).map((x) => peopleDefs.find((p) => p.id === x).name);
+const disabledNow = (p) => p.preDisabled || S.disabledIds[p.id];
+const people = peopleDefs.map((p) => ({ name: p.name, access: p.access, roles: p.roles, opens: p.opens, levels: p.levels,
+state: disabledNow(p) ? 'Disabled' : 'Active', stateChip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; ' + (disabledNow(p) ? 'background: #eef2f4; color: #3d4c52' : 'background: #e1f5ee; color: #085041'),
+canDisable: !disabledNow(p) && p.id !== 'ka', disable: () => set({ disabling: p.id, transfers: {}, disableError: '' }) }));
+const DP = peopleDefs.find((p) => p.id === S.disabling);
+let disabling = { name: '', nameUpper: '', owned: [], none: true, hasError: false, error: '', confirm: () => {}, cancel: () => {} };
+if (DP) {
+const owned = ownedBy(DP.id);
+disabling = { name: DP.name, nameUpper: DP.name.toUpperCase(), none: owned.length === 0, hasError: !!S.disableError, error: S.disableError,
+owned: owned.map((o) => ({ kind: o.kind, text: o.text, targets: targetsFor(DP.id).map((t) => ({ label: t, pick: () => set({ transfers: Object.assign({}, S.transfers, { [o.id]: t }), disableError: '' }),
+style: 'border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; ' + (S.transfers[o.id] === t ? 'background: #005299; color: #ffffff; border: 1px solid #005299' : 'background: #ffffff; color: #17262b; border: 1px solid #9fb0b7') })) })),
+cancel: () => set({ disabling: '' }),
+confirm: () => {
+const missing = owned.filter((o) => !S.transfers[o.id]);
+if (missing.length) return set({ disableError: 'Choose who receives ' + missing.length + ' more item' + (missing.length > 1 ? 's' : '') + ' first.' });
+set({ disabledIds: Object.assign({}, S.disabledIds, { [DP.id]: true }), disabling: '',
+auditExtra: addAudit(owned.map((o) => audit('K. Admin', o.kind + ' ' + o.text + ' transferred from ' + DP.name + ' to ' + S.transfers[o.id], 'People', 'people audit', 'people')).concat([audit('K. Admin', DP.name + ' disabled', 'People', 'people audit', 'people')])),
+toast: DP.name + ' disabled. ' + owned.length + ' item' + (owned.length === 1 ? '' : 's') + ' transferred; nothing deleted.' });
+} };
+}
+const peopleWarnings = [];
+if (!S.authorFixed) peopleWarnings.push({ text: 'Case Wren has had no Author since J. Moss was disabled on 2 Nov: nobody can change its members or datasets.', hasAction: true, actLabel: 'Name an Author', act: () => set({ authorFixed: true, auditExtra: addAudit([audit('K. Admin', 'S. Lead named Author of case Wren', 'Case Wren', 'case audit', 'people')]), toast: 'S. Lead is now Author of case Wren.' }) });
+if (S.telPolicy === 'review') peopleWarnings.push({ text: 'Telco call records needs a second person for promotions, and only 1 person can approve them.', hasAction: true, actLabel: 'Open Datasets', act: () => set({ adminSec: 'datasets' }) });
+
+const rightsCatalogue = [
+{ place: 'The Glass', rights: [['open_cases', 'Open cases'], ['edit_graph', 'Edit the graph'], ['draw_on_boards', 'Draw on boards'], ['promote_to_dataset', 'Promote drawn items'], ['propose_types', 'Propose link types'], ['export', 'Export'], ['triage_alerts', 'Triage alerts']] },
+{ place: 'Ingest Studio', rights: [['build_pipelines', 'Build pipelines'], ['deploy_pipelines', 'Deploy pipelines'], ['accept_types', 'Accept proposed types'], ['review_promotions', 'Review promotions'], ['revert_loads', 'Revert loads']] },
+{ place: 'Admin', rights: [['manage_people', 'Manage people'], ['administer_system', 'Administer the system'], ['operate_schedules', 'Operate schedules']] }];
+const builtIn = {
+Analyst: ['open_cases', 'edit_graph', 'draw_on_boards', 'promote_to_dataset', 'propose_types', 'export', 'triage_alerts'],
+'Data Engineer': ['build_pipelines', 'deploy_pipelines', 'accept_types', 'review_promotions', 'revert_loads'],
+Admin: ['manage_people', 'administer_system', 'operate_schedules'],
+'Reports Viewer': ['open_cases'] };
+const placesOf = (rs) => rightsCatalogue.filter((g) => g.rights.some(([id]) => rs.indexOf(id) >= 0)).map((g) => g.place).join(' · ') || '—';
+const rightLabel = (id) => { let l = id; rightsCatalogue.forEach((g) => g.rights.forEach(([k, v]) => { if (k === id) l = v; })); return l; };
+const roleRows = Object.keys(builtIn).map((n) => ({ name: n, opens: placesOf(builtIn[n]), rights: builtIn[n].map(rightLabel).join(', '), kind: 'Built-in', chip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; background: #eef2f4; color: #3d4c52', copy: () => set({ roleDraft: { base: n, name: '', rights: builtIn[n].slice(), error: '' } }) }))
+.concat([{ name: 'Super user', opens: 'The Glass · Ingest Studio', rights: 'Analyst + Data Engineer', kind: 'Preset', chip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; background: #e3f2fd; color: #0c3d6b', copy: () => set({ roleDraft: { base: 'Super user', name: '', rights: builtIn.Analyst.concat(builtIn['Data Engineer']), error: '' } }) }])
+.concat(S.customRoles.map((r) => ({ name: r.name, opens: placesOf(r.rights), rights: r.rights.map(rightLabel).join(', '), kind: 'Custom · v1', chip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; background: #eeedfe; color: #3c3489', copy: () => set({ roleDraft: { base: r.name, name: '', rights: r.rights.slice(), error: '' } }) })));
+const RD = S.roleDraft;
+const roleDraft = RD ? { name: RD.name, baseUpper: RD.base.toUpperCase(), hasError: !!RD.error, error: RD.error,
+groups: rightsCatalogue.map((g) => ({ place: g.place, rights: g.rights.map(([id, label]) => ({ label: label, on: RD.rights.indexOf(id) >= 0,
+toggle: () => set({ roleDraft: Object.assign({}, RD, { error: '', rights: RD.rights.indexOf(id) >= 0 ? RD.rights.filter((x) => x !== id) : RD.rights.concat([id]) }) }) })) })) }
+: { name: '', baseUpper: '', hasError: false, error: '', groups: [] };
+const saveRole = () => {
+const name = RD.name.trim();
+if (!name) return set({ roleDraft: Object.assign({}, RD, { error: 'Give the role a name.' }) });
+if (Object.keys(builtIn).concat(['Super user']).concat(S.customRoles.map((r) => r.name)).some((n) => n.toLowerCase() === name.toLowerCase())) return set({ roleDraft: Object.assign({}, RD, { error: 'A role called “' + name + '” already exists.' }) });
+if (RD.rights.indexOf('promote_to_dataset') >= 0 && RD.rights.indexOf('review_promotions') >= 0) return set({ roleDraft: Object.assign({}, RD, { error: 'A role can’t both promote drawn items and review promotions. Give the two to different roles.' }) });
+if (RD.rights.indexOf('propose_types') >= 0 && RD.rights.indexOf('accept_types') >= 0) return set({ roleDraft: Object.assign({}, RD, { error: 'A role can’t both propose link types and accept them. Give the two to different roles.' }) });
+if (RD.rights.length === 0) return set({ roleDraft: Object.assign({}, RD, { error: 'Choose at least one right.' }) });
+set({ customRoles: S.customRoles.concat([{ name: name, rights: RD.rights.slice(), assignedTo: 'af' }]), roleDraft: null,
+auditExtra: addAudit([audit('K. Admin', 'Role “' + name + '” v1 created from ' + RD.base + ' (' + RD.rights.length + ' rights) and given to A. Field', 'Roles', 'roles audit', 'people')]),
+toast: 'Role “' + name + '” saved as v1 and given to A. Field. See People and roles.' });
+};
+
+const markOpts = ['OFFICIAL', 'OFFICIAL-SENSITIVE', 'SECRET'];
+const pol = (cur, id) => 'border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; ' + (cur === id ? 'background: #005299; color: #ffffff; border: 1px solid #005299' : 'background: #ffffff; color: #17262b; border: 1px solid #9fb0b7');
+const dsChange = (field, val, label, ds) => set({ [field]: val, auditExtra: addAudit([audit('K. Admin', label, ds, 'dataset audit', 'datasets')]) });
+const dsRows = [
+{ name: 'Prison intel', meta: 'Intel unit · egress: none · read by Kestrel, Harrier',
+marks: markOpts.map((m) => ({ label: m, style: pol(S.piMark, m), pick: () => dsChange('piMark', m, 'Highest marking set to ' + m, 'Prison intel') })),
+policies: [['author', 'Author promotes'], ['review', 'Second person reviews']].map(([id, l]) => ({ label: l, style: pol(S.reviewMode, id), pick: () => dsChange('reviewMode', id, 'Promotion policy set to “' + l + '”', 'Prison intel') })),
+reviewers: S.reviewMode === 'review' ? '4 people can approve: D. Engineer, S. Lead (data engineers), and the Authors of Kestrel and Harrier.' : 'The analyst who drew an item promotes it; every promotion is a load, audited and revertible.',
+reviewStyle: 'font-size: 12px; color: #3d4c52' },
+{ name: 'Telco call records', meta: 'Intel unit · egress: contracted · read by Harrier',
+marks: markOpts.map((m) => ({ label: m, style: pol(S.telMark, m), pick: () => dsChange('telMark', m, 'Highest marking set to ' + m, 'Telco call records') })),
+policies: [['author', 'Author promotes'], ['review', 'Second person reviews']].map(([id, l]) => ({ label: l, style: pol(S.telPolicy, id), pick: () => dsChange('telPolicy', id, 'Promotion policy set to “' + l + '”', 'Telco call records') })),
+reviewers: S.telPolicy === 'review' ? 'Only 1 person can approve (S. Lead). With one reviewer, a promotion S. Lead proposes can never be approved: add a second data engineer or Author.' : 'The analyst who drew an item promotes it.',
+reviewStyle: S.telPolicy === 'review' ? 'font-size: 12px; color: #633806; background: #faeeda; border-radius: 4px; padding: 4px 6px' : 'font-size: 12px; color: #3d4c52' }];
+
+const waits = S.promotions.filter((q) => q.status === 'awaiting').map((q) => ({ load: q.load, what: q.what, dataset: 'Prison intel', days: 0 }))
+.concat(S.telPolicy === 'review' ? [{ load: 8807, what: '2 items + 1 link', dataset: 'Telco call records', days: 4 }] : []);
+const waitRows = waits.map((w) => ({ load: w.load, what: w.what, dataset: w.dataset, age: w.days === 0 ? 'under a day' : w.days + ' days',
+flag: w.days >= S.alertDays ? 'Overdue: reviewers and administrators alerted' : 'Within ' + S.alertDays + ' days',
+chip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; ' + (w.days >= S.alertDays ? 'background: #fcebeb; color: #791f1f' : 'background: #eef2f4; color: #3d4c52') }));
+const oldest = waits.reduce((m, w) => Math.max(m, w.days), 0);
+const opsCards = [
+{ label: 'Runs today', value: String(6 + S.promotions.length), note: 'by schedule 4 · by watch 1 · analyst promotions ' + S.promotions.length },
+{ label: 'Rows held for a person', value: '4', note: 'Tue load of Visits and contacts' },
+{ label: 'Promotions waiting for review', value: String(waits.length), note: waits.length ? 'oldest ' + (oldest === 0 ? 'under a day' : oldest + ' days') : 'none' },
+{ label: 'Scheduler', value: 'healthy', note: '1 paused: refused 3 in a row' }];
+const ageOpts = [1, 2, 3, 5, 7].map((d) => ({ label: d + ' day' + (d > 1 ? 's' : ''), style: pol(S.alertDays, d), pick: () => set({ alertDays: d }) }));
+
+const baseAudit = [
+{ when: 'today 09:15', who: 'A. Field', what: 'Opened alert A14 as a private view', where: 'Case Kestrel', record: 'case audit', kind: 'assertions' },
+{ when: 'today 06:10', who: 'Scheduler (as D. Engineer)', what: 'Load 8812, Visits and contacts v3: 412 rows, 4 held', where: 'Prison intel', record: 'run ledger', kind: 'promotions' },
+{ when: '2 Nov 16:02', who: 'K. Admin', what: 'J. Moss disabled', where: 'People', record: 'people audit', kind: 'people' }];
+const derived = [];
+S.items.forEach((i) => derived.push({ when: 'today', who: 'A. Field', what: 'Drew ' + i.type + ' “' + i.label + '”, graded ' + i.grading + (i.withdrawn ? '; later withdrawn' : ''), where: 'Case Kestrel · board ' + boardOf(i.board), record: 'case audit', kind: 'assertions' }));
+S.links.forEach((l) => derived.push({ when: 'today', who: 'A. Field', what: 'Drew link ' + (l.type || '') + ' ' + labelOf(l.a) + ' → ' + labelOf(l.b), where: 'Case Kestrel', record: 'case audit', kind: 'assertions' }));
+S.promotions.forEach((q) => derived.push({ when: 'today', who: 'A. Field', what: 'Promotion load ' + q.load + ' (' + q.what + '): ' + q.status, where: 'Prison intel', record: 'run ledger', kind: 'promotions' }));
+S.customTypes.forEach((t) => derived.push({ when: 'today', who: 'A. Field', what: 'Proposed link type “' + t.name + '”: ' + t.status, where: 'Prison intel model', record: 'model history', kind: 'types' }));
+const allAudit = derived.concat(S.auditExtra.slice().reverse()).concat(baseAudit);
+const auditFilters = [['all', 'Everything'], ['assertions', 'Analyst assertions'], ['promotions', 'Loads and promotions'], ['types', 'Types'], ['people', 'People and roles'], ['datasets', 'Datasets']]
+.map(([id, l]) => ({ label: l, style: pol(S.auditFilter, id).replace('font-size: 12px', 'font-size: 13px').replace('padding: 4px 10px', 'padding: 6px 12px'), pick: () => set({ auditFilter: id }) }));
+const auditRows = allAudit.filter((a) => S.auditFilter === 'all' || a.kind === S.auditFilter);
+
+const notesList = [];
+if (canStudio) {
+S.customTypes.filter((t) => t.status === 'proposed').forEach((t) => notesList.push({ title: 'Link type proposed: “' + t.name + '”', sub: 'by A. Field, case Kestrel · Prison intel’s Model tab', tip: 'Analysts can use it on boards now; links of this type can’t be promoted until you accept it.', go: () => set({ place: 'studio', stab: 'model', notesOpen: false }) }));
+S.promotions.filter((q) => q.status === 'awaiting').forEach((q) => notesList.push({ title: 'Promotion to review: load ' + q.load, sub: q.what + ' from board “' + q.board + '” · 4 Runs', tip: 'A second person must approve or reject it; the proposer cannot.', go: () => set({ place: 'studio', stab: 'runs', reviewOpen: q.pid, notesOpen: false }) }));
+}
+const proposedCount = S.customTypes.filter((t) => t.status === 'proposed').length;
+const alertDefs = [
+{ id: 'A14', title: 'Z1042AB and Z2217CD share a visitor within 7 days', case: 'Kestrel', when: 'today 06:12', action: 'Open as a view', fullAction: isToday ? 'Put on the canvas' : 'Open as a view' },
+{ id: 'A15', title: 'A new number called from cell B2-14', case: 'Kestrel', when: 'yesterday 21:40', action: 'Open as a view', fullAction: isToday ? 'Put on the canvas' : 'Open as a view' },
+{ id: 'A09', title: 'Hotlist number seen in a call record', case: 'Harrier', when: '4 Nov', action: 'Open as a view', fullAction: isToday ? 'Put on the canvas' : 'Open as a view' }];
+const firstPerson = live.find((i) => i.type === 'Person');
+if (firstPerson && !isToday) alertDefs.unshift({ id: 'A16', title: 'Today’s load matches “' + firstPerson.label + '”, drawn on board “' + boardOf(firstPerson.board) + '”', case: 'Kestrel', when: 'just now', action: 'Open the board', fullAction: 'Open the board', board: firstPerson.board });
+const openAlert = (a) => () => {
+if (a.board) set({ place: 'board', board: a.board, bsel: '', draft: null, toast: 'Alert A16: review the proposal under “Looks like a loaded item”.' });
+else if (a.case === 'Kestrel' && isToday) set({ place: 'glass', gsel: 'n1', toast: 'Alert ' + a.id + ' put on the canvas: its nodes are selected.' });
+else if (a.case === 'Kestrel') set({ place: 'glass', view: 'alert14', alertView: true, gsel: '', toast: 'Alert ' + a.id + ' opened as a private view in case Kestrel. Share it from Views when you are ready.' });
+else set({ toast: 'Alert ' + a.id + ' belongs to case Harrier: in this prototype only Kestrel opens.' });
+};
+const allAlerts = alertDefs.map((a) => Object.assign({}, a, { open: openAlert(a) }));
+const caseAlerts = allAlerts.filter((a) => a.case === 'Kestrel');
+
+const stabs = [['model', proposedCount ? '1 Model · ' + proposedCount + ' proposed' : '1 Model'], ['sources', '2 Sources'], ['pipelines', '3 Pipelines'], ['runs', '4 Runs']]
+.map(([id, label]) => ({ label: label, style: placeTab(S.stab === id), go: () => set({ stab: id }) }));
+const readOnly = R === 'analyst';
+const dayCell = (k, d) => k === 'promo' ? { day: d, bg: '#eeedfe', ink: '#3c3489', words: d + ': analyst promotion loaded' } : k === 'review' ? { day: d, bg: '#f8e2bf', ink: '#5c3b06', words: d + ': promotion awaiting review' } : k === 'ok' ? { day: d, bg: '#d3eef1', ink: '#004d56', words: d + ': loaded' } : (k === 'held' ? { day: d, bg: '#f8e2bf', ink: '#5c3b06', words: d + ': rows held' } : { day: d, bg: '#eef2f4', ink: '#5f6f76', words: d + ': no run' });
+const days = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const runRow = (name, ks) => ({ name: name, days: ks.map((k, i) => dayCell(k, days[i])) });
+const dag = (kind, label, x, y, root) => ({ kind: kind, label: label, style: 'position: absolute; left: ' + x + '%; top: ' + y + '%; transform: translate(-50%, -50%); background: ' + (root ? '#e3f2fd' : '#ffffff') + '; border: 1px solid ' + (root ? '#005299' : '#7a8c93') + '; border-radius: 6px; padding: 5px 9px; font-size: 12px; white-space: nowrap' });
+const dagNodes = [dag('Source', 'visit_bookings', 14, 30), dag('Profile', '12 columns', 34, 30), dag('Map', 'NIEM v3 template', 54, 30), dag('Load', 'Prison intel', 76, 30), dag('Source', 'cell_stays', 14, 66), dag('Profile', '8 columns', 34, 66), dag('Domain', 'NIEM v3 (root)', 90, 56, true)];
+
+const studioTitle = (isA && R !== 'developer') ? 'Kestrel › Data › Prison intel' : 'Prison intel dataset';
+const studioSub = R === 'analyst' ? 'Where case Kestrel’s data comes from' : 'Feeds cases Kestrel and Harrier';
+const homeTitle = R === 'admin' ? 'Administration' : R === 'developer' ? 'Your datasets' : 'Good afternoon';
+const homeSub = R === 'admin' ? 'One person needs disabling, a case has no Author and a promotion has waited 4 days. Open Admin.' : R === 'analyst' ? 'Pick up a case, start a drawing board, or look at what the alerts found overnight.' : (R === 'developer' ? 'One pipeline needs attention since this morning.' : 'Your cases and your datasets, side by side.');
+const linkHint = S.linkFrom ? 'Now click the second item: ' + labelOf(S.linkFrom) + ' → ?' : 'Click the first item of the link, loaded or drawn.';
+
+const onGlassFull = isFull && P === 'glass' && canGlass;
+const onStudioFull = isFull && P === 'studio' && canData;
+const onMonitoringFull = isFull && P === 'alerts' && canGlass;
+const onAdmin = P === 'admin' && canAdmin;
+const usesSimpleArea = !(onGlassFull || onStudioFull || onMonitoringFull || onAdmin);
+const fullGlassBar = isFull && inGlass;
+const fullMenuLabel = (P === 'studio' && M === 'B') ? 'Dataset: Prison intel' : (P === 'home' ? 'Choose a case' : 'Kestrel');
+
+return {
+canAdminFlag: canAdmin, adminHome: [{ title: 'Case Wren has no Author', sub: 'People and roles', chip: 'needs you', go: () => set({ place: 'admin', adminSec: 'people' }) }, { title: 'A promotion has waited 4 days', sub: 'Operations · Telco call records', chip: 'overdue', go: () => set({ place: 'admin', adminSec: 'operations' }) }, { title: 'Open Admin', sub: 'People · Data · Running · Policies · Audit · Demo packs', chip: '6 sections', go: () => set({ place: 'admin', adminSec: 'people' }) }],
+onAdmin: onAdmin, adminNav: adminNav, adm: adm, admOtherTitle: AS === 'dashboards' ? 'Dashboard identities' : 'Connections', admOtherBody: AS === 'dashboards' ? 'Register a dashboard’s account (its secret shown once), see when it last pulled, remove it. Unchanged by this redesign.' : 'Files (the ingest root), the bookings replica (SQL, read-only) and the telco lookup API. Unchanged by this redesign; connectors arrive in phase 9.',
+people: people, peopleWarnings: peopleWarnings, hasDisabling: !!DP, disabling: disabling,
+roleRows: roleRows, hasRoleDraft: !!RD, roleDraft: roleDraft, setRoleName: (e) => set({ roleDraft: Object.assign({}, S.roleDraft, { name: e.target.value, error: '' }) }), saveRole: saveRole, cancelRole: () => set({ roleDraft: null }),
+dsRows: dsRows, waitRows: waitRows, opsCards: opsCards, ageOpts: ageOpts,
+approversNow: S.reviewMode === 'review' ? 'Prison intel: 4 · Telco: ' + (S.telPolicy === 'review' ? '1 (needs 2)' : 'not required') : 'Prison intel: not required · Telco: ' + (S.telPolicy === 'review' ? '1 (needs 2)' : 'not required'),
+auditFilters: auditFilters, auditRows: auditRows,
+hasNotes: notesList.length > 0, notesCount: String(notesList.length), notes: notesList, notesOpen: S.notesOpen, toggleNotes: () => set({ notesOpen: !S.notesOpen }),
+notesTitle: notesList.length + ' thing(s) waiting for you: proposed types and promotions to review',
+studioTypeHint: canStudio && proposedCount > 0 && S.stab !== 'model', studioTypeHintText: proposedCount + ' link type' + (proposedCount > 1 ? 's' : '') + ' proposed by analysts ' + (proposedCount > 1 ? 'are' : 'is') + ' waiting for you.', goModelTab: () => set({ stab: 'model' }),
+roles: roles, models: models, details: details, reviewModes: reviewModes, showDetail: !isToday,
+reset: () => set(this.fresh(S.role, S.model, S.detail)),
+goHome: go('home'), goAlerts: go('alerts'),
+isFull: isFull, isSimple: !isFull, isToday: isToday, notToday: !isToday,
+fullAppSwitch: isFull && !isToday && appTabs.length > 0 && P !== 'home', appTabs: appTabs,
+fullCaseMenu: isFull && P !== 'home' && (inGlass || P === 'studio'), fullMenuLabel: fullMenuLabel,
+fullGlassBar: fullGlassBar, barUnderline: (isToday && P === 'studio') ? '3px solid #e0b75a' : '0',
+account: R === 'admin' ? 'k.admin · SECRET' : R === 'analyst' ? 'a.field · OFFICIAL-SENSITIVE' : (R === 'developer' ? 'd.engineer · OFFICIAL-SENSITIVE' : 's.lead · OFFICIAL-SENSITIVE'),
+showContext: showContext, contextLabel: contextLabel, tabs: tabs,
+who: R === 'admin' ? 'K. Admin (administrator)' : R === 'analyst' ? 'A. Field (analyst)' : (R === 'developer' ? 'D. Engineer (data engineer)' : 'S. Lead (analyst + data engineer)'),
+showBanner: showBanner, bannerPlace: bannerPlace, bannerContext: bannerContext, subtabs: subtabs,
+showCross: showCross, crossLabel: crossLabel, cross: cross,
+hasToast: !!S.toast, toast: S.toast, clearToast: () => set({ toast: '' }),
+showRail: showRail, rail: rail, hasDrawer: hasDrawer, drawer: drawers[S.drawer] || { title: '', lines: [] }, closeDrawer: () => set({ drawer: '' }),
+showWelcome: () => set({ welcome: true, place: 'glass' }), welcome: S.welcome, closeWelcome: () => set({ welcome: false }),
+onGlassFull: onGlassFull, onStudioFull: onStudioFull, onMonitoringFull: onMonitoringFull,
+simpleWrapStyle: usesSimpleArea ? 'max-width: 1400px; margin: 0 auto; padding: 20px' : 'display: none',
+toggleDetails: () => set({ rightOpen: !S.rightOpen }), rightOpen: S.rightOpen, panels: panels,
+toggleTimeline: () => set({ timeline: !S.timeline }), timelineOpen: S.timeline, timelineChevron: S.timeline ? '▾' : '▸', bars: bars,
+dimmed: cur.nodes ? String(6 - cur.nodes.length) : '0',
+hasSelBar: !!(gBase || gItem),
+onHome: P === 'home', onGlass: P === 'glass' && canGlass && !isFull, onAlerts: P === 'alerts' && canGlass && !isFull, onStudio: P === 'studio' && canData && !isFull,
+onBoards: P === 'boards' && canGlass && !isToday, onBoard: P === 'board' && canGlass && !isToday,
+homeTitle: homeTitle, homeSub: homeSub, canGlass: canGlass, canStudio: canStudio,
+homePick: S.homePick, homeNewBoard: () => set({ homePick: true }),
+pickKestrel: () => set({ place: 'boards', homePick: false, toast: 'Case Kestrel. Choose how to start the board.' }),
+pickHarrier: () => set({ toast: 'Only case Kestrel is built in this prototype.' }),
+pickNewCase: () => set({ toast: 'Making a case: pick its dataset, name it, invite people (ADR-140 R16). Not built in this prototype.' }),
+cases: [
+{ name: 'Kestrel', reads: 'Prison intel + its analyst layer', alerts: (hasDrawnPerson ? '3' : '2') + ' new alerts', open: go('glass') },
+{ name: 'Harrier', reads: 'Telco call records + its analyst layer', alerts: '1 new alert', open: () => set({ toast: 'Only case Kestrel is built in this prototype.' }) }],
+datasets: [
+{ name: 'Prison intel', used: 'Used by cases Kestrel and Harrier', state: '1 needs attention', chipBg: '#fdecd4', chipInk: '#7a4a06', open: go('studio', { from: '' }) },
+{ name: 'Telco call records', used: 'Used by case Harrier', state: 'All loaded', chipBg: '#d7efe2', chipInk: '#14552f', open: () => set({ toast: 'Only Prison intel is built in this prototype.' }) }],
+analystB: R === 'analyst' && M === 'B',
+views: views, saveView: () => set({ extraViews: S.extraViews + 1, view: 'mine' + (S.extraViews + 1), toast: 'Saved as “My view ' + (S.extraViews + 1) + '”, private to you.' }),
+caseAlerts: caseAlerts, allAlerts: allAlerts,
+viewName: 'View: ' + cur.name, curViewName: cur.name,
+drawFromView: newFromView, drawFromSel: newFromSel, hasLoadedSel: !!base[S.gsel],
+glassNodes: glassNodes, glassLinks: glassLinks, hasGlassSel: !!(gItem || gBase), gsel: gsel,
+boardCards: boardCards, newBlank: newBlank, newFromView: newFromView, newFromSel: newFromSel,
+importI2: () => set({ toast: 'i2 import: an .anx chart becomes a new board, its items drawn and graded. Needs a synthetic sample chart and its own design round.' }),
+board: { name: bd.name, who: bd.who }, backToBoards: go('boards'),
+shareBoard: () => set({ boards: S.boards.map((b) => b.id === bd.id ? Object.assign({}, b, { who: 'shared with the case' }) : b), toast: 'Board shared with the members of case Kestrel.' }),
+palette: palette, requestType: () => set({ typeRequested: true, toast: 'Type request sent to the Prison intel data engineers. It appears on their Model tab.' }),
+linkMode: S.linkMode, linkHint: linkHint,
+toggleLink: () => set({ linkMode: !S.linkMode, linkFrom: '', draft: null }),
+linkBtnLabel: S.linkMode ? 'Cancel the link' : 'Draw a link',
+linkBtnStyle: (S.linkMode ? 'background: #005299; color: #ffffff; border: 1px solid #005299;' : 'background: #ffffff; color: #005299; border: 1px solid #005299;') + ' width: 100%; border-radius: 6px; padding: 8px 10px; margin-top: 6px; cursor: pointer; min-height: 40px; font-weight: 700',
+boardEmpty: boardNodes.length === 0, boardNodes: boardNodes, boardLinks: boardLinks,
+hasDraft: !!D, draft: D || { label: '', grading: 'B2', source: '', error: '' }, draftTypeUpper: D ? D.type.toUpperCase() : '',
+hasDraftError: !!(D && D.error),
+setLabel: (e) => set({ draft: Object.assign({}, S.draft, { label: e.target.value, error: '' }) }),
+setGrading: (e) => set({ draft: Object.assign({}, S.draft, { grading: e.target.value }) }),
+setSource: (e) => set({ draft: Object.assign({}, S.draft, { source: e.target.value, error: '' }) }),
+saveDraft: saveDraft, cancelDraft: () => set({ draft: null }),
+hasPromoSheet: !!PS, promoteBoard: () => { const pick = {}; onBoardItems.filter((i) => !promotedIds[i.id]).forEach((i) => { pick[i.id] = true; }); set({ promoSheet: 'board', promoPick: pick, draft: null, linkDraft: null, bsel: '' }); }, sheet: sheet, closeSheet: () => set({ promoSheet: '' }), hasPromos: S.promotions.length > 0, promoRows: promoRows, boardPromos: boardPromos, hasBoardPromos: boardPromos.length > 0, noBoardPromos: boardPromos.length === 0,
+hasBoardSel: !!(bItem || base[S.bsel]) && !D && !LD && !S.promoSheet, bsel: bsel,
+boardDown: boardDown, hasMenu: !!S.menu, menu: menu, boardMove: boardMove, boardUp: boardUp, boardLeave: boardLeave, boardCursor: dragging ? 'crosshair' : 'default',
+dragging: dragging, rubber: rubber, hasPending: !!LD, pending: pending, linkLabels: linkLabels,
+hasLinkDraft: !!LD, hasLinkError: !!(LD && LD.error),
+linkDraft: LD ? Object.assign({}, LD, { aLabel: labelOf(LD.a), bLabel: labelOf(LD.b) }) : { aLabel: '', bLabel: '', type: 'Visited with', grading: 'B2', source: '', error: '' },
+linkTypePills: modelLinkTypes.concat(S.customTypes.filter((t) => t.status !== 'declined').map((t) => t.name)).map((name) => {
+const on = !!(S.linkDraft && S.linkDraft.type === name);
+const custom = !!ctOf(name);
+return { label: name + typeTag(name), on: on, pick: () => set({ linkDraft: Object.assign({}, S.linkDraft, { type: name }), defining: false }),
+style: (on ? 'background: #005299; color: #ffffff; border: 1px solid #005299;' : (custom ? 'background: #f6f5fe; color: #3c3489; border: 1px solid #afa9ec;' : 'background: #ffffff; color: #17262b; border: 1px solid #9fb0b7;')) + ' border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px' };
+}),
+defining: S.defining, newType: S.newType, hasNtError: !!S.newType.error,
+openDefine: () => set({ defining: true, newType: { name: '', desc: '', directed: true, error: '' } }),
+cancelDefine: () => set({ defining: false }),
+setNtName: (e) => set({ newType: Object.assign({}, S.newType, { name: e.target.value, error: '' }) }),
+setNtDesc: (e) => set({ newType: Object.assign({}, S.newType, { desc: e.target.value, error: '' }) }),
+toggleNtDirected: () => set({ newType: Object.assign({}, S.newType, { directed: !S.newType.directed }) }),
+saveNewType: () => {
+const name = S.newType.name.trim();
+if (!name) return set({ newType: Object.assign({}, S.newType, { error: 'Give the link type a name.' }) });
+if (!S.newType.desc.trim()) return set({ newType: Object.assign({}, S.newType, { error: 'Say what it means, so others read it the same way.' }) });
+if (modelLinkTypes.concat(S.customTypes.map((t) => t.name)).some((n) => n.toLowerCase() === name.toLowerCase())) return set({ newType: Object.assign({}, S.newType, { error: '“' + name + '” already exists: pick it above.' }) });
+set({ customTypes: S.customTypes.concat([{ name: name, desc: S.newType.desc.trim(), directed: S.newType.directed, status: 'proposed' }]), defining: false, linkDraft: Object.assign({}, S.linkDraft, { type: name }), toast: 'Link type “' + name + '” proposed. Use it on boards now; a data engineer sees it on the Ingest Studio’s Model tab.' });
+},
+hasCustomTypes: S.customTypes.length > 0,
+customTypeRows: S.customTypes.map((t) => ({
+name: t.name, desc: t.desc, dir: t.directed ? 'directed' : 'either way',
+uses: S.links.filter((l) => l.type === t.name).length + ' link(s)',
+statusText: t.status === 'accepted' ? 'In the draft model' : (t.status === 'declined' ? 'Declined' : 'Proposed'),
+chip: 'font-size: 12px; border-radius: 999px; padding: 2px 9px; ' + (t.status === 'accepted' ? 'background: #e1f5ee; color: #085041' : (t.status === 'declined' ? 'background: #fcebeb; color: #791f1f' : 'background: #eeedfe; color: #3c3489')),
+canDecide: t.status === 'proposed' && R !== 'analyst',
+accept: () => set({ customTypes: S.customTypes.map((x) => x.name === t.name ? Object.assign({}, x, { status: 'accepted' }) : x), toast: '“' + t.name + '” added to Prison intel’s draft model (made live with the next model version). Links of this type can now be promoted.' }),
+decline: () => set({ customTypes: S.customTypes.map((x) => x.name === t.name ? Object.assign({}, x, { status: 'declined' }) : x), toast: '“' + t.name + '” declined. Its links stay in the Kestrel analyst layer and can still be used there.' })
+})),
+setLinkType: (e) => set({ linkDraft: Object.assign({}, S.linkDraft, { type: e.target.value }) }),
+setLinkGrading: (e) => set({ linkDraft: Object.assign({}, S.linkDraft, { grading: e.target.value }) }),
+setLinkSource: (e) => set({ linkDraft: Object.assign({}, S.linkDraft, { source: e.target.value, error: '' }) }),
+saveLink: saveLink, cancelLink: () => set({ linkDraft: null }),
+matches: matches, hasMatches: matches.length > 0, noMatches: matches.length === 0,
+studioTitle: studioTitle, studioSub: studioSub, readOnly: readOnly, canEdit: !readOnly, stabs: stabs, dagNodes: dagNodes,
+tabSources: S.stab === 'sources', tabPipelines: S.stab === 'pipelines', tabRuns: S.stab === 'runs', tabModel: S.stab === 'model',
+runsMatchNote: hasDrawnPerson, typeRequested: S.typeRequested,
+sources: [
+{ name: 'cell_stays', conn: 'Files · ingest folder', refresh: 'Folder watch, full snapshot', last: 'today 06:10', used: 'Visits and contacts' },
+{ name: 'visit_bookings', conn: 'SQL · bookings replica', refresh: 'Hourly, new rows only', last: 'today 16:00', used: 'Visits and contacts' },
+{ name: 'pin_calls', conn: 'Files · ingest folder', refresh: 'Manual', last: '4 Nov', used: 'PIN calls (draft)' }],
+pipelines: [
+{ name: 'Visits and contacts', reads: 'visit_bookings, cell_stays', state: 'Deployed v3', chipBg: '#d7efe2', chipInk: '#14552f' },
+{ name: 'Intelligence reports', reads: 'reports folder', state: 'Deployed v2', chipBg: '#d7efe2', chipInk: '#14552f' },
+{ name: 'PIN calls', reads: 'pin_calls', state: 'Draft, needs Test', chipBg: '#fdecd4', chipInk: '#7a4a06' }],
+runs: [
+runRow('Visits and contacts', ['ok', 'ok', 'ok', 'held', 'ok', 'ok', 'ok']),
+runRow('Intelligence reports', ['ok', 'none', 'ok', 'ok', 'ok', 'ok', 'held']),
+runRow('PIN calls', ['none', 'none', 'none', 'none', 'none', 'none', 'none'])].concat(S.promotions.length ? [runRow('Analyst promotions', ['none', 'none', 'none', 'none', 'none', 'none', S.promotions.some((q) => q.status === 'promoted') ? 'promo' : (S.promotions.some((q) => q.status === 'awaiting') ? 'review' : 'none')])] : [])
+};
+}
+}
+</script>
+</body>
+</html>
