@@ -99,4 +99,17 @@ describe("the Runs tab", () => {
       "python -m scripts.seed_internal ledger --revert-load 01X --reverted-by <your username> --stop-api",
     );
   });
+
+  it("reads the runs again when asked, for a watched file that has just loaded", () => {
+    const onChanged = vi.fn();
+    render(
+      <RunsTab
+        apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" datasetId="prison-intelligence"
+        datasetName="Prison Intelligence Dataset" pipelines={PIPELINES} runs={RUNS} level="editor"
+        canRevert={false} username={null} onChanged={onChanged} today={new Date("2026-11-05T12:00:00Z")}
+      />,
+    );  // prettier-ignore
+    fireEvent.click(screen.getByRole("button", { name: "Read the runs again" }));
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
 });

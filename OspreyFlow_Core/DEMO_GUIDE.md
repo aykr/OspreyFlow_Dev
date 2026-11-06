@@ -865,14 +865,19 @@ The last three chapters of the Prison Intelligence demo's Act 2 (`spec/06_DECISI
 Intelligence Dataset (synthetic demo)". Chapters 1 to 8 and Act 1 are unchanged.
 
 **Before chapter 9:** `python -m scripts.seed_internal prison-intelligence --release-batch-2` lists its three
-files; they are loaded in that order. Use four signed-in browser profiles: the analyst, the data engineer,
+files; they are loaded in that order. Each loads by its pipeline's **folder watch** (ADR-140 Amendment 3): the
+seed, and every reset, set *Seized media*, *Visit bookings* and *PIN phone first contacts* each to watch for its
+own file, **paused**, so nothing loads until the engineer resumes it at its step. To load one, as the engineer,
+on the Studio's **4 Runs** tab: choose the pipeline under *Pipeline to run or schedule*, **Run now or schedule**,
+**Resume schedule**; the file loads about a minute later, and **Read the runs again** shows its run (trigger
+*watch*) in today's cell. Use four signed-in browser profiles: the analyst, the data engineer,
 the report viewer and the admin (the case's Author).
 
 **Chapter 9** (as the persona named):
 1. Analyst, *Monitoring → Watches*: hotlist the coordinator's number (*Only me*, the default).
-2. Engineer: run *Seized media* over the second seized-phone batch. **H1**, in the Watches tab's alert inbox,
-   explained as before (ADR-130).
-3. Engineer: run *Visit bookings* over `pid_visit_bookings.csv`. **H2**, high, in *Monitoring → Queue*: the
+2. Engineer: resume *Seized media*'s watch (above); it loads the second seized-phone batch. **H1**, in the
+   Watches tab's alert inbox, explained as before (ADR-130).
+3. Engineer: resume *Visit bookings*' watch; it loads `pid_visit_bookings.csv`. **H2**, high, in *Monitoring → Queue*: the
    coordinator has booked a social visit to the third group member for Saturday 9 May 2026, booked on the
    Monday. The booking is a record; no visit is written.
 4. Case Author (the admin account; a rule for the case team needs the Author level, and the demo analyst
@@ -885,7 +890,7 @@ the report viewer and the admin (the case's Author).
    the rule cannot be judged in a dry run (it reads links from the stored graph). *PIN phone first contacts*
    was deployed by the seed with no canvas, so its own Load rules are reached only through **Reopen for
    editing** (a new version); every case rule judges it while nothing is chosen.
-6. Engineer: run *PIN phone first contacts* over `pid_pin_new_contacts.csv`. **S1**, high, for the case team,
+6. Engineer: resume *PIN phone first contacts*' watch; it loads `pid_pin_new_contacts.csv`. **S1**, high, for the case team,
    on the number nobody owns, which the third group member's PIN account called twice.
 
 **Chapter 10:** close H2 as *Referred* (the owner's alone, so at once); propose S1's close as *Referred*
@@ -905,7 +910,9 @@ once). A hotlist entry cannot be removed in the Glass: keep the first rehearsal'
 again. The alert trend counts the week alerts were raised in by the clock, so rehearsals the same week add to
 it. The reset reverts the three loads (and with the first contacts, S1's node, closing S1); it cannot undo
 the hotlist, its alerts and H2's close, the rule, the trends or the pack's items. Since 3 November (ADR-127
-Amendment 45) it leaves chapter 9's three files released ("kept …"), so they need not be released again.
+Amendment 45) it leaves chapter 9's three files released ("kept …"), so they need not be released again;
+since 6 November (ADR-140 Amendment 3) it also sets the three watches again, paused, and writes each kept file
+again, so the next rehearsal's watch takes it.
 
 **Chapter 4's draft** (ADR-127 Amendment 45, 3 November): the seed, and every reset, leave the *Intelligence
 reports* pipeline as a draft holding the whole branch (source, Profile, Map, Load) and the committed map,

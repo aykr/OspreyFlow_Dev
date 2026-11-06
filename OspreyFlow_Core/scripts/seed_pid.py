@@ -535,6 +535,61 @@ def _is_released_copy(root: Path, file: str) -> bool:
     return held.is_file() and held.read_bytes() == (listed_folder(root) / file).read_bytes()
 
 
+#: What the three chapter-9 watches say while they wait (ADR-140 Amendment 3).
+CHAPTER_9_PAUSED = "waiting for its chapter 9 step: resume it on the Studio's Runs tab"
+
+
+def chapter_9_watches() -> list[tuple[str, str]]:
+    """Each chapter-9 pipeline and the one file its folder watch takes, in chapter 9's order: the
+    second seized-phone batch, the visit bookings, the PIN first contacts. A pattern is the file's
+    whole name, so no watch can take another pipeline's file, or batch 1."""
+    return [
+        (comms_recipe_id(), pid_files.BATCH_2),
+        *((recipe_id_of(stage.recipe), stage.file) for stage in pid_monitoring.MONITORING_STAGES),
+    ]
+
+
+class _Schedules(Protocol):
+    async def update_schedule(
+        self,
+        recipe_id: str,
+        principal: Principal,
+        *,
+        schedule_cron: str | None,
+        schedule_watch: str | None,
+        schedule_timezone: str | None = None,
+        now: datetime | None = None,
+        schedule_case: str | None = None,
+    ) -> Any: ...
+
+    async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None: ...
+
+
+async def set_chapter_9_watches(
+    store: _Schedules, principal: Principal, *, case_id: str, now: datetime
+) -> list[str]:
+    """Chapter 9 loads by folder watch (ADR-140 Amendment 3, the owner's ruling "Folder watch"):
+    since build-order step 30 a run reads only the file Test checked, so no run can name a released
+    file. Each pipeline watches the dataset's listed folder for its own file, owned by `principal`
+    (the demo engineer, who runs it), in the case; and each starts **paused**, so nothing loads
+    until the engineer resumes it at its step on the Runs tab: the seized batch after the analyst's
+    hotlist, the first contacts after the Author's rule. A watch takes only a file that arrived
+    after it was set, so setting it here, before any release, leaves every release to it."""
+    said: list[str] = []
+    for recipe_id, file in chapter_9_watches():
+        await store.update_schedule(
+            recipe_id,
+            principal,
+            schedule_cron=None,
+            schedule_watch=file,
+            now=now,
+            schedule_case=case_id,
+        )
+        await store.set_paused(recipe_id, paused=True, reason=CHAPTER_9_PAUSED)
+        said.append(f"watch set on {file}, paused until its chapter 9 step")
+    return said
+
+
 def release_batch_2(root: Path) -> str:
     """Chapter 9: copies batch 2, and the two monitoring batches after it (ADR-127 Amendment 41),
     from `incoming/` into the listed folder. A file copy only, so the Conduit stays up. Refuses,
@@ -1698,15 +1753,19 @@ async def seed_all(
     run: Callable[[Principal], Awaitable[Any]],
     pictures: Callable[[Principal], Awaitable[Any]],
     checks: Callable[[Principal], Awaitable[Any]],
+    watches: Callable[[Principal], Awaitable[Any]] | None = None,
 ) -> tuple[Any, Any, Any, Any]:
     """The seed's steps in their order, the loader scoped to the case before any of them writes: the
     recipes, the runs, the pictures, the demo numbers. A loader the scope leaves unscoped stops it.
-    The pictures step alone is handed `EDIT_GRAPH` as well (Amendment 31)."""
+    The pictures step alone is handed `EDIT_GRAPH` as well (Amendment 31). Chapter 9's watches
+    are set after the runs (ADR-140 Amendment 3)."""
     scoped = await scope(principal)
     if scoped.datasets is None:
         raise RuntimeError("the seed worker is not scoped to the case: nothing was written")
     recipes = await enter_recipes(scoped)
     runs = await run(scoped)
+    if watches is not None:
+        await watches(scoped)
     pics = await pictures(with_edit_graph(scoped))
     numbers = await checks(scoped)
     return recipes, runs, pics, numbers
@@ -1865,6 +1924,7 @@ async def reset_live(
     rewrite_reports: Callable[[], None],
     say: Callable[[str], None],
     show_ids: bool = False,
+    set_watches: Callable[[], Awaitable[None]] | None = None,
 ) -> int:
     """The rehearsal reset (Amendment 23, "The reset", as Amendment 32 simplified it). Reverts each
     chosen load, newest first. Exit 0 reset; 1 a revert was refused (it stops, names the refusal by
@@ -1919,6 +1979,11 @@ async def reset_live(
         say("restored the reports recipe to its starting draft")
     rewrite_reports()
     say(f"rewrote {pid_files.REPORTS}")
+    if set_watches is not None:
+        # ADR-140 Amendment 3: each watch set again, paused, before a kept release is written
+        # again below, so the next rehearsal's watch takes it as a file that arrived after it.
+        await set_watches()
+        say("set chapter 9's three watches again, paused")
     listed = listed_folder(root)
     keep = {stage.file for stage in SEED_ORDER if stage.file not in CHAPTER_9_FILES}
     if listed.is_dir():
@@ -1926,8 +1991,11 @@ async def reset_live(
             if not path.is_file() or path.name in keep:
                 continue
             if path.name in CHAPTER_9_FILES and _is_released_copy(root, path.name):
-                # Amendment 45: chapter 9's release stands, so its loads are ready again.
-                say(f"kept {path.name} (chapter 9's release)")
+                # Amendment 45: chapter 9's release stands, so its loads are ready again. Written
+                # again (ADR-140 Amendment 3): a watch takes a file once, by its name, size and
+                # modification time, and only one that arrived after the watch was set.
+                _place(incoming_folder(root) / path.name, path)
+                say(f"kept {path.name} (chapter 9's release, written again for its watch)")
                 continue
             path.unlink()
             say(f"removed {path.name} from the listed folder")
@@ -2388,8 +2456,20 @@ async def _seed_into(
         moment = moment_of(standing)
         return moment, await run_demo_checks(resources.graph, principal, plan, moment)
 
+    async def watches(principal: Principal) -> None:
+        for line in await set_chapter_9_watches(
+            store, principal, case_id=case_id, now=datetime.now(UTC)
+        ):
+            print(f"  {line}")
+
     _, results, summary, (moment, numbers) = await seed_all(
-        base, scope=scope, enter_recipes=recipes, run=run, pictures=pictures, checks=checks
+        base,
+        scope=scope,
+        enter_recipes=recipes,
+        run=run,
+        pictures=pictures,
+        checks=checks,
+        watches=watches,
     )
     brief = await _seed_brief_into(case_id, author, resources.audit)
     draft = await store.get(reports_recipe_id())
@@ -2549,11 +2629,16 @@ async def _reset(args: argparse.Namespace, root: Path) -> int:
             rewrite_reports=lambda: rewrite_reports_file(plan, root),
             say=print,
             show_ids=args.show_ids,
+            set_watches=lambda: _set_watches_quietly(store, scoped, case_id),
         )
     finally:
         await history.close()
         await store.close()
         await resources.close()
+
+
+async def _set_watches_quietly(store: _Schedules, principal: Principal, case_id: str) -> None:
+    await set_chapter_9_watches(store, principal, case_id=case_id, now=datetime.now(UTC))
 
 
 async def _fallback(args: argparse.Namespace, root: Path) -> int:

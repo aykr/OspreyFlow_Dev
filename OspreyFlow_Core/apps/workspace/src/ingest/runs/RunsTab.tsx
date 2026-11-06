@@ -111,6 +111,9 @@ export function RunsTab(props: RunsTabProps) {
         <Button disabled={!chosen} onClick={() => setOperating(chosen)}>
           Run now or schedule
         </Button>
+        {/* A watched file loads a minute after it settles (ADR-110 Amendment 4); this reads the
+            ledger again to show it, without leaving the tab. */}
+        <Button onClick={props.onChanged}>Read the runs again</Button>
       </header>
 
       {pipelines !== null && deployed.length === 0 && (

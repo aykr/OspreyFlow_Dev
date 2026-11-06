@@ -704,20 +704,32 @@ test("CAP-A2-C8-b", async ({ page }) => {
 /** The rule P1 deploys (`pid_monitoring.P1_RULE_NAME`). */
 const P1_RULE = "Calls to a number on a seized handset";
 
-/** The incoming folder `pid_files.write_files` writes the chapter-9 files to, as the Conduit sees
- * it: the demo loads them, the seed does not. */
-const INCOMING = "/var/lib/osprey/ingest/uploaded/prison-intelligence/incoming";
-
-/** Runs a published pipeline over one of the chapter-9 files from its Publish screen, as the data
- * engineer, and says what its runs list reads afterwards. */
+/** Loads one of chapter 9's files by its pipeline's folder watch (ADR-140 Amendment 3): the seed
+ * sets each chapter-9 pipeline to watch for its own file, paused; `--release-batch-2` has put the file
+ * in the dataset's folder. As the data engineer, on the Studio's **4 Runs** tab: choose the pipeline,
+ * **Run now or schedule**, **Resume schedule**, then **Read the runs again** until today's report
+ * names a watch run of the file (a file loads a minute after it settles). Logs that report. */
 async function loadIncoming(page: Page, open: RegExp, file: string): Promise<void> {
   await studio(page);
-  await page.getByRole("button", { name: open }).click();
-  const run = page.getByRole("button", { name: "Run now" });
-  await run.waitFor();
-  await page.getByLabel(/^Source file/).fill(`${INCOMING}/${file}`);
-  // The new run's own answer, never the runs list's older "Succeeded" (step 9d finding 7).
-  console.log(`${file}: ${await runNowAndWait(page, run)}`);
+  const label = open.source.replace(/^\^Open /, "").replace(/\\/g, "");
+  await page.getByRole("tab", { name: "4 Runs" }).click();
+  const choose = page.getByRole("combobox", { name: "Pipeline to run or schedule" });
+  const value = await choose.locator("option").filter({ hasText: new RegExp(`^${label}`) }).first().getAttribute("value");
+  await choose.selectOption(value ?? "");
+  await page.getByRole("button", { name: "Run now or schedule" }).click();
+  await page.getByRole("button", { name: "Resume schedule" }).click();
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const report = page.getByRole("region", { name: "Run report" });
+  for (let waited = 0; waited < 240; waited += 15) {
+    await page.waitForTimeout(15_000);
+    await page.getByRole("button", { name: "Read the runs again" }).click();
+    const cell = page.getByRole("button", { name: new RegExp(`^${label}.*, ${today}: `) }).first();
+    if (await cell.isVisible().catch(() => false)) {
+      await cell.click();
+      if (((await report.textContent().catch(() => "")) ?? "").includes(`watch, ${file}`)) break;
+    }
+  }
+  console.log(`${file}: ${(await report.textContent().catch(() => "(no run report)")) ?? ""}`.slice(0, 600));
   await page.waitForTimeout(5000);
 }
 

@@ -46,9 +46,11 @@ const CHAIN = {
 
 const base = { connector_profile: "generic-csv", owning_unit: "unit-a", created_by: "engineer-1", created_at: day(10),
   unmapped_fields: [], ready_for_profile: true, dataset_id: "harbour-extract", legal_basis: "Synthetic demonstration" };  // prettier-ignore
-const deployed: Record<string, unknown> = {
+let deployed: Record<string, unknown> = {
   ...base, recipe_id: "r-calls", version: 2, status: "published", label: "Wing phone calls", source_location: "harbour-extract/calls.csv",
   handling: { classification: "OFFICIAL" }, git_path: "recipes/r-calls.yaml", schedule_watch: "calls-*.csv", pipeline: CHAIN,
+  schedule_owner: "engineer-1", schedule_paused: true,
+  schedule_paused_reason: "waiting for its chapter 9 step: resume it on the Studio's Runs tab",
 };  // prettier-ignore
 let draft: Record<string, unknown> = {
   ...base, recipe_id: "r-visits", version: 3, status: "draft", label: "Visit bookings", source_location: "harbour-extract/visits.csv",
@@ -92,6 +94,10 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path.endsWith("/ingest/recipes/r-visits/run") && method === "POST")
     return reply({ load_id: "SYN-LOAD-5", recipe_id: "r-visits", recipe_version: 3, rows_read: 30, rows_deduplicated: 0,
       nodes_created: 12, nodes_referenced: 18, edges_created: 30, rejections: [], rows_held: 0, rule_notes: [] });  // prettier-ignore
+  if (path.endsWith("/ingest/recipes/r-calls/schedule/resume") && method === "POST") {
+    deployed = { ...deployed, schedule_paused: false, schedule_paused_reason: null };
+    return reply(deployed);
+  }
   if (path.endsWith("/ingest/recipes/r-calls")) return reply(deployed);
   if (path.endsWith("/ingest/recipes/r-visits")) return reply(draft);
   if (path.endsWith("/held-rows")) return reply(HELD);

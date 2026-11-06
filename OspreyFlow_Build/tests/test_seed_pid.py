@@ -132,6 +132,7 @@ from services.api.resolution_trigger import submit_post_ingest_resolution_jobs
 from services.api.studio_publish import build_recipe, pack_versions_for, serialise_recipe
 from services.api.studio_recipes import (
     SeededRecipeContentDiffers,
+    StudioRecipeNotADraftError,
     StudioRecipeNotFoundError,
     carry_source_declarations,
     check_seeded_recipe,
@@ -2416,6 +2417,17 @@ class _Registry:
             status=StudioRecipeStatus.DRAFT, version=1, row_template=None, recipe_id=recipe_id
         )
 
+    async def update_schedule(self, recipe_id: str, principal: Any, **kw: Any) -> Any:
+        # As `StudioRecipeStore.update_schedule` refuses (rule 15): only a recipe the seed entered
+        # published can be scheduled; a draft, or one it never entered, cannot.
+        published = {r for kind, r in self.log if kind == "enter"}
+        if recipe_id not in published:
+            raise StudioRecipeNotADraftError(recipe_id)
+        self.log.append(("watch", (recipe_id, kw["schedule_watch"])))
+
+    async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
+        self.log.append(("paused", (recipe_id, paused)))
+
 
 class _RunLedger:
     def __init__(self, standing: list[LoadRecord] | None = None) -> None:
@@ -3305,3 +3317,92 @@ async def test_the_check_command_reads_through_a_graph_with_the_deployments_onto
 
     assert await seed_pid._check(seed_pid.parse_args(["--case-name", "X", "--check"])) == 0
     assert len(handed) == 1 and applied == [ontology], "the checks' graph has the ontology"
+
+
+# --- chapter 9's watches (ADR-140 Amendment 3) -----------------------------------------------
+
+
+class _ScheduleStore:
+    """The two schedule writes the seed makes, as `StudioRecipeStore` takes them."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+
+    async def update_schedule(self, recipe_id: str, principal: Any, **kwargs: Any) -> None:
+        self.calls.append(("schedule", recipe_id, principal.id, kwargs))
+
+    async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
+        self.calls.append(("paused", recipe_id, paused, reason))
+
+
+async def test_chapter_9s_three_pipelines_each_watch_only_their_own_file_and_start_paused() -> None:
+    """Red if a watch is left running (the seized batch would load before the analyst's hotlist,
+    and the first contacts before the Author's rule), or if a pattern could take another
+    pipeline's file."""
+    store, engineer = _ScheduleStore(), seed_pid.engineer("verify")
+    said = await seed_pid.set_chapter_9_watches(store, engineer, case_id=CASE, now=NOW)
+    schedules = [c for c in store.calls if c[0] == "schedule"]
+    assert [(c[1], c[3]["schedule_watch"]) for c in schedules] == seed_pid.chapter_9_watches()
+    assert [w for _, w in seed_pid.chapter_9_watches()] == list(seed_pid.CHAPTER_9_FILES)
+    for _, _, owner, kwargs in schedules:
+        assert owner == engineer.id
+        assert kwargs["schedule_cron"] is None
+        assert kwargs["schedule_case"] == CASE and kwargs["now"] == NOW
+    paused = [c for c in store.calls if c[0] == "paused"]
+    assert [(c[1], c[2]) for c in paused] == [(r, True) for r, _ in seed_pid.chapter_9_watches()]
+    assert all("Runs tab" in c[3] for c in paused)
+    # Each set before it is paused, so the pause is the last word on it.
+    for recipe_id, _ in seed_pid.chapter_9_watches():
+        order = [c[0] for c in store.calls if c[1] == recipe_id]
+        assert order == ["schedule", "paused"]
+    assert len(said) == 3
+
+
+async def test_the_seed_sets_the_watches_after_the_runs_and_before_the_pictures() -> None:
+    log: list[str] = []
+
+    async def scope(principal: Any) -> Any:
+        return principal.model_copy(update={"datasets": ["prison-intelligence"]})
+
+    async def step(name: str) -> None:
+        log.append(name)
+
+    await seed_pid.seed_all(
+        seed_pid.engineer("verify"),
+        scope=scope,
+        enter_recipes=lambda p: step("recipes"),
+        run=lambda p: step("runs"),
+        watches=lambda p: step("watches"),
+        pictures=lambda p: step("pictures"),
+        checks=lambda p: step("checks"),
+    )
+    assert log == ["recipes", "runs", "watches", "pictures", "checks"]
+
+
+async def test_the_reset_sets_the_watches_again_then_writes_each_kept_release_afresh(
+    tmp_path: Path,
+) -> None:
+    """A watch takes a file once, by its name, size and modification time, and only one that
+    arrived after the watch was set. Red if the reset keeps a released copy without writing it
+    again after the watches are set (the next rehearsal's watch would never take it)."""
+    world, said = _ResetWorld(_loads()), []
+    root = _root(tmp_path)
+    _seed_folder(root)
+    listed = seed_pid.listed_folder(root)
+    before = [n for n in seed_pid.CHAPTER_9_FILES if (listed / n).exists()]
+    order: list[str] = []
+
+    async def set_watches() -> None:
+        order.append("watches")
+        world.log.append("watches")
+
+    import os
+
+    for name in before:
+        os.utime(listed / name, ns=(1, 1))
+    await seed_pid.reset_live(**_reset_args(tmp_path, world, said, set_watches=set_watches))
+    assert order == ["watches"]
+    for name in before:
+        assert (listed / name).stat().st_mtime_ns > 1, f"{name} was kept but not written again"
+        assert f"kept {name}" in "\n".join(said)
+    assert "set chapter 9's three watches again, paused" in "\n".join(said)

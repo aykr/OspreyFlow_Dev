@@ -81,6 +81,21 @@ test("a deployed pipeline is run from Runs by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "read-rows-already-loaded-on-a-run-report-by-keyboard");
 });
 
+test("a paused watch is resumed from Runs, and the runs read again, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "4 Runs");
+  const choose = page.getByRole("combobox", { name: "Pipeline to run or schedule" });
+  await choose.focus();
+  await choose.selectOption("r-calls");
+  await press(page, "Run now or schedule");
+  await press(page, "Resume schedule");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/schedule/resume"))).toBe(true);
+  const before = (await asked(page)).filter((a) => a.path.endsWith("/ingest/recipe-registry")).length;
+  await press(page, "Read the runs again");
+  await expect.poll(async () => (await asked(page)).filter((a) => a.path.endsWith("/ingest/recipe-registry")).length).toBeGreaterThan(before);
+  registerCovered(REGISTRY, "resume-a-watch-and-read-the-runs-again-by-keyboard");
+});
+
 test("Add files opens on Sources by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await tab(page, "2 Sources");

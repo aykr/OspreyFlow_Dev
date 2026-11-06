@@ -25587,3 +25587,35 @@ this says so. Spec 09 §1.0 has the screens.
 
 **Tests:** spec 09 §1.0's list. Shown red: the switcher test with every dataset a case reads offered
 (it then offered one only read).
+
+### ADR-140, Amendment 3 (6 November 2026) — chapter 9 loads by folder watch
+
+Status: accepted 6 November 2026 (the owner's ruling "Folder watch", on Amendment 2 item 5). ADR-127
+Amendments 41, 45 and 47 and ADR-110 are unchanged except where this says so.
+
+1. **Chapter 9's three files load by their pipelines' folder watches.** The seed sets *Seized media*,
+   *Visit bookings* and *PIN phone first contacts* each to watch the dataset's listed folder for its own
+   file, by its whole name (so no watch takes another's file, or batch 1), owned by the demo engineer,
+   in the case (`scripts.seed_pid.set_chapter_9_watches`, after the runs). Each starts **paused**, with
+   the reason "waiting for its chapter 9 step: resume it on the Studio's Runs tab": the seized batch must
+   load after the analyst's hotlist and the first contacts after the Author's rule, so nothing loads
+   until the engineer resumes it at its step (Runs tab: choose the pipeline, **Run now or schedule**,
+   **Resume schedule**; the file loads about a minute after it settles, ADR-110 Amendment 4 item 2).
+   It anticipates phase 4, where refresh is the source's.
+2. **The reset sets the three watches again, paused, and writes each kept release again** (still
+   *kept*, Amendment 45). A watch takes a file once, by its name, size and modification time, and only
+   one that arrived after the watch was set; a kept copy left as it was would never be taken by the next
+   rehearsal's watch.
+3. **The Runs tab gains *Read the runs again*,** so the watch's run is seen without leaving the tab.
+4. **Must be seen live:** a watched run acts as the schedule's owner through token exchange (ADR-110
+   decision 3); the demo engineer's exchange on the owner's deployment has not been seen working from
+   a watch.
+
+**Tests:** `tests/test_seed_pid.py::test_chapter_9s_three_pipelines_each_watch_only_their_own_file_and_start_paused`,
+`::test_the_seed_sets_the_watches_after_the_runs_and_before_the_pictures`,
+`::test_the_reset_sets_the_watches_again_then_writes_each_kept_release_afresh` (red with the kept file
+not written again); the seed's fake registry now refuses a schedule on a recipe it did not enter
+published, as the store does (rule 15); `runs/RunsTab.test.tsx` "reads the runs again";
+`keyboard/ingest-studio.spec.ts` "a paused watch is resumed from Runs, and the runs read again".
+`live/pid-capture.spec.ts`'s `loadIncoming` resumes the watch and reads the runs until today's report
+names the file (not run here: it runs against the owner's deployment).

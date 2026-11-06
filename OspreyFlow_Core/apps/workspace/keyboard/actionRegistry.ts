@@ -787,6 +787,8 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   "deploy-and-run-now-by-keyboard",
   // Moved from PIPELINE_STUDIO_ACTIONS with Run now (ADR-127 decision 5's count on a run report).
   "read-rows-already-loaded-on-a-run-report-by-keyboard",
+  // ADR-140 Amendment 3: chapter 9's paused watch resumed, and the runs read again.
+  "resume-a-watch-and-read-the-runs-again-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
