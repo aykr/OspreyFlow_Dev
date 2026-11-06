@@ -25619,3 +25619,39 @@ published, as the store does (rule 15); `runs/RunsTab.test.tsx` "reads the runs 
 `keyboard/ingest-studio.spec.ts` "a paused watch is resumed from Runs, and the runs read again".
 `live/pid-capture.spec.ts`'s `loadIncoming` resumes the watch and reads the runs until today's report
 names the file (not run here: it runs against the owner's deployment).
+
+### ADR-140, Amendment 4 (6 November 2026) — phase 3: connections, registered sources, dataset routes
+
+Status: accepted 6 November 2026 (the owner's three rulings, each put as a multiple-choice question:
+"Dataset routes now", "Needs attention", "Table and admin screen now"). ADR-140, ADR-099 and its
+Amendment 4, and ADR-140 Amendment 2 are unchanged except where this says so. `01_DOMAIN_MODEL.md` §12
+has the objects; `03_CONDUIT_MIDDLEWARE.md` the routes.
+
+1. **Sources live on dataset routes now** (`/v1/datasets/{dataset_id}/sources…`), ahead of the rest of
+   the Studio (open question 6, phase 5). `get_principal` scopes such a request to the dataset alone,
+   and only for a person one of whose cases loads into it (the case's first dataset): the same reach as
+   the switcher (Amendment 2). Anyone else, another unit's dataset and a missing one answer 404 alike.
+   *(mine: the admission rule; it adds no reach the switcher did not have.)*
+2. **Connections are records,** the deployment's, named by an administrator and audited
+   (`/v1/admin/connections`); the built-in Files connection exists in every deployment. The Admin
+   area gains a *Connections* screen. Only `files` until phase 9.
+3. **A governance edit flags deployed pipelines** reading the source *needs attention* (the owner's
+   ruling) with the reason in words (`flagged_reason`; the ontology's flag now records its own), and
+   **drafts follow at once**, their Test cleared. *(mine: drafts following, which the ruling's option
+   described.)*
+4. **A source's profile is computed for each reader, never stored** *(mine)*: the profiler masks by the
+   reader's clearance, so a snapshot would leak what was masked for another (rule 3).
+5. **A source is registered once per dataset and location;** a Files source must be a file the
+   dataset's ingest-root listing offers, refused in the same words otherwise, whether or not the path
+   exists (the ingest root's confinement unchanged).
+6. **Migration** *(mine)*: `scripts.migrate_sources` registers each existing recipe's file as a source
+   of its dataset; files read by several recipes under different governance are left for a person and
+   named; no recipe is changed.
+
+**Tests:** `tests/services/api/test_dataset_sources.py` (the dataset reach, another unit and a missing
+dataset alike, a source through another dataset's route, confinement, once per location, the governance
+edit flagging, following and audited, the profile per reader, connections by an administrator only; the
+reach and confinement cases shown red by plants); `test_studio_recipes_store.py` (live Postgres: the
+flag only on deployed recipes of that dataset and file — red first on a real defect, the location being
+in `content`; drafts following; the ontology's own reason; the source store keyed by dataset);
+`tests/test_migrate_sources.py`.

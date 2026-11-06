@@ -2195,3 +2195,41 @@ and a hotlist turned back to "only me" withdraws its alerts from the team. A sen
 a pattern (its advanced view) and read back from one; neither writes anything, and deploying a
 sentence is a route of its own. `03_CONDUIT_MIDDLEWARE.md` has the routes: the audience in §3.8,
 assignment and sentences in §3.8a.
+
+## 12. Connections and registered sources (ADR-140 decision 7, Amendment 4)
+
+A **connection** is where sources are read from, owned by the deployment's administrators
+(`ingest_connections`; Admin area, `administer_system`). One kind today, `files`: the ingest root. Every
+deployment has the built-in one, `files` ("Files: the ingest root"); SQL, API and JSON-schema
+connections are phase 9's.
+
+A **source** (`SourceTable`, `ingest_sources`; `packages/schemas/sources.py`) is one file, table or
+endpoint on a connection, registered **once per dataset and location**, and carries what every pipeline
+reading it inherits:
+
+```python
+class SourceTable(BaseModel):
+    id: str
+    dataset_id: str            # the dataset it belongs to; every read is keyed by it (rule 3)
+    connection_id: str
+    name: str
+    location: str              # a Files source: a file the dataset's ingest-root listing offers
+    connector_profile: str     # e.g. generic-csv
+    handling: dict             # marking, units, the columns a row's marking is read from (ADR-127 decision 3)
+    legal_basis: str | None
+    refresh: SourceRefresh     # trigger manual | watch (+ pattern); recorded here, executed in phase 4
+    version: int               # each governance edit is a new version, audited
+    created_by: str; created_at: datetime
+    updated_by: str | None; updated_at: datetime | None
+```
+
+- **Its profile is never stored.** The profiler masks sample values by the reader's clearance, so a
+  stored profile would show one reader what was masked for another; it is computed for whoever asks.
+- **A governance edit** (marking, units, legal basis, refresh) is a new version. Every **deployed**
+  pipeline of the dataset reading it is flagged *needs attention* (`studio_recipes.flagged_reason`,
+  its scheduled and watched runs blocked) until deployed again; every **draft** reading it takes the
+  new handling and legal basis at once and must pass Test again. A deployed recipe's committed
+  governance is never rewritten.
+- A recipe reads a source by its location, which the source node writes to the draft.
+- Existing recipes' files became sources by `python -m scripts.migrate_sources` (dry run first); files
+  read under different governance by different recipes are left for a person.
