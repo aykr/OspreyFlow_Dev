@@ -1206,6 +1206,17 @@ class StudioRecipeStore:
             )
         return [row["label"] for row in rows]
 
+    async def current_for_migration(self) -> list[StudioRecipeDraft]:
+        """Every recipe at every status but a previous version, across every dataset: for
+        `scripts.migrate_sources` alone, an operator's command run with no request and no reader
+        (ADR-140 Amendment 4). No route calls it."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes WHERE status <> $1 ORDER BY dataset_id, label",
+                StudioRecipeStatus.SUPERSEDED.value,
+            )
+        return [_row_to_draft(r) for r in rows]
+
     async def follow_source(
         self,
         dataset_id: str,
