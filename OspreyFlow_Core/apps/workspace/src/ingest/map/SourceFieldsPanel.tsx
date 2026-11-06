@@ -19,6 +19,9 @@ export interface SourceFieldsPanelProps {
   onRowChange: (delta: 1 | -1) => void;
   onIgnoreField: (field: string, note: string | null) => void;
   onUnignoreField: (field: string) => void;
+  /** Which registered source the pipeline reads, in words (ADR-140 Amendment 6); the fields are
+   * still the pipeline's own profile. `null`: nothing to say (no dataset, or still reading). */
+  readsFrom?: string | null;
 }
 
 export function SourceFieldsPanel({
@@ -30,11 +33,17 @@ export function SourceFieldsPanel({
   onRowChange,
   onIgnoreField,
   onUnignoreField,
+  readsFrom = null,
 }: SourceFieldsPanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)", height: "100%", overflow: "auto" }}>
       <Panel title="Source fields">
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8, 8px)" }}>
+          {readsFrom && (
+            <p className="label" role="status" style={{ margin: 0 }}>
+              {readsFrom}
+            </p>
+          )}
           {columns.map((column) => {
             const bound = boundFieldNames.has(column.name);
             const ignored = ignoredNotes.has(column.name);

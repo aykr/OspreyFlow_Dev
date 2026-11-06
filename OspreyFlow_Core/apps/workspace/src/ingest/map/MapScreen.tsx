@@ -60,6 +60,7 @@ import { ElementInspector, type ElementSelection } from "./ElementInspector";
 import { EntityList } from "./EntityList";
 import { LinkList } from "./LinkList";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
+import { listSources } from "../sources/api";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
 import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, updateEntityByRef, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
 
@@ -122,6 +123,10 @@ export function MapScreen({
   const [linking, setLinking] = useState(false);
   const [linkFromRef, setLinkFromRef] = useState<string | null>(null);
 
+  // ADR-140 Amendment 6 (the owner's ruling): the pane names the registered source the pipeline reads,
+  // but its fields stay the pipeline's own profile, masked also by any marking the pipeline sets
+  // above the source's. The source's own profile route is deliberately not read here.
+  const [readsFrom, setReadsFrom] = useState<string | null>(null);
   const [rowIndex, setRowIndex] = useState(0);
   const [sampleRow, setSampleRow] = useState<MapSampleRow | null>(null);
 
@@ -157,6 +162,28 @@ export function MapScreen({
       cancelled = true;
     };
   }, [apiBaseUrl, bearerToken, recipeId, onDraftChange, investigationId]);
+
+  const datasetId = draft?.dataset_id ?? null;
+  const location = draft?.source_location ?? null;
+  useEffect(() => {
+    setReadsFrom(null);
+    if (!datasetId) return;
+    let cancelled = false;
+    listSources({ apiBaseUrl, bearerToken }, datasetId)
+      .then((found) => {
+        if (cancelled) return;
+        const source = found.find((s) => s.location === location);
+        setReadsFrom(
+          source
+            ? `From the registered source ${source.name}, version ${source.version}.`
+            : "No registered source reads this file: its settings are the pipeline's own.",
+        );
+      })
+      .catch(() => !cancelled && setReadsFrom("The registered sources could not be read."));
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, bearerToken, datasetId, location]);
 
   useEffect(() => {
     if (loading || error) return;
@@ -336,6 +363,7 @@ export function MapScreen({
           the inspector and never shrank back (9 October 2026). */}
       <div style={{ display: "grid", gridTemplateColumns: "280px minmax(0, 1fr) 340px", flex: 1, minHeight: 0, gap: "var(--sp-8)" }}>
         <SourceFieldsPanel
+          readsFrom={readsFrom}
           columns={columns}
           sampleRow={sampleRow}
           boundFieldNames={boundFieldNames}
