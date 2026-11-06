@@ -44,7 +44,7 @@ from typing import Any
 
 import asyncpg
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.api.datasets import Dataset, DatasetStore, PostgresDatasetStore
+from services.api.datasets import Dataset, DatasetStore, PostgresDatasetStore, read_also
 from services.api.working_set.store import ValkeyWorkingSetStore, WorkingSetStorage
 from valkey.asyncio import Valkey
 
@@ -388,7 +388,9 @@ async def stamp(
                     ordered = [f"(new: {case.name or case.id})"]
                 report.own_datasets_made.append(case.id)
             if write:
-                await datasets.set_for_case(case.id, ordered, seeder)
+                # ADR-099 Amendment 12: one dataset per case; several become a composite.
+                for dataset_id in ordered:
+                    await read_also(datasets, case.id, dataset_id, seeder, case_name=case.name)
             held = ordered
         report.case_datasets[case.id] = list(held)
         say(f"  case {case.name or case.id}: reads {', '.join(held)}")

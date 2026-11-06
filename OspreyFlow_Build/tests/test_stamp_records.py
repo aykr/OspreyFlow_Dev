@@ -18,7 +18,7 @@ import pytest
 from scripts.stamp_datasets import place_records
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 from services.api.hotlists import HotlistStore
 from services.api.link_type_store import LinkTypeProposalStore
 from services.api.link_types import LinkTypeProposal
@@ -58,7 +58,9 @@ async def setup():  # type: ignore[no-untyped-def]
             )
         )
     case = new_id()
-    await datasets.set_for_case(case, [f"fixture-corp-{unit}", f"enron-{unit}"], owner)
+    # ADR-099 Amendment 12: a case reading both reads a composite of them, the first member first.
+    for dataset_id in (f"fixture-corp-{unit}", f"enron-{unit}"):
+        await read_also(datasets, case, dataset_id, owner)
     proposal = LinkTypeProposal(
         id=new_id(),
         name="KNOWN_TO",

@@ -24,17 +24,19 @@ async def store():
     await s.close()
 
 
-async def test_a_cases_datasets_are_kept_in_order_and_copied_to_a_branch(store) -> None:
+async def test_a_case_reads_one_dataset_and_a_branch_takes_it(store) -> None:
+    """ADR-099 Amendment 12: one dataset per case; the read set adds the case's own layer
+    (`test_analyst_layer_store.py` has the layer's own cases)."""
     first = await store.create(ALICE, "Fixture Corp")
     second = await store.create(ALICE, "Enron corpus")
     case, branch = new_id(), new_id()
-    await store.set_for_case(case, [second.id, first.id], ALICE)
-    assert await store.ids_of_case(case) == [second.id, first.id]
-    assert [d.name for d in await store.of_case(case, ALICE)] == ["Enron corpus", "Fixture Corp"]
+    await store.set_for_case(case, [second.id], ALICE)
+    assert (await store.ids_of_case(case))[0] == second.id
+    assert [d.name for d in await store.of_case(case, ALICE)] == ["Enron corpus"]
     await store.copy_case(case, branch)
-    assert await store.ids_of_case(branch) == [second.id, first.id]
+    assert [d.id for d in await store.of_case(branch, ALICE)] == [second.id]
     await store.set_for_case(case, [first.id], ALICE)
-    assert await store.ids_of_case(case) == [first.id]
+    assert [d.id for d in await store.of_case(case, ALICE)] == [first.id]
 
 
 async def test_another_units_dataset_is_refused_and_nothing_changes(store) -> None:
@@ -44,10 +46,10 @@ async def test_another_units_dataset_is_refused_and_nothing_changes(store) -> No
     case = new_id()
     await store.set_for_case(case, [mine.id], alice)
     with pytest.raises(DatasetRefusedError):
-        await store.set_for_case(case, [mine.id, theirs.id], alice)
+        await store.set_for_case(case, [theirs.id], alice)
     with pytest.raises(DatasetRefusedError):
-        await store.set_for_case(case, [mine.id, "no-such-dataset"], alice)
-    assert await store.ids_of_case(case) == [mine.id]
+        await store.set_for_case(case, ["no-such-dataset"], alice)
+    assert [d.id for d in await store.of_case(case, alice)] == [mine.id]
     assert [d.id for d in await store.list_for(alice)] == [mine.id]
 
 
@@ -59,10 +61,10 @@ async def test_postgres_names_no_dataset_to_a_reader_with_no_role(store) -> None
     for a unit holding datasets as for one holding none."""
     unit = f"unit-{new_id()}"
     author = Principal(id="author", clearance="OFFICIAL", org_unit=unit, roles=["analyst"])
-    first = await store.create(author, "Fixture Corp")
+    await store.create(author, "Fixture Corp")
     second = await store.create(author, "Enron corpus")
     case = new_id()
-    await store.set_for_case(case, [second.id, first.id], author)
+    await store.set_for_case(case, [second.id], author)
 
     for roles in ([], ["default-roles-osprey", "offline_access"]):
         reader = author.model_copy(update={"id": "arrival", "roles": roles})
@@ -74,4 +76,4 @@ async def test_postgres_names_no_dataset_to_a_reader_with_no_role(store) -> None
     for roles in (["analyst"], ["reports_viewer"], ["right:read_reports"]):
         reader = author.model_copy(update={"id": "reader", "roles": roles})
         assert [d.name for d in await store.list_for(reader)] == ["Enron corpus", "Fixture Corp"]
-        assert [d.id for d in await store.of_case(case, reader)] == [second.id, first.id]
+        assert [d.id for d in await store.of_case(case, reader)] == [second.id]

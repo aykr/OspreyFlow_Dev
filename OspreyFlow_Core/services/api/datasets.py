@@ -538,7 +538,8 @@ async def _tell_apart_and_index(conn: asyncpg.Connection) -> None:
     starts rather than failing to build the index. An index built before layers existed covers
     every row; it is rebuilt to leave layers out."""
     indexdef = await conn.fetchval(
-        "SELECT indexdef FROM pg_indexes WHERE indexname = 'datasets_unit_name_unique'"
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'datasets_unit_name_unique' "
+        "AND schemaname = current_schema()"
     )
     if indexdef is not None and "analyst_layer" in indexdef:
         return
@@ -569,7 +570,10 @@ async def _tell_apart_and_index(conn: asyncpg.Connection) -> None:
 async def index_one_dataset_per_case(conn: asyncpg.Connection) -> bool:
     """Builds the one-row-per-case index when no case names two datasets; says whether it is
     there. Run at every start and by the migration's real run, which is what makes it possible."""
-    if await conn.fetchval("SELECT 1 FROM pg_indexes WHERE indexname = $1", _ONE_PER_CASE_INDEX):
+    if await conn.fetchval(
+        "SELECT 1 FROM pg_indexes WHERE indexname = $1 AND schemaname = current_schema()",
+        _ONE_PER_CASE_INDEX,
+    ):
         return True
     if await conn.fetchval(
         "SELECT 1 FROM investigation_datasets GROUP BY investigation_id HAVING count(*) > 1 LIMIT 1"

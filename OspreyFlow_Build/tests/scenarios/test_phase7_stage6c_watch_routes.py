@@ -30,7 +30,7 @@ from fastapi.testclient import TestClient
 from services.api.alerts import AlertStore
 from services.api.app import get_recipes_repo_root
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 from services.api.hotlists import HotlistStore
 from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
@@ -394,7 +394,7 @@ def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
                         created_by="test",
                     )
                 )
-                await store.set_for_case(case, [dataset_for(PRINCIPAL), other], PRINCIPAL)
+                await read_also(store, case, other, PRINCIPAL)  # a composite of both
             finally:
                 await store.close()
 
