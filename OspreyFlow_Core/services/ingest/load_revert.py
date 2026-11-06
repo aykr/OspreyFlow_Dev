@@ -101,6 +101,7 @@ RefusalReason = Literal[
     "rests_on_by_live_links",
     "rewritten_by_another_writer",
     "superseded_by_a_correction",
+    "withdrawn_rows_loaded_again",
 ]
 
 
@@ -136,6 +137,10 @@ class Refusal:
             "superseded_by_a_correction": (
                 f"{self.count} node(s) or link(s) it created were replaced by an analyst's "
                 "correction, whose replacement is in no record and would keep the load's data"
+            ),
+            "withdrawn_rows_loaded_again": (
+                f"{self.count} row(s) it withdrew were loaded again by a later load, and restoring "
+                "them would hold them twice; revert that load first"
             ),
             "rewritten_by_another_writer": (
                 f"{self.count} node(s) it created were written again by a load outside this "
@@ -177,6 +182,11 @@ class LoadReverted:
     #: Of `nodes`, those the case's rules wrote into the load (their alerts), said apart from what
     #: the recipe loaded so the count agrees with the run's "created" (build order step 15).
     rule_nodes: int = 0
+    #: ADR-110 Amendment 8 point 5, a full snapshot's load: the nodes, links and events it had
+    #: withdrawn, put back.
+    nodes_restored: int = 0
+    links_restored: int = 0
+    events_restored: int = 0
 
 
 @dataclass
@@ -235,6 +245,11 @@ class RevertLedger(Protocol):
         ...
 
     async def mark_reverted(self, load_id: str, *, reverted_by: str, at: datetime) -> None: ...
+
+    # ADR-110 Amendment 8 point 5: asked only of a load that withdrew rows (a full snapshot).
+    async def withdrawn_keys_kept_again(self, load_id: str) -> int: ...
+
+    async def restore_withdrawn_row_keys(self, load_id: str) -> int: ...
 
 
 class HeldRowDiscard(Protocol):
@@ -452,6 +467,14 @@ async def _later_refusals(
       what was written since is a later load's, not a merge the plan should have refused.
     """
     in_plan = {r.load_id for r in plan}
+    refusals: list[Refusal] = []
+    # ADR-110 Amendment 8 point 5: a full snapshot's load restores the rows it withdrew, which a
+    # later load may have loaded again (the row came back); restoring would hold it twice.
+    for record in plan:
+        if record.rows_withdrawn:
+            again = await deps.ledger.withdrawn_keys_kept_again(record.load_id)
+            if again:
+                refusals.append(Refusal(record.load_id, "withdrawn_rows_loaded_again", again))
     merged_into: set[str] = set()
     for record in await deps.ledger.records_merging(sorted(plan_nodes), sorted(plan_links)):
         if record.load_id in in_plan:
@@ -459,7 +482,6 @@ async def _later_refusals(
         merged_into |= (set(record.merged_node_ids) & plan_nodes) | (
             set(record.merged_edge_ids) & plan_links
         )
-    refusals: list[Refusal] = []
     if merged_into:
         refusals.append(Refusal(load_id, "merged_into_by_later_load", len(merged_into)))
     touching = await deps.graph.live_edges_touching(sorted(plan_nodes))
@@ -524,11 +546,18 @@ async def _revert_one(
         ]
         reverting_nodes[:] = [n for n in record.created_node_ids if n not in left_alone]
         nodes, links = reverting_nodes, list(record.created_edge_ids)
-        if not nodes and not links:
+        if not nodes and not links and not record.rows_withdrawn:
             return
         tx = await deps.graph.begin_transaction()
         try:
-            await deps.graph.revert_elements(nodes, links, tx)
+            if nodes or links:
+                await deps.graph.revert_elements(nodes, links, tx)
+            if record.rows_withdrawn:
+                # ADR-110 Amendment 8 point 5: what this full snapshot withdrew, back in the same
+                # transaction. Idempotent: a rerun finds nothing left withdrawn by it.
+                restored = await deps.graph.restore_withdrawn(record.load_id, tx)
+                counts["nodes_restored"] = len(restored.node_ids)
+                counts["links_restored"] = len(restored.edge_ids)
         except BaseException:
             await rollback_keeping_failure(deps.graph, tx)
             raise
@@ -558,6 +587,12 @@ async def _revert_one(
                     at=now,
                     reason=f"load {record.load_id} was reverted and its events removed",
                 )
+        if record.rows_withdrawn:
+            # The events of the links it withdrew, back before its own go: they carry the loads
+            # that wrote them, so the retract below leaves them.
+            counts["events_restored"] = await deps.analytics.restore_withdrawn_events(
+                record.load_id
+            )
         counts["events"] = await deps.analytics.retract_load(record.load_id)
 
     async def geometries() -> None:
@@ -598,6 +633,9 @@ async def _revert_one(
     async def row_keys() -> None:
         # The keys this load kept for its case: by load id, idempotent (a rerun releases none).
         await deps.ledger.release_row_keys([record.load_id])
+        if record.rows_withdrawn:
+            # And the keys it withdrew, kept again with the loads that kept them.
+            await deps.ledger.restore_withdrawn_row_keys(record.load_id)
 
     async def audit() -> None:
         await deps.audit.record(

@@ -62,6 +62,7 @@ from services.ingest.pipeline import (
     SUPPORTED_EXTRACT_MEDIA,
     SUPPORTED_GEOCODERS,
 )
+from services.ingest.recipe_rules import RecipeRuleError
 
 from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
@@ -487,8 +488,13 @@ async def run_published_pipeline(
     online_geocode: OnlineGeocode | None = None,
     rules: RuleGate | None = None,
     sink: LoadSink | None = None,
+    withdraw_dropped: bool = False,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
+
+    `withdraw_dropped` (ADR-110 Amendment 8 point 3) is a full snapshot's: refused for a pipeline
+    with more than one source, whose branches keep their row keys under one recipe, so one
+    branch's snapshot would take every other branch's rows for dropped.
 
     `source_location`, when given, overrides the location of every source node that does not
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
@@ -502,6 +508,15 @@ async def run_published_pipeline(
         load_id=load_id, recipe_id=draft.recipe_id, recipe_version=draft.version
     )
     ordered = _topological(pipeline)
+    sources = [n for n in ordered if n.kind is PipelineNodeKind.SOURCE]
+    if withdraw_dropped and len(sources) > 1:
+        raise RecipeRuleError(
+            [
+                f"This pipeline reads {len(sources)} sources, whose rows share one deduplication "
+                "key, so a full snapshot of one would withdraw the others' rows. Set the refresh "
+                "to keep dropped rows until each source has a key of its own (redesign phase 6)."
+            ]
+        )
 
     for node in ordered:
         if node.kind is not PipelineNodeKind.SOURCE:
@@ -521,6 +536,7 @@ async def run_published_pipeline(
             rules=rules,
             scheme=scheme,
             sink=sink,
+            withdraw_dropped=withdraw_dropped,
         )
         report.branches.append(
             BranchRunReport(

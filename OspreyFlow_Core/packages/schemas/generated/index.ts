@@ -124,6 +124,7 @@ export type { PipelineEdge } from "./PipelineEdge";
 export type { PipelineGraph } from "./PipelineGraph";
 export type { StudioRecipeDraft } from "./StudioRecipeDraft";
 export type { RecipeConnector } from "./RecipeConnector";
+export type { RowElements } from "./RowElements";
 export type { RecipeDefaults } from "./RecipeDefaults";
 export type { DeduplicateConfig } from "./DeduplicateConfig";
 export type { FieldBinding } from "./FieldBinding";

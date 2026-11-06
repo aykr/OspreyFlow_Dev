@@ -881,6 +881,14 @@ class RejectionRecord(BaseModel):
     sample_unreadable: bool = False
 
 
+class RowElements(BaseModel):
+    """What one kept row wrote (ADR-110 Amendment 8 point 2): the nodes it wrote or matched and the
+    links it wrote, created or merged into, each by its stored id. For the ledger alone."""
+
+    node_ids: list[NodeId] = Field(default_factory=list)
+    edge_ids: list[EdgeId] = Field(default_factory=list)
+
+
 class LoadReport(BaseModel):
     load_id: str
     recipe_id: str
@@ -905,6 +913,20 @@ class LoadReport(BaseModel):
     #: kept with them: a run under another definition is refused while keys under this one are
     #: kept for the case. `None` for a recipe without `deduplicate`.
     row_key_fingerprint: str | None = None
+    #: ADR-110 Amendment 8 point 2: for each of `kept_row_keys`, what its row wrote, so a full
+    #: snapshot's refresh can withdraw exactly a dropped row's elements. Kept with the key in the
+    #: ledger; never in `LoadReportView`.
+    kept_row_elements: dict[str, RowElements] = Field(default_factory=dict)
+    #: ADR-110 Amendment 8 points 3 and 4, a full snapshot with *withdraw*: the dropped keys this
+    #: load withdrew (moved aside in the ledger with it) and the nodes and links it withdrew, for
+    #: the ledger alone; and the counts and words a route answers.
+    withdrawn_row_keys: list[str] = Field(default_factory=list)
+    withdrawn_node_ids: list[NodeId] = Field(default_factory=list)
+    withdrawn_edge_ids: list[EdgeId] = Field(default_factory=list)
+    rows_withdrawn: int = 0
+    links_kept_an_occurrence: int = 0
+    rows_left_in_place: int = 0
+    refresh_notes: list[str] = Field(default_factory=list)
     #: Only the nodes THIS load created — never a node it merely
     #: referenced, and never an edge it only extended (§9.1, when this
     #: becomes a `LoadRecord`, records only what revert may safely
@@ -966,6 +988,11 @@ class LoadReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: ADR-110 Amendment 8: what a full snapshot's refresh withdrew, as counts and words.
+    rows_withdrawn: int = 0
+    links_kept_an_occurrence: int = 0
+    rows_left_in_place: int = 0
+    refresh_notes: list[str] = Field(default_factory=list)
     #: Rule 3, ADR-127 Amendment 23: set where the reader may not view every marking the load's
     #: rows were written at. Every count above is then zero and the lists empty: a count of what a
     #: load wrote is a read.
@@ -1207,6 +1234,13 @@ class LoadRecord(BaseModel):
     #: record from before has neither, and reads as not reverted.
     reverted_at: datetime | None = None
     reverted_by: PrincipalId | None = None
+    #: ADR-110 Amendment 8 points 4 and 5: how many dropped rows a full snapshot's load withdrew,
+    #: and what it withdrew. Its revert restores them (`GraphPort.restore_withdrawn`, the events
+    #: and the keys), refused while a key it withdrew is kept again. Not elements the load holds:
+    #: no question of which elements a record holds reads these.
+    rows_withdrawn: int = 0
+    withdrawn_node_ids: list[NodeId] = Field(default_factory=list)
+    withdrawn_edge_ids: list[EdgeId] = Field(default_factory=list)
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
@@ -1218,6 +1252,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     PipelineGraph,
     StudioRecipeDraft,
     RecipeConnector,
+    RowElements,
     RecipeDefaults,
     DeduplicateConfig,
     FieldBinding,

@@ -24,9 +24,18 @@ export type Rejections = RejectionRecord[];
 export type KeptRowKeys = string[];
 export type RowKeyFingerprint = string | null;
 export type NodeId = string;
+export type NodeIds = NodeId[];
+export type EdgeId = string;
+export type EdgeIds = EdgeId[];
+export type WithdrawnRowKeys = string[];
+export type WithdrawnNodeIds = NodeId[];
+export type WithdrawnEdgeIds = EdgeId[];
+export type RowsWithdrawn = number;
+export type LinksKeptAnOccurrence = number;
+export type RowsLeftInPlace = number;
+export type RefreshNotes = string[];
 export type CreatedNodeIds = NodeId[];
 export type ReferencedNodeIds = NodeId[];
-export type EdgeId = string;
 export type TouchedEdgeIds = EdgeId[];
 export type CreatedEdgeIds = EdgeId[];
 export type MergedEdgeIds = EdgeId[];
@@ -51,6 +60,14 @@ export interface LoadReport {
   rejections?: Rejections;
   kept_row_keys?: KeptRowKeys;
   row_key_fingerprint?: RowKeyFingerprint;
+  kept_row_elements?: KeptRowElements;
+  withdrawn_row_keys?: WithdrawnRowKeys;
+  withdrawn_node_ids?: WithdrawnNodeIds;
+  withdrawn_edge_ids?: WithdrawnEdgeIds;
+  rows_withdrawn?: RowsWithdrawn;
+  links_kept_an_occurrence?: LinksKeptAnOccurrence;
+  rows_left_in_place?: RowsLeftInPlace;
+  refresh_notes?: RefreshNotes;
   created_node_ids?: CreatedNodeIds;
   referenced_node_ids?: ReferencedNodeIds;
   touched_edge_ids?: TouchedEdgeIds;
@@ -86,5 +103,17 @@ export interface Handling {
   owning_unit: OrgUnitId;
   review_date?: ReviewDate;
   legal_basis?: LegalBasis;
+  [k: string]: unknown;
+}
+export interface KeptRowElements {
+  [k: string]: RowElements;
+}
+/**
+ * What one kept row wrote (ADR-110 Amendment 8 point 2): the nodes it wrote or matched and the
+ * links it wrote, created or merged into, each by its stored id. For the ledger alone.
+ */
+export interface RowElements {
+  node_ids?: NodeIds;
+  edge_ids?: EdgeIds;
   [k: string]: unknown;
 }

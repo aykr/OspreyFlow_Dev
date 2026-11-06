@@ -21,13 +21,14 @@ its id lists (`report_view`)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Protocol, overload
 
 from services.ingest.engine import distinct_markings
 from services.ingest.load_ledger import load_record_from_report
+from services.ingest.snapshot_withdrawal import DroppedRow
 
 from ontology.errors import HandlingSchemeError
 from ontology.handling import HandlingScheme, principal_may_view
@@ -40,6 +41,7 @@ from schemas.ingest import (
     PipelineRunReport,
     PipelineRunReportView,
     RejectionRecord,
+    RowElements,
 )
 
 
@@ -51,6 +53,8 @@ class _RunLedger(Protocol):
         *,
         row_keys: Sequence[str] = (),
         row_key_fingerprint: str = "",
+        row_elements: Mapping[str, RowElements] | None = None,
+        withdrawn_row_keys: Sequence[str] = (),
     ) -> None: ...
 
     async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]: ...
@@ -72,6 +76,24 @@ class _RunLedger(Protocol):
     ) -> None: ...
 
     async def mark_uncovered(self, run_id: str, load_id: str) -> None: ...
+
+    async def dropped_row_keys(
+        self, recipe_id: str, case: str, *, present: Collection[str]
+    ) -> Sequence[DroppedRow]: ...
+
+    async def elements_kept_by_other_rows(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        recipe_id: str,
+        case: str,
+        excluding: Sequence[str],
+    ) -> tuple[set[str], set[str]]: ...
+
+    async def elements_in_other_records(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
+    ) -> tuple[set[str], set[str]]: ...
 
 
 class LedgerSink:
@@ -116,6 +138,9 @@ class LedgerSink:
             ),
             row_keys=report.kept_row_keys,
             row_key_fingerprint=report.row_key_fingerprint or "",
+            # ADR-110 Amendment 8 point 2: what each kept row wrote, kept with its key.
+            row_elements=report.kept_row_elements,
+            withdrawn_row_keys=report.withdrawn_row_keys,
         )
 
     async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
@@ -126,6 +151,32 @@ class LedgerSink:
 
     def hold_row_keys(self, recipe_id: str, case: str) -> AbstractAsyncContextManager[None]:
         return self._ledger.hold_row_keys(recipe_id, case)
+
+    # ADR-110 Amendment 8 point 3: what a full snapshot's withdrawal asks of the ledger.
+    async def dropped_row_keys(
+        self, recipe_id: str, case: str, *, present: Collection[str]
+    ) -> Sequence[DroppedRow]:
+        return await self._ledger.dropped_row_keys(recipe_id, case, present=present)
+
+    async def elements_kept_by_other_rows(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        recipe_id: str,
+        case: str,
+        excluding: Sequence[str],
+    ) -> tuple[set[str], set[str]]:
+        return await self._ledger.elements_kept_by_other_rows(
+            node_ids, edge_ids, recipe_id=recipe_id, case=case, excluding=excluding
+        )
+
+    async def elements_in_other_records(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
+    ) -> tuple[set[str], set[str]]:
+        return await self._ledger.elements_in_other_records(
+            node_ids, edge_ids, excluding_loads=excluding_loads
+        )
 
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None:
         await self._ledger.add_geometries(self._run_id, load_id, list(refs))

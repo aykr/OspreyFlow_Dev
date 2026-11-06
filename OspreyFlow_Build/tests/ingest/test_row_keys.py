@@ -57,7 +57,7 @@ from adapters.media_objectstore.testing import InMemoryMediaStore
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import Principal
-from schemas.ingest import LoadReport, Recipe
+from schemas.ingest import LoadReport, Recipe, RowElements
 from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
     MergingGraph,
     local_staging,
@@ -706,6 +706,8 @@ async def test_the_ledger_sink_hands_the_keys_to_the_ledger_with_the_record_and_
             *,
             row_keys: Sequence[str] = (),
             row_key_fingerprint: str = "",
+            row_elements: Any = None,
+            withdrawn_row_keys: Sequence[str] = (),
         ) -> None:
             calls.append(
                 {
@@ -713,6 +715,8 @@ async def test_the_ledger_sink_hands_the_keys_to_the_ledger_with_the_record_and_
                     "record": record,
                     "keys": list(row_keys),
                     "fingerprint": row_key_fingerprint,
+                    "elements": row_elements,
+                    "withdrawn": list(withdrawn_row_keys),
                 }
             )
 
@@ -736,8 +740,13 @@ async def test_the_ledger_sink_hands_the_keys_to_the_ledger_with_the_record_and_
         recipe_version=1,
         kept_row_keys=["k1", "k2"],
         row_key_fingerprint="fp",
+        kept_row_elements={"k1": RowElements(node_ids=["n1"]), "k2": RowElements(edge_ids=["e1"])},
+        withdrawn_row_keys=["k0"],
     )
     await sink.committed(report, source="s.csv")
+    # ADR-110 Amendment 8: each kept row's record and the keys a snapshot withdrew, in one call.
+    assert calls[0]["elements"] == report.kept_row_elements
+    assert calls[0]["withdrawn"] == ["k0"]
     assert calls[0]["keys"] == ["k1", "k2"] and calls[0]["record"].investigation_id == CASE
     assert calls[0]["fingerprint"] == "fp", "the definition that made the keys goes with them"
     assert await sink.fingerprints("r", CASE) == {"fp": 2}

@@ -53,6 +53,7 @@ from services.api.pipeline_run import run_published_pipeline
 from services.api.review import CandidateStatus, ExtractionCandidateStore
 from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
+from services.ingest.recipe_rules import RecipeRuleError
 
 from tests.ingest.test_studio_run_geometries import RecordingAnalytics
 
@@ -314,6 +315,29 @@ async def test_two_source_branches_both_load_each_under_its_own_load_id(
             node = await graph.find_node("Endpoint", "value_normalised", value, LOADER)
             assert node is not None
             assert node.audit.load_id == branch.report.load_id
+
+
+async def test_a_full_snapshot_of_a_two_source_pipeline_is_refused_in_words_before_any_load(
+    store: StudioRecipeStore, tmp_path: Path, git_repo: Path
+) -> None:
+    """ADR-110 Amendment 8 point 3: the branches keep their row keys under one recipe, so one
+    branch's snapshot would take the other's rows for dropped and withdraw them."""
+    ontology = load_default_ontology()
+    a = _csv(tmp_path / "a.csv", ["a_party", "notes"], [{"a_party": "07960112001", "notes": "x"}])
+    b = _csv(tmp_path / "b.csv", ["a_party", "notes"], [{"a_party": "07960112002", "notes": "y"}])
+    published = await _publish_pipeline(
+        store, git_repo, label="two branches", source_location=str(a),
+        row_template=_endpoint_notes_template(),
+        pipeline=_chain(second_source=str(b)), ontology_version=ontology.version,
+    )  # fmt: skip
+    async with arcadedb_adapter(ontology, load_uk_le_scheme()) as graph:
+        with pytest.raises(RecipeRuleError, match="reads 2 sources"):
+            await run_published_pipeline(
+                published, LOADER, graph=graph, ontology=ontology, scheme=load_uk_le_scheme(),
+                load_id="pipeline-load-1", investigation_scope="case-1", repo_root=git_repo,
+                recogniser_for=_recognisers, media=InMemoryMediaStore(), withdraw_dropped=True,
+            )  # fmt: skip
+        assert await graph.find_node("Endpoint", "value_normalised", "07960112001", LOADER) is None
 
 
 # --- Extract ----------------------------------------------------------------

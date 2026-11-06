@@ -28,6 +28,10 @@ export type SampleUnreadable = boolean;
 export type Rejections = RejectionRecord[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
+export type RowsWithdrawn = number;
+export type LinksKeptAnOccurrence = number;
+export type RowsLeftInPlace = number;
+export type RefreshNotes = string[];
 export type Withheld = boolean;
 export type Branches = BranchRunReportView[];
 export type NodeId = string;
@@ -111,6 +115,10 @@ export interface LoadReportView {
   rejections?: Rejections;
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
+  rows_withdrawn?: RowsWithdrawn;
+  links_kept_an_occurrence?: LinksKeptAnOccurrence;
+  rows_left_in_place?: RowsLeftInPlace;
+  refresh_notes?: RefreshNotes;
   withheld?: Withheld;
   [k: string]: unknown;
 }

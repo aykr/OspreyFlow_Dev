@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, get_args
 
@@ -26,7 +27,7 @@ from services.ingest.engine import RowKeyRunInProgress
 
 from conduit_common.identity import new_id
 from schemas.domain import Handling
-from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport
+from schemas.ingest import LoadRecord, LoadReport, PipelineRunReport, RowElements
 
 #: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
 RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh"]
@@ -70,7 +71,48 @@ ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL D
 CREATE INDEX IF NOT EXISTS loaded_row_keys_load_idx ON loaded_row_keys (load_id);
 CREATE INDEX IF NOT EXISTS loaded_row_keys_fingerprint_idx
     ON loaded_row_keys (recipe_id, investigation_id, fingerprint, load_id);
+-- ADR-110 Amendment 8 point 2: what each kept row wrote, by stored id. NULL for a key kept
+-- before it, which a full snapshot's withdrawal leaves in place and counts.
+ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS node_ids TEXT[];
+ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS edge_ids TEXT[];
+CREATE INDEX IF NOT EXISTS loaded_row_keys_node_ids_idx ON loaded_row_keys USING gin (node_ids);
+CREATE INDEX IF NOT EXISTS loaded_row_keys_edge_ids_idx ON loaded_row_keys USING gin (edge_ids);
+-- Amendment 8 points 4 and 5: the keys a full snapshot withdrew, moved here whole with the load
+-- that withdrew them, so a row that comes back is kept again in `loaded_row_keys` and the
+-- refresh's revert can tell that it has.
+CREATE TABLE IF NOT EXISTS withdrawn_row_keys (
+    recipe_id TEXT NOT NULL,
+    investigation_id TEXT NOT NULL,
+    row_key TEXT NOT NULL,
+    load_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL DEFAULT '',
+    node_ids TEXT[],
+    edge_ids TEXT[],
+    withdrawn_by_load TEXT NOT NULL,
+    PRIMARY KEY (recipe_id, investigation_id, row_key)
+);
+CREATE INDEX IF NOT EXISTS withdrawn_row_keys_by_idx ON withdrawn_row_keys (withdrawn_by_load);
+CREATE INDEX IF NOT EXISTS withdrawn_row_keys_load_idx ON withdrawn_row_keys (load_id);
+CREATE INDEX IF NOT EXISTS withdrawn_row_keys_node_ids_idx
+    ON withdrawn_row_keys USING gin (node_ids);
+CREATE INDEX IF NOT EXISTS withdrawn_row_keys_edge_ids_idx
+    ON withdrawn_row_keys USING gin (edge_ids);
 """
+
+#: The id lists of a load's record an element is held by (`elements_in_other_records`).
+_RECORD_NODE_LISTS = ("created_node_ids", "merged_node_ids", "rule_node_ids")
+_RECORD_EDGE_LISTS = ("touched_edge_ids", "created_edge_ids", "merged_edge_ids")
+
+
+@dataclass(frozen=True)
+class KeptRow:
+    """A kept key and what its row wrote (ADR-110 Amendment 8 point 2); `None` for a key kept
+    before rows recorded it."""
+
+    row_key: str
+    load_id: str
+    node_ids: tuple[str, ...] | None
+    edge_ids: tuple[str, ...] | None
 
 #: The record's own id lists: what `unreverted_loads` leaves out, since it answers a question about
 #: a load, not about its elements.
@@ -82,6 +124,8 @@ _ID_LISTS = (
     "merged_edge_ids",
     "merged_node_ids",
     "created_geometry_refs",
+    "withdrawn_node_ids",
+    "withdrawn_edge_ids",
 )
 
 #: How long a second run of one recipe into one case waits for the first before it is refused, and
@@ -185,6 +229,10 @@ def _row(record: asyncpg.Record) -> RecipeRun:
     return RecipeRun.model_validate(data)
 
 
+def _ids(elements: RowElements | None, field: str) -> list[str] | None:
+    return None if elements is None else list(getattr(elements, field))
+
+
 class RecipeRunStore:
     def __init__(self, pool: asyncpg.Pool, dsn: str) -> None:
         self._pool = pool
@@ -249,6 +297,8 @@ class RecipeRunStore:
         *,
         row_keys: Sequence[str] = (),
         row_key_fingerprint: str = "",
+        row_elements: Mapping[str, RowElements] | None = None,
+        withdrawn_row_keys: Sequence[str] = (),
     ) -> None:
         """Appends a load's record to its run (ADR-127 decision 6), when the load's graph
         transaction commits and so before the run can `finish`: a run that fails afterwards still
@@ -258,7 +308,12 @@ class RecipeRunStore:
         same transaction**: both land or neither does. The graph has committed already, so a crash
         between the two stores leaves rows loaded with neither (the run row stays `running`), and
         never a key for a row that did not load, nor a record whose keys were lost. A key already
-        kept is left as it was."""
+        kept is left as it was.
+
+        `row_elements` (ADR-110 Amendment 8 point 2) is what each key's row wrote, kept with it; a
+        key it has no entry for records none. `withdrawn_row_keys` (points 4 and 5) are the keys of
+        the record's recipe and case a full snapshot withdrew: moved to `withdrawn_row_keys` with
+        the record's load, in the same transaction."""
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "UPDATE recipe_runs SET load_records = COALESCE(load_records, '[]'::jsonb) "
@@ -267,18 +322,167 @@ class RecipeRunStore:
                 json.dumps([record.model_dump(mode="json")]),
             )
             keys = list(dict.fromkeys(row_keys))
+            elements = row_elements or {}
             for start in range(0, len(keys), _KEY_CHUNK):
+                chunk = keys[start : start + _KEY_CHUNK]
+                # Each key's id lists as one JSON array of arrays (an array of arrays cannot be
+                # ragged in Postgres): `null` for a key with no entry.
+                nodes = [_ids(elements.get(k), "node_ids") for k in chunk]
+                edges = [_ids(elements.get(k), "edge_ids") for k in chunk]
                 await conn.execute(
                     "INSERT INTO loaded_row_keys "
-                    "(recipe_id, investigation_id, row_key, load_id, fingerprint) "
-                    "SELECT $1, $2, k, $4, $5 FROM unnest($3::text[]) AS k "
+                    "(recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
+                    "edge_ids) "
+                    "SELECT $1, $2, k.key, $4, $5, "
+                    "CASE WHEN n.ids = 'null' THEN NULL ELSE "
+                    "ARRAY(SELECT jsonb_array_elements_text(n.ids)) END, "
+                    "CASE WHEN e.ids = 'null' THEN NULL ELSE "
+                    "ARRAY(SELECT jsonb_array_elements_text(e.ids)) END "
+                    "FROM unnest($3::text[]) WITH ORDINALITY AS k(key, i) "
+                    "JOIN jsonb_array_elements($6::jsonb) WITH ORDINALITY AS n(ids, i) USING (i) "
+                    "JOIN jsonb_array_elements($7::jsonb) WITH ORDINALITY AS e(ids, i) USING (i) "
                     "ON CONFLICT (recipe_id, investigation_id, row_key) DO NOTHING",
                     record.recipe_id,
                     record.investigation_id or "",
-                    keys[start : start + _KEY_CHUNK],
+                    chunk,
                     record.load_id,
                     row_key_fingerprint,
+                    json.dumps(nodes),
+                    json.dumps(edges),
                 )
+            withdrawn = list(dict.fromkeys(withdrawn_row_keys))
+            for start in range(0, len(withdrawn), _KEY_CHUNK):
+                await conn.execute(
+                    "WITH moved AS (DELETE FROM loaded_row_keys WHERE recipe_id = $1 "
+                    "AND investigation_id = $2 AND row_key = ANY($3::text[]) RETURNING *) "
+                    "INSERT INTO withdrawn_row_keys (recipe_id, investigation_id, row_key, "
+                    "load_id, fingerprint, node_ids, edge_ids, withdrawn_by_load) "
+                    "SELECT recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
+                    "edge_ids, $4 FROM moved",
+                    record.recipe_id,
+                    record.investigation_id or "",
+                    withdrawn[start : start + _KEY_CHUNK],
+                    record.load_id,
+                )
+
+    async def dropped_row_keys(
+        self, recipe_id: str, case: str, *, present: Collection[str]
+    ) -> list[KeptRow]:
+        """The keys the case keeps for the recipe that `present` (every key a full snapshot's rows
+        carry) does not, each with its record (ADR-110 Amendment 8 point 3). A withdrawn key is not
+        kept, so not dropped again. Every kept key is read and compared here: one pass over the
+        (recipe, case) part of the primary key, unmeasured at a million keys."""
+        dropped: list[KeptRow] = []
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for row in conn.cursor(
+                "SELECT row_key, load_id, node_ids, edge_ids FROM loaded_row_keys "
+                "WHERE recipe_id = $1 AND investigation_id = $2 ORDER BY row_key",
+                recipe_id,
+                case,
+            ):
+                if row["row_key"] in present:
+                    continue
+                dropped.append(
+                    KeptRow(
+                        row_key=row["row_key"],
+                        load_id=row["load_id"],
+                        node_ids=None if row["node_ids"] is None else tuple(row["node_ids"]),
+                        edge_ids=None if row["edge_ids"] is None else tuple(row["edge_ids"]),
+                    )
+                )
+        return dropped
+
+    async def elements_kept_by_other_rows(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        recipe_id: str,
+        case: str,
+        excluding: Sequence[str],
+    ) -> tuple[set[str], set[str]]:
+        """Which of these nodes and links a kept row's record also names, of any recipe and any
+        case, leaving out the (recipe, case) keys in `excluding` (the dropped ones). By the GIN
+        indexes (`&&`). A withdrawn key keeps nothing."""
+        found: tuple[set[str], set[str]] = (set(), set())
+        async with self._pool.acquire() as conn:
+            for column, ids, into in (
+                ("node_ids", node_ids, found[0]),
+                ("edge_ids", edge_ids, found[1]),
+            ):
+                unique = list(dict.fromkeys(ids))
+                for start in range(0, len(unique), _KEY_CHUNK):
+                    chunk = unique[start : start + _KEY_CHUNK]
+                    rows = await conn.fetch(
+                        f"SELECT DISTINCT x FROM loaded_row_keys, unnest({column}) AS x "
+                        f"WHERE {column} && $1::text[] AND x = ANY($1::text[]) "
+                        "AND NOT (recipe_id = $2 AND investigation_id = $3 "
+                        "AND row_key = ANY($4::text[]))",
+                        chunk,
+                        recipe_id,
+                        case,
+                        list(excluding),
+                    )
+                    into.update(r["x"] for r in rows)
+        return found
+
+    async def elements_in_other_records(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        excluding_loads: Sequence[str],
+    ) -> tuple[set[str], set[str]]:
+        """Which of these nodes and links an unreverted load's record lists (created, merged or a
+        rule's), leaving out the loads in `excluding_loads`. Over every record (the jsonb `?|`
+        operator), as `records_merging` asks."""
+        nodes, edges = set(node_ids), set(edge_ids)
+        if not nodes and not edges:
+            return set(), set()
+        every_list = " || ".join(
+            f"COALESCE(rec->'{c}', '[]'::jsonb)" for c in (*_RECORD_NODE_LISTS, *_RECORD_EDGE_LISTS)
+        )
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT x FROM recipe_runs, jsonb_array_elements(load_records) AS rec, "
+                f"jsonb_array_elements_text({every_list}) AS x "
+                "WHERE load_records IS NOT NULL AND rec->>'reverted_at' IS NULL "
+                "AND NOT (rec->>'load_id' = ANY($2::text[])) AND x = ANY($1::text[])",
+                [*nodes, *edges],
+                list(excluding_loads),
+            )
+        held = {r["x"] for r in rows}
+        return held & nodes, held & edges
+
+    async def withdrawn_keys_kept_again(self, load_id: str) -> int:
+        """How many of the keys `load_id` withdrew are kept again by a later load: its revert is
+        refused while any is (ADR-110 Amendment 8 point 5)."""
+        async with self._pool.acquire() as conn:
+            return int(
+                await conn.fetchval(
+                    "SELECT count(*) FROM withdrawn_row_keys w JOIN loaded_row_keys k "
+                    "USING (recipe_id, investigation_id, row_key) WHERE w.withdrawn_by_load = $1",
+                    load_id,
+                )
+            )
+
+    async def restore_withdrawn_row_keys(self, load_id: str) -> int:
+        """Moves the keys `load_id` withdrew back, each with the load that kept it and its record
+        (the refresh's revert). Idempotent; a key kept again meanwhile is left where it is, which
+        the revert refuses before it gets here."""
+        async with self._pool.acquire() as conn:
+            status = await conn.execute(
+                "WITH moved AS (DELETE FROM withdrawn_row_keys w WHERE withdrawn_by_load = $1 "
+                "AND NOT EXISTS (SELECT 1 FROM loaded_row_keys k WHERE k.recipe_id = w.recipe_id "
+                "AND k.investigation_id = w.investigation_id AND k.row_key = w.row_key) "
+                "RETURNING *) "
+                "INSERT INTO loaded_row_keys (recipe_id, investigation_id, row_key, load_id, "
+                "fingerprint, node_ids, edge_ids) "
+                "SELECT recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
+                "edge_ids FROM moved",
+                load_id,
+            )
+        return int(status.split()[-1])
 
     async def kept_row_keys(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
         """Which of `keys` the case has kept for the recipe, whatever version and whichever load:
@@ -305,8 +509,11 @@ class RecipeRunStore:
         million keys is a scan of that index and not of the table. Unmeasured."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT fingerprint, count(DISTINCT load_id) AS loads FROM loaded_row_keys "
-                "WHERE recipe_id = $1 AND investigation_id = $2 GROUP BY fingerprint",
+                "SELECT fingerprint, count(DISTINCT load_id) AS loads FROM ("
+                "SELECT fingerprint, load_id FROM loaded_row_keys "
+                "WHERE recipe_id = $1 AND investigation_id = $2 UNION ALL "
+                "SELECT fingerprint, load_id FROM withdrawn_row_keys "
+                "WHERE recipe_id = $1 AND investigation_id = $2) AS kept GROUP BY fingerprint",
                 recipe_id,
                 case,
             )
@@ -368,11 +575,16 @@ class RecipeRunStore:
         decision 6). By load id; idempotent: a second call finds none and returns 0."""
         if not load_ids:
             return 0
-        async with self._pool.acquire() as conn:
+        async with self._pool.acquire() as conn, conn.transaction():
             status = await conn.execute(
                 "DELETE FROM loaded_row_keys WHERE load_id = ANY($1::text[])", list(load_ids)
             )
-        return int(status.split()[-1])
+            # A key these loads kept that a refresh withdrew is theirs too (ADR-110 Amendment 8
+            # point 3): released with them, so the refresh's revert has nothing to restore.
+            aside = await conn.execute(
+                "DELETE FROM withdrawn_row_keys WHERE load_id = ANY($1::text[])", list(load_ids)
+            )
+        return int(status.split()[-1]) + int(aside.split()[-1])
 
     async def add_geometries(self, run_id: str, load_id: str, refs: list[str]) -> None:
         """Records the geometry refs a load is about to insert, against that load's record."""

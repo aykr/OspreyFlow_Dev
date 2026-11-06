@@ -876,6 +876,15 @@ recorded under the trigger `source_refresh`:
 - a pipeline needing attention is recorded *blocked*, and a keyless one *refused* in words;
 - three refusals in a row pause the source's policy, not the pipeline.
 
+**A full snapshot with *withdraw*** (ADR-110 Amendments 8 and 9). Each kept row key records what its
+row wrote. The keys a snapshot no longer carries are its dropped rows. Their nodes, links and events
+are withdrawn in the refresh's own load, except what another kept row, another load or a live link
+still rests on. The run says in words how many rows it withdrew, how many links kept an occurrence
+from a dropped row, and how many dropped rows were loaded before rows recorded what they wrote and
+were left in place. A row that comes back is loaded again. Reverting the refresh restores the rows,
+their events and their keys, and is refused while a row it withdrew has been loaded again. A pipeline
+reading more than one source cannot withdraw until phase 6.
+
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
 offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
 London by default), or an advanced cron expression; before anything is saved the Conduit explains it

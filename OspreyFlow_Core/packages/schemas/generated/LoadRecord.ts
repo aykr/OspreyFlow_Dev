@@ -23,6 +23,9 @@ export type UncoveredWrites = boolean;
 export type ReleasedFrom = string | null;
 export type EventsStamped = boolean;
 export type RevertedAt = string | null;
+export type RowsWithdrawn = number;
+export type WithdrawnNodeIds = NodeId[];
+export type WithdrawnEdgeIds = EdgeId[];
 
 /**
  * One execution of a recipe against a source — the persisted form of
@@ -62,5 +65,8 @@ export interface LoadRecord {
   superseded_by?: PrincipalId | null;
   reverted_at?: RevertedAt;
   reverted_by?: PrincipalId | null;
+  rows_withdrawn?: RowsWithdrawn;
+  withdrawn_node_ids?: WithdrawnNodeIds;
+  withdrawn_edge_ids?: WithdrawnEdgeIds;
   [k: string]: unknown;
 }

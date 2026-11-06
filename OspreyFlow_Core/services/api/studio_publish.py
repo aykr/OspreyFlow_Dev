@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
 from typing import Protocol
@@ -34,7 +34,8 @@ from services.ingest.engine import (
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 from services.ingest.pipeline import recipe_packs
 from services.ingest.recipe_loader import load_recipe
-from services.ingest.recipe_rules import check_reference_matches
+from services.ingest.recipe_rules import RecipeRuleError, check_reference_matches
+from services.ingest.snapshot_withdrawal import DroppedRow, plan_withdrawal
 
 from conduit_common.transactions import rollback_keeping_failure
 from ontology.handling import HandlingScheme, merge_handling
@@ -42,7 +43,15 @@ from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from ports.media import MediaStore
 from schemas.analytics import EventRecord
-from schemas.domain import EdgeWrite, Handling, HeldRow, NodeWrite, OntologySchema, Principal
+from schemas.domain import (
+    EdgeWrite,
+    Handling,
+    HeldRow,
+    NodeWrite,
+    OntologySchema,
+    Principal,
+    TxId,
+)
 from schemas.ingest import (
     LoadReport,
     PipelineGraph,
@@ -346,6 +355,25 @@ class LoadSink(Protocol):
 
     async def uncovered(self, load_id: str) -> None: ...
 
+    # ADR-110 Amendment 8 point 3: asked only by a full snapshot's withdrawal.
+    async def dropped_row_keys(
+        self, recipe_id: str, case: str, *, present: Collection[str]
+    ) -> Sequence[DroppedRow]: ...
+
+    async def elements_kept_by_other_rows(
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        *,
+        recipe_id: str,
+        case: str,
+        excluding: Sequence[str],
+    ) -> tuple[set[str], set[str]]: ...
+
+    async def elements_in_other_records(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
+    ) -> tuple[set[str], set[str]]: ...
+
 
 async def run_published_recipe(
     draft: StudioRecipeDraft,
@@ -362,6 +390,7 @@ async def run_published_recipe(
     rules: RuleGate | None = None,
     scheme: HandlingScheme | None = None,
     sink: LoadSink | None = None,
+    withdraw_dropped: bool = False,
 ) -> LoadReport:
     """§8: "Loader: run a published recipe against a file at or below their
     own clearance" — "a file", not necessarily the one Connect originally
@@ -403,7 +432,13 @@ async def run_published_recipe(
         rules=rules,
         scheme=scheme,
         sink=sink,
+        withdraw_dropped=withdraw_dropped,
     )
+    # ADR-110 Amendment 8 point 1: the events of the links a full snapshot withdrew leave every
+    # read with them, after the graph has committed. A failure here fails the run, in words; the
+    # links stay withdrawn and the revert puts back whatever was set aside.
+    if analytics is not None and report.withdrawn_edge_ids:
+        await analytics.withdraw_events(report.withdrawn_edge_ids, load_id)
     # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
     # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
     # *Show messages* or extraction (found building ADR-094 step 2).
@@ -457,6 +492,7 @@ async def load_with_rules(
     row_numbers: list[int] | None = None,
     scheme: HandlingScheme | None = None,
     sink: LoadSink | None = None,
+    withdraw_dropped: bool = False,
 ) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
     """One load in one graph transaction, judged by the case's pre-commit rules before it commits
     (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
@@ -464,7 +500,20 @@ async def load_with_rules(
     it could not judge: the transaction is rolled back, the rows go to the quarantine, and the load
     runs again without them — a second pass whose remaining rows carry no money movement for a
     typology to judge, so it cannot hold again; if it ever did, the load is refused rather than
-    part-loaded silently (rule 2)."""
+    part-loaded silently (rule 2).
+
+    `withdraw_dropped` (ADR-110 Amendment 8 point 3): `rows` are a full snapshot, and the rows the
+    case kept for the recipe that it no longer carries are withdrawn in this transaction, before it
+    commits, under the same lock that serialises the runs (`snapshot_withdrawal.plan_withdrawal`).
+    Only with a sink, which answers the ledger's questions, and a recipe with `deduplicate`: a
+    refresh never runs a keyless pipeline (Amendment 6 point 2)."""
+    if withdraw_dropped and (sink is None or recipe.deduplicate is None):
+        raise RecipeRuleError(
+            [
+                "A full snapshot withdraws its dropped rows by their deduplication key: this "
+                "pipeline has none, or the run keeps no ledger."
+            ]
+        )
     # ADR-127 decision 5: runs of one recipe into one case are serialised from the check of the kept
     # keys (in `run_recipe`) to the write of the load's record and keys (`sink.committed`), so two
     # overlapping runs cannot both find a row's key absent and both load it. Only a recipe with
@@ -571,6 +620,11 @@ async def load_with_rules(
                     dataset_id=principal.datasets[0] if principal.datasets else None,
                     row_handling=lambda row: by_row_object[id(row)],
                 )
+            if withdraw_dropped:
+                assert sink is not None
+                await _withdraw_dropped_rows(
+                    recipe, rows, report, sink, graph, tx, principal, investigation_scope
+                )
         except BaseException:
             # Anything but a refusal (`RowRejected` is handled per row above) leaves the open
             # transaction rolled back, not abandoned: nothing of this load is committed.
@@ -596,6 +650,33 @@ async def load_with_rules(
         rules.last_written = written
         await rules.record_expiries(written)
     return report, events, skip
+
+
+async def _withdraw_dropped_rows(
+    recipe: Recipe,
+    rows: list[dict[str, str]],
+    report: LoadReport,
+    sink: LoadSink,
+    graph: GraphPort,
+    tx: TxId,
+    principal: Principal,
+    case: str,
+) -> None:
+    """ADR-110 Amendment 8 point 3: the dropped rows' elements withdrawn in the load's own
+    transaction, and the report told what was, for the ledger (the keys and ids) and the reader
+    (the counts and words). The keys move aside with the record, after the commit."""
+    plan = await plan_withdrawal(
+        recipe, rows, report, case=case, ledger=sink, graph=graph, principal=principal
+    )
+    if plan.node_ids or plan.edge_ids:
+        await graph.withdraw_elements(plan.node_ids, plan.edge_ids, report.load_id, tx)
+    report.withdrawn_row_keys = plan.row_keys
+    report.withdrawn_node_ids = plan.node_ids
+    report.withdrawn_edge_ids = plan.edge_ids
+    report.rows_withdrawn = len(plan.row_keys)
+    report.links_kept_an_occurrence = plan.links_kept
+    report.rows_left_in_place = plan.rows_left_in_place
+    report.refresh_notes = plan.notes
 
 
 def _fold_rule_writes(report: LoadReport, writes: RuleWrites) -> None:

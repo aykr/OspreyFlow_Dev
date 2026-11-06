@@ -1408,7 +1408,8 @@ are on the port too, each taking the principal like every other read.
   back exactly what `load_id` withdrew, except a link whose pair (type and ends) has a live link
   written since: each link is written once. No `principal`, as `revert_elements`; `services/ingest/`
   is the only caller. Conformance: `tests/conformance/graph_port/test_suite.py`'s withdrawal
-  section, six cases, each branch shown red by a plant.
+  section, six cases, each branch shown red by a plant. The withdrawing refresh's own choice of
+  what to withdraw is `services/ingest/snapshot_withdrawal.py` (ADR-110 Amendments 8 and 9).
 
 These reads take a set of nodes or links, or the whole case, rather than one seed, each with the access step on
 every node, every link and each link's other end, so a link counts only when both its ends can be

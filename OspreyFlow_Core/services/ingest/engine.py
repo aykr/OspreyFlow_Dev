@@ -84,6 +84,7 @@ from schemas.ingest import (
     RecipeEdge,
     RecipeEntity,
     RejectionRecord,
+    RowElements,
 )
 from schemas.merge import aggregate_edge_writes, edge_write_key, merge_interval
 
@@ -829,6 +830,8 @@ class _HeldLink:
     written_slots: list[int] = field(default_factory=list)
     #: The events of the rows that wrote this link, whose `edge_id` is the stored id once flushed.
     events: list[EventRecord] = field(default_factory=list)
+    #: The rows that wrote this link, each told its stored id once flushed (ADR-110 Amendment 8).
+    row_indices: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -859,6 +862,10 @@ class _RunState:
     #: created is neither a new link nor a merge into another load's.
     created_edge_ids: list[EdgeId] = field(default_factory=list)
     merged_edge_ids: list[EdgeId] = field(default_factory=list)
+    #: ADR-110 Amendment 8 point 2: by row index, the nodes each row wrote or matched and the links
+    #: it wrote (stored ids, once flushed), each once, in the order first met.
+    row_nodes: dict[int, dict[NodeId, None]] = field(default_factory=dict)
+    row_edges: dict[int, dict[EdgeId, None]] = field(default_factory=dict)
     #: Of `merged_edge_ids`, the links `_write_edge` merged into. The count told to the loader
     #: depends on whether they may read each (`_count_hidden_merges`); a `HOLDS` link is always
     #: counted at its write and is not among them.
@@ -1419,6 +1426,28 @@ def _resolve_markings(
         return most_restrictive_markings(recipe, scheme)
 
 
+def _note_row_node(state: _RunState, row_index: int, node_id: NodeId) -> None:
+    """A node this row wrote or matched, for its kept key's record (ADR-110 Amendment 8 point 2)."""
+    state.row_nodes.setdefault(row_index, {})[node_id] = None
+
+
+def _kept_row_elements(
+    state: _RunState, rows: Sequence[StagedRow], skip_row_indices: frozenset[int]
+) -> dict[str, RowElements]:
+    """Each kept key's record: what the rows carrying it wrote (one survivor per key in a file, so
+    one row, but a union whatever the count). Held rows are not kept and have none."""
+    nodes: dict[str, dict[NodeId, None]] = {}
+    edges: dict[str, dict[EdgeId, None]] = {}
+    for row in rows:
+        if row.row_key is None or row.row_index in skip_row_indices:
+            continue
+        nodes.setdefault(row.row_key, {}).update(state.row_nodes.get(row.row_index, {}))
+        edges.setdefault(row.row_key, {}).update(state.row_edges.get(row.row_index, {}))
+    return {
+        key: RowElements(node_ids=list(nodes[key]), edge_ids=list(edges[key])) for key in nodes
+    }
+
+
 def _note_referenced(state: _RunState, node_id: NodeId) -> None:
     """Remember a node matched by reference, once, unless this load created it (a node written by an
     earlier row and found again by a later one is this load's own, not one it merely touched)."""
@@ -1650,6 +1679,7 @@ async def _write_held_content(
             state.nodes_referenced += 1
         else:
             state.nodes_created += 1
+    _note_row_node(state, row_index, document_id)
     holds = EdgeWrite(
         id=f"{document_id}:held-by:{holder_id}",
         type="HOLDS",
@@ -1877,6 +1907,7 @@ async def _hold_edge(
         held.write = folded.write
     if event is not None:
         held.events.append(event)
+    held.row_indices.append(row_index)
     if record_written and state.written is not None:
         held.written_slots.append(len(state.written))
         state.written.append(write)
@@ -1923,6 +1954,8 @@ def _settle_link(state: _RunState, link: _HeldLink, edge_id: EdgeId) -> None:
         )
     for event in link.events:
         event.edge_id = edge_id
+    for row_index in link.row_indices:
+        state.row_edges.setdefault(row_index, {})[edge_id] = None
     if state.written is not None:
         for slot in link.written_slots:
             state.written[slot] = state.written[slot].model_copy(update={"id": edge_id})
@@ -2405,6 +2438,7 @@ async def run_recipe(
             )
             if node_id is not None:
                 refs[staged_entity.ref] = node_id
+                _note_row_node(state, staged_row.row_index, node_id)
                 if resolved_entity.content and media is not None and not own_text:
                     await _write_held_content(
                         resolved_entity,
@@ -2447,6 +2481,7 @@ async def run_recipe(
                 if r.row_key is not None and r.row_index not in skip_row_indices
             )
         ),
+        kept_row_elements=_kept_row_elements(state, loaded_rows, skip_row_indices),
         nodes_created=state.nodes_created,
         nodes_referenced=state.nodes_referenced,
         edges_created=state.edges_created,

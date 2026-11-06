@@ -25907,3 +25907,69 @@ with a store that never held the events, for three principals; the restore compa
 before; idempotence; the retract of the creating load); the engine's per-row record; a second snapshot
 missing one row withdraws exactly its elements and events, a shared link stays and is counted, and the
 revert restores both; the revert refused after the row came back.
+
+### ADR-110, Amendment 9 (6 November 2026) — a full snapshot's withdrawal, as built; Amendment 8 point 4 corrected
+
+Status: built 6 November 2026, within Amendment 8's ruling. Amendment 8 is unchanged except where
+this says so.
+
+1. **The withdrawn key moves aside** *(mine; corrects Amendment 8 point 4)*. Replacing a marked
+   entry in place loses the refresh's claim to it once the row comes back, and the revert of the
+   load that loaded it again would then delete the key outright. A withdrawn key is instead moved,
+   with its load and its record, to `withdrawn_row_keys`, marked with the refresh's load:
+   - a run reads only `loaded_row_keys`, so the row that comes back is kept again there, normally;
+   - the refresh's revert is refused while any key it withdrew is kept again, and otherwise moves
+     them back (`restore_withdrawn_row_keys`);
+   - reverting the load that kept a key releases it from both tables, so nothing is left to restore;
+   - a withdrawn key's definition of `deduplicate` still counts toward ADR-127 decision 5's refusal:
+     it waits to be restored.
+2. **What the run says** *(mine)*. The report and its route view carry `rows_withdrawn`,
+   `links_kept_an_occurrence`, `rows_left_in_place` and `refresh_notes` in words; the keys and ids
+   withdrawn are for the ledger alone. Rule 3: a link kept because a kept row also wrote it is
+   counted only if the loader may read it (`get_edges` as the loader). A link they may not read is
+   still kept, and is not counted, as `_count_hidden_merges` withholds a merge.
+3. **One source per pipeline** *(mine)*. A pipeline's source branches keep their row keys under one
+   recipe, so one branch's snapshot would take every other branch's rows for dropped. A full snapshot
+   with *withdraw* of a pipeline with more than one source is refused in words before anything loads,
+   until phase 6 gives each source its own key on the Load node.
+4. **Within the run** *(mine)*. The withdrawal is planned and written in the refresh's own graph
+   transaction, after the rows and the pre-commit rules and before the commit, under the lock that
+   serialises the runs. The refresh's own rows protect what they name from the report itself: their
+   record reaches the ledger only after the commit, and the port's unfiltered `live_edges_touching`
+   reads outside the transaction. Its events are set aside after the commit.
+5. **The revert of a withdrawing load** restores the elements in its graph step
+   (`restore_withdrawn`), the events in its events step before its own are retracted, and the keys
+   in its row-key step. Each is gated on the record's `rows_withdrawn`, so a record from before has
+   no new step.
+
+**Found by the tests:**
+- The engine tests' graph fake matched a reverted node by its value, which the real store's
+  `find_node` never does: a row that came back would have been matched to its withdrawn node. The
+  fake now refuses it, as the store does (rule 15).
+- The same fake's `live_edges_touching` saw links in the open transaction, which the real port reads
+  outside. It hid a planner that ignored the snapshot's own rows. The fake now sees committed links
+  only, and a case guards the planner (`test_a_node_the_snapshots_own_new_row_matches_stays`).
+- A planner that ignored other kept rows stayed green while a live link happened to protect the same
+  node. A case where another pipeline's kept row only matched the node, with no link, now fails
+  without the check.
+
+**Known limits** (recorded, not built):
+- A link restored by the revert is skipped when a live link of its type has since joined the same
+  pair; its events are still put back. A row that comes back refuses the revert, so this is reached
+  only through another pipeline writing the pair.
+- The revert of a load whose created node a refresh withdrew sees that node reverted and takes the
+  attempt for a rerun, so ADR-127 Amendment 6's "written again by another writer" check is not made
+  for it.
+- A large drop whose nodes many links touch asks `live_edges_touching` once per node. Unmeasured.
+
+**Tests:**
+- `tests/conformance/analytics_port/test_suite.py`: five cases, DuckDB and ClickHouse, each branch
+  shown red by its own plant;
+- `tests/ingest/test_row_elements.py` (6), `tests/ingest/test_snapshot_withdrawal.py` (13, the
+  planner and the revert);
+- `tests/services/api/test_row_key_withdrawal_ledger.py` (8, live Postgres);
+- `tests/ingest/test_pipeline_run.py`: the two-source refusal;
+- `tests/services/api/test_source_refresh_snapshot_live.py` (2): the exit, live on ArcadeDB, Postgres
+  and DuckDB. The second snapshot withdraws exactly the dropped row's two nodes, its link and its
+  event; the revert restores all three; a row that comes back is loaded again once, and the refresh's
+  revert is then refused.

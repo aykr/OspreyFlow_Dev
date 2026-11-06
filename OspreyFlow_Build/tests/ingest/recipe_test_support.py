@@ -219,6 +219,8 @@ class MergingGraph(ValidatingGraph):
     def __init__(self, ontology: Any) -> None:
         super().__init__(ontology)
         self.reverted: set[str] = set()
+        #: Element id -> the load that withdrew it (ADR-110 Amendment 6 point 3); each is reverted.
+        self.withdrawn: dict[str, str] = {}
         self.reverted_calls: list[tuple[list[str], list[str]]] = []
         self.superseded: set[str] = set()
         self._scheme = load_uk_le_scheme()
@@ -321,6 +323,61 @@ class MergingGraph(ValidatingGraph):
         self.reverted_calls.append((list(node_ids), list(edge_ids)))
         self.reverted.update(node_ids)
         self.reverted.update(edge_ids)
+        # Reverting the load that created an element clears its withdrawal (ADR-110 Amendment 6
+        # point 3), so a later restore cannot bring it back.
+        for element_id in [*node_ids, *edge_ids]:
+            self.withdrawn.pop(element_id, None)
+
+    # --- a full snapshot's withdrawal (ADR-110 Amendment 6 point 3), as the adapter does it ----
+
+    async def withdraw_elements(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: object
+    ) -> None:
+        """Marks each live element reverted and withdrawn by `load_id`; one already reverted (or
+        withdrawn) is left as it is, as the adapter's `AND reverted = false` leaves it."""
+        for element_id in [*node_ids, *edge_ids]:
+            if element_id in self.reverted:
+                continue
+            self.reverted.add(element_id)
+            self.withdrawn[element_id] = load_id
+
+    async def restore_withdrawn(self, load_id: str, tx: object) -> Any:
+        """Brings back what `load_id` withdrew, except a link whose pair a live link of the same
+        type joins again (written since), as the adapter skips it."""
+        from ports.graph import RestoredElements
+
+        mine = [i for i, by in self.withdrawn.items() if by == load_id]
+        edges = {e.id: e for e in self.committed_edges}
+        nodes, links = [], []
+        for element_id in mine:
+            link = edges.get(element_id)
+            if link is not None:
+                again = any(
+                    e.id != link.id and e.type == link.type
+                    and {e.source, e.target} == {link.source, link.target}
+                    and e.id not in self.reverted and e.id not in self.superseded
+                    for e in self.committed_edges
+                )  # fmt: skip
+                if again:
+                    continue
+                links.append(element_id)
+            else:
+                nodes.append(element_id)
+            self.reverted.discard(element_id)
+            del self.withdrawn[element_id]
+        return RestoredElements(node_ids=tuple(nodes), edge_ids=tuple(links))
+
+    async def find_node(self, entity_type: str, field: str, value: str, principal: Any) -> Any:
+        """A reverted node is no match, as the adapter's read leaves it out: a later write of the
+        same value is a fresh create."""
+        for node in [*self.committed_nodes, *self.open_nodes]:
+            if (
+                node.type == entity_type
+                and str(node.properties.get(field)) == value
+                and node.id not in self.reverted
+            ):
+                return SimpleNamespace(id=node.id, type=node.type)
+        return None
 
     async def existing_node_ids(self, node_ids: Sequence[str]) -> set[str]:
         """A node that is reverted and not superseded is left out: a write onto it is a fresh
@@ -344,15 +401,18 @@ class MergingGraph(ValidatingGraph):
         for node in nodes:
             if node.id in self.reverted:
                 self.reverted.discard(node.id)
+                self.withdrawn.pop(node.id, None)
                 self.committed_nodes = [n for n in self.committed_nodes if n.id != node.id]
         return await super().upsert_nodes(nodes, tx)
 
     async def live_edges_touching(self, node_ids: Sequence[str]) -> set[str]:
-        """The live links (not reverted, not superseded) at either end, whoever may read them."""
+        """The live links (not reverted, not superseded) at either end, whoever may read them: the
+        committed ones, as the adapter's read outside any transaction sees them (rule 15: a load's
+        own open links are not seen, so a withdrawal cannot lean on them)."""
         wanted = set(node_ids)
         return {
             e.id
-            for e in [*self.committed_edges, *self.open_edges]
+            for e in self.committed_edges
             if (e.source in wanted or e.target in wanted)
             and e.id not in self.reverted
             and e.id not in self.superseded
