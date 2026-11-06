@@ -25686,3 +25686,46 @@ chooser writing the source's marking, shown red with the marking dropped), `src/
 `IngestStudio.test.tsx` (Sources); keyboard `ingest-studio.spec.ts` (+4) and `admin.spec.ts` (+1); the
 axe scan of the wizard's governance step, a source's page and its edit, the chooser, and Connections,
 in both themes and GOV.UK.
+
+### ADR-140, Amendment 6 (6 November 2026) — phase 3 closed: Map's pane and its masking, the strip, the source page's marking
+
+Status: accepted 6 November 2026 (the owner's two rulings, each put as a multiple-choice question:
+"Name source, mask as pipeline" and "Source marking governs"). ADR-140, ADR-127 and Amendments 4 and
+5 are unchanged except where this says so; Amendment 5's point 5 ("Not done") is closed here.
+
+1. **Map's left pane names the registered source it reads, and its version, but its fields stay the
+   pipeline's own profile** (the owner's ruling). The build plan's phase 3 had the pane read the
+   source's profile. It cannot do so as it stands: a pipeline may set a marking above the source's,
+   fixed on an element or bound to a column (ADR-127 decision 3), and only the pipeline's profile
+   masks for that marking. The source's profile knows only the source's own marking, so reading it
+   in Map would show a reader below the pipeline's marking values Map masks for them today (rule 3).
+   The pane says *From the registered source <name>, version <n>.*, or that no registered source
+   reads the file (its settings are then the pipeline's own), or that the sources could not be read.
+   It does not read `…/sources/{id}/profile`.
+2. **The source's marking governs the source page** (the owner's ruling). A source's page shows its
+   profile masked by the source's marking alone, even when a pipeline reading the file marks rows
+   higher. That marking describes the pipeline's elements, not the file. A file that holds data above
+   its source's marking is mis-registered; the remedy is to raise the source's marking (Amendment 4
+   decision 3 then flags the pipelines and makes the drafts follow).
+3. **The readiness strip counts the registered sources**, as the Sources tab lists them, *(mine)*.
+   A file a pipeline reads that no source registers is named, never folded into the count
+   ("1 source · 1 file not registered"). A failed read is said, never counted as none. The strip
+   reads the sources again when the Sources tab registers or edits one.
+4. **Access cases phase 3 lacked** (rule 4): a reader below a SECRET source's marking gets its
+   profile masked after a cleared reader has read it; the register wizard's file listing
+   (`GET /v1/datasets/{id}/source-files`) answers alike for another unit's, a missing and a
+   read-only dataset, and lists only the dataset's own files; the Admin list of connections refuses
+   a non-administrator.
+5. **Phase 3's exit, end to end by keyboard:** `cell_stays.csv` is registered from the dataset's
+   files and used in a new pipeline. No marking is asked in the pipeline, and the draft is sent the
+   source's file, marking and legal basis. *Every existing recipe still runs* rests on the migration
+   leaving every recipe unchanged (Amendment 4 decision 6) and on `tests/ingest`. The owner's seed is
+   the live proof. `test_source_confinement.py` is green.
+
+**Tests:** `src/ingest/map/MapScreen.source.test.tsx` (the pane's three sentences and none for a
+pipeline in no dataset; the pipeline's own profile shown, the source's own never read, shown red with
+it read); `IngestStudio.test.tsx` (the strip's figures, a refused read, the re-read after an edit, shown
+red with the callback removed); `tests/services/api/test_dataset_sources.py` (+3, each shown red by a
+plant at its call site); keyboard `ingest-studio.spec.ts` "a file is registered as a source and used in
+a new pipeline by keyboard, asking no marking there" (shown red with the chooser sending the draft's own
+marking).

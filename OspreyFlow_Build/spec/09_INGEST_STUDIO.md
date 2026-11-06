@@ -89,8 +89,9 @@ schedules it and runs it.
 
 The Studio (`apps/workspace/src/ingest/IngestStudio.tsx`) is **four places with one method**, in the
 method's order — **1 Model**, **2 Sources**, **3 Pipelines**, **4 Runs** — under a **readiness strip**
-(the target model, the number of sources, the pipelines with how many drafts have not passed Test, and the
-last run). It opens on **3 Pipelines**; the person picks the entry point (ruling R7).
+(the target model, the number of registered sources with any file a pipeline reads that no source
+registers named beside it (ADR-140 Amendment 6), the pipelines with how many drafts have not passed Test,
+and the last run). It opens on **3 Pipelines**; the person picks the entry point (ruling R7).
 
 - **The dataset switcher**, at the top, names the dataset the Studio works on. Until phase 5 gives the
   Studio routes of its own, every Studio route is still a case's (ADR-099 Amendment 4 decision 5), so the
@@ -108,7 +109,9 @@ last run). It opens on **3 Pipelines**; the person picks the entry point (ruling
   File, Governance and refresh, then Register, after which its profile shows). A source's page has its
   profile (computed for the reader, never stored), its governance with an audited *Edit governance*
   (deployed pipelines reading it then need attention; drafts follow and must be tested again), its
-  lineage, *Re-profile* and *Open in a pipeline*. Below, the unstructured path (*Add files*, ADR-094
+  lineage, *Re-profile* and *Open in a pipeline*. The page's profile is masked by the source's own
+marking: a pipeline that marks rows higher describes its elements, not the file, and a file holding
+data above its source's marking is remedied by raising the source's (Amendment 6, the owner's ruling). Below, the unstructured path (*Add files*, ADR-094
   step 3). A pipeline's first source node chooses a registered source (*Use this source*), so no marking
   is asked in the pipeline; *The draft's own settings* keeps the deduplication key until phase 6.
 - **3 Pipelines** is the pipelines home and canvas below: name a pipeline, open one, edit it on the canvas.
@@ -440,6 +443,10 @@ so the template looks like the thing it will produce.
 - **The Map canvas paints from the themed palette (ADR-070)** and redraws when the theme changes, so
   every element, label and link stands out from the canvas in either theme (a link's chosen start
   was painted the dark theme's text colour, and vanished in the light theme, until 9 October 2026).
+- **The source fields pane names the registered source** the pipeline reads, and its version (ADR-140
+  Amendment 6), or says that none reads the file. Its fields are the pipeline's own profile, never the
+  source's: a pipeline may mark rows above its source (ADR-127 decision 3), and only its own profile
+  masks for that (`MapScreen.source.test.tsx`).
 - **Unmapped fields are shown, always.** A field nobody mapped is either unimportant or the most
   important thing in the file, and silence is how the second case gets missed. Mark it
   `ignore` deliberately, with an optional note, or map it.
