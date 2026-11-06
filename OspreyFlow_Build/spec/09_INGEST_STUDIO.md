@@ -894,6 +894,19 @@ are counted; rows with no value are read, counted, and kept from loading twice b
 is not reverted while a later refresh has read past it. A pipeline reading more than one source
 cannot refresh incrementally until phase 6.
 
+**On the source's page** (ADR-110 Amendment 13) the policy is said in words: when it reads, how each
+file is read, whom it runs as, and whether it is paused and why. A person holding `schedule_pipelines`
+pauses it, with a reason, and resumes it; neither is an edit of the source. **Moving the watches**
+(Amendment 11): `scripts.migrate_sources` moves each pipeline's own folder watch onto the source it
+reads, with its owner, its time and its pause, and leaves its cron on the pipeline; a source watched
+under different patterns or for different owners, or read by a keyless pipeline, is left and named.
+
+**What a run cost** (Amendment 12): every run records its wall time, the rows it read, the bytes it
+put to the object store and the elements it wrote to the graph, on its report and in the ledger.
+Rows staged and bytes to Parquet are *not measured* until phase 7's staging, and are said so, never
+shown as 0. The run report, the Runs tab and Admin's run rows show them after the counts, and withhold
+them where the counts are withheld.
+
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
 offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
 London by default), or an advanced cron expression; before anything is saved the Conduit explains it
