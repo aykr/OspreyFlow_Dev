@@ -25729,3 +25729,90 @@ red with the callback removed); `tests/services/api/test_dataset_sources.py` (+3
 plant at its call site); keyboard `ingest-studio.spec.ts` "a file is registered as a source and used in
 a new pipeline by keyboard, asking no marking there" (shown red with the chooser sending the draft's own
 marking).
+
+### ADR-110, Amendment 6 (6 November 2026) — the source's refresh, as phase 4 builds it
+
+Status: accepted 6 November 2026. The owner made four rulings, each put as a multiple-choice question:
+"Modes for file sources too", "Refuse, in words", "New audit field, port first" and "Watches move;
+cron stays". **Being built** (Ingest Studio redesign phase 4). Amendment 5 is unchanged except where
+this says so; *(mine)* marks a detail the rulings left open.
+
+1. **File sources take the modes too** (the owner's ruling; amends Amendment 5 item 2). A file source
+   whose trigger is a folder watch declares how each arriving file is read:
+   - *full snapshot*: the whole table each time, with dropped rows *kept* or *withdrawn*;
+   - *incremental*: only rows past a declared watermark column. The highest value seen is kept per
+     source and advanced only by a run that succeeded; a row at or below it is not read, and is
+     counted.
+
+   A manual refresh re-reads the registered file in the same mode. SQL and API sources reuse the
+   modes in phase 9.
+2. **A refresh never runs a keyless pipeline** (the owner's ruling; settles ADR-109 Amendment 8 item 3).
+   - A refresh policy other than manual is refused, in words, on a source that a deployed pipeline
+     with no `deduplicate` reads.
+   - Deploying a keyless pipeline that reads a source with such a policy is refused in the same words.
+   - The executor records such a pipeline *refused* if one is met (one deployed before this rule).
+   - The deduplication key stays the pipeline's (phase 6 moves it to the Load node).
+3. **A dropped row's elements are withdrawn, not superseded** (the owner's ruling). `AuditStub` gains
+   `withdrawn_by_load` (the refresh's `load_id`).
+   - `GraphPort.withdraw_elements(node_ids, edge_ids, load_id, tx)` sets it, and sets `reverted`, so
+     every read already leaves the element out for every reader, with no read changed *(mine)*.
+   - `GraphPort.restore_withdrawn(load_id, tx)` clears both, on the elements that load withdrew alone.
+   - Reverting the withdrawing load restores them. Reverting the load that *created* them clears
+     `withdrawn_by_load` and leaves them reverted, so a later restore cannot bring back a reverted
+     element.
+   - A later write is a fresh create (ADR-127 Amendment 6). A row that comes back in a later snapshot
+     is loaded again.
+   - `superseded_by` keeps its one meaning: replaced by a successor.
+
+   **Conformance first** (rule 1): the suite gains these cases before either adapter changes.
+4. **Which elements a dropped row withdraws** *(mine)*. A kept row key (ADR-127 decision 5) records the
+   ids of the nodes and links its row created. On a full snapshot with *withdraw*:
+   - The dropped keys are the pipeline's kept keys for the case that the snapshot's rows do not carry.
+   - A dropped key's elements are withdrawn unless a kept row of any pipeline in the dataset, or any
+     other load's record, also wrote or referenced them.
+   - A link a kept row also wrote stays, its occurrence count unchanged. The run report counts such
+     links in words ("2 links kept an occurrence from a dropped row"): disclosed, not silent.
+   - The dropped keys are marked with the refresh's `load_id`. A run then treats them as not kept,
+     and the revert restores them.
+5. **One refresh, every pipeline** *(mine, within Amendment 5 item 3)*. Each deployed pipeline that
+   reads the source takes the source's waiting files itself, through the executor's existing watch
+   path, with the source's pattern. So each pipeline runs once per file, under its own claim, lock and
+   `load_id`, recorded with the trigger `source_refresh`. The executor, its claims and its locks are
+   unchanged (Amendment 5 item 6).
+6. **The owner and the case** *(mine, until ADR-140 open question 6, phase 5)*:
+   - The policy's owner is the person who set it (Amendment 5 item 4).
+   - Each pipeline's run acts as the owner, through that pipeline's own case (`schedule_case`, else
+     the case it was made in), with decision 3's checks unchanged.
+   - A policy may be paused, with its reason in words; three refusals in a row pause it, as decision 4
+     pauses a schedule.
+7. **Migration** (the owner's ruling). `scripts.migrate_sources` moves each recipe's folder watch onto
+   the source it reads (dry run first), with its owner and its paused state.
+   - Recipes reading one source under different patterns are left for a person and named.
+   - A recipe's cron schedule stays on the recipe, unchanged, until SQL and API sources take schedules
+     in phase 9.
+   - Chapter 9's paused watches become paused source policies, resumed on the Runs tab as before
+     (ADR-140 Amendment 3).
+8. **The poll** (R17) stays open until phase 9: nothing polls before then, and the 15-minute floor
+   holds.
+9. **Metering, part 1** (ADR-141 decision 2) is recorded on `PipelineRunReport` and the ledger:
+   - wall time; rows read and rows staged; bytes written to Parquet and to the object store; graph
+     writes;
+   - a figure the run cannot yet measure is *not measured* (`null`), never 0. Parquet and rows staged
+     wait for phase 7's staging;
+   - the run report shows the figures, and so does Admin's *Schedules and runs* until Operations
+     replaces it (phase 10).
+
+**Tests (written first):**
+- the conformance cases of point 3;
+- a refresh runs each pipeline that reads the source once, under separate load ids, with the trigger
+  `source_refresh`;
+- an incremental refresh reads only rows past the kept watermark (red with the watermark ignored);
+- a second snapshot missing one row withdraws exactly that row's elements, and the revert restores
+  them;
+- a *needs attention* pipeline is recorded *blocked*;
+- a refresh whose owner has lost clearance is refused (the token-exchange fake refusing what Keycloak
+  refuses, rule 15);
+- a keyless pipeline is refused in words, at the policy, at Deploy and at the executor;
+- the PIN-call file re-read creates nothing and holds each event once;
+- an access case on every new read path (rule 4);
+- a keyboard case for every new action (rule 13).
