@@ -125,6 +125,18 @@ Follows merges, never runs ahead of them for the guides:
 A lane changes only what it owns. Anything else is a request to the orchestrator, who either makes a
 small shared commit and merges it first or moves the work to the owning lane.
 
+**Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
+map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
+no conflict with another lane's work, and is recorded in the merge's friction row. Shared files
+(`packages/schemas/**`, `keyboard/actionRegistry.ts`, `tokens.css`, the Makefile, `ci.yml`) stay
+shared. A registry id is committed by the orchestrator immediately before the merge whose cases
+prove it, not earlier, because `assertAllCovered` refuses an id with no proving case.
+
+**Owner questions go through the orchestrator (the owner, 7 November).** A lane sends a question for the
+owner to the orchestrator's session by cross-session message, as multiple choice, instead of asking in
+its own window. The orchestrator batches the questions for the owner and sends the answers back, and
+the lane records each one in `REPORT.md`.
+
 | Lane | Owns |
 | --- | --- |
 | Studio | `apps/workspace/src/ingest/**` (except `ingest/runs/promotions*` during L3.4); `services/ingest/**`; the Studio's routes in `services/api`; `packages/knowledge_adapters/**`; `recipes/**`; `connectors/**` |

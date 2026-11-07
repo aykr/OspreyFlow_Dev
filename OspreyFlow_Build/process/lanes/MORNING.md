@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **Owner rulings, 10:45.** Trivy: rebuild, then a dated ignore where no fix exists yet. The perf budget (`MatrixView.budget`, failing on main) is to be measured under the lease on a quiet machine. Widen the link and provenance gates to all of `spec/` except the decision log. Ratify out-of-map changes where needed (now in the build plan). Owner questions now reach the owner through the orchestrator, by cross-session message.
+
 - A change to `lanes_heartbeat.sh` reaches a running `watch` only after it is restarted (Ctrl-C, then run it again). The merged-lane false alarm was fixed at `cc2e443`, and the monitor was restarted at 07:20.
 
 - A beat the orchestrator sends on a lane's behalf records the orchestrator's head, not the lane's (glass, 05:53). Send it from the lane's worktree. Minor; not fixed tonight.
