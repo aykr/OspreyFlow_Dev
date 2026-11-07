@@ -69,7 +69,8 @@ def _needs(show: subprocess.CompletedProcess[str]) -> list[str]:
     out = show.stdout
     if "NEEDS YOU:" not in out:
         return []
-    return [line.strip()[2:] for line in out.split("NEEDS YOU:")[1].splitlines() if line.strip()]
+    section = out.split("NEEDS YOU:")[1].split("FOR THE ORCHESTRATOR")[0]
+    return [line.strip()[2:] for line in section.splitlines() if line.strip()]
 
 
 def _all_beat(hb, state: str = "working") -> None:
