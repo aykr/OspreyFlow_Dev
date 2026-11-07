@@ -552,35 +552,37 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   ADR-099 Amendments 12 and 13, ADR-143 decision 1):
   - **`source`**: loaded through the Studio or a seed;
   - **`composite`**: names two or more of its unit's source datasets (`members`) and holds none of
-    their data; read at read time as its members and its own id (so `SAME_AS` links written into
-    it are read). Made by `POST /v1/datasets/composites`, or by the migration;
+    their data; read at read time as its own id and its members (so what is written into it is
+    read). Made by `POST /v1/datasets/composites`, or by the migration;
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
     dataset), and its name takes no place in the unit's unique names. A branch has a layer of its
-    own (a layer is never shared with another case). **Interim, not a decision:** its egress
-    (ADR-136) is read as the strictest of what its case otherwise reads, under that dataset's name
-    (`datasets.as_its_case`), so it changes no verdict and its own name is in no refusal; ADR-136
-    decision 2's `none` would have stopped every case asking a hosted model. The owner rules on it
-    (raised at L3.1), and the ruling is recorded as an ADR-136 amendment before drawing (L3.3) puts
-    material in a layer.
+    own (a layer is never shared with another case). Its egress (ADR-136 Amendment 1) is the
+    strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`),
+    so it changes no verdict and its own name is in no refusal; an administrator cannot set it.
 - **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
   decision 1); a branch takes its parent's; only the case's Author changes it, and each change is
   audited (decision 3). A new case names an existing dataset or a new one; the Conduit no longer
   makes one for a case that names none (Amendment 12 item 6).
 - **A case's read set** (`Principal.datasets` for a request under it, `DatasetStore.ids_of_case`)
-  is its chosen dataset (a composite as its members, then its own id) **plus** its analyst layer,
+  is its chosen dataset (a composite as its own id, then its members) **plus** its analyst layer,
   and nothing else; a case that has chosen nothing reads nothing. Case views (ADR-144) will read
   the same set. A link drawn in one case's layer, even between two loaded nodes, is in no count,
   degree, bucket, neighbourhood or path read under another case of the same source
   (`tests/conformance/graph_port/test_analyst_layer.py`, shown red with the layer added to the other
   case's read set); the read set itself is `tests/services/api/test_analyst_layer.py`.
-- **What a case writes joins the first of its read set** unless the load names another (decision
-  6): the source, or a composite's first member, as before composites existed. Where analyst writes
-  go once the layer exists (ADR-143 open question 1) and where a composite case's writes go
-  (Amendment 12 item 5) wait for the owner. The Conduit's own writes for a case are stamped so by
-  `DatasetStampingGraph` (Amendment 1 decision 2), and an element's properties are the latest
-  write's (decision 2).
+- **What a case writes joins the first of its read set** unless the write names another (decision
+  6): the source, or a composite's own id, so no member is written by a case reading the composite
+  (Amendment 14). Accepted question proposals, accepted extractions and loads are written so. The
+  Conduit's own writes for a case are stamped by `DatasetStampingGraph` (Amendment 1 decision 2), and
+  an element's properties are the latest write's (decision 2).
+- **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity
+  marked by hand in the reader (the node and its `MENTIONED_IN` link) and a manual `SAME_AS` or
+  `NOT_SAME_AS` (§4) name the layer, which the request holds beside its read set
+  (`dataset_scope.analyst_layer`). A case with no layer yet writes them with everything else; what
+  was written before the amendment stays where it is. `tests/services/api/test_case_writes.py`
+  drives each writer at its real call site.
 - **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
   gives each case that names several datasets a composite of them (one composite per distinct set),
   gives every case its layer, reports a case it cannot place rather than guessing, and then builds
@@ -750,7 +752,9 @@ The design:
    re-projects the view; it does not touch storage.
 4. Analyst decisions are edges too: a manual link is a `SAME_AS` with score 1.0 and
    `provenance.state = asserted`; a manual split is a `NOT_SAME_AS` edge that the projection
-   always honours and no future resolution run may override.
+   always honours and no future resolution run may override. Both are written in the case's
+   analyst layer (ADR-143 Amendment 1, §2.2a), so another case reading the same source neither
+   sees nor is collapsed by them.
 
 The Glass surfaces τ as a slider with three labelled detents — **Strict (0.99)**, **Balanced
 (0.95)**, **Broad (0.80)** — and shows the analyst who moved it what changed: "3 entities merged,

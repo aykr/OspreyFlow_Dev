@@ -26609,6 +26609,54 @@ the analyst who sends it; the approver is a data engineer of the dataset or an A
 the proposer. Admin › Policies › Approval rights shows how many people can approve each, and warns when
 fewer than two can.
 
+### ADR-143, Amendment 1 (7 November 2026) — where today's analyst writes go
+
+Status: accepted; the owner's ruling on open question 1 ("Split", 7 November 2026), built at L3.1.
+Open question 1 is closed. Of the analyst writes that existed before the layer:
+
+1. **Into the case's analyst layer:** an entity marked by hand in the reader (ADR-098 decision 5: the
+   node and its `MENTIONED_IN` link) and a manual `SAME_AS` or `NOT_SAME_AS`
+   (`03_CONDUIT_MIDDLEWARE.md` §3.5's link and split). They are the analyst's own assertions, so they
+   sit with what the analyst draws: no other case reading the source sees them, and promotion
+   (decision 9) is how they reach a dataset.
+2. **Into the source, as before:** an accepted question proposal and an accepted extraction. They are
+   model or pipeline output that a person confirmed (rule 5), and belong with the data they came from.
+3. **How:** the request's case's layer is held beside its read set when the principal is scoped
+   (`dataset_scope.analyst_layer`); the two writers in item 1 name it on what they write. Every other
+   write names no dataset and is stamped with the case's first, exactly as before (ADR-099 Amendment
+   14 for a composite). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
+   reached) writes item 1's data where it writes everything else.
+4. **What is not moved:** marks and links written before this amendment stay in the dataset they were
+   written in. Moving them would be a load-shaped change to a dataset other cases read, and is not
+   done silently; it waits for its own decision if one is wanted.
+
+Proved by `tests/services/api/test_case_writes.py` (each writer at its real call site, under a
+principal scoped by `scope_to_case`).
+
+### ADR-099, Amendment 14 (7 November 2026) — a composite case's added data is written under the composite's own id
+
+Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026). Decision 6 reads: "Data
+added to a case joins its dataset; for a case reading a composite, the composite's own id." A
+composite's members are never written by a case reading the composite, so no case reading only a
+member sees what the composite case added. The read set (`DatasetStore.ids_of_case`) lists a
+composite's own id **first**, then its members, then the case's layer; the first is what every writer
+naming no dataset is stamped with (the stamping graph, `dataset_scope.made_in` for records made in the
+case, and `scripts.stamp_datasets` for records placed afterwards), and what the Studio's dataset reach
+(`scope_to_dataset`) matches. An entity marked by hand and a manual link go to the layer instead (ADR-143
+Amendment 1). Amendment 12 item 4 (entity resolution across members writing into the composite) is
+unchanged and still to be built. Proved by `test_a_composite_cases_write_lands_under_the_composite_id`.
+
+### ADR-136, Amendment 1 (7 November 2026) — a case's analyst layer takes the strictest egress of the case's sources
+
+Status: accepted; the owner's ruling (7 November 2026). A case's analyst layer (ADR-143) has no egress
+of its own to set: it takes the strictest egress (`none` stricter than `contracted`, `contracted`
+stricter than `any`) of everything else its case reads (its source, or a composite and each of its
+members), worked out each time it is asked (`DatasetStore.egress_of`, through `datasets.as_its_case`). A layer defaulting to `none` would have stopped every case asking a
+hosted model the moment it was given a layer; a looser layer than its sources would let drawn copies of
+source data leave under a looser rule. An administrator cannot set a layer's egress (the store refuses
+it), and a refusal that a layer causes names the case's dataset, never the layer, which no one is shown
+(ADR-099 Amendment 13).
+
 ## ADR-144 — Case views replace branches: a case is the only container, a view is a saved lens on it — ACCEPTED (design)
 
 Status: accepted from the owner's rulings V1–V5 of 6 November 2026, put as multiple-choice questions

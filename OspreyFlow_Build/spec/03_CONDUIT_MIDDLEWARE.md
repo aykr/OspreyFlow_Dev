@@ -147,7 +147,9 @@ one source or composite dataset of the caller's unit, or `new_dataset_name`, an 
 caller's unit made first; neither, both, or two ids is 422 `dataset_refused` and no case is made (ADR-099
 Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). The case's analyst layer
 is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). A branch reads its parent's chosen
-dataset and gets a layer of its own. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+dataset and gets a layer of its own. Under a case, what is written joins its source, or a composite's
+own id (ADR-099 Amendment 14); an entity marked by hand and a manual link or split join its layer
+(ADR-143 Amendment 1). `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
 among them, `name` names the new case. Without a body it forks the whole working set, as before. The
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
@@ -262,7 +264,7 @@ GET    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        the 
 POST   /v1/investigations/{investigation_id}/pictures                       which of these entities have a picture of their own the caller may see, Viewer (ADR-105)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   entities from a held Document by kind: text, an image described and read, a video transcribed; `using`: `recogniser` (the default, ADR-098) or `model`, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
-POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, Editor (ADR-098)
+POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, both written in the case's analyst layer (ADR-143 Amendment 1), Editor (ADR-098)
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098); with `degree` 2–6 and 2–8 named nodes, also the routes between them within it (Amendment 4)
 GET    /v1/investigations/{investigation_id}/datasets   the dataset the case chose (a source or a composite; never its analyst layer), Viewer (ADR-099, ADR-143)
 PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [one]}`, a source or composite of the Author's unit; else 422 `dataset_refused`, one answer for two ids, another unit's, a missing one and an analyst layer), audited before and after, Author (ADR-099 Amendment 12)
@@ -504,8 +506,8 @@ span (§3.6) until a candidate has actually been accepted.
 ```
 GET    /v1/resolution/threshold          current session τ
 PUT    /v1/resolution/threshold          set τ; triggers a reproject delta
-POST   /v1/resolution/link               analyst-asserted SAME_AS
-POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS
+POST   /v1/resolution/link               analyst-asserted SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1)
+POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1)
 GET    /v1/resolution/explain/{cluster}  the comparison vector and score that produced a cluster
 ```
 
