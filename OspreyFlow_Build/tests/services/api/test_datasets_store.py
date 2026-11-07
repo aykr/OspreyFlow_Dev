@@ -92,8 +92,8 @@ async def _a_composite_and_its_case(store) -> tuple[set[str], str, str]:
 
 async def test_postgres_answers_which_ids_are_composites(store) -> None:
     """ADR-099 Amendment 15: the stamping graph's last word asks the store which ids are
-    composites; the test registries answer `set()`, so only this proves the real query. A source,
-    a layer and an id nobody registered are not composites."""
+    composites; only this runs the real query. A source, a layer and an id nobody registered are
+    not composites."""
     members, composite, layer = await _a_composite_and_its_case(store)
     asked = [*sorted(members), composite, layer, f"no-such-{new_id()}"]
     assert await store.composites_among(asked) == {composite}
@@ -101,14 +101,20 @@ async def test_postgres_answers_which_ids_are_composites(store) -> None:
     assert await store.composites_among([]) == set()
 
 
-async def test_the_composite_check_fails_answered_as_the_fakes_answer(
+async def test_the_composite_check_fails_with_the_kind_left_out_of_the_query(
     store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rule 15: with the store answering as the test registries do, the check above is red."""
+    """Rule 15, in the query's own shape: the same SQL without its `kind` condition, run against
+    Postgres, answers every registered id, and the check above is red."""
 
-    async def as_the_fakes(self: object, dataset_ids: object) -> set[str]:
-        return set()
+    async def without_the_kind(self: PostgresDatasetStore, dataset_ids: list[str]) -> set[str]:
+        async with self._pool.acquire() as conn:  # noqa: SLF001
+            rows = await conn.fetch(
+                "SELECT id FROM datasets WHERE id = ANY($1::text[])", list(set(dataset_ids))
+            )
+        return {r["id"] for r in rows}
 
-    monkeypatch.setattr(PostgresDatasetStore, "composites_among", as_the_fakes)
-    _members, composite, _layer = await _a_composite_and_its_case(store)
-    assert await store.composites_among([composite]) != {composite}
+    monkeypatch.setattr(PostgresDatasetStore, "composites_among", without_the_kind)
+    members, composite, layer = await _a_composite_and_its_case(store)
+    asked = [*sorted(members), composite, layer, f"no-such-{new_id()}"]
+    assert await store.composites_among(asked) != {composite}

@@ -421,42 +421,74 @@ async def test_an_upload_is_refused_and_with_the_dependency_alone_removed_is_sav
     assert saved == ["rows.csv"]
 
 
-#: Every route of the case's or the Studio's that loads, runs, schedules, publishes or uploads.
-LOADING_ROUTES = {
-    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run",
-    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule",
-    "/v1/investigations/{investigation_id}/ingest/source-files",
+#: Where the case's and the Studio's loading routes live: every route that writes under these
+#: carries the refusal, found by walking the app, so a new one fails here until it does or is named
+#: below with its reason.
+LOADING_PREFIXES = (
+    "/v1/investigations/{investigation_id}/ingest/",
+    "/v1/datasets/{dataset_id}/",
+)
+#: Also loading, outside those prefixes: an uploaded document, held rows' rejection.
+LOADING_ELSEWHERE = {
+    "/v1/investigations/{investigation_id}/documents",
     "/v1/investigations/{investigation_id}/held-rows/reject",
-    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
-    "/v1/datasets/{dataset_id}/sources",
 }
+#: Under the prefixes but not refused by the route, each for a reason.
+NOT_BY_THE_ROUTE = {
+    # Dry runs, writing nothing (`verify`'s docstring; the two previews).
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify",
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/preview-graph",
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview",
+    # Refused by `review.accept_candidate` and `reject_candidate` after their own read, so a
+    # finding the reader cannot see answers 404 (`test_composite_read_only.py`).
+    "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept",
+    "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject",
+}
+_WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def _refusals(route: Any) -> list[Any]:
     calls = {app_module.refuse_loading_in_a_composite_case, app_module.refuse_loading_a_composite}
-    return [d.dependency for d in route.dependencies if d.dependency in calls]
+    return [d.dependency for d in getattr(route, "dependencies", []) if d.dependency in calls]
+
+
+def _loading_routes_without_the_refusal() -> list[str]:
+    missing = []
+    for route in app_module.app.routes:
+        path = getattr(route, "path", "")
+        if not (getattr(route, "methods", None) or set()) & _WRITES:
+            continue
+        loading = path.startswith(LOADING_PREFIXES) or path in LOADING_ELSEWHERE
+        if loading and path not in NOT_BY_THE_ROUTE and not _refusals(route):
+            missing.append(path)
+    return missing
 
 
 def test_every_loading_route_carries_the_refusal() -> None:
-    held = {
-        r.path for r in app_module.app.routes
-        if getattr(r, "path", None) in LOADING_ROUTES and _refusals(r)
-    }  # fmt: skip
-    assert held == LOADING_ROUTES
-
-
-def test_the_route_census_fails_with_one_refusal_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    (route,) = [
+    assert _loading_routes_without_the_refusal() == []
+    # And the walk finds what it should: more than the handful named in this file.
+    found = [
         r for r in app_module.app.routes
-        if getattr(r, "path", None) == "/v1/investigations/{investigation_id}/held-rows/reject"
+        if getattr(r, "path", "").startswith(LOADING_PREFIXES) and _refusals(r)
     ]  # fmt: skip
+    assert len(found) >= 18
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish",
+        "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
+        "/v1/investigations/{investigation_id}/held-rows/reject",
+    ],
+)
+def test_the_route_census_fails_with_one_refusal_removed(
+    path: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (route,) = [r for r in app_module.app.routes if getattr(r, "path", None) == path]
     kept = [d for d in route.dependencies if d.dependency not in set(_refusals(route))]
     monkeypatch.setattr(route, "dependencies", kept)
-    held = {
-        r.path for r in app_module.app.routes
-        if getattr(r, "path", None) in LOADING_ROUTES and _refusals(r)
-    }  # fmt: skip
-    assert held != LOADING_ROUTES
+    assert _loading_routes_without_the_refusal() == [path]
 
 
 # --- corrections' last word -------------------------------------------------------------------
