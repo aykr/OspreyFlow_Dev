@@ -6,6 +6,6 @@
 4. **Exit.** Local links resolve (scratch check; the home page's `{{ }}` placeholders and image ids pre-date this). British English read through.
 5. **Captures needed** once L2.2 and the boards merge: `three-places.html`, `drawing-boards.html`, the home page's `#coming` section.
 6. **Requests to the orchestrator.** (a) `publish_pages.sh` copies a fixed list: add `drawing-boards.html` and `three-places.html` (and consider copying `*.html`) before the owner publishes, or the links 404. (b) A test in `tests/` that local links and fragments resolve and each section of the two pages has a Coming mark. (c) The design source needs the nav links and `#coming` section. (d) The guides are untouched, as briefed.
-7. **Question for the owner.** Should the site name i2 once the import has a design (ADR-143 open question 5)? (a) No, say "another tool" (recommended until the design exists); (b) name i2 once designed; (c) name it now.
+7. **Ruled by the owner (i2).** Keep "another tool" now; name i2 once the import's ADR is accepted. Recorded in `README.md`'s checklist.
 8. **Ruled by the owner.** A section moves to Built at once on merge, text only; captures follow.
 9. **Running.** Nothing; the local server is stopped. No dev stack lease.
