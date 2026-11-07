@@ -739,6 +739,12 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "help-from-the-rail-by-keyboard",
   // ADR-132: the skip link, under both brands.
   "skip-to-main-content-by-keyboard",
+  // ADR-145 decisions 1–3: the place switcher (both brands), the banner's cross-link and its
+  // sections, and Home's cards.
+  "switch-place-by-keyboard",
+  "banner-cross-link-by-keyboard",
+  "banner-sections-by-keyboard",
+  "home-place-cards-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
