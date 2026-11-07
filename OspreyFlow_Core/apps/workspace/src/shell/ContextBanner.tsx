@@ -1,14 +1,15 @@
 // The context banner (ADR-145 decision 2): one line under the top bar naming the place the person is
 // in and what they are working on — "You are in the Glass · Case Kestrel ▾ · reads Prison intel";
-// "You are in the Ingest Studio · Dataset Prison intel · for case Kestrel ▾"; "You are in Admin".
+// "You are in the Ingest Studio · for case Kestrel ▾"; "You are in Admin".
 // A person who holds both the Glass and the Studio gets the cross-link between them, which keeps the
 // case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3).
 //
 // In the Glass the banner carries the place's sections, Case · Boards · Monitoring (decision 1);
-// *Boards* is drawn as coming until its screens are built. Not drawn: the Studio's dataset choice
-// ("Dataset ‹name› ▾" — the Studio's own dataset state, which its screens do not yet have) and its
-// "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an unfiltered
-// count is refused by rule 7; `02_GLASS_FRONTEND.md` §2.0a).
+// *Boards* is drawn as coming until its screens are built. Not drawn in the Studio: its dataset
+// ("Dataset ‹name› ▾"), which the Studio chooses itself, in its own *Dataset* select
+// (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
+// dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
+// unfiltered count is refused by rule 7; `02_GLASS_FRONTEND.md` §2.0a).
 import { useEffect, useState, type ReactNode } from "react";
 
 import { currentBrand } from "../brand/brand";
@@ -111,14 +112,6 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
         <>
           {sep}
           <span>reads {names(datasets)}</span>
-        </>
-      )}
-      {place === "ingest" && datasets && datasets.length > 0 && (
-        <>
-          {sep}
-          <span>
-            {datasets.length === 1 ? "Dataset" : "Datasets"} {names(datasets)}
-          </span>
         </>
       )}
       {place === "ingest" && caseSwitcher && (

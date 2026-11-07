@@ -62,6 +62,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
     return (
       <HomePage
         rights={rights ?? new Set()}
+        rightsUnread={rights === null}
         person={input.person}
         summary={input.summary}
         account={input.account}

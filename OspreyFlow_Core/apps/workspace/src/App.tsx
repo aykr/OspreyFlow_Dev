@@ -115,7 +115,6 @@ import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } f
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { AlertsPlace } from "./alerts/AlertsPlace";
-import { AdminPlace } from "./admin/AdminPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
 import {
@@ -502,8 +501,10 @@ export function App() {
   const [browsingCases, setBrowsingCases] = useState(false);
   // ADR-114 Amendment 5 point 9: Start, or the place chosen on it, while outside a case's workspace.
   // `null` with a case open is the workspace itself; a hand-off naming the Studio or Admin is a choice.
+  // ADR-145 decision 1: Admin is a place of its own, outside any case, so a hand-off naming it opens
+  // it even with a case open; a hand-off is only a wish, checked against the rights below.
   const [startChoice, setStartChoice] = useState<StartPlace | "start" | null>(() =>
-    initialInvestigationId() ? null : handoff.view === "admin" ? "admin" : handoff.view === "ingest" ? "ingest" : null,
+    handoff.view === "admin" ? "admin" : initialInvestigationId() ? null : handoff.view === "ingest" ? "ingest" : null,
   );
   const [investigationId, setInvestigationId] = useState<string | null>(
     initialInvestigationId(),
@@ -705,7 +706,7 @@ export function App() {
 
   const [view, setView] = useState<
     "graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
-  >(handoff.view === "ingest" ? "ingest" : handoff.view === "admin" ? "admin" : "graph");
+  >(handoff.view === "ingest" ? "ingest" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
   useEffect(() => {
@@ -761,7 +762,9 @@ export function App() {
     }
   };
   // ADR-145 decision 2: the Glass's view to come back to from the Studio (`shell/placeMemory.ts`).
-  const lastGlassView = useLastGlassView(view, "ingest", "graph");
+  const lastGlassView = useLastGlassView(view, "ingest", "graph", [
+    "graph", "map", "matrix", "reports", "dashboards", "dossier", "alerts", "ownership",
+  ] as const);
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -785,6 +788,17 @@ export function App() {
     });
     return () => cancelAnimationFrame(frame);
   }, [view]);
+  // ADR-145 N6: a place reached by a hand-off (`?view=ingest|admin`) or kept from before is opened only
+  // if the person's rights open it; otherwise Home, or the Glass's own landing view. Hiding is not the
+  // control (the routes refuse anyway); this keeps the screen from offering what would be refused.
+  useEffect(() => {
+    if (!rightsSettled) return;
+    const open = startPlaces(rights);
+    if ((startChoice === "admin" || startChoice === "ingest" || startChoice === "glass") && !open.includes(startChoice)) {
+      setStartChoice("start");
+    }
+    if (view === "ingest" && !open.includes("ingest")) setView(landingView(rights));
+  }, [rights, rightsSettled, startChoice, view]);
   // ADR-145 decision 2: the banner's case and the datasets it reads, as this person may see them.
   const caseContext = useCaseContext(API_BASE_URL, bearerToken, investigationId);
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
@@ -1429,7 +1443,9 @@ export function App() {
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
           />
         }
-        datasets={caseContext.datasets}
+        // ADR-145 decision 2: the Glass names what the case reads; the Studio's dataset is its own
+        // choice, drawn by the Studio (`ingest/IngestStudio.tsx`), so the banner does not repeat it.
+        datasets={app === "glass" ? caseContext.datasets : null}
         crossLink={crossLinkFor(app, startPlaces(rights), caseContext.name, caseContext.datasets, {
           toStudio: () => setView("ingest"),
           toGlass: () => setView(lastGlassView()),
@@ -1567,7 +1583,6 @@ export function App() {
             <EmbeddedDashboards apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
           </div>
         )}
-        {view === "admin" && rights && <AdminPlace apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} rights={rights} />}
         {view === "ownership" && (
           <OwnershipPlace
             apiBaseUrl={API_BASE_URL}

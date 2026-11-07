@@ -26,6 +26,8 @@ export interface HomePerson {
 
 export interface HomePageProps {
   rights: ReadonlySet<string>;
+  /** The rights could not be read, so no place is offered (ADR-145 N6): Home says so. */
+  rightsUnread?: boolean;
   person: HomePerson;
   /** `null` while the figures are being read. */
   summary: HomeSummary | null;
@@ -134,7 +136,7 @@ function AdminPicture({ services }: { services: HomeSummary["services"] }) {
   );
 }
 
-export function HomePage({ rights, person, summary, onChoose, onOpenCase, account, marking, now = new Date() }: HomePageProps) {
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, account, marking, now = new Date() }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
@@ -183,7 +185,11 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
         </section>
 
         {panels.length === 0 && (
-          <p className="home-section__empty">Your account opens no place yet. Ask an administrator to give you a role.</p>
+          <p className="home-section__empty">
+            {rightsUnread
+              ? "What your account may open could not be read just now, so no place is offered. Sign in again, or try again shortly."
+              : "Your account opens no place yet. Ask an administrator to give you a role."}
+          </p>
         )}
         <div className="home-panels">
           {panels.map((place) => {

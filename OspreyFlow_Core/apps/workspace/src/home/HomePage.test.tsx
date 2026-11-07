@@ -109,6 +109,12 @@ describe("Home", () => {
     expect(screen.queryByRole("table", { name: "Recent cases" })).toBeNull();
   });
 
+  it("says when the rights could not be read, not that a role is missing", () => {
+    home([], { rightsUnread: true });
+    expect(screen.getByText(/could not be read just now, so no place is offered/)).toBeTruthy();
+    expect(screen.queryByText(/Ask an administrator to give you a role/)).toBeNull();
+  });
+
   it("shows only the attention rows of places the person can use", () => {
     home(["edit_pipelines"]);
     expect(screen.queryByText("KYC screening alert in Operation Ledger")).toBeNull();

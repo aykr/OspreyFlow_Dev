@@ -311,7 +311,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const url = String(input);
       const body = url.endsWith("/v1/investigations")
         ? [{ id: "inv-9", name: "TestCase", level: "editor", created_at: "2026-10-10T09:00:00Z", created_by: "a1" }]
-        : url.endsWith("/v1/ontology")
+        : // ADR-145 N6: the Studio tile's choice is kept only for someone the Studio is open to.
+          url.endsWith("/v1/me/rights")
+          ? { rights: ["investigate", "edit_pipelines"] }
+          : url.endsWith("/v1/ontology")
           ? { entity_types: [], edge_types: [] }
           : [];
       return Promise.resolve(new Response(JSON.stringify(body)));
@@ -389,6 +392,67 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
     // The case menu stays, in the banner (ADR-145 decision 2; the Studio's own "goes into" row carries a second one).
     expect(within(screen.getByRole("region", { name: "You are in the Ingest Studio" })).getByRole("button", { name: /^Case:/ })).toBeTruthy();
+  });
+
+  // ADR-145 N6: a hand-off (`?view=ingest|admin`) is a wish, checked against the rights.
+  // Every request held but the rights, so only the rights decide what is drawn.
+  const withRights = (rights: string[]) => {
+    vi.mocked(globalThis.fetch).mockImplementation((input) =>
+      String(input).endsWith("/v1/me/rights")
+        ? Promise.resolve(new Response(JSON.stringify({ rights })))
+        : new Promise<Response>(() => undefined),
+    );
+  };
+
+  test("a hand-off to the Studio opens the Glass for someone the Studio is not open to", async () => {
+    withRights(["investigate"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("region", { name: "You are in the Glass" })).toBeTruthy();
+    expect(document.querySelector("header.app-header")?.getAttribute("data-app")).toBe("glass");
+    expect(screen.queryByRole("region", { name: "You are in the Ingest Studio" })).toBeNull();
+  });
+
+  test("a hand-off to Admin with a case open opens the Admin place, not Admin under the Glass", async () => {
+    withRights(["investigate", "manage_people"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "admin", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("region", { name: "You are in Admin" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "You are in the Glass" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+  });
+
+  test("a hand-off to Admin for someone Admin is not open to lands on Home", async () => {
+    withRights(["investigate"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "admin", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "You are in Admin" })).toBeNull();
+  });
+
+  // ADR-145 decision 2: choosing another case in the Studio reloads the page (`openCase`); after it,
+  // Back returns to the Glass's view that was open before, on the case now open.
+  test("after a reload in the Studio, Back returns to the Glass's last view on the open case", async () => {
+    withRights(["investigate", "read_alert_queue", "edit_pipelines"]);
+    // In the Glass, on Monitoring; then the page is reloaded into the Studio, as `openCase` does.
+    const first = render(<App />);
+    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
+    first.unmount();
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
+    const went: string[] = [];
+    const realLocation = window.location;
+    Reflect.deleteProperty(window, "location");
+    (window as { location: unknown }).location = { ...realLocation, assign: (url: string | URL) => went.push(String(url)) };
+    try {
+      render(<App />);
+      fireEvent.click(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ }));
+      expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+      // The case is the open one: Back neither changes it nor reloads.
+      expect(sessionStorage.getItem("ospreyflow.investigationId")).toBe("inv-1");
+      expect(went).toEqual([]);
+    } finally {
+      (window as { location: unknown }).location = realLocation;
+    }
   });
 
   test("the switcher and the cross-link move between the places, and coming back returns to the view that was open", async () => {
