@@ -28,6 +28,8 @@ from schemas.domain import (
     Subgraph,
 )
 
+from tests.services.api.no_transactions import NO_TRANSACTIONS
+
 from .working_set.fakes import FakeGraphPort
 from .working_set.test_visible_link import SCHEME, edge, node
 
@@ -144,6 +146,7 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
     await dispose(
         _Store(),  # type: ignore[arg-type]
         graph,
+        NO_TRANSACTIONS,
         "inv-1",
         "al-1",
         SCOPED,
