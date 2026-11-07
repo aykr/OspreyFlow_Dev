@@ -1,42 +1,42 @@
-# Studio lane · brief L1.1 · phase 4's remainder: `make ci` green
+# Studio lane · brief L1.2 · phase 6: the canvas as editor, the Map editor, guided mode
 
-Written by the orchestrator, 6 November 2026 (step 0). Opus, medium. Size S.
+Written by the orchestrator, 7 November 2026, on the owner's word ("Studio: L1.2"). Opus, medium. Size L:
+it may take a second session; stop at a clean, committed point and report what is left.
 
-**Why.** At step 0 `make ci` was found red at `b548d9f`, before any step 0 change, for causes from 3 to
-6 November. The owner ruled "Spec by me, code by L1.1": the orchestrator fixed the spec-text causes
-(`54fbd3d`); this brief fixes the rest. Nothing is pushed to `origin` until this lane's merge passes
-`make ci` (ADR-142 decision 6); step 0 rides on that push.
+**Binds.** `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it; 13 and 15 above all); ADR-140
+and its Amendments 1–7; ADR-108 as amended by ADR-108 Amendment 6; `spec/09_INGEST_STUDIO.md`;
+`spec/02_GLASS_FRONTEND.md` (keyboard, themes); the redesign's design reference,
+`spec/ingest_studio_redesign/` (`INGEST_STUDIO_REDESIGN_BRIEF_v2.md`, `ingest_studio_prototype.html`,
+`wf3_pipeline_canvas.svg`); and its build plan's **phase 6**,
+`spec/ingest_studio_redesign/BUILD_PLAN_INGEST_STUDIO.md` (committed at `a56f2f9`). ADR-145 (the
+Studio is its own place, with no rail; Lane 2 builds the switcher, so do not build one here).
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it); ADR-142 decisions 5–8;
-`FDE_HANDOVER.md` §1 ("a defect is fixed at the class, not the instance"; explain before you fix).
+**Build** (phase 6's "Do"): the drawer beside the canvas (`PipelineCanvas.tsx` and a new `NodeDrawer`),
+never replacing it; *Preview* on any node (today's dry run up to that node: the node's table, or the
+graph on Map and Load); *Test* for the whole pipeline (today's Verify); *Deploy as vN*. The **Map
+editor**: pipeline strip, staged columns pane, template canvas (today's `MapScreen` canvas, kept),
+inspector with bindings, match on, on match, link when, SAME_AS score; drag-to-bind and the keyboard path
+(select both, Enter: a spec gap, close it in `spec/09` by amendment under a reserved number); unmapped
+columns always shown; ◂ ▸ sample paging. **Guided mode**: the numbered list with the same drawers;
+expert steps read-only; the mode a per-person preference. Every screen in dark, light and GOV.UK.
 
-**The causes, as found by the orchestrator (download-free gates; the full run's other gates follow by
-nudge if they are red too).**
-1. `OspreyFlow_Core`: `ruff check .` — one error, `TRUST_EMAIL_FIX` and `TRUST_EMAIL_SAYS` imported and
-   unused (introduced around `7e1e552`, 5 November).
-2. `OspreyFlow_Core`: `mypy packages services harness` — five errors:
-   `packages/demo_fixtures/pid_plan.py:2627` `_offset` redefined (first at line 314), and the two that
-   follow from it at 2658 and 2661 (`2f24d85`, 3 November); `harness/apply.py:1048` and `:1059`,
-   `FilesHeld` against `dict[str, str]` (`6edda39`, 4 November).
-3. `test-file-coverage-check`: `tests/services/api/test_pin_calls_refresh_live.py` (`191d24c`) needs a
-   live service and is in neither the `test` job's ignore list nor a live-service job's file list. That
-   needs lines in `.github/workflows/ci.yml` and `OspreyFlow_Build/Makefile`, which are the owner's:
-   **write the exact diff into your report as a request to the orchestrator; do not edit either file.**
+**Not in this step:** phase 5's target model (Lane 3's L3.1b); staging steps (phase 7); case views or
+boards (Lane 3).
 
-**Files this brief lets you change** (beyond the Studio's ownership map, because the causes sit there):
-the file holding the unused imports, `packages/demo_fixtures/pid_plan.py`, `harness/apply.py`, and the
-tests that cover them. Nothing else outside the Studio's map.
+**Tests first.** A keyboard case in `keyboard/ingest-studio.spec.ts` for every new action (rule 13),
+each shown red with its handler removed; axe in all three themes in `a11y/every-harness.spec.ts`; Preview
+reads under the person's own principal (an access test: Preview of a node never shows a row the person
+could not read, rule 4); `MapScreen` tests migrated, not deleted.
 
-**Tests first.** For each mypy error, say whether it is a real fault or a typing gap. A real one (for
-example, `_offset` redefined so that the earlier definition's callers now call the later one) gets a
-failing test first, shown red, that would catch it; a typing gap needs none. Run the touched tests and,
-for `pid_plan.py`, the PID seed's own tests (`tests/test_pid_*`, `tests/demo_fixtures`).
+**Files.** The Studio lane's ownership map. `keyboard/actionRegistry.ts` and `packages/schemas/**` go
+through the orchestrator as small shared commits (ask in your report and stop that piece). Reserve any
+ADR or amendment number with the orchestrator before writing it. Take the lease for any live test.
 
-**Exit.** `ruff check .` and `mypy packages services harness` clean in `OspreyFlow_Core`;
-`make -C OspreyFlow_Build test-file-coverage-check` green once the owner has applied your diff (until
-then, your report names the diff as the one open item); every touched test green; a friction fragment
-in `process/friction/`. No dev stack needed; if you find you need it, take the lease.
+**Exit.** Phase 6's exit: the Prison Intelligence reports pipeline can be built from scratch in guided mode
+by someone following the demo script, and edited in expert mode; `MapScreen` tests migrated and green;
+keyboard and axe green; spec 09 updated; a friction fragment.
 
-**Report** (Prompt L's format, also in `process/lanes/studio/REPORT.md`): each exit criterion with its
-proving command or test; the commits; the `ci.yml` and `Makefile` diff; questions for the owner as
-multiple choice; one hand check for the owner; whether anything of yours is still running.
+**Report** (Prompt L's format, at most twenty lines, also in this folder's `REPORT.md`): each exit
+criterion with its proving test; the commits; requests to the orchestrator; questions for the owner as
+multiple choice; one hand check (full commands and where to click, default and GOV.UK); whether anything
+of yours is still running. Then stop: no next step.

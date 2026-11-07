@@ -1,38 +1,42 @@
-# Glass lane · brief L2.1 · the alerts gap map (no code)
+# Glass lane · brief L2.2 · three places: the switcher, the context banner, Home, the rail
 
-Written by the orchestrator, 6 November 2026 (step 0). Opus, medium. Size M.
+Written by the orchestrator, 7 November 2026, on the owner's word ("Glass: L2.2"). Opus, medium. Size L.
 
-**Why.** ADR-145 N5: "map what exists against ADR-109, ADR-130 and ADR-134 before designing anything".
-The owner wants an alerts journey mapped before the Glass's navigation is redesigned around it.
+**Binds.** `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it; 3, 4 and 13 above all);
+ADR-145 decisions 1–3 and N1–N6, with ADR-132 Amendments 5 and 6 (the GOV.UK header) and ADR-110
+Amendment 14 (Admin as a place); ADR-112 (rights); `spec/02_GLASS_FRONTEND.md` §2.0 ("there is no
+application switch", which this step replaces) and the shell sections; the design reference,
+`spec/glass_redesign/navigation_prototype.dc.html` (navigation *B*). Where the prototype and ADR-145 differ,
+ADR-145 governs.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it); ADR-145 (N5, and decisions
-1–2 for where alerts will live: the Glass's Monitoring); ADR-109, ADR-130, ADR-133 (its amendments 1–8),
-ADR-134; ADR-143 decision 12 (alerts when a load meets a drawn item) and ADR-145 decision 9 (the
-promotions-overdue alert), which are new alert kinds the map must place; `spec/02_GLASS_FRONTEND.md`;
-`spec/03_CONDUIT_MIDDLEWARE.md`'s alert and monitoring routes.
+**Build** (ADR-145 decisions 1–3):
+1. **Three places.** *The Glass* (Case · Boards · Monitoring), *Ingest Studio* (1 Model · 2 Sources ·
+   3 Pipelines · 4 Runs) and *Admin*. A switcher in the top bar lists only the places the person's rights
+   open (N6); Home lists the same as cards. The Glass's rail loses *Ingest Studio*, *Admin* and *Proposed
+   types*. The Studio has no rail. *Boards* may be a placeholder ("coming") until Lane 3 builds it.
+2. **The context banner**: one line under the top bar, as decision 2 words it, with the cross-link for a
+   person holding both the Glass and the Studio that keeps the case they came from.
+3. **Under the GOV.UK brand**: the switcher inside the GOV.UK header (`brand/govuk/GovukHeader.tsx`);
+   the banner a GOV.UK notification banner. Check the pinned `govuk-frontend` (6.6.0) offers header
+   navigation; if not, a small local extension, recorded in an amendment you reserve with the orchestrator.
 
-**Do.** Read the code as the evidence (`apps/workspace/src/alerts/**` and the monitoring screens,
-read-only; `services/api`'s alert, monitoring, rule and screening modules; their tests). For every alert
-kind that exists today, record: how it is **generated** (rule kind, trigger: load, schedule, list
-refresh, manual), how it is **triaged** (queue, severity, team, assignment, close reasons, maker–checker),
-how it is **routed** (to whom; people only, ADR-133 Amendment 7), and its **case scope** (which case and
-datasets it reads, what it may name, rule 3). Then the same for the kinds ADR-143 and ADR-145 add, as
-"not built". Mark each cell built / partly built / recorded only / contradicted, with the file and line
-or the ADR that says so. Where the ADRs and the code disagree, the code is the evidence; say so.
+**Not in this step:** the case screen's lightening (L2.3), Admin's sections (L2.4), any alerts change.
 
-**Write.** `spec/glass_redesign/ALERTS_GAP_MAP.md`: the table, a one-page journey (an analyst from an
-alert to its case and back; a team lead triaging), and the gaps. End it with the open questions as
-**multiple choice** (at most four per round, recommendation first) for the owner; the findings become
-their own ADR afterwards (ADR-145 open question 1). Ask the orchestrator to reserve that ADR's number;
-do not write the ADR yet.
+**Tests first.** The switcher shows only the places a principal's rights open, **and each hidden place's
+routes refuse that principal** (red with the routes' check removed: hiding alone must not pass; rule 3).
+Keyboard cases in `keyboard/shell.spec.ts` for the switcher, the banner's cross-link and Home's cards,
+each shown red with its handler removed (rule 13). Axe in dark, light and GOV.UK.
 
-**Files.** Only `spec/glass_redesign/ALERTS_GAP_MAP.md` and your friction fragment. No code, no tests:
-this step changes nothing that runs. No dev stack.
+**Files.** The Glass lane's ownership map (`shell`, `layout`, `home`, `welcome`, `admin`, `statusbar`,
+`theme`, `brand`). The Studio's own top (`ingest/**`) is Lane 1's: if the banner needs a hook there, ask
+the orchestrator. `keyboard/actionRegistry.ts` and `tokens.css` go through the orchestrator. Update
+`spec/02` §2.0 in the same commits (rule 11).
 
-**Exit.** The map in `spec/`, every existing alert kind in it with evidence, the new kinds placed, the
-questions written as multiple choice; `make -C OspreyFlow_Build citation-check` and
-`product-tree-link-check` green on it (cite no `process/` file from `spec/`).
+**Exit.** Each role sees only its places, and the hidden places' routes refuse it; `keyboard/shell.spec.ts`
+and axe (dark, light, GOV.UK) green; `spec/02` rewritten; the DEMO_GUIDE chapters that name the rail's
+entries say what moved (`OspreyFlow_Core/DEMO_GUIDE.md`, text only); a friction fragment.
 
-**Report** (Prompt L's format, also in `process/lanes/glass/REPORT.md`): the exit criteria; the
-commits; the questions for the owner; one hand check (which alert to open in the product to see the
-biggest gap, with full commands); whether anything of yours is still running.
+**Report** (Prompt L's format, at most twenty lines, also in this folder's `REPORT.md`): each exit
+criterion with its proving test; the commits; requests to the orchestrator; questions for the owner as
+multiple choice; one hand check (full commands and where to click, as an analyst, a data engineer and an
+administrator, default and GOV.UK); whether anything of yours is still running. Then stop.
