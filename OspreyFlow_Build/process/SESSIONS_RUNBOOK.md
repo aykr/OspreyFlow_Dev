@@ -18,6 +18,35 @@ defined; `~/.zshrc` holds `claude-izi` and `claude-sol` only). The launcher star
 way the orchestrator's own session runs: `claude` by its full path, under the orchestrator's
 `CLAUDE_CONFIG_DIR` (`OSPREY_CLAUDE_CMD` and `OSPREY_CLAUDE_CONFIG_DIR` change them).
 
+### Accounts, pausing and switching (ADR-142 Amendment 1)
+
+Each session can run on a chosen Claude account. An account is a Claude Code config directory you sign
+in once, by hand: `CLAUDE_CONFIG_DIR=~/.claude-client claude`, then `/login`. Name the accounts in
+`~/.ospreyflow/accounts.conf` (outside the repository; the tooling never reads inside an account's
+directory):
+
+```
+account ayan   = ~/.claude-ayan
+account client = ~/.claude-client
+orchestrator   = ayan
+lane case      = client          # a lane with no line uses the orchestrator's account
+fallback case  = ayan            # optional, yours alone: lets watch mode switch case once at its limit
+```
+
+```
+OspreyFlow_Build/scripts/lanes_launch.sh orchestrator --account ayan     # the orchestrator's own window
+OspreyFlow_Build/scripts/lanes_launch.sh open case --account client      # or resume / headless
+OspreyFlow_Build/scripts/lanes_launch.sh pause case                      # a clean stop the lane makes itself
+OspreyFlow_Build/scripts/lanes_launch.sh pause case --now                # it cannot answer (its usage limit)
+OspreyFlow_Build/scripts/lanes_launch.sh switch case --account ayan      # pause, then resume on that account
+OspreyFlow_Build/scripts/lanes_heartbeat.sh beat case blocked "usage limit"   # mark a lane stopped at its limit
+```
+
+A paused lane commits `wip(<lane>): paused at <step>` with its `HANDOFF.md`; the resumed session reads
+`HANDOFF.md` first. The orchestrator runs `lanes_launch.sh merge-ok <lane>` before every merge, which
+refuses a branch still holding a `wip(` commit. It never pauses or switches a lane on its own, except
+once under your `fallback` line.
+
 ## 0. Before anything: let phase 4 finish
 
 1. Let the phase 4 session write its final report. Then close it (`/exit`), and check nothing of it is

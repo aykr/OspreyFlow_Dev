@@ -2,12 +2,16 @@
 # The lanes' heartbeat and the owner's monitor (spec/06_DECISIONS.md ADR-142 decision 9).
 #
 #   lanes_heartbeat.sh beat <lane> <state> "<note>"   a lane records where it is
-#        state: planning | working | testing | waiting-for-owner | blocked | ready-to-merge | idle
+#        state: planning | working | testing | waiting-for-owner | blocked | ready-to-merge | idle | paused
+#        (a lane at its usage limit is beaten from outside as: beat <lane> blocked "usage limit")
 #   lanes_heartbeat.sh nudge <lane> "<message>"     the orchestrator leaves a lane a message, shown
 #                                                     to it at its next beat (a session it cannot type into)
 #   lanes_heartbeat.sh show                           one table: every lane, the lease, what needs you
 #   lanes_heartbeat.sh watch [seconds]                show again every N seconds (default 300) and send a
-#                                                     macOS notification when something newly needs you
+#                                                     macOS notification when something newly needs you; a
+#                                                     lane blocked at its usage limit is switched to its
+#                                                     owner-written fallback account once, never otherwise
+#                                                     (ADR-142 Amendment 1 decision 6)
 #
 # Heartbeats live outside every worktree ($OSPREY_LANES_DIR, default ~/.ospreyflow/lanes), so every
 # session and the monitor see the same ones; each beat appends to <lane>.log and rewrites <lane>.beat.
@@ -23,7 +27,8 @@ LANES="${OSPREY_LANES:-studio glass case docs}"
 QUIET_MIN="${OSPREY_QUIET_MINUTES:-45}"       # a working lane silent this long is flagged
 LEASE_MAX_MIN="${OSPREY_LEASE_MAX_MINUTES:-120}"
 BEHIND_MAX="${OSPREY_BEHIND_MAX:-5}"
-STATES="planning working testing waiting-for-owner blocked ready-to-merge idle"
+STATES="planning working testing waiting-for-owner blocked ready-to-merge idle paused"
+LAUNCHER="${OSPREY_LAUNCHER:-$(cd "$(dirname "$0")" && pwd)/lanes_launch.sh}"
 # The step table the orchestrator keeps on main (process/lanes/progress.tsv).
 PROGRESS="${OSPREY_PROGRESS_FILE:-$(cd "$(dirname "$0")/.." && pwd)/process/lanes/progress.tsv}"
 mkdir -p "$DIR"
@@ -106,7 +111,12 @@ show() {
             echo "$lane has been quiet since $at while $state" >> "$needs"
           fi ;;
         waiting-for-owner) echo "$lane is waiting for you: $note" >> "$needs" ;;
-        blocked) echo "$lane is blocked: $note" >> "$needs" ;;
+        blocked)
+          case "$note" in
+            *"usage limit"*) echo "$lane stopped at its usage limit on account $(cat "$DIR/$lane.account" 2>/dev/null || echo default): switch it (lanes_launch.sh switch $lane --account <name>) or write a fallback line" >> "$needs" ;;
+            *) echo "$lane is blocked: $note" >> "$needs" ;;
+          esac ;;
+        paused) ago="paused $(mins "$a")m ago" ;;   # a paused lane is never stalled
         ready-to-merge) echo "$lane is ready to merge (since $at)" >> "$mine" ;;
       esac
     else
@@ -124,6 +134,8 @@ show() {
       fi
     fi
     if [ -s "$DIR/$lane.nudge" ]; then note="(unread nudge) $note"; fi
+    if [ "$state" != paused ] && grep -q '^requested' "$DIR/$lane.pause" 2>/dev/null; then note="(pause requested) $note"; fi
+    local account; account="$(cat "$DIR/$lane.account" 2>/dev/null || echo default)"
     local prog head steps done total merged
     prog="$(progress_of "$lane")"; head="$(printf '%s\n' "$prog" | head -1)"; steps="$(printf '%s\n' "$prog" | tail -n +2)"
     done="${head%% *}"; total="${head#* }"
@@ -131,7 +143,11 @@ show() {
     case "$ab" in +0/*) merged="all merged" ;; +*) merged="${ab%%/*} commits not yet merged"; merged="${merged#+}" ;; esac
     printf '%s: ' "$(echo "$lane" | tr '[:lower:]' '[:upper:]')"
     [ -n "$head" ] && printf '%s of %s done · ' "$done" "$total"
-    printf '%s · last heard %s%s\n' "$state" "$ago" "${merged:+ · $merged}"
+    if [ "$state" = paused ]; then
+      printf '%s · account %s%s\n' "$ago" "$account" "${merged:+ · $merged}"
+    else
+      printf '%s · last heard %s · account %s%s\n' "$state" "$ago" "$account" "${merged:+ · $merged}"
+    fi
     if [ -n "$steps" ]; then
       printf '%s\n' "$steps" | awk -F'\t' -v note="${note:0:90}" '{
           now = ""; if (!told && ($1=="in review" || $1=="being built") && note != "") { now = "   <- now: " note; told = 1 }
@@ -182,6 +198,12 @@ watch_loop() {
       done < "$DIR/.needs"
     fi
     cp "$DIR/.needs" "$prev"
+    # Amendment 1 decision 6: only under the owner's fallback line, and once (lanes_launch.sh checks both).
+    for lane in $LANES; do
+      if [ "$(field state "$DIR/$lane.beat")" = blocked ] && field note "$DIR/$lane.beat" | grep -q "usage limit"; then
+        "$LAUNCHER" fallback-switch "$lane" >> "$DIR/.fallback.log" 2>&1 || true
+      fi
+    done
     pass=$((pass + 1))
     if [ -n "${OSPREY_WATCH_PASSES:-}" ] && [ "$pass" -ge "$OSPREY_WATCH_PASSES" ]; then break; fi
     sleep "$every"

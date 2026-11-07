@@ -17,7 +17,12 @@ figure you record. Send a heartbeat with
 OspreyFlow_Build/scripts/lanes_heartbeat.sh beat <lane> <state> "<what you are doing>" when you start
 planning, start work, start tests, ask me something (waiting-for-owner), are blocked, are ready to merge
 (ready-to-merge), finish (idle), and after every commit. If a beat shows a message from the
-orchestrator, act on it before going on. Build every screen for the dark, light and GOV.UK themes and run the axe scans for
+orchestrator, act on it before going on. If it says PAUSE REQUESTED (ADR-142 Amendment 1), stop at the
+next safe point, never mid-tool: bring the stack down if it is up, write
+OspreyFlow_Build/process/lanes/<lane>/HANDOFF.md (at most thirty lines: the step and part; the last
+commit; what is done, what is next, what was running; open questions; what the next session must not
+redo), run OspreyFlow_Build/scripts/lanes_launch.sh pause-done <lane> "<step>" (it releases the lease,
+makes the wip commit and beats paused), and end your session. Build every screen for the dark, light and GOV.UK themes and run the axe scans for
 all three. Write your friction-log row as process/friction/<yyyy-mm-dd>-<lane>-<slug>.md, one row,
 ending "Hash: recorded at merge." Commit in small Conventional Commits naming the files; never stage
 OspreyFlow_Core/osprey.yaml or OspreyFlow_Core/data/; never merge to main; never push; no

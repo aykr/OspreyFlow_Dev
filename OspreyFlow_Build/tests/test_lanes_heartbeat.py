@@ -224,3 +224,26 @@ def test_only_what_needs_the_owner_is_under_needs_you(hb) -> None:
     hb("watch", "1", OSPREY_WATCH_PASSES="1")
     notes = hb.notified.read_text().splitlines()
     assert len(notes) == 1 and "case is waiting for you: a question" in notes[0]
+
+
+def test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled(hb, tmp_path) -> None:
+    """ADR-142 Amendment 1 decision 7: the monitor shows the paused state, how long, and the account;
+    a lane paused for hours is not quiet (red with `paused` handled as `working`)."""
+    _all_beat(hb)
+    assert hb("beat", "case", "paused", "paused at L3.1 fix 7").returncode == 0
+    (tmp_path / "lanes" / "case.account").write_text("client\n")
+    hb.age("case", 300)
+    show = hb("show")
+    assert _needs(show) == []
+    case_line = next(line for line in show.stdout.splitlines() if line.startswith("CASE:"))
+    assert "paused 300m ago" in case_line and "account client" in case_line
+    studio_line = next(line for line in show.stdout.splitlines() if line.startswith("STUDIO:"))
+    assert "account default" in studio_line
+
+
+def test_a_lane_at_its_usage_limit_names_its_account_for_the_owner(hb, tmp_path) -> None:
+    _all_beat(hb)
+    (tmp_path / "lanes" / "glass.account").write_text("ayan\n")
+    assert hb("beat", "glass", "blocked", "usage limit").returncode == 0
+    [line] = _needs(hb("show"))
+    assert line.startswith("glass stopped at its usage limit on account ayan")
