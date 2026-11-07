@@ -1,32 +1,27 @@
-"""The three places (`06_DECISIONS.md` ADR-145 decisions 1 and N6, Amendment 1): the switcher
-shows a person only the places their rights open, and **each hidden place's routes refuse that
+"""The three places (`06_DECISIONS.md` ADR-145 decisions 1 and N6, Amendment 1): the switcher shows
+a person only the places their rights open, and **each hidden place's routes refuse that
 person** (rule 3: hiding a place is never the control).
 
-The places and the rights that open each are one table, `apps/workspace/src/shell/places.json`,
-which the Glass's switcher and Home read. This file assigns every Conduit route to the places whose
-screens call it (`PLACE_RULES`), and proves:
+A route's checks are all of them (`_checks`): the right its decorator names (`require_right`), the
+Studio role its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a
+Studio role is a right, `_STUDIO_ROLE_RIGHT`), and the administrator role (`require_admin_role`).
+A route answers a person only if every check does, so this file refuses what the real route refuses
+(rule 15). Each route belongs to the place whose screens call it (`PLACE_RULES`), and:
 
-1. the assignment covers what the screens really call: each call site's place, derived from the
-   workspace's source and its imports, is among its route's places (`screen_places`; shown red by a
-   planted Admin screen calling a Studio route, `test_a_planted_call_from_another_place_is_found`);
-2. each place's rights in `places.json` are exactly the rights its own routes need;
-3. a route of the Studio or Admin with no right is a named reference catalogue, never an omission;
-4. each built-in role, legacy role and single `right:` grant is offered the places ADR-145 lists,
-   and every route of each place hidden from it refuses it over HTTP with `403 right_required`
-   (red with any one route's `require_right` removed: shown red on 7 November 2026 for
-   `invite_person_route` and `list_studio_recipe_drafts`).
-
-The owner's ruling of 7 November 2026 ("Re-home the routes"): no role loses a right. The analyst's
-upload (ADR-067) answers as a Glass route; the schedule preview, a pipeline's schedule and its pause
-and resume, and a source's refresh pause and resume answer as Admin routes too; the Studio's other
-routes need a Studio right (ADR-145 Amendment 1).
+1. a place is offered to whoever some route of that place answers. `shell/placesByRole.json` records
+   that for every role, legacy role and right granted singly, and the Glass's `placesFor` is held to
+   it (`shell/places.test.tsx`); `shell/places.json`'s rights are exactly the single rights that
+   open a place, and each is used by a screen of that place (read from the workspace's source);
+2. every route of a place hidden from a person refuses them over HTTP (403);
+3. each call site in the workspace's source is among its route's places (shown red by a planted
+   Admin screen importing a Studio call, `test_a_planted_call_from_another_place_is_found`).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
-from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -34,20 +29,17 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from schemas.domain import Principal
+from schemas.ingest import StudioRole
 from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, Right, rights_for
 
 WORKSPACE_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/apps/workspace/src"
 PLACES_JSON = WORKSPACE_SRC / "shell/places.json"
+BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
 
 # (path pattern, the places whose screens call it, which screen). First match wins.
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"^/v1/admin/screening-lists", frozenset({"glass"}), "Monitoring › Lists (alerts/api.ts)"),
     (r"^/v1/admin/", frozenset({"admin"}), "the Admin place"),
-    (r"^/v1/ingest/schedule-preview$|/ingest/recipes/\{recipe_id\}/schedule(/pause|/resume)?$"
-     r"|/sources/\{source_id\}/refresh/(pause|resume)$", frozenset({"ingest", "admin"}),
-     "the Studio's schedules, and Admin's (the owner's ruling: Admin routes too)"),
-    (r"/ingest/source-files$", frozenset({"glass", "ingest"}),
-     "the analyst's upload (ADR-067), a Glass route by the owner's ruling; the Studio's Connect"),
     (r"/ingest/recipes/\{recipe_id\}/held-rows/release$", frozenset({"glass"}),
      "Monitoring's held rows (alerts/api.ts)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
@@ -57,43 +49,73 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 
-#: Routes of the Studio or Admin that any signed-in person may call: reference catalogues, the same
-#: decision `test_route_rights.py` records as `None`.
-ANY_SIGNED_IN = frozenset({"list_connectors", "list_domain_packs", "list_transforms"})
+#: Routes no place is shown from, each with its reason: they read nothing of the deployment.
+EXEMPT = {
+    # Reference catalogues: any signed-in person (`test_route_rights.py` records them as `None`).
+    "list_connectors": "a reference catalogue",
+    "list_domain_packs": "a reference catalogue",
+    "list_transforms": "a reference catalogue",
+    # ADR-145 Amendment 1 (the owner's answer, 7 November 2026): run times computed from the cron
+    # text it is sent; Admin › Operations and the Studio's schedule editor both call it.
+    "schedule_preview_route": "computes run times from the text sent; reads no store",
+    # No screen calls the export ledger's route yet, so no place is shown from it; its own right,
+    # Admin's (ADR-112 A8), refuses everyone else (`test_route_rights.py`).
+    "list_exports_route": "no screen calls it",
+}
 
-#: What each role is offered (ADR-145 decision 7 lists the places), the bundles as `rights.py` has
-#: them.
+#: What each named role is offered (ADR-145 decision 7 lists the places).
 EXPECTED_PLACES = {
     "analyst": ["glass"],
     "data_engineer": ["glass", "ingest", "admin"],
     "osprey-admin": ["glass", "admin"],
     "reports_viewer": ["glass"],
     "super": ["glass", "ingest", "admin"],
-    "source_author": ["glass", "ingest"],
-    "source_approver": ["ingest", "admin"],
-    "loader": ["ingest"],
-    "compliance": ["glass"],
 }
 #: The token roles each case signs in with: the four roles, the Super user preset, the legacy roles,
-#: and every right granted singly (`right:<name>`).
+#: every right granted singly (`right:<name>`), and nobody's.
 TOKEN_ROLES: dict[str, list[str]] = (
     {role: [role] for role in ROLE_RIGHTS}
     | {"super": ["analyst", "data_engineer"]}
     | {role: [role] for role in LEGACY_ROLE_RIGHTS}
     | {f"right:{r.value}": [f"right:{r.value}"] for r in Right}
+    | {"none": []}
 )
+PLACE_ORDER = ["glass", "ingest", "admin"]
 
 
-def _places() -> dict[str, frozenset[str]]:
-    table = json.loads(PLACES_JSON.read_text())
-    return {place["id"]: frozenset(place["rights"]) for place in table["places"]}
+def _routes() -> list[APIRoute]:
+    from services.api.app import app
+
+    return [r for r in app.routes if isinstance(r, APIRoute)]
 
 
-def places_for(held: Iterable[Right | str], places: dict[str, frozenset[str]]) -> list[str]:
-    """`shell/places.ts`'s `placesFor` for known rights: a place is offered for any one of its
-    rights, in the table's order."""
-    values = {str(r) for r in held}
-    return [place for place, rights in places.items() if rights & values]
+def _checks_of(dependant: object) -> set[str]:
+    from services.api import app as conduit
+
+    found: set[str] = set()
+    for dependency in dependant.dependencies:  # type: ignore[attr-defined]
+        call = dependency.call
+        right = getattr(call, "required_right", None)
+        if right is not None:
+            found.add(str(right))
+        if getattr(call, "__qualname__", "").startswith("require_studio_role"):
+            for cell in call.__closure__ or ():
+                if isinstance(cell.cell_contents, StudioRole):
+                    found.add(str(conduit._STUDIO_ROLE_RIGHT[cell.cell_contents]))
+        if call is conduit.require_admin_role:
+            found.add(f"role:{conduit.ADMIN_ROLE}")
+        found |= _checks_of(dependency)
+    return found
+
+
+def _checks(route: APIRoute) -> frozenset[str]:
+    """Every check the route makes, its decorator's and its signature's, nested ones included."""
+    return frozenset(_checks_of(route.dependant))
+
+
+def _answers(route: APIRoute, roles: list[str]) -> bool:
+    held = {str(r) for r in rights_for(roles)} | {f"role:{r}" for r in roles}
+    return _checks(route) <= held
 
 
 def places_of(path: str) -> frozenset[str]:
@@ -103,18 +125,27 @@ def places_of(path: str) -> frozenset[str]:
     raise AssertionError(path)  # the last rule matches everything
 
 
-def _routes() -> list[APIRoute]:
-    from services.api.app import app
+def _placed() -> list[APIRoute]:
+    """The routes a place is shown from: each with a check, none exempt."""
+    return [r for r in _routes() if _checks(r) and r.endpoint.__name__ not in EXEMPT]
 
-    return [r for r in app.routes if isinstance(r, APIRoute)]
+
+def offered(roles: list[str]) -> list[str]:
+    """The places some route answers this person in, from the routes alone (not `places.json`)."""
+    found = {p for r in _placed() if _answers(r, roles) for p in places_of(r.path)}
+    return [p for p in PLACE_ORDER if p in found]
 
 
-def _declared(route: APIRoute) -> str | None:
-    for dependency in route.dependant.dependencies:
-        right = getattr(dependency.call, "required_right", None)
-        if right is not None:
-            return str(right)
-    return None
+def _places_json() -> dict[str, frozenset[str]]:
+    table = json.loads(PLACES_JSON.read_text())
+    return {place["id"]: frozenset(place["rights"]) for place in table["places"]}
+
+
+def _by_role() -> dict[str, dict[str, list[str]]]:
+    return {
+        name: {"rights": sorted(str(r) for r in rights_for(roles)), "places": offered(roles)}
+        for name, roles in sorted(TOKEN_ROLES.items())
+    }
 
 
 # --- What the screens call, read from the workspace's source ------------------------------------
@@ -127,10 +158,20 @@ _IMPORT = re.compile(
 )
 _EXPORTED = re.compile(r"^export\s+(?:(?:async\s+)?function\s+(\w+)|const\s+(\w+)\s*=)", re.M)
 _LITERAL = re.compile(r"`([^`]*)`|\"([^\"\n]*)\"")
-
-
 #: A file whose screen stands in another place than its folder says.
 MOVED = {"linktypes/ProposedTypes.tsx": "admin"}  # ADR-090 Amendment 5: Proposed types, in Admin
+#: The workspace's path helpers, read as the prefixes they build (`ingest/api.ts`'s `studioCase`,
+#: `ingest/sources/api.ts`'s `dataset`).
+BASES = {"studioCase": "/v1/investigations/{x}", "dataset": "/v1/datasets/{x}"}
+#: Helpers that take a path relative to a prefix, read wherever they are called: `admin/api.ts`'s
+#: `call(api, "people")`, `alerts/api.ts`'s `caseUrl(base, id, "held-rows")`, and
+#: `reports/caseHttp.ts`'s `send(api, "GET", "data-feeds")`.
+_PATH = r"([`\"][^`\"]*[`\"])"
+RELATIVE_CALLS = [
+    (re.compile(r"\bcall<[^>]*>\(\s*api,\s*" + _PATH), "/v1/admin", "admin/api.ts"),
+    (re.compile(r"\bcaseUrl\([^,()]+,\s*[^,()]+,\s*" + _PATH), "/v1/investigations/{x}", None),
+    (re.compile(r"\bsend\(\s*api,\s*\"[A-Z]+\",\s*" + _PATH), "/v1/investigations/{x}", None),
+]
 
 
 def _own_place(rel: str) -> str | None:
@@ -138,9 +179,9 @@ def _own_place(rel: str) -> str | None:
         return MOVED[rel]
     if rel.startswith(NEUTRAL):
         return None
-    return (
-        "ingest" if rel.startswith("ingest/") else "admin" if rel.startswith("admin/") else "glass"
-    )
+    if rel.startswith("ingest/"):
+        return "ingest"
+    return "admin" if rel.startswith("admin/") else "glass"
 
 
 def _resolve(base: Path, spec: str, root: Path) -> str | None:
@@ -161,49 +202,55 @@ def _resolve(base: Path, spec: str, root: Path) -> str | None:
     return None
 
 
-#: The workspace's path helpers, read as the prefixes they build (`ingest/api.ts`'s `studioCase`,
-#: `ingest/sources/api.ts`'s `dataset`, `alerts/api.ts`'s `caseUrl`).
-BASES = {"studioCase": "/v1/investigations/{x}", "dataset": "/v1/datasets/{x}"}
-
-
-def _fragments(text: str) -> list[str]:
+def _fragments(text: str, prefix: str = "") -> list[str]:
     """The API paths a piece of source names: each literal holding a path, its `${…}` parts as
     `{x}` (a known path helper as the prefix it builds), from its first segment, without a query."""
     found = []
     for match in _LITERAL.finditer(text):
         literal = match.group(1) if match.group(1) is not None else match.group(2)
         base = re.match(r"^\$\{(\w+)\(", literal)
-        prefix = BASES.get(base.group(1), "") if base else ""
-        literal = prefix + re.sub(r"^\$\{[^}]*\}", "", literal)
+        lead = BASES.get(base.group(1), "") if base else ""
+        literal = prefix + lead + re.sub(r"^\$\{[^}]*\}", "", literal)
         literal = re.sub(r"\$\{[^}]*\}", "{x}", literal).split("?")[0]
         if " " in literal or "/" not in literal:
             continue
         segments = [s for s in literal.strip("/").split("/") if s]
-        # A generic helper's literal (`/v1/admin/${path}`) names no route: two real segments.
+        # A generic helper's literal (`/v1/admin/${path}`) names no route: two real segments, or a
+        # path from `/v1/` itself (`/v1/investigations`, `/v1/investigations/${id}`).
         literal_segments = [s for s in segments if re.fullmatch(r"[a-z][a-z-]*", s) and s != "v1"]
-        if len(literal_segments) >= 2:
+        rooted = segments[:1] == ["v1"] and segments != ["v1", "admin", "{x}"]
+        if len(literal_segments) >= 2 or (rooted and literal_segments):
             found.append("/" + "/".join(segments))
+    return found
+
+
+def _chunk_fragments(rel: str, chunk: str) -> list[str]:
+    found = _fragments(chunk)
+    for pattern, prefix, only in RELATIVE_CALLS:
+        if only is not None and rel != only:
+            continue
+        for match in pattern.finditer(chunk):
+            found += _fragments(match.group(1), prefix + "/")
     return found
 
 
 def screen_places(root: Path) -> dict[str, set[str]]:
     """For each API path fragment the workspace's source names, the places whose screens call it: an
-    exported function's fragments belong to the places of the files that import that function, and
-    any other fragment to its own file's place (a file's folder: `ingest/` the Studio, `admin/`
-    Admin, the shell and Home none, anything else the Glass; `MOVED` the exceptions). An
-    under-approximation — a component imported across places counts once, by its own folder — so
-    a route this misses is not proved, but one it finds in the wrong place is a real call."""
+    exported API function's fragments belong to the places of the files that import it, and any
+    other fragment to its own file's place (a file's folder: `ingest/` the Studio, `admin/` Admin,
+    the shell and Home none, anything else the Glass; `MOVED` the exceptions). A component
+    (capitalised) is drawn where its folder says, wherever it is embedded (the Studio's Verify
+    embeds the Glass's canvas). An under-approximation: a route this misses is not proved, but one
+    it finds in the wrong place is a real call."""
     root = root.resolve()
     files = {p.relative_to(root).as_posix(): p.read_text() for p in root.rglob("*.ts*")
              if ".test." not in p.name and not p.name.endswith(".d.ts")}  # fmt: skip
-    importers: dict[str, set[str]] = {f: set() for f in files}
     users: dict[tuple[str, str], set[str]] = {}
     for rel, text in files.items():
         for names, spec in _IMPORT.findall(text):
             target = _resolve(root / rel, spec, root)
             if target is None or target not in files:
                 continue
-            importers[target].add(rel)
             for name in re.findall(r"(?:type\s+)?(\w+)(?:\s+as\s+\w+)?\s*(?:,|$)", names or ""):
                 users.setdefault((target, name), set()).add(rel)
     places: dict[str, set[str]] = {f: ({p} if (p := _own_place(f)) else set()) for f in files}
@@ -212,31 +259,37 @@ def screen_places(root: Path) -> dict[str, set[str]]:
         starts = [(m.start(), m.group(1) or m.group(2)) for m in _EXPORTED.finditer(text)]
         chunks: list[tuple[str | None, str]] = [(None, text[: starts[0][0]] if starts else text)]
         for i, (start, name) in enumerate(starts):
-            chunks.append(
-                (name, text[start : starts[i + 1][0] if i + 1 < len(starts) else len(text)])
-            )
+            end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
+            chunks.append((name, text[start:end]))
         for name, chunk in chunks:
-            # A component (capitalised) is drawn where its folder says, wherever it is embedded (the
-            # Studio's Verify embeds the Glass's canvas); an API function belongs to its callers.
             callers = users.get((rel, name), set()) if name and name[0].islower() else set()
             where = set().union(*(places[c] for c in callers)) if callers else places[rel]
-            for fragment in _fragments(chunk):
+            for fragment in _chunk_fragments(rel, chunk):
                 reached.setdefault(fragment, set()).update(where)
     return reached
 
 
-def _misplaced(root: Path) -> list[tuple[str, str, list[str], list[str]]]:
+def _callers(route: APIRoute, reached: dict[str, set[str]]) -> set[str]:
+    normal = re.sub(r"\{[a-z_]+(?::path)?\}", "{x}", route.path)
+    where: set[str] = set()
+    for fragment, places in reached.items():
+        if re.search(re.escape(fragment).replace(r"\{x\}", r"[^/]+") + "$", normal):
+            where |= places
+    return where
+
+
+def _misplaced(root: Path) -> list[tuple[str, list[str], list[str]]]:
+    """Routes a screen of another place calls. The scan does not see methods, so a path shared with
+    a route any signed-in person may call (`GET /v1/investigations`, the case list, beside
+    `POST`, a new case) is left out: its call may be that one."""
     reached = screen_places(root)
-    wrong = []
-    for route in _routes():
-        if _declared(route) is None:
-            continue  # any signed-in person's: no place's (`test_route_rights.py` records it)
-        normal = re.sub(r"\{[a-z_]+(?::path)?\}", "{x}", route.path)
-        for fragment, where in reached.items():
-            pattern = re.escape(fragment).replace(r"\{x\}", r"[^/]+") + "$"
-            if re.search("/" + pattern.lstrip("/"), normal) and not where <= places_of(route.path):
-                wrong.append((route.path, fragment, sorted(where), sorted(places_of(route.path))))
-    return wrong
+    open_paths = {r.path for r in _routes() if not _checks(r)}
+    return [
+        (route.path, sorted(where), sorted(places_of(route.path)))
+        for route in _placed()
+        if route.path not in open_paths
+        and not (where := _callers(route, reached)) <= places_of(route.path)
+    ]
 
 
 def test_every_call_site_s_place_is_among_its_route_s_places() -> None:
@@ -247,15 +300,20 @@ def test_every_call_site_s_place_is_among_its_route_s_places() -> None:
 
 
 def test_a_planted_call_from_another_place_is_found(tmp_path: Path) -> None:
-    """The red half of the case above: an Admin screen calling a Studio-only route is reported."""
+    """The red half of the case above, in a real call site's shape: an Admin screen importing a
+    Studio API function, whose path is built through the Studio's own `dataset` helper."""
     (tmp_path / "admin").mkdir()
-    (tmp_path / "admin/Planted.tsx").write_text(
-        "export async function planted(base: string, id: string) {\n"
-        "  return fetch(`${base}/v1/investigations/${id}/ingest/recipe-registry`);\n}\n"
+    (tmp_path / "ingest/sources").mkdir(parents=True)
+    (tmp_path / "ingest/sources/api.ts").write_text(
+        "const dataset = (api: Api, id: string) => `${api.apiBaseUrl}/v1/datasets/${id}`;\n"
+        "export const listSources = (api: Api, datasetId: string) =>\n"
+        '  call<Source[]>(api, `${dataset(api, datasetId)}/sources`, "Reading the sources");\n'
     )
-    assert [w[0] for w in _misplaced(tmp_path)] == [
-        "/v1/investigations/{investigation_id}/ingest/recipe-registry"
-    ]
+    (tmp_path / "admin/Planted.tsx").write_text(
+        'import { listSources } from "../ingest/sources/api";\n'
+        "export function Planted() { void listSources(api, 'd'); return null; }\n"
+    )
+    assert [w[0] for w in _misplaced(tmp_path)] == ["/v1/datasets/{dataset_id}/sources"] * 2
 
 
 # --- The places' table against the routes --------------------------------------------------------
@@ -269,47 +327,112 @@ def test_every_rule_places_at_least_one_route() -> None:
         assert any(re.search(pattern, p) for p in paths), (pattern, screen)
 
 
-def test_each_place_opens_with_exactly_the_rights_its_own_routes_need() -> None:
-    places = _places()
-    needed: dict[str, set[str]] = {place: set() for place in places}
-    alone: dict[str, set[str]] = {place: set() for place in places}
-    for route in _routes():
-        right, where = _declared(route), places_of(route.path)
-        if right is None:
-            continue
-        for place in where:
-            needed[place].add(right)
-        if len(where) == 1:
-            alone[next(iter(where))].add(right)
-        # A shared route's right must open at least one of its places.
-        assert any(right in places[p] for p in where), (route.path, right, sorted(where))
-    for place, rights in places.items():
-        assert alone[place] <= rights, (place, sorted(alone[place] - rights))
-        assert rights <= needed[place], (place, "opens with a right none of its routes needs",
-                                         sorted(rights - needed[place]))  # fmt: skip
+def test_a_check_in_a_route_s_signature_is_read() -> None:
+    """The reader sees a Studio role asked for in a route's signature (`SourceAuthorDep`) as well
+    as its decorator's right: the dataset's sources need `edit_pipelines` as well."""
+    route = next(r for r in _routes() if r.endpoint.__name__ == "list_dataset_sources")
+    assert _checks(route) == {"add_ingest_files", "edit_pipelines"}
 
 
-def test_a_studio_or_admin_route_with_no_right_is_a_named_catalogue() -> None:
-    """Red with a route's `require_right` removed: the route would answer anyone, so a person the
-    place is hidden from could still call it."""
-    loose = [
-        (r.endpoint.__name__, r.path)
-        for r in _routes()
-        if _declared(r) is None
-        and places_of(r.path) & {"ingest", "admin"}
-        and r.endpoint.__name__ not in ANY_SIGNED_IN
-    ]
-    assert loose == []
+def _openers(place: str) -> set[frozenset[str]]:
+    sets = {_checks(r) for r in _placed() if place in places_of(r.path)}
+    return {s for s in sets if not any(o < s for o in sets)}
+
+
+def test_places_json_names_exactly_the_single_rights_that_open_each_place() -> None:
+    """`placesFor` asks for any one right, so every way into a place must be a single right, or
+    hold one, or be the administrator role (whose holders hold Admin's rights)."""
+    table = _places_json()
+    for place in PLACE_ORDER:
+        openers = _openers(place)
+        singles = {next(iter(s)) for s in openers if len(s) == 1}
+        assert table[place] == singles, (place, sorted(table[place] ^ singles))
+        for combined in openers - {frozenset({s}) for s in singles}:
+            roles = {c.removeprefix("role:") for c in combined if c.startswith("role:")}
+            covered = combined & singles or any(
+                {str(r) for r in ROLE_RIGHTS.get(role, ())} & singles for role in roles
+            )
+            assert covered, (place, sorted(combined))
+
+
+def test_each_right_a_place_claims_is_used_by_a_screen_of_that_place() -> None:
+    """The other direction: a right in `places.json` opens its place only if a screen of that place
+    calls a route that right alone answers, so nobody is offered an empty place."""
+    reached = screen_places(WORKSPACE_SRC)
+    unused = []
+    for place, rights in _places_json().items():
+        for right in rights:
+            routes = [r for r in _placed() if _checks(r) == {right} and place in places_of(r.path)]
+            if not any(place in _callers(r, reached) for r in routes):
+                unused.append((place, right))
+    assert unused == []
+
+
+def test_the_record_of_places_by_role_is_the_routes() -> None:
+    """`placesByRole.json` is what the routes answer; `places.test.tsx` holds `placesFor` to it.
+    Rewrite it with `OSPREY_WRITE_PLACES_BY_ROLE=1` after a deliberate change."""
+    computed = _by_role()
+    if os.environ.get("OSPREY_WRITE_PLACES_BY_ROLE") == "1":
+        BY_ROLE_JSON.write_text(json.dumps({"roles": computed}, indent=1) + "\n")
+    assert json.loads(BY_ROLE_JSON.read_text())["roles"] == computed
 
 
 @pytest.mark.parametrize("role", sorted(EXPECTED_PLACES))
 def test_each_role_is_offered_the_places_adr_145_lists(role: str) -> None:
-    assert places_for(rights_for(TOKEN_ROLES[role]), _places()) == EXPECTED_PLACES[role]
+    assert offered(TOKEN_ROLES[role]) == EXPECTED_PLACES[role]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["list_ingest_connections", "list_dataset_source_files", "list_dataset_sources",
+     "register_dataset_source", "get_dataset_source", "get_dataset_source_profile",
+     "get_dataset_source_lineage"],
+)  # fmt: skip
+def test_an_analyst_is_refused_on_the_dataset_s_sources_routes(name: str) -> None:
+    """The orchestrator's case of 7 November 2026: these seven name `add_ingest_files`, which every
+    Analyst holds, and refuse an Analyst anyway, by the Studio role in their signature."""
+    from services.api.app import app, get_principal, require_studio_dataset
+
+    route = next(r for r in _routes() if r.endpoint.__name__ == name)
+    who = Principal(id="place-analyst", clearance="SECRET", org_unit="unit-1", roles=["analyst"])
+    app.dependency_overrides[get_principal] = lambda: who
+    # The dataset is one the Analyst reaches, so nothing but the route's checks can refuse them.
+    app.dependency_overrides[require_studio_dataset] = lambda dataset_id: dataset_id
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.request(sorted(route.methods or {"GET"})[0], _path(route), json={})
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+        app.dependency_overrides.pop(require_studio_dataset, None)
+    assert response.status_code == 403 and "studio role" in response.text, (name, response.text)
+
+
+def test_the_schedule_preview_reads_no_store() -> None:
+    """Why it is exempt: its only dependencies are who is asking and their right, and the body."""
+    route = next(r for r in _routes() if r.endpoint.__name__ == "schedule_preview_route")
+    from services.api.app import get_principal
+
+    def calls(dependant: object) -> set[str]:
+        found = set()
+        for d in dependant.dependencies:  # type: ignore[attr-defined]
+            found.add(getattr(d.call, "__name__", repr(d.call)))
+            found |= calls(d)
+        return found
+
+    named = {c for c in calls(route.dependant) if not c.startswith("<fastapi.security")}
+    assert named <= {"_dependency", get_principal.__name__}, named
+    assert _checks(route) == {"schedule_pipelines"}
 
 
 def test_a_schedule_an_administrator_owns_still_runs() -> None:
-    """`scheduler.py`'s run check asks the schedule's owner for `schedule_pipelines`: re-homing the
-    routes kept that right with the administrator, so an administrator's schedules still run."""
+    """`scheduler.py`'s run check refuses a schedule whose owner lacks `schedule_pipelines`; an
+    administrator keeps it, so a schedule they own passes that check."""
+    import inspect
+
+    from services.api import scheduler
+
+    source = inspect.getsource(scheduler)
+    assert "Right.SCHEDULE_PIPELINES not in rights_for(owner.roles)" in source
     assert Right.SCHEDULE_PIPELINES in rights_for(["osprey-admin"])
 
 
@@ -322,34 +445,38 @@ def _path(route: APIRoute) -> str:
 
 @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
 def test_every_route_of_a_hidden_place_refuses_the_role(role: str) -> None:
-    """Over HTTP, without the stores: the right is checked before anything else a route does
-    (`require_right`), so a refusal here needs no case, dataset or store. A route that answers with
-    anything but `403 right_required` is a place the switcher hides and the Conduit still opens."""
-    from services.api.app import app, get_principal
+    """Every check a route makes (`_checks`) refuses this person on each route of each place hidden
+    from them. And over HTTP, without the stores, none of those routes answers them: a check's 403,
+    or a 404 or 500 where a store or a case is reached before the checks, but never a success. A
+    case's or a dataset's lookup cannot stand in for the checks: the dataset is given as reached."""
+    from services.api.app import app, get_principal, require_studio_dataset
 
-    places = _places()
     roles = TOKEN_ROLES[role]
-    hidden = set(places) - set(places_for(rights_for(roles), places))
+    hidden = set(PLACE_ORDER) - set(offered(roles))
+    routes = [r for r in _placed() if places_of(r.path) <= hidden]
+    assert [r.endpoint.__name__ for r in routes if _answers(r, roles)] == []
     who = Principal(id=f"place-{role}", clearance="SECRET", org_unit="unit-1", roles=roles)
-    answered: list[tuple[str, str, int]] = []
-    checked = 0
+    answered: list[tuple[str, int]] = []
+    refused_by_a_check = 0
     app.dependency_overrides[get_principal] = lambda: who
-    # No lifespan: nothing past the right check is reached, and a route that gets past it answers
-    # (500, with no stores) rather than raising, so it is reported, not hidden.
+    app.dependency_overrides[require_studio_dataset] = lambda dataset_id: dataset_id
+    # No lifespan: a route that gets past its checks reaches a missing store and answers 500 rather
+    # than raising, so it is counted, not hidden.
     client = TestClient(app, raise_server_exceptions=False)
     try:
-        for route in _routes():
-            if not places_of(route.path) <= hidden or _declared(route) is None:
-                continue  # a route with no right is any signed-in person's, checked above
-            checked += 1
+        for route in routes:
             method = sorted(route.methods or {"GET"})[0]
-            response = client.request(
-                method, _path(route), headers={"Authorization": "Bearer x"}, json={}
-            )
-            if not (response.status_code == 403 and "right_required" in response.text):
-                answered.append((route.endpoint.__name__, route.path, response.status_code))
+            headers = {"Authorization": "Bearer x"}
+            response = client.request(method, _path(route), headers=headers, json={})
+            if response.status_code < 400:
+                answered.append((route.endpoint.__name__, response.status_code))
+            by_a_check = re.search(r"right_required|lacks required", response.text)
+            if response.status_code == 403 and by_a_check:
+                refused_by_a_check += 1
     finally:
         app.dependency_overrides.pop(get_principal, None)
+        app.dependency_overrides.pop(require_studio_dataset, None)
     assert answered == [], answered
-    if hidden:
-        assert checked > 0, (role, hidden)
+    if routes:
+        # Most refusals are the checks' own: the right is checked before anything else.
+        assert refused_by_a_check >= len(routes) * 0.8, (role, refused_by_a_check, len(routes))

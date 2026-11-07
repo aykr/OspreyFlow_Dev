@@ -100,7 +100,8 @@ describe("Start", () => {
     expect(startPlaces(new Set(ADMIN))).toEqual(["admin"]);
     expect(startPlaces(new Set([...ADMIN, "share_case"]))).toEqual(["glass", "admin"]);
     expect(startPlaces(new Set(READER))).toEqual(["glass"]);
-    expect(startPlaces(new Set(["manage_ontology"]))).toEqual(["admin"]);
+    // ADR-145 Amendment 1: `manage_ontology` alone opens nothing; its routes ask for the administrator role too.
+    expect(startPlaces(new Set(["manage_ontology"]))).toEqual([]);
     expect(startPlaces(new Set())).toEqual([]);
     // ADR-145 N6: nothing is offered until the rights are known.
     expect(startPlaces(null)).toEqual([]);

@@ -7476,7 +7476,7 @@ async def _source_of(sources: SourceStore, dataset_id: str, source_id: str) -> S
         raise _source_not_found() from exc
 
 
-@app.get("/v1/ingest/connections", dependencies=[Depends(require_right(Right.EDIT_PIPELINES))])
+@app.get("/v1/ingest/connections", dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))])
 async def list_ingest_connections(
     principal: SourceAuthorDep, sources: SourcesDep
 ) -> list[Connection]:
@@ -7513,7 +7513,7 @@ async def add_admin_connection(
 
 @app.get(
     "/v1/datasets/{dataset_id}/source-files",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def list_dataset_source_files(
     dataset_id: StudioDatasetDep, principal: SourceAuthorDep, audit: AuditDep
@@ -7532,7 +7532,7 @@ async def list_dataset_source_files(
 
 @app.get(
     "/v1/datasets/{dataset_id}/sources",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def list_dataset_sources(
     dataset_id: StudioDatasetDep, principal: SourceAuthorDep, sources: SourcesDep, audit: AuditDep
@@ -7550,7 +7550,7 @@ async def list_dataset_sources(
 @app.post(
     "/v1/datasets/{dataset_id}/sources",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def register_dataset_source(
     dataset_id: StudioDatasetDep,
@@ -7601,7 +7601,7 @@ async def register_dataset_source(
 
 @app.get(
     "/v1/datasets/{dataset_id}/sources/{source_id}",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def get_dataset_source(
     dataset_id: StudioDatasetDep, source_id: str, principal: SourceAuthorDep, sources: SourcesDep
@@ -7631,7 +7631,7 @@ def source_as_draft(source: SourceTable, owning_unit: str) -> StudioRecipeDraft:
 
 @app.get(
     "/v1/datasets/{dataset_id}/sources/{source_id}/profile",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def get_dataset_source_profile(
     dataset_id: StudioDatasetDep,
@@ -7657,7 +7657,7 @@ async def get_dataset_source_profile(
 
 @app.get(
     "/v1/datasets/{dataset_id}/sources/{source_id}/lineage",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
 )
 async def get_dataset_source_lineage(
     dataset_id: StudioDatasetDep,

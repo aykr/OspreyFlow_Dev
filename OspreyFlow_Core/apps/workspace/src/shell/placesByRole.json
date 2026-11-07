@@ -1,0 +1,511 @@
+{
+ "roles": {
+  "analyst": {
+   "rights": [
+    "add_ingest_files",
+    "ask_model",
+    "branch_case",
+    "confirm_inferred",
+    "create_case",
+    "decide_held_rows",
+    "deploy_rules",
+    "edit_graph",
+    "export",
+    "export_override",
+    "extract_files",
+    "investigate",
+    "keep_watches",
+    "manage_strength_influencers",
+    "propose_link_type",
+    "read_alert_queue",
+    "read_data_feeds",
+    "read_held_rows",
+    "read_reports",
+    "read_rule_audit",
+    "record_assessment",
+    "remove_case",
+    "resolve_entities",
+    "run_analysis",
+    "share_case",
+    "trace_ownership",
+    "triage_alerts"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "compliance": {
+   "rights": [
+    "read_export_ledger"
+   ],
+   "places": []
+  },
+  "data_engineer": {
+   "rights": [
+    "add_ingest_files",
+    "create_case",
+    "decide_held_rows",
+    "deploy_rules",
+    "edit_pipelines",
+    "investigate",
+    "load_screening_lists",
+    "operate_schedules",
+    "propose_link_type",
+    "publish_pipelines",
+    "read_alert_queue",
+    "read_data_feeds",
+    "read_held_rows",
+    "read_reports",
+    "read_rule_audit",
+    "revert_loads",
+    "run_analysis",
+    "run_pipelines",
+    "schedule_pipelines",
+    "share_case",
+    "verify_pipelines"
+   ],
+   "places": [
+    "glass",
+    "ingest",
+    "admin"
+   ]
+  },
+  "loader": {
+   "rights": [
+    "run_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "none": {
+   "rights": [],
+   "places": []
+  },
+  "osprey-admin": {
+   "rights": [
+    "administer_system",
+    "load_screening_lists",
+    "manage_dashboards",
+    "manage_geospatial",
+    "manage_ontology",
+    "manage_people",
+    "manage_strength_influencers",
+    "operate_schedules",
+    "read_audit",
+    "read_export_ledger",
+    "read_rule_audit",
+    "remove_case",
+    "revert_loads",
+    "schedule_pipelines",
+    "share_case"
+   ],
+   "places": [
+    "glass",
+    "admin"
+   ]
+  },
+  "reports_viewer": {
+   "rights": [
+    "read_alert_queue",
+    "read_data_feeds",
+    "read_report_feed",
+    "read_reports"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:add_ingest_files": {
+   "rights": [
+    "add_ingest_files"
+   ],
+   "places": []
+  },
+  "right:administer_system": {
+   "rights": [
+    "administer_system"
+   ],
+   "places": [
+    "admin"
+   ]
+  },
+  "right:ask_model": {
+   "rights": [
+    "ask_model"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:branch_case": {
+   "rights": [
+    "branch_case"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:confirm_inferred": {
+   "rights": [
+    "confirm_inferred"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:create_case": {
+   "rights": [
+    "create_case"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:decide_held_rows": {
+   "rights": [
+    "decide_held_rows"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:deploy_rules": {
+   "rights": [
+    "deploy_rules"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:edit_graph": {
+   "rights": [
+    "edit_graph"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:edit_pipelines": {
+   "rights": [
+    "edit_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "right:export": {
+   "rights": [
+    "export"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:export_override": {
+   "rights": [
+    "export_override"
+   ],
+   "places": []
+  },
+  "right:extract_files": {
+   "rights": [
+    "extract_files"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:investigate": {
+   "rights": [
+    "investigate"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:keep_watches": {
+   "rights": [
+    "keep_watches"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:load_screening_lists": {
+   "rights": [
+    "load_screening_lists"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:manage_dashboards": {
+   "rights": [
+    "manage_dashboards"
+   ],
+   "places": [
+    "admin"
+   ]
+  },
+  "right:manage_geospatial": {
+   "rights": [
+    "manage_geospatial"
+   ],
+   "places": []
+  },
+  "right:manage_ontology": {
+   "rights": [
+    "manage_ontology"
+   ],
+   "places": []
+  },
+  "right:manage_people": {
+   "rights": [
+    "manage_people"
+   ],
+   "places": [
+    "admin"
+   ]
+  },
+  "right:manage_strength_influencers": {
+   "rights": [
+    "manage_strength_influencers"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:operate_schedules": {
+   "rights": [
+    "operate_schedules"
+   ],
+   "places": [
+    "admin"
+   ]
+  },
+  "right:propose_link_type": {
+   "rights": [
+    "propose_link_type"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:publish_pipelines": {
+   "rights": [
+    "publish_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "right:read_alert_queue": {
+   "rights": [
+    "read_alert_queue"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:read_audit": {
+   "rights": [
+    "read_audit"
+   ],
+   "places": []
+  },
+  "right:read_data_feeds": {
+   "rights": [
+    "read_data_feeds"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:read_export_ledger": {
+   "rights": [
+    "read_export_ledger"
+   ],
+   "places": []
+  },
+  "right:read_held_rows": {
+   "rights": [
+    "read_held_rows"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:read_report_feed": {
+   "rights": [
+    "read_report_feed"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:read_reports": {
+   "rights": [
+    "read_reports"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:read_rule_audit": {
+   "rights": [
+    "read_rule_audit"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:record_assessment": {
+   "rights": [
+    "record_assessment"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:remove_case": {
+   "rights": [
+    "remove_case"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:resolve_entities": {
+   "rights": [
+    "resolve_entities"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:revert_loads": {
+   "rights": [
+    "revert_loads"
+   ],
+   "places": []
+  },
+  "right:run_analysis": {
+   "rights": [
+    "run_analysis"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:run_pipelines": {
+   "rights": [
+    "run_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "right:schedule_pipelines": {
+   "rights": [
+    "schedule_pipelines"
+   ],
+   "places": []
+  },
+  "right:share_case": {
+   "rights": [
+    "share_case"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:trace_ownership": {
+   "rights": [
+    "trace_ownership"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:triage_alerts": {
+   "rights": [
+    "triage_alerts"
+   ],
+   "places": [
+    "glass"
+   ]
+  },
+  "right:verify_pipelines": {
+   "rights": [
+    "verify_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "source_approver": {
+   "rights": [
+    "publish_pipelines",
+    "schedule_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "source_author": {
+   "rights": [
+    "add_ingest_files",
+    "edit_pipelines",
+    "verify_pipelines"
+   ],
+   "places": [
+    "ingest"
+   ]
+  },
+  "super": {
+   "rights": [
+    "add_ingest_files",
+    "ask_model",
+    "branch_case",
+    "confirm_inferred",
+    "create_case",
+    "decide_held_rows",
+    "deploy_rules",
+    "edit_graph",
+    "edit_pipelines",
+    "export",
+    "export_override",
+    "extract_files",
+    "investigate",
+    "keep_watches",
+    "load_screening_lists",
+    "manage_strength_influencers",
+    "operate_schedules",
+    "propose_link_type",
+    "publish_pipelines",
+    "read_alert_queue",
+    "read_data_feeds",
+    "read_held_rows",
+    "read_reports",
+    "read_rule_audit",
+    "record_assessment",
+    "remove_case",
+    "resolve_entities",
+    "revert_loads",
+    "run_analysis",
+    "run_pipelines",
+    "schedule_pipelines",
+    "share_case",
+    "trace_ownership",
+    "triage_alerts",
+    "verify_pipelines"
+   ],
+   "places": [
+    "glass",
+    "ingest",
+    "admin"
+   ]
+  }
+ }
+}

@@ -10,6 +10,7 @@ import { GovukHeader } from "../brand/govuk/GovukHeader";
 import { ContextBanner, crossLinkFor } from "./ContextBanner";
 import { PlaceSwitcher } from "./PlaceSwitcher";
 import { PLACES, placesFor } from "./places";
+import BY_ROLE from "./placesByRole.json";
 
 afterEach(() => {
   cleanup();
@@ -28,6 +29,15 @@ describe("the places' table", () => {
     expect(placesFor(new Set(["a_right_nobody_has"]))).toEqual([]);
     // Rights not yet known, or not read: no place is offered on a guess.
     expect(placesFor(null)).toEqual([]);
+  });
+
+  // The routes' own answer for every role, legacy role and right granted singly, recorded by the
+  // Conduit's place-routes test from every check each route makes: `placesFor` must agree with it.
+  it("offers each role exactly the places the routes answer it in", () => {
+    for (const [name, { rights, places }] of Object.entries(BY_ROLE.roles)) {
+      expect([name, placesFor(new Set(rights))]).toEqual([name, places]);
+    }
+    expect(Object.keys(BY_ROLE.roles).length).toBeGreaterThan(50);
   });
 });
 
@@ -75,7 +85,8 @@ describe("the context banner", () => {
 
   it("in the Studio names the dataset and the case it loads for; in Admin, the place alone", () => {
     render(<ContextBanner place="ingest" caseSwitcher={<button type="button">Case Kestrel</button>} datasets={["Prison intel"]} />);
-    expect(screen.getByRole("region", { name: "You are in the Ingest Studio" }).textContent).toContain("Dataset Prison intel");
+    // The Studio names its dataset in its own select; the banner does not repeat the case's.
+    expect(screen.getByRole("region", { name: "You are in the Ingest Studio" }).textContent).not.toContain("Prison intel");
     cleanup();
     render(<ContextBanner place="admin" />);
     expect(screen.getByRole("region", { name: "You are in Admin" }).textContent).toBe("You are in Admin");
