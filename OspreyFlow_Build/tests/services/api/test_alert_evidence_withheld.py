@@ -90,6 +90,11 @@ class Graph:
         self.recorder.calls.append(("get_node", 1, (node_id,)))
         return None if node_id in self.hidden else _node(node_id)
 
+    async def edges_among(self, node_ids: Any, principal: Principal) -> list[Edge]:
+        """The links among the nodes, as the reader reads them: here, every link these tests cite."""
+        self.recorder.calls.append(("edges_among", len(set(node_ids)), tuple(sorted(set(node_ids)))))
+        return [_edge(i) for i in ("e-1", "e-2", "e-secret") if i not in self.hidden]
+
     async def get_edges(self, edge_ids: Any, principal: Principal) -> list[Edge]:
         if isinstance(edge_ids, str):
             raise TypeError("edge_ids must be a sequence of ids")
@@ -269,3 +274,149 @@ async def test_a_notify_stub_has_no_evidence_to_withhold() -> None:
     view = await alert_to_view(stub, READER, graph, analytics)  # type: ignore[arg-type]
     assert view.evidence_available is True
     assert recorder.calls == []
+
+
+# ---- the triage paths and the canvas: refused exactly as a missing alert ----------------------------
+
+
+class TriageStore(Store):
+    """`AlertStore.get_queue_alert` and its writes. An id not in the case is not found, as the real
+    store answers; every write is recorded, so a refused action can be shown to have written nothing."""
+
+    def __init__(self, alerts: list[Alert]) -> None:
+        super().__init__(alerts)
+        self.writes: list[str] = []
+
+    async def get_queue_alert(self, alert_id: str, investigation_id: str, reader: Principal) -> QueueRow:
+        from services.api.alerts import AlertNotFoundError
+
+        for a in self.alerts:
+            if a.id == alert_id and a.investigation_id == investigation_id:
+                return QueueRow(a, "typology", "medium", "case")
+        raise AlertNotFoundError(alert_id)
+
+    async def set_queue_triage(self, alert_id: str, *_: Any, **__: Any) -> Alert:
+        self.writes.append(f"triage {alert_id}")
+        return next(a for a in self.alerts if a.id == alert_id)
+
+    async def __getattr__(self, name: str) -> Any:  # any other write
+        raise AssertionError(f"the store was asked to {name}")
+
+
+def _path(name: str) -> Any:
+    """Each path, called as its route calls it, on `alert_id`."""
+    member = READER
+
+    async def call(store: Any, graph: Any, analytics: Any, alert_id: str) -> Any:
+        if name == "dispose":
+            return await alert_queue.dispose(store, graph, analytics, CASE, alert_id, member,
+                                             disposition="false_positive", reason="checked")  # fmt: skip
+        if name == "assign":
+            return await alert_queue.assign(store, graph, analytics, CASE, alert_id, member,
+                                            assignee="someone", allowed={"someone"})  # fmt: skip
+        function = getattr(alert_queue, name)
+        return await function(store, graph, analytics, CASE, alert_id, member)
+
+    return call
+
+
+PATHS = ["claim", "release", "dispose", "approve_close", "send_back", "assign", "canvas_elements"]
+
+
+@pytest.mark.parametrize("hidden", ["e-secret", "t-secret"])
+@pytest.mark.parametrize("path", PATHS)
+async def test_each_path_refuses_an_alert_over_hidden_evidence_as_missing(path: str, hidden: str) -> None:
+    """Red with the nodes-only check: every node of the alert is readable, so the path went on (and a
+    triage path wrote, and returned the alert's words; the canvas drew it without the hidden link)."""
+    from services.api.alerts import AlertNotFoundError
+
+    withheld = (OVER_LINK if hidden == "e-secret" else OVER_TRANSACTION).model_copy(
+        update={"status": "closing" if path in ("approve_close", "send_back") else "claimed"
+                if path == "release" else "open", "close_proposed_by": "other", "disposition":
+                "false_positive", "assignee": READER.id if path == "release" else None}
+    )  # fmt: skip
+    call = _path(path)
+    store, graph, analytics, _ = _world({hidden}, [withheld])
+    triage = TriageStore([withheld])
+    with pytest.raises(AlertNotFoundError) as refused:
+        await call(triage, graph, analytics, withheld.id)
+    missing_store = TriageStore([withheld])
+    with pytest.raises(AlertNotFoundError) as missing:
+        await call(missing_store, graph, analytics, "no-such-alert")
+    assert type(refused.value) is type(missing.value)
+    assert triage.writes == [] == missing_store.writes
+
+
+@pytest.mark.parametrize("hidden", ["e-secret", "t-secret"])
+async def test_the_canvas_answers_as_the_explanation_does(hidden: str) -> None:
+    """The whole alert refused, never drawn in part: the canvas and the explanation both answer
+    not found for it."""
+    from services.api.alerts import AlertNotFoundError
+
+    withheld = OVER_LINK if hidden == "e-secret" else OVER_TRANSACTION
+    _, graph, analytics, _ = _world({hidden}, [withheld])
+    store = TriageStore([withheld])
+    answers = []
+    for read in (alert_queue.canvas_elements, alert_queue.explain):
+        try:
+            await read(store, graph, analytics, CASE, withheld.id, READER)  # type: ignore[arg-type]
+            answers.append("answered")
+        except AlertNotFoundError:
+            answers.append("not found")
+    assert answers == ["not found", "not found"]
+
+
+@pytest.mark.parametrize("hidden", ["e-secret", "t-secret"])
+def test_a_claim_on_a_withheld_alert_writes_nothing_and_is_refused_as_for_a_missing_one(
+    hidden: str,
+) -> None:
+    """At the route: the claim of an alert over hidden evidence and the claim of an id that never
+    existed get the same answer, write nothing to the store and record the same in the audit
+    (nothing: a refused claim is not a claim). Red with the nodes-only check, which claimed it and
+    audited `alert_claimed` with its referents."""
+    from fastapi.testclient import TestClient
+    from services.api.app import (
+        app,
+        get_alerts_store,
+        get_analytics,
+        get_audit,
+        get_graph,
+        get_investigations,
+        get_principal,
+    )
+    from services.api.investigations import AccessLevel
+
+    from tests.services.api.test_monitoring_routes import _Case, _no_lifespan
+
+    class Audit:
+        def __init__(self) -> None:
+            self.records: list[str] = []
+
+        async def record(self, **kwargs: Any) -> None:
+            self.records.append(str(kwargs.get("action")))
+
+    triager = READER.model_copy(update={"roles": ["analyst"]})
+    withheld = OVER_LINK if hidden == "e-secret" else OVER_TRANSACTION
+    _, graph, analytics, _ = _world({hidden}, [withheld])
+    store, audit = TriageStore([withheld]), Audit()
+    previous = app.router.lifespan_context
+    app.router.lifespan_context = _no_lifespan
+    app.dependency_overrides.update({
+        get_principal: lambda: triager,
+        get_investigations: lambda: _Case(CASE, {triager.id: AccessLevel.EDITOR}),
+        get_graph: lambda: graph,
+        get_analytics: lambda: analytics,
+        get_alerts_store: lambda: store,
+        get_audit: lambda: audit,
+    })  # fmt: skip
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            answers = []
+            for alert_id in (withheld.id, "no-such-alert"):
+                response = client.post(f"/v1/investigations/{CASE}/alert-queue/{alert_id}/claim")
+                answers.append((response.status_code, response.json(), list(audit.records)))
+    finally:
+        app.dependency_overrides.clear()
+        app.router.lifespan_context = previous
+    assert answers[0] == answers[1] == (404, {"error": "alert_not_found"}, [])
+    assert store.writes == []

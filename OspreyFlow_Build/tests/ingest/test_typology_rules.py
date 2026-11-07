@@ -560,7 +560,7 @@ async def test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opene
             await alert_queue.explain(stores["alerts"], graph, analytics, case,
                                       secret.alert.id, TEAMMATE)  # fmt: skip
         with pytest.raises(AlertNotFoundError):
-            await alert_queue.claim(stores["alerts"], graph, case, secret.alert.id, TEAMMATE)
+            await alert_queue.claim(stores["alerts"], graph, analytics, case, secret.alert.id, TEAMMATE)
 
 
 async def test_an_alert_explains_itself_with_its_transactions_links_and_node(
@@ -575,7 +575,7 @@ async def test_an_alert_explains_itself_with_its_transactions_links_and_node(
         assert [t.amount for t in why.transactions] == [9_500.0] * 4
         assert {n.type for n in why.nodes} == {"Account", "Alert"}
         assert {e.type for e in why.edges} == {"TRANSACTED", "ALERTED_ON"}
-        _, nodes, edges = await alert_queue.canvas_elements(stores["alerts"], graph, case,
+        _, nodes, edges = await alert_queue.canvas_elements(stores["alerts"], graph, analytics, case,
                                                             queued.alert.id, TEAMMATE)  # fmt: skip
         assert len(nodes) == 3 and len(edges) == 3
 
@@ -588,14 +588,14 @@ async def test_triage_claims_once_and_a_true_positive_confirms_the_alert_node(
         await _raised(stores, graph, analytics, case, "T")
         (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
         alert_id = queued.alert.id
-        claimed = await alert_queue.claim(stores["alerts"], graph, case, alert_id, TEAMMATE)
+        claimed = await alert_queue.claim(stores["alerts"], graph, analytics, case, alert_id, TEAMMATE)
         assert (claimed.status, claimed.assignee) == ("claimed", TEAMMATE.id)
         with pytest.raises(AlertTriageConflict):
-            await alert_queue.claim(stores["alerts"], graph, case, alert_id, THIRD)
+            await alert_queue.claim(stores["alerts"], graph, analytics, case, alert_id, THIRD)
         with pytest.raises(AlertTriageConflict):
-            await alert_queue.release(stores["alerts"], graph, case, alert_id, THIRD)
+            await alert_queue.release(stores["alerts"], graph, analytics, case, alert_id, THIRD)
 
-        closed = await alert_queue.dispose(stores["alerts"], graph, case, alert_id, TEAMMATE,
+        closed = await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert_id, TEAMMATE,
                                            disposition="true_positive",
                                            reason="matches the SAR")  # fmt: skip
         assert (closed.status, closed.disposition, closed.decided_by) == (
@@ -605,7 +605,7 @@ async def test_triage_claims_once_and_a_true_positive_confirms_the_alert_node(
         assert node is not None and node.provenance.state is ProvenanceState.ASSERTED
         assert node.provenance.confirmed_by == TEAMMATE.id
         with pytest.raises(AlertTriageConflict):
-            await alert_queue.dispose(stores["alerts"], graph, case, alert_id, THIRD,
+            await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert_id, THIRD,
                                       disposition="false_positive", reason="again")  # fmt: skip
         assert await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE,
                                        statuses=["open", "claimed"]) == []  # fmt: skip
@@ -620,7 +620,7 @@ async def test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred(
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "U")
         (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
-        closed = await alert_queue.dispose(stores["alerts"], graph, case, queued.alert.id,
+        closed = await alert_queue.dispose(stores["alerts"], graph, analytics, case, queued.alert.id,
                                            TEAMMATE, disposition="false_positive",
                                            reason="payroll")  # fmt: skip
         assert closed.alert_node_id == queued.alert.alert_node_id

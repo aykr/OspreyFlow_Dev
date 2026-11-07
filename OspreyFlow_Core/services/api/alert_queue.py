@@ -136,21 +136,6 @@ async def monitoring_queue(
     return shown
 
 
-async def _visible_nodes(
-    alert: Alert, graph: GraphPort, reader: Principal
-) -> dict[str, Node] | None:
-    """Every entity the alert concerns, and its own node, as the reader reads them — or `None`
-    when any of them is hidden from the reader."""
-    wanted = [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
-    found: dict[str, Node] = {}
-    for node_id in wanted:
-        node = await graph.get_node(node_id, reader)
-        if node is None:
-            return None
-        found[node_id] = node
-    return found
-
-
 async def queue(
     store: AlertStore,
     graph: GraphPort,
@@ -172,21 +157,37 @@ async def queue(
 
 
 async def _visible_row(
-    store: AlertStore, graph: GraphPort, alert_id: str, investigation_id: str, reader: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    alert_id: str,
+    investigation_id: str,
+    reader: Principal,
 ) -> tuple[QueueRow, dict[str, Node]]:
-    """One alert of the reader's queue, and everything it names as they read it — or not found,
-    the same answer as for an alert that does not exist."""
+    """One alert of the reader's queue, and every node it names as they read it — or not found, the
+    same answer as for an alert that does not exist, when any node, link or transaction it cites is
+    hidden from them (ADR-146 decision 10: the queue's own check, `alerts.read_evidence`, so every
+    path that acts on or draws an alert refuses exactly what the queue withholds; until it, this
+    read nodes alone, and a triage path acted on, and returned the words of, an alert the reader
+    could not wholly see)."""
     row = await store.get_queue_alert(alert_id, investigation_id, reader)
-    nodes = await _visible_nodes(row.alert, graph, reader)
-    if nodes is None:
+    readable = await read_evidence(
+        [row.alert], reader, graph, analytics, scope=lambda _: investigation_id
+    )
+    if not readable.whole(row.alert):
         raise AlertNotFoundError(alert_id)
-    return row, nodes
+    return row, {i: readable.nodes[i] for i in evidence_node_ids(row.alert)}
 
 
 async def _visible_alert(
-    store: AlertStore, graph: GraphPort, alert_id: str, investigation_id: str, reader: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    alert_id: str,
+    investigation_id: str,
+    reader: Principal,
 ) -> tuple[Alert, dict[str, Node]]:
-    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, reader)
+    row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, reader)
     return row.alert, nodes
 
 
@@ -214,7 +215,7 @@ async def explain_with_evidence(
 ) -> tuple[AlertExplanation, list[EventRecord]]:
     """`explain`, and the cited transactions as the analytics store holds them — with their
     handlings, which a report pack's alert item rests on (ADR-134 decision 1)."""
-    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, reader)
+    row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, reader)
     alert = row.alert
     edges = await _cited_edges(alert, graph, reader, list(nodes))
     if len({e.id for e in edges if e.type != "ALERTED_ON"}) < len(set(alert.edge_ids)):
@@ -286,18 +287,28 @@ async def _cited_edges(
 
 
 async def canvas_elements(
-    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, reader: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    reader: Principal,
 ) -> tuple[Alert, list[Node], list[Edge]]:
     """What "open on the canvas" puts there: the alert's node, its entities and the links among
     them it cites — all of it visible to the reader, or the alert is not found."""
-    alert, nodes = await _visible_alert(store, graph, alert_id, investigation_id, reader)
+    alert, nodes = await _visible_alert(store, graph, analytics, alert_id, investigation_id, reader)
     return alert, list(nodes.values()), await _cited_edges(alert, graph, reader, list(nodes))
 
 
 async def claim(
-    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
 ) -> Alert:
-    await _visible_alert(store, graph, alert_id, investigation_id, member)
+    await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     return await store.set_queue_triage(
         alert_id, investigation_id, member, expect_status=["open"], status="claimed",
         assignee=member.id,
@@ -305,9 +316,14 @@ async def claim(
 
 
 async def release(
-    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
 ) -> Alert:
-    alert, _ = await _visible_alert(store, graph, alert_id, investigation_id, member)
+    alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.assignee not in (None, member.id):
         raise AlertTriageConflict(alert_id)
     return await store.set_queue_triage(
@@ -332,6 +348,7 @@ def needs_second_person(row: QueueRow) -> bool:
 async def dispose(
     store: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     investigation_id: str,
     alert_id: str,
     member: Principal,
@@ -342,7 +359,7 @@ async def dispose(
     """Closes the alert with its disposition and reason — or, for a high-severity alert a second
     person may read, proposes the close: the alert waits as `closing`, its disposition and reason
     kept, until another member approves it (`approve_close`)."""
-    row, nodes = await _visible_row(store, graph, alert_id, investigation_id, member)
+    row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
     alert = row.alert
     if alert.status in ("closed", "closing"):
         raise AlertTriageConflict(alert_id)
@@ -359,11 +376,16 @@ async def dispose(
 
 
 async def approve_close(
-    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
 ) -> Alert:
     """The second person approves a proposed close: the alert closes with the proposer's
     disposition and reason, decided by `member`, the proposer kept beside it."""
-    alert, nodes = await _visible_alert(store, graph, alert_id, investigation_id, member)
+    alert, nodes = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.status != "closing" or alert.disposition is None or alert.close_proposed_by is None:
         raise AlertTriageConflict(alert_id)
     if alert.close_proposed_by == member.id:
@@ -378,11 +400,16 @@ async def approve_close(
 
 
 async def send_back(
-    store: AlertStore, graph: GraphPort, investigation_id: str, alert_id: str, member: Principal
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
 ) -> Alert:
     """A proposed close turned down (or withdrawn by its proposer): the alert goes back to the
     person who proposed it, claimed, its proposed disposition cleared."""
-    alert, _ = await _visible_alert(store, graph, alert_id, investigation_id, member)
+    alert, _ = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
     if alert.status != "closing":
         raise AlertTriageConflict(alert_id)
     return await store.set_queue_triage(
@@ -456,6 +483,7 @@ class AssignmentRefused(Exception):
 async def assign(
     store: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     investigation_id: str,
     alert_id: str,
     member: Principal,
@@ -468,7 +496,7 @@ async def assign(
     alert (a typology alert, which every member of the case may read) is given to someone else: an
     alert shared with a team, or its owner's alone, may be read by people the case's member list
     does not show, so it is claimed by a person who can see it, never handed to one who may not."""
-    row, _ = await _visible_row(store, graph, alert_id, investigation_id, member)
+    row, _ = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
     if row.alert.status == "closed":
         raise AlertTriageConflict(alert_id)
     if assignee not in allowed:

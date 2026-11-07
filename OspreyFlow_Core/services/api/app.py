@@ -9520,8 +9520,11 @@ async def claim_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
-    alert = await alert_queue.claim(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.claim(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await _triage_audit(audit, principal, investigation.id, "alert_claimed", alert)
     return alert
 
@@ -9537,8 +9540,11 @@ async def release_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
-    alert = await alert_queue.release(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.release(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await _triage_audit(audit, principal, investigation.id, "alert_released", alert)
     return alert
 
@@ -9555,12 +9561,14 @@ async def dispose_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """Closes the alert with its disposition and reason. A true positive confirms its node
     (rule 5's human confirmation); a false positive leaves it `inferred`."""
     alert = await alert_queue.dispose(
         alerts_store,
         graph,
+        analytics,
         investigation.id,
         alert_id,
         principal,
@@ -9583,12 +9591,13 @@ async def approve_alert_close(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
     alert — never the member who proposed it."""
     try:
         alert = await alert_queue.approve_close(
-            alerts_store, graph, investigation.id, alert_id, principal
+            alerts_store, graph, analytics, investigation.id, alert_id, principal
         )
     except alert_queue.CloseRefused as refused:
         raise HTTPException(
@@ -9611,9 +9620,12 @@ async def send_back_alert_close(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """A proposed close sent back to its proposer with the reason, or withdrawn by them."""
-    alert = await alert_queue.send_back(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.send_back(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await audit.record(
         principal=principal,
         action="alert_close_sent_back",
@@ -9642,6 +9654,7 @@ async def assign_alert(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """ADR-133 stage (a): give an open or claimed alert to an Editor or Author of the case who is a
     person (never a service account). Only a case (typology) alert is given to someone else; one
@@ -9650,8 +9663,8 @@ async def assign_alert(
         investigations, investigation.id, principal, principal_names
     )
     alert = await alert_queue.assign(
-        alerts_store, graph, investigation.id, alert_id, principal, assignee=body.assignee,
-        allowed=allowed,
+        alerts_store, graph, analytics, investigation.id, alert_id, principal,
+        assignee=body.assignee, allowed=allowed,
     )  # fmt: skip
     await _triage_audit(audit, principal, investigation.id, "alert_assigned", alert)
     return alert
@@ -9680,11 +9693,12 @@ async def alert_canvas(
     history: HistoryDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    analytics: AnalyticsDep,
 ) -> StarterRunOutcome:
     """The alert's node, its entities and the links it cites onto the canvas — all, or past the
     working set's cap, none (`limit_exceeded`, rule 2). Editor, as it adds to the working set."""
     alert, nodes, edges = await alert_queue.canvas_elements(
-        alerts_store, graph, investigation.id, alert_id, principal
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
     outcome = await working_set.seed(investigation.id, nodes, edges, principal)
     await publish_delta(valkey, investigation.id, outcome.delta)

@@ -288,7 +288,7 @@ async def story(scene: Scene, *, close: bool = True) -> Scene:
         r1 = (await queue(scene, scene.analyst))[0]
         assert r1.alert.typology == ledger_monitoring.CLOSED_KIND
         closed = await alert_queue.dispose(
-            scene.stores.alerts, scene.world.graph, scene.case, r1.alert.id, scene.analyst,
+            scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, r1.alert.id, scene.analyst,
             disposition=ledger_monitoring.CLOSING_REASON, reason=ledger_monitoring.CLOSING_WORDS,
         )  # fmt: skip
         assert closed.status == "closed", "a medium-severity alert closes without a second person"

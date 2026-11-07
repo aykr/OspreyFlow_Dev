@@ -387,20 +387,20 @@ async def test_a_team_member_claims_and_closes_a_hotlist_alert_and_a_stranger_ca
     target = made["hotlist"].id
 
     with pytest.raises(AlertNotFoundError):
-        await alert_queue.claim(alerts, graph, case, target, stranger)
-    claimed = await alert_queue.claim(alerts, graph, case, target, member)
+        await alert_queue.claim(alerts, graph, NO_TRANSACTIONS, case, target, stranger)
+    claimed = await alert_queue.claim(alerts, graph, NO_TRANSACTIONS, case, target, member)
     assert claimed.status == "claimed" and claimed.assignee == member.id
     with pytest.raises(AlertTriageConflict):
-        await alert_queue.claim(alerts, graph, case, target, owner)
+        await alert_queue.claim(alerts, graph, NO_TRANSACTIONS, case, target, owner)
     # A hotlist alert is high severity and shared with the team: closing it is proposed, and a
     # second member approves (ADR-133 decision 7, stage (d)); `test_alert_close_approval.py`.
     proposed = await alert_queue.dispose(
-        alerts, graph, case, target, member, disposition="false_positive", reason="a known number"
+        alerts, graph, NO_TRANSACTIONS, case, target, member, disposition="false_positive", reason="a known number"
     )
     assert (proposed.status, proposed.close_proposed_by) == ("closing", member.id)
     with pytest.raises(AlertNotFoundError):
-        await alert_queue.approve_close(alerts, graph, case, target, stranger)
-    closed = await alert_queue.approve_close(alerts, graph, case, target, owner)
+        await alert_queue.approve_close(alerts, graph, NO_TRANSACTIONS, case, target, stranger)
+    closed = await alert_queue.approve_close(alerts, graph, NO_TRANSACTIONS, case, target, owner)
     assert closed.status == "closed" and closed.disposition_reason == "a known number"
     assert (closed.decided_by, closed.close_proposed_by) == (owner.id, member.id)
 
@@ -414,16 +414,16 @@ async def test_a_case_alert_is_given_to_a_member_and_a_shared_one_only_to_be_cla
     made = await _three_kinds(hotlists, alerts, owner, case)
     graph = _Graph(GRAPH_NAMES)
 
-    given = await alert_queue.assign(alerts, graph, case, made["typology"].id, owner,
+    given = await alert_queue.assign(alerts, graph, NO_TRANSACTIONS, case, made["typology"].id, owner,
                                      assignee=member.id, allowed={member.id, owner.id})  # fmt: skip
     assert given.status == "claimed" and given.assignee == member.id
     with pytest.raises(alert_queue.AssignmentRefused, match="not a member"):
-        await alert_queue.assign(alerts, graph, case, made["typology"].id, owner,
+        await alert_queue.assign(alerts, graph, NO_TRANSACTIONS, case, made["typology"].id, owner,
                                  assignee="someone-else", allowed={member.id})  # fmt: skip
     # Someone outside the owner's team may be a member of the case: an alert shared with a team is
     # never given to them, as they might not be able to read it. Claiming it is the way.
     with pytest.raises(alert_queue.AssignmentRefused, match="claimed"):
-        await alert_queue.assign(alerts, graph, case, made["hotlist"].id, owner,
+        await alert_queue.assign(alerts, graph, NO_TRANSACTIONS, case, made["hotlist"].id, owner,
                                  assignee=member.id, allowed={member.id})  # fmt: skip
 
 
