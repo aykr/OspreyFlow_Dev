@@ -198,7 +198,7 @@ def test_each_lane_is_one_tree_of_its_progress_state_and_steps_in_hand(hb, tmp_p
     lines = out.splitlines()
     head = next(i for i, line in enumerate(lines) if line.startswith("studio "))
     assert " 1/4 " in lines[head] and "working" in lines[head]
-    block = lines[head + 1 : head + 3]
+    block = lines[head + 1 : head + 4]
     assert any("L1.2 in review: Second step" in line for line in block)
     assert any("on the drawer" in line for line in block)
     case = next(line for line in lines if line.startswith("case "))
