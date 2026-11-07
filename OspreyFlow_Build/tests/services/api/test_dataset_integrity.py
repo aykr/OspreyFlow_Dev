@@ -77,6 +77,10 @@ class _Registry:
         self.asked.append(sorted(dataset_ids))
         return {d for d in dataset_ids if d in self.held}
 
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]:
+        """None of these is a composite (ADR-099 Amendment 15 asks the registry which are)."""
+        return set()
+
 
 class _Store:
     def __init__(self) -> None:
