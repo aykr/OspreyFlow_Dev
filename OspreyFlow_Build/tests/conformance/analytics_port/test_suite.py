@@ -2014,12 +2014,14 @@ async def test_a_retract_does_not_cross_investigations_it_was_not_asked_about(
         assert page.total == 1
 
 
-# --- withdraw_events (ADR-110 Amendment 8 point 1): a full snapshot's dropped links ---------------
+# --- withdraw_events_by_id (ADR-110 Amendments 8 point 1 and 15): a dropped row's own events -----
 #
-# A refresh that withdraws a dropped row's links withdraws their events with them, so no trend,
-# histogram or timeline counts a row the snapshot no longer carries. The events are set aside, not
-# deleted: reverting the refresh puts back exactly those. As `retract_load`, every read after a
-# withdrawal answers, for every principal, as a store that never held the events.
+# A full snapshot's refresh withdraws a dropped row's own events, named by the ids its record keeps,
+# so no trend, histogram or timeline counts a row the snapshot no longer carries. Never by link
+# (Amendment 15): another row's event on the same link, of this load, another or another case, stays.
+# The events are set aside, not deleted: reverting the refresh puts back exactly those. As
+# `retract_load`, every read after a withdrawal answers, for every principal, as a store that never
+# held the events.
 
 REFRESH = "load-refresh"
 REFRESH_2 = "load-refresh-2"
@@ -2036,18 +2038,45 @@ async def _reads_of(factory: AnalyticsAdapterFactory, events: list[EventRecord])
         return {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
 
 
-async def test_withdraw_events_takes_every_event_on_those_links_out_of_every_read(
+def _ids_on(events: list[EventRecord], *edge_ids: str) -> list[str]:
+    return [e.event_id for e in events if e.edge_id in edge_ids]
+
+
+async def test_withdraw_events_by_id_takes_exactly_those_events_out_of_every_read(
     factory: AnalyticsAdapterFactory,
 ) -> None:
     """Rule 4: the withdrawn events include one on a SECRET marking, counted in the answer and left
-    out of every read for every principal, including those who could never read it."""
+    out of every read for every principal, including those who could never read it. An id no event
+    holds is not counted."""
     events = _a_and_b_and_unattributed()
-    survivors = [e for e in events if e.edge_id not in {"ea", "ea2"}]
+    chosen = _ids_on(events, "ea", "ea2")
     async with factory.context(events) as adapter:
         await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
-        assert await adapter.withdraw_events(["ea", "ea2", "e-none"], REFRESH) == 3
+        assert await adapter.withdraw_events_by_id([*chosen, "no-such-event"], REFRESH) == 3
         after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
-    assert after == await _reads_of(factory, survivors)
+    assert after == await _reads_of(factory, [e for e in events if e.event_id not in chosen])
+
+
+async def test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """Amendment 15, rule 3: one of link `ea`'s two events is withdrawn; the other (the same load's
+    other row), another load's event on `ea` and another case's event on `ea` all stay, for every
+    principal. A withdrawal by link would take all four."""
+    events = _a_and_b_and_unattributed()
+    other_load = _event(occurred_at=_week(6), source_id="a1", target_id="a2", edge_id="ea", load_id=LOAD_B, lat=51.5, lon=-0.12)  # fmt: skip
+    other_case = _event(occurred_at=_week(7), source_id="a1", target_id="a2", edge_id="ea", load_id="load-c", investigation_scope="case-2")  # fmt: skip
+    events = [*events, other_load, other_case]
+    dropped = events[0]
+    async with factory.context(events) as adapter:
+        await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
+        assert await adapter.withdraw_events_by_id([dropped.event_id], REFRESH) == 1
+        after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
+        theirs = await adapter.list_events(
+            EventListRequest(filter=EventFilter(investigation_scope="case-2")), CLEARED
+        )
+    assert [e.event_id for e in theirs.events] == [other_case.event_id]
+    assert after == await _reads_of(factory, events[1:])
 
 
 async def test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew(
@@ -2056,23 +2085,25 @@ async def test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdre
     events = _a_and_b_and_unattributed()
     async with factory.context(events) as adapter:
         await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
-        await adapter.withdraw_events(["ea", "ea2"], REFRESH)
-        await adapter.withdraw_events(["eb"], REFRESH_2)
+        await adapter.withdraw_events_by_id(_ids_on(events, "ea", "ea2"), REFRESH)
+        await adapter.withdraw_events_by_id(_ids_on(events, "eb"), REFRESH_2)
         assert await adapter.restore_withdrawn_events(REFRESH) == 3
         restored = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
     # Each event comes back as it was, its id and its load included; the other refresh's stay out.
     assert restored == await _reads_of(factory, [e for e in events if e.edge_id != "eb"])
 
 
-async def test_withdraw_and_restore_are_idempotent_and_ask_nothing_of_no_links(
+async def test_withdraw_and_restore_are_idempotent_and_ask_nothing_of_no_ids(
     factory: AnalyticsAdapterFactory,
 ) -> None:
-    async with factory.context(_a_and_b_and_unattributed()) as adapter:
-        assert await adapter.withdraw_events([], REFRESH) == 0
-        assert await adapter.withdraw_events(["ea"], REFRESH) == 2
-        assert await adapter.withdraw_events(["ea"], REFRESH) == 0
+    events = _a_and_b_and_unattributed()
+    on_ea = _ids_on(events, "ea")
+    async with factory.context(events) as adapter:
+        assert await adapter.withdraw_events_by_id([], REFRESH) == 0
+        assert await adapter.withdraw_events_by_id([*on_ea, *on_ea], REFRESH) == 2
+        assert await adapter.withdraw_events_by_id(on_ea, REFRESH) == 0
         # An event already set aside stays with the load that set it aside.
-        assert await adapter.withdraw_events(["ea"], REFRESH_2) == 0
+        assert await adapter.withdraw_events_by_id(on_ea, REFRESH_2) == 0
         assert await adapter.restore_withdrawn_events(REFRESH_2) == 0
         assert await adapter.restore_withdrawn_events("never-withdrew") == 0
         assert (await adapter.histogram(_HOUR, CLEARED)).total == 4
@@ -2090,7 +2121,7 @@ async def test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to
     events = _a_and_b_and_unattributed()
     async with factory.context(events) as adapter:
         await adapter.load_geometries([_boundary(geometry_ref="cell-1")])
-        await adapter.withdraw_events(["ea"], REFRESH)
+        await adapter.withdraw_events_by_id(_ids_on(events, "ea"), REFRESH)
         assert await adapter.retract_load(LOAD_A) == 3
         assert await adapter.restore_withdrawn_events(REFRESH) == 0
         after = {p.id: await _everything_a_reader_can_ask(adapter, p) for p in _three_principals()}
@@ -2103,8 +2134,9 @@ async def test_retracting_the_withdrawing_load_takes_its_own_events_and_no_other
     """The refresh's own events (its new rows') carry its load id and go with its revert; the events
     it set aside belong to the loads that wrote them and are put back by the restore alone."""
     own = _event(occurred_at=_week(6), source_id="r1", target_id="r2", edge_id="er", load_id=REFRESH)
-    async with factory.context([*_a_and_b_and_unattributed(), own]) as adapter:
-        await adapter.withdraw_events(["eb"], REFRESH)
+    events = _a_and_b_and_unattributed()
+    async with factory.context([*events, own]) as adapter:
+        await adapter.withdraw_events_by_id(_ids_on(events, "eb"), REFRESH)
         assert await adapter.retract_load(REFRESH) == 1
         assert await adapter.restore_withdrawn_events(REFRESH) == 2
         page = await adapter.list_events(EventListRequest(filter=_filter(), limit=200), CLEARED)

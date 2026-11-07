@@ -910,25 +910,25 @@ class AnalyticsClickHouseAdapter:
             )
         return removed + aside
 
-    async def withdraw_events(self, edge_ids: Sequence[str], load_id: str) -> int:
-        """`AnalyticsPort.withdraw_events`: every event on these links copied to `withdrawn_events`,
+    async def withdraw_events_by_id(self, event_ids: Sequence[str], load_id: str) -> int:
+        """`AnalyticsPort.withdraw_events_by_id`: exactly these events copied to `withdrawn_events`,
         marked with `load_id`, then deleted from `events` (the mutation waited for). ClickHouse has
         no transaction across the two, so each step is safe to repeat: an event already copied is
         not copied again, and a rerun after a failure between them finishes the move."""
-        ids = list(dict.fromkeys(edge_ids))
+        ids = list(dict.fromkeys(event_ids))
         if not ids:
             return 0
-        (row,) = await self._ch.rows("SELECT count() FROM events WHERE has(?, edge_id)", [ids])
+        (row,) = await self._ch.rows("SELECT count() FROM events WHERE has(?, event_id)", [ids])
         moved = int(row[0])
         if moved:
             await self._ch.command(
                 f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
-                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, edge_id) "
+                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, event_id) "
                 "AND event_id NOT IN (SELECT event_id FROM withdrawn_events)",
                 [load_id, ids],
             )
             await self._ch.command(
-                "ALTER TABLE events DELETE WHERE has(?, edge_id)" + _SYNC, [ids]
+                "ALTER TABLE events DELETE WHERE has(?, event_id)" + _SYNC, [ids]
             )
         return moved
 
