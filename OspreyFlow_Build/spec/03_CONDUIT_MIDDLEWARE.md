@@ -740,9 +740,15 @@ signature, per rule, in Valkey).
 
 **An alert a rule raised** is a §3.8 alert row carrying `typology`, `words`, `edge_ids`,
 `event_ids`, `window`, `trigger` and `alert_node_id`, plus the `Alert` node, marked no lower than
-anything it references; where referents with a restricted code belong to different units no single
-marking is safe, the node is withheld and the withholding audited. They are also the deployer's
-§3.8 alerts, and the case team's queue below.
+anything it references: its entities, the transactions and the links it cites, and what it writes
+alongside (ADR-146 decision 10: a link marked above its ends counts). In a load's transaction,
+what the load itself wrote stands in at its marking as written, anything else the load cannot read
+back at the highest marking the recipe could give it; a marking is never guessed. No node is
+written, the row still raised and the withholding audited with its reason in words, where
+referents with a restricted code belong to different units (no single marking is safe), where a
+referent's marking cannot be read in the load, or where a cited link cannot be read when the alert
+is raised after the commit (taken back or replaced since it was found; one such link never stops a
+sweep). They are also the deployer's §3.8 alerts, and the case team's queue below.
 
 **The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
 `rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and
@@ -759,7 +765,7 @@ team or owner). The Reports view's typology figures count the typology alerts al
 monitoring figures (below) count every kind.
 
 ```
-GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default), open, claimed, closed or all; ?kind= and ?severity=, each repeatable, Viewer
+GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default: open, claimed and closing), open, claimed, closing, closed or all; ?kind= and ?severity=, each repeatable, Viewer
 GET    /v1/investigations/{id}/alert-assignees   the case's Editors and Authors by grant, with names: whom an alert may be given to, Editor (ADR-133 stage (a))
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed → claimed by the member named; a typology alert only (one shared with a team is claimed), 422 assignment_refused in words otherwise, Editor (ADR-133 stage (a))
 GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
