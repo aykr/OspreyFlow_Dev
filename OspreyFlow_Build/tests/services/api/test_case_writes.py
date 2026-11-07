@@ -323,16 +323,16 @@ async def test_the_source_check_fails_with_unnamed_writes_stamped_into_the_layer
 # `test_composite_read_only.py`.
 
 
-# --- a branch has an empty layer of its own (ADR-143 Amendment 1 item 3) -----------------------
+# --- a branch holds no layer: it reads its original's (ADR-144 Amendment 1 decision 2) ----------
 
 
-async def test_a_branch_of_a_selection_holding_layer_items_reads_a_layer_of_its_own(
+async def test_a_branch_of_a_selection_holding_layer_items_reads_its_originals_layer(
     store: InMemoryDatasetStore,
 ) -> None:
-    """A branch reads its parent's dataset and an empty layer of its own, never its parent's
-    (the owner, 09:25, 7 November 2026: branches are removed in the next builds; until then no
-    branch reaches its parent's layer). Through the real branch-by-filter route, with the real
-    dataset store."""
+    """A branch reads its original case's dataset and layer, the layer read-only, and holds no
+    layer of its own (the owner, 7 November 2026: no branches anywhere; L3.2 removes them). Through
+    the real branch-by-filter route, with the real dataset store; its writes into that layer are
+    refused in `test_branch_layer.py`."""
     from services.api.app import (
         app,
         get_audit,
@@ -387,11 +387,11 @@ async def test_a_branch_of_a_selection_holding_layer_items_reads_a_layer_of_its_
 
     (published,) = recorder.published
     assert {n["id"] for n in json.loads(published[1])["nodes"]} == {"loaded", "drawn"}
-    own = await store.layer_of_case(branch)
-    assert own is not None and own != layer
-    assert await store.ids_of_case(branch) == ["src", own]
+    assert await store.layer_of_case(branch) is None
+    assert await store.read_only_layer_of(branch) == layer
+    assert await store.ids_of_case(branch) == ["src", layer]
     await scope_to_case(ALICE, branch, store)
-    assert analyst_layer() == own
+    assert analyst_layer() is None  # nothing of the branch's goes into it
 
 
 def _jumped_from_bobs_alert(store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch) -> Any:

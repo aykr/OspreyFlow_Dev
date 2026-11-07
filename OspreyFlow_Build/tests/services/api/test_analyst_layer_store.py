@@ -10,6 +10,7 @@ import pytest
 from services.api.config import PostgresConfig
 from services.api.datasets import (
     ANALYST_LAYER,
+    BranchLayerError,
     DatasetRefusedError,
     PostgresDatasetStore,
     UnknownDatasetEgressError,
@@ -115,15 +116,35 @@ async def test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first(s
     assert [d.id for d in await store.of_case(case, alice)] == [both.id]
 
 
-async def test_a_branch_has_a_layer_of_its_own(store) -> None:
+async def test_a_branch_holds_no_layer_and_reads_its_originals(store) -> None:
+    """ADR-144 Amendment 1 decision 2 (the owner, 7 November 2026), on Postgres: a branch, a branch
+    of a branch included, holds no layer of its own and reads its original's, read-only."""
     alice = _analyst()
     source = await store.create(alice, "Source")
-    parent, branch = new_id(), new_id()
+    parent, branch, twig = new_id(), new_id(), new_id()
     await store.set_for_case(parent, [source.id], alice)
+    layer = await store.layer_of_case(parent)
     await store.copy_case(parent, branch)
-    assert (await store.ids_of_case(branch))[0] == source.id
-    # ADR-143 Amendment 1 item 3: never its parent's.
-    assert await store.layer_of_case(branch) not in (None, await store.layer_of_case(parent))
+    await store.copy_case(branch, twig)
+    for case in (branch, twig):
+        assert await store.layer_of_case(case) is None
+        assert await store.read_only_layer_of(case) == layer
+        assert await store.ids_of_case(case) == [source.id, layer]
+    with pytest.raises(BranchLayerError):
+        await store.ensure_layer(branch, unit=alice.org_unit, created_by=alice.id)
+
+
+async def test_a_case_opened_from_an_alert_keeps_a_layer_of_its_own(store) -> None:
+    """The exception (ADR-143 Amendment 1 item 3): its maker may hold no level on the original."""
+    alice = _analyst()
+    source = await store.create(alice, "Source")
+    parent, jump = new_id(), new_id()
+    await store.set_for_case(parent, [source.id], alice)
+    await store.copy_case(parent, jump, created_by="bob", as_a_branch=False)
+    own = await store.layer_of_case(jump)
+    assert own not in (None, await store.layer_of_case(parent))
+    assert await store.read_only_layer_of(jump) is None
+    assert await store.ids_of_case(jump) == [source.id, own]
 
 
 async def test_a_layers_egress_is_the_strictest_of_its_cases(store) -> None:

@@ -48,10 +48,13 @@ from schemas.domain import (
     Principal,
 )
 
-from .datasets import COMPOSITE, Dataset, DatasetStore, reads_dataset_names
+from .datasets import COMPOSITE, BranchLayerError, Dataset, DatasetStore, reads_dataset_names
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
+#: A branch's original case's layer, which the branch reads and never writes (ADR-144 Amendment 1
+#: decision 2): set by `scope_to_case`, judged by the stamping graph's last word.
+_READ_ONLY_LAYER: ContextVar[str | None] = ContextVar("read_only_layer", default=None)
 #: The request's case, its dataset store and the principal scoped to it: so a writer may make the
 #: case's layer when it has none, inside the route after its level check (`analyst_writes_into`),
 #: and a write may be refused in a case reading a composite (`refuse_in_a_composite_case`).
@@ -93,6 +96,7 @@ def set_case_datasets(
     _CASE_DATASETS.set(tuple(datasets) if datasets is not None else None)
     _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
     _CASE_SCOPE.set(scope if datasets is not None else None)
+    _READ_ONLY_LAYER.set(None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
@@ -119,6 +123,8 @@ async def analyst_writes_into() -> list[str]:
     if scope is None or not held:
         raise NoAnalystLayerError("there is no case's analyst layer to write into")
     investigation_id, store, asker = scope
+    if _READ_ONLY_LAYER.get() is not None:
+        raise BranchLayerError  # a branch writes into no layer (ADR-144 Amendment 1 decision 2)
     chosen = await store.chosen_of_case(investigation_id)
     if not chosen:
         raise NoAnalystLayerError("the case reads no dataset")
@@ -208,6 +214,8 @@ async def scope_to_case(
     layer = await store.layer_of_case(investigation_id) if datasets else None
     scoped = principal.model_copy(update={"datasets": datasets})
     set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
+    if datasets and layer is None:
+        _READ_ONLY_LAYER.set(await store.read_only_layer_of(investigation_id))
     return scoped
 
 
@@ -373,12 +381,20 @@ class DatasetStampingGraph:
             raise AttributeError(name)
         return getattr(self._inner, name)
 
+    async def _refuse_into_a_read_only_layer(self, datasets: set[str]) -> None:
+        """The last word on ADR-144 Amendment 1 decision 2: a branch reads its original case's
+        layer and writes nothing into it, a correction of what is in it included."""
+        read_only = _READ_ONLY_LAYER.get()
+        if read_only is not None and read_only in datasets:
+            raise BranchLayerError
+
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
         into the case's own analyst layer goes ahead; and no write names a composite's id, under a
         case or not (the Studio reaches a dataset with no case). Before anything is written."""
         if self._dataset is not None:
             return
+        await self._refuse_into_a_read_only_layer(datasets)
         layer = analyst_layer()
         composite = await _composite_read()
         if composite is not None and (not datasets or datasets != {layer}):

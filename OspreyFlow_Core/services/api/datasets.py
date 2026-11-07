@@ -9,8 +9,10 @@ the datasets of each unit, and the datasets of each case.
 **Who may name what.** A case names exactly one dataset, a source or a composite, of its own unit
 (ADR-099 Amendment 12). A dataset of another unit, an analyst layer and one that does not exist are
 refused with the same answer, so a refusal says nothing about another unit's data or a layer.
-Changing a case's dataset is its Author's (the route's level); a branch, and a case opened from an
-alert, takes its parent's dataset and has an empty analyst layer of its own (ADR-143 Amendment 1).
+Changing a case's dataset is its Author's (the route's level). A branch takes its original case's
+dataset and reads its layer, read-only, holding none of its own (ADR-144 Amendment 1 decision 2); a
+case opened from an alert takes the dataset and has an empty analyst layer of its own, its maker
+holding no level on the original perhaps (ADR-143 Amendment 1 item 3).
 
 **Names are unique within a unit (ADR-099 Amendment 6),** ignoring case and spacing, so two of a
 unit's datasets never read alike; the id stays what every element and case refers to. A dataset
@@ -196,7 +198,10 @@ class DatasetStore(Protocol):
         *,
         case_name: str | None = None,
     ) -> list[Dataset]: ...
-    #: `created_by`: the person making the branch, whose new layer it is.
+    #: A branch reads its original case's dataset and layer and holds no layer of its own
+    #: (ADR-144 Amendment 1 decision 2). `as_a_branch=False` for a case opened from an alert: its
+    #: maker may hold no level on the original, so it reads the dataset alone and keeps an empty
+    #: layer of its own, `created_by` its maker (ADR-143 Amendment 1 item 3).
     async def copy_case(
         self,
         from_investigation_id: str,
@@ -204,12 +209,15 @@ class DatasetStore(Protocol):
         *,
         case_name: str | None = None,
         created_by: str | None = None,
+        as_a_branch: bool = True,
     ) -> None: ...
+    #: The original case's layer a branch reads, read-only; `None` for any other case.
+    async def read_only_layer_of(self, investigation_id: str) -> str | None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
     ) -> str: ...
-    #: The case's own layer; a branch's too is its own (ADR-143 Amendment 1 item 3).
+    #: The case's own layer; a branch holds none (ADR-144 Amendment 1 decision 2).
     async def layer_of_case(self, investigation_id: str) -> str | None: ...
     #: What the case chose, a source or a composite, with no reader: for the seeds and the
     #: migration, never for a route (a route names datasets only through `of_case`).
@@ -229,6 +237,18 @@ class DatasetStore(Protocol):
     async def set_egress(
         self, dataset_id: str, egress: DatasetEgress
     ) -> tuple[DatasetEgress, Dataset]: ...
+
+
+class BranchLayerError(Exception):
+    """ADR-144 Amendment 1 decision 2 (the owner, 7 November 2026: no branches anywhere, removed in
+    L3.2): a branch holds no layer of its own and writes into none; it reads its original case's,
+    read-only. Asked for one, the store refuses rather than make it."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This case is a branch, which reads its original case's own work read-only: mark or "
+            "link in the original case."
+        )
 
 
 class UnknownDatasetEgressError(Exception):
@@ -340,6 +360,8 @@ class InMemoryDatasetStore:
     def __init__(self) -> None:
         self.datasets: dict[str, Dataset] = {}
         self.cases: dict[str, list[str]] = {}
+        #: A branch's original case's layer, read-only (ADR-144 Amendment 1 decision 2).
+        self.layer_reads: dict[str, str] = {}
 
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
@@ -450,7 +472,11 @@ class InMemoryDatasetStore:
             or Dataset(id=i, name=i, owning_unit="", created_at=datetime.now(UTC), created_by="")
             for i in self.cases.get(investigation_id, [])
         ]
-        return read_set(chosen, await self.layer_of_case(investigation_id))
+        layer = await self.layer_of_case(investigation_id)
+        return read_set(chosen, layer or self.layer_reads.get(investigation_id))
+
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        return self.layer_reads.get(investigation_id)
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -458,6 +484,8 @@ class InMemoryDatasetStore:
         held = await self.layer_of_case(investigation_id)
         if held is not None:
             return held
+        if investigation_id in self.layer_reads:
+            raise BranchLayerError
         layer = self.add(
             Dataset(
                 id=new_id(),
@@ -482,9 +510,13 @@ class InMemoryDatasetStore:
         chosen = _one(dataset_ids)
         self._choosable(chosen, principal.org_unit, kinds=(SOURCE, COMPOSITE))
         self.cases[investigation_id] = [chosen]
-        await self.ensure_layer(
-            investigation_id, unit=principal.org_unit, created_by=principal.id, case_name=case_name
-        )
+        if investigation_id not in self.layer_reads:  # a branch holds none of its own
+            await self.ensure_layer(
+                investigation_id,
+                unit=principal.org_unit,
+                created_by=principal.id,
+                case_name=case_name,
+            )
         return await self.of_case(investigation_id, principal)
 
     async def copy_case(
@@ -494,12 +526,21 @@ class InMemoryDatasetStore:
         *,
         case_name: str | None = None,
         created_by: str | None = None,
+        as_a_branch: bool = True,
     ) -> None:
-        """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
-        empty layer of its own: it never reads its parent's layer, which its maker may hold no
-        level on (ADR-143 Amendment 1 item 3; branches are removed in the next builds)."""
+        """A branch reads its original case's chosen dataset and layer, the layer read-only, and
+        holds none of its own (ADR-144 Amendment 1 decision 2; branches are removed in L3.2). A
+        case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
+        its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         chosen = list(self.cases.get(from_investigation_id, []))
         self.cases[to_investigation_id] = chosen
+        if as_a_branch:
+            original = await self.layer_of_case(from_investigation_id) or self.layer_reads.get(
+                from_investigation_id
+            )
+            if original is not None:
+                self.layer_reads[to_investigation_id] = original
+            return
         if chosen:
             parent = self.datasets[chosen[0]]
             await self.ensure_layer(
@@ -564,6 +605,11 @@ CREATE TABLE IF NOT EXISTS investigation_datasets (
     dataset_id TEXT NOT NULL REFERENCES datasets (id),
     position INTEGER NOT NULL,
     PRIMARY KEY (investigation_id, dataset_id)
+);
+-- ADR-144 Amendment 1 decision 2: the original case's layer a branch reads, read-only.
+CREATE TABLE IF NOT EXISTS case_layer_reads (
+    investigation_id TEXT PRIMARY KEY,
+    layer_id TEXT NOT NULL REFERENCES datasets (id)
 );
 """
 
@@ -807,7 +853,17 @@ class PostgresDatasetStore:
                 "WHERE c.investigation_id = $1 AND d.kind <> 'analyst_layer' ORDER BY c.position",
                 investigation_id,
             )
-        return read_set([_row(r) for r in rows], await self.layer_of_case(investigation_id))
+        layer = await self.layer_of_case(investigation_id)
+        borrowed = None if layer else await self.read_only_layer_of(investigation_id)
+        return read_set([_row(r) for r in rows], layer or borrowed)
+
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        async with self._pool.acquire() as conn:
+            found: str | None = await conn.fetchval(
+                "SELECT layer_id FROM case_layer_reads WHERE investigation_id = $1",
+                investigation_id,
+            )
+        return found
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -815,6 +871,8 @@ class PostgresDatasetStore:
         held = await self.layer_of_case(investigation_id)
         if held is not None:
             return held
+        if await self.read_only_layer_of(investigation_id) is not None:
+            raise BranchLayerError
         layer = Dataset(
             id=new_id(),
             name=layer_name(case_name, investigation_id),
@@ -889,9 +947,13 @@ class PostgresDatasetStore:
                 investigation_id,
                 chosen,
             )
-        await self.ensure_layer(
-            investigation_id, unit=principal.org_unit, created_by=principal.id, case_name=case_name
-        )
+        if await self.read_only_layer_of(investigation_id) is None:  # a branch holds none
+            await self.ensure_layer(
+                investigation_id,
+                unit=principal.org_unit,
+                created_by=principal.id,
+                case_name=case_name,
+            )
         return await self.of_case(investigation_id, principal)
 
     async def list_all(self) -> list[Dataset]:
@@ -946,10 +1008,12 @@ class PostgresDatasetStore:
         *,
         case_name: str | None = None,
         created_by: str | None = None,
+        as_a_branch: bool = True,
     ) -> None:
-        """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
-        empty layer of its own: it never reads its parent's layer, which its maker may hold no
-        level on (ADR-143 Amendment 1 item 3; branches are removed in the next builds)."""
+        """A branch reads its original case's chosen dataset and layer, the layer read-only, and
+        holds none of its own (ADR-144 Amendment 1 decision 2; branches are removed in L3.2). A
+        case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
+        its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
@@ -966,6 +1030,20 @@ class PostgresDatasetStore:
                 "ORDER BY c.position LIMIT 1",
                 to_investigation_id,
             )
+            if as_a_branch:
+                await conn.execute(
+                    "INSERT INTO case_layer_reads (investigation_id, layer_id) "
+                    "SELECT $2, COALESCE("
+                    "(SELECT id FROM datasets WHERE layer_of = $1 AND kind = 'analyst_layer'), "
+                    "(SELECT layer_id FROM case_layer_reads WHERE investigation_id = $1)) "
+                    "WHERE COALESCE("
+                    "(SELECT id FROM datasets WHERE layer_of = $1 AND kind = 'analyst_layer'), "
+                    "(SELECT layer_id FROM case_layer_reads WHERE investigation_id = $1)) "
+                    "IS NOT NULL ON CONFLICT DO NOTHING",
+                    from_investigation_id,
+                    to_investigation_id,
+                )
+                return
         if parent is not None:
             await self.ensure_layer(
                 to_investigation_id,

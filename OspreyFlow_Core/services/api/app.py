@@ -392,6 +392,7 @@ from .dataset_scope import (
 )
 from .datasets import (
     MAX_DATASET_NAME,
+    BranchLayerError,
     CaseDatasetsRequest,
     CreateCompositeRequest,
     CreateDatasetRequest,
@@ -2376,6 +2377,15 @@ async def _composite_read_only_handler(
     was written."""
     return JSONResponse(
         status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(BranchLayerError)
+async def _branch_layer_handler(request: Request, exc: BranchLayerError) -> JSONResponse:
+    """ADR-144 Amendment 1 decision 2: a branch reads its original case's layer and writes none;
+    refused before anything was written."""
+    return JSONResponse(
+        status_code=409, content={"error": "branch_layer_read_only", "detail": str(exc)}
     )
 
 
@@ -6444,8 +6454,15 @@ async def jump_alert_route(
     if alert.dataset_id is not None:
         await datasets.set_for_case(branch.id, [alert.dataset_id], principal, case_name=branch.name)
     elif alert.investigation_id is not None:
+        # Not as a branch: the jumper may hold no level on the alert's case, so the new case reads
+        # its dataset and keeps an empty layer of its own, never the original's (ADR-143 Amendment
+        # 1 item 3; ADR-144 Amendment 1 decision 2 is for the branch routes).
         await datasets.copy_case(
-            alert.investigation_id, branch.id, case_name=branch.name, created_by=principal.id
+            alert.investigation_id,
+            branch.id,
+            case_name=branch.name,
+            created_by=principal.id,
+            as_a_branch=False,
         )
     if not await datasets.ids_of_case(branch.id):
         own = await datasets.create(principal, branch.name, suffix_if_taken=True)
