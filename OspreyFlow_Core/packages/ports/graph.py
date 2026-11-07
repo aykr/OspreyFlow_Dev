@@ -681,12 +681,14 @@ class GraphPort(Protocol):
     async def withdraw_elements(
         self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
     ) -> None:
-        """ADR-110 Amendment 6 point 3: a full-snapshot refresh (`load_id`) withdraws the elements
-        only its dropped rows made. Each live one of `node_ids`/`edge_ids` is set reverted, so every
-        read leaves it out for every reader with no read changed, and `audit.withdrawn_by_load`
-        records the refresh. An element already reverted is left as it is (it is not this load's to
+        """ADR-110 Amendment 6 point 3, as Amendment 15 leaves it: no refresh calls this since
+        Amendment 15 (a full snapshot withdraws its dropped rows' events alone, never an element);
+        it stays in the port, with its conformance, for `restore_withdrawn`'s records made before.
+        Each live one of `node_ids`/`edge_ids` is set reverted, so every read leaves it out for
+        every reader with no read changed, and `audit.withdrawn_by_load` records the refresh.
+        An element already reverted is left as it is (it is not this load's to
         restore). Unknown ids and none are a safe no-op; resolved as `revert_elements` resolves
-        them, refusing an ambiguous id. `services/ingest/` is the only caller."""
+        them, refusing an ambiguous id."""
         ...
 
     async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:

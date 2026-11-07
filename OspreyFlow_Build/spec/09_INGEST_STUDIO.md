@@ -932,8 +932,8 @@ recorded under the trigger `source_refresh`:
 what its row wrote, its events by id among it. The keys a snapshot no longer carries are its dropped
 rows. **Only their own events** (their timeline and analytics rows) are withdrawn, by the ids their
 keys record, and never another row's on the same link (Amendment 15, the owner's ruling "Only the
-rows' events"). **The graph is never touched**: a dropped row's nodes and links stay, with no row
-holding them, until its load is reverted. Whether a link or a node could go depended on other
+rows' events"). **The graph is never touched**: a dropped row's nodes and links stay, whether or not
+another row still holds them, until its load is reverted. Whether a link or a node could go depended on other
 cases' rows and loads, which the loader may not read, so whether it stayed or went would tell them
 so (rule 3's hidden degree). The withdrawal asks only which of this pipeline's kept keys in the case
 the snapshot no longer carries. The run says in words how many rows it withdrew, and how many
@@ -946,7 +946,7 @@ rows' events and their keys, and is refused while a row it withdrew has been loa
 recorded before Amendment 15, whose record lists withdrawn nodes and links, restores those too. A
 pipeline reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
 
-Two limits stand until the owner rules (Amendment 15). A row that comes back merges into its own
+Three limits stand until the owner rules (Amendment 15). A row that comes back merges into its own
 link, so its load is not reverted, nor the refresh that withdrew it; the run says so in words. A row
 dropped again after coming back is left in place, its events too, in words. And until a Studio load
 stamps its dataset (ADR-143), two cases' rows on the same pair merge into one link, so one case's

@@ -27109,7 +27109,8 @@ the same link, of any case, went with them.
    `withdraw_events`; `RecipeRunStore.withdrawn_event_ids`). Another row's event on the same link
    stays, whoever wrote it (the analytics conformance suite's
    `test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link`).
-2. **The graph is never touched.** A dropped row's nodes and links stay, with no row holding them,
+2. **The graph is never touched.** A dropped row's nodes and links stay, whether or not another row
+   still holds them,
    until its load is reverted, as *keep* leaves every element. `withdrawn_node_ids` and
    `withdrawn_edge_ids` stay in the record and the report, always empty for a refresh after this
    amendment, and `links_kept_an_occurrence` is always 0. A link still counts the occurrence the
@@ -27134,7 +27135,8 @@ the same link, of any case, went with them.
    for (`tests/ingest/test_metering.py`'s
    `test_a_rows_write_counts_the_same_whether_it_merged_or_created`, red with merges uncounted). A
    `reference` to a node the reader may not see reads as no node at all, so it creates, exactly as
-   when no node exists.
+   when no node exists (`test_metering.py`'s
+   `test_a_match_on_a_node_the_reader_may_not_see_reads_as_no_node_at_all`).
 6. **A record written earlier reverts as before.** A refresh recorded under Amendment 8 or under
    "Never withdraw nodes" may list nodes and links in `withdrawn_node_ids` and `withdrawn_edge_ids`,
    marked in the graph with its load. Its revert puts them back by the load (`GraphPort.
