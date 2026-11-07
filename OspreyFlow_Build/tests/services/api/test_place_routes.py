@@ -63,8 +63,9 @@ EXEMPT = {
     # ADR-145 Amendment 1 (the owner's answer, 7 November 2026): run times computed from the cron
     # text it is sent; Admin › Operations and the Studio's schedule editor both call it.
     "schedule_preview_route": "computes run times from the text sent; reads no store",
-    # No screen calls the export ledger's route yet, so no place is shown from it; its own right,
-    # Admin's (ADR-112 A8), refuses everyone else (`test_route_rights.py`). Exempt only while no
+    # No screen calls the export ledger's route yet, so no place is shown from it. Its right,
+    # Admin's (ADR-112 A8), also answers the legacy `compliance` role, which is offered no place;
+    # it refuses everyone else (`test_route_rights.py`). Exempt only while no
     # screen calls it (`test_the_export_ledger_is_exempt_only_while_no_screen_calls_it`).
     "list_exports_route": "no screen calls it",
 }

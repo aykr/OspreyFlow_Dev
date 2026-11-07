@@ -27026,7 +27026,10 @@ usable); built in Lane 2's L2.2. Amends decisions 1 and 3 as they are built; dec
    the legacy roles, `source_author` is offered the Studio; `source_approver`, `loader` and `compliance`
    no place — the first two keep their own Studio routes (publishing and scheduling; running and the run
    history), which still answer them by their own rights, recorded in `placesByRole.json` as answered
-   though their place is not offered, because the Studio's entry read needs `edit_pipelines`.
+   though their place is not offered, because the Studio's entry read needs `edit_pipelines`. So are
+   three rights granted singly: `right:run_pipelines` (running, the run history), `right:publish_pipelines`
+   (publishing) and `right:verify_pipelines` (verifying, the graph preview). `compliance` holds the
+   export ledger's right, whose route no screen calls.
 5. **The GOV.UK header's local extension** (decision 3). GOV.UK Frontend 6.6.0's `header` has no
    navigation: its parameters are the product name and the homepage link. So the header carries one
    slot after the logo (`brand/govuk/GovukHeader.tsx`, `withPlaces`, drawn only in the Glass's frame,
