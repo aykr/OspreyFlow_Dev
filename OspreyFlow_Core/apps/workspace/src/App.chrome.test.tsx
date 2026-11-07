@@ -7,6 +7,11 @@
 // opens with the Inspector only. Red if a control returns before the canvas, or a panel opens by
 // default. The canvas, the map and the timeline need WebGL, which jsdom has none of: the canvas is a
 // stand-in carrying its real role and name, so the count stops where the real one would.
+//
+// What this count cannot see: it reads the DOM in document order, not a real Tab walk, so a control
+// hidden only by CSS would be counted, and one with a positive `tabindex` (reached out of document
+// order) would be counted in the wrong place. Neither is used in the chrome today. A true Tab walk on
+// the real `App` needs a browser and the Conduit behind it — the dev stack — which this tier has not.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 

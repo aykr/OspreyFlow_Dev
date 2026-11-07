@@ -776,7 +776,8 @@ granted on a real dataset (rule 9).
 
 **The reporting walkthrough** (all synthetic, on "Operation Ledger — AML review"):
 
-1. **As the analyst** — *Reports* in the top bar: the case's figures, counted for the reader.
+1. **As the analyst** — *More views → Reports* in the top bar (ADR-145 Amendment 2): the case's
+   figures, counted for the reader.
 2. **As the admin** — *Admin* in the place switcher, then its *Dashboards* tab: register a dashboard identity (its secret is shown once;
    put it in `REPORT_SYNC_DASHBOARDS`); its *Figures* column says when it last pulled.
 3. **As the case's Author** — *Cases → Who can open this case*: give the dashboard's account id

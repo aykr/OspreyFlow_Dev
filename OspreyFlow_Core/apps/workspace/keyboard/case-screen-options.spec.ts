@@ -2,7 +2,10 @@
 // Counts each variant's controls by keyboard alone (rule 13: what a keyboard user passes through), and
 // with `OSPREY_L23_SHOTS=<folder>` writes each variant's screenshot in the dark, light and GOV.UK
 // themes there (the build tree's lane folder, `process/lanes/glass/l2.3/`). The harness is never wired
-// into the app.
+// into the app. The counts pinned below are the prototype's record, not the product's: its harness
+// draws the mark without its Home button and stand-ins for the panels, so every count is one below the
+// product's (`src/App.chrome.test.tsx` counts the real `App`) and the column's parts are a stand-in's
+// (`keyboard/case-screen-parts.spec.ts` counts the real panels).
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 

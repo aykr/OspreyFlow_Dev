@@ -1,7 +1,7 @@
 // L2.3 part 1 (ADR-145 decision 4, N4): a prototype round for the case screen's lightening, for the
-// owner to choose from. Never wired into the app. The chrome is the real shell (`TopBar`, the place
-// switcher, the context banner, `LeftRail`, `SidePanelStack`); what needs the Conduit (search, the
-// panels' contents, the canvas) is a stand-in with the same names and controls. `?variant=`:
+// owner to choose from. Never wired into the app. Most of the chrome is the real shell (`TopBar`, the
+// place switcher, the context banner, `LeftRail`, `SidePanelStack`), but the mark is drawn without its
+// Home button, and what needs the Conduit (search, the panels' contents, the canvas) is a stand-in. `?variant=`:
 //   today — the case screen as built (all three panels open), for reference;
 //   a     — ADR-145 decision 4 as written: the right-hand column opens with the Inspector only,
 //           Metrics and the Query builder folded below it, one click away, in their order;

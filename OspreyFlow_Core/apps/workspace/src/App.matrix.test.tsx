@@ -132,8 +132,9 @@ test("the view switch offers the Graph and the Map, and the Matrix one click awa
     .map((b) => b.textContent);
   expect(names).toEqual(["Graph", "Map"]);
   chooseMatrix();
-  // The view open is one of More views': the button names it and is marked as pressed.
-  expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
+  // The view open is one of More views': the button names it, and its menu marks it as current.
+  fireEvent.click(screen.getByRole("button", { name: /^Matrix/ }));
+  expect(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Matrix" }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("heading", { name: "Matrix" })).toBeTruthy();
   // The same working set, read again from nothing: three people, two links.
   expect(entities().querySelector("caption")?.textContent).toMatch(/^Entities in this view, 3\./);

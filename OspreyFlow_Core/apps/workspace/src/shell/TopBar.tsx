@@ -78,7 +78,7 @@ export function TopBar({ app, places, caseSwitcher, search, views = [], moreView
                 key={view.id}
                 type="button"
                 className="menu-panel__item"
-                aria-current={view.pressed ? "true" : undefined}
+                aria-current={view.pressed ? "page" : undefined}
                 onClick={() => {
                   close();
                   view.onSelect();

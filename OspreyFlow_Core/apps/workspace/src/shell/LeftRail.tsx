@@ -14,8 +14,6 @@ export interface RailItem {
   onSelect: () => void;
   /** This place is the one open now. */
   pressed?: boolean;
-  /** How many are open there (ADR-115 E6: the alert queue's count); none drawn for nothing. */
-  badge?: number;
 }
 
 /** The rail's ⋯ *More*: a menu of the destinations not on the rail itself. It closes on Escape
@@ -34,8 +32,8 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
-  const current = items.find((item) => item.pressed);
-  const label = current ? `More, ${current.label} open` : "More";
+  // One name and one role, whatever is open: the destination open is marked inside the menu.
+  const label = "More";
   return (
     <div
       ref={wrapper}
@@ -59,7 +57,6 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        aria-pressed={current ? true : undefined}
         title={expanded ? undefined : label}
         onClick={() => setOpen((was) => !was)}
       >
@@ -73,7 +70,7 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
               key={item.id}
               type="button"
               className="menu-panel__item"
-              aria-current={item.pressed ? "true" : undefined}
+              aria-current={item.pressed ? "page" : undefined}
               onClick={() => {
                 setOpen(false);
                 item.onSelect();
@@ -106,17 +103,12 @@ export function LeftRail({
           key={item.id}
           type="button"
           className="left-rail__item"
-          aria-label={item.badge ? `${item.label}, ${item.badge.toLocaleString("en-GB")} open` : item.label}
+          aria-label={item.label}
           aria-pressed={item.pressed === undefined ? undefined : item.pressed}
           title={expanded ? undefined : item.label}
           onClick={item.onSelect}
         >
           <Icon name={item.icon} />
-          {item.badge ? (
-            <span className="value left-rail__badge" aria-hidden="true">
-              {item.badge > 99 ? "99+" : item.badge}
-            </span>
-          ) : null}
           {expanded && <span className="left-rail__name">{item.label}</span>}
         </button>
       ))}

@@ -71,20 +71,9 @@ describe("the left rail", () => {
   });
 });
 
-// ADR-115 E6 (the reference's rail): an entry may carry a count, said in its name and drawn as a badge
-// in mono; a Help button at the foot reopens the workspace's welcome panel.
-describe("the left rail's badge and Help", () => {
-  it("draws a count on an entry and says it in the entry's name", () => {
-    render(<LeftRail items={[{ id: "alerts", label: "Alerts", icon: "alerts", onSelect: () => undefined, badge: 3 }]} />);
-    const alerts = screen.getByRole("button", { name: "Alerts, 3 open" });
-    expect(alerts.querySelector(".left-rail__badge")?.textContent).toBe("3");
-  });
-
-  it("draws no badge for nothing open", () => {
-    render(<LeftRail items={[{ id: "alerts", label: "Alerts", icon: "alerts", onSelect: () => undefined, badge: 0 }]} />);
-    expect(screen.getByRole("button", { name: "Alerts" }).querySelector(".left-rail__badge")).toBeNull();
-  });
-
+// ADR-115 E6: a Help button at the foot reopens the workspace's welcome panel. (The open-alert count
+// left the rail with Monitoring, ADR-145 Amendment 2: it is the banner's, tested in `places.test.tsx`.)
+describe("the left rail's Help", () => {
   it("offers Help at the foot, which calls back", () => {
     const help = vi.fn();
     render(<LeftRail items={[]} onHelp={help} />);
@@ -106,11 +95,14 @@ describe("the rail's More and the top bar's More views", () => {
         ]}
       />,
     );
-    const more = screen.getByRole("button", { name: "More, History open" });
-    expect(more.getAttribute("aria-pressed")).toBe("true");
+    // One name and no pressed state, whatever is open: the open destination is marked in the menu.
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more.getAttribute("aria-pressed")).toBeNull();
     fireEvent.click(more);
     const menu = within(screen.getByRole("group", { name: "More" }));
     expect(menu.getAllByRole("button").map((b) => b.textContent)).toEqual(["Ownership", "History"]);
+    expect(menu.getByRole("button", { name: "History" }).getAttribute("aria-current")).toBe("page");
+    expect(menu.getByRole("button", { name: "Ownership" }).getAttribute("aria-current")).toBeNull();
     fireEvent.click(menu.getByRole("button", { name: "Ownership" }));
     expect(chose).toHaveBeenCalledWith("ownership");
     expect(screen.queryByRole("group", { name: "More" })).toBeNull();
@@ -132,6 +124,8 @@ describe("the rail's More and the top bar's More views", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Reports" }));
     expect(chose).toHaveBeenCalledWith("reports");
     rerender(<TopBar app="glass" views={[view("graph"), view("map")]} moreViews={[view("matrix"), view("reports", true)]} account={null} />);
-    expect(screen.getByRole("button", { name: /^Reports/ }).className).toContain("menu-button--pressed");
+    // The button names the view open, and the menu marks it as the current one.
+    fireEvent.click(screen.getByRole("button", { name: /^Reports/ }));
+    expect(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Reports" }).getAttribute("aria-current")).toBe("page");
   });
 });
