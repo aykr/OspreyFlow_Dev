@@ -750,16 +750,17 @@ that brand), and Home shows a card for each place the account opens and none for
 types* left the rail too: it is a tab of Admin. The Studio has no rail; a line under the top bar says
 where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
-Glass*, which replaces the Studio rail's *Back to the investigation*. Until the rights change the owner
-ruled on that day lands (ADR-112's amendment), the analyst and the report viewer are still offered the
-Studio in the switcher, because its file and run-history routes still answer them.
+Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
+*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. No role lost a right: the
+routes were re-homed instead (ADR-145 Amendment 1), so each account is offered exactly the places in the
+table below, and a place it is not offered refuses it.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |
-| `osprey-demo-analyst` | Analyst | the investigation: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
-| `osprey-demo-engineer` | Data Engineer | the Ingest Studio: pipelines, rules, held rows | `OSPREY_DEMO_ENGINEER_PASSWORD` |
-| `osprey-demo-report-viewer` | Reports Viewer | Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
-| `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | everything, and the Admin area | `OSPREY_DEMO_ADMIN_PASSWORD` |
+| `osprey-demo-analyst` | Analyst | the Glass: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
+| `osprey-demo-engineer` | Data Engineer | the Glass, the Ingest Studio (pipelines, rules, held rows) and Admin › Operations | `OSPREY_DEMO_ENGINEER_PASSWORD` |
+| `osprey-demo-report-viewer` | Reports Viewer | the Glass: Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
+| `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | all three places: the Glass, the Ingest Studio and Admin | `OSPREY_DEMO_ADMIN_PASSWORD` |
 
 The engineer holds Editor and the report viewer Viewer on the synthetic demo cases; neither is ever
 granted on a real dataset (rule 9).

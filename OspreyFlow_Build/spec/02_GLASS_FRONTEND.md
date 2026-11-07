@@ -213,8 +213,8 @@ menu, which sits on `surface-raised` (the owner, 9 October 2026). The timeline o
 folded: a 34px row — the chevron, *Timeline*, a small density strip of what the open timeline
 holds and its date range in mono; open, its plot is 130px by default (DESIGN.md §5a; ADR-115 E4). Above the bar, the **classification strip** names the highest protective marking among what is
 on screen, by the deployment's handling scheme's order, and is never hidden (`role="note"`, "Protective
-marking"). Chrome is these three rows — strip, bar, view toolbar — and no more (ADR-097 Amendment 1);
-their heights are DESIGN.md v0.3 §5a's (20, 44, 36; ADR-115 decision 9) and checked
+marking"). Chrome is these four rows — strip, bar, the context banner (ADR-145 decision 2, §2.0a), view
+toolbar — and no more (ADR-097 Amendment 1); the strip's, the bar's and the toolbar's heights are DESIGN.md v0.3 §5a's (20, 44, 36; ADR-115 decision 9) and checked
 (`keyboard/shell.spec.ts`, `design/shellSizes.test.ts`). The right panel is 340px by default and
 resizable from 300 to 480; at a viewport of 1200px or wider it docks, open; below, it starts closed
 and opens over the canvas (a shadow, no hairline), and the canvas toolbar's *Details* opens and closes
@@ -396,15 +396,20 @@ Admin › Operations, is named with both; `/v1/admin/screening-lists` is the Gla
 as each built-in role and the *Super user* preset, expecting `403 right_required`. It was shown red with
 one Admin route's and one Studio route's `require_right` removed.
 
-What each role is offered, with the rights as the owner's ruling of 7 November 2026 ("narrow those
-rights") leaves them: an **Analyst** the Glass; a **Data Engineer** the Glass, the Studio and Admin
-(Admin › Operations, its `operate_schedules`); an **Administrator** Admin and the Glass (the case list,
-for an orphaned case's sharing and removal, the rule audit, link-strength influencers and the export
-ledger); a **Reports Viewer** the Glass; the **Super user** all three. Until ADR-112's amendment lands
-(the Analyst loses `add_ingest_files`, the Administrator `schedule_pipelines`) and Lane 1 moves the
-pipeline-run history (`GET …/ingest/recipes/{id}/runs`) off `read_data_feeds`, an Analyst and a Reports
-Viewer are also offered the Studio, and an Administrator the Studio too, because those routes still
-answer them; the test holds each of these as a strict expected failure that turns red when it lands.
+What each role is offered (the owner's ruling of 7 November 2026, "Re-home the routes": no role
+loses a right, ADR-145 Amendment 1): an **Analyst** the Glass; a **Data Engineer** the Glass, the Studio
+and Admin (Admin › Operations, its `operate_schedules` and `schedule_pipelines`); an **Administrator**
+Admin and the Glass (the case list, for an orphaned case's sharing and removal, the rule audit,
+link-strength influencers and the export ledger); a **Reports Viewer** the Glass; the **Super user**
+all three. The routes that crossed were re-homed, not the roles: the analyst's upload
+(`…/ingest/source-files`, ADR-067) answers as a Glass route; the schedule preview, a pipeline's
+schedule with its pause and resume, and a source's refresh pause and resume answer as Admin routes as
+well as the Studio's; the Studio's other routes need a Studio right — its dataset sources, connections
+and folder listing `edit_pipelines` (no longer `add_ingest_files`), its run history `run_pipelines` (no
+longer `read_data_feeds`; the Glass's *Data feeds* keeps its own route). The test also signs in as each
+legacy role and each right granted singly, and checks every call site the workspace's source names
+against its route's places. While the rights are not yet known, or cannot be read, no place is
+offered.
 
 **The switcher.** In the top bar after the mark, one button per place in the table's order, the current
 one `aria-current="page"`. Choosing Admin leaves the case for the Admin place (it needs none); choosing
@@ -413,21 +418,25 @@ GOV.UK brand the switcher stands inside the GOV.UK header (ADR-132 Amendment 6).
 `header` has no navigation (its parameters are the product name and the homepage link), so the header
 carries a small local extension: one slot after the logo (`brand/govuk/GovukHeader.tsx`, drawn only in
 the Glass's frame, not on the identity provider's sign-in page), styled on the header's own colours
-(`shell/places.css`). The amendment recording the extension is reserved with the orchestrator.
+(`shell/places.css`), recorded in ADR-145 Amendment 1.
 
-**The context banner.** One line under the top bar (`shell/ContextBanner.tsx`), a region named by its
-first words:
-- in the Glass: "You are in the Glass · ‹case menu› · reads ‹the case's datasets›";
+**The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
+under the OspreyFlow brand, its controls 32), a region named by its first words:
+- in the Glass: "You are in the Glass · Case · Boards · Monitoring · ‹case menu› · reads ‹the case's
+  datasets›", the sections a navigation named *In the Glass* (*Case* the case's views, *Monitoring* the
+  Monitoring place, *Boards* drawn as "Boards (coming)", `aria-disabled`, until Lane 3 builds it);
 - in the Studio: "You are in the Ingest Studio · Dataset ‹the case's dataset› · for ‹case menu›";
 - in Admin: "You are in Admin".
 
 The datasets are the case's, as `GET /v1/investigations/{id}/datasets` answers this reader. Not drawn:
-decision 2's "feeds n cases" in the Studio. No route gives a dataset's cases as the reader may see
+decision 2's "Dataset ‹name› ▾" choice in the Studio (the Studio's screens hold no dataset of their own
+yet; the banner names the case's), and its "feeds n cases". No route gives a dataset's cases as the reader may see
 them, and a count over cases they cannot see would break rule 7; it waits for that route. A person
 holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset› in the Ingest Studio ↗*
 in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the same case
 and the view last open (this replaces the Studio rail's *Back to the investigation*). Under the GOV.UK
-brand the banner is a GOV.UK notification banner, its title the place.
+brand the banner is a GOV.UK notification banner, its title the place: 91 pixels tall at 1440 wide,
+title and one line, taken from the workspace's height.
 
 **Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). Its tabs are as
 before, each behind its right, with **Proposed types** (`manage_ontology`) among them: it left the
@@ -435,8 +444,8 @@ Glass's rail, and is decided here until the Studio's Model tab holds it (ADR-145
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
 banner's cross-link and Home's cards end to end, each shown red with its handler removed (rule 13);
-`a11y/every-harness.spec.ts` scans `keyboard/places-harness.html` in the dark, light and GOV.UK
-variants, in each place.
+the banner's sections are proved too; `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
+in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
@@ -834,7 +843,9 @@ type fits; the ends are the link's own. Proposed, it is chosen at once in the fo
 probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
 are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
 when a case opens and again after a proposal or a decision. A refused name is said in the server's
-words. **An `osprey-admin` holder** also has **Proposed types** on the left rail: their own unit's
+words. **A holder of `manage_ontology`** (an administrator) has **Proposed types** as a tab of the Admin
+place (ADR-090 Amendment 5: it left the rail, and stays in Admin until the Studio's Model tab shows it,
+L3.5): their own unit's
 proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
 Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
 not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
@@ -1107,8 +1118,8 @@ leaves out what it would only be refused — never in place of the Conduit's che
 (`rights/visibility.ts`): the rail shows *Monitoring* (`alerts`) for read_alert_queue or keep_watches (ADR-133 Amendment 5: the
 watches are in its Watches tab, the rail having no Watches entry),
 *Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
-*Proposed types* for manage_ontology, *Ingest Studio* for edit_pipelines (an analyst adds files from
-the canvas), *Dashboards* for read_reports, *Admin* for any administration right; the view switch offers Graph and Map for
+*Dashboards* for read_reports (the Ingest Studio, Admin and Proposed types are no longer on the rail:
+the place switcher offers the places, `shell/places.ts`, §2.0a); the view switch offers Graph and Map for
 investigate and Reports for read_reports, and a person who may not investigate (a Reports Viewer)
 lands on Reports; the Reports view's download is offered only to holders of read_report_feed.
 

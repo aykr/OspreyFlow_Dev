@@ -26977,3 +26977,73 @@ conditions, content and six handling parts bound to columns), has not been built
 keyboard or by hand. *Edited in expert mode*: the only expert-mode edit case edits the harness's own
 draft, not the reports pipeline. Nothing has been walked on the dev stack, and DEMO_GUIDE chapter 4
 still opens the seeded draft. All of it is left to a later step (L1.2b).
+
+### ADR-145, Amendment 1 (7 November 2026) — three places as built: a place follows the rights its routes check; the crossing routes re-homed; the GOV.UK header's local extension
+
+Status: accepted from the owner's ruling of 7 November 2026, "Re-home the routes", put with its
+consequences; built in Lane 2's L2.2. Amends decisions 1 and 3 as they are built; decision 2 is unchanged.
+
+1. **A place follows the rights its routes check.** `apps/workspace/src/shell/places.json` names the three
+   places and the rights that open each; a place is offered to whoever holds any one of them, and a
+   place's rights are exactly the rights its own routes need. Every route is assigned to the places whose
+   screens call it, and a route two places call belongs to both. While the rights are not known, or cannot
+   be read, no place is offered. Proved by `test_place_routes.py` (each built-in role, the *Super user*
+   preset, each legacy role and each right granted singly is offered its places, and every route of a
+   place hidden from it answers `403 right_required`; each call site the workspace's source names is
+   among its route's places).
+2. **No role loses a right** (`schemas/rights.py` is unchanged). The routes that crossed places were
+   re-homed instead:
+   - the analyst's upload, `GET` and `POST /v1/investigations/{id}/ingest/source-files` (ADR-067),
+     answers as a Glass route (and the Studio's Connect), its right `add_ingest_files` unchanged —
+     so ADR-067 is not amended;
+   - `POST /v1/ingest/schedule-preview`, `PATCH …/ingest/recipes/{id}/schedule` and its `…/pause` and
+     `…/resume`, and `POST /v1/datasets/{d}/sources/{s}/refresh/pause` and `…/resume` answer as Admin
+     routes as well as the Studio's, their right `schedule_pipelines` unchanged. `scheduler.py`'s run
+     check still asks a schedule's owner for `schedule_pipelines`, which administrators keep, so a
+     schedule an administrator owns still runs;
+   - the Studio's other routes need a Studio right. Eight changed their right:
+
+     | Route | Was | Now |
+     | --- | --- | --- |
+     | `GET /v1/ingest/connections` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/datasets/{d}/source-files` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/datasets/{d}/sources` | `add_ingest_files` | `edit_pipelines` |
+     | `POST /v1/datasets/{d}/sources` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/datasets/{d}/sources/{s}` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/datasets/{d}/sources/{s}/profile` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/datasets/{d}/sources/{s}/lineage` | `add_ingest_files` | `edit_pipelines` |
+     | `GET /v1/investigations/{id}/ingest/recipes/{r}/runs` | `read_data_feeds` | `run_pipelines` |
+
+     **Who stops being answered:** Analysts (who held `add_ingest_files`) on the first seven, and
+     Analysts and Reports Viewers (who held `read_data_feeds`) on the run history — Studio-only routes
+     for which neither had a screen; no Glass or Admin screen calls any of the eight. The Glass's *Data
+     feeds* keeps its own route and `read_data_feeds`. Data Engineers, and the legacy `source_author`
+     (on the first seven) and `loader` (on the run history), are answered as before.
+3. **What each role is offered:** an Analyst the Glass; a Data Engineer the Glass, the Studio and Admin
+   (Admin › Operations); an Administrator Admin and the Glass (the case list, for an orphaned case, the
+   rule audit, link-strength influencers and the export ledger); a Reports Viewer the Glass; the Super
+   user all three.
+4. **The GOV.UK header's local extension** (decision 3). GOV.UK Frontend 6.6.0's `header` has no
+   navigation: its parameters are the product name and the homepage link. So the header carries one
+   slot after the logo (`brand/govuk/GovukHeader.tsx`, `withPlaces`, drawn only in the Glass's frame,
+   never on the identity provider's sign-in page, whose markup stays the component's), into which the
+   place switcher is drawn, styled on the header's own colours (`shell/places.css`). ADR-132 Amendment 6
+   stands; nothing else of GOV.UK Frontend is changed.
+5. **The banner as built** (decision 2): the Glass's Case · Boards · Monitoring, *Boards* drawn as coming
+   until Lane 3 builds it. Not built: the Studio's *Dataset ‹name› ▾* choice (the Studio's screens hold
+   no dataset of their own yet; the banner names the case's datasets) and its "feeds n cases" (no route
+   gives a dataset's cases as the reader may see them; rule 7).
+
+### ADR-090, Amendment 5 (7 November 2026) — Proposed types stay in Admin until the Studio's Model tab shows them
+
+Status: accepted from the owner's ruling of 7 November 2026. Amends Amendment 4 as to when. *Proposed
+types* left the Glass's rail (ADR-145 decision 1) and is a tab of the Admin place, behind
+`manage_ontology` as before (`admin/AdminPlace.tsx`), until the Studio's Model tab shows proposed types
+(L3.5). Then it moves there, under Amendment 4.
+
+### ADR-115, Amendment 6 (7 November 2026) — places a person cannot open are hidden, not dimmed
+
+Status: accepted from the owner's ruling of 7 November 2026 (ADR-145 N6). Amends decision 7. Home shows a
+card only for each place the person's rights open, the same list as the place switcher; a place they
+cannot open has no card, where decision 7 drew it dimmed with the role it needs. A person whose rights
+open none is told "Your account opens no place yet. Ask an administrator to give you a role."
