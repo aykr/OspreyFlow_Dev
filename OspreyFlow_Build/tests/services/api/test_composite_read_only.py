@@ -27,7 +27,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from services.api import dataset_scope
 from services.api.dataset_scope import (
     CompositeReadOnlyError,
     DatasetStampingGraph,
@@ -115,29 +114,38 @@ async def _in_the_composite_case() -> tuple[InMemoryDatasetStore, Principal]:
     return store, await scope_to_case(ANALYST, CASE, store)
 
 
-def _planted_out(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Rule 15: the refusal planted out wherever it lives (each service's call, and the stamping
-    graph's last word), as the code stood before the ruling."""
+#: Each check, by name: the services' own (`refuse_in_a_composite_case`, after their read), the
+#: node routes', the stamping graph's last word, and the dataset store's answer to it.
+SERVICES = ("alert_queue", "email_extraction", "link_changes", "review")
+
+
+def _without(monkeypatch: pytest.MonkeyPatch, *checks: str) -> None:
+    """Rule 15, one check at a time: only the named checks are removed, so a companion shows that
+    the check it names is what holds (the others still standing), and only with every line of a
+    path removed is the write made. Names: a module of `SERVICES`, `node-route`, `last-word`,
+    `composites`."""
+    import importlib
+
+    import services.api.app as app_module
 
     async def allowed(*args: Any, **kwargs: Any) -> None:
         return None
 
-    import services.api.alert_queue as alert_queue
-    import services.api.app as app_module
-    import services.api.email_extraction as email_extraction
-    import services.api.link_changes as link_changes
-    import services.api.review as review
-
-    for module in (dataset_scope, alert_queue, email_extraction, link_changes, review):
-        monkeypatch.setattr(module, "refuse_in_a_composite_case", allowed)
-    monkeypatch.setattr(app_module, "refuse_writing_a_node_in_a_composite_case", allowed)
-    monkeypatch.setattr(app_module, "refuse_in_a_composite_case", allowed)
-
     async def no_composites(self: Any, dataset_ids: Any) -> set[str]:
         return set()
 
-    monkeypatch.setattr(InMemoryDatasetStore, "composites_among", no_composites)
-    monkeypatch.setattr(DatasetStampingGraph, "_refuse_into_a_composite", allowed)
+    for check in checks:
+        if check in SERVICES:
+            module = importlib.import_module(f"services.api.{check}")
+            monkeypatch.setattr(module, "refuse_in_a_composite_case", allowed)
+        elif check == "node-route":
+            monkeypatch.setattr(app_module, "refuse_writing_a_node_in_a_composite_case", allowed)
+        elif check == "last-word":
+            monkeypatch.setattr(DatasetStampingGraph, "_refuse_into_a_composite", allowed)
+        elif check == "composites":
+            monkeypatch.setattr(InMemoryDatasetStore, "composites_among", no_composites)
+        else:
+            raise AssertionError(check)
 
 
 # --- node corrections, over HTTP ----------------------------------------------------------------
@@ -182,6 +190,7 @@ async def _http(
     *,
     member: bool = True,
     body: dict[str, Any] | None = None,
+    without_dependency: Any = None,
 ) -> Any:
     """`path` under a case reading the composite, through the real `get_principal` (so the case is
     in scope as in a deployment). With `member=False` the caller holds no level on the case."""
@@ -206,6 +215,12 @@ async def _http(
     app.dependency_overrides[get_graph] = lambda: stamping(graph, registry=store)
     for dependency, value in overrides.items():
         app.dependency_overrides[dependency] = value
+    if without_dependency is not None:
+
+        async def allowed() -> None:
+            return None
+
+        app.dependency_overrides[without_dependency] = allowed
     try:
         http = TestClient(app, headers={"Authorization": "Bearer token"})
         return http.request(
@@ -242,15 +257,39 @@ async def test_a_node_is_neither_confirmed_nor_retracted_in_a_composite_case(
     assert graph.superseded == []
 
 
-async def test_the_node_check_fails_with_the_refusal_planted_out(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("action", "state"),
+    [("confirm", ProvenanceState.INFERRED), ("retract", ProvenanceState.ASSERTED)],
+)
+@pytest.mark.parametrize("removed", [("node-route",), ("last-word",)])
+async def test_each_node_check_holds_alone(
+    action: str, state: ProvenanceState, removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _planted_out(monkeypatch)
-    graph = _NodeGraph(_member_node(ProvenanceState.INFERRED))
+    """The route's check and the stamping graph's last word (`supersede_node`), each with the
+    other removed: still 409, and nothing written."""
+    _without(monkeypatch, *removed)
+    graph = _NodeGraph(_member_node(state))
+    answer = await _http(
+        "POST", f"/v1/investigations/{{case}}/nodes/p1/{action}", graph, _judgements()
+    )
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "composite_read_only"
+    assert graph.superseded == []
+
+
+@pytest.mark.parametrize(
+    ("action", "state"),
+    [("confirm", ProvenanceState.INFERRED), ("retract", ProvenanceState.ASSERTED)],
+)
+async def test_the_node_is_written_with_both_its_checks_removed(
+    action: str, state: ProvenanceState, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, "node-route", "last-word")
+    graph = _NodeGraph(_member_node(state))
     try:
-        await _http("POST", "/v1/investigations/{case}/nodes/p1/confirm", graph, _judgements())
+        await _http("POST", f"/v1/investigations/{{case}}/nodes/p1/{action}", graph, _judgements())
     except AttributeError:
-        pass  # the confirmation was written; only the judgement stub stops the route after it
+        pass  # the correction was written; only the judgement stub stops the route after it
     assert graph.superseded == ["p1"]
 
 
@@ -275,6 +314,11 @@ async def _link_change_service() -> tuple[LinkChangeService, SupersedingGraph]:
     links = [_edge("e1", "a", "b").model_copy(update={"datasets": [MEMBER]})]
     await working.add_edges(CASE, links)
     graph = SupersedingGraph({e.id for e in links})
+
+    async def stored(edge_ids: Any, principal: Any) -> list[Any]:
+        return [links[0]] if "e1" in edge_ids else []
+
+    graph.get_edges = stored  # type: ignore[method-assign]  # the case reads the member's link
     stamped = stamping(graph)
     service = LinkChangeService(
         InMemoryChanges(), WorkingSetService(stamped, working, SCHEME), stamped, ONTOLOGY,
@@ -321,6 +365,30 @@ async def test_the_stamping_graphs_last_word_refuses_a_link_change_over_http(
     assert answer.status_code == 409, answer.text
     assert answer.json()["error"] == "composite_read_only"
     assert graph.superseded == []
+
+
+async def test_the_link_services_check_holds_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The last word removed: the service's own check refuses, before its write."""
+    _without(monkeypatch, "last-word")
+    _, principal = await _in_the_composite_case()
+    service, graph = await _link_change_service()
+    with pytest.raises(CompositeReadOnlyError):
+        await service.change(
+            CASE, "e1", principal, LinkChangeRequest(type="FAMILY_OF", reason="Told so")
+        )
+    assert graph.superseded == []
+
+
+async def test_the_link_is_changed_with_both_its_checks_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "link_changes", "last-word")
+    _, principal = await _in_the_composite_case()
+    service, graph = await _link_change_service()
+    await service.change(
+        CASE, "e1", principal, LinkChangeRequest(type="FAMILY_OF", reason="Told so")
+    )
+    assert [edge_id for edge_id, _ in graph.superseded] == ["e1"]
 
 
 async def test_supersede_node_has_the_last_word() -> None:
@@ -382,10 +450,20 @@ async def test_an_alert_closed_as_a_true_positive_is_refused_before_any_write() 
         await _close(principal)
 
 
-async def test_the_close_check_fails_with_the_refusal_planted_out(
+@pytest.mark.parametrize("removed", [("alert_queue",), ("last-word",)])
+async def test_each_close_check_holds_alone(
+    removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, *removed)
+    _, principal = await _in_the_composite_case()
+    with pytest.raises(CompositeReadOnlyError):
+        await _close(principal)
+
+
+async def test_the_close_is_written_with_both_its_checks_removed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _planted_out(monkeypatch)
+    _without(monkeypatch, "alert_queue", "last-word")
     _, principal = await _in_the_composite_case()
     triaged, graph = await _close(principal)
     assert graph.superseded == ["p1"] and len(triaged) == 1
@@ -439,15 +517,47 @@ async def test_a_finding_the_reader_cannot_read_is_not_found_not_refused() -> No
         await accept_candidate(candidates, stamping(WritingGraph()), finding, principal)  # type: ignore[arg-type]
 
 
-async def test_the_finding_check_fails_with_the_refusal_planted_out(
+async def test_the_accept_check_holds_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The last word removed: `accept_candidate` refuses on its own, the finding still pending."""
+    _without(monkeypatch, "last-word")
+    _, principal = await _in_the_composite_case()
+    candidates, finding = await _a_finding(principal)
+    graph = WritingGraph()
+    with pytest.raises(CompositeReadOnlyError):
+        await accept_candidate(candidates, stamping(graph), finding, principal)  # type: ignore[arg-type]
+    assert graph.nodes == {}
+
+
+async def test_the_accept_last_word_holds_alone(monkeypatch: pytest.MonkeyPatch) -> None:
+    _without(monkeypatch, "review")
+    _, principal = await _in_the_composite_case()
+    candidates, finding = await _a_finding(principal)
+    graph = WritingGraph()
+    with pytest.raises(CompositeReadOnlyError):
+        await accept_candidate(candidates, stamping(graph), finding, principal)  # type: ignore[arg-type]
+    assert graph.nodes == {}
+
+
+async def test_the_finding_is_accepted_with_both_its_checks_removed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _planted_out(monkeypatch)
+    _without(monkeypatch, "review", "last-word")
     _, principal = await _in_the_composite_case()
     candidates, finding = await _a_finding(principal)
     graph = WritingGraph()
     await accept_candidate(candidates, stamping(graph), finding, principal)  # type: ignore[arg-type]
     assert len(graph.nodes) == 1
+
+
+async def test_the_reject_check_fails_with_it_alone_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejection writes no graph, so the service's check is its only line."""
+    _without(monkeypatch, "review")
+    _, principal = await _in_the_composite_case()
+    candidates, finding = await _a_finding(principal)
+    await reject_candidate(candidates, finding, principal)  # type: ignore[arg-type]
+    assert candidates.records[finding].status.value == "rejected"
 
 
 # --- extraction ---------------------------------------------------------------------------------
@@ -483,10 +593,20 @@ async def test_an_email_is_not_extracted_in_a_composite_case() -> None:
         await _extract(principal)
 
 
-async def test_the_extraction_check_fails_with_the_refusal_planted_out(
+@pytest.mark.parametrize("removed", [("email_extraction",), ("last-word",)])
+async def test_each_extraction_check_holds_alone(
+    removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, *removed)
+    _, principal = await _in_the_composite_case()
+    with pytest.raises(CompositeReadOnlyError):
+        await _extract(principal)
+
+
+async def test_the_email_is_extracted_with_both_its_checks_removed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _planted_out(monkeypatch)
+    _without(monkeypatch, "email_extraction", "last-word")
     _, principal = await _in_the_composite_case()
     graph, candidates = await _extract(principal)
     assert graph.nodes and candidates.records
@@ -510,24 +630,47 @@ async def test_a_composite_is_not_loaded_run_or_scheduled(method: str, path: str
     assert answer.json()["error"] == "composite_read_only"
 
 
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("POST", "/v1/investigations/{case}/ingest/recipes/r-1/run"),
-        ("POST", "/v1/datasets/{dataset}/sources"),
-    ],
-)
-async def test_the_loading_check_fails_with_the_refusal_planted_out(
-    method: str, path: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """With the refusal planted out of the routes' dependency, the route goes on to its own work
-    (and fails there, on this harness's missing stores): never the read-only answer."""
-    _planted_out(monkeypatch)
-    try:
-        answer = await _http(method, path, FakeGraphPort(Subgraph(nodes=[], edges=[])), {})
-    except Exception:  # noqa: BLE001 - the route reached past the refusal into its own work
-        return
-    assert answer.status_code != 409 or answer.json().get("error") != "composite_read_only"
+class _Reached(Exception):
+    """The route's own work, reached once its refusal is removed."""
+
+
+class _RecipesReached:
+    def __getattr__(self, name: str) -> Any:
+        async def reached(*args: Any, **kwargs: Any) -> None:
+            raise _Reached(name)
+
+        return reached
+
+
+async def test_the_run_routes_dependency_alone_holds_it() -> None:
+    """With the case's loading dependency alone removed, the run goes on to read its recipe, the
+    first of its own work; with it, 409 before that (above)."""
+    from services.api.app import get_studio_recipes, refuse_loading_in_a_composite_case
+
+    with pytest.raises(_Reached):
+        await _http(
+            "POST",
+            "/v1/investigations/{case}/ingest/recipes/r-1/run",
+            FakeGraphPort(Subgraph(nodes=[], edges=[])),
+            {get_studio_recipes: _RecipesReached},
+            without_dependency=refuse_loading_in_a_composite_case,
+        )
+
+
+async def test_the_studios_dependency_alone_holds_its_routes() -> None:
+    """The Studio's own route of a composite, with its dependency alone removed: it goes on to its
+    own check of the file, and answers that (422), never the read-only answer."""
+    from services.api.app import get_sources, get_studio_recipes, refuse_loading_a_composite
+
+    answer = await _http(
+        "POST",
+        "/v1/datasets/{dataset}/sources",
+        FakeGraphPort(Subgraph(nodes=[], edges=[])),
+        {get_studio_recipes: _RecipesReached, get_sources: _RecipesReached},
+        body={"location": "uploaded/nowhere.csv", "kind": "files"},
+        without_dependency=refuse_loading_a_composite,
+    )
+    assert answer.status_code == 422, answer.text
 
 
 @pytest.mark.parametrize(
@@ -567,9 +710,24 @@ async def test_a_write_into_a_composites_id_is_refused_as_the_studio_would_make_
     assert graph.nodes == {}
 
 
-async def test_the_last_word_fails_with_it_planted_out(monkeypatch: pytest.MonkeyPatch) -> None:
-    _planted_out(monkeypatch)
+async def test_the_last_word_fails_with_it_alone_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A write naming no dataset in a composite case, at the stamping graph's own call."""
+    _without(monkeypatch, "last-word")
     store, _ = await _in_the_composite_case()
+    graph = WritingGraph()
+    stamped = stamping(graph, registry=store)
+    tx = await stamped.begin_transaction()
+    await stamped.upsert_nodes([_write("p9")], tx)
+    await stamped.commit_transaction(tx)
+    assert "p9" in graph.nodes
+
+
+async def test_the_studios_composite_id_write_fails_with_the_stores_answer_alone_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "composites")
+    store = await _composite_store()
+    set_case_datasets([BOTH])
     graph = WritingGraph()
     stamped = stamping(graph, registry=store)
     tx = await stamped.begin_transaction()

@@ -73,8 +73,8 @@ from schemas.domain import (
 )
 
 from .alerts import AlertStore
-from .dataset_scope import analyst_writes_into, reads_a_composite
 from .audit import AuditWriter
+from .dataset_scope import analyst_writes_into, reads_a_composite
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
 from .kyc_expiries import KycExpiryStore

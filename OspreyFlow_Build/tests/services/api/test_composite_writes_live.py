@@ -7,8 +7,12 @@ and Fixture Corp shape (a case reading a composite whose member already holds th
 - an entity's picture: neither replaced nor removed, and no file stored for the refused one
   (`test_a_picture_is_neither_replaced_nor_removed_in_a_composite_case`).
 
-Each was a write that changed a member before the ruling (the fourth and fifth reviews); the
-in-memory proofs, with each refusal planted out, are in `test_composite_read_only.py`.
+Each was a write that changed a member before the ruling (the fourth and fifth reviews). Each check
+has its own red companion here, one check removed at a time (`_without`): the service's own check
+alone holds the extraction against the last word, and the last word alone holds it against the
+service; with both removed, the member's Document changes. A picture's service check is what keeps
+the file from being stored at all: removed alone, the file is stored before the stamping graph
+refuses the graph write; removed with the last word, the member's picture is replaced.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from datetime import UTC, datetime
 import pytest
 from services.api.dataset_scope import (
     CompositeReadOnlyError,
+    DatasetStampingGraph,
     scope_to_case,
     set_case_datasets,
     stamping,
@@ -59,6 +64,22 @@ def _no_case_left_in_scope() -> object:
     set_case_datasets(None)
 
 
+def _without(monkeypatch: pytest.MonkeyPatch, *checks: str) -> None:
+    """Only the named checks removed: a service's own (`email_extraction`, `entity_pictures`), or
+    the stamping graph's `last-word`."""
+    import importlib
+
+    async def allowed(*args: object, **kwargs: object) -> None:
+        return None
+
+    for check in checks:
+        if check == "last-word":
+            monkeypatch.setattr(DatasetStampingGraph, "_refuse_into_a_composite", allowed)
+        else:
+            module = importlib.import_module(f"services.api.{check}")
+            monkeypatch.setattr(module, "refuse_in_a_composite_case", allowed)
+
+
 def _dataset(dataset_id: str, **kind: object) -> Dataset:
     return Dataset(
         id=dataset_id,
@@ -97,7 +118,9 @@ def _held_by_the_member(node_id: str, node_type: str = "Person") -> NodeWrite:
     )
 
 
-async def test_an_email_is_not_extracted_in_a_composite_case_and_the_member_is_unchanged() -> None:
+async def _extract_in_the_composite_case(*, refused: bool) -> tuple[bool, bool]:
+    """Extracts the member's email in the composite case: whether the member's Document and its
+    neighbourhood are exactly as they were, and whether anything was stored as a finding."""
     store = await _composite_case()
     async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
         graph = stamping(adapter, registry=store)
@@ -134,18 +157,114 @@ async def test_an_email_is_not_extracted_in_a_composite_case_and_the_member_is_u
         held = await adapter.get_node(DOCUMENT, MEMBER_ONLY)
 
         principal = await scope_to_case(ANALYST, CASE, store)
-        with pytest.raises(CompositeReadOnlyError, match="do this in a case that reads"):
+        if refused:
+            with pytest.raises(CompositeReadOnlyError, match="do this in a case that reads"):
+                await service.extract(CASE, "e1", "ev-1", principal)
+        else:
             await service.extract(CASE, "e1", "ev-1", principal)
         set_case_datasets(None)
 
-        assert await adapter.neighbourhood_stats(DOCUMENT, MEMBER_ONLY) == before
-        assert await adapter.get_node(DOCUMENT, MEMBER_ONLY) == held
-        assert candidates.records == {} and candidates.texts == {}
+        unchanged = (
+            await adapter.neighbourhood_stats(DOCUMENT, MEMBER_ONLY) == before
+            and await adapter.get_node(DOCUMENT, MEMBER_ONLY) == held
+        )
+        return unchanged, bool(candidates.records or candidates.texts)
+
+
+async def test_an_email_is_not_extracted_in_a_composite_case_and_the_member_is_unchanged() -> None:
+    assert await _extract_in_the_composite_case(refused=True) == (True, False)
+
+
+@pytest.mark.parametrize("removed", [("email_extraction",), ("last-word",)])
+async def test_each_extraction_check_holds_alone_live(
+    removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, *removed)
+    assert await _extract_in_the_composite_case(refused=True) == (True, False)
+
+
+async def test_the_member_changes_with_both_extraction_checks_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "email_extraction", "last-word")
+    unchanged, stored = await _extract_in_the_composite_case(refused=False)
+    assert not unchanged and stored
+
+
+async def _picture_in_the_composite_case(*, refused: bool) -> tuple[bool, int]:
+    """Replaces the member's picture from the composite case: whether the member's picture is as it
+    was, and how many files were stored past the member's own."""
+    from services.api.entity_pictures import EntityPictureService
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+
+    store = await _composite_case()
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
+        tx = await adapter.begin_transaction()
+        await adapter.upsert_nodes([_held_by_the_member("car-1", "Vehicle")], tx)
+        await adapter.commit_transaction(tx)
+        graph = stamping(adapter, registry=store)
+        working = FakeWorkingSetStore()
+        held_car = await adapter.get_node("car-1", MEMBER_ONLY)
+        assert held_car is not None
+        for case in ("member-case", CASE):
+            await working.add_nodes(case, [held_car])
+        media = InMemoryMediaStore()
+        service = EntityPictureService(
+            WorkingSetService(graph, working, SCHEME),
+            graph,
+            media,
+            load_default_ontology(),
+            scheme=load_uk_le_scheme(),
+        )
+        png = b"\x89PNG\r\n\x1a\n" + b"synthetic car"
+        in_member = await scope_to_case(ANALYST, "member-case", store)
+        await service.set(
+            "member-case", "car-1", in_member, name="car.png", data=png, handling=HANDLING
+        )
+        set_case_datasets(None)
+        stored = len(media.files)
+        before = await service.pictures("member-case", ["car-1"], MEMBER_ONLY)
+
+        in_composite = await scope_to_case(ANALYST, CASE, store)
+        replace = service.set(
+            CASE, "car-1", in_composite, name="side.png", data=png + b"2", handling=HANDLING
+        )
+        if refused:
+            with pytest.raises(CompositeReadOnlyError, match="do this in a case that reads"):
+                await replace
+        else:
+            await replace
+        set_case_datasets(None)
+        unchanged = await service.pictures("member-case", ["car-1"], MEMBER_ONLY) == before
+        return unchanged, len(media.files) - stored
 
 
 async def test_a_picture_is_neither_replaced_nor_removed_in_a_composite_case() -> None:
     """Set first in a case reading the member; in the composite case, replacing and removing it are
     refused before any file is stored, and the member's picture is exactly as it was."""
+    assert await _picture_in_the_composite_case(refused=True) == (True, 0)
+
+
+async def test_the_picture_check_alone_keeps_the_file_from_being_stored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The service's check removed alone: the last word still refuses the graph write, but only
+    after the file was stored."""
+    _without(monkeypatch, "entity_pictures")
+    unchanged, stored = await _picture_in_the_composite_case(refused=True)
+    assert unchanged and stored == 1
+
+
+async def test_the_member_picture_is_replaced_with_both_checks_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "entity_pictures", "last-word")
+    unchanged, stored = await _picture_in_the_composite_case(refused=False)
+    assert not unchanged and stored == 1
+
+
+async def test_a_picture_is_not_removed_in_a_composite_case() -> None:
     from services.api.entity_pictures import EntityPictureService
 
     from adapters.media_objectstore.testing import InMemoryMediaStore

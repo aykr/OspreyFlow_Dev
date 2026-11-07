@@ -22,7 +22,12 @@ from typing import Any
 
 import pytest
 from services.api import rule_evaluation, screening_refresh
-from services.api.dataset_scope import CompositeReadOnlyError, scope_to_case, set_case_datasets, stamping
+from services.api.dataset_scope import (
+    CompositeReadOnlyError,
+    scope_to_case,
+    set_case_datasets,
+    stamping,
+)
 from services.api.datasets import ANALYST_LAYER, COMPOSITE, Dataset, InMemoryDatasetStore
 from services.api.rule_evaluation import Finding, RuleGate
 from services.api.screening import ListDiff, ScreeningEntry
