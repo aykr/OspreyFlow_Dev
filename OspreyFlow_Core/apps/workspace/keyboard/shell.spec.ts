@@ -134,7 +134,7 @@ test("the rail's Help is reached and pressed by keyboard", async ({ page }) => {
 // bar, and inside the GOV.UK header — listing only the places the rights open.
 for (const brand of ["ospreyflow", "govuk"] as const) {
   test(`${brand}: the place switcher lists only the places the rights open, and moves between them by keyboard`, async ({ page }) => {
-    await page.goto(`/keyboard/places-harness.html?brand=${brand}`);
+    await page.goto(`/keyboard/places-harness.html?brand=${brand}&rights=investigate,edit_pipelines,manage_people`);
     const places = page.getByRole("navigation", { name: "Places" });
     await expect(places.getByRole("button")).toHaveText(["The Glass", "Ingest Studio", "Admin"]);
     if (brand === "govuk") await expect(page.locator(".govuk-header").getByRole("navigation", { name: "Places" })).toHaveCount(1);
@@ -157,18 +157,44 @@ test("an analyst's switcher offers the Glass alone", async ({ page }) => {
   await expect(page.getByRole("button", { name: /in the Ingest Studio/ })).toHaveCount(0);
 });
 
-// ADR-145 decision 2 (rule 13): the banner's cross-link, there and back, keeping the case.
-test("the banner's cross-link goes to the Studio and back to the same case by keyboard", async ({ page }) => {
+// ADR-145 decision 2 (rule 13): the banner's cross-link, there and back, keeping the case and the view.
+test("the banner's cross-link goes to the Studio and back to the same case and view by keyboard", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,edit_pipelines");
+  await page.getByRole("button", { name: "Map", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "You are in the Ingest Studio" })).toContainText("Dataset Prison intel");
-  await page.getByRole("button", { name: "← Back to case Kestrel in the Glass" }).focus();
+  await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
+  await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "You are in the Glass" })).toBeVisible();
-  await expect(page.getByText("glass on case kestrel")).toBeVisible();
+  await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
   expect(await page.evaluate(() => window.__PLACES__?.crossed)).toEqual(["to-studio", "to-glass"]);
   registerCovered(REGISTRY, "banner-cross-link-by-keyboard");
+});
+
+// ADR-145 decision 1 (rule 13): the Glass's sections in the banner, Case · Boards · Monitoring; Boards
+// is coming and does nothing.
+test("the banner's sections move between Case and Monitoring by keyboard, and Boards is coming", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,read_alert_queue");
+  const sections = page.getByRole("navigation", { name: "In the Glass" });
+  await expect(sections.getByRole("button")).toHaveText(["Case", "Boards (coming)", "Monitoring"]);
+  await expect(sections.getByRole("button", { name: "Boards (coming)" })).toHaveAttribute("aria-disabled", "true");
+  await sections.getByRole("button", { name: "Monitoring" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, alerts, on case kestrel")).toBeVisible();
+  await expect(sections.getByRole("button", { name: "Monitoring" })).toHaveAttribute("aria-current", "page");
+  await sections.getByRole("button", { name: "Boards (coming)" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, alerts, on case kestrel")).toBeVisible();
+  await sections.getByRole("button", { name: "Case" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
+  registerCovered(REGISTRY, "banner-sections-by-keyboard");
 });
 
 // ADR-145 decision 1 (rule 13): Home's cards are the switcher's list, reached by Tab and opened by
