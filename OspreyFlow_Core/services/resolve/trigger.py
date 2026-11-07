@@ -46,6 +46,7 @@ disclosed as a guess, not a measurement.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -148,6 +149,13 @@ async def _fetch_not_same_as_edges(
     return [e for e in subgraph.edges if e.type == "NOT_SAME_AS"]
 
 
+def honoured_splits(edges: list[Edge], layers: set[str]) -> list[Edge]:
+    """The `NOT_SAME_AS` links the corpus-wide run honours: each in some dataset that is not an
+    analyst layer. A split in the source (and in a layer too) is honoured; one only in layers is
+    not (ADR-143 Amendment 1)."""
+    return [e for e in edges if not (e.datasets and set(e.datasets) <= layers)]
+
+
 async def run_resolution_for_entity_type(
     entity_type_name: str,
     *,
@@ -156,6 +164,7 @@ async def run_resolution_for_entity_type(
     ontology: OntologySchema,
     scheme: HandlingScheme,
     valkey: Valkey | None = None,
+    analyst_layers: Callable[[], Awaitable[Collection[str]]],
 ) -> ResolutionRunResult:
     """The actual work, independent of the job-queue/worker plumbing —
     `run_resolve_entity_type_job` below is the thin adapter this presents
@@ -169,7 +178,12 @@ async def run_resolution_for_entity_type(
     `SAME_AS` write is published to the corpus-wide change stream (`06_DECISIONS.md` ADR-037's own
     amendment — `services/api/change_stream.py`'s own docstring has the full reasoning) — this is
     resolution's own producer, the one that makes "a match created by resolution alone, with no
-    new ingest" observable to a future monitor at all."""
+    new ingest" observable to a future monitor at all.
+
+    `analyst_layers` gives the ids of every case's analyst layer (ADR-143 Amendment 1). Required, so
+    no caller can forget it: a manual split only in a layer is that case's own decision, honoured
+    in its own projection, and must not stop a `SAME_AS` that every other case reading the source
+    would read."""
     entity_type: EntityTypeDef | None = ontology.entity_type(entity_type_name)
     if entity_type is None or entity_type.resolution is None:
         raise ValueError(
@@ -190,7 +204,10 @@ async def run_resolution_for_entity_type(
     # established pattern (`tests/resolve/test_conflict_pipeline.py`,
     # `tests/scenarios/test_phase6_extraction_and_resolution.py`'s own
     # split clause), not assumed.
-    not_same_as_edges = await _fetch_not_same_as_edges(graph, list(nodes_by_id), principal)
+    not_same_as_edges = honoured_splits(
+        await _fetch_not_same_as_edges(graph, list(nodes_by_id), principal),
+        set(await analyst_layers()),
+    )
     conflicts = detect_conflicts(candidates, not_same_as_edges)
     conflicted_pairs = {frozenset((c.node_a, c.node_b)) for c in conflicts}
     mergeable_candidates = [
@@ -229,6 +246,7 @@ async def try_run_resolution_with_overlap_guard(
     ontology: OntologySchema,
     scheme: HandlingScheme,
     valkey: Valkey,
+    analyst_layers: Callable[[], Awaitable[Collection[str]]],
 ) -> ResolutionRunResult:
     """The overlap guard, wrapping `run_resolution_for_entity_type` — both
     the job handler below and the manual "resolve now" route go through
@@ -242,7 +260,13 @@ async def try_run_resolution_with_overlap_guard(
         return ResolutionRunResult(skipped=True, reason="a resolution run is already in progress")
     try:
         return await run_resolution_for_entity_type(
-            entity_type_name, graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
+            entity_type_name,
+            graph=graph,
+            tx=tx,
+            ontology=ontology,
+            scheme=scheme,
+            valkey=valkey,
+            analyst_layers=analyst_layers,
         )
     finally:
         try:
@@ -262,6 +286,7 @@ async def run_resolve_entity_type_job(
     ontology: OntologySchema,
     scheme: HandlingScheme,
     valkey: Valkey,
+    analyst_layers: Callable[[], Awaitable[Collection[str]]],
 ) -> dict[str, Any]:
     """`JobWorker`'s fixed dispatch shape is `(payload, *, graph, tx)` —
     `ontology`/`scheme`/`valkey` are bound at registration time
@@ -274,6 +299,12 @@ async def run_resolve_entity_type_job(
     hook, say) is exactly the case the guard exists for."""
     entity_type_name = str(payload["entity_type"])
     result = await try_run_resolution_with_overlap_guard(
-        entity_type_name, graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
+        entity_type_name,
+        graph=graph,
+        tx=tx,
+        ontology=ontology,
+        scheme=scheme,
+        valkey=valkey,
+        analyst_layers=analyst_layers,
     )
     return result.to_dict()

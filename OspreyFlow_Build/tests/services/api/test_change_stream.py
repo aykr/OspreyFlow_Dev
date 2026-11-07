@@ -30,6 +30,11 @@ async def valkey() -> Valkey:
     await client.aclose()
 
 
+async def _no_layers() -> set[str]:
+    """No case has an analyst layer here (ADR-143 Amendment 1's `analyst_layers`)."""
+    return set()
+
+
 async def test_publish_is_a_no_op_when_nothing_was_touched(valkey: Valkey) -> None:
     writer = ChangeStreamWriter(valkey)
     assert await writer.publish("ingest", node_ids=[], edge_ids=[]) is None
@@ -80,7 +85,13 @@ async def test_change_stream_carries_a_same_as_edge_written_by_resolution_with_n
 
         tx = await graph.begin_transaction()
         result = await run_resolution_for_entity_type(
-            "Person", graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
+            "Person",
+            graph=graph,
+            tx=tx,
+            ontology=ontology,
+            scheme=scheme,
+            valkey=valkey,
+            analyst_layers=_no_layers,
         )
         await graph.commit_transaction(tx)
         assert result.same_as_written >= 1

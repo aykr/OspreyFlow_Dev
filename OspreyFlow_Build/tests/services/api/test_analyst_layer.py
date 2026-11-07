@@ -143,13 +143,19 @@ async def test_a_case_that_chose_nothing_reads_nothing(store: InMemoryDatasetSto
     assert await store.ids_of_case("orphan") == []
 
 
-async def test_a_branch_has_a_layer_of_its_own(store: InMemoryDatasetStore) -> None:
+async def test_a_branch_reads_its_parents_layer_and_has_none_of_its_own(
+    store: InMemoryDatasetStore,
+) -> None:
+    """The owner's ruling on finding 8 (7 November 2026), a branch of a branch included."""
     await store.set_for_case("parent", ["enron"], ALICE)
     await store.copy_case("parent", "branch")
+    await store.copy_case("branch", "twig")
     parent_layer = await store.layer_of_case("parent")
-    branch_layer = await store.layer_of_case("branch")
-    assert parent_layer and branch_layer and parent_layer != branch_layer
-    assert_read_set(await store.ids_of_case("branch"), source=["enron"], layer=branch_layer)
+    assert parent_layer
+    for case in ("branch", "twig"):
+        assert await store.layer_of_case(case) == parent_layer
+        assert_read_set(await store.ids_of_case(case), source=["enron"], layer=parent_layer)
+    assert sum(d.kind == ANALYST_LAYER for d in store.datasets.values()) == 1
 
 
 # --- never offered ----------------------------------------------------------------------------
@@ -212,6 +218,42 @@ async def test_a_layers_egress_is_its_sources(store: InMemoryDatasetStore) -> No
     assert held[layer].egress == "contracted"
     await store.set_egress("enron", "any")
     assert (await store.egress_of([layer]))[layer].egress == "any"
+
+
+async def _composite_layer_egress(store: InMemoryDatasetStore) -> Dataset:
+    """A composite case whose members differ (`any` and `contracted`), the composite itself set to
+    `any` by an administrator: its layer's egress, as an egress question sees it."""
+    both = await store.create_composite(ALICE, "Both", ["enron", "fixture"])
+    await store.set_egress("enron", "any")
+    await store.set_egress("fixture", "contracted")
+    await store.set_egress(both.id, "any")
+    await store.set_for_case("case-c", [both.id], ALICE)
+    layer = await store.layer_of_case("case-c")
+    assert layer
+    return (await store.egress_of([layer]))[layer]
+
+
+async def test_a_composite_cases_layer_takes_the_strictest_of_members_that_differ(
+    store: InMemoryDatasetStore,
+) -> None:
+    """ADR-136 Amendment 1: the strictest of everything else the case reads, the composite's own id
+    and each member alike, under the name of the dataset it takes that from."""
+    held = await _composite_layer_egress(store)
+    assert held.egress == "contracted"
+    assert held.name == store.datasets["fixture"].name
+
+
+async def test_the_strictest_check_fails_with_the_loosest_planted(
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: `strictest_egress` turned to the loosest (max for min), at its one definition."""
+    order = datasets_module._EGRESS_ORDER
+    monkeypatch.setattr(
+        datasets_module,
+        "strictest_egress",
+        lambda egresses: max(egresses, key=order.__getitem__, default="none"),
+    )
+    assert (await _composite_layer_egress(store)).egress != "contracted"
 
 
 # --- one dataset per case -----------------------------------------------------------------------

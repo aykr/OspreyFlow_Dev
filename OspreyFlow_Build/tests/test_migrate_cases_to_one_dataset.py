@@ -179,3 +179,27 @@ async def test_a_case_naming_a_composite_beside_another_dataset_is_reported(
     )
     assert report.unplaced == ["Odd (odd-case): names a composite beside another dataset"]
     assert _state(store) == before
+
+
+async def test_a_branch_shares_its_parents_layer_and_is_given_none(
+    store: InMemoryDatasetStore,
+) -> None:
+    """The owner's ruling on finding 8: a branch reads and writes its parent case's layer. The
+    migration meets the parent first (`all_cases` orders by creation)."""
+    store.cases["branch"] = ["enron"]
+    store.cases["twig"] = ["enron"]
+    cases = [
+        CaseRow("enron-case", "Enron", UNIT, None),
+        CaseRow("branch", "Branch of Enron", UNIT, "enron-case"),
+        CaseRow("twig", "Branch of the branch", UNIT, "branch"),
+    ]
+    dry = await migrate(store, cases, write=False, say=lambda _: None)
+    assert dry.layers_made == ["enron-case"]
+    report = await migrate(store, cases, write=True, say=lambda _: None)
+    assert report.layers_made == ["enron-case"]
+    layer = await store.layer_of_case("enron-case")
+    assert layer is not None
+    assert report.layers_shared == [("branch", layer), ("twig", layer)]
+    for case in ("branch", "twig"):
+        assert await store.ids_of_case(case) == ["enron", layer]
+    assert sum(d.kind == ANALYST_LAYER for d in store.datasets.values()) == 1

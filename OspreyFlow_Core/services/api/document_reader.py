@@ -237,6 +237,7 @@ class DocumentReaderService:
                 )
             ],
             principal,
+            dataset_id=into[0] if into else None,
         )
         await self._candidates.mark_reviewed(
             record.id, principal, status=CandidateStatus.ACCEPTED, node_id=node.id

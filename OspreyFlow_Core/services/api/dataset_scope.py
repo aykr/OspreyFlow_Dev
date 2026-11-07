@@ -18,7 +18,9 @@ keeps them. Outside a request (a background job, a script) nothing is stamped, a
 name their own.
 
 **The analyst's own writes** (ADR-143 Amendment 1): an entity marked by hand and a manual `SAME_AS`
-or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`).
+or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`). A case
+with no layer yet is given one when its principal is scoped, so they never fall back to the source;
+a branch's is its parent's.
 Accepted question proposals, accepted extractions and loads name nothing, and so land in the
 source as before.
 """
@@ -69,6 +71,16 @@ async def scope_to_case(
     principal may open the case: that is the route's own level check."""
     datasets = await store.ids_of_case(investigation_id)
     layer = await store.layer_of_case(investigation_id) if datasets else None
+    if datasets and layer is None:
+        # A case the migration has not reached: given its layer now, so the analyst's own writes
+        # never fall back to the source (the owner's ruling on finding 7, 7 November 2026). Of
+        # the unit of the dataset it reads, as every layer is of its case's unit.
+        chosen = await store.chosen_of_case(investigation_id)
+        if chosen:  # always, where a foreign key holds every id a case names (Postgres)
+            layer = await store.ensure_layer(
+                investigation_id, unit=chosen[0].owning_unit, created_by=principal.id
+            )
+            datasets = await store.ids_of_case(investigation_id)
     set_case_datasets(datasets, layer=layer)
     return principal.model_copy(update={"datasets": datasets})
 

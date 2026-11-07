@@ -49,6 +49,11 @@ from schemas.domain import (
 CLEARED = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 
 
+async def _no_layers() -> set[str]:
+    """No case has an analyst layer here (ADR-143 Amendment 1's `analyst_layers`)."""
+    return set()
+
+
 def _handling() -> Handling:
     return Handling(
         classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
@@ -159,6 +164,7 @@ async def test_overlap_guard_skips_a_second_run_while_the_first_holds_the_lock()
             ontology=None,  # type: ignore[arg-type]
             scheme=None,  # type: ignore[arg-type]
             valkey=client,
+            analyst_layers=_no_layers,
         )
     finally:
         trigger_module.run_resolution_for_entity_type = original
@@ -222,7 +228,12 @@ async def test_run_resolution_for_entity_type_writes_same_as_and_records_a_confl
 
         tx = await graph.begin_transaction()
         result = await run_resolution_for_entity_type(
-            "Person", graph=graph, tx=tx, ontology=ontology, scheme=scheme
+            "Person",
+            graph=graph,
+            tx=tx,
+            ontology=ontology,
+            scheme=scheme,
+            analyst_layers=_no_layers,
         )
         await graph.commit_transaction(tx)
 

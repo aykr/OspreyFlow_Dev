@@ -1052,7 +1052,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_worker.register(
         JOB_TYPE_RESOLVE_ENTITY_TYPE,
         functools.partial(
-            run_resolve_entity_type_job, ontology=ontology, scheme=handling_scheme, valkey=valkey
+            run_resolve_entity_type_job,
+            ontology=ontology,
+            scheme=handling_scheme,
+            valkey=valkey,
+            # ADR-143 Amendment 1: a layer's split is its own case's, not the corpus's.
+            analyst_layers=datasets_store.layer_ids,
         ),
     )
     job_worker.register(

@@ -12,6 +12,7 @@ from services.api.datasets import (
     ANALYST_LAYER,
     DatasetRefusedError,
     PostgresDatasetStore,
+    UnknownDatasetEgressError,
     index_one_dataset_per_case,
 )
 
@@ -114,14 +115,15 @@ async def test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first(s
     assert [d.id for d in await store.of_case(case, alice)] == [both.id]
 
 
-async def test_a_branch_has_a_layer_of_its_own(store) -> None:
+async def test_a_branch_reads_its_parents_layer(store) -> None:
     alice = _analyst()
     source = await store.create(alice, "Source")
     parent, branch = new_id(), new_id()
     await store.set_for_case(parent, [source.id], alice)
     await store.copy_case(parent, branch)
     assert (await store.ids_of_case(branch))[0] == source.id
-    assert await store.layer_of_case(branch) not in (None, await store.layer_of_case(parent))
+    # The owner's ruling on finding 8: a branch reads and writes its parent's layer.
+    assert await store.layer_of_case(branch) == await store.layer_of_case(parent) is not None
 
 
 async def test_a_layers_egress_is_the_strictest_of_its_cases(store) -> None:
@@ -131,6 +133,10 @@ async def test_a_layers_egress_is_the_strictest_of_its_cases(store) -> None:
     case = new_id()
     await store.set_for_case(case, [source.id], alice)
     layer = await store.layer_of_case(case)
+    assert (await store.egress_of([layer]))[layer].egress == "contracted"
+    # An administrator cannot set it: refused as a dataset that does not exist.
+    with pytest.raises(UnknownDatasetEgressError):
+        await store.set_egress(layer, "any")
     assert (await store.egress_of([layer]))[layer].egress == "contracted"
 
 

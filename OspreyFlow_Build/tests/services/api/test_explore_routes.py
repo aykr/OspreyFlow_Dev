@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import app, get_audit, get_graph, get_investigations
-from services.api.datasets import Dataset, InMemoryDatasetStore
+from services.api.datasets import ANALYST_LAYER, Dataset, InMemoryDatasetStore
 
 from schemas.domain import Principal
 from schemas.explore import RankedNode, RankedNodes, TypeCounts
@@ -79,6 +79,10 @@ class _FakeGraph:
         return RankedNodes(nodes=[RankedNode(node=_node("hub"), degree=7)], total=42, offset=offset)
 
 
+#: What a request under case-e reads: its dataset, then its analyst layer (ADR-143 decision 1).
+READS = ["enron", "layer-e"]
+
+
 @pytest.fixture
 def client() -> Any:
     store = InMemoryDatasetStore()
@@ -92,6 +96,18 @@ def client() -> Any:
         )
     )
     store.cases["case-e"] = ["enron"]
+    # Every case reads its analyst layer too (ADR-143 decision 1).
+    store.add(
+        Dataset(
+            id="layer-e",
+            name="Analyst layer: case-e",
+            owning_unit="unit-1",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            created_by="seed",
+            kind=ANALYST_LAYER,
+            layer_of="case-e",
+        )
+    )
     saved = {
         k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets", "explore_cache")
     }
@@ -160,7 +176,7 @@ def test_the_counts_are_asked_with_the_cases_datasets(client) -> None:  # type: 
         "edges": {"ASSOCIATE_OF": 4},
     }
     assert body["computed_at"]  # ADR-100 Amendment 3: the figures say when they were counted
-    assert [p.datasets for p in graph.counts] == [["enron"]]
+    assert [p.datasets for p in graph.counts] == [READS]
     assert audit.records[-1]["action"] == "explore_counts"
 
 
@@ -172,7 +188,7 @@ def test_the_ranking_is_asked_with_the_cases_datasets_and_what_was_asked_for(cli
     )
     assert response.status_code == 200
     ((principal, entity_type, limit, offset),) = graph.ranked
-    assert principal.datasets == ["enron"]
+    assert principal.datasets == READS
     assert (entity_type, limit, offset) == ("Person", 5, 10)
     assert audit.records[-1]["action"] == "explore_most_connected"
     assert audit.records[-1]["result_cardinality"] == 1
@@ -226,7 +242,7 @@ def test_the_busiest_links_are_asked_with_the_cases_datasets(client) -> None:  #
     )
     assert response.status_code == 200
     ((principal, edge_type, limit, offset),) = graph.busiest
-    assert principal.datasets == ["enron"] and (edge_type, limit, offset) == (
+    assert principal.datasets == READS and (edge_type, limit, offset) == (
         "COMMUNICATED_WITH",
         10,
         0,
@@ -262,7 +278,7 @@ def test_the_busiest_days_are_asked_of_the_cases_own_events(client, monkeypatch)
     response = http.get("/v1/investigations/case-e/explore/busiest-days")
     assert response.status_code == 200
     assert response.json()["days"] == [] and response.json()["total"] == 0
-    assert seen == [("case-e", ["enron"]), 86_400]
+    assert seen == [("case-e", READS), 86_400]
     assert audit.records[-1]["action"] == "explore_busiest_days"
 
 
@@ -295,7 +311,7 @@ def test_the_groups_are_found_with_the_cases_datasets(client) -> None:  # type: 
     response = http.get("/v1/investigations/case-e/explore/groups")
     assert response.status_code == 200
     assert response.json()["groups"] == [] and response.json()["total_groups"] == 0
-    assert [p.datasets for p in seen] == [["enron"]]
+    assert [p.datasets for p in seen] == [READS]
     assert audit.records[-1]["action"] == "explore_groups"
     assert TestClient(app).get("/v1/investigations/case-e/explore/groups").status_code in (401, 403)
 
@@ -327,8 +343,11 @@ def test_whats_new_is_asked_with_the_cases_datasets(client) -> None:  # type: ig
         async def recent(self) -> list[SuppressionMark]:
             return [
                 SuppressionMark(
-                    node_id="elsewhere", investigation_id="other", marked_by="colleague",
-                    marked_at=datetime(2026, 10, 8, tzinfo=UTC), reason="proposed",
+                    node_id="elsewhere",
+                    investigation_id="other",
+                    marked_by="colleague",
+                    marked_at=datetime(2026, 10, 8, tzinfo=UTC),
+                    reason="proposed",
                 )
             ]
 
@@ -341,9 +360,9 @@ def test_whats_new_is_asked_with_the_cases_datasets(client) -> None:  # type: ig
     body = response.json()
     assert body["loads_total"] == 3 and body["marked"] == [] and body["marked_total"] == 0
     assert [(what, p.datasets) for what, p in seen] == [
-        ("loads", ["enron"]),
-        ("confirmed", ["enron"]),
-        ("node", ["enron"]),
+        ("loads", READS),
+        ("confirmed", READS),
+        ("node", READS),
     ]
     assert audit.records[-1]["action"] == "explore_whats_new"
     anonymous = TestClient(app).get("/v1/investigations/case-e/explore/whats-new")
@@ -365,7 +384,7 @@ def test_the_starter_questions_suit_the_types_the_case_can_see(client) -> None: 
     # `_FakeGraph.type_counts` answers Person 5 and ASSOCIATE_OF 4.
     assert body["questions"][0]["id"] == CHAIN
     assert body["total"] >= 1
-    assert [p.datasets for p in graph.counts] == [["enron"]]
+    assert [p.datasets for p in graph.counts] == [READS]
     assert audit.records[-1]["action"] == "explore_starter_questions"
     anonymous = TestClient(app).get("/v1/investigations/case-e/explore/starter-questions")
     assert anonymous.status_code in (401, 403)
@@ -427,9 +446,9 @@ def test_a_starter_question_runs_onto_the_case_with_its_datasets(client) -> None
     response = http.post(f"/v1/investigations/case-e/explore/starter-questions/{CHAIN}/run")
     assert response.status_code == 200, response.text
     assert response.json()["added_nodes"] == 2
-    assert [p.datasets for p in seen] == [["enron"]] * 3
+    assert [p.datasets for p in seen] == [READS] * 3
     assert [(case, ids, p.datasets) for case, ids, _, p in seeded] == [
-        ("case-e", ["hub", "c1"], ["enron"])
+        ("case-e", ["hub", "c1"], READS)
     ]
     assert audit.records[-1]["action"] == "explore_starter_run"
 
@@ -465,7 +484,7 @@ def test_who_shares_contacts_is_asked_with_the_cases_datasets(client) -> None:  
     _run_overrides([])
     response = http.get("/v1/investigations/case-e/nodes/hub/shared-contacts?edge_type=USES")
     assert response.status_code == 200 and response.json()["total"] == 4
-    assert [(n, e, p.datasets) for n, e, p in asked] == [("hub", "USES", ["enron"])]
+    assert [(n, e, p.datasets) for n, e, p in asked] == [("hub", "USES", READS)]
     assert audit.records[-1]["action"] == "shared_contacts"
     refused = http.get("/v1/investigations/case-e/nodes/hub/shared-contacts?edge_type=SAME_AS")
     assert refused.status_code == 422
@@ -497,7 +516,7 @@ def test_a_shared_pair_goes_onto_the_case_with_its_datasets(client) -> None:  # 
     response = http.post(path.format("c1"))
     assert response.status_code == 200, response.text
     assert [(case, ids) for case, ids, _, _ in seeded] == [("case-e", ["hub", "c1", "phone"])]
-    assert {tuple(p.datasets or []) for p in seen} == {("enron",)}
-    assert {tuple(p.datasets or []) for *_, p in seeded} == {("enron",)}
+    assert {tuple(p.datasets or []) for p in seen} == {tuple(READS)}
+    assert {tuple(p.datasets or []) for *_, p in seeded} == {tuple(READS)}
     assert audit.records[-1]["action"] == "shared_pair_canvas"
     assert http.post(path.format("hidden")).status_code == 404
