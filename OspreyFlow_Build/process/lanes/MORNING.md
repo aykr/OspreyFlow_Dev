@@ -33,11 +33,7 @@ Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; 
 - golden recall, `pid_recipe` r1 and r14, `typology_rule_routes` (10 rules listed for a new case), the phase 6 and phase 8 scenarios (phase 8's 403), `witness_statement`;
 - the KYC rules' true-positive test, written on 13 October, which expects `closed`. Since ADR-133(d) (`4fd664a`, 1 November) a high-severity alert goes to `closing`, so the test is stale, not the code (glass's finding).
 
-**Questions for you (recommendation first; nothing waits for them but L3.9 and the queue's suppression):**
-- **L5.** Where a fresh drawing's items live: **(a)** in the drawn dataset itself, since for a drawing-first case the drawing is the data; (b) in the case's layer, promoted into the drawn dataset before a merge.
-- **L6.** Who may merge a drawn dataset: **(a)** an Author of the target holding `merge_datasets`, with a second person when the target's policy asks; administrators see every drawn dataset and may retire one; (b) administrators only.
-- **QB (studio, Part A2): a person loaded into two datasets.** ADR-099 decision 2 says the same person seen in two datasets "stays one node … visible to a case of either". But a load confined to dataset X cannot see dataset S's node, so it makes a second node, and today's code already does this. **(a)** Amend decision 2 to say so. A confined load matches only within its reach, so two cases on two datasets make two nodes. Resolution's scored `SAME_AS` (rule 6) joins them, and nothing of S is detectable from X (rule 3). (b) Make the load match across datasets: that lets X detect S's node, a rule 3 leak, so it isn't advised. Nothing waits on this; the record is just wrong until it's amended.
-- **R8.** The team lead's queue tools: **(a)** all four, including *Suppress until…* (a reason, at most 90 days, listed in the inventory); (b) the filters only.
+**Your rulings, 23:15 UTC (all as recommended): 1a 2a 3a 4a 5A.** L5 and L6 → ADR-143 Amendment 3; R8 → ADR-146 Amendment 1; QB → ADR-099 Amendment 16 (all three written). L1.2c's option A → ADR-110 Amendment 16, reserved for studio, which builds it as L1.2c. **From now on I act on my recommended option and list it here for you to overrule, rather than asking** (your instruction, 23:15). Your three overridable calls above (old audit words withheld; an alert-jump case's own layer; existing case copies' empty layers) stand unless you say otherwise.
 
 ## Since 08:00 (you were away from about 08:20)
 

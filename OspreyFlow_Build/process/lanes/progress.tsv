@@ -4,7 +4,7 @@
 studio	L1.1	S	done	Phase 4's remainder: make ci green
 studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	done	Events-only withdrawal (Part A); Part A2 (the cross-case link merge) next
-studio	L1.2c	S	todo	Revert a load whose returning row merged into its own link (pending the owner)
+studio	L1.2c	S	todo	Revert a load whose returning row merged into its own link (owner ruled A; ADR-110 Am 16)
 studio	L1.2b	M	todo	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
 studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine; screening lists in it
 studio	L1.4	M	todo	Phase 7b: the drawers for each step
@@ -35,6 +35,6 @@ case	L3.5	M	todo	Analyst-defined link types
 case	L3.6	S	todo	drawn_watch alerts in the one queue (with L2.10)
 case	L3.7	S	todo	The grading scheme setting and command
 case	L3.8	S	todo	The ownership route for Disable
-case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (asks L5, L6)
+case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (L5, L6 ruled)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2	M	todo	Guides, website, deck: four places, no branches, alerts (after L2.9)

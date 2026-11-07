@@ -27830,3 +27830,60 @@ the same link, of any case, went with them.
 - A failure to set the events aside, after the record is in, fails the run in words. The keys are
   already aside, so a rerun does not find those rows dropped again; the revert of the refresh
   reconciles them. Not tested.
+
+### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
+
+Status: accepted from the owner's rulings of 7 November 2026 on Amendment 2's two open questions, L5 and L6
+(each answered (a), as recommended). Amendment 2 is unchanged except that its *Still open* section is closed by
+this one.
+
+**Decision.**
+
+1. **L5: a fresh drawing's items live in the drawn dataset itself.** For a case that starts as a drawing (Amendment
+   2 decision 5), the drawing is the data: its items are written to the drawn dataset, not held in the case's
+   layer for later promotion. The layer's marking ceiling (decision 3) applies to them as the dataset's highest
+   allowed marking, set by its maker within their own clearance.
+2. **L6: who may merge a drawn dataset into another.** An Author of the target dataset (ADR-145 Amendment 4) who
+   also holds `merge_datasets` (ADR-112 Amendment 5), with a second person when the target's promotion policy
+   asks for one. Administrators see every drawn dataset and may retire one no longer used; they do not merge
+   one by being administrators.
+
+**Tests (L3.9's, shown red first).** A drawn item on a fresh board is written to the drawn dataset and to no layer
+(red with it held in the layer); a merge is refused to an Author of the target without `merge_datasets`, to a
+holder of `merge_datasets` who is not an Author of the target, and to an administrator who is neither; with a
+second-person policy the merge waits for the approval.
+
+### ADR-146, Amendment 1 (7 November 2026) — the team lead's queue tools
+
+Status: accepted from the owner's ruling of 7 November 2026 on ADR-146's open question R8 ((a), as recommended).
+ADR-146 is unchanged except that its *Still open* section is closed by this one.
+
+**Decision.** A team's lead (ADR-112 Amendment 5 decision 4), and its cover while the cover lasts, has all four
+tools in the queue: the team's filters; giving a team alert to a named member (audited); a taken-back alert
+marked apart (G12); and **Suppress until…**, which takes a reason and a date at most 90 days ahead, is audited,
+is listed in *What raises alerts* beside the rule or watch it quiets, and ends by itself on its date. A suppressed
+alert stays in the queue's *All* filter, marked suppressed, and is counted open wherever a proposed close is
+(decision 6), so suppression never makes an alert disappear from a count.
+
+**Tests (L2.10's, shown red first).** Only the lead or the cover may suppress (refused for another member and
+for a non-member); a reason is required and a date beyond 90 days is refused; the suppression is listed in the
+inventory and ends on its date with no action; a suppressed alert is in *All* and counted open on Home, the
+switcher's count and in trends.
+
+### ADR-099, Amendment 16 (7 November 2026) — a confined load matches only within its reach
+
+Status: accepted from the owner's ruling of 7 November 2026 on the studio lane's question QB ((a), as
+recommended), raised in L1.2a Part A2. ADR-099 decision 2 is amended where it says one person seen in two datasets
+"stays one node … visible to a case of either".
+
+**Decision.** A load is confined to the datasets of the case it runs for (ADR-143 decision 1), so it can match
+only nodes within that reach. The same person loaded into two datasets by two cases is therefore **two nodes**,
+one per dataset, each visible to a case of its own dataset. Entity resolution joins them by a scored `SAME_AS`
+edge, collapsed at query time for a reader who may see both (`process/CLAUDE.md` rule 6); nothing of one dataset's
+node is detectable from the other's (rule 3). A load matching across datasets would let a case detect a node it
+may not read, and is not done. Decision 2's "stays one node" holds within one dataset, and where one case reads
+both.
+
+**Tests.** The studio lane's live proof in L1.2a Part A2 (its stamping test, landing with that part's merge):
+two cases on two datasets loading the same person make two nodes, and neither case's reads, counts or run report
+differ with the other's load (red with the load's confinement removed).

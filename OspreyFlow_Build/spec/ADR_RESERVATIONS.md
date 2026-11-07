@@ -49,6 +49,10 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-142 Amendment 2 | A merge's make ci takes no lease: it touches no stack, and the port guard refuses the leased stack to anyone not holding the lease | orchestrator | 2026-11-07 | written |
 | ADR-124 Amendment 17 | A jump to an alert whose evidence is not whole for the reader is refused exactly as a missing alert, before anything is created (rule 3; ADR-146's address test; L2.8's Q1, the orchestrator's settlement, 7 November) | glass | 2026-11-07 | reserved |
 | ADR-109 Amendment 9 | Confirming a link's new revision repoints every open alert citing the old one in the same close, and the queue checks the new revision for every reader (L2.8's Q2, the orchestrator's settlement, 7 November) | glass | 2026-11-07 | reserved |
+| ADR-143 Amendment 3 | A fresh drawing's items live in its drawn dataset (L5 a); a drawn dataset is merged by an Author of the target holding merge_datasets, with a second person when the target's policy asks (L6 a) (the owner's rulings, 7 November) | orchestrator | 2026-11-07 | written |
+| ADR-146 Amendment 1 | The team lead's queue tools are all four, Suppress until… included (R8 a) (the owner's ruling, 7 November) | orchestrator | 2026-11-07 | written |
+| ADR-099 Amendment 16 | A load confined to one dataset matches only within its reach: the same person loaded into two datasets is two nodes, joined by resolution's scored SAME_AS (QB a) (the owner's ruling, 7 November) | orchestrator | 2026-11-07 | written |
+| ADR-110 Amendment 16 | A row that comes back after a full snapshot withdrew it, and merges into its own withdrawn key's link, counts that merge as the row's own, so its load reverts (L1.2c, the owner's ruling A, 7 November) | studio | 2026-11-07 | reserved |
 
 ## Baseline
 
