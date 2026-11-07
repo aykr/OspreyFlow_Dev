@@ -331,22 +331,32 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
     return [seen[k] for k in sorted(seen)]
 
 
-async def _repoint_cited_links(
-    conn: asyncpg.Connection, repoint: Mapping[str, str], *, exclude: str
-) -> list[str]:
-    """Every alert but `exclude` citing an old revision in `repoint`, made to cite the new one, in
-    the caller's transaction (rows locked as they are read). Returns the ids it changed."""
-    rows = await conn.fetch(
-        "SELECT id, edge_ids FROM alerts WHERE id <> $1 "
-        "AND COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $2::text[] FOR UPDATE",
-        exclude,
-        sorted(repoint),
+#: The alerts citing any of `$1`'s links: an alert stores the links it cites as a JSON list.
+_CITES_ANY_SQL = "COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $1::text[]"
+
+
+async def _lock_for_repoint(conn: asyncpg.Connection, alert_id: str, old: Sequence[str]) -> None:
+    """The closing alert and every alert citing an old revision, locked in one statement in id
+    order, so two closes confirming the same link lock the same rows in the same order and never
+    deadlock (the closing row is never locked ahead of the rest)."""
+    await conn.execute(
+        f"SELECT id FROM alerts WHERE id = $2 OR {_CITES_ANY_SQL} ORDER BY id FOR UPDATE",
+        list(old),
+        alert_id,
     )
-    for r in rows:
-        cited = [repoint.get(e, e) for e in json.loads(r["edge_ids"])]
-        await conn.execute(
-            "UPDATE alerts SET edge_ids = $2 WHERE id = $1", r["id"], json.dumps(cited)
-        )
+
+
+async def _repoint_cited_links(conn: asyncpg.Connection, repoint: Mapping[str, str]) -> list[str]:
+    """Every alert citing an old revision in `repoint`, made to cite the new one: the rename map
+    applied in SQL to each row as it now stands (locked by `_lock_for_repoint`), never a list read
+    earlier and written back, which would undo a concurrent repoint. Returns the ids it changed."""
+    rows = await conn.fetch(
+        "UPDATE alerts SET edge_ids = (SELECT jsonb_agg(COALESCE($2::jsonb ->> t.e, t.e) "
+        "ORDER BY t.n)::text FROM jsonb_array_elements_text(edge_ids::jsonb) "
+        f"WITH ORDINALITY AS t(e, n)) WHERE {_CITES_ANY_SQL} RETURNING id",
+        sorted(repoint),
+        json.dumps(dict(repoint)),
+    )
     return [r["id"] for r in rows]
 
 
@@ -563,7 +573,6 @@ class AlertStore:
         disposition_reason: str | None = None,
         decided_by: str | None = None,
         alert_node_id: str | None = None,
-        edge_ids: Sequence[str] | None = None,
         close_proposed_by: str | None = None,
         repoint: Mapping[str, str] | None = None,
     ) -> Alert:
@@ -573,22 +582,26 @@ class AlertStore:
         high-severity alert; kept, with when, while the same person stays named, and cleared with
         `None`.
 
-        `repoint` (old link id → its new revision): links this close confirmed. Every other alert
-        citing an old revision is repointed to the new one in the same transaction, so none of them
-        is withheld for citing a link that only moved (the queue reads a link by its id, ADR-146
-        decision 10; the orchestrator's Q2). Not scoped to the reader: it changes which revision an
-        alert cites, never what anyone may read, and returns nothing of the alerts it touched."""
-        scope, extra = queue_scope(principal, investigation_id, 11)
+        `repoint` (old link id → its new revision): links this close confirmed. Every alert citing
+        an old revision, this one included, is repointed to the new one in the same transaction, so
+        none is withheld for citing a link that only moved (ADR-109 Amendment 9; the queue reads a
+        link by its id and checks the new revision for every reader). The rows are locked together
+        first, in id order, and renamed in SQL as they stand. Not scoped to the reader: it changes
+        which revision an alert cites, never what anyone may read, and returns nothing of the
+        alerts it touched."""
+        scope, extra = queue_scope(principal, investigation_id, 10)
         moved: list[str] = []
         async with self._pool.acquire() as conn, conn.transaction():
+            if repoint:
+                await _lock_for_repoint(conn, alert_id, sorted(repoint))
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $2, assignee = $3, disposition = $4, "
                 "disposition_reason = $5, decided_by = $6, "
                 "decided_at = CASE WHEN $6::text IS NULL THEN NULL ELSE now() END, "
-                "alert_node_id = COALESCE($7, alert_node_id), edge_ids = COALESCE($9, edge_ids), "
-                "close_proposed_at = CASE WHEN $10::text IS NULL THEN NULL "
-                "WHEN close_proposed_by IS NOT DISTINCT FROM $10::text THEN close_proposed_at "
-                "ELSE now() END, close_proposed_by = $10 "
+                "alert_node_id = COALESCE($7, alert_node_id), "
+                "close_proposed_at = CASE WHEN $9::text IS NULL THEN NULL "
+                "WHEN close_proposed_by IS NOT DISTINCT FROM $9::text THEN close_proposed_at "
+                "ELSE now() END, close_proposed_by = $9 "
                 f"WHERE id = $1 AND status = ANY($8::text[]){scope} "
                 f"RETURNING {_COLUMNS}",
                 alert_id,
@@ -599,15 +612,15 @@ class AlertStore:
                 decided_by,
                 alert_node_id,
                 list(expect_status),
-                None if edge_ids is None else json.dumps(list(edge_ids)),
                 close_proposed_by,
                 *extra,
             )
             if row is None:
                 raise AlertTriageConflict(alert_id)
             if repoint:
-                moved = await _repoint_cited_links(conn, repoint, exclude=alert_id)
-        await self.publish_facts([alert_id, *moved])
+                moved = await _repoint_cited_links(conn, repoint)
+                row = await conn.fetchrow(f"SELECT {_COLUMNS} FROM alerts WHERE id = $1", alert_id)
+        await self.publish_facts(sorted({alert_id, *moved}))
         return _row_to_alert(row)
 
     async def set_triage(

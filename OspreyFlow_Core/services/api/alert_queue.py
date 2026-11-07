@@ -443,7 +443,6 @@ async def _close(
 ) -> Alert:
     alert_id = alert.id
     confirmed_node: str | None = None
-    cited: list[str] | None = None
     renamed: dict[str, str] = {}
     if disposition == "true_positive":
         node = nodes.get(alert.alert_node_id) if alert.alert_node_id is not None else None
@@ -469,8 +468,6 @@ async def _close(
                 await graph.rollback_transaction(tx)
                 raise
             await graph.commit_transaction(tx)
-            if renamed:
-                cited = [renamed.get(edge_id, edge_id) for edge_id in alert.edge_ids]
     return await store.set_queue_triage(
         alert_id,
         investigation_id,
@@ -482,7 +479,6 @@ async def _close(
         disposition_reason=reason,
         decided_by=member.id,
         alert_node_id=confirmed_node,
-        edge_ids=cited,
         close_proposed_by=proposed_by,
         repoint=renamed or None,
     )

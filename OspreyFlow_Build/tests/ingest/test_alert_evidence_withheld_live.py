@@ -397,3 +397,112 @@ async def test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_t
         )
         with pytest.raises(AlertNotFoundError):
             await alert_queue.explain(stores["alerts"], graph, analytics, case, second.id, TEAMMATE)
+
+
+def _people_and_matches(n_matches: int) -> tuple[list[Any], list[Any], Any]:
+    """Two OFFICIAL people and `n_matches` inferred `SAME_AS` links between them, as the screening
+    rule writes a match (a score, `basis="probabilistic"`, inferred, sourced to the list entry)."""
+    from conduit_common.identity import new_edge_id, new_node_id
+    from schemas.domain import (
+        EdgeWrite,
+        Handling,
+        NodeWrite,
+        Provenance,
+        ProvenanceState,
+        SourceRef,
+    )
+
+    official = Handling(classification="OFFICIAL", handling_code="P", originator="verify",
+                        owning_unit="verify")  # fmt: skip
+    asserted = Provenance(state=ProvenanceState.ASSERTED, first_seen=T0,
+                          sources=[SourceRef(document_id="t", locator="r", excerpt_hash="")])  # fmt: skip
+    people = [NodeWrite(id=new_node_id(), type="Person", properties={"family_name": n}, provenance=asserted,
+                        handling=official, created_by="t", created_at=T0) for n in ("Petrov", "PETROVA")]  # fmt: skip
+    matches = [
+        EdgeWrite(id=new_edge_id(), type="SAME_AS", source=people[0].id, target=people[1].id,
+                  properties={"score": 0.9 + i / 100, "model_version": f"screening:list-{i}"},
+                  basis="probabilistic", handling=official, created_by="t", created_at=T0,
+                  provenance=Provenance(state=ProvenanceState.INFERRED, first_seen=T0, extracted_by="screening:t",
+                                        sources=[SourceRef(document_id=f"list-{i}", locator="e-1", excerpt_hash="")]))
+        for i in range(n_matches)
+    ]  # fmt: skip
+    return people, matches, official
+
+
+def _screening_alert(case: str, people: list[Any], edge_ids: list[str], words: str) -> Alert:
+    from schemas.domain import AlertMode
+
+    return Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
+                 referent_node_ids=[p.id for p in people], edge_ids=edge_ids, investigation_id=case,
+                 created_at=T0, typology="kyc_screening", words=words, severity="medium")  # fmt: skip
+
+
+async def test_a_close_never_writes_back_a_list_another_close_has_repointed_since(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 1's point 1. Alert A cites two matches, L and M; alert B cites L. A's close read A's
+    links (unlocked) before B's close confirmed L and repointed A to L's new revision; A's close then
+    confirms M. Writing back the list A's close had read put the superseded L back, hiding A for
+    good. Now the rename is applied in SQL to the locked row as it stands. Red with the stale
+    write-back (`edge_ids=` the list read before): A cited L again and could not be opened."""
+    case = f"case-{new_id()}"
+    people, (l_match, m_match), official = _people_and_matches(2)
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(people, tx)
+        l_id, m_id = await graph.upsert_edges([l_match, m_match], tx)
+        await graph.commit_transaction(tx)
+        a = _screening_alert(case, people, [l_id, m_id], "A: Petrov matches PETROVA twice")
+        b = _screening_alert(case, people, [l_id], "B: Petrov matches PETROVA")
+        for alert in (a, b):
+            await stores["alerts"].save(alert, handlings=[official])
+        read_before = a  # A as its close read it, before B's close
+        nodes = {n.id: n for n in await graph.get_nodes(read_before.referent_node_ids, ANALYST)}
+
+        closed_b = await alert_queue.dispose(stores["alerts"], graph, analytics, case, b.id, ANALYST,
+                                             disposition="true_positive", reason="B matches")  # fmt: skip
+        (l_new,) = closed_b.edge_ids
+        closed_a = await alert_queue._close(stores["alerts"], graph, case, read_before, nodes, ANALYST,
+                                            disposition="true_positive", reason="A matches",
+                                            expect=["open", "claimed"])  # fmt: skip
+        assert l_id not in closed_a.edge_ids and m_id not in closed_a.edge_ids, closed_a.edge_ids
+        assert closed_a.edge_ids[0] == l_new
+        why = await alert_queue.explain(stores["alerts"], graph, analytics, case, a.id, ANALYST)
+        assert {e.id for e in why.edges if e.type == "SAME_AS"} == set(closed_a.edge_ids)
+
+
+async def test_two_closes_confirming_one_match_both_complete(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 1's point 2: two closes sharing one match, at once. Each locked its own row first and
+    then the rows citing the match, in no order, so each could hold the row the other waited for: a
+    deadlock, one close refused after its graph commit. Now every row is locked in one id-ordered
+    statement. Twenty pairs at once, each pair two alerts citing one match, at the store, with no
+    graph: both of every pair complete and cite the new revision. Red with the old locking: Postgres
+    found deadlocks and refused closes."""
+    import asyncio
+
+    _, _, official = _people_and_matches(0)
+    case = f"case-{new_id()}"
+    pairs = []
+    for i in range(20):
+        old, new = f"link-{new_id()}", f"link-{new_id()}"
+        pair = [_screening_alert(case, [], [old], f"pair {i}") for _ in range(2)]
+        for alert in pair:
+            alert = alert.model_copy(update={"referent_node_ids": []})
+            await stores["alerts"].save(alert, handlings=[official])
+        pairs.append((pair, old, new))
+
+    async def close(alert: Alert, old: str, new: str) -> Alert:
+        return await stores["alerts"].set_queue_triage(
+            alert.id, case, ANALYST, expect_status=["open"], status="closed", assignee=ANALYST.id,
+            disposition="true_positive", disposition_reason="matches", decided_by=ANALYST.id,
+            repoint={old: new},
+        )  # fmt: skip
+
+    done = await asyncio.gather(*(close(a, old, new) for pair, old, new in pairs for a in pair),
+                                return_exceptions=True)  # fmt: skip
+    refused = [d for d in done if isinstance(d, BaseException)]
+    assert refused == [], f"{len(refused)} of {len(done)} closes refused: {refused[:2]}"
+    for (pair, _old, new), (x, y) in zip(pairs, zip(done[::2], done[1::2], strict=True), strict=True):
+        assert x.edge_ids == [new] and y.edge_ids == [new], pair[0].words
