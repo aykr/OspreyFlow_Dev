@@ -19,8 +19,6 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
-from services.ingest.metering import CountingMedia, graph_writes, metering_of
-
 from adapters.media_objectstore.testing import InMemoryMediaStore
 from schemas.ingest import (
     BranchRunReport,
@@ -29,6 +27,7 @@ from schemas.ingest import (
     LoadReport,
     PipelineRunReport,
 )
+from services.ingest.metering import CountingMedia, graph_writes, metering_of
 
 
 def _load(**lists: object) -> LoadReport:
@@ -54,14 +53,18 @@ def test_a_rows_write_counts_the_same_whether_it_merged_or_created() -> None:
     may not read): a row whose node and link merge into ones the reader may not see, where the
     same row alone would have created them, moves `graph_writes` by nothing. Each write is counted
     once, in whichever list the engine put it."""
-    created = _load(created_node_ids=["n1", "n2"], touched_edge_ids=["e1"], created_edge_ids=["e1"])
+    created = _load(
+        created_node_ids=["n1", "n2"], touched_edge_ids=["e1"], created_edge_ids=["e1"]
+    )
     merged = _load(created_node_ids=["n1"], merged_node_ids=["hidden"], touched_edge_ids=["e9"],
                    merged_edge_ids=["e9"])  # fmt: skip
     assert graph_writes(created) == graph_writes(merged) == 3
 
 
 def test_a_pipelines_graph_writes_add_its_branches_and_stages() -> None:
-    branch = BranchRunReport(source_id="s", source_label="S", report=_load(created_node_ids=["n1"]))
+    branch = BranchRunReport(
+        source_id="s", source_label="S", report=_load(created_node_ids=["n1"])
+    )
     report = PipelineRunReport(
         load_id="l", recipe_id="r", recipe_version=1, branches=[branch, branch],
         extracts=[
@@ -86,11 +89,19 @@ def test_the_rows_read_are_every_row_of_the_file() -> None:
 
 def test_what_is_not_yet_measured_is_none() -> None:
     metering = metering_of(_load(), wall_seconds=0.25, object_store_bytes=12)
-    assert (metering.rows_staged, metering.parquet_bytes) == (None, None), "phase 7's staging"
-    assert (metering.wall_ms, metering.object_store_bytes, metering.graph_writes) == (250, 12, 0)
+    assert (metering.rows_staged, metering.parquet_bytes) == (None, None), (
+        "phase 7's staging"
+    )
+    assert (metering.wall_ms, metering.object_store_bytes, metering.graph_writes) == (
+        250,
+        12,
+        0,
+    )
 
 
-async def test_the_counting_media_store_counts_what_it_is_given_and_passes_it_on() -> None:
+async def test_the_counting_media_store_counts_what_it_is_given_and_passes_it_on() -> (
+    None
+):
     inner = InMemoryMediaStore()
     media = CountingMedia(inner)
     ref = await media.put(b"0123456789", "text/plain")
@@ -101,15 +112,20 @@ async def test_the_counting_media_store_counts_what_it_is_given_and_passes_it_on
     assert media.bytes_written == 13
 
 
-def test_a_route_shows_a_runs_metering_only_to_a_reader_who_may_see_its_counts() -> None:
+def test_a_route_shows_a_runs_metering_only_to_a_reader_who_may_see_its_counts() -> (
+    None
+):
     """Rules 3 and 4: the figures count the run's rows and writes, so they go with the counts."""
+    from schemas.domain import Handling, Principal
     from services.api.load_records import report_view
 
-    from schemas.domain import Handling, Principal
     from tests.ingest.test_row_keys import SCHEME
 
     secret = Handling(
-        classification="SECRET", handling_code="P", owning_unit="unit-1", originator="unit-1"
+        classification="SECRET",
+        handling_code="P",
+        owning_unit="unit-1",
+        originator="unit-1",
     )
     report = _load(rows_read=4, markings=[secret])
     report.metering = metering_of(report, wall_seconds=2, object_store_bytes=9)
@@ -120,7 +136,60 @@ def test_a_route_shows_a_runs_metering_only_to_a_reader_who_may_see_its_counts()
     )  # fmt: skip
     cleared = Principal(id="a", clearance="SECRET", org_unit="unit-1")
     below = Principal(id="b", clearance="OFFICIAL", org_unit="unit-1")
-    for shown in (report_view(report, cleared, SCHEME), report_view(pipeline, cleared, SCHEME)):
+    for shown in (
+        report_view(report, cleared, SCHEME),
+        report_view(pipeline, cleared, SCHEME),
+    ):
         assert shown.metering == report.metering
-    for withheld in (report_view(report, below, SCHEME), report_view(pipeline, below, SCHEME)):
+    for withheld in (
+        report_view(report, below, SCHEME),
+        report_view(pipeline, below, SCHEME),
+    ):
         assert withheld.withheld and withheld.metering is None
+
+
+async def test_a_match_on_a_node_the_reader_may_not_see_reads_as_no_node_at_all() -> (
+    None
+):
+    """ADR-110 Amendment 15 point 5's last sentence: the engine asks `find_node` under the loader's
+    principal, so a node they may not see is not matched, and the row creates exactly as when no
+    node exists. The run they are told of, and its figures, are the same in both worlds."""
+    from typing import Any
+
+    from services.api.studio_publish import load_with_rules
+
+    from tests.ingest.recipe_test_support import MergingGraph
+    from tests.ingest.test_row_keys import LOADER, ONTOLOGY, SCHEME, _recipe, _row
+
+    class HidesSyn1(MergingGraph):
+        async def find_node(
+            self, entity_type: str, field: str, value: str, principal: Any
+        ) -> Any:
+            return (
+                None
+                if value == "SYN-1"
+                else await super().find_node(entity_type, field, value, principal)
+            )
+
+    async def told(graph: MergingGraph, *, someone_elses: bool) -> tuple[Any, ...]:
+        async def load(
+            rows: list[dict[str, str]], load_id: str, recipe_id: str
+        ) -> LoadReport:
+            report, _, _ = await load_with_rules(
+                _recipe(deduplicate=False).model_copy(update={"id": recipe_id}), rows, LOADER,
+                graph=graph, ontology=ONTOLOGY, load_id=load_id,  # type: ignore[arg-type]
+                investigation_scope="case-1", source="cash.csv", media=InMemoryMediaStore(),
+                rules=None, scheme=SCHEME,
+            )  # fmt: skip
+            return report
+
+        if someone_elses:
+            await load([_row("SYN-1", "SYN-7", 4)], "load-x", "another-pipeline")
+        report = await load([_row("SYN-1", "SYN-2", 1)], "load-1", "private-cash")
+        return (report.nodes_created, report.nodes_referenced, graph_writes(report))
+
+    assert (
+        await told(HidesSyn1(ONTOLOGY), someone_elses=True)
+        == await told(HidesSyn1(ONTOLOGY), someone_elses=False)
+        == (2, 0, 3)
+    )

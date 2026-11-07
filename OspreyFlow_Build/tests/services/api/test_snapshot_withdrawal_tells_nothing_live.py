@@ -29,14 +29,25 @@ the states differ by that row whatever the withdrawal does.
 It also says, in the first world, what the ruling says: the second run leaves every node and link,
 and takes B's event alone. Only the ids and times that differ between any two runs are left out.
 
-In the second world it also reads the other case's timeline, as its own loader, before and after
-the withdrawal: it must not move.
+In the second world, before the loader's second run, a third case also loads and withdraws its own
+B, the very key the loader's B has (a row key does not depend on the case): the loader's B must
+still be withdrawn as if theirs never was. And it reads the other case's timeline, as its own loader, before
+and after the loader's withdrawal: it must not move.
 
 What a mistake would do, and what catches it (`L1.2a_RED_RECORD.md` has each shown red):
-- a dropped row's link withdrawn (the graph changes in either world);
-- a link withdrawn unless another row of any case holds it (`elements_kept_by_other_rows`): the
-  live links, the timeline and the counts differ between the worlds;
-- a link withdrawn unless another load's record lists it (`elements_in_other_records`): the same."""
+- a: a dropped row's link withdrawn (the change of the live links differs between the worlds);
+- b: a link withdrawn unless another row of any case holds it (`elements_kept_by_other_rows`):
+  the same;
+- c: a link withdrawn unless another load's record lists it (`elements_in_other_records`): the
+  same;
+- d: the rows' events taken by their links: the other case's timeline moves;
+- e: a count told to the loader taken from other cases' rows (the old `links_kept_an_occurrence`
+  and its words, from every row of every case): the run's view and the report's differ;
+- f: `dropped_row_keys`'s `withdrawn_before` asked without the case: the third case's own
+  withdrawal of the same key leaves the loader's B in place (`B was dropped` fails). The other
+  question, `withdrawn_row_keys_among`, cannot differ here (the loader's case withdrew B too); its
+  case condition is held by `test_row_key_withdrawal_ledger.py`'s
+  `test_another_cases_withdrawal_of_the_same_key_is_never_ours`."""
 
 from __future__ import annotations
 
@@ -74,6 +85,8 @@ A, B = _row("SYN-1", "SYN-2", 1), _row("SYN-3", "SYN-4", 2)
 #: The other case's rows: B's own pair again, and a link of their own on B's node.
 THEIRS = [_row("SYN-3", "SYN-4", 2), _row("SYN-3", "SYN-8", 6)]
 OWN_VALUES = ("SYN-1", "SYN-2", "SYN-3", "SYN-4")
+#: The third case's other row, away from the loader's nodes.
+ELSEWHERE = _row("SYN-5", "SYN-9", 7)
 
 
 @pytest.fixture
@@ -138,7 +151,11 @@ class World:
             self._deps(), principal=who, recipe=self.draft, investigation_id=case,
             source_location=None, trigger="source_refresh",
         )  # fmt: skip
-        row = (await self.runs.for_recipe(self.draft.recipe_id, limit=1))[0]
+        # The run's own row, by its load: the recipe id is shared by both cases and both worlds.
+        (row,) = [
+            r for r in await self.runs.for_recipe(self.draft.recipe_id, limit=50)
+            if r.load_id == report.load_id
+        ]  # fmt: skip
         run_view = app_module._schedule_run_view(row, who, SCHEME).model_dump(
             exclude={"run_id", "started_at", "finished_at", "load_id"}
         )
@@ -196,8 +213,12 @@ async def _told(
 ) -> dict[str, Any]:
     """One world: what the loader is told of the second and third runs, and what they read."""
     repo, draft = _published_draft(tmp_path / ("beside" if beside else "alone"))
-    ours, theirs = new_id(), new_id()
-    loader, other = _loader("loader-1"), _loader("loader-2")
+    ours, theirs, third = new_id(), new_id(), new_id()
+    loader, other, another = (
+        _loader("loader-1"),
+        _loader("loader-2"),
+        _loader("loader-3"),
+    )
     async with (
         arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
         duckdb_adapter([], SCHEME) as analytics,
@@ -207,6 +228,11 @@ async def _told(
         first = await world.what_they_read(loader, ours)
         if beside:
             await world.run(other, theirs, THEIRS)
+            # Rules 3 and 4: a third case withdraws its own B, the very key ours holds (a row key
+            # does not depend on the case). Ours must still be withdrawn as if theirs never was.
+            await world.run(another, third, [B, ELSEWHERE])
+            third_drop, _, _ = await world.run(another, third, [ELSEWHERE])
+            assert third_drop.rows_withdrawn == 1
         before_drop = await world.what_they_read(loader, ours)
         theirs_before = await world.what_they_read(other, theirs)
         second, second_run, second_said = await world.run(loader, ours, [A])

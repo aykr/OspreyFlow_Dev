@@ -10,7 +10,9 @@ do, and the case that catches it:
   of the dropped row withdrawn (`test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them`);
 - a row that comes back in a third snapshot skipped as kept, or creating its link again, or its
   events counted twice (`test_a_row_that_comes_back_is_loaded_again_once`);
-- the refresh's revert restoring a row that came back (the same file's second case)."""
+- the refresh's revert restoring a row that came back (the same file's second case);
+- a row dropped again after coming back moved aside a second time, a unique violation after the
+  commit (`test_a_row_dropped_again_after_coming_back_is_left_in_place_in_words`)."""
 
 from __future__ import annotations
 
@@ -46,7 +48,10 @@ from tests.ingest.test_row_keys import LOADER, ONTOLOGY, ROWS, SCHEME, _publishe
 
 NOW = datetime(2026, 11, 6, 12, tzinfo=UTC)
 SOURCE = Handling(
-    classification="OFFICIAL", handling_code="P", owning_unit="unit-1", originator="unit-1"
+    classification="OFFICIAL",
+    handling_code="P",
+    owning_unit="unit-1",
+    originator="unit-1",
 )
 A, B, C = ROWS
 
@@ -70,7 +75,9 @@ def _write(path: Path, rows: list[dict[str, str]]) -> None:
 class Refresh:
     """One case's refreshes of one file: each a ledger run and a load, as the executor runs."""
 
-    def __init__(self, tmp_path: Path, runs: RecipeRunStore, graph: object, analytics: object):
+    def __init__(
+        self, tmp_path: Path, runs: RecipeRunStore, graph: object, analytics: object
+    ):
         self.repo, draft = _published_draft(tmp_path)
         self.case = new_id()
         self.draft = draft.model_copy(update={"recipe_id": draft.recipe_id})
@@ -91,7 +98,11 @@ class Refresh:
             now=self.started,
         )  # fmt: skip
         sink = LedgerSink(
-            self.runs, run_id, created_by=LOADER.id, investigation_id=self.case, started_at=NOW
+            self.runs,
+            run_id,
+            created_by=LOADER.id,
+            investigation_id=self.case,
+            started_at=NOW,
         )
         load_id = new_id()
         report = await run_published_recipe(
@@ -124,7 +135,10 @@ class Refresh:
 
     async def events(self) -> int:
         page = await self.analytics.list_events(  # type: ignore[attr-defined]
-            EventListRequest(filter=EventFilter(investigation_scope=self.case), limit=100), LOADER
+            EventListRequest(
+                filter=EventFilter(investigation_scope=self.case), limit=100
+            ),
+            LOADER,
         )
         return int(page.total)
 
@@ -146,13 +160,23 @@ class Refresh:
 async def test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them(
     tmp_path: Path, runs: RecipeRunStore
 ) -> None:
-    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph, duckdb_adapter([], SCHEME) as analytics:
+    async with (
+        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+        duckdb_adapter([], SCHEME) as analytics,
+    ):
         refresh = Refresh(tmp_path, runs, graph, analytics)
         first = await refresh.snapshot([A, B, C])
         assert first.rows_withdrawn == 0  # type: ignore[attr-defined]
         links = set(first.created_edge_ids)  # type: ignore[attr-defined]
         assert len(links) == 3
-        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
+        assert await refresh.values() == {
+            "SYN-1",
+            "SYN-2",
+            "SYN-3",
+            "SYN-4",
+            "SYN-5",
+            "SYN-6",
+        }
         assert await refresh.events() == 3
 
         second = await refresh.snapshot([A, C])
@@ -160,13 +184,29 @@ async def test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_re
         assert second.rows_already_loaded == 2 and second.rows_withdrawn == 1  # type: ignore[attr-defined]
         # ADR-110 Amendment 15: the dropped row's own event goes; its nodes and link never do.
         assert (second.withdrawn_node_ids, second.withdrawn_edge_ids) == ([], [])  # type: ignore[attr-defined]
-        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
+        assert await refresh.values() == {
+            "SYN-1",
+            "SYN-2",
+            "SYN-3",
+            "SYN-4",
+            "SYN-5",
+            "SYN-6",
+        }
         assert {e.id for e in await graph.get_edges(sorted(links), LOADER)} == links
-        assert await refresh.events() == 2, "the dropped row's event leaves the timeline"
+        assert await refresh.events() == 2, (
+            "the dropped row's event leaves the timeline"
+        )
 
         await refresh.revert(second.load_id)  # type: ignore[attr-defined]
 
-        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
+        assert await refresh.values() == {
+            "SYN-1",
+            "SYN-2",
+            "SYN-3",
+            "SYN-4",
+            "SYN-5",
+            "SYN-6",
+        }
         assert await refresh.events() == 3
         # Its key is kept again: the same snapshot run now withdraws it once more, not twice.
         again = await refresh.snapshot([A, C])
@@ -176,7 +216,10 @@ async def test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_re
 async def test_a_row_that_comes_back_is_loaded_again_once(
     tmp_path: Path, runs: RecipeRunStore
 ) -> None:
-    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph, duckdb_adapter([], SCHEME) as analytics:
+    async with (
+        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+        duckdb_adapter([], SCHEME) as analytics,
+    ):
         refresh = Refresh(tmp_path, runs, graph, analytics)
         await refresh.snapshot([A, B, C])
         second = await refresh.snapshot([A, C])
@@ -186,10 +229,46 @@ async def test_a_row_that_comes_back_is_loaded_again_once(
         # Its nodes and link never left (Amendment 15): matched and merged into, not created.
         assert back.rows_already_loaded == 2 and back.nodes_created == 0  # type: ignore[attr-defined]
         assert (back.edges_created, back.created_edge_ids) == (0, [])  # type: ignore[attr-defined]
-        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
+        assert await refresh.values() == {
+            "SYN-1",
+            "SYN-2",
+            "SYN-3",
+            "SYN-4",
+            "SYN-5",
+            "SYN-6",
+        }
         assert await refresh.events() == 3, "each event held once"
         # The refresh that withdrew B is not reverted while B is loaded again.
         with pytest.raises(RevertRefused) as refused:
             await refresh.revert(second.load_id)  # type: ignore[attr-defined]
-        assert [r.reason for r in refused.value.refusals] == ["withdrawn_rows_loaded_again"]
+        assert [r.reason for r in refused.value.refusals] == [
+            "withdrawn_rows_loaded_again"
+        ]
         assert await refresh.events() == 3
+
+
+async def test_a_row_dropped_again_after_coming_back_is_left_in_place_in_words(
+    tmp_path: Path, runs: RecipeRunStore
+) -> None:
+    """ADR-110 Amendment 15, live: drop B, B comes back, drop B again. The third snapshot cannot
+    move B's key aside a second time (the first withdrawal's entry stands), so B is left in place,
+    its event too, and the run says so, where before it was a unique violation after the commit."""
+    async with (
+        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+        duckdb_adapter([], SCHEME) as analytics,
+    ):
+        refresh = Refresh(tmp_path, runs, graph, analytics)
+        await refresh.snapshot([A, B, C])
+        await refresh.snapshot([A, C])
+        back = await refresh.snapshot([A, B, C])
+        assert back.refresh_notes and "came back" in back.refresh_notes[0]  # type: ignore[attr-defined]
+        assert await refresh.events() == 3
+
+        again = await refresh.snapshot([A, C])
+
+        assert (again.rows_withdrawn, again.rows_left_in_place) == (0, 1)  # type: ignore[attr-defined]
+        assert (
+            "had come back after an earlier refresh withdrew it"
+            in again.refresh_notes[0]
+        )  # type: ignore[attr-defined]
+        assert await refresh.events() == 3, "B's new event stays"
