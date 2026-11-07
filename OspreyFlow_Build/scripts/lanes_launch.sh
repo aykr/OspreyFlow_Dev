@@ -71,7 +71,7 @@ export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
 $CLAUDE_CMD --model "$model" "\$(cat "$pf")"
 EOF
   osascript -e "tell application \"Terminal\" to do script \"source '$start'\"" -e 'tell application "Terminal" to activate' >/dev/null
-  "$ROOT/OspreyFlow_Build/scripts/lanes_heartbeat.sh" beat "$lane" planning "session opened by the orchestrator ($which)" >/dev/null
+  OSPREY_BEAT_KEEP_NUDGE=1 "$ROOT/OspreyFlow_Build/scripts/lanes_heartbeat.sh" beat "$lane" planning "session opened by the orchestrator ($which)" >/dev/null
   echo "Opened $lane in a new Terminal window ($model). Approvals inside it are the owner's."
 }
 

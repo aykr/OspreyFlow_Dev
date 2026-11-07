@@ -46,7 +46,9 @@ beat() {
   mv "$DIR/$lane.beat.tmp" "$DIR/$lane.beat"
   printf '%s\t%s\t%s\t%s\n' "$(iso)" "$state" "$head" "$note" >> "$DIR/$lane.log"
   echo "Heartbeat: $lane $state."
-  if [ -s "$DIR/$lane.nudge" ]; then
+  # OSPREY_BEAT_KEEP_NUDGE: a beat made on the lane's behalf (the launcher's, at open) leaves the
+  # nudge for the lane's own first beat to show.
+  if [ -z "${OSPREY_BEAT_KEEP_NUDGE:-}" ] && [ -s "$DIR/$lane.nudge" ]; then
     echo; echo "MESSAGE FROM THE ORCHESTRATOR (act on it before going on):"; cat "$DIR/$lane.nudge"
     printf '%s\tnudge read\t%s\t\n' "$(iso)" "$head" >> "$DIR/$lane.log"
     rm -f "$DIR/$lane.nudge"

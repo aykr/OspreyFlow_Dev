@@ -147,3 +147,17 @@ def test_headless_refuses_any_lane_but_docs(launcher, lane) -> None:
     refused = launcher("headless", lane)
     assert refused.returncode == 1
     assert "docs lane only" in refused.stderr
+
+
+def test_opening_a_lane_leaves_its_pending_nudge_for_the_lane(launcher) -> None:
+    """The orchestrator's own beat at open must not read the lane's nudge away (found 7 November
+    2026: a resumed glass session never saw the review it was nudged with)."""
+    launcher("setup", "studio")
+    subprocess.run(
+        ["bash", str(HEARTBEAT), "nudge", "studio", "rebase on main"],
+        env={**os.environ, "OSPREY_LANES_DIR": str(launcher.wt.parent / "state")},
+        check=True, capture_output=True,
+    )
+    assert launcher("resume", "studio").returncode == 0
+    nudge = launcher.wt.parent / "state" / "studio.nudge"
+    assert nudge.exists() and "rebase on main" in nudge.read_text()
