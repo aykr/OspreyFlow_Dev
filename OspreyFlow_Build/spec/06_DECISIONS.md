@@ -27086,7 +27086,7 @@ smallest step beyond it the owner chose (N4).
    folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
    proves each moved action by keyboard.
 
-### ADR-110, Amendment 15 (7 November 2026) — a full snapshot's withdrawal takes back only the dropped rows' own events, never a node or a link, so nothing a reader sees varies with what they cannot read
+### ADR-110, Amendment 15 (7 November 2026) — a full snapshot's withdrawal takes back only the dropped rows' own events, never a node or a link, so what it changes never depends on what the loader cannot read
 
 Status: accepted 7 November 2026, on the owner's ruling "Only the rows' events" (put to the owner by
 the orchestrator after the review of L1.2a's Part A; it replaces the same day's "Never withdraw
@@ -27122,7 +27122,14 @@ the same link, of any case, went with them.
    wrote (Amendment 8), or before they recorded their events (a key written between Amendment 8 and
    this one has `event_ids` NULL). Its key stays kept and its events stay; there is no fallback to
    its links' events. The run says so: "1 dropped row was loaded before rows recorded the events they
-   wrote, and was left in place, its events too", counted in `rows_left_in_place`.
+   wrote, and was left in place, its events too", counted in `rows_left_in_place`. So is a dropped
+   key an earlier snapshot already withdrew whose row came back (`KeptRow.withdrawn_before`): its
+   first withdrawal's entry stands in `withdrawn_row_keys` (neither revert can clear it, below), and
+   moving it aside again would collide with it after the graph has committed. The run says "1
+   dropped row had come back after an earlier refresh withdrew it, and was left in place, its events
+   too, until that refresh can be reverted" (`test_snapshot_withdrawal.py`'s
+   `test_a_row_dropped_after_coming_back_is_left_in_place_in_words`, whose fake refuses the second
+   move as the table's primary key does; `test_row_key_withdrawal_ledger.py`).
 5. **Metering counts no withdrawal**: it writes no element. A merge counts as the create it stands
    for (`tests/ingest/test_metering.py`'s
    `test_a_rows_write_counts_the_same_whether_it_merged_or_created`, red with merges uncounted). A
@@ -27144,7 +27151,12 @@ the same link, of any case, went with them.
    `ScheduleRunView` and `report_view` of the second and third runs, and what each run changed of
    the live nodes, the live links (with their occurrences) and the case's timeline. It is shown red
    with link withdrawal restored, and with it each of the two ledger reads
-   (`process/lanes/studio/L1.2a_RED_RECORD.md`).
+   (`process/lanes/studio/L1.2a_RED_RECORD.md`). It holds for what the withdrawal changes, not for
+   every figure the run gives: the known limits below are why.
+8. **The Studio says it in words.** A source's page and the wizard offer "Withdraw their events;
+   their nodes and links stay until their load is reverted", and describe the policy the same way
+   (`ingest/sources/GovernanceFields.tsx`, `sources.test.tsx`). This replaces Amendment 13's
+   "withdrawing what rows it no longer carries had loaded".
 
 **Known limits, recorded, not changed.**
 - A load that merged into a link that already existed is not reverted (ADR-127 decision 6). A row
@@ -27157,5 +27169,10 @@ the same link, of any case, went with them.
   `tests/ingest/test_snapshot_withdrawal.py`).
 - A Studio load stamps no dataset on what it writes until the load-into rule (ADR-143, L3.1), so the
   test's principals are not confined to a dataset. And two cases' rows on the same pair merge into
-  one link with the same audience, so one case's occurrences count the other's. Neither is the
-  withdrawal's; the test compares each run's change, not the state, for that reason.
+  one link with the same audience, so one case's occurrences count the other's, and the other case's
+  row can turn this case's create into a merge. Neither is the withdrawal's; the test compares each
+  run's change, not the state, for that reason. The orchestrator has it as the studio lane's Part A2
+  (to be proved on main first).
+- A failure to set the events aside, after the record is in, fails the run in words. The keys are
+  already aside, so a rerun does not find those rows dropped again; the revert of the refresh
+  reconciles them. Not tested.

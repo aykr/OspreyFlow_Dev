@@ -1406,10 +1406,11 @@ are on the port too, each taking the principal like every other read.
   tx) -> RestoredElements`** (ADR-110 Amendment 6 point 3). The first marks each *live* given
   element reverted and withdrawn by `load_id`; one already reverted is left alone. The second brings
   back exactly what `load_id` withdrew, except a link whose pair (type and ends) has a live link
-  written since: each link is written once. No `principal`, as `revert_elements`; `services/ingest/`
-  is the only caller. Conformance: `tests/conformance/graph_port/test_suite.py`'s withdrawal
-  section, six cases, each branch shown red by a plant. The withdrawing refresh's own choice of
-  what to withdraw is `services/ingest/snapshot_withdrawal.py` (ADR-110 Amendments 8 and 9).
+  written since: each link is written once. No `principal`, as `revert_elements`. Conformance:
+  `tests/conformance/graph_port/test_suite.py`'s withdrawal section, six cases, each branch shown
+  red by a plant. Since ADR-110 Amendment 15 no refresh withdraws a node or a link, so nothing calls
+  `withdraw_elements`; `restore_withdrawn` stays for the revert (`services/ingest/load_revert.py`)
+  of a refresh recorded before it, whose record lists withdrawn nodes and links.
 
 These reads take a set of nodes or links, or the whole case, rather than one seed, each with the access step on
 every node, every link and each link's other end, so a link counts only when both its ends can be

@@ -939,12 +939,18 @@ so (rule 3's hidden degree). The withdrawal asks only which of this pipeline's k
 the snapshot no longer carries. The run says in words how many rows it withdrew, and how many
 dropped rows were loaded before rows recorded the events they wrote and were left in place, their
 events too; there is no fallback to their links' events. The run's metering counts no withdrawal.
-Nothing the run says varies with anything the loader may not read
+What the withdrawal changes never depends on anything the loader may not read
 (`tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`). A row that comes back matches
 its nodes and merges into its own link, so it creates nothing. Reverting the refresh restores the
 rows' events and their keys, and is refused while a row it withdrew has been loaded again; a refresh
 recorded before Amendment 15, whose record lists withdrawn nodes and links, restores those too. A
 pipeline reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
+
+Two limits stand until the owner rules (Amendment 15). A row that comes back merges into its own
+link, so its load is not reverted, nor the refresh that withdrew it; the run says so in words. A row
+dropped again after coming back is left in place, its events too, in words. And until a Studio load
+stamps its dataset (ADR-143), two cases' rows on the same pair merge into one link, so one case's
+occurrences and created links can count the other's: that is the load's, not the withdrawal's.
 
 **An incremental refresh** (ADR-110 Amendment 10). The source names a watermark column. Each load
 records the highest value it read, and the next refresh by the same pipeline into the same case
