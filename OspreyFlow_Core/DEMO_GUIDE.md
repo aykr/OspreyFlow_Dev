@@ -931,7 +931,7 @@ them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The
 draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
 reports and 67 naming people rather than 229 and 68.
 
-**Chapter 4 in the phase 6 Studio** (ADR-140 Amendment 8, 7 November 2026; built on the studio lane, **not
+**Chapter 4 in the Studio's drawer and guided mode** (ADR-140 Amendment 8, 7 November 2026; built on the studio lane, **not
 yet walked live**): the pipeline opens in **guided mode**, every person's default, as a numbered list of
 its steps beside a picture of the pipeline; **Expert** (the header's mode switch, kept for the person
 in their browser) shows the canvas instead, and either opens the same **drawer** beside the pipeline.

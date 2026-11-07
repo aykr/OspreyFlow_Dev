@@ -115,7 +115,7 @@ data above its source's marking is remedied by raising the source's (Amendment 6
   step 3). A pipeline's first source node chooses a registered source (*Use this source*), so no marking
   is asked in the pipeline; *The draft's own settings* keeps the deduplication key until the canvas becomes the editor (ADR-140).
 - **3 Pipelines** is the pipelines home and canvas below: name a pipeline, open one, edit it beside its
-  drawer (phase 6, below). The pipeline header's buttons are **Guided** and **Expert** (the mode),
+  drawer (below; ADR-140 Amendment 8). The pipeline header's buttons are **Guided** and **Expert** (the mode),
   **Load rules** (§5a), **Test** (§5) and **Deploy** (§6), each opening in the drawer.
 - **4 Runs** (`ingest/runs/RunsTab.tsx`) is the grid of deployed pipelines by day, read from the run
   ledger (ADR-110 decision 6): a cell per day — succeeded; *needs a person* (rows held, or a run failed,
@@ -153,7 +153,7 @@ load branch), **+ Extract** and **+ Enrich** (each after the last map) and **Rem
 the domain root). Every edit is saved as it is made (`PUT …/ingest/recipes/{id}/pipeline`); the save
 gate's refusals are shown above the canvas in its own words.
 
-**The drawer and the two modes (phase 6, as built 7 November 2026; ADR-108 Amendment 6, ADR-140
+**The drawer and the two modes (as built 7 November 2026; ADR-140 Amendment 8, ADR-108 Amendment 6, ADR-140
 decisions 3 and 14).** Choosing a step opens its editor in the **drawer** beside the pipeline
 (`ingest/dag/NodeDrawer.tsx`); nothing replaces the pipeline, and no hosted screen has a "Back to the
 pipeline" (the drawer's **Close** goes back to the step, or lets it go).
@@ -181,12 +181,12 @@ pipeline" (the drawer's **Close** goes back to the step, or lets it go).
 - **Guided and expert mode** (ADR-140 decision 3; Amendment 1.3). **Guided**, every person's default,
   shows the steps as a **numbered list** in the order they run, each opening the same drawer, beside a
   picture of the pipeline with nothing to press. **Expert** shows the canvas as the editor. A step
-  guided mode does not offer (an expert step, phase 8) is listed, labelled "Expert step, read-only here"
+  guided mode does not offer (an expert step, once SQL transform and Fuzzy match are built, ADR-140 decisions 12 and 13) is listed, labelled "Expert step, read-only here"
   and opened read-only, never hidden, and guided mode's *Remove selected* refuses it. The mode is a per-person preference **kept in the person's browser**,
   keyed by their user name (`ingest/dag/studioMode.ts`; the owner's ruling Q1 a, 7 November 2026): with
   no preference store on the server, a second browser starts in guided mode again, and a browser that
   refuses storage stays guided. Everyone may switch to expert mode until `write_sql_transforms` exists
-  (the owner's ruling Q3 a): the right gates the SQL and fuzzy steps when phase 8 builds them.
+  (the owner's ruling Q3 a): the right gates the SQL and fuzzy steps once they are built (ADR-140 decisions 12 and 13).
   *Show YAML* is not yet built.
 - **Map** opens the **Map editor** (`ingest/map/MapEditor.tsx`, §4): the pipeline collapses to a
   **strip** across the top, each other step a button, Map said as where the person is (not a button);
@@ -212,7 +212,7 @@ Preview never shows a row the reader may not read, shown red on both read paths)
 only for `revert_loads`), `studio/datasets.test.ts`, `publish/PublishScreen.test.tsx` "Deploy" (deploys
 without running or scheduling; deploys and runs); keyboard `keyboard/ingest-studio.spec.ts` with
 `INGEST_STUDIO_ACTIONS` (rule 13); the axe scan of `keyboard/ingest-studio-harness.html` in both themes
-and GOV.UK, with Model, Sources, Runs, a report and its held rows, and, since phase 6, a step's drawer
+and GOV.UK, with Model, Sources, Runs, a report and its held rows, and, since ADR-140 Amendment 8, a step's drawer
 in each mode, both Previews, Test, Deploy, an expert step and the Map editor with a column chosen.
 
 ### 1.1 Domain packs (ADR-108 phase D)
@@ -466,7 +466,7 @@ so the template looks like the thing it will produce.
 
 ### Interaction
 
-- **Drag a source field onto a template element** to bind it, **or choose both** (built in phase 6,
+- **Drag a source field onto a template element** to bind it, **or choose both** (built under ADR-140 Amendment 8,
   7 November 2026, closing the gap this bullet disclosed). Each column in the source fields pane has a
   **Choose** button; a chosen column is outlined, says so, and stays chosen until it is bound or let go
   (**Let go**). While a column is chosen, every field binding in the inspector (a property's, a link's
@@ -474,15 +474,15 @@ so the template looks like the thing it will produce.
   ("Bind caller here: name"); **Enter** on it, or a click, binds the column through the same path a drop
   takes, and lets the column go. "Select both, Enter" is therefore: Enter on the column's *Choose*, then
   Enter on the binding's *Bind here*. A literal binding offers no *Bind here*. Bound columns are outlined
-  and read "bound", never faded (an opacity put their words below 4.5:1, found by phase 6's axe scan).
+  and read "bound", never faded (an opacity put their words below 4.5:1, found by the first axe scan of Map with a column bound, ADR-140 Amendment 8).
   `keyboard/ingest-studio.spec.ts` "a column is bound in the Map editor by choosing it and the binding,
   then Enter" and `map/FieldBindingEditor.bind.test.tsx` prove it.
 - **The profiler proposes a starting template** — *not built* (§2 records both as post-milestone).
   When built, every proposal is visibly a proposal until confirmed.
 - **Map saves; it does not verify.** The editor's one action is *Save draft*; Test is the pipeline
-  header's (§1.0), reached from the strip across the top (phase 6; ADR-108 Amendment 6.1).
+  header's (§1.0), reached from the strip across the top (ADR-108 Amendment 6.1; ADR-140 Amendment 8).
 - **A SAME_AS link's score** (brief §6.5) is not in the inspector: only a fuzzy match makes one, and
-  the score column comes with it in phase 8 (the owner's ruling Q2 a, 7 November 2026).
+  the score column comes with it once Fuzzy match is built (ADR-140 decision 13; the owner's ruling Q2 a, 7 November 2026).
 - **A link's time is chosen, never assumed.** *When it occurred* is **Not recorded** or **From a
   column**, and only a column chosen there is saved; the editor once displayed a default binding it
   never saved (found live, 11 October 2026; `ElementInspector.content.test.tsx`).
@@ -498,7 +498,7 @@ so the template looks like the thing it will produce.
 - **The source fields pane names the registered source** the pipeline reads, and its version (ADR-140
   Amendment 6), or says that none reads the file. Its fields are the pipeline's own profile, never the
   source's: a pipeline may mark rows above its source (ADR-127 decision 3), and only its own profile
-  masks for that (`MapEditor.source.test.tsx`, migrated from `MapScreen.source.test.tsx` in phase 6).
+  masks for that (`MapEditor.source.test.tsx`, migrated from `MapScreen.source.test.tsx` under ADR-140 Amendment 8).
 - **Unmapped fields are shown, always.** A field nobody mapped is either unimportant or the most
   important thing in the file, and silence is how the second case gets missed. Mark it
   `ignore` deliberately, with an optional note, or map it.
