@@ -1041,18 +1041,6 @@ able to load material at any classification.
 | Source approver | Publish a recipe, schedule it, approve a mapping that changes an existing recipe's semantics |
 | Loader | Run a published recipe against a file at or below their own clearance |
 
-**A recipe is reached only through a case that loads into its dataset** (the second review of L1.2,
-7 November 2026; rule 4). Every Studio route names a case, and the route then works with that case's rule
-gate, its row keys and its loads. So `get_authorized_studio_recipe` refuses a recipe as missing (404,
-`studio_recipe_not_found`, audited as a denial) unless it belongs to the dataset the path's case loads
-into: the case's first dataset, the one a recipe made there is given (`made_in`, ADR-099 Amendment
-3). Before this, only the recipe's unit was checked, so an editor of a case that only *read* the
-dataset could dry-run the recipe through their own case's path. Another case loading into the same
-dataset reaches the recipe, since that is the Studio's dataset scope (ADR-140 Amendment 2). A recipe made
-before Amendment 3 names no dataset and stays in reach until it is placed, as every such record does
-(`dataset_scope.reach_clause`). `tests/services/api/test_studio_preview_routes.py` proves it for
-Preview and Test alike, red first.
-
 Verify runs against the sample under the author's own clearance, so an author cannot use a dry
 run to see material they could not otherwise see (mechanism: §5). Every recipe publish, edit and
 load is audited like any other action.
