@@ -26900,9 +26900,11 @@ and `accept_types` (in the Data Engineer role).
 
 ### ADR-140, Amendment 8 (7 November 2026) — phase 6 as built: the drawer beside the pipeline, Preview, guided and expert mode, the Map editor's strip and keyboard bind
 
-Status: built under the owner's rulings of 7 November 2026. The owner answered three multiple-choice
-questions, each with the recommended option (Q1 a, Q2 a, Q3 a). Built by the studio lane in step
-L1.2, redesign phase 6, and corrected after its review the same day (point 2). ADR-140
+Status: built 7 November 2026 by the studio lane in step L1.2 (redesign phase 6), and corrected after
+its two reviews the same day (points 2 and 10). **Points 3, 5 and 8 are the owner's rulings** of
+7 November 2026, answers to three multiple-choice questions, each the recommended option (Q1 a, Q2 a
+and Q3 a, in the order 3, 8, 5). **The other points are the lane's**: how ADR-140 decisions 3 and 14
+and ADR-108 Amendment 6 were built, recorded here for review rather than ruled. ADR-140
 and ADR-108 Amendment 6 stand, except where this amendment says otherwise. `09_INGEST_STUDIO.md` §1.0
 and §4 carry the detail.
 
@@ -26949,10 +26951,20 @@ and §4 carry the detail.
 9. **Found while building:** Map faded bound columns with an opacity that put their text below 4.5:1.
    The first axe scan of Map with a column bound caught it. A bound column is now outlined and labelled
    "bound".
+10. **A recipe is reached only through a case that loads into its dataset** (the second review; rule
+    4). `get_authorized_studio_recipe` checked the recipe's unit alone, so an editor of a case that
+    only read the dataset could dry-run its recipe through their own case's path, under that case's
+    rule gate and row keys. `verify` on main had the same gap. A recipe naming a dataset is now
+    missing unless the path's case loads into it (`made_in`); a recipe naming none stays in reach
+    until it is placed, as `dataset_scope.reach_clause` keeps every such record. Spec 09 §8 has the
+    rule. `test_studio_preview_routes.py` proves it for Preview and Test, red first.
+11. **Guided mode may not remove a step that feeds an expert step**, since that cuts the expert step's
+    input edge.
 
 **Tests.**
-- **Keyboard** (rule 13): seventeen new cases in `keyboard/ingest-studio.spec.ts`, among them the
-  reports pipeline built from scratch in guided mode by keys alone, an edit in expert mode, and a Map
+- **Keyboard** (rule 13): eighteen new action cases in `keyboard/ingest-studio.spec.ts`, among them a
+  reports pipeline begun from scratch in guided mode by keys alone (its source, one Document with its
+  title bound, Test and Deploy; not the committed reports map), an edit in expert mode, and a Map
   Preview that leaves Deploy refused until Test runs. The harness refuses as the routes do. Each case
   was shown red with its handler removed, each planted change and failing assertion recorded with the
   studio lane's report.
@@ -26962,4 +26974,9 @@ and §4 carry the detail.
   assertions run against the Map editor.
 
 **Not built:** *Show YAML*; a server-side mode preference; and Preview of staging steps (phase 7) and of
+
+**Phase 6's exit is not met.** The Prison Intelligence reports pipeline, as its committed map builds it
+(eleven elements and ten links, with conditions, content and six handling parts bound to columns), has
+not been built from scratch in guided mode, by keyboard or by hand, and nothing has been walked on the
+dev stack. DEMO_GUIDE chapter 4 still opens the seeded draft. Both are left to the next step.
 expert steps (phase 8).
