@@ -24,7 +24,7 @@ follow merges, and none affects them tonight.
 
 **Files.** `OspreyFlow_Build/marketing_site/**` only, plus your friction fragment and report.
 
-**Exit.** The site's pages render locally (open `deploy/index.html` in a browser, or serve the folder with
+**Exit.** The site's pages render locally (open `OspreyFlow_Build/marketing_site/deploy/index.html` in a browser, or serve the folder with
 `python3 -m http.server` from it), every new claim marked "coming", British English throughout, no broken
 local links; a friction fragment.
 
