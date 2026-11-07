@@ -39,6 +39,14 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-110 Amendment 15 | A snapshot's withdrawal takes back a dropped row's links and events only, never its nodes, so nothing a reader sees varies with what they cannot read (rule 3; the owner's ruling "Never withdraw nodes", 7 November) | studio | 2026-11-07 | reserved |
 | ADR-145 Amendment 2 | The case screen lightened: the column opens with the Inspector only; the rail keeps Cases and Explore, the rest under ⋯ More; the view switch keeps Graph and Map, the rest under More views (the owner's choice of variant B, 7 November) | glass | 2026-11-07 | written |
 | ADR-145 Amendment 3 | Admin's sections as built: each section's right (Roles manage_people; Grading scheme, Approval rights and Uploads administer_system; Audit read_audit, which opens no place until Audit is built); Proposed types under Data; five coming placeholders that call nothing; the GOV.UK side navigation (the orchestrator's settlement under the owner's delegation, 7 November) | glass | 2026-11-07 | reserved |
+| ADR-146 | The alerts journey: three sources, one queue, and Rules and Monitoring as a place of its own (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-143 Amendment 2 | The analyst layer's lifecycle; drawn datasets and merging them; drawn items watched (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-144 Amendment 1 | No branches anywhere: not in the code, the screens, the guides or the specs, and no branch has a layer (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-145 Amendment 4 | Four places; a home case per dataset and its Authors; reporting folded into the places; roles made clear (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-140 Amendment 9 | "Domain model" on screen; a drawn dataset as a third way to start a case; screening lists; releases as YAML; the owner step in Make live (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-112 Amendment 5 | The Rule author role, two more rights, and teams (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-142 Amendment 1 | Each session on a chosen Claude account; a lane can be paused and resumed on another (the owner's records of 7 November) | orchestrator | 2026-11-07 | reserved |
+| ADR-142 Amendment 2 | A merge's make ci takes no lease: it touches no stack, and the port guard refuses the leased stack to anyone not holding the lease | orchestrator | 2026-11-07 | reserved |
 
 ## Baseline
 
