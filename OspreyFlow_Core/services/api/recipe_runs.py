@@ -415,10 +415,14 @@ class RecipeRunStore:
         recipe_id: str,
         case: str,
         excluding: Sequence[str],
+        only_this_pipeline: bool = False,
     ) -> tuple[set[str], set[str]]:
         """Which of these nodes and links a kept row's record also names, of any recipe and any
         case, leaving out the (recipe, case) keys in `excluding` (the dropped ones). By the GIN
-        indexes (`&&`). A withdrawn key keeps nothing."""
+        indexes (`&&`). A withdrawn key keeps nothing. `only_this_pipeline`: the rows of
+        `recipe_id` in `case` alone, which is all a snapshot's run may count (ADR-110 Amendment
+        15: another pipeline's or another case's row keeps a link silently)."""
+        own = " AND recipe_id = $2 AND investigation_id = $3" if only_this_pipeline else ""
         found: tuple[set[str], set[str]] = (set(), set())
         async with self._pool.acquire() as conn:
             for column, ids, into in (
@@ -432,7 +436,7 @@ class RecipeRunStore:
                         f"SELECT DISTINCT x FROM loaded_row_keys, unnest({column}) AS x "
                         f"WHERE {column} && $1::text[] AND x = ANY($1::text[]) "
                         "AND NOT (recipe_id = $2 AND investigation_id = $3 "
-                        "AND row_key = ANY($4::text[]))",
+                        f"AND row_key = ANY($4::text[])){own}",
                         chunk,
                         recipe_id,
                         case,

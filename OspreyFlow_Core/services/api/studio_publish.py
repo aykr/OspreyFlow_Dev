@@ -370,6 +370,7 @@ class LoadSink(Protocol):
         recipe_id: str,
         case: str,
         excluding: Sequence[str],
+        only_this_pipeline: bool = False,
     ) -> tuple[set[str], set[str]]: ...
 
     async def elements_in_other_records(

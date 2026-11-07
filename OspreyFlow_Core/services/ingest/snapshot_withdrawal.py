@@ -1,21 +1,26 @@
-"""A full snapshot's withdrawal of its dropped rows (`06_DECISIONS.md` ADR-110 Amendment 8 point 3).
+"""A full snapshot's withdrawal of its dropped rows (`06_DECISIONS.md` ADR-110 Amendment 8 point 3,
+as ADR-110 Amendment 15 narrows it).
 
 A source refreshed as a *full snapshot* with *withdraw* reads the whole table each time; a row a
-pipeline kept for the case that the snapshot no longer carries is *dropped*, and its elements are
-withdrawn (`GraphPort.withdraw_elements`), in the refresh's own graph transaction, before it
-commits. `plan_withdrawal` decides which:
+pipeline kept for the case that the snapshot no longer carries is *dropped*, and its **links**,
+with their events, are withdrawn (`GraphPort.withdraw_elements`), in the refresh's own graph
+transaction, before it commits. **Its nodes are never withdrawn** (Amendment 15, the owner's
+ruling "Never withdraw nodes"): whether a node may go depends on links and rows the loader may
+not read, and a node that stayed or went would tell them so, through the graph and through the
+run's figures (rule 3's hidden degree). A node is left exactly as *keep* leaves every element.
+`plan_withdrawal` decides:
 
 - **the dropped keys**: the pipeline's kept keys for the case that no row of the snapshot carries
   (a held or rejected row still carries its key, so it is not dropped);
-- **their elements**, from each key's record (Amendment 8 point 2), less every one that is also:
-  in another kept row's record (any pipeline, any case); written or matched by the snapshot's own
-  rows; listed by an unreverted load's record other than the ones that kept the dropped keys; or,
-  for a node, an end of a live link that is not being withdrawn (`GraphPort.live_edges_touching`,
-  which catches a load that keeps no keys);
-- **what it says** (`Withdrawal.notes`), in words, never silently: the links kept because a kept
-  row also wrote them, counted only among those the loader may read (rule 3: a link they may not
-  read is kept and not counted, as `_count_hidden_merges` withholds a merge); and the dropped keys
-  kept before rows recorded what they wrote, which are left in place.
+- **their links**, from each key's record (Amendment 8 point 2), less every one that is also: in
+  another kept row's record (any pipeline, any case); written by the snapshot's own rows; or listed
+  by an unreverted load's record other than the ones that kept the dropped keys;
+- **what it says** (`Withdrawal.notes`), in words, never silently, and the same whatever the loader
+  may not read (Amendment 15): the links kept because **this pipeline's** rows in the case (the
+  snapshot's own, or its other kept ones) also wrote them,
+  counted only among those the loader may read (a link kept because another case's row or another
+  load holds it is kept and never counted, as `_count_hidden_merges` withholds a merge); and the
+  dropped keys kept before rows recorded what they wrote, which are left in place.
 
 The questions it asks of the ledger are `WithdrawalLedger`'s, which `RecipeRunStore` answers
 (`services/api/recipe_runs.py`) and `LedgerSink` passes through."""
@@ -63,6 +68,7 @@ class WithdrawalLedger(Protocol):
         recipe_id: str,
         case: str,
         excluding: Sequence[str],
+        only_this_pipeline: bool = False,
     ) -> tuple[set[str], set[str]]: ...
 
     async def elements_in_other_records(
@@ -109,7 +115,8 @@ async def plan_withdrawal(
     graph: GraphPort,
     principal: Principal,
 ) -> Withdrawal:
-    """Which elements the snapshot's dropped rows withdraw (the module docstring has the rule).
+    """Which links the snapshot's dropped rows withdraw, never a node (the module docstring has the
+    rule).
     `report` is the snapshot's own load, written and not yet committed; `rows` every row it read."""
     present = await asyncio.to_thread(
         lambda: {k for k in row_group_keys(recipe, rows) if k is not None}
@@ -127,12 +134,6 @@ async def plan_withdrawal(
     by_rows = await ledger.elements_kept_by_other_rows(
         nodes, edges, recipe_id=recipe.id, case=case, excluding=[d.row_key for d in dropped]
     )
-    own_nodes = {
-        *report.created_node_ids,
-        *report.referenced_node_ids,
-        *report.merged_node_ids,
-        *(n for e in report.kept_row_elements.values() for n in e.node_ids),
-    }
     own_edges = {
         *report.touched_edge_ids,
         *(x for e in report.kept_row_elements.values() for x in e.edge_ids),
@@ -142,23 +143,18 @@ async def plan_withdrawal(
         edges,
         excluding_loads=sorted({d.load_id for d in dropped} | {report.load_id}),
     )
-    kept_by_rows = (by_rows[1] | own_edges) & set(edges)
-    kept_edges = kept_by_rows | by_records[1]
+    kept_edges = (by_rows[1] | own_edges | by_records[1]) & set(edges)
     plan.edge_ids = [e for e in edges if e not in kept_edges]
-    if kept_by_rows:
-        readable = await graph.get_edges(sorted(kept_by_rows), principal)
-        plan.links_kept = len(readable)
-
-    candidates = [n for n in nodes if n not in by_rows[0] | own_nodes | by_records[0]]
-    withdrawn_edges = set(plan.edge_ids)
-    # One question for every candidate; only if a live link outside the withdrawal touches one of
-    # them is each asked alone, to find which. Unmeasured for a large drop with many such links.
-    foreign = await graph.live_edges_touching(candidates) - withdrawn_edges if candidates else set()
-    if foreign:
-        resting: set[str] = set()
-        for node in candidates:
-            if await graph.live_edges_touching([node]) - withdrawn_edges:
-                resting.add(node)
-        candidates = [n for n in candidates if n not in resting]
-    plan.node_ids = candidates
+    # Counted only from this pipeline's own rows in this case (the snapshot's and its kept ones),
+    # and only what the loader may read: a link kept because another case's or another pipeline's
+    # row, or another load, holds it changes no figure (Amendment 15).
+    own_rows = await ledger.elements_kept_by_other_rows(
+        [], edges, recipe_id=recipe.id, case=case, excluding=[d.row_key for d in dropped],
+        only_this_pipeline=True,
+    )  # fmt: skip
+    rewritten = (own_rows[1] | own_edges) & set(edges)
+    if rewritten:
+        plan.links_kept = len(await graph.get_edges(sorted(rewritten), principal))
+    # Amendment 15: nodes are never withdrawn, whatever rests on them.
+    plan.node_ids = []
     return plan

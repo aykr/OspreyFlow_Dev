@@ -94,6 +94,7 @@ class _RunLedger(Protocol):
         recipe_id: str,
         case: str,
         excluding: Sequence[str],
+        only_this_pipeline: bool = False,
     ) -> tuple[set[str], set[str]]: ...
 
     async def elements_in_other_records(
@@ -171,10 +172,12 @@ class LedgerSink:
         recipe_id: str,
         case: str,
         excluding: Sequence[str],
+        only_this_pipeline: bool = False,
     ) -> tuple[set[str], set[str]]:
         return await self._ledger.elements_kept_by_other_rows(
-            node_ids, edge_ids, recipe_id=recipe_id, case=case, excluding=excluding
-        )
+            node_ids, edge_ids, recipe_id=recipe_id, case=case, excluding=excluding,
+            only_this_pipeline=only_this_pipeline,
+        )  # fmt: skip
 
     async def elements_in_other_records(
         self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]

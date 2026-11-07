@@ -38,6 +38,9 @@ class CountingMedia:
 
 
 def _load_writes(report: LoadReport) -> int:
+    # A full snapshot's withdrawal is not counted (ADR-110 Amendment 15): which of a dropped row's
+    # links go depends on rows and loads the reader may not read, so a count of them would show
+    # those; the run says what it withdrew in `rows_withdrawn` and its notes instead.
     return (
         len(report.created_node_ids)
         + len(report.merged_node_ids)
@@ -45,8 +48,6 @@ def _load_writes(report: LoadReport) -> int:
         + len(report.rule_node_ids)
         + len(report.rule_created_edge_ids)
         + len(report.rule_merged_edge_ids)
-        + len(report.withdrawn_node_ids)
-        + len(report.withdrawn_edge_ids)
     )
 
 

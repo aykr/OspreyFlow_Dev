@@ -5,8 +5,9 @@ the report and in the ledger; a figure the run cannot yet measure is *not measur
 
 What a mistake would do, and the case that catches it:
 
-- a write left out of the count, or one counted twice
-  (`test_a_loads_graph_writes_are_every_element_it_wrote_once`);
+- a write left out of the count, or one counted twice, or a snapshot's withdrawal counted, which
+  would tell of rows and loads the reader may not read (ADR-110 Amendment 15;
+  `test_a_loads_graph_writes_are_every_element_it_wrote_once`);
 - a pipeline's stages left out (`test_a_pipelines_graph_writes_add_its_branches_and_stages`);
 - an incremental refresh's rows below the watermark left out of the rows read
   (`test_the_rows_read_are_every_row_of_the_file`);
@@ -40,8 +41,10 @@ def test_a_loads_graph_writes_are_every_element_it_wrote_once() -> None:
         withdrawn_node_ids=["w1"], withdrawn_edge_ids=["we1"],
         referenced_node_ids=["ref1"],
     )  # fmt: skip
-    # created and merged edges are within touched: counted once; a referenced node is not written.
-    assert graph_writes(report) == 2 + 1 + 2 + 1 + 2 + 2
+    # created and merged edges are within touched: counted once; a referenced node is not written;
+    # a full snapshot's withdrawal is not counted (ADR-110 Amendment 15: which links go depends on
+    # rows and loads the reader may not read).
+    assert graph_writes(report) == 2 + 1 + 2 + 1 + 2
 
 
 def test_a_pipelines_graph_writes_add_its_branches_and_stages() -> None:
