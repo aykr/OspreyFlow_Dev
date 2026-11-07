@@ -618,9 +618,10 @@ even a `notify` stub, and an alert's entities are read as its case reads them. `
 investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
 identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
 second implementation of it. An alert any of whose cited nodes, links or transactions the jumper
-cannot read now is refused exactly as a missing alert, before any case is made (ADR-146 decision
-10's address test, which for this case supersedes ADR-124 decision 1's seeding of whatever
-referents are readable: those are the entities the hidden link or transactions tie together).
+cannot read now is refused exactly as a missing alert, before any case is made (ADR-124
+Amendment 17, under rule 3 and ADR-146's test that `/alerts/<id>` for a reader who may not see the
+alert is refused exactly as a missing alert): seeding whatever referents are readable would give
+the jumper the entities the hidden link or transactions tie together.
 `Alert.investigation_id` (the triggering event's own investigation,
 where the underlying ingest or resolution that raised the alert happened) may be absent — a
 resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
@@ -752,7 +753,11 @@ written, the row still raised and the withholding audited with its reason in wor
 referents with a restricted code belong to different units (no single marking is safe), where a
 referent's marking cannot be read in the load, or where a cited link cannot be read when the alert
 is raised after the commit (taken back or replaced since it was found; one such link never stops a
-sweep). They are also the deployer's §3.8 alerts, and the case team's queue below.
+sweep). They are also the deployer's §3.8 alerts, and the case team's queue below. A close that
+confirms a link (a true positive's `SAME_AS`) writes the link's new revision, and repoints every
+alert citing the old one to it in the same transaction, the closing alert and the rest locked
+together in id order and renamed as they stand; the queue then checks the new revision for every
+reader, as it checks any link (ADR-109 Amendment 9).
 
 **The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
 `rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and

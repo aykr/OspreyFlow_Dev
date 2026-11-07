@@ -27887,3 +27887,67 @@ both.
 **Tests.** The studio lane's live proof in L1.2a Part A2 (its stamping test, landing with that part's merge):
 two cases on two datasets loading the same person make two nodes, and neither case's reads, counts or run report
 differ with the other's load (red with the load's confinement removed).
+
+### ADR-109, Amendment 9 (7 November 2026) — confirming a link's new revision repoints every open alert citing the old one, in the same close
+
+Status: accepted 7 November 2026, the orchestrator's settlement of L2.8's Q2 (the glass lane's
+reviewer's finding 5), reserved in `ADR_RESERVATIONS.md`. Built by the glass lane in L2.8. ADR-109 is
+unchanged except where this says so.
+
+**Why.** Amendment 7 made a true positive on a screening alert the analyst's confirmation of its
+match: the inferred `SAME_AS` becomes asserted, which the graph does by superseding it with a new
+revision (`supersede_edge`), and the closed alert was made to cite the new revision so it still
+opens. Any other alert citing the same match still cited the old revision. Before ADR-146 decision
+10 the queue checked an alert's nodes alone, so that alert stayed listed; since the queue reads each
+cited link by its id (G2), and `get_edges` does not return a superseded link, the alert was withheld
+from every reader, for good, while its trend fact still counted it open (ADR-134 decision 3).
+
+1. **The close repoints every alert citing a link it confirmed**, the closing alert included, in the
+   same Postgres transaction as the close (`AlertStore.set_queue_triage(..., repoint=)`). Its rows
+   are locked together first, in one statement in id order, so two closes confirming the same link
+   lock the same rows in the same order and never deadlock; each row's links are renamed in SQL as
+   the row then stands, never written back from a list read earlier, so one close never undoes
+   another's repoint.
+2. **The queue checks the new revision for every reader**, as it checks any link: the repoint changes
+   which revision an alert cites, never what anyone may read. A confirmed revision keeps the match's
+   marking, so a reader who may read the new revision could read the old one. The repoint is not
+   scoped to the reader and returns nothing of the alerts it touched.
+3. **Not covered here, carried to L2.8b:** a close refused after its graph commit
+   (`AlertTriageConflict`, a concurrent triage of the same alert) leaves the match superseded and
+   nothing repointed; the other callers of `supersede_edge` (`link_changes.py`, `entity_pictures.py`)
+   hide alerts citing the link they replace in the same way.
+
+**Tests.** `tests/ingest/test_alert_evidence_withheld_live.py`:
+`::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue` (a SECRET match
+between OFFICIAL people: the cleared reader keeps the second alert, citing the new revision, its
+trend fact open; the OFFICIAL reader is never given it; red with no repoint, and with the link check
+skipped for repointed rows), `::test_a_close_never_writes_back_a_list_another_close_has_repointed_since`
+(red with the stale write-back) and `::test_two_closes_confirming_one_match_both_complete` (red with
+the closing row locked first and the rest after, unordered).
+
+### ADR-124, Amendment 17 (7 November 2026) — a jump to an alert whose evidence is not whole is refused as a missing alert
+
+Status: accepted 7 November 2026, the orchestrator's settlement of L2.8's Q1 (the glass lane's
+reviewer's finding 3), reserved in `ADR_RESERVATIONS.md`. Built by the glass lane in L2.8. ADR-124 is
+unchanged except where this says so.
+
+**Why.** Decision 1 sends no figure for withheld material, and the jump (`POST
+/v1/investigations/{id}/alerts/{alert_id}/jump`) followed it by seeding whatever referents of the
+owner's alert were readable and saying nothing of the rest. Since L2.8 the inbox withholds an alert's
+referents and words when any node, link or transaction it cites is hidden from the reader (ADR-146
+decision 10, gap map G3). The jump still seeded the readable referents: the entities the hidden link
+or transactions tie together, which is what the inbox withholds (rule 3).
+
+1. **A jump to an alert whose evidence is not whole for the jumper is refused exactly as a missing
+   alert, before anything is created** (`watch_routes.jumpable_alert`: ownership, then the
+   whole-evidence check, the same `AlertNotFoundError` and answer as an id that never existed; no
+   case, datasets, seed, history or audit). This applies rule 3 as ADR-146's tests state it for an
+   alert's address: "`/alerts/<id>` for a reader who may not see the alert is refused exactly as a
+   missing alert".
+2. **Decision 1 still holds for what remains:** a referent that goes between that check and the seed
+   is left out, with no figure for it.
+
+**Tests.** `tests/services/api/test_alert_evidence_withheld.py::test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one`
+(at the route; red before: the jump created a case) and the B14 scenario,
+`tests/scenarios/test_phase7_stage6c_watch_routes.py::test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities`,
+changed to this amendment (ratified at L2.8's merge).

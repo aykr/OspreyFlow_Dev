@@ -457,9 +457,9 @@ def test_a_claim_on_a_withheld_alert_writes_nothing_and_is_refused_as_for_a_miss
 
 @pytest.mark.parametrize("hidden", ["e-secret", "t-secret"])
 def test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one(hidden: str) -> None:
-    """ADR-146 decision 10's address test ("refused exactly as a missing alert"), which supersedes
-    ADR-124 decision 1's seeding of the readable referents for an alert whose evidence is not whole
-    (the orchestrator's ruling on the lane-reviewer's finding 3). At the route: the jump of the
+    """ADR-124 Amendment 17 (rule 3; ADR-146's test that `/alerts/<id>` for a reader who may not see
+    the alert is refused exactly as a missing alert), on the lane-reviewer's finding 3: no seeding
+    of the readable referents for an alert whose evidence is not whole. At the route: the jump of the
     owner's own alert over hidden evidence and the jump of an id that never existed get the same
     answer, and neither creates a case, gives it datasets, seeds, records history or audits. Red
     before: the jump branched a case and seeded the readable referents, the accounts the hidden

@@ -412,9 +412,8 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
     link to the originating investigation." The task's own question ("what happens when a referent
     became unreadable between the alert firing and the jump") was answered as a partial success
     (ADR-124 decision 1) until L2.8: an alert whose evidence the jumper cannot wholly read is now
-    refused exactly as a missing alert, making no case (ADR-146 decision 10's address test, the
-    orchestrator's Q1), since the readable referents are the entities the hidden one ties
-    together. An alert whose every referent is readable branches and seeds them all."""
+    refused exactly as a missing alert, making no case (ADR-124 Amendment 17, the orchestrator's
+    Q1), since the readable referents are the entities the hidden one ties together. An alert whose every referent is readable branches and seeds them all."""
     private_key, _ = keypair
     headers = _bearer(private_key)
 
