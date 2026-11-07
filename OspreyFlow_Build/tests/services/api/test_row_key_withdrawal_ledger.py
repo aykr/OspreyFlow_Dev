@@ -226,54 +226,62 @@ async def test_the_unit_files_fake_moves_keys_as_the_ledger_does(
     """Rule 15's fixture rule, both ways: `test_snapshot_withdrawal.py`'s `WithdrawalLedger` stands
     in for this store, so the same records go to both and what each then keeps and has withdrawn
     must match. That covers a key kept, withdrawn, kept again, named withdrawn again (the guard
-    skips it), and named withdrawn though never kept (nothing moves), with no error from either."""
+    skips it), and named withdrawn though never kept (nothing moves), with no error from either.
+    Two cases hold the same keys, interleaved, and every answer is compared for each: a fake
+    that ignored the case would answer one case with the other's."""
     from schemas.ingest import LoadReport
 
-    from tests.ingest.test_row_keys import CASE
     from tests.ingest.test_snapshot_withdrawal import WithdrawalLedger
 
     recipe, k1, k2, never = new_id(), new_id(), new_id(), new_id()
-    loads = [new_id() for _ in range(4)]
-    steps: list[tuple[str, list[str], list[str]]] = [
-        (loads[0], [k1, k2], []),
-        (loads[1], [], [k1]),
-        (loads[2], [k1], []),
-        (loads[3], [], [k1, never]),
+    ours, theirs = new_id(), new_id()
+    loads = [new_id() for _ in range(7)]
+    steps: list[tuple[str, str, list[str], list[str]]] = [
+        (ours, loads[0], [k1, k2], []),
+        (theirs, loads[1], [k1, k2], []),
+        (ours, loads[2], [], [k1]),
+        (theirs, loads[3], [], [k2]),
+        (ours, loads[4], [k1], []),
+        (ours, loads[5], [], [k1, never]),
+        (theirs, loads[6], [], [k1]),
     ]
     fake = WithdrawalLedger()
     run_id = await _started(runs, recipe)
-    for load, kept, withdrawn in steps:
+    for case, load, kept, withdrawn in steps:
         elements = {
             k: _elements([f"n-{k}"], [f"e-{k}"], [f"v-{load}-{k}"]) for k in kept
         }
-        await runs.add_record(run_id, _keyed(load, recipe, CASE), row_keys=kept,
+        await runs.add_record(run_id, _keyed(load, recipe, case), row_keys=kept,
                               row_elements=elements, withdrawn_row_keys=withdrawn)  # fmt: skip
+        fake.case = case
         await fake.committed(
             LoadReport.model_construct(recipe_id=recipe, load_id=load, kept_row_keys=kept,
                                        kept_row_elements=elements, withdrawn_row_keys=withdrawn),
             source="cash.csv",
         )  # fmt: skip
 
+    def told(dropped: list[Any]) -> dict[str, tuple[bool, Any]]:
+        return {d.row_key: (d.withdrawn_before, d.event_ids) for d in dropped}
+
     keys = [k1, k2, never]
-    assert await runs.kept_row_keys(recipe, CASE, keys) == await fake.kept(
-        recipe, CASE, keys
-    )
-    assert await runs.kept_row_keys(recipe, CASE, keys) == {k1, k2}
     for load in loads:
         assert await runs.withdrawn_event_ids(load) == await fake.withdrawn_event_ids(
             load
         ), load
-
-    def told(dropped: list[Any]) -> dict[str, tuple[bool, Any]]:
-        return {d.row_key: (d.withdrawn_before, d.event_ids) for d in dropped}
-
-    real = told(await runs.dropped_row_keys(recipe, CASE, present=set()))
-    assert real == told(await fake.dropped_row_keys(recipe, CASE, present=set()))
-    assert real[k1][0] is True and real[k2][0] is False, (
-        "k1 came back after its withdrawal"
-    )
-    among = await runs.withdrawn_row_keys_among(recipe, CASE, keys)
-    assert among == await fake.withdrawn_row_keys_among(recipe, CASE, keys) == {k1}
+    for case in (ours, theirs):
+        kept = await runs.kept_row_keys(recipe, case, keys)
+        assert kept == await fake.kept(recipe, case, keys), case
+        real = told(await runs.dropped_row_keys(recipe, case, present=set()))
+        assert real == told(await fake.dropped_row_keys(recipe, case, present=set())), (
+            case
+        )
+        among = await runs.withdrawn_row_keys_among(recipe, case, keys)
+        assert among == await fake.withdrawn_row_keys_among(recipe, case, keys), case
+    # What each case holds, so the comparison is over something different for each.
+    assert await runs.kept_row_keys(recipe, ours, keys) == {k1, k2}
+    assert await runs.kept_row_keys(recipe, theirs, keys) == set()
+    assert told(await runs.dropped_row_keys(recipe, ours, present=set()))[k1][0] is True
+    assert await runs.withdrawn_row_keys_among(recipe, theirs, keys) == {k2, k1}
 
 
 async def test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds(
