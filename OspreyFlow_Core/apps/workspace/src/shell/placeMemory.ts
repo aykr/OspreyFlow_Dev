@@ -9,6 +9,10 @@ import { useRef } from "react";
 
 export const LAST_GLASS_VIEW_KEY = "ospreyflow.lastGlassView";
 
+/** The Glass's views kept as the one to come back to — `App.tsx`'s and the keyboard harness's alike.
+ * Messages (`dossier`) is not among them: it is drawn for one node, which a reload does not keep. */
+export const KEPT_GLASS_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports", "dashboards", "alerts", "ownership"];
+
 function stored(): string | null {
   try {
     return sessionStorage.getItem(LAST_GLASS_VIEW_KEY);
@@ -28,9 +32,14 @@ function keep(view: string): void {
 /** The Glass's view to come back to: the last of `views` that was open (this tab's, across a
  * reload), else `initial`. A view outside `views` is not kept: Messages (`dossier`) is drawn for one
  * node, which a reload does not keep, so Back returns to the view open before it. */
-export function useLastGlassView<V extends string>(view: V, studioView: V, initial: V, views: readonly V[]): () => V {
+export function useLastGlassView<V extends string>(
+  view: V,
+  studioView: V,
+  initial: V,
+  views: readonly string[] = KEPT_GLASS_VIEWS,
+): () => V {
   const last = useRef<V | null>(null);
-  const keeps = (v: string | null): v is V => v !== null && v !== studioView && (views as readonly string[]).includes(v);
+  const keeps = (v: string | null): v is V => v !== null && v !== studioView && views.includes(v);
   if (last.current === null) {
     const kept = stored();
     last.current = keeps(view) ? view : keeps(kept) ? kept : initial;

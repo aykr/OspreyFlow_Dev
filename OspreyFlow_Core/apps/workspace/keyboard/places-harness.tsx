@@ -48,7 +48,8 @@ function Harness() {
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : "graph");
   const caseId = initialInvestigationId() ?? "kestrel";
-  const lastGlassView = useLastGlassView(view, "ingest", "graph", ["graph", "map", "alerts"] as const);
+  // The same kept-view list as `App.tsx` (`KEPT_GLASS_VIEWS`), so the Messages case tests the Glass's.
+  const lastGlassView = useLastGlassView(view, "ingest", "graph");
   // The real `openCase`, its reload kept inside the harness.
   const reopen = (id: string) =>
     openCase(id, view === "ingest" ? "ingest" : undefined, (url) => {

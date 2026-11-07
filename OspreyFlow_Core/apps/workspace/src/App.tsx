@@ -762,10 +762,8 @@ export function App() {
     }
   };
   // ADR-145 decision 2: the Glass's view to come back to from the Studio (`shell/placeMemory.ts`).
-  // Messages (`dossier`) is not kept: it is drawn for one node, which a reload does not keep.
-  const lastGlassView = useLastGlassView(view, "ingest", "graph", [
-    "graph", "map", "matrix", "reports", "dashboards", "alerts", "ownership",
-  ] as const);
+  // The views kept are `KEPT_GLASS_VIEWS` (Messages is not), shared with the keyboard harness.
+  const lastGlassView = useLastGlassView(view, "ingest", "graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
