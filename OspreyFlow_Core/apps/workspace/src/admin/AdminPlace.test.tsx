@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// ADR-110 Amendment 1, ADR-112: the Admin area. Tabs follow the account's rights; a person's roles are
+// ADR-110 Amendment 1, ADR-112: the Admin area. Its sections follow the account's rights (ADR-145 decision 5); a person's roles are
 // saved whole with their other grants kept; a dashboard's secret is shown once; a refusal is said.
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -111,9 +111,9 @@ describe("the Admin area", () => {
   });
 });
 
-// ADR-145 decision 1: Proposed types left the Glass's rail and is an Admin tab, behind its right.
+// ADR-145 decision 1: Proposed types left the Glass's rail and is an Admin section, under Data, behind its right.
 describe("Proposed types in the Admin area", () => {
-  it("is a tab only for a holder of manage_ontology, and opens the proposals there", async () => {
+  it("is a section only for a holder of manage_ontology, and opens the proposals there", async () => {
     serve((path) => (path === "link-types" ? json(200, []) : null));
     place(["administer_system"]);
     expect(screen.queryByRole("button", { name: "Proposed types" })).toBeNull();

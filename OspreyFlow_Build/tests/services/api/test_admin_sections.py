@@ -9,15 +9,23 @@ only for the names imported from it), matched to the Conduit's routes as the pla
 (`test_place_routes.py`, whose reading of a route's checks is used here: its decorator's right, its
 signature's Studio role, the administrator role; never a check inside its body). Then:
 
-1. every route a built section calls declares the section's right, but for the open reads named in
-   `SHARED` and the place test's exemptions (`test_each_built_section_s_routes_need_its_right`);
+1. every route a built section calls declares the section's right, but for the reads `SHARED` names
+   for that section, each with its reason (`test_each_built_section_s_routes_need_its_right`);
 2. over HTTP, a principal holding every right but the section's is refused on each of them;
-3. every `/v1/admin` route is some section's, or recorded here with its reason; and every file under
-   `admin/sections/` is a section's screen, drawn by `AdminPlace.tsx`.
+3. every `/v1/admin` route is some section's, or recorded here with its reason; every file under
+   `admin/sections/` is a section's screen; and the component `AdminPlace.tsx`'s `SCREENS` draws for
+   each section is imported from the very file `sections.json` names
+   (`test_admin_place_draws_each_section_from_its_declared_screen`).
 
-Shown red: a route declaring another right is found, and a planted screen calling another section's
-route is found (`test_a_route_declaring_another_right_is_found`,
-`test_a_planted_screen_calling_another_section_s_route_is_found`).
+Shown red: a route declaring another right, a route with its check removed, a planted screen calling
+another section's route, and a `SCREENS` entry drawing another section's file are each found.
+
+What the walk cannot see (an under-approximation, as the place test's scan is): a namespace
+import, or a default import beside named ones, of a lower-case module; a call in a lower-case
+module's helper that is not exported (only the chunks of exported names imported are read); an
+`export class` or `export default`. A call it misses to a route outside `/v1/admin` that declares
+no check would escape all of these tests; today the only open route a section reads is the handling
+scheme, named in `SHARED`.
 """
 
 from __future__ import annotations
@@ -36,7 +44,6 @@ from schemas.rights import Right
 from tests.services.api.test_place_routes import (
     _EXPORTED,
     _IMPORT,
-    EXEMPT,
     WORKSPACE_SRC,
     _checks,
     _chunk_fragments,
@@ -143,22 +150,36 @@ def _reached(fragments: list[str], routes: list[APIRoute]) -> list[APIRoute]:
     return out
 
 
-#: Routes open to every signed-in person that a section's screen reads, each with its reason. Only
-#: these are passed over: any other route a screen calls must declare the section's right, so a
-#: route whose check is removed is found (`test_a_route_with_its_check_removed_is_found`).
-SHARED = {
-    "get_handling_scheme_route": "the deployment's classifications and handling codes, a reference "
-    "every signed-in person reads (People's access editor, Dashboards' clearance)",
+#: Routes a section's screen reads that are not the section's own, by route name: the sections
+#: that read each, and why. Only these are passed over, and only for those sections: any other
+#: route a screen calls must declare the section's right, so a route whose check is removed is found
+#: (`test_a_route_with_its_check_removed_is_found`).
+SHARED: dict[str, tuple[frozenset[str], str]] = {
+    "get_handling_scheme_route": (
+        frozenset({"people", "dashboards"}),
+        "the deployment's classifications and handling codes, open to every signed-in person "
+        "(People's access editor, Dashboards' clearance)",
+    ),
+    # The place test's exemption (ADR-145 Amendment 1): it computes run times from the cron text it
+    # is sent and reads no store. It asks for `schedule_pipelines`, so a holder of
+    # `operate_schedules` alone is shown Operations but refused its *Change schedule* preview.
+    "schedule_preview_route": (
+        frozenset({"operations"}),
+        "Change schedule's preview, which reads no store (ADR-145 Amendment 1)",
+    ),
 }
 
 
-def section_routes(root: Path, screen: str, routes: list[APIRoute]) -> list[APIRoute]:
-    """The routes a section's screen calls that are its own: all but `SHARED` and the place test's
-    exemptions (a reference catalogue, the schedule preview)."""
+def section_routes(
+    root: Path, screen: str, routes: list[APIRoute], section: str | None = None
+) -> list[APIRoute]:
+    """The routes a section's screen calls that are its own: all but what `SHARED` names for it."""
+    if section is None:
+        section = next((s["id"] for s in built() if s["screen"] == screen), "")
     return [
         r
         for r in _reached(screen_fragments(root, screen), routes)
-        if r.name not in SHARED | EXEMPT.keys()
+        if section not in SHARED.get(r.name, (frozenset(), ""))[0]
     ]
 
 
@@ -227,17 +248,46 @@ def test_every_admin_route_is_some_section_s() -> None:
         assert any(re.search(rule, p) for p in left), rule
 
 
-def test_every_section_file_is_a_section_s_screen_drawn_by_the_admin_place() -> None:
+def test_every_section_file_is_a_section_s_screen() -> None:
     screens = {s["screen"] for s in built()}
     folder = WORKSPACE_SRC / "admin/sections"
     under = {p.relative_to(WORKSPACE_SRC).as_posix() for p in folder.glob("*.tsx")
              if ".test." not in p.name}  # fmt: skip
     assert under <= screens
-    drawn = {
-        _resolve(ADMIN_PLACE, spec, WORKSPACE_SRC)
-        for _, spec in _IMPORT.findall(ADMIN_PLACE.read_text())
+
+
+_SCREENS_BLOCK = re.compile(r"export const SCREENS\b.*?> = \{(.*?)\n\};", re.S)
+_SCREEN_ENTRY = re.compile(r"^\s*\"?([\w-]+)\"?:\s*\(api\)\s*=>\s*<(\w+)\b", re.M)
+
+
+def drawn_screens(text: str, path: Path) -> dict[str, str | None]:
+    """For each id in `SCREENS`, the file its component is imported from (`None` if none)."""
+    imported: dict[str, str | None] = {}
+    for names, spec in _IMPORT.findall(text):
+        for name in re.findall(r"(\w+)\s*(?:,|$)", names or ""):
+            imported[name] = _resolve(path, spec, WORKSPACE_SRC)
+    block = _SCREENS_BLOCK.search(text)
+    assert block, "AdminPlace.tsx's SCREENS was not found"
+    return {
+        sid: imported.get(component) for sid, component in _SCREEN_ENTRY.findall(block.group(1))
     }
-    assert screens <= drawn
+
+
+def test_admin_place_draws_each_section_from_its_declared_screen() -> None:
+    """The route test reads `sections.json`'s screen; this holds what is drawn to it, so the two
+    cannot drift (a hand-kept `SCREENS` drawing another file would pass every other test)."""
+    drawn = drawn_screens(ADMIN_PLACE.read_text(), ADMIN_PLACE)
+    assert drawn == {s["id"]: s["screen"] for s in built()}
+
+
+def test_a_screens_entry_drawing_another_file_is_found() -> None:
+    text = ADMIN_PLACE.read_text().replace(
+        "operations: (api) => <Schedules", "operations: (api) => <System"
+    )
+    assert "operations: (api) => <System" in text
+    drawn = drawn_screens(text, ADMIN_PLACE)
+    assert drawn["operations"] == "admin/sections/System.tsx"
+    assert drawn != {s["id"]: s["screen"] for s in built()}
 
 
 # ---- shown red (rule 15) -------------------------------------------------------------------------
@@ -275,16 +325,17 @@ def test_a_route_with_its_check_removed_is_found() -> None:
     ]
 
 
-def test_the_shared_reads_are_open_and_read_by_a_section() -> None:
+def test_each_shared_read_is_read_by_exactly_the_sections_named() -> None:
     routes = {r.name: r for r in _routes()}
-    for name in SHARED:
-        assert not _checks(routes[name]), f"{name} now declares a check: it is no longer shared"
-    reached = {
-        r.name
-        for s in built()
-        for r in _reached(screen_fragments(WORKSPACE_SRC, s["screen"]), list(routes.values()))
-    }
-    assert SHARED.keys() <= reached
+    assert not _checks(routes["get_handling_scheme_route"]), "the handling scheme is no longer open"
+    for name, (named, _) in SHARED.items():
+        readers = {
+            s["id"]
+            for s in built()
+            if routes[name]
+            in _reached(screen_fragments(WORKSPACE_SRC, s["screen"]), [routes[name]])
+        }
+        assert readers == named, name
 
 
 def test_a_planted_screen_calling_another_section_s_route_is_found(tmp_path: Path) -> None:

@@ -448,7 +448,7 @@ function Arrivals({
   if (!arrivals.length) return null;
   return (
     <section aria-label="Refused organisation sign-ins" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h3>
+      <h4 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h4>
       <p className="label" style={{ margin: 0 }}>
         These people signed in through the organisation and were refused, because an OspreyFlow account already holds
         their email address. Join one to the account that is theirs, or remove that account so they arrive afresh.
@@ -520,7 +520,7 @@ function InviteForm({
       }}
       style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
     >
-      <h3 className="value" style={{ margin: 0 }}>Invite a person</h3>
+      <h4 className="value" style={{ margin: 0 }}>Invite a person</h4>
       <p className="label" style={{ margin: 0 }}>
         They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
         are shown a one-time code to give them in person. Nobody can be given more than you hold.

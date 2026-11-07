@@ -44,8 +44,8 @@ export interface AdminGroup {
 
 export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
 
-/** Each built section's screen, by its id in `sections.json` (`AdminPlace.test.tsx` holds the two
- * to each other). */
+/** Each built section's screen, by its id in `sections.json` (`AdminSections.test.tsx` holds their
+ * ids together; `test_admin_sections.py` holds each to the file `sections.json` names). */
 export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   people: (api) => <People api={api} />,
   dashboards: (api) => <Dashboards api={api} />,
