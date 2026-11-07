@@ -883,10 +883,13 @@ class RejectionRecord(BaseModel):
 
 class RowElements(BaseModel):
     """What one kept row wrote (ADR-110 Amendment 8 point 2): the nodes it wrote or matched and the
-    links it wrote, created or merged into, each by its stored id. For the ledger alone."""
+    links it wrote, created or merged into, each by its stored id, and the events it wrote, by
+    `event_id` (Amendment 15: a full snapshot withdraws a dropped row's own events by these, never
+    by link). For the ledger alone."""
 
     node_ids: list[NodeId] = Field(default_factory=list)
     edge_ids: list[EdgeId] = Field(default_factory=list)
+    event_ids: list[str] = Field(default_factory=list)
 
 
 #: ADR-110 Amendment 6 point 1: how an incremental refresh compares its watermark column's values.
