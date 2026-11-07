@@ -14,12 +14,11 @@ makes it. The route's own scoping is `test_studio_run_now_stamps_its_case_datase
 - **Two cases on two datasets:** the loader's run, its words and what it reads are the same whether
   or not another case loaded the same pair first. The loader reads its own link (the comparison
   never holds over nothing), and neither case reads the other's.
-- **Two cases on one dataset:** by design, as three records make it. ADR-102 Amendment 3: a link
-  write merges "only when both are visible to exactly the same principals, judged by … the same set
-  of datasets (ADR-099)". ADR-099 decision 2: "One person or address seen in two datasets stays one
-  node … visible to a case of either; its links stay with the dataset that wrote them". And
-  ADR-143, as amended (ADR-099 decision 6): "data loaded through the Studio joins the source
-  dataset". Both rows merge
+- **Two cases on one dataset:** by design under ADR-102 Amendment 3: a link write merges "only
+  when both are visible to exactly the same principals, judged by … the same set of datasets
+  (ADR-099)". (ADR-099 decision 2's "stays one node" and ADR-143's "joins the source dataset" are
+  not cited: the first is before the owner, and the stamp is the case's first dataset until Part C;
+  Amendment 15's known limits.) Both rows merge
   into one link, and both cases read the same link, count and occurrences. A third case on another
   dataset reads none of it.
 

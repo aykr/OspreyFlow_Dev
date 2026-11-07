@@ -27793,7 +27793,9 @@ the same link, of any case, went with them.
 7. **The test of the whole.** `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`
    drives `run_recipe_as` and `run_published_recipe` over the run ledger, the Conduit's stamping
    graph on the real ArcadeDB adapter, and DuckDB. Each principal is confined to its case's datasets
-   by the real `scope_to_case`. It runs one published pipeline three times into one case (rows A and
+   by the real `scope_to_case`. The stamping context is set from that principal's datasets before
+   each run, as each entry point's own `scope_to_case` sets it; the entry points themselves are
+   driven by the Part A2 files below. It runs one published pipeline three times into one case (rows A and
    B; A; A and B) in two worlds. In the second, the other case, loading into the same dataset, runs
    the same pipeline with B's own row and a link of its own on B's node; its row merges into B's link
    by design (the known limits below). A third case, on its own dataset, loads and withdraws its own
@@ -27827,19 +27829,33 @@ the same link, of any case, went with them.
 - **Examined in Part A2 and not real on main, by these tests:** the cross-case link merge. Part A's
   test first drove the raw adapter, which stamps nothing, so it needed unconfined principals and two
   cases' rows on one pair merged. The Conduit stamps a Studio load with its case's dataset and
-  confines the loader to it, through the scheduler's `check_case` and through *Run now*'s
-  `get_principal` (both `scope_to_case`). A link write merges only within one set of datasets, so
-  cases on two datasets never merge, and each reads only its own.
-  - Proofs: `tests/services/api/test_studio_load_stamps_its_case_dataset_live.py` and
-    `test_studio_run_now_stamps_its_case_dataset_live.py`. They are red with the raw adapter in place
-    of the stamping graph, and with `scope_to_case` taken out of either entry point.
-  - Two cases loading into one dataset do merge, by design. ADR-102 Amendment 3: a link write
+  confines the loader to it (`scope_to_case`). That holds through *Run now*'s `get_principal` and
+  through the scheduler: a slot in `ScheduleExecutor.tick` and its `run_now`, each run stamped by the
+  `check_case` of its own `_owner` just before it. A link write merges only within one set of
+  datasets, so cases on two datasets never merge, and each reads only its own.
+  - Proofs: `tests/services/api/test_studio_load_stamps_its_case_dataset_live.py` (the executor's
+    closures, two pipelines due in one tick, a run now, and a shared dataset) and
+    `test_studio_run_now_stamps_its_case_dataset_live.py`. Red with the raw adapter in place of the
+    stamping graph, and with `scope_to_case` out of either entry point. Red with owners resolved for
+    every due recipe before any runs. Red with Run now's stamp kept but its confinement dropped.
+  - A source refresh through `case_for_dataset` is not driven: the fixture's pipeline names no
+    dataset, which a watch refuses. Its run takes the same `_owner`, then `run`.
+  - Two cases loading into one dataset do merge, by design under ADR-102 Amendment 3: a link write
     merges "only when both are visible to exactly the same principals, judged by … the same set of
-    datasets". ADR-099 decision 2: "One person or address seen in two datasets stays one node …
-    visible to a case of either; its links stay with the dataset that wrote them". ADR-143 as
-    amended: "data loaded through the Studio joins the source dataset". Both cases read the same
-    link, count and occurrences, and a case on another dataset reads none of it (the first file).
-  - The test of the whole compares each run's change for that reason.
+    datasets". Both cases read the same link, count and occurrences, and a case on another dataset
+    reads none of it (the first file). The test of the whole compares each run's change for that
+    reason.
+- **Open until Part C (after L3.1): what a Studio load writes into.** The stamp is the case's first
+  dataset (`DatasetStampingGraph._into`); the pipeline's own `dataset_id` is not consulted by *Run
+  now*, and a watch checks only that it is among the case's datasets. A case reading two datasets
+  that runs a pipeline of its second loads into its first. The orchestrator's call under the owner's
+  ruling ("only a case that loads into a dataset lists or opens its pipelines"): a load writes into
+  the pipeline's `dataset_id`, refused unless that is the case's loading dataset, built in Part C.
+  L3.1 makes a case read one dataset or one composite.
+- **For the owner (ADR-099 decision 2): one node across datasets.** A loader confined to one dataset
+  cannot see the same person's node in another, so its load makes a second node. That is rule 3's
+  answer, and resolution's scored `SAME_AS` (rule 6) joins them, but decision 2 says such a person
+  "stays one node". Proposed: amend it to say a confined load matches within its reach alone.
 - A failure to set the events aside, after the record is in, fails the run in words. The keys are
   already aside, so a rerun does not find those rows dropped again; the revert of the refresh
   reconciles them. Not tested.

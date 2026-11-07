@@ -951,9 +951,11 @@ link, so its load is not reverted, nor the refresh that withdrew it; the run say
 dropped again after coming back is left in place, its events too, in words. And a failure to set the events aside after the record is in fails the run in words; the keys are
 already aside, so the refresh's revert reconciles them. That path is not tested. A cross-case link
 merge was examined in Part A2 and is not real on main, by its tests. A Studio load is stamped with
-its case's dataset and its loader confined to it, by the scheduler and by *Run now* alike, so cases
-on two datasets never share a link. Two cases loading into one dataset share it by design, and read
-it alike (Amendment 15's known limits).
+its case's dataset and its loader confined to it, through *Run now* and through the scheduler's slots
+and its run now, so cases on two datasets never share a link. A source refresh's run takes the same
+path but is not driven by those tests. Two cases loading into one dataset share it by design
+(ADR-102 Amendment 3), and read it alike. Until Part C, the stamp is the case's first dataset, not
+the pipeline's own (Amendment 15's known limits).
 
 **An incremental refresh** (ADR-110 Amendment 10). The source names a watermark column. Each load
 records the highest value it read, and the next refresh by the same pipeline into the same case

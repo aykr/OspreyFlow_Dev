@@ -1,8 +1,11 @@
 """ADR-110 Amendments 6, 8 and 15: a second full snapshot missing one row withdraws only that row's
 own events, never a node or a link, and the refresh's revert restores them.
 
-Live, end to end, through the path a source refresh takes (`run_published_recipe` with
-`withdraw_dropped`, a `LedgerSink` over the real run ledger): ArcadeDB on `ARCADEDB_HTTP_PORT`,
+Live, through the load a source refresh makes (`run_published_recipe` with `withdraw_dropped`, a
+`LedgerSink` over the real run ledger), on the raw adapter with an unconfined loader: what the
+withdrawal does, not who may see it. Its dataset stamping and confinement are
+`test_studio_load_stamps_its_case_dataset_live.py`'s, and the comparison across cases is
+`test_snapshot_withdrawal_tells_nothing_live.py`'s. ArcadeDB on `ARCADEDB_HTTP_PORT`,
 Postgres on `POSTGRES_PORT`, DuckDB in memory. Synthetic rows only (rule 9). What a mistake would
 do, and the case that catches it:
 
