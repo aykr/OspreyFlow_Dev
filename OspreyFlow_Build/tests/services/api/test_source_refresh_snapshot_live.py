@@ -1,15 +1,15 @@
-"""ADR-110 Amendments 6, 8 and 15: a second full snapshot missing one row withdraws exactly that
-row's links and events, never its nodes, and the refresh's revert restores them.
+"""ADR-110 Amendments 6, 8 and 15: a second full snapshot missing one row withdraws only that row's
+own events, never a node or a link, and the refresh's revert restores them.
 
 Live, end to end, through the path a source refresh takes (`run_published_recipe` with
 `withdraw_dropped`, a `LedgerSink` over the real run ledger): ArcadeDB on `ARCADEDB_HTTP_PORT`,
 Postgres on `POSTGRES_PORT`, DuckDB in memory. Synthetic rows only (rule 9). What a mistake would
 do, and the case that catches it:
 
-- the dropped row left in the graph or its events in the timeline, or a kept row taken with it
-  (`test_a_second_snapshot_missing_one_row_withdraws_it_and_the_revert_restores_it`);
-- a row that comes back in a third snapshot skipped as kept, or matched to its withdrawn node, or
-  its events counted twice (`test_a_row_that_comes_back_is_loaded_again_once`);
+- the dropped row's events left in the timeline, a kept row's taken with them, or any node or link
+  of the dropped row withdrawn (`test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them`);
+- a row that comes back in a third snapshot skipped as kept, or creating its link again, or its
+  events counted twice (`test_a_row_that_comes_back_is_loaded_again_once`);
 - the refresh's revert restoring a row that came back (the same file's second case)."""
 
 from __future__ import annotations
@@ -20,6 +20,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from adapters.analytics_duckdb.testing import duckdb_adapter
+from adapters.graph_arcadedb.testing import arcadedb_adapter
+from adapters.media_objectstore.testing import InMemoryMediaStore
+from conduit_common.identity import new_id
+from schemas.analytics import EventFilter, EventListRequest
+from schemas.domain import Handling
 from services.api.config import PostgresConfig
 from services.api.load_records import LedgerSink
 from services.api.recipe_runs import RecipeRunStore
@@ -27,14 +33,15 @@ from services.api.studio_publish import run_published_recipe
 from services.ingest.load_revert import RevertDeps, RevertRefused, revert
 from services.ingest.watermark import RefreshRead
 
-from adapters.analytics_duckdb.testing import duckdb_adapter
-from adapters.graph_arcadedb.testing import arcadedb_adapter
-from adapters.media_objectstore.testing import InMemoryMediaStore
-from conduit_common.identity import new_id
-from schemas.analytics import EventFilter, EventListRequest
-from schemas.domain import Handling
 from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
-from tests.ingest.test_revert_load import Alerts, Audit, Held, Steps, WorkingSets, no_caches
+from tests.ingest.test_revert_load import (
+    Alerts,
+    Audit,
+    Held,
+    Steps,
+    WorkingSets,
+    no_caches,
+)
 from tests.ingest.test_row_keys import LOADER, ONTOLOGY, ROWS, SCHEME, _published_draft
 
 NOW = datetime(2026, 11, 6, 12, tzinfo=UTC)
@@ -136,24 +143,26 @@ class Refresh:
         await revert(load_id, reverted_by="operator-1", deps=deps, now=NOW)
 
 
-async def test_a_second_snapshot_missing_one_row_withdraws_it_and_the_revert_restores_it(
+async def test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them(
     tmp_path: Path, runs: RecipeRunStore
 ) -> None:
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph, duckdb_adapter([], SCHEME) as analytics:
         refresh = Refresh(tmp_path, runs, graph, analytics)
         first = await refresh.snapshot([A, B, C])
         assert first.rows_withdrawn == 0  # type: ignore[attr-defined]
+        links = set(first.created_edge_ids)  # type: ignore[attr-defined]
+        assert len(links) == 3
         assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
         assert await refresh.events() == 3
 
         second = await refresh.snapshot([A, C])
 
         assert second.rows_already_loaded == 2 and second.rows_withdrawn == 1  # type: ignore[attr-defined]
-        # ADR-110 Amendment 15: the dropped row's link and its event go; its nodes never do.
-        assert second.withdrawn_node_ids == [] and len(second.withdrawn_edge_ids) == 1  # type: ignore[attr-defined]
+        # ADR-110 Amendment 15: the dropped row's own event goes; its nodes and link never do.
+        assert (second.withdrawn_node_ids, second.withdrawn_edge_ids) == ([], [])  # type: ignore[attr-defined]
         assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
-        assert await refresh.events() == 2, "the dropped row's event leaves the timeline too"
-        assert await graph.get_edges(second.withdrawn_edge_ids, LOADER) == []  # type: ignore[attr-defined]
+        assert {e.id for e in await graph.get_edges(sorted(links), LOADER)} == links
+        assert await refresh.events() == 2, "the dropped row's event leaves the timeline"
 
         await refresh.revert(second.load_id)  # type: ignore[attr-defined]
 
@@ -174,9 +183,9 @@ async def test_a_row_that_comes_back_is_loaded_again_once(
 
         back = await refresh.snapshot([A, B, C])
 
-        # Its nodes never left (Amendment 15): matched, not created; its link is written again.
+        # Its nodes and link never left (Amendment 15): matched and merged into, not created.
         assert back.rows_already_loaded == 2 and back.nodes_created == 0  # type: ignore[attr-defined]
-        assert back.created_edge_ids and not set(back.created_edge_ids) & set(second.withdrawn_edge_ids)  # type: ignore[attr-defined]
+        assert (back.edges_created, back.created_edge_ids) == (0, [])  # type: ignore[attr-defined]
         assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
         assert await refresh.events() == 3, "each event held once"
         # The refresh that withdrew B is not reverted while B is loaded again.
