@@ -1,10 +1,12 @@
-"""Rule 4 for phase 6's *Preview* (ADR-140 decision 14; redesign brief §8): a Preview of a node reads
-with the person's own principal and never shows a row the person could not read.
+"""Rule 4 for phase 6's *Preview* (ADR-140 decision 14; redesign brief §8): a Preview of a node
+reads with the person's own principal and never shows a row the person could not read.
 
-*Preview* adds no route. The drawer's `NodePreview.tsx` composes two that exist: a source or a
-profile node reads the Map sample rows, from row 0 until `is_last_row` or `PREVIEW_ROWS` rows; a
-Map or a Load node reads the dry run (`verify`). So the read path to prove is that sequence, as the
-drawer makes it, through the real modules, for a reader cleared for the source's OFFICIAL and not for
+The drawer's `NodePreview.tsx` reads two routes: a source or a profile node reads the Map sample
+rows, from row 0 until `is_last_row` or `PREVIEW_ROWS` rows; a Map or a Load node reads
+`preview-graph`, the dry run `verify` runs (`run_verify`), marking nothing
+(`tests/services/api/test_studio_preview_routes.py` proves the marking-nothing half). So the read
+path to prove is that sequence, as the drawer makes it, through the real modules, for a reader
+cleared for the source's OFFICIAL and not for
 the SECRET row a bound marking column gives it. What a mistake would do, and the case that catches
 it:
 
@@ -17,6 +19,9 @@ it:
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from services.api import studio_map, studio_profile, studio_verify
 from services.api.studio_map import get_sample_row
@@ -27,8 +32,14 @@ from tests.ingest.recipe_test_support import ValidatingGraph
 from tests.ingest.test_handling_from_columns import ONTOLOGY, SCHEME
 from tests.ingest.test_handling_read_paths import CLEARED, OFFICIAL, ROWS, _draft
 
-#: The drawer's own cap (`NodePreview.tsx`'s `PREVIEW_ROWS`): a Preview reads at most this many.
-PREVIEW_ROWS = 10
+_NODE_PREVIEW = (
+    Path(__file__).resolve().parents[3]
+    / "OspreyFlow_Core/apps/workspace/src/ingest/dag/NodePreview.tsx"
+)
+#: The drawer's own cap, read from the one place it is written (`NodePreview.tsx`).
+_CAP = re.search(r"export const PREVIEW_ROWS = (\d+);", _NODE_PREVIEW.read_text())
+assert _CAP is not None, "NodePreview.tsx no longer writes PREVIEW_ROWS where this test reads it"
+PREVIEW_ROWS = int(_CAP.group(1))
 HIDDEN = "Hidden report"
 
 

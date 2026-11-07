@@ -8290,39 +8290,27 @@ async def preview_studio_recipe_element_handling(
 # --- ingest studio: verify (09_INGEST_STUDIO.md §5) ---------------------------
 
 
-@app.post(
-    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify",
-    dependencies=[Depends(require_right(Right.VERIFY_PIPELINES))],
-)
-async def verify_studio_recipe(
-    investigation: InvestigationEditorDep,
-    recipe: AuthorizedStudioRecipeDep,
-    principal: PrincipalDep,
-    scheme: HandlingSchemeDep,
-    graph: GraphDep,
-    ontology: OntologyDep,
-    studio_recipes: StudioRecipesDep,
-    audit: AuditDep,
-    recipe_runs: RecipeRunsDep,
-    typology_rules: TypologyRulesDep,
-    analytics: AnalyticsDep,
-    principal_resolver: PrincipalResolverDep,
-    patterns_store: PatternsStoreDep,
-    hotlists_store: HotlistsStoreDep,
-    screening_lists: ScreeningListsDep,
-    compute: ComputeDep,
-    repo_root: RecipesRepoRootDep,
-    influencers_store: OptionalStrengthInfluencersDep = None,
-) -> VerifyReport:
-    """§5: the dry run. No persistent write of any kind happens here — no
-    Parquet staging, no `GraphPort` write, no transaction — but an
-    `on_match: reference` element's lookup against the *existing* graph
-    goes through the ordinary `GraphPort.find_node` under this principal's
-    own clearance (`services/ingest/engine.py`'s `dry_run_recipe`), which is
-    the actual mechanism behind §5's "an author cannot use a dry run to see
-    material they could not otherwise see": an access-filtered miss reads
-    as `None`, exactly like any other read, so it shows as "would create"
-    rather than leaking that a higher-classification match exists."""
+async def _studio_dry_run(
+    *,
+    investigation: Investigation,
+    recipe: StudioRecipeDraft,
+    principal: Principal,
+    scheme: HandlingScheme,
+    graph: GraphPort,
+    ontology: OntologySchema,
+    recipe_runs: RecipeRunStore,
+    typology_rules: TypologyRuleStore,
+    analytics: AnalyticsPort,
+    principal_resolver: PrincipalResolver,
+    patterns_store: PatternStore,
+    hotlists_store: HotlistStore,
+    screening_lists: ScreeningListStore,
+    compute: ComputePort,
+    repo_root: Path,
+    influencers_store: InfluencerStore | None,
+) -> tuple[VerifyReport, list[Any]]:
+    """The dry run Test and Preview share (§5; ADR-140 decision 14): the report, and the files it
+    read with their hashes. It writes nothing; what Test records afterwards is Test's alone."""
     # ADR-127 decision 5: the dry run counts the rows the case already kept as the run would count
     # them, by the draft's own `deduplicate`, asking the store of loaded rows (this case's keys
     # only) and writing nothing.
@@ -8358,6 +8346,50 @@ async def verify_studio_recipe(
         checks=judge_checks,
         locations=locations,
     )
+    return report, checked
+
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify",
+    dependencies=[Depends(require_right(Right.VERIFY_PIPELINES))],
+)
+async def verify_studio_recipe(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    graph: GraphDep,
+    ontology: OntologyDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    recipe_runs: RecipeRunsDep,
+    typology_rules: TypologyRulesDep,
+    analytics: AnalyticsDep,
+    principal_resolver: PrincipalResolverDep,
+    patterns_store: PatternsStoreDep,
+    hotlists_store: HotlistsStoreDep,
+    screening_lists: ScreeningListsDep,
+    compute: ComputeDep,
+    repo_root: RecipesRepoRootDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
+) -> VerifyReport:
+    """§5: the dry run. No persistent write of any kind happens here — no
+    Parquet staging, no `GraphPort` write, no transaction — but an
+    `on_match: reference` element's lookup against the *existing* graph
+    goes through the ordinary `GraphPort.find_node` under this principal's
+    own clearance (`services/ingest/engine.py`'s `dry_run_recipe`), which is
+    the actual mechanism behind §5's "an author cannot use a dry run to see
+    material they could not otherwise see": an access-filtered miss reads
+    as `None`, exactly like any other read, so it shows as "would create"
+    rather than leaking that a higher-classification match exists."""
+    report, checked = await _studio_dry_run(
+        investigation=investigation, recipe=recipe, principal=principal, scheme=scheme, graph=graph,
+        ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
+        analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
+        hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
+        repo_root=repo_root, influencers_store=influencers_store,
+    )  # fmt: skip
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
     # rejections can be published"), so `publish` below can gate on this
@@ -8368,6 +8400,54 @@ async def verify_studio_recipe(
     await audit.record(
         principal=principal,
         action="verify_studio_recipe",
+        resolved_query={"recipe_id": recipe.recipe_id, "would_raise": len(report.would_raise)},
+        result_cardinality=len(report.nodes) + len(report.edges),
+    )
+    return report
+
+
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/preview-graph",
+    dependencies=[Depends(require_right(Right.VERIFY_PIPELINES))],
+)
+async def preview_studio_recipe_graph(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    graph: GraphDep,
+    ontology: OntologyDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    recipe_runs: RecipeRunsDep,
+    typology_rules: TypologyRulesDep,
+    analytics: AnalyticsDep,
+    principal_resolver: PrincipalResolverDep,
+    patterns_store: PatternsStoreDep,
+    hotlists_store: HotlistsStoreDep,
+    screening_lists: ScreeningListsDep,
+    compute: ComputeDep,
+    repo_root: RecipesRepoRootDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
+) -> VerifyReport:
+    """Phase 6's *Preview* of a Map or Load step (ADR-140 decision 14; ADR-140 Amendment 8 point 2):
+    the same dry run Test runs, under the same right and level and the person's own principal, but
+    it **marks nothing**: the draft is not marked verified, no file is recorded for *Run now* to be
+    held to, and the audit row is a Preview's, never a Test's. Deploy's gate is satisfied by Test
+    alone (`test_studio_preview_routes.py`, shown red against `verify`, 7 November 2026)."""
+    # `studio_recipes` is taken only so the route's dependencies match Test's; nothing is written.
+    report, _ = await _studio_dry_run(
+        investigation=investigation, recipe=recipe, principal=principal, scheme=scheme, graph=graph,
+        ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
+        analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
+        hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
+        repo_root=repo_root, influencers_store=influencers_store,
+    )  # fmt: skip
+    await audit.record(
+        principal=principal,
+        action="preview_studio_recipe_graph",
         resolved_query={"recipe_id": recipe.recipe_id, "would_raise": len(report.would_raise)},
         result_cardinality=len(report.nodes) + len(report.edges),
     )

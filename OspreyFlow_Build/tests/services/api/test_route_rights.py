@@ -200,6 +200,7 @@ ROUTE_RIGHTS = {
     "get_studio_recipe_sample_row": "edit_pipelines",
     "preview_studio_recipe_element_handling": "edit_pipelines",
     "verify_studio_recipe": "verify_pipelines",
+    "preview_studio_recipe_graph": "verify_pipelines",
     # ADR-133 decision 6, stage (d): the "Checks on load" step, an engineer's (D1).
     "read_load_checks": "edit_pipelines",
     "set_load_checks": "edit_pipelines",
