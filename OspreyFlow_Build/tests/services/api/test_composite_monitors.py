@@ -1,18 +1,23 @@
 """Monitors keep working in a case reading a composite (ADR-099 Amendment 15 item 2), which is
 read-only for now: an alert's own nodes and links, and what a finding writes alongside it, go into
-the case's analyst layer, which the case reads. Before this, both of these failed without raising
-an alert, every write refused by the stamping graph's last word (the final L3.1 review, fix 2):
+the case's analyst layer, which the case reads. Before this, each failed without raising an alert,
+every write refused by the stamping graph's last word, or wrote into a member (the final L3.1
+review, fix 2, and the lane-reviewer's first two findings):
 
-- a scheduled rule's slot, judged as its author in the case (`check_case` scopes it as a request
-  is, `scope_to_case`), raising its finding through the gate (`RuleGate.raise_committed`, as
-  `sentence_rules.run_scheduled_rule` does): one alert, its node and `ALERTED_ON` in the layer;
-- a screening list's re-screening (`Rescreener`), for a rule made in the composite case and so
-  naming the composite's own id: one alert, its node, `ALERTED_ON`, the listed party and its
-  `SAME_AS` all in the layer, and no member changed.
+- a scheduled rule's slot, through the executor the Conduit builds (`app._rule_schedule_executor`:
+  `check_case` scopes it as a request is, then `judge` builds the gate and calls
+  `run_scheduled_rule`, its matching stood in for by its last step): one alert, its node and
+  `ALERTED_ON` in the layer;
+- a screening list's re-screening (`Rescreener`), for a rule naming the composite's own id, a
+  member's (made before the case read a composite) or none: one alert, its node, `ALERTED_ON`, the
+  listed party and its `SAME_AS` all in the layer, and no member changed;
+- the daily KYC sweep (`kyc_sweep.sweep`), for a rule naming the composite or a member: one alert
+  in the layer.
 
-Each is shown red with the refusal back: `rule_evaluation._alert_datasets` planted to name nothing,
-so the writes fall to the stamping graph's last word as before; and, for the re-screening, its own
-scoping planted back to the composite's id alone.
+Each is shown red: `rule_evaluation._alert_datasets` planted to name nothing, so the writes fall to
+the stamping graph's last word as before; and the monitors' scoping planted back to the rule's
+dataset alone, when a rule naming the composite reads nothing and one naming a member writes into
+it.
 """
 
 from __future__ import annotations
@@ -93,33 +98,63 @@ def _layer_of(store: InMemoryDatasetStore) -> str:
 # --- a scheduled rule's slot ------------------------------------------------------------------
 
 
-async def _a_scheduled_slot() -> tuple[InMemoryDatasetStore, _Graph, _Queue, Any]:
+async def _a_scheduled_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[InMemoryDatasetStore, _Graph, _Queue, Any]:
+    """One slot of a scheduled rule in the composite case, through the executor the Conduit builds
+    (`app._rule_schedule_executor`): its `check_case`, the case's level check and `scope_to_case`,
+    then its `judge`, which builds the gate and calls `run_scheduled_rule`. The sentence's own
+    matching (the drawn pattern's `match`, judged as `test_rule_schedule.py` does) is stood in for
+    by its last step: the finding raised through the gate it was given."""
+    from types import SimpleNamespace
+
+    import services.api.app as app_module
+    from services.api.investigations import AccessLevel
+
     store = await _store()
     customer = _customer("p-1", "Elena", "Petrova", datasets=[MEMBER])
     graph = _Graph([customer])
     queue = _Queue()
-    # What the scheduler's `check_case` does: the case's level check, then `scope_to_case`.
-    author = await scope_to_case(OFFICER, CASE, store)
-    gate = RuleGate(
-        rules=[_rule(dataset_id=BOTH)], investigation_id=CASE,
-        graph=stamping(graph, registry=store),  # type: ignore[arg-type]
-        analytics=None, scheme=SCHEME, alert_store=queue, audit=queue,  # type: ignore[arg-type]
-        valkey=queue, principal_for_owner=lambda _o: _none(), loader=author,  # type: ignore[arg-type]
+
+    class _Investigations:
+        async def get_authorized(self, *args: Any, **kwargs: Any) -> object:
+            return object()
+
+    async def run_scheduled_rule(
+        rule: TypologyRule, deployer: Principal, gate: RuleGate, *, now: datetime
+    ) -> int:
+        await gate.raise_committed(
+            Finding(
+                rule=rule,
+                deployer=deployer,
+                typology="kyc_screening",
+                subject="p-1",
+                refs=("p-1",),
+                words="Elena Petrova: judged on the schedule",
+                node_ids=["p-1"],
+            )  # fmt: skip
+        )
+        return 1
+
+    monkeypatch.setattr(app_module, "run_scheduled_rule", run_scheduled_rule)
+    state = SimpleNamespace(
+        investigations=_Investigations(), datasets=store,
+        graph=stamping(graph, registry=store), analytics=None, handling_scheme=SCHEME,
+        alerts_store=queue, audit=queue, valkey=queue, compute=None, patterns_store=None,
+        screening_lists=None, hotlists_store=None, ontology=None, strength_influencers=None,
+        typology_rules=None,
+        principal_resolver=SimpleNamespace(resolve_for_owner_detailed=None),
     )  # fmt: skip
-    finding = Finding(
-        rule=_rule(dataset_id=BOTH), deployer=author, typology="kyc_screening", subject="p-1",
-        refs=("p-1",), words="Elena Petrova: judged on the schedule", node_ids=["p-1"],
-    )  # fmt: skip
-    return store, graph, queue, (gate, finding)
+    executor = app_module._rule_schedule_executor(SimpleNamespace(state=state))  # type: ignore[arg-type]  # noqa: SLF001
+    author = await executor.check_case(OFFICER, CASE, AccessLevel.EDITOR)
+    return store, graph, queue, (executor, author)
 
 
-async def _none() -> None:
-    return None
-
-
-async def test_a_scheduled_rule_in_a_composite_case_raises_its_alert_into_the_layer() -> None:
-    store, graph, queue, (gate, finding) = await _a_scheduled_slot()
-    await gate.raise_committed(finding)
+async def test_a_scheduled_rule_in_a_composite_case_raises_its_alert_into_the_layer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, graph, queue, (executor, author) = await _a_scheduled_slot(monkeypatch)
+    assert await executor.judge(_rule(dataset_id=BOTH), author, NOW) == 1
     layer = _layer_of(store)
     assert len(queue.alerts) == 1
     (alert,) = graph.written_nodes
@@ -135,9 +170,9 @@ async def test_the_scheduled_alert_is_refused_with_the_refusal_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _no_layer(monkeypatch)
-    _store_, graph, queue, (gate, finding) = await _a_scheduled_slot()
+    _store_, graph, queue, (executor, author) = await _a_scheduled_slot(monkeypatch)
     with pytest.raises(CompositeReadOnlyError):
-        await gate.raise_committed(finding)
+        await executor.judge(_rule(dataset_id=BOTH), author, NOW)
     assert queue.alerts == [] and graph.written_nodes == []
 
 
