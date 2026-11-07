@@ -7,7 +7,7 @@ Written by the orchestrator at 00:05 and updated at 05:45. Nothing has been push
 | Lane · step | State | Commits on `lane/<x>` | What proves it | Left |
 | --- | --- | --- | --- | --- |
 | studio · L1.1 | **merged locally** as `32c0f36`; session closed by you | `dbc3956` `4f958f5` `e9b8b31` (after the rebase) | ruff and mypy clean; reviewed; `make ci` on the merge is red on 3 gates, down from 5 (below) | your diff; r1/r14 PID tests red since `2f24d85`; the two trivy findings |
-| glass · L2.1 | ready to merge, **not rebased**; 3 review fixes not yet made | `fec0e07` `b98668a` | the map, `spec/glass_redesign/ALERTS_GAP_MAP.md` | The reviewer's three must-fix items: K10's schedule requirement, the inbox's `reach_clause`, the gate claim. ADR-146 after your answers. |
+| glass · L2.1 | fixes made and rebased (05:41); **second review: 2 more must-fix**, in a nudge it has not read (idle) | `21d31c0` `3d5f471` `e35fa11` `94ff128` `7491114` | the map; the 3 first-review fixes confirmed | the "fifteen places" list (2 wrong, 5 missing; split into queue kind and typology); the hand check's clean-up cannot undo the week-2 load on your deployment (add `--revert-load`). Then merge, with no third review. Type `read your nudge` in its window. |
 | case · L3.1 | waiting for you; **not to be merged tonight** (your rule 4) | `774388a` `3f1bc01` `2bb69c9` `b3906c1` `8708ddd` | `test_analyst_layer.py` (conformance: case B unchanged, under the case lease) and the read-set and store tests, each shown red first. 477 of 478 pass; the one failure was already failing at `83ff99e`. | Phase 5's target-model half (Q4 below); out-of-map files to ratify; 5 minor open items. |
 | docs | not opened (P7: after the first merge) | none | none | none |
 
@@ -92,6 +92,8 @@ Also asked by the lanes:
 3. On case's branch: `test_analyst_layer_store.py` and `test_migrate_cases_to_one_dataset_store.py` need the same wiring. The lane has not written a diff yet.
 
 ## Notes
+
+- A beat the orchestrator sends on a lane's behalf records the orchestrator's head, not the lane's (glass, 05:53). Send it from the lane's worktree. Minor; not fixed tonight.
 
 - `origin` is public and stands, as you ruled. Pushing waits for a green `make ci`.
 - Case's throwaway ArcadeDB was bound to `0.0.0.0:2491`, not loopback. It is stopped now.
