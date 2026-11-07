@@ -533,8 +533,10 @@ class ScheduleExecutor:
                 f"the schedule's owner, {owner_id}, is no longer an Editor of its case"
             ) from error
         except CompositeReadOnlyError as error:
-            # Every run, so a case switched to a composite after its schedule was set starts none.
-            raise _Refused(_COMPOSITE_CASE, about_the_owner=False) from error
+            # Every run, so a case switched to a composite after its schedule was set starts none;
+            # a lasting refusal, so after three in a row the schedule is paused, saying why,
+            # rather than the owner told at every slot (Amendment 3).
+            raise _Refused(_COMPOSITE_CASE) from error
         if not principal_may_view(resolve_source_handling(recipe), owner, self.scheme):
             raise _Refused(
                 f"the source is marked above the clearance of the schedule's owner, {owner_id}"
@@ -548,10 +550,10 @@ class ScheduleExecutor:
                 scoped = await self.check_case(owner, case)
                 if scoped.datasets and scoped.datasets[0] == dataset:
                     return case
-            except (InsufficientAccessError, InvestigationNotFoundError):
+            except (InsufficientAccessError, InvestigationNotFoundError, CompositeReadOnlyError):
+                # A pipeline's own case reading a composite loads nothing; another case of the
+                # owner's that loads into the source's dataset may (ADR-110 Amendment 6 point 6).
                 pass
-            except CompositeReadOnlyError as error:
-                raise _Refused(_COMPOSITE_CASE, about_the_owner=False) from error
         found = await self.case_for_dataset(owner, dataset) if self.case_for_dataset else None
         if found is None:
             raise _Refused(

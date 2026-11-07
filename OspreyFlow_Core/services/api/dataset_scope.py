@@ -188,10 +188,12 @@ async def refuse_unless_in_the_layer(elements: Sequence[Node | Edge]) -> None:
 async def refuse_writing_a_node_in_a_composite_case(
     graph: GraphPort, node_id: NodeId, principal: Principal
 ) -> None:
-    """`refuse_in_a_composite_case` for a route correcting a node by id: only once the node is read
-    as `principal`; one it cannot read is left to the writer, which answers it as not found."""
-    if await graph.get_nodes([node_id], principal):
-        await refuse_in_a_composite_case()
+    """`refuse_unless_in_the_layer` for a route correcting a node by id: only once the node is read
+    as `principal`, so one it cannot read is left to the writer, which answers it as not found; and
+    a node wholly the case's layer's (an alert raised there) is corrected, as by the close."""
+    held = await graph.get_nodes([node_id], principal)
+    if held:
+        await refuse_unless_in_the_layer(held)
 
 
 async def scope_to_case(

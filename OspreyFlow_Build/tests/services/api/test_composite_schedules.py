@@ -159,6 +159,46 @@ async def test_the_scheduler_check_fails_with_it_alone_removed(
     assert await _run_now(monkeypatch) == ["case-2"]
 
 
+async def _executor_over(store: InMemoryDatasetStore, cases: dict[str, Any]) -> Any:
+    """The executor the Conduit builds (`app._schedule_executor`), over `store` and an
+    investigation store listing `cases` as the owner's, Editor on each."""
+    from services.api.investigations import AccessLevel
+
+    class _Listing(_Investigations):
+        async def list_for(self, principal: Principal) -> list[Any]:
+            return [(SimpleNamespace(id=c), AccessLevel.EDITOR) for c in cases]
+
+    state = SimpleNamespace(
+        investigations=_Listing(), datasets=store, studio_recipes=None, recipe_runs=None,
+        valkey=_Valkey(), handling_scheme=load_uk_le_scheme(), principal_resolver=_Resolver(),
+        sources=None, alerts_store=None,
+    )  # fmt: skip
+    return app_module._schedule_executor(SimpleNamespace(state=state))  # type: ignore[arg-type]  # noqa: SLF001
+
+
+async def test_a_lasting_composite_refusal_is_about_the_schedule_and_pauses_it() -> None:
+    """Refused at every slot, so it counts toward the pause after three in a row (ADR-110
+    Amendment 3) rather than telling the owner at every slot for ever."""
+    from services.api.scheduler import _Refused
+
+    store = _store()
+    await store.set_for_case("case-2", [BOTH], OWNER, case_name="Both")
+    executor = await _executor_over(store, {"case-2": None})
+    with pytest.raises(_Refused) as refused:
+        await executor._owner(_recipe("case-2"))  # noqa: SLF001
+    assert refused.value.about_the_owner and "read-only for now" in str(refused.value)
+
+
+async def test_a_source_refresh_falls_back_to_a_case_that_loads_into_its_dataset() -> None:
+    """ADR-110 Amendment 6 point 6: the pipeline's own case reads a composite, so another case of
+    the owner's that loads into the source's dataset runs the refresh."""
+    store = _store()
+    await store.set_for_case("case-2", [BOTH], OWNER, case_name="Both")
+    await store.set_for_case("case-1", [MEMBER], OWNER, case_name="Member")
+    executor = await _executor_over(store, {"case-2": None, "case-1": None})
+    assert await executor._case_into(OWNER.id, "case-2", MEMBER) == "case-1"  # noqa: SLF001
+
+
 # --- the Admin area's schedule routes -----------------------------------------------------------
 
 

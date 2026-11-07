@@ -300,6 +300,22 @@ async def test_the_node_is_written_with_both_its_checks_removed(
     assert graph.superseded == ["p1"]
 
 
+async def test_a_node_wholly_in_the_layer_is_corrected_by_the_route_check() -> None:
+    """The node routes' own check, as the close judges it: a node of the case's layer (an alert
+    raised there) may be confirmed or retracted; a member's may not."""
+    from services.api.dataset_scope import refuse_writing_a_node_in_a_composite_case
+
+    store, principal = await _in_the_composite_case()
+    layer = await store.layer_of_case(CASE)
+    assert layer is not None
+    mine = _member_node(ProvenanceState.INFERRED, "mine").model_copy(update={"datasets": [layer]})
+    graph = _NodeGraph(mine, _member_node(ProvenanceState.INFERRED))
+    principal = await scope_to_case(ANALYST, CASE, store)
+    await refuse_writing_a_node_in_a_composite_case(graph, "mine", principal)
+    with pytest.raises(CompositeReadOnlyError):
+        await refuse_writing_a_node_in_a_composite_case(graph, "p1", principal)
+
+
 async def test_a_node_the_reader_cannot_see_is_not_found_not_refused() -> None:
     """The refusal comes after the read, so it says nothing of a node the reader cannot see."""
     graph = _NodeGraph()

@@ -26698,7 +26698,7 @@ composite case's write to a member's node made a copy of it in the composite; no
    keep working in a composite case (the orchestrator's call within the owner's ruling, 7 November
    2026). A monitor's alert, raised there by a scheduled rule or a list's re-screening, is written
    into the case's layer with its `ALERTED_ON` and what it writes alongside (a screening hit's
-   listed party and its `SAME_AS`, new and inferred): a link of the layer's is of another audience
+   listed party, as the list asserts it, and its inferred `SAME_AS`, both new): a link of the layer's is of another audience
    than a member's, so it merges into none (`rule_evaluation.write_alert_node`). A rule made in the
    case names the composite's own id, which holds nothing, so a re-screening reads it as its case
    (`screening_refresh`). Closing such an alert as a true positive confirms only the layer's

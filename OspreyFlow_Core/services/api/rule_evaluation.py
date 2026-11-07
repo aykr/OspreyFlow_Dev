@@ -539,10 +539,11 @@ async def write_alert_node(
         return None  # an alert for its author alone puts nothing in the case's graph
     into = await _alert_datasets()
     if finding.pending:
-        # What the finding writes alongside (a screening hit's listed party and its `SAME_AS`) is
-        # new, the rule's own and `inferred`: in a composite case it goes into the layer with the
-        # alert. A link of the layer's is of another audience than a member's, so it never merges
-        # into one; a write naming a dataset of its own keeps it, and the stamping graph judges it.
+        # What the finding writes alongside (a screening hit's listed party, as the list asserts
+        # it, and its inferred `SAME_AS`) is new and the rule's own: in a composite case it goes
+        # into the layer with the alert. A link of the layer's is of another audience than a
+        # member's, so it never merges into one; a write naming a dataset of its own keeps it, and
+        # the stamping graph judges it.
         pending = [w if w.datasets or not into else w.model_copy(update={"datasets": into})
                    for w in finding.pending]  # fmt: skip
         pending_nodes = [w for w in pending if isinstance(w, NodeWrite)]
