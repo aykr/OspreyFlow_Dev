@@ -1,25 +1,12 @@
-# studio lane · report · L1.2 (phase 6: the canvas as editor, the Map editor, guided mode), 7 November 2026
+# studio lane · report · L1.2 (phase 6), after the review, 7 November 2026
 
-1. **Met in the harness, not yet walked live: the reports pipeline built from scratch in guided mode.** Proved by keys alone in `keyboard/ingest-studio.spec.ts`, "the reports pipeline is built from scratch in guided mode by keyboard". The walk is: name it, choose its registered source, Preview the rows, map a report to a Document with the keyboard bind, Test, then Deploy as v1. Expert mode opens the same drawer from the canvas ("a step's drawer opens beside the canvas…").
-2. **Met: `MapScreen` tests migrated and green.** The five files are now `map/MapEditor.*.test.tsx`, with the same assertions run against the Map editor. Vitest passes 2601 of 2602. The one failure is `matrix/MatrixView.budget.test.tsx`, a timing budget that took 3.9 s against 2.5 s under full-suite load; it passes alone, and this branch doesn't touch matrix.
-3. **Met: keyboard green.** Full suite 539/539. There are ten new cases, each shown red with its handler removed, plus a planted lost save of the mode choice.
-4. **Met: axe green.** Full suite 352/352. There are eight new Studio states, each scanned in dark, light and GOV.UK.
-   - The scan found a real defect: bound Map columns were faded below 4.5:1 contrast. They are now outlined and labelled "bound".
-5. **Met: Preview access test (rule 4).** `tests/ingest/test_node_preview_access.py` was shown red on each read path by switching off that path's masking.
-6. **Met: spec 09 updated.** §1.0 and §4 are updated, and the §4 keyboard-bind gap is closed. ADR-140 Amendment 8 is written and its reservation is marked `written`.
-7. **Met: friction fragment.** `process/friction/2026-11-07-studio-phase-6-canvas.md`.
-8. **Left:**
-   - *Show YAML* is not built.
-   - No live walk was done against the dev stack (no lease taken).
-   - The SAME_AS score waits for phase 8 (your Q2 a).
-   - The mode is kept per browser (your Q1 a).
-9. **Commits** (11, on `13a77d1`): `65785b4` (the access test), `b8a3f78` (Preview and the mode preference), `d75c09b` (the drawer and guided list), `ba5d0b5` (the Map strip and keyboard bind), `440a1bc` (the fixes), `795b0f3` (the test migration), `0b9aafe` (the keyboard and axe cases), `e83a35e` (spec 09), `b04566d` (Amendment 8), `bbb844f` (the friction row), and this report.
-10. **Request: `keyboard/actionRegistry.ts`.** Apply `process/lanes/studio/L1.2_action_registry.diff` with `git apply OspreyFlow_Build/process/lanes/studio/L1.2_action_registry.diff` from the repository root. It adds the ten ids; with them in, `ingest-studio.spec.ts` passes 26/26.
-11. **Request: `OspreyFlow_Core/DEMO_GUIDE.md` chapter 4** (not this lane's file). It should say that the pipeline opens in guided mode, that Test and Deploy open in the drawer, and that Map has a strip and *Choose* / *Bind here*.
-12. **Questions for the owner:** none.
-13. **Hand check, no stack needed.** From the repository root: `cd OspreyFlow_Core/apps/workspace && npx vite --port 5185`.
-    - Open http://localhost:5185/keyboard/ingest-studio-harness.html. Click *Open Visit bookings*, then *Source: Call log*, *Preview* and *Run preview*.
-    - Then *Map: Map*, *Open map editor*, *Choose* on "called", *Entity 1*, and *Bind called here: name*.
-    - Then *Expert* and *Test*.
-    - Repeat with `?brand=govuk` added to the URL.
-14. **Running:** nothing of mine. No dev stack, no lease, no background jobs.
+1. **Must-fix 1, met.** A Map or Load Preview reads a new route, `POST …/preview-graph`: Test's dry run, which marks nothing and audits as `preview_studio_recipe_graph`. `test_studio_preview_routes.py` (six cases) was shown red against today's `verify` call. Both fakes now model the route's 403 and must never see a call to `verify`.
+2. **Must-fix 2, met.** Guided mode refuses Remove for an expert step: case "an expert step cannot be removed in guided mode", red with the guard removed.
+3. **Must-fix 3.** *From scratch in guided mode*: met in the harness only, not walked live. The harness now refuses as the routes do (the right, the editor level, an unverified publish, an edit clearing Test's mark), and the walk sees Deploy refused after a Preview, then deploys after Test. *Edited in expert mode*: met ("a step is edited in expert mode from the canvas"). *DEMO_GUIDE chapter 4*: met, text only, marked "not yet walked live". *A live walk on the dev stack*: not met, because the case lane holds the lease.
+4. **Must-fix 4, met.** Keyboard cases for *Open load rules*, *Let go*, and *Settings* after *Preview*.
+5. **Must-fix 5, met.** `process/lanes/studio/L1.2_RED_RECORD.md` holds 18 keyboard plants and 5 Python and vitest plants, each with the planted change, the run, and the first failing assertion at its spec line.
+6. **Must-fix 6, not measured under a lease** (the case lane held it). `MatrixView.budget.test.tsx` failed on main `d72ae2f` in all three alternating full-vitest runs (4.90, 4.77, 3.30 s) and on the branch (3.80, 4.41, 3.59 s), against 2.5 s. Neither the test nor anything it imports differs from main. Request: rerun it under a lease, as main's defect.
+7. **Minor items, met.** Spec 09 says who may preview (table: `edit_pipelines`, viewer; graph: `verify_pipelines`, editor). `PREVIEW_ROWS` is written once and the Python test reads it. Amendment 8's status now reads "built under the owner's rulings". The strip's current step is no longer a button, and every new button is the design `Button`. **Not done:** a route test with another case's principal reading the same dataset.
+8. **Green on the branch head, rebased on main `d72ae2f`:** Python 231 (the rights and levels tables included), ruff, mypy, tsc; vitest 338 (ingest); keyboard 79 (pipeline-studio, ingest-studio, checks-on-load, publish); axe 72 (the ingest states in three themes). The full suites last ran green before the review: keyboard 539, axe 352.
+9. **Request:** apply `process/lanes/studio/L1.2_action_registry.diff` (15 ids). With it in, `ingest-studio.spec.ts` passes 33/33. I'll rebase after it lands.
+10. **Questions for the owner:** none. **Running:** nothing of mine; no lease, no background jobs.
