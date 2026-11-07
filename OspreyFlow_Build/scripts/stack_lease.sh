@@ -16,7 +16,8 @@ LOCK="$DIR/stack.lease"
 mkdir -p "$DIR"
 
 # The dev stack's compose project is named after the compose file's folder ("compose") in every
-# worktree, so asking from any worktree sees the one shared stack. Prints "up" or "down"; if docker
+# worktree, so asking from any worktree sees the one shared stack; the lanes' throwaway test stack is
+# checked too. Prints "up" or "down"; if docker
 # cannot answer, it says so and fails, so a release is refused rather than let through blind.
 stack_state() {
   local root core out
@@ -30,7 +31,14 @@ stack_state() {
     echo "docker could not say whether the dev stack is up: $out" >&2
     return 1
   fi
-  if [ -n "$out" ]; then echo up; else echo down; fi
+  # The throwaway test stack the lanes run their live tests on (FDE_HANDOVER.md: osprey-test-* and
+  # osprey-probe-*, on the ports tests/port_guard.py pins), which is not dev.yaml's.
+  local more
+  if ! more="$(docker ps -q --filter 'name=^osprey-(test|probe)-' 2>&1)"; then
+    echo "docker could not say whether the test stack is up: $more" >&2
+    return 1
+  fi
+  if [ -n "$out" ] || [ -n "$more" ]; then echo up; else echo down; fi
 }
 
 cmd="${1:-status}"

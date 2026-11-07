@@ -132,6 +132,15 @@ no conflict with another lane's work, and is recorded in the merge's friction ro
 shared. A registry id is committed by the orchestrator immediately before the merge whose cases
 prove it, not earlier, because `assertAllCovered` refuses an id with no proving case.
 
+**Operational judgements are the orchestrator's (the owner, 7 November 2026: "can you make some of these
+operational judgements on your own … if I get them wrong we would need to revert them during the active
+testing").** The orchestrator decides operational matters itself and records each one, with its reason,
+in `process/lanes/MORNING.md` and the merge's friction row: tooling and gates, test and CI hygiene,
+ports and stacks, ignore entries, merge order, review handling, ratifying out-of-map files, and which
+lane fixes what. The owner still rules on what a person sees or can do, who may access what, the data
+model and any product decision an ADR records, published claims, real data, anything outside the
+private repository, and the protected `Makefile` and `ci.yml`.
+
 **Owner questions go through the orchestrator (the owner, 7 November).** A lane sends a question for the
 owner to the orchestrator's session by cross-session message, as multiple choice, instead of asking in
 its own window. The orchestrator batches the questions for the owner and sends the answers back, and

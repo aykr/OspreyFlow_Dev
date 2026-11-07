@@ -23,6 +23,11 @@ _DOCKER = {
     "up": "#!/bin/sh\necho 3f1c0a9b2d7e\necho 9a8b7c6d5e4f\n",
     "down": "#!/bin/sh\nexit 0\n",
     "broken": "#!/bin/sh\necho 'Cannot connect to the Docker daemon' >&2\nexit 1\n",
+    # The handover's throwaway test stack (osprey-test-*, osprey-probe-*) up, dev.yaml's down: the real
+    # `docker ps --filter name=...` answers with ids only for the named containers.
+    "throwaway-up": (
+        '#!/bin/sh\nif [ "$1" = ps ]; then case "$*" in *osprey-*) echo 7e7e7e7e7e7e;; esac; fi\nexit 0\n'
+    ),
 }
 
 
@@ -89,3 +94,13 @@ def test_the_holder_releases_once_the_stack_is_down(lease) -> None:
     assert done.returncode == 0, done.stderr
     assert lease("status").stdout.strip() == "free"
     assert lease("acquire", "glass", "axe scans").returncode == 0
+
+
+def test_release_with_the_throwaway_test_stack_still_up_is_refused(lease) -> None:
+    """The lanes' live tests run on the throwaway stack (FDE_HANDOVER.md), not dev.yaml's, so the
+    lease must see it too: a release with it up is refused (red with only dev.yaml checked)."""
+    lease("acquire", "case", "conformance")
+    up = lease("release", "case", docker="throwaway-up")
+    assert up.returncode == 1
+    assert "still up" in up.stderr
+    assert lease.lock.is_dir()

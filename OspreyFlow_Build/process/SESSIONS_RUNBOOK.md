@@ -101,6 +101,16 @@ fifth for the heartbeat monitor (§5).
 
 ## 4. The dev stack: one at a time
 
+**The leased stack is the throwaway test stack** (the orchestrator's judgement of 7 November 2026, under
+the owner's delegation; it supersedes the ruling to move dev-up's ports). `make dev-up` publishes ArcadeDB on
+2480, which the owner's deployment holds, and the demo guide and several scripts (`seed_paysim`,
+`repro_paysim_duplicates`, the hand-run Conduit, the reset's `drop database`) reach `localhost:2480`
+whenever no port is set. Moving dev-up would point each of those at the deployment instead. So the
+lanes run live tests on the throwaway stack in `FDE_HANDOVER.md` (`osprey-probe-arcadedb-new` 2491,
+`osprey-test-pg` 55433, `osprey-test-valkey-6379` 6379, `osprey-test-minio`), whose ports nothing uses by
+default, under the same lease. `stack_lease.sh release` refuses while either stack is up. The commands
+below that name `make dev-up` stand for bringing that stack up and down.
+
 There is one stack for the machine. A lane that needs Postgres, ArcadeDB or Valkey:
 
 ```
