@@ -18,7 +18,7 @@ describe("AdminWithoutCase", () => {
     render(
       <AdminWithoutCase apiBaseUrl="http://api" bearerToken="t" rights={new Set(["manage_people"])} onStart={start} account={null} marking={null} />,
     );
-    expect(screen.getByRole("tab", { name: "People and roles" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "People and roles" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Osprey, go to Home" }));
     expect(start).toHaveBeenCalledTimes(1);

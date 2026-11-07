@@ -1,0 +1,45 @@
+/* The Admin place (ADR-145 decisions 5 and 13): the side list of sections beside the open one. Under
+   the GOV.UK brand the list is a GOV.UK side navigation: group headings, each item a link, the open
+   one marked by a 4px rule in the accent and bold text. Tokens only (tokens.css). */
+.admin-place {
+  display: flex; flex-direction: column; gap: var(--sp-12);
+  padding: var(--sp-16); min-height: 0; flex: 1; overflow-y: auto;
+  background: var(--surface-app); color: var(--text-primary);
+}
+.admin-place .admin-place__title { margin: 0; }
+.admin-place__body { display: flex; gap: var(--sp-24); align-items: flex-start; min-width: 0; }
+.admin-place__section { display: flex; flex-direction: column; gap: var(--sp-12); flex: 1; min-width: 0; }
+.admin-place__section > h3 { align-self: flex-start; }
+.admin-place__section > h3:focus { outline: none; }
+.admin-place__section > h3:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
+
+.admin-nav { flex: none; width: 220px; display: flex; flex-direction: column; gap: var(--sp-12); }
+.admin-nav .admin-nav__heading { margin: 0 0 var(--sp-4); }
+.admin-nav__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.admin-nav__item { border-left: 4px solid transparent; }
+.admin-nav__item--current { border-left-color: var(--brass); background: var(--surface-raised); }
+.admin-nav__link {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: none; border: 0; padding: var(--sp-4) var(--sp-8);
+}
+.admin-nav__link:hover { background: var(--surface-hover); }
+.admin-nav__link:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: calc(-1 * var(--focus-width)); }
+.admin-nav__item--current .admin-nav__link { font-weight: 700; }
+
+/* GOV.UK's side navigation: links underlined, the open item's rule and background as GOV.UK draws it,
+   the focus state GOV.UK's own (the yellow with its ink). */
+.admin-nav--govuk { width: 280px; }
+.admin-nav--govuk .admin-nav__item--current { background: var(--surface-sunken); }
+.admin-nav--govuk .admin-nav__link { text-decoration: underline; text-underline-offset: 0.1578em; }
+.admin-nav--govuk .admin-nav__item--current .admin-nav__link { text-decoration: none; }
+.admin-nav--govuk .admin-nav__link:hover { background: none; text-decoration-thickness: 3px; }
+.admin-nav--govuk .admin-nav__link:focus-visible {
+  outline: var(--focus-width) solid transparent; background: var(--focus); color: var(--focus-ink);
+  box-shadow: 0 -2px var(--focus), 0 4px var(--focus-ink); text-decoration: none;
+}
+
+/* A phone: the list above the section, its full width. */
+@media (max-width: 640px) {
+  .admin-place__body { flex-direction: column; }
+  .admin-nav { width: 100%; }
+}

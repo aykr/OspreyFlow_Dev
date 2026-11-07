@@ -88,6 +88,16 @@ async function press(page: Page, name: string) {
   await page.keyboard.press("Enter");
 }
 
+/** A section in the Admin place's side list (ADR-145 decision 5). */
+const section = (page: Page, name: string) =>
+  page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name, exact: true });
+
+/** Opens a section from the side list by keyboard: focused, then Enter. */
+async function open(page: Page, name: string) {
+  await section(page, name).focus();
+  await page.keyboard.press("Enter");
+}
+
 test("a person's roles are saved by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html");
@@ -121,9 +131,7 @@ test("a dataset's egress is set by keyboard", async ({ page }) => {
     if (request.method() === "PUT" && request.url().endsWith("/datasets/enron/egress")) sent.push(request.postDataJSON());
   });
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
-  const tab = page.getByRole("tab", { name: "Datasets" });
-  await tab.focus();
-  await page.keyboard.press("Enter");
+  await open(page, "Datasets");
   const egress = page.getByLabel("Egress for Enron corpus", { exact: true });
   await egress.focus();
   // A closed select takes an arrow key differently by platform; typing an option's start chooses it.
@@ -139,6 +147,7 @@ test("a dataset's egress is set by keyboard", async ({ page }) => {
 test("the system is asked again by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "System");
   await expect(page.getByText("answered in 12 ms")).toBeVisible();
   await press(page, "Ask again");
   await expect.poll(() => asked.filter((a) => a === "GET system").length).toBe(2);
@@ -226,8 +235,7 @@ test("a demo pack's command is copied by keyboard", async ({ page, context }) =>
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
-  await page.getByRole("tab", { name: "Demo packs" }).focus();
-  await page.keyboard.press("Enter");
+  await open(page, "Demo packs");
   await press(page, "Copy the command for hmp");
   await expect(page.getByText("Copied. Run it in a terminal on the machine OspreyFlow runs on.")).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("ospreyflow demo add hmp");
@@ -288,8 +296,7 @@ test("a schedule is changed by keyboard, keeping its owner", async ({ page }) =>
 test("a connection is named by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
-  await page.getByRole("tab", { name: "Connections" }).focus();
-  await page.keyboard.press("Enter");
+  await open(page, "Connections");
   await expect(page.getByText("Files: the ingest root")).toBeVisible();
   await page.getByRole("textbox", { name: "New Files connection" }).focus();
   await page.keyboard.type("Second folder");
@@ -297,6 +304,42 @@ test("a connection is named by keyboard", async ({ page }) => {
   await expect(page.getByText("Named Second folder.")).toBeVisible();
   expect(asked).toContain("POST connections");
   registerCovered(REGISTRY, "name-a-connection-by-keyboard");
+});
+
+// ADR-145 decision 5 (rule 13): the side list is walked by Tab and a section opened by Enter; focus
+// moves to the section's heading, the list marks it current, and its screen reads from the Conduit.
+test("Admin's sections are moved between by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people,manage_dashboards,administer_system");
+  await expect(page.getByRole("heading", { name: "People and roles" })).toBeVisible();
+  await section(page, "People and roles").focus();
+  await page.keyboard.press("Tab");
+  await expect(section(page, "Roles (coming)")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(section(page, "Dashboard identities")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Dashboard identities" })).toBeFocused();
+  await expect(section(page, "Dashboard identities")).toHaveAttribute("aria-current", "page");
+  await expect(section(page, "People and roles")).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("table", { name: "Dashboard identities" })).toBeVisible();
+  expect(asked).toContain("GET dashboards");
+  registerCovered(REGISTRY, "move-between-admin-sections-by-keyboard");
+});
+
+// ADR-145 decision 5: a section not built yet opens by keyboard to say what it will hold, and asks the
+// Conduit nothing.
+test("a coming section is opened by keyboard, and calls nothing", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system,read_audit");
+  await expect(page.getByRole("heading", { name: "Datasets" })).toBeVisible();
+  await expect.poll(() => asked).toContain("GET datasets");
+  const before = asked.length;
+  await open(page, "Audit (coming)");
+  await expect(page.getByRole("heading", { name: "Audit" })).toBeFocused();
+  await expect(page.getByText(/^Coming: One view over the records/)).toBeVisible();
+  await expect(section(page, "Audit (coming)")).toHaveAttribute("aria-current", "page");
+  expect(asked.length).toBe(before);
+  registerCovered(REGISTRY, "open-a-coming-admin-section-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

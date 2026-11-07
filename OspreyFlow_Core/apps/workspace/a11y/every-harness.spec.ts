@@ -94,8 +94,12 @@ const EXTRA_STATES: Record<string, string[]> = {
     "pipeline=guided", "pipeline=expert&mode=expert", "pipeline=preview", "pipeline=map-preview",
     "pipeline=test", "pipeline=deploy", "pipeline=expert-step&expert=1", "pipeline=map",
   ],
-  // ADR-140 Amendment 4: the Connections tab, served by the page itself.
-  "admin-harness.html": ["open=connections&rights=administer_system"],
+  // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
+  // every section in the side list, a coming placeholder open.
+  "admin-harness.html": [
+    "open=connections&rights=administer_system",
+    "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Audit%20(coming)",
+  ],
 };
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();

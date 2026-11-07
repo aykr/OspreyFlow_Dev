@@ -749,7 +749,7 @@ are in `deploy/generated/<profile>/deployment.env`, never printed.
 **What moved on 7 November 2026 (ADR-145, three places).** The Ingest Studio and Admin left the
 Glass's rail: they are places in the **place switcher** in the top bar (inside the GOV.UK header under
 that brand), and Home shows a card for each place the account opens and none for another. *Proposed
-types* left the rail too: it is a tab of Admin. The Studio has no rail; a line under the top bar says
+types* left the rail too: it is a section of Admin, under *Data*. The Studio has no rail; a line under the top bar says
 where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
@@ -759,10 +759,15 @@ that line; the rail keeps *Cases* and *Explore*, with *Ownership*, *History*, *Q
 *Dashboards* under its ⋯ *More*; the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*
 under *More views*; and the right-hand column opens with the Inspector only. Each account is offered
 exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
-whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds one of its tabs' rights,
+whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds the right of one of its built sections,
 the Glass for whoever holds a right a case's routes need. A place an account is not offered refuses
 it. No role lost a right; the Studio's pipeline-run history now needs a pipeline right, so the
-analyst and the report viewer, who had no screen for it, are no longer answered there.
+analyst and the report viewer, who had no screen for it, are no longer answered there. Admin
+(ADR-145 Amendment 3) is a side list of sections in groups: *People* (People and roles, Roles,
+Dashboard identities), *Data* (Datasets, Connections, Proposed types), *Running* (Operations, System),
+*Policies* (Grading scheme, Approval rights, Uploads), *Audit* and *Demo packs*, each shown only to an
+account holding its right. Roles, the three Policies and Audit say "(coming)" and what they will
+hold. Under `?brand=govuk` the list is a GOV.UK side navigation.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |
@@ -778,7 +783,7 @@ granted on a real dataset (rule 9).
 
 1. **As the analyst** — *More views → Reports* in the top bar (ADR-145 Amendment 2): the case's
    figures, counted for the reader.
-2. **As the admin** — *Admin* in the place switcher, then its *Dashboards* tab: register a dashboard identity (its secret is shown once;
+2. **As the admin** — *Admin* in the place switcher, then *Dashboard identities* in its side list (under *People*): register a dashboard identity (its secret is shown once;
    put it in `REPORT_SYNC_DASHBOARDS`); its *Figures* column says when it last pulled.
 3. **As the case's Author** — *Cases → Who can open this case*: give the dashboard's account id
    Viewer. report-sync pulls the case as that identity within 15 minutes (restart `report-sync` to

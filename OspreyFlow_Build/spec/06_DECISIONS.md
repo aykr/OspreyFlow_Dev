@@ -25682,7 +25682,7 @@ says so. Spec 09 §1.0 has the screens.
 
 **Tests:** `src/ingest/sources/sources.test.tsx` (the wizard's steps, Back, the body sent, a
 registered file not offered; the source page's edit naming the pipelines that need attention; the
-chooser writing the source's marking, shown red with the marking dropped), `src/admin/Connections.test.tsx`,
+chooser writing the source's marking, shown red with the marking dropped), `src/admin/sections/Connections.test.tsx`,
 `IngestStudio.test.tsx` (Sources); keyboard `ingest-studio.spec.ts` (+4) and `admin.spec.ts` (+1); the
 axe scan of the wizard's governance step, a source's page and its edit, the chooser, and Connections,
 in both themes and GOV.UK.
@@ -27085,3 +27085,54 @@ smallest step beyond it the owner chose (N4).
    and 15 were its stand-in's. On the Graph a fourth panel, *Find connections*, has no parts and is
    folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
    proves each moved action by keyboard.
+
+### ADR-145, Amendment 3 (7 November 2026) — Admin's sections as built
+
+Status: accepted from the orchestrator's settlement of 7 November 2026 (operational: nothing is
+reachable behind a placeholder; recorded for the owner); built in Lane 2's L2.4 part 1. Records
+decisions 5 and 13 as built, and what they left open.
+
+1. **Each section's right.** A section is shown only to a holder of its right, and each built section
+   keeps the right its tab required (ADR-110 Amendment 14): People and roles `manage_people`;
+   Dashboard identities `manage_dashboards`; Datasets, Connections, System and Demo packs
+   `administer_system`; Operations `operate_schedules`; Proposed types `manage_ontology` (its routes
+   also ask for the administrator role). Decision 5 named no right for the sections not yet built:
+   **Roles** takes `manage_people`; **Grading scheme**, **Approval rights** and **Uploads** take
+   `administer_system`; **Audit** takes `read_audit` (ADR-112 A7).
+2. **Proposed types sits under Data,** beside Datasets and Connections: decision 5 did not list it, and
+   it stays in Admin until the Studio's Model tab shows proposed types (ADR-090 Amendment 5, L3.5).
+3. **Five sections are "coming" placeholders:** Roles, Grading scheme, Approval rights, Uploads and Audit.
+   Each is listed as "*Name* (coming)", shown only to holders of its right, and says what it will hold;
+   nothing behind it calls the Conduit. Approval rights is one of them, though the brief did not name
+   it: it has no screen and no route yet. A place is offered for its entry screen's first read
+   (Amendment 1), so `read_audit` alone opens no Admin place until Audit is built.
+4. **Hiding is never the control** (rule 3). Each built section's screen is its own file under
+   `admin/sections/`, listed in `admin/sections.json`. `test_admin_sections.py`:
+   - derives from the code the routes each screen calls, following the files it imports;
+   - holds each route to the section's right, by the route's own declared checks and over HTTP, for a
+     principal holding every other right; the only reads passed over are named per section with their
+     reason (the open handling scheme, for People and Dashboard identities; the schedule preview, for
+     Operations, which asks `schedule_pipelines`, so a holder of `operate_schedules` alone is refused
+     *Change schedule*'s preview);
+   - holds the component `AdminPlace.tsx` draws for each section to the file `sections.json` names;
+   - finds every `/v1/admin` route some section's, or records why it is not (Monitoring › Lists; the
+     geospatial wizard).
+
+   It was shown red by hand twice on the real Datasets egress route, its check removed and then naming
+   another right (both the declared-checks test and the HTTP test failed), and by planted routes and
+   screens committed with it. Connections' screen and test moved to `admin/sections/`; Schedules stays
+   at `admin/Schedules.tsx`, since the Studio, Monitoring and Reports import it.
+5. **The side list.** Groups carry a heading; a group of one section of its own name (Audit, Demo
+   packs) is that section alone. The first built section the person holds, in decision 5's order,
+   opens first: for `administer_system` alone that is now Datasets, where the tabs opened System (the
+   built-in roles land where they did). Admin's entry read for that right is the datasets list. Choosing a
+   section moves focus to its heading and marks it `aria-current="page"`. Under the GOV.UK brand
+   (decision 13) the list is a GOV.UK side navigation, drawn with the workspace's own classes:
+   - group headings;
+   - underlined, link-styled buttons (no section has an address of its own, so Back does not step
+     between sections);
+   - the open section bold, with a 4px rule in the accent.
+
+   `keyboard/admin.spec.ts` proves moving between sections and opening a coming one, each red with the
+   list's handler removed. Axe scans the list, every section shown and a placeholder open, in dark,
+   light and GOV.UK.

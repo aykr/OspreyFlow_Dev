@@ -73,12 +73,14 @@ EXEMPT = {
 #: A place must be usable, not only answered (the orchestrator's settlement, 7 November 2026): the
 #: Studio and Admin are offered for the rights their entry screen's first read needs. The Studio's
 #: is the recipe registry (`ingest/api.ts`'s `fetchRecipeRegistry`); Admin's is the first read of
-#: whichever of its tabs the person holds a right for. The Glass's entry, the case list, is open to
-#: every signed-in person, so the Glass is offered for any right one of its routes needs.
+#: the first built section the person holds a right for (ADR-145 Amendment 3: for
+#: `administer_system`, Datasets, the first in decision 5's order). The Glass's entry, the case
+#: list, is open to every signed-in person, so the Glass is offered for any right one of its routes
+#: needs.
 ENTRY = {
     "ingest": {"list_studio_recipe_registry"},
     "admin": {"list_people_route", "list_dashboards_route", "list_schedules_route",
-              "system_status_route", "list_link_type_proposals_route"},
+              "admin_datasets_route", "list_link_type_proposals_route"},
 }  # fmt: skip
 
 #: What each named role is offered (ADR-145 decision 7 lists the places).

@@ -777,6 +777,9 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "set-a-datasets-egress-by-keyboard",
   // ADR-140 Amendment 4: a connection named by an administrator.
   "name-a-connection-by-keyboard",
+  // ADR-145 decision 5: Admin's sections.
+  "move-between-admin-sections-by-keyboard",
+  "open-a-coming-admin-section-by-keyboard",
 ] as const);
 
 // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

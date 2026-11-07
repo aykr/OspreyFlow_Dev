@@ -1,0 +1,53 @@
+{
+  "about": "The Admin place's sections (ADR-145 decision 5, ADR-110 Amendment 14). Each is shown only to a holder of its right, and each built section's routes refuse a principal without it, read from the routes' own checks. A section with no screen yet is a coming placeholder, shown only to holders of its right. The rights of Roles, Grading scheme, Approval rights, Uploads and Audit, and Proposed types under Data, were settled by the orchestrator on 7 November 2026.",
+  "groups": [
+    {
+      "label": "People",
+      "sections": [
+        { "id": "people", "label": "People and roles", "right": "manage_people", "screen": "admin/sections/People.tsx" },
+        { "id": "roles", "label": "Roles", "right": "manage_people",
+          "coming": "The four built-in roles and the Super user preset, each with the places it opens and its rights, and roles of your own: a name and a set of existing rights, versioned and audited." },
+        { "id": "dashboards", "label": "Dashboard identities", "right": "manage_dashboards", "screen": "admin/sections/Dashboards.tsx" }
+      ]
+    },
+    {
+      "label": "Data",
+      "sections": [
+        { "id": "datasets", "label": "Datasets", "right": "administer_system", "screen": "admin/sections/Datasets.tsx" },
+        { "id": "connections", "label": "Connections", "right": "administer_system", "screen": "admin/sections/Connections.tsx" },
+        { "id": "proposed-types", "label": "Proposed types", "right": "manage_ontology", "screen": "admin/sections/ProposedTypes.tsx" }
+      ]
+    },
+    {
+      "label": "Running",
+      "sections": [
+        { "id": "operations", "label": "Operations", "right": "operate_schedules", "screen": "admin/Schedules.tsx" },
+        { "id": "system", "label": "System", "right": "administer_system", "screen": "admin/sections/System.tsx" }
+      ]
+    },
+    {
+      "label": "Policies",
+      "sections": [
+        { "id": "grading-scheme", "label": "Grading scheme", "right": "administer_system",
+          "coming": "The deployment's grading scheme, read-only, with the command that changes it." },
+        { "id": "approval-rights", "label": "Approval rights", "right": "administer_system",
+          "coming": "Who may approve each kind of decision, how many people can, and a warning where fewer than two can." },
+        { "id": "uploads", "label": "Uploads", "right": "administer_system",
+          "coming": "The largest picture an analyst may add, and the formats accepted." }
+      ]
+    },
+    {
+      "label": "Audit",
+      "sections": [
+        { "id": "audit", "label": "Audit", "right": "read_audit",
+          "coming": "One view over the records that already exist (the case, rule, run, model, people and dataset audits), filtered by person, case, dataset and kind, read under your own access." }
+      ]
+    },
+    {
+      "label": "Demo packs",
+      "sections": [
+        { "id": "demo-packs", "label": "Demo packs", "right": "administer_system", "screen": "admin/sections/DemoPacks.tsx" }
+      ]
+    }
+  ]
+}

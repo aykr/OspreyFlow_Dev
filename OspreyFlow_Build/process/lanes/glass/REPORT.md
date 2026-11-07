@@ -1,29 +1,32 @@
-# glass lane · report · L2.3 part 2, variant B of the case screen's lightening, after review (7 November 2026)
+# glass lane · report · L2.4 part 1, Admin regrouped into sections (7 November 2026)
 
-1. **Variant B in the product: met.**
-   - The column opens with the Inspector only (`layout/SidePanelStack.tsx`, `DEFAULT_FOLDED`).
-   - The rail keeps Cases and Explore; Ownership, History, Questions and Dashboards are under its ⋯ More.
-   - The view switch keeps Graph and Map; Matrix and Reports are under More views.
-   - Monitoring's open count is on the banner's section.
-   - The GOV.UK banner's leading "·" is gone. `canvas/**` is untouched.
-2. **Count: met.** `App.chrome.test.tsx` counts 24 controls before the canvas on the real `App` (25 with the deployed skip link); part 1's figures were one short. It goes red with Ownership back on the rail. The test reads document order, not a real Tab walk, which needs the stack; its docstring says what that can miss.
-3. **Column parts: met.** `keyboard/case-screen-parts.spec.ts` counts the real panels: the Inspector has at most 7 parts for a node (6 for a link), Metrics 3, the Query builder 3. So today's column shows up to 13 parts and B up to 7 (the prototype's stand-in said 15 and 8). ADR-145 Amendment 2 §5 is corrected.
-4. **Banner count: met.** With an open, a claimed and a closed alert, `App.chrome.test.tsx` checks the banner says "Monitoring 2 open". It goes red when `App` doesn't pass the count.
-5. **Keyboard: met.** `shell.spec.ts` covers each destination under More (Escape returns to ⋯), More views and the folded panels, each red with its handler removed. ⋯ More and More views mark the view open with `aria-current` (red with it removed). Full suite: see 9.
-6. **Axe: met** in dark, light and GOV.UK, now covering:
-   - Monitoring's badge, including inside the GOV.UK notification banner;
-   - ⋯ More and More views drawn open;
-   - the column's fresh-page default.
-   The badge scan found a real defect: the Monitoring button's name omitted its visible text (WCAG 2.5.3). It is fixed: "Monitoring 3 open".
-7. **Vitest:** 2626 pass, 1 fail: the Matrix first-frame budget (`MatrixView.budget.test.tsx`) failed in the full run, as on earlier runs. The orchestrator is measuring main's own status on a quiet machine, and I left it alone.
-8. **Docs: met.** ADR-145 Amendment 2 and `spec/02` give the measured figures. The DEMO_GUIDE (§8a, the Reports and Dashboards steps) is updated, plus a friction row.
-9. **Commits:** on `lane/glass`, rebased on main. **Full keyboard suite: 563/563** on 5185 under `CI=1`, in one run after the last change.
-10. **Requests:** the three `SHELL_ACTIONS` ids (diff sent). `DropdownPanel` is left as it is: a `className` prop alone would not let the rail's icon trigger reuse it.
-11. **Hand check** (use a fresh browser profile or clear the site's storage, since the column's default applies only when nothing is stored). From `OspreyFlow_Core`: `.venv/bin/ospreyflow start --build`, then `.venv/bin/ospreyflow open`. As the analyst, open a case:
-    - The Inspector is open; Metrics and the Query builder are folded.
-    - The rail shows Cases, Explore and ⋯.
-    - ⋯ → History works.
-    - More views → Matrix works.
-    - The banner reads "Monitoring" with its count.
-    - Repeat with `?brand=govuk`: the banner has no leading "·".
-12. **Still running:** nothing. No dev stack or lease used.
+1. **Sections: met.** Admin is a side list from `admin/sections.json`: People, Data, Running, Policies, Audit, Demo packs. Each section shows only to a holder of its right. Roles, Grading scheme, Approval rights, Uploads and Audit are "(coming)" placeholders that call nothing. Under GOV.UK the list is a GOV.UK side navigation. Each screen is its own file in `admin/sections/` (Schedules stays put: other lanes import it).
+2. **Routes refuse: met (rule 3).** `test_admin_sections.py` (25 tests):
+   - derives each section's routes from its screen and that screen's imports;
+   - holds each route to the section's right, by declared checks and over HTTP;
+   - holds the component `SCREENS` draws to the file the JSON names;
+   - finds every `/v1/admin` route some section's.
+
+   It went red with the real egress route's check removed, then naming another right, and with `SCREENS` drawing the wrong file.
+3. **Keyboard: met.** `keyboard/admin.spec.ts` (19) adds moving between sections and opening a coming one, each red with the side list's handler removed. **Ids for the registry** (please land them): `move-between-admin-sections-by-keyboard` and `open-a-coming-admin-section-by-keyboard` in `ADMIN_ACTIONS`.
+4. **Axe: met.** Dark, light and GOV.UK: the harness now applies `?brand=`, and every section is listed with a placeholder open. Full scan: 384 pass.
+5. **Other checks:**
+   - Vitest: 2640 pass, 1 fail (the Matrix budget, not ours).
+   - Keyboard, full suite: 562 pass, 1 skipped (the L2.3 screenshot case, which needs `OSPREY_L23_SHOTS`).
+   - Python: place, section, route-rights and stand-alone tests all pass.
+   - lanes-check and the citation checks are green.
+6. **Docs: met.** ADR-145 Amendment 3, `spec/02`'s Admin area, the DEMO_GUIDE and a friction row.
+7. **Questions to the owner** (settled by the orchestrator): Q1 the placeholders' rights, (a); Q2 Proposed types under Data, (a); Q3 Approval rights as a placeholder, (a).
+8. **Lane-reviewer findings and what was done:**
+   - (1) `SCREENS` was held to nothing: fixed, with a new test shown red.
+   - (2) The place test's exemptions were skipped for every section: now each skip is named per section, with its reason.
+   - (3) DEMO_GUIDE is outside the map: **please ratify.**
+   - (4) This report: written.
+   - (5) Administer_system alone now lands on Datasets, not System: recorded in Amendment 3; the place test's `ENTRY` was updated.
+   - (6) The scanner's blind spots: stated in its docstring.
+   - (7–9) A wrong count, overstated red claims and a stale citation: corrected.
+   - (11) Sub-headings: now h4.
+   - (12) Wording: "link-styled buttons".
+   - (10) Duplicated `utc` and handling-scheme reads: left; the move kept them as they were.
+9. **For the owner:** a holder of `operate_schedules` alone sees Operations, but the schedule preview (`schedule_pipelines`) refuses them. This predates the lane, is recorded in Amendment 3, and nothing was changed.
+10. **Still running:** nothing. No dev stack and no lease.

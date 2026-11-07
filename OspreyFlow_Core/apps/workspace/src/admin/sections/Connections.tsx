@@ -3,11 +3,11 @@
 // JSON-schema connections arrive with phase 9.
 import { useEffect, useState } from "react";
 
-import type { Connection } from "../../../../packages/schemas/generated";
-import { Button } from "../design/primitives/Button";
-import { Input } from "../design/primitives/Input";
-import { addConnection, listAdminConnections } from "../ingest/sources/api";
-import type { AdminApi } from "./api";
+import type { Connection } from "../../../../../packages/schemas/generated";
+import { Button } from "../../design/primitives/Button";
+import { Input } from "../../design/primitives/Input";
+import { addConnection, listAdminConnections } from "../../ingest/sources/api";
+import type { AdminApi } from "../api";
 
 export function Connections({ api }: { api: AdminApi }) {
   const [connections, setConnections] = useState<Connection[] | null>(null);
