@@ -29,6 +29,8 @@ from schemas.domain import Principal
 
 from .alerts import AlertStore
 from .audit import AuditWriter
+from .dataset_scope import scope_a_monitor, set_case_datasets
+from .datasets import DatasetStore
 from .kyc_expiries import KycExpiryStore
 from .kyc_rules import KycContext, judge_lapsed
 from .rule_evaluation import RuleGate
@@ -59,6 +61,7 @@ async def sweep(
     valkey: Valkey,
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
     sweeper: Principal,
+    datasets: DatasetStore | None = None,
 ) -> SweepReport:
     raw = await reply(valkey.get(_LAST_SWEPT))
     last = date.fromisoformat(raw.decode() if isinstance(raw, bytes) else raw) if raw else None
@@ -87,17 +90,26 @@ async def sweep(
             if deployer is None:
                 report.failures.append(f"rule {rule.id}: its deployer could not be resolved")
                 continue
-            if rule.dataset_id is not None:
+            if datasets is not None:
+                # As a request is, by what the case reads: in a case reading a composite its
+                # alert goes into the case's layer (ADR-099 Amendment 15 item 2).
+                deployer = await scope_a_monitor(deployer, case, rule.dataset_id, datasets)
+            elif rule.dataset_id is not None:
                 deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
             context = KycContext(
                 graph=graph, scheme=scheme, screening=None, compute=None, today=day
             )
             raised = 0
-            for customer_id, documents in customers.items():
-                for finding in await judge_lapsed(rule, deployer, customer_id, documents, context):
-                    if not await gate.seen(finding):
-                        await gate.raise_committed(finding)
-                        raised += 1
+            try:
+                for customer_id, documents in customers.items():
+                    for finding in await judge_lapsed(
+                        rule, deployer, customer_id, documents, context
+                    ):
+                        if not await gate.seen(finding):
+                            await gate.raise_committed(finding)
+                            raised += 1
+            finally:
+                set_case_datasets(None)
             report.alerts += raised
             await audit.record(
                 principal=sweeper,

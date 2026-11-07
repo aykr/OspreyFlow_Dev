@@ -207,6 +207,25 @@ async def scope_to_case(
     return scoped
 
 
+async def scope_a_monitor(
+    deployer: Principal, investigation_id: str, rule_dataset: str | None, store: DatasetStore
+) -> Principal:
+    """A monitor's deployer for one run outside any request (a re-screening, the daily sweep),
+    scoped to the rule's case as a request is, so what it writes is judged as a request's would be.
+    Decided by what the case reads, never by the dataset the rule names: in a case reading a
+    composite it reads the case and its alert goes into the case's layer (ADR-099 Amendment 15 item
+    2), whichever dataset the rule was made naming (a member's, from before the case read a
+    composite, or the composite's own id). In any other case, a rule naming a source of its own
+    reads that source alone, as before."""
+    scoped = await scope_to_case(deployer, investigation_id, store)
+    if await reads_a_composite() or not rule_dataset:
+        return scoped
+    if await store.composites_among([rule_dataset]):
+        return scoped
+    set_case_datasets([rule_dataset])
+    return deployer.model_copy(update={"datasets": [rule_dataset]})
+
+
 class _CasesOf(Protocol):
     async def list_for(self, principal: Principal) -> Sequence[tuple[Any, Any]]: ...
 
@@ -489,6 +508,7 @@ __all__: Sequence[str] = (
     "case_datasets",
     "outside_any_case",
     "scope_to_case",
+    "scope_a_monitor",
     "analyst_layer",
     "analyst_writes_into",
     "with_the_layer",

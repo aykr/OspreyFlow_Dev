@@ -51,7 +51,7 @@ from schemas.screening import ScreeningListStatus, ScreeningListUpdate
 
 from .alerts import AlertStore
 from .audit import AuditWriter
-from .dataset_scope import scope_to_case, set_case_datasets
+from .dataset_scope import scope_a_monitor, set_case_datasets
 from .ingest_sources import ingest_root, is_inside
 from .screening import ListDiff, ScreeningEntry, ScreeningListStore, UnitCounts, screen
 
@@ -327,18 +327,15 @@ class Rescreener:
         params = rule.params
         assert isinstance(params, KycScreeningParams)
         # The rule reads within its case's datasets, as at onboarding (ADR-099): its own dataset,
-        # else the case's. Whatever it writes belongs to the first of them. A rule made in a case
-        # reading a composite names the composite's own id, which holds nothing of its own: it reads
-        # as its case, scoped as a request is, so its alert goes into the case's analyst layer
-        # (ADR-099 Amendment 15 item 2, `rule_evaluation.write_alert_node`), never the composite.
-        if rule.dataset_id and not await self.datasets.composites_among([rule.dataset_id]):
-            reach = [rule.dataset_id]
-            deployer = deployer.model_copy(update={"datasets": reach})
-            set_case_datasets(reach)
-        else:
-            deployer = await scope_to_case(
-                deployer, rule.investigation_id, self.datasets  # type: ignore[arg-type]
-            )
+        # else the case's; whatever it writes belongs to the first of them. In a case reading a
+        # composite it reads the case, and its alert goes into the case's analyst layer, whichever
+        # dataset the rule names (ADR-099 Amendment 15 item 2, `scope_a_monitor`).
+        deployer = await scope_a_monitor(
+            deployer,
+            rule.investigation_id,
+            rule.dataset_id,
+            self.datasets,  # type: ignore[arg-type]
+        )
         gate = RuleGate(
             rules=[rule],
             investigation_id=rule.investigation_id,

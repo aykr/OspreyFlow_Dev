@@ -1102,6 +1102,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             valkey=valkey,
             principal_for_owner=app.state.principal_resolver.resolve_for_owner,
             sweeper=sweeper,
+            datasets=datasets_store,
         )
 
     sweep_task = asyncio.create_task(run_daily_kyc_sweep(valkey, _sweep_day))
