@@ -1,5 +1,5 @@
 {
-  "//": "ADR-145 decisions 1 and N6: the three places and the rights that open each. A place is offered to whoever holds one of its rights, and its rights are exactly the rights its own routes need, so a place hidden from a person is one whose every route refuses them (rule 3). OspreyFlow_Build/tests/services/api/test_place_routes.py reads this file and fails when it and the routes disagree.",
+  "//": "ADR-145 decisions 1 and N6: the three places and the rights that open each. A place is offered to whoever holds one of its rights, and its rights are exactly the rights its own routes need, so a place hidden from a person is one whose every route refuses them (rule 3). The Conduit's place-routes test (`test_place_routes.py`) reads this file and fails when it and the routes disagree.",
   "places": [
     {
       "id": "glass",

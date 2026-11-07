@@ -1,6 +1,6 @@
 // The three places (ADR-145 decisions 1 and N6): the Glass, the Ingest Studio and Admin, from the one
 // table the Conduit's routes are checked against (`places.json`, read by
-// `OspreyFlow_Build/tests/services/api/test_place_routes.py`). A place is offered to whoever holds one
+// the Conduit's place-routes test, `test_place_routes.py`). A place is offered to whoever holds one
 // of its rights. Hiding is never the control: each hidden place's routes refuse the person anyway.
 import table from "./places.json";
 
