@@ -19,3 +19,8 @@ apps/workspace/src/inspector/linkHistory.ts
 # place inside a backup bundle where `harness/backup.py` copies the weights file. It is never a file
 # in the checkout.
 config/weights.yaml
+
+# Not yet written: the Ingest Studio build plan (spec/ingest_studio_redesign/BUILD_PLAN_INGEST_STUDIO.md)
+# names the Operations view phase 10 builds from Schedules.tsx (ADR-145 decision 9 places it in
+# Admin). Remove this entry when phase 10 lands.
+apps/workspace/src/admin/Operations.tsx
