@@ -2,6 +2,21 @@
 
 Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.
 
+## For your review tomorrow: decisions I took on my recommendation
+
+You asked at 23:45 for the build to run on its own, with design conflicts settled on my recommendation and
+listed here. Each line says what was decided and where it is recorded; overrule any of them and I'll reverse it.
+New ones are added at the bottom as they happen.
+
+1. **A case opened from an alert keeps an empty layer of its own** (your no-branches ruling names branches only). Recorded in ADR-143 Amendment 1 on case's branch.
+2. **Existing case copies keep an empty layer each** until L3.2: a branch can't be told from an alert jump, and linking them to the original case's layer would leak. L3.2's migration moves anything in those layers into the original case's layer.
+3. **The rule audit's old entries lose their words** when they name an alert (L2.8b), because nothing can check them.
+4. **L2.8, a jump to an alert whose evidence isn't whole is refused as a missing alert** (ADR-124 Amendment 17, reserved for glass).
+5. **L2.8, confirming a link repoints every open alert citing its old revision** in the same close (ADR-109 Amendment 9, reserved for glass).
+6. **A swept alert whose cited link can't be read is raised without its node**, rather than stopping the sweep.
+7. **QA: a Studio load writes into the pipeline's own dataset, refused unless that dataset is the case's loading dataset** (Part C, after L3.1; open limit in ADR-110 Amendment 15 until then). This follows your earlier ruling that only a case loading into a dataset sees its pipelines.
+8. **The port guard now reaches every Python process a test starts, and turns uvloop off** (`b232abf`), after the fourth rule 14 breach of the day.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
