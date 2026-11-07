@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 7705f23..106a770 100644
+index 7705f23..9e4c486 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -802,6 +802,25 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
+@@ -802,6 +802,27 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
    // paused with why and resumed.
    "set-a-sources-refresh-mode-by-keyboard",
    "pause-and-resume-a-sources-refresh-by-keyboard",
@@ -25,6 +25,8 @@ index 7705f23..106a770 100644
 +  "open-load-rules-from-the-load-step-by-keyboard",
 +  "let-go-a-chosen-column-by-keyboard",
 +  "go-back-to-a-steps-settings-from-preview-by-keyboard",
++  // The second review: guided mode may not remove the step that feeds an expert step.
++  "the-step-feeding-an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",
  ] as const);
  
  // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
