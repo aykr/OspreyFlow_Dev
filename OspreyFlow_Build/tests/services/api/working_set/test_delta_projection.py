@@ -28,9 +28,13 @@ from services.api.working_set.service import WorkingSetService
 
 from schemas.domain import Edge, Handling, Principal, Subgraph
 
+from ..case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
 from ..corpus_counts import keys_at_any_depth
 from .fakes import FakeGraphPort, FakeWorkingSetStore
 from .test_visible_link import OFFICIAL_READER, SCHEME, SECRET_READER, edge, node
+
+#: ADR-143 Amendment 1: the analyst's own writes need a case's layer to go into.
+pytestmark = pytest.mark.usefixtures("in_a_case_with_a_layer")
 
 CASE = "inv-1"
 

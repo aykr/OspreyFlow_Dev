@@ -12,9 +12,8 @@ What a mistake here would do, and the case that catches it:
 - an analyst's `SAME_AS` or `NOT_SAME_AS` landing in the source:
   `test_a_manual_link_and_a_manual_split_are_written_into_the_layer`;
 - accepted proposals and extractions following the analyst's writes into the layer, each through
-  its real accept path: `test_an_accepted_extraction_lands_in_the_source_not_the_layer`,
-  `test_an_entity_accepted_from_an_email_lands_in_the_source`,
-  `test_an_accepted_question_proposal_lands_in_the_source`;
+  its real accept path: `test_an_accepted_extraction_or_proposal_lands_in_the_source_not_the_layer`,
+  each with its red half;
 - a composite case's added data landing in one member, which every case reading that member
   would then see: `test_a_composite_cases_write_lands_under_the_composite_id`.
 """
@@ -22,11 +21,15 @@ What a mistake here would do, and the case that catches it:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from services.api.dataset_scope import (
+    NoAnalystLayerError,
     analyst_layer,
+    analyst_writes_into,
+    case_datasets,
     made_in,
     outside_any_case,
     scope_to_case,
@@ -183,11 +186,9 @@ async def test_a_manual_link_and_a_manual_split_are_written_into_the_layer(
     assert written.datasets == [layer]
 
 
-async def test_an_accepted_extraction_lands_in_the_source_not_the_layer(
-    store: InMemoryDatasetStore,
-) -> None:
-    """ADR-143 Amendment 1 item 2, through `review.accept_candidate`, the one write every accept
-    path shares (`POST .../ingest/candidates/{id}/accept`)."""
+async def _accepted_extraction(store: InMemoryDatasetStore) -> list[str]:
+    """`review.accept_candidate`, the write every accept path shares
+    (`POST .../ingest/candidates/{id}/accept`): the datasets of the node it writes."""
     principal = await _case_reading(store, "src")
     candidates = InMemoryCandidates()
     (pending,) = await candidates.store(
@@ -208,46 +209,12 @@ async def test_an_accepted_extraction_lands_in_the_source_not_the_layer(
     )
     inner = WritingGraph()
     node_id = await accept_candidate(candidates, stamping(inner), pending.id, principal)  # type: ignore[arg-type]
-    assert inner.nodes[node_id].datasets == ["src"]
-    assert made_in(principal) == "src"
+    return inner.nodes[node_id].datasets
 
 
-async def test_the_source_check_fails_with_unnamed_writes_stamped_into_the_layer(
-    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Rule 15: the defect in its real shape (the stamping graph giving a write that names no
-    dataset the layer, as "all four into the layer" would) is caught by the same check."""
-    from services.api import dataset_scope
-
-    monkeypatch.setattr(dataset_scope.DatasetStampingGraph, "_into", lambda self: analyst_layer())
-    principal = await _case_reading(store, "src")
-    candidates = InMemoryCandidates()
-    (pending,) = await candidates.store(
-        [
-            ExtractionCandidate(
-                id="cand-1",
-                document_id="doc-1",
-                entity_type="Person",
-                properties={"family_name": "MERCER", "given_names": "Dana"},
-                confidence=0.9,
-                model="local-model",
-                locator="char span 0-11",
-                excerpt_hash="",
-                handling=HANDLING,
-            )
-        ],
-        principal,
-    )
-    inner = WritingGraph()
-    node_id = await accept_candidate(candidates, stamping(inner), pending.id, principal)  # type: ignore[arg-type]
-    assert inner.nodes[node_id].datasets != ["src"]
-
-
-async def test_an_entity_accepted_from_an_email_lands_in_the_source(
-    store: InMemoryDatasetStore,
-) -> None:
-    """The same, through `EmailExtractionService.accept` (`.../links/{edge}/events/{event}/extract`
-    and its candidate's `accept`)."""
+async def _accepted_from_an_email(store: InMemoryDatasetStore) -> list[str]:
+    """`EmailExtractionService.accept` (`.../links/{edge}/events/{event}/extract` and its
+    candidate's `accept`): the datasets of the node and of its `MENTIONED_IN` link."""
     principal = await _case_reading(store, "src")
     working = FakeWorkingSetStore()
     await working.add_nodes(CASE, [_in("src", node("a")), _in("src", node("b"))])
@@ -268,15 +235,13 @@ async def test_an_entity_accepted_from_an_email_lands_in_the_source(
     )
     extracted = await service.extract(CASE, "e1", "ev-1", principal)
     accepted = await service.accept(CASE, "e1", "ev-1", extracted.candidates[0].id, principal)
-    assert inner.nodes[accepted.node_id].datasets == ["src"]
     (mention,) = [e for e in inner.committed_edges if e.source == accepted.node_id]
-    assert mention.datasets == ["src"]
+    assert mention.datasets == inner.nodes[accepted.node_id].datasets
+    return inner.nodes[accepted.node_id].datasets
 
 
-async def test_an_accepted_question_proposal_lands_in_the_source(
-    store: InMemoryDatasetStore,
-) -> None:
-    """The same, through `QuestionsService.accept` (`.../questions/candidates/{id}/accept`)."""
+async def _accepted_proposal(store: InMemoryDatasetStore) -> list[str]:
+    """`QuestionsService.accept` (`.../questions/candidates/{id}/accept`)."""
     principal = await _case_reading(store, "src")
     doc = _document(email_document_id("ev-1"))
     working = FakeWorkingSetStore()
@@ -307,7 +272,34 @@ async def test_an_accepted_question_proposal_lands_in_the_source(
     answered = await service.ask(CASE, "Who?", principal)
     person = next(c for c in answered.candidates if c.entity_type == "Person")
     accepted = await service.accept(CASE, person.id, principal)
-    assert inner.nodes[accepted.node_id].datasets == ["src"]
+    return inner.nodes[accepted.node_id].datasets
+
+
+ACCEPT_PATHS = pytest.mark.parametrize(
+    "accept", [_accepted_extraction, _accepted_from_an_email, _accepted_proposal],
+    ids=["extraction", "email", "question"],
+)  # fmt: skip
+
+
+@ACCEPT_PATHS
+async def test_an_accepted_extraction_or_proposal_lands_in_the_source_not_the_layer(
+    store: InMemoryDatasetStore, accept: Any
+) -> None:
+    """ADR-143 Amendment 1 item 2, through each real accept path."""
+    assert await accept(store) == ["src"]
+
+
+@ACCEPT_PATHS
+async def test_the_source_check_fails_with_unnamed_writes_stamped_into_the_layer(
+    store: InMemoryDatasetStore, accept: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, for each path: the defect in its real shape (the stamping graph giving a write
+    that names no dataset the layer, as "all four into the layer" would) is caught by the same
+    check."""
+    from services.api import dataset_scope
+
+    monkeypatch.setattr(dataset_scope.DatasetStampingGraph, "_into", lambda self: analyst_layer())
+    assert await accept(store) != ["src"]
 
 
 async def test_a_composite_cases_write_lands_under_the_composite_id(
@@ -342,15 +334,16 @@ def _write(node_id: str) -> NodeWrite:
     )
 
 
-# --- a branch shares its parent's layer (the owner's ruling on finding 8, 7 November 2026) -------
+# --- a branch has an empty layer of its own (ADR-143 Amendment 1 item 3) -----------------------
 
 
-async def test_a_branch_of_a_selection_holding_layer_items_still_reads_them(
+async def test_a_branch_of_a_selection_holding_layer_items_reads_a_layer_of_its_own(
     store: InMemoryDatasetStore,
 ) -> None:
-    """A branch reads and writes its parent case's layer, not one of its own: what the analyst drew
-    in the parent and branched with is still read in the branch. Through the real branch-by-filter
-    route, with the real dataset store."""
+    """A branch reads its parent's dataset and an empty layer of its own, never its parent's
+    (the owner, 09:25, 7 November 2026: branches are removed in the next builds; until then no
+    branch reaches its parent's layer). Through the real branch-by-filter route, with the real
+    dataset store."""
     from services.api.app import (
         app,
         get_audit,
@@ -405,14 +398,45 @@ async def test_a_branch_of_a_selection_holding_layer_items_still_reads_them(
 
     (published,) = recorder.published
     assert {n["id"] for n in json.loads(published[1])["nodes"]} == {"loaded", "drawn"}
-    # The branch reads the parent's layer, so the drawn person it holds is in its world ...
-    assert await store.layer_of_case(branch) == layer
-    assert await store.ids_of_case(branch) == ["src", layer]
-    # ... and writes there: the analyst's own writes in the branch name the parent's layer.
+    own = await store.layer_of_case(branch)
+    assert own is not None and own != layer
+    assert await store.ids_of_case(branch) == ["src", own]
     await scope_to_case(ALICE, branch, store)
-    assert analyst_layer() == layer
-    # No second layer was made for it.
-    assert sum(d.kind == "analyst_layer" for d in store.datasets.values()) == 1
+    assert analyst_layer() == own
+
+
+async def _opened_from_an_alert(store: InMemoryDatasetStore) -> tuple[str, Principal]:
+    """The alert jump's two calls (`app.alert_jump_route`): the new case copies what the alert's
+    case reads, then the jumper is scoped to it. The jumper holds no level on the alert's case."""
+    await store.set_for_case(CASE, ["src"], ANALYST, case_name="The alert's case")
+    stranger = Principal(id="jumper", clearance="OFFICIAL", org_unit=UNIT)
+    await store.copy_case(CASE, "opened", case_name="Opened from alert a-1")
+    return "opened", await scope_to_case(stranger, "opened", store)
+
+
+async def test_a_case_opened_from_an_alert_never_reaches_the_alerts_cases_layer(
+    store: InMemoryDatasetStore,
+) -> None:
+    _opened, jumper = await _opened_from_an_alert(store)
+    parent_layer = await store.layer_of_case(CASE)
+    assert parent_layer is not None
+    assert parent_layer not in (jumper.datasets or [])
+    assert analyst_layer() not in (None, parent_layer)
+
+
+async def test_the_alert_jump_check_fails_with_the_sharing_put_back(
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: ruling 8's sharing, where it lived (`layer_of_case` answering a branch with its
+    parent's layer), and the same check sees the jumper reach the alert's case's layer."""
+    real = store.layer_of_case
+
+    async def shared(investigation_id: str) -> str | None:
+        return await real(CASE if investigation_id == "opened" else investigation_id)
+
+    monkeypatch.setattr(store, "layer_of_case", shared)
+    _opened, jumper = await _opened_from_an_alert(store)
+    assert await real(CASE) in (jumper.datasets or [])
 
 
 # --- a case with no layer yet (the owner's ruling on finding 7, 7 November 2026) ---------------
@@ -421,14 +445,13 @@ async def test_a_branch_of_a_selection_holding_layer_items_still_reads_them(
 async def test_a_case_with_no_layer_is_given_one_and_never_writes_its_marks_in_the_source(
     store: InMemoryDatasetStore,
 ) -> None:
-    """A case the migration has not reached reads its dataset and has no layer. Its analyst's own
-    writes go into a layer made for it then, never into the source."""
+    """A case the migration has not reached reads its dataset and has no layer. Scoping to it makes
+    none (that comes before the route's level check); its analyst's own write, made inside the
+    route, makes it and goes into it, never into the source."""
     store.cases[CASE] = ["src"]  # as a case stood before the layer, with no layer
-    assert await store.layer_of_case(CASE) is None
     principal = await scope_to_case(ANALYST, CASE, store)
-    layer = await store.layer_of_case(CASE)
-    assert layer is not None and store.datasets[layer].owning_unit == UNIT
-    assert principal.datasets == ["src", layer]
+    assert principal.datasets == ["src"]
+    assert await store.layer_of_case(CASE) is None
     people = [_in("src", node("n1")), _in("src", node("n2"))]
     inner = FakeGraphPort(Subgraph(nodes=people, edges=[]))
     working = FakeWorkingSetStore()
@@ -436,8 +459,32 @@ async def test_a_case_with_no_layer_is_given_one_and_never_writes_its_marks_in_t
     await WorkingSetService(stamping(inner), working, SCHEME).manual_link(
         CASE, "n1", "n2", principal
     )
+    layer = await store.layer_of_case(CASE)
+    assert layer is not None and store.datasets[layer].owning_unit == UNIT
     (written,) = inner.committed_edges
     assert written.datasets == [layer]
+    assert case_datasets() == ("src", layer)  # the rest of the request reads it too
+
+
+async def test_an_analysts_own_write_with_no_case_to_keep_it_is_refused_and_writes_nothing(
+    store: InMemoryDatasetStore,
+) -> None:
+    """Must-fix 4 (second review): never `[]`, so never stamped into a source. Outside a case, and
+    in a case that reads nothing, the writer is refused before anything is written."""
+    with pytest.raises(NoAnalystLayerError):
+        await analyst_writes_into()
+    people = [_in("src", node("n1")), _in("src", node("n2"))]
+    inner = FakeGraphPort(Subgraph(nodes=people, edges=[]))
+    working = FakeWorkingSetStore()
+    await working.add_nodes(CASE, people)
+    service = WorkingSetService(stamping(inner), working, SCHEME)
+    with pytest.raises(NoAnalystLayerError):
+        await service.manual_link(CASE, "n1", "n2", ANALYST)
+    await scope_to_case(ANALYST, "reads-nothing", store)
+    with pytest.raises(NoAnalystLayerError):
+        await service.manual_split(CASE, "n1", "n2", ANALYST)
+    assert inner.committed_edges == []
+    assert await store.layer_of_case("reads-nothing") is None
 
 
 # --- a layer's egress cannot be set (ADR-136 Amendment 1) -----------------------------------
@@ -459,3 +506,36 @@ def test_an_administrator_setting_a_layers_egress_is_refused_as_a_missing_datase
     assert as_layer.status_code == 404
     assert store.datasets[layer].egress == "none"
     assert client.audit.records == []  # type: ignore[attr-defined]
+
+
+# --- a layer is never made for a caller the case refuses (must-fix 3, second review) -----------
+
+
+async def test_a_caller_the_case_refuses_is_refused_as_for_a_missing_case_and_makes_no_layer(
+    store: InMemoryDatasetStore,
+) -> None:
+    """`get_principal` scopes the request (`scope_to_case`) before the route's level check, so it
+    must write nothing: a case with no layer yet, asked for by someone holding no level on it, is
+    answered as a case that does not exist, and is left with no layer."""
+    from services.api.app import app, get_audit, get_investigations
+
+    from .test_analyst_layer import _Audit, _Investigations
+    from .test_dataset_scope import _Resolver
+
+    store.cases["case-z"] = ["src"]  # a case the migration has not reached: no layer
+    saved = {k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets")}
+    app.state.principal_resolver = _Resolver()
+    app.state.datasets = store
+    app.dependency_overrides[get_investigations] = _Investigations
+    app.dependency_overrides[get_audit] = _Audit
+    try:
+        http = TestClient(app, headers={"Authorization": "Bearer token"})
+        refused = http.get("/v1/investigations/case-z/datasets")
+        missing = http.get("/v1/investigations/no-such-case/datasets")
+    finally:
+        app.dependency_overrides.clear()
+        for key, value in saved.items():
+            setattr(app.state, key, value)
+    assert refused.status_code == 404
+    assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+    assert await store.layer_of_case("case-z") is None

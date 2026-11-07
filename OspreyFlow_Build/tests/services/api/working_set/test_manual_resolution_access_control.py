@@ -36,9 +36,14 @@ from schemas.domain import (
 )
 from tests.conformance.registry import GRAPH_PORT_ADAPTERS, GraphAdapterFactory
 
+from ..case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
 from .fakes import FakeWorkingSetStore
 
-pytestmark = pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str)
+#: ADR-143 Amendment 1: the analyst's own writes need a case's layer to go into.
+pytestmark = [
+    pytest.mark.parametrize("factory", GRAPH_PORT_ADAPTERS, ids=str),
+    pytest.mark.usefixtures("in_a_case_with_a_layer"),
+]
 
 SCHEME = load_uk_le_scheme()
 INVESTIGATION = "inv-1"

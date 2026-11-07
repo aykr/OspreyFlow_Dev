@@ -380,6 +380,7 @@ from .compute_routes import (
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .dataset_scope import (
+    NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
     outside_any_case,
@@ -2349,6 +2350,20 @@ async def _unknown_dataset_handler(request: Request, exc: UnknownDatasetError) -
             "error": "dataset_unknown",
             "detail": f"No dataset {', '.join(exc.dataset_ids)} is registered; "
             "nothing was written.",
+        },
+    )
+
+
+@app.exception_handler(NoAnalystLayerError)
+async def _no_analyst_layer_handler(request: Request, exc: NoAnalystLayerError) -> JSONResponse:
+    """ADR-143 Amendment 1 item 3: an analyst's own write with no case's layer to go into (the
+    case reads nothing): refused, and nothing was written, rather than written into a source."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "no_analyst_layer",
+            "detail": "This case reads no dataset yet, so there is nowhere to keep what you mark "
+            "or link; nothing was written.",
         },
     )
 

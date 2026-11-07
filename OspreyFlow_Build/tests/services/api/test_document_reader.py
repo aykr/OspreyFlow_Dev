@@ -156,6 +156,11 @@ import hashlib  # noqa: E402
 
 from services.api.document_reader import Designation, DesignationRefusedError  # noqa: E402
 
+from .case_dataset import in_a_case_with_a_layer  # noqa: E402, F401 (a fixture)
+
+#: ADR-143 Amendment 1: the analyst's own writes need a case's layer to go into.
+pytestmark = pytest.mark.usefixtures("in_a_case_with_a_layer")
+
 
 async def _with_writes(documents: list[Node]) -> tuple[DocumentReaderService, WritingGraph]:
     reader = await _reader(documents)

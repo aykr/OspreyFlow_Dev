@@ -199,11 +199,8 @@ class DatasetStore(Protocol):
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
     ) -> str: ...
-    #: The case's layer: its own, or, for a branch, its parent case's (the owner's ruling on the
-    #: lane-reviewer's finding 8, 7 November 2026).
+    #: The case's own layer; a branch's too is its own (ADR-143 Amendment 1 item 3).
     async def layer_of_case(self, investigation_id: str) -> str | None: ...
-    #: A branch reads and writes `layer_id`, its parent case's layer, and is given none of its own.
-    async def share_layer(self, investigation_id: str, layer_id: str) -> None: ...
     #: What the case chose, a source or a composite, with no reader: for the seeds and the
     #: migration, never for a route (a route names datasets only through `of_case`).
     async def chosen_of_case(self, investigation_id: str) -> list[Dataset]: ...
@@ -333,8 +330,6 @@ class InMemoryDatasetStore:
     def __init__(self) -> None:
         self.datasets: dict[str, Dataset] = {}
         self.cases: dict[str, list[str]] = {}
-        #: A branch's parent's layer, by the branch's id (`branch_layers` in Postgres).
-        self.shared_layers: dict[str, str] = {}
 
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
@@ -432,11 +427,7 @@ class InMemoryDatasetStore:
         for dataset in self.datasets.values():
             if dataset.kind == ANALYST_LAYER and dataset.layer_of == investigation_id:
                 return dataset.id
-        return self.shared_layers.get(investigation_id)
-
-    async def share_layer(self, investigation_id: str, layer_id: str) -> None:
-        if await self.layer_of_case(investigation_id) is None:
-            self.shared_layers[investigation_id] = layer_id
+        return None
 
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         # A test may give a case an id it never registered (Postgres's foreign key would refuse
@@ -486,17 +477,19 @@ class InMemoryDatasetStore:
     async def copy_case(
         self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
     ) -> None:
-        """A branch reads its parent's chosen dataset and reads and writes its parent's layer (made
-        first if the parent has none), with no layer of its own (the owner's ruling on finding
-        8)."""
+        """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
+        empty layer of its own: it never reads its parent's layer, which its maker may hold no
+        level on (ADR-143 Amendment 1 item 3; branches are removed in the next builds)."""
         chosen = list(self.cases.get(from_investigation_id, []))
         self.cases[to_investigation_id] = chosen
         if chosen:
             parent = self.datasets[chosen[0]]
-            layer = await self.ensure_layer(
-                from_investigation_id, unit=parent.owning_unit, created_by=parent.created_by
+            await self.ensure_layer(
+                to_investigation_id,
+                unit=parent.owning_unit,
+                created_by=parent.created_by,
+                case_name=case_name,
             )
-            await self.share_layer(to_investigation_id, layer)
 
     async def list_all(self) -> list[Dataset]:
         return sorted(self._offered(), key=lambda d: (d.owning_unit, d.name))
@@ -542,11 +535,6 @@ ALTER TABLE datasets ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'source
 ALTER TABLE datasets ADD COLUMN IF NOT EXISTS layer_of TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS datasets_one_layer_per_case ON datasets (layer_of)
     WHERE layer_of IS NOT NULL;
--- The owner's ruling on finding 8: a branch reads and writes its parent case's layer.
-CREATE TABLE IF NOT EXISTS branch_layers (
-    investigation_id TEXT PRIMARY KEY,
-    layer_id TEXT NOT NULL REFERENCES datasets (id)
-);
 CREATE TABLE IF NOT EXISTS composite_members (
     composite_id TEXT NOT NULL REFERENCES datasets (id),
     member_id TEXT NOT NULL REFERENCES datasets (id),
@@ -778,23 +766,10 @@ class PostgresDatasetStore:
     async def layer_of_case(self, investigation_id: str) -> str | None:
         async with self._pool.acquire() as conn:
             found: str | None = await conn.fetchval(
-                "SELECT COALESCE("
-                "(SELECT id FROM datasets WHERE layer_of = $1 AND kind = 'analyst_layer'), "
-                "(SELECT layer_id FROM branch_layers WHERE investigation_id = $1))",
+                "SELECT id FROM datasets WHERE layer_of = $1 AND kind = 'analyst_layer'",
                 investigation_id,
             )
         return found
-
-    async def share_layer(self, investigation_id: str, layer_id: str) -> None:
-        if await self.layer_of_case(investigation_id) is not None:
-            return
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO branch_layers (investigation_id, layer_id) VALUES ($1, $2) "
-                "ON CONFLICT DO NOTHING",
-                investigation_id,
-                layer_id,
-            )
 
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         async with self._pool.acquire() as conn:
@@ -939,9 +914,9 @@ class PostgresDatasetStore:
     async def copy_case(
         self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
     ) -> None:
-        """A branch reads its parent's chosen dataset and reads and writes its parent's layer (made
-        first if the parent has none), with no layer of its own (the owner's ruling on finding
-        8)."""
+        """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
+        empty layer of its own: it never reads its parent's layer, which its maker may hold no
+        level on (ADR-143 Amendment 1 item 3; branches are removed in the next builds)."""
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
@@ -959,10 +934,12 @@ class PostgresDatasetStore:
                 to_investigation_id,
             )
         if parent is not None:
-            layer = await self.ensure_layer(
-                from_investigation_id, unit=parent["owning_unit"], created_by=parent["created_by"]
+            await self.ensure_layer(
+                to_investigation_id,
+                unit=parent["owning_unit"],
+                created_by=parent["created_by"],
+                case_name=case_name,
             )
-            await self.share_layer(to_investigation_id, layer)
 
 
 class _Borrowed:

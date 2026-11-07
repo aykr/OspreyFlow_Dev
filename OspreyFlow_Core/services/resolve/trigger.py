@@ -204,15 +204,19 @@ async def run_resolution_for_entity_type(
     # established pattern (`tests/resolve/test_conflict_pipeline.py`,
     # `tests/scenarios/test_phase6_extraction_and_resolution.py`'s own
     # split clause), not assumed.
-    not_same_as_edges = honoured_splits(
-        await _fetch_not_same_as_edges(graph, list(nodes_by_id), principal),
-        set(await analyst_layers()),
-    )
+    every_split = await _fetch_not_same_as_edges(graph, list(nodes_by_id), principal)
+    not_same_as_edges = honoured_splits(every_split, set(await analyst_layers()))
     conflicts = detect_conflicts(candidates, not_same_as_edges)
     conflicted_pairs = {frozenset((c.node_a, c.node_b)) for c in conflicts}
     mergeable_candidates = [
         c for c in candidates if frozenset((c.node_a, c.node_b)) not in conflicted_pairs
     ]
+    # ADR-025 Amendment 1: a split held only in a case's layer does not stop the merge, but the
+    # conflict is recorded on that split, so in that layer, for that case's review alone.
+    honoured_ids = {e.id for e in not_same_as_edges}
+    layer_conflicts = detect_conflicts(
+        mergeable_candidates, [e for e in every_split if e.id not in honoured_ids]
+    )
 
     same_as_ids = await write_same_as_edges(
         graph,
@@ -222,9 +226,13 @@ async def run_resolution_for_entity_type(
         tx=tx,
         scheme=scheme,
     )
-    not_same_as_by_id = {e.id: e for e in not_same_as_edges}
+    not_same_as_by_id = {e.id: e for e in every_split}
     conflict_ids = await record_conflicts(
-        graph, conflicts, not_same_as_by_id, created_by=SERVICE_PRINCIPAL_ID, tx=tx
+        graph,
+        [*conflicts, *layer_conflicts],
+        not_same_as_by_id,
+        created_by=SERVICE_PRINCIPAL_ID,
+        tx=tx,
     )
 
     if valkey is not None and same_as_ids:

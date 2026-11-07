@@ -767,7 +767,7 @@ class WorkingSetService:
         # ADR-143 Amendment 1: the analyst's own decision is written in the case's analyst layer.
         from ..dataset_scope import analyst_writes_into
 
-        into = analyst_writes_into()
+        into = await analyst_writes_into()
         new_edge = new_edge.model_copy(update={"datasets": into})
         edge_write = EdgeWrite(
             id=new_edge.id,

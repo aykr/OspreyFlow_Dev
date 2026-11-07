@@ -60,9 +60,11 @@ async def _datasets() -> InMemoryDatasetStore:
     return held
 
 
-async def test_a_mark_made_in_case_a_is_not_read_under_case_b(
+async def _marked_in_case_a(
     candidates: ExtractionCandidateStore,
-) -> None:
+) -> tuple[InMemoryDatasetStore, str, str]:
+    """An analyst of case A marks words in a Document: (the dataset store, the Document, the
+    mark's kept candidate)."""
     datasets = await _datasets()
     event = f"ev-{new_id()}"
     doc = _document(email_document_id(event))
@@ -86,13 +88,34 @@ async def test_a_mark_made_in_case_a_is_not_read_under_case_b(
         as_a,
     )
     (mark,) = await candidates.list_for_document(doc.id, as_a)
+    return datasets, doc.id, mark.id
 
+
+async def test_a_mark_made_in_case_a_is_not_read_under_case_b(
+    candidates: ExtractionCandidateStore,
+) -> None:
+    datasets, doc_id, _ = await _marked_in_case_a(candidates)
+    as_a = await scope_to_case(ANALYST, CASE_A, datasets)
+    (mark,) = await candidates.list_for_document(doc_id, as_a)
     as_b = await scope_to_case(B_MEMBER, CASE_B, datasets)
-    assert await candidates.list_for_document(doc.id, as_b) == []
+    assert await candidates.list_for_document(doc_id, as_b) == []
     with pytest.raises(ExtractionCandidateNotFoundError):
         await candidates.get_authorized(mark.id, as_b)
     # The author of the mark, under case B, is refused alike: the case decides, not the person.
     as_a_in_b = await scope_to_case(ANALYST, CASE_B, datasets)
-    assert await candidates.list_for_document(doc.id, as_a_in_b) == []
+    assert await candidates.list_for_document(doc_id, as_a_in_b) == []
     # Kept with the layer it was written in.
     assert mark.dataset_id == await datasets.layer_of_case(CASE_A)
+
+
+async def test_the_case_b_check_fails_with_the_case_limit_planted_out(
+    candidates: ExtractionCandidateStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: `reach_clause` planted empty in the store's SQL, as the store read candidates
+    before the fix (by unit alone), and the same reads hand case B case A's mark."""
+    from services.api import review
+
+    monkeypatch.setattr(review, "reach_clause", lambda principal, position: ("", []))
+    datasets, doc_id, mark_id = await _marked_in_case_a(candidates)
+    as_b = await scope_to_case(B_MEMBER, CASE_B, datasets)
+    assert [m.id for m in await candidates.list_for_document(doc_id, as_b)] == [mark_id]

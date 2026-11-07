@@ -19,8 +19,9 @@ name their own.
 
 **The analyst's own writes** (ADR-143 Amendment 1): an entity marked by hand and a manual `SAME_AS`
 or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`). A case
-with no layer yet is given one when its principal is scoped, so they never fall back to the source;
-a branch's is its parent's.
+with no layer yet is given one by the writer, after the route's level check, so they never fall
+back to the source; outside a case they are refused (`NoAnalystLayerError`). A branch has a layer
+of its own.
 Accepted question proposals, accepted extractions and loads name nothing, and so land in the
 source as before.
 """
@@ -31,20 +32,47 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
+from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ports.graph import BulkGraphLoader, GraphPort
-from schemas.domain import EdgeWrite, NodeId, NodeWrite, Principal
+from schemas.domain import (
+    EdgeWrite,
+    NodeId,
+    NodeWrite,
+    Principal,
+    Provenance,
+    ProvenanceState,
+    SourceRef,
+)
 
-from .datasets import DatasetStore
+from .datasets import COMPOSITE, DatasetStore
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
+#: The request's case, its dataset store and the principal scoped to it: so a writer may make the
+#: case's layer when it has none, inside the route after its level check (`analyst_writes_into`),
+#: and the stamping graph may tell a composite case's write to a member's node (ADR-099 A15).
+_CASE_SCOPE: ContextVar[tuple[str, DatasetStore, Principal] | None] = ContextVar(
+    "case_scope", default=None
+)
 
 
-def set_case_datasets(datasets: Sequence[str] | None, *, layer: str | None = None) -> None:
+class NoAnalystLayerError(Exception):
+    """An analyst's own write with no case's layer to write into: outside a case, or in a case
+    that reads nothing. Refused, never written into a source (ADR-143 Amendment 1 item 3)."""
+
+
+def set_case_datasets(
+    datasets: Sequence[str] | None,
+    *,
+    layer: str | None = None,
+    scope: tuple[str, DatasetStore, Principal] | None = None,
+) -> None:
     """Called once per request, by `app.get_principal`: the datasets of the request's case, or
-    `None` outside a case, and the case's analyst layer when it has one in that read set."""
+    `None` outside a case; the case's analyst layer when it has one in that read set; and the case
+    (its id, its store, who asks) for `analyst_writes_into`."""
     _CASE_DATASETS.set(tuple(datasets) if datasets is not None else None)
     _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
+    _CASE_SCOPE.set(scope if datasets is not None else None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
@@ -53,36 +81,46 @@ def case_datasets() -> tuple[str, ...] | None:
 
 def analyst_layer() -> str | None:
     """The request's case's analyst layer, where the analyst's own writes go (ADR-143 Amendment 1);
-    `None` outside a case, or for a case with no layer yet, whose writes then go where every other
-    write of the case goes."""
+    `None` outside a case, or for a case whose layer is not made yet."""
     return _CASE_LAYER.get()
 
 
-def analyst_writes_into() -> list[str]:
-    """The `datasets` an analyst's own write names: the layer, or none, to be stamped as usual."""
+async def analyst_writes_into() -> list[str]:
+    """The `datasets` an analyst's own write names (a mark made by hand, a manual link or split):
+    the case's layer, never a source (ADR-143 Amendment 1 item 3). A case the migration has not
+    reached has none yet; it is made here, by the writer, so only after the route's level check
+    has let the caller in, never by `scope_to_case`. Refused with `NoAnalystLayerError` outside a
+    case, or in a case that reads nothing: nothing is written then."""
     layer = analyst_layer()
-    return [layer] if layer is not None else []
+    if layer is not None:
+        return [layer]
+    scope = _CASE_SCOPE.get()
+    held = case_datasets()
+    if scope is None or not held:
+        raise NoAnalystLayerError("there is no case's analyst layer to write into")
+    investigation_id, store, asker = scope
+    chosen = await store.chosen_of_case(investigation_id)
+    if not chosen:
+        raise NoAnalystLayerError("the case reads no dataset")
+    # Of the unit of the dataset it reads, as every layer is of its case's unit.
+    layer = await store.ensure_layer(
+        investigation_id, unit=chosen[0].owning_unit, created_by=asker.id
+    )
+    set_case_datasets([*held, layer], layer=layer, scope=scope)
+    return [layer]
 
 
 async def scope_to_case(
     principal: Principal, investigation_id: str, store: DatasetStore
 ) -> Principal:
     """`principal`, reading only the datasets of `investigation_id`. Says nothing about whether the
-    principal may open the case: that is the route's own level check."""
+    principal may open the case: that is the route's own level check, which comes after this, so
+    this writes nothing (a case with no layer yet is given one by `analyst_writes_into`)."""
     datasets = await store.ids_of_case(investigation_id)
     layer = await store.layer_of_case(investigation_id) if datasets else None
-    if datasets and layer is None:
-        # A case the migration has not reached: given its layer now, so the analyst's own writes
-        # never fall back to the source (the owner's ruling on finding 7, 7 November 2026). Of
-        # the unit of the dataset it reads, as every layer is of its case's unit.
-        chosen = await store.chosen_of_case(investigation_id)
-        if chosen:  # always, where a foreign key holds every id a case names (Postgres)
-            layer = await store.ensure_layer(
-                investigation_id, unit=chosen[0].owning_unit, created_by=principal.id
-            )
-            datasets = await store.ids_of_case(investigation_id)
-    set_case_datasets(datasets, layer=layer)
-    return principal.model_copy(update={"datasets": datasets})
+    scoped = principal.model_copy(update={"datasets": datasets})
+    set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
+    return scoped
 
 
 class _CasesOf(Protocol):
@@ -222,10 +260,71 @@ class DatasetStampingGraph:
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
+        stamped, kept = await self._kept_from_members(stamped)
         await self._checked(stamped)
         ids = await self._inner.upsert_nodes(stamped, tx)
+        if kept:
+            await self._inner.upsert_edges(kept, tx)
         await self._written()
         return ids
+
+    async def _kept_from_members(
+        self, writes: list[NodeWrite]
+    ) -> tuple[list[NodeWrite], list[EdgeWrite]]:
+        """ADR-099 Amendment 15: under a case reading a composite, a write into the composite that
+        names a node already in one of its members becomes a new node in the composite, linked to
+        the member's node by a `SAME_AS`; the member's node is not written (rule 6), so no case
+        reading only the member sees the change. Asked as the request's own principal (the
+        composite and its members, its handling), so the answer tells it nothing it cannot read.
+        Outside a request, or a case reading a source, nothing changes."""
+        scope = _CASE_SCOPE.get()
+        if self._dataset is not None or scope is None or not writes:
+            return writes, []
+        investigation_id, store, principal = scope
+        chosen = await store.chosen_of_case(investigation_id)
+        if len(chosen) != 1 or chosen[0].kind != COMPOSITE:
+            return writes, []
+        composite, members = chosen[0].id, set(chosen[0].members)
+        into_composite = [w.id for w in writes if composite in w.datasets]
+        if not into_composite:
+            return writes, []
+        held = await self._inner.get_nodes(into_composite, principal)
+        in_a_member = {n.id for n in held if set(n.datasets) & members}
+        if not in_a_member:
+            return writes, []
+        out: list[NodeWrite] = []
+        links: list[EdgeWrite] = []
+        for write in writes:
+            if write.id not in in_a_member:
+                out.append(write)
+                continue
+            fresh = write.model_copy(update={"id": new_node_id(), "datasets": [composite]})
+            out.append(fresh)
+            links.append(
+                EdgeWrite(
+                    id=new_edge_id(),
+                    type="SAME_AS",
+                    source=fresh.id,
+                    target=write.id,
+                    properties={"score": 1.0},
+                    provenance=Provenance(
+                        state=ProvenanceState.ASSERTED,
+                        sources=[
+                            SourceRef(
+                                document_id=f"composite:{composite}:{write.id}",
+                                locator=write.created_by,
+                                excerpt_hash="",
+                            )
+                        ],
+                        first_seen=now_utc(),
+                    ),
+                    handling=write.handling,
+                    created_by=write.created_by,
+                    created_at=write.created_at,
+                    datasets=[composite],
+                )
+            )
+        return out, links
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
         stamped = _stamp_edges(edges, self._into())
@@ -304,5 +403,6 @@ __all__: Sequence[str] = (
     "scope_to_case",
     "analyst_layer",
     "analyst_writes_into",
+    "NoAnalystLayerError",
     "set_case_datasets",
 )

@@ -184,7 +184,7 @@ class DocumentReaderService:
             excerpt_hash=hashlib.sha256(designation.text.encode("utf-8")).hexdigest(),
         )
         provenance = Provenance(state=ProvenanceState.ASSERTED, sources=[source], first_seen=now)
-        into = analyst_writes_into()
+        into = await analyst_writes_into()
         node = NodeWrite(
             id=new_node_id(),
             type=designation.entity_type,
@@ -237,7 +237,7 @@ class DocumentReaderService:
                 )
             ],
             principal,
-            dataset_id=into[0] if into else None,
+            dataset_id=into[0],
         )
         await self._candidates.mark_reviewed(
             record.id, principal, status=CandidateStatus.ACCEPTED, node_id=node.id

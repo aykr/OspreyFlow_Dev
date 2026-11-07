@@ -30,7 +30,11 @@ from schemas.domain import (
     Subgraph,
 )
 
+from ..case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
 from .fakes import FakeGraphPort, FakeWorkingSetStore
+
+#: ADR-143 Amendment 1: the analyst's own writes need a case's layer to go into.
+pytestmark = pytest.mark.usefixtures("in_a_case_with_a_layer")
 
 PRINCIPAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 SCHEME = load_uk_le_scheme()

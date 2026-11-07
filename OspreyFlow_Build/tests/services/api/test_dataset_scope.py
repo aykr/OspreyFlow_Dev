@@ -145,17 +145,14 @@ def test_outside_a_case_a_request_reads_no_dataset(probe) -> None:  # type: igno
 
 
 def test_a_case_request_reads_that_cases_datasets(probe) -> None:  # type: ignore[no-untyped-def]
-    """And its analyst layer, made for it here, since these cases were recorded with none (the
-    owner's ruling on the L3.1 review's finding 7: never fall back to the source)."""
+    """Scoping writes nothing: these cases were recorded with no layer, and none is made for a
+    read (it comes before the route's level check; the second review's must-fix 3)."""
     client, _ = probe
     store = client.app.state.datasets
-    assert client.get("/v1/investigations/case-f/probe").json()["datasets"] == [
-        "fixture",
-        asyncio.run(store.layer_of_case("case-f")),
-    ]
+    assert client.get("/v1/investigations/case-f/probe").json()["datasets"] == ["fixture"]
     both = client.get("/v1/investigations/case-both/probe").json()
-    reads = ["enron", "fixture", asyncio.run(store.layer_of_case("case-both"))]
-    assert both == {"datasets": reads, "writes_into": reads}
+    assert both == {"datasets": ["enron", "fixture"], "writes_into": ["enron", "fixture"]}
+    assert asyncio.run(store.layer_of_case("case-f")) is None
     # A case with no datasets recorded reads nothing, not everything.
     assert client.get("/v1/investigations/case-unknown/probe").json()["datasets"] == []
 

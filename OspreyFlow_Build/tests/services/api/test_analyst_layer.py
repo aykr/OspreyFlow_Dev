@@ -16,8 +16,12 @@ What a mistake here would do, and the case that catches it:
   `test_the_one_dataset_check_fails_with_the_check_removed`;
 - a principal outside the case told more than of a missing case:
   `test_a_principal_outside_the_case_is_refused_as_for_a_missing_case`;
-- a branch sharing its parent's layer: `test_a_branch_has_a_layer_of_its_own`;
-- a layer stopping its case asking a hosted model: `test_a_layers_egress_is_its_sources`.
+- a branch reading its parent's layer: `test_a_branch_has_an_empty_layer_of_its_own` (the alert
+  jump's case, made for someone with no level on the parent, is in `test_case_writes.py`);
+- a layer stopping its case asking a hosted model, or going further than its sources:
+  `test_a_layers_egress_is_its_sources` and
+  `test_a_composite_cases_layer_takes_the_strictest_of_members_that_differ`, shown red in
+  `test_the_strictest_check_fails_with_the_loosest_planted`.
 
 The Postgres half is `test_analyst_layer_store.py`.
 """
@@ -143,19 +147,17 @@ async def test_a_case_that_chose_nothing_reads_nothing(store: InMemoryDatasetSto
     assert await store.ids_of_case("orphan") == []
 
 
-async def test_a_branch_reads_its_parents_layer_and_has_none_of_its_own(
-    store: InMemoryDatasetStore,
-) -> None:
-    """The owner's ruling on finding 8 (7 November 2026), a branch of a branch included."""
+async def test_a_branch_has_an_empty_layer_of_its_own(store: InMemoryDatasetStore) -> None:
+    """ADR-143 Amendment 1 item 3 (the owner, 09:25, 7 November 2026): a branch, a branch of a
+    branch included, never reads its parent's layer."""
     await store.set_for_case("parent", ["enron"], ALICE)
     await store.copy_case("parent", "branch")
     await store.copy_case("branch", "twig")
-    parent_layer = await store.layer_of_case("parent")
-    assert parent_layer
-    for case in ("branch", "twig"):
-        assert await store.layer_of_case(case) == parent_layer
-        assert_read_set(await store.ids_of_case(case), source=["enron"], layer=parent_layer)
-    assert sum(d.kind == ANALYST_LAYER for d in store.datasets.values()) == 1
+    layers = [await store.layer_of_case(case) for case in ("parent", "branch", "twig")]
+    assert all(layers) and len(set(layers)) == 3
+    for case, layer in zip(("branch", "twig"), layers[1:], strict=True):
+        assert layer is not None
+        assert_read_set(await store.ids_of_case(case), source=["enron"], layer=layer)
 
 
 # --- never offered ----------------------------------------------------------------------------

@@ -1,20 +1,24 @@
-"""`GraphPort` conformance, the lane-reviewer's finding 5 on L3.1 (ADR-099 Amendment 14): what a
-case reading a composite writes is written under the composite's own id, so that "no case reading
-only a member sees what the composite case added". This measures whether that holds when the
-composite case writes to a node that is already in a member.
+"""`GraphPort` conformance for a composite case's writes (ADR-099 Amendments 14 and 15): what a case
+reading a composite writes is written under the composite's own id, and "no case reading only a
+member sees what the composite case added". The lane-reviewer's finding 5 on L3.1 measured that a
+write naming a node already in a member was merged into it: its properties became the latest
+write's, so a member-only case saw the change. The owner ruled (7 November 2026, Amendment 15):
+such a write becomes a new node in the composite, linked by `SAME_AS` to the member's node, and no
+member changes (rule 6).
 
-The real call site's shape: the stamping graph gives a write naming no dataset the case's first,
-the composite's id; the write names the existing node's id (a correction made in the case, an
-ingest row that matches it), with one property changed; and a new link between two member nodes.
-
-Written first and run before anything was changed, at the owner's ruling (7 November 2026): the
-owner decides what should happen after seeing what this shows. Until then each case is
-`xfail(strict=True)`, so the suite stays green and a change in the adapter's behaviour turns it red.
+Driven through the Conduit's own write path, the stamping graph, with the request's case in scope
+as `scope_to_case` holds it, over the real adapter. Shown red (rule 15) with the stamping graph's
+check planted out (`_kept_from_members` passing every write through, as before the ruling).
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
 import pytest
+from services.api.dataset_scope import DatasetStampingGraph, set_case_datasets, stamping
+from services.api.datasets import Dataset, InMemoryDatasetStore
 
 from ports.graph import GraphPort
 from schemas.domain import Principal
@@ -41,11 +45,6 @@ MEMBER_CASE = Principal(
     id="analyst-m", clearance="OFFICIAL", org_unit="unit-1", datasets=[MEMBER, "layer-m"]
 )
 
-PENDING = pytest.mark.xfail(
-    strict=True,
-    reason="finding 5: the adapter merges a write into the existing element; owner to decide",
-)
-
 
 async def _loaded(adapter: GraphPort) -> tuple[str, str]:
     (a, b), _ = await _write(
@@ -59,29 +58,79 @@ async def _loaded(adapter: GraphPort) -> tuple[str, str]:
     return a, b
 
 
-@PENDING
-async def test_a_composite_cases_write_to_a_member_node_leaves_it_unchanged_for_a_member_case(
+def _in_the_composite_case(adapter: GraphPort) -> GraphPort:
+    """The stamping graph over `adapter`, with a request scoped to the composite case."""
+    store = InMemoryDatasetStore()
+    for dataset_id in (MEMBER, OTHER_MEMBER):
+        store.add(_dataset(dataset_id))
+    store.add(_dataset(COMPOSITE, kind="composite", members=[MEMBER, OTHER_MEMBER]))
+    store.cases["case-c"] = [COMPOSITE]
+    set_case_datasets(COMPOSITE_CASE.datasets, scope=("case-c", store, COMPOSITE_CASE))
+    return stamping(adapter)
+
+
+def _dataset(dataset_id: str, **kind: object) -> Dataset:
+    return Dataset(
+        id=dataset_id,
+        name=dataset_id,
+        owning_unit="unit-1",
+        created_at=datetime(2026, 11, 1, tzinfo=UTC),
+        created_by="seed",
+        **kind,  # type: ignore[arg-type]
+    )
+
+
+async def _rewrite_through_the_composite_case(adapter: GraphPort) -> tuple[str, str]:
+    """A member's node `a`, then the composite case's write naming `a` with one property changed
+    (no dataset named, as a writer under a case leaves it). Returns (`a`, the id written)."""
+    a, _b = await _loaded(adapter)
+    graph = _in_the_composite_case(adapter)
+    rewrite = _node("Person", classification="OFFICIAL", family_name="MERCER-JONES").model_copy(
+        update={"id": a, "datasets": []}
+    )
+    tx = await graph.begin_transaction()
+    (written,) = await graph.upsert_nodes([rewrite], tx)
+    await graph.commit_transaction(tx)
+    set_case_datasets(None)
+    return a, written
+
+
+async def test_a_composite_cases_write_to_a_member_node_becomes_a_new_node_linked_by_same_as(
     factory: GraphAdapterFactory,
 ) -> None:
     async with factory.context() as adapter:
-        a, _b = await _loaded(adapter)
-        before = await adapter.get_node(a, MEMBER_CASE)
-        assert before is not None and before.properties["family_name"] == "MERCER"
+        a, written = await _rewrite_through_the_composite_case(adapter)
 
-        rewrite = _node(
-            "Person", classification="OFFICIAL", datasets=[COMPOSITE], family_name="MERCER-JONES"
-        ).model_copy(update={"id": a})
-        await _write(adapter, [rewrite], [])
+        # No member changes: a member-only case reads `a` exactly as loaded.
+        member_view = await adapter.get_node(a, MEMBER_CASE)
+        assert member_view is not None
+        assert member_view.properties["family_name"] == "MERCER"
+        assert member_view.datasets == [MEMBER]
+        # The composite case's write is a new node of the composite, linked to `a`.
+        assert written != a
+        fresh = await adapter.get_node(written, COMPOSITE_CASE)
+        assert fresh is not None and fresh.datasets == [COMPOSITE]
+        assert fresh.properties["family_name"] == "MERCER-JONES"
+        links = await adapter.edges_among([written, a], COMPOSITE_CASE)
+        assert [(e.type, e.source, e.target) for e in links] == [("SAME_AS", written, a)]
+        # Neither the new node nor its link reaches the member-only case.
+        assert await adapter.get_node(written, MEMBER_CASE) is None
+        assert await adapter.edges_among([written, a], MEMBER_CASE) == []
 
-        # The control: the composite case reads its write.
-        in_composite = await adapter.get_node(a, COMPOSITE_CASE)
-        assert in_composite is not None
-        assert in_composite.properties["family_name"] == "MERCER-JONES"
 
-        after = await adapter.get_node(a, MEMBER_CASE)
-        assert after is not None
-        assert after.properties == before.properties
-        assert after.datasets == before.datasets
+async def test_the_member_check_fails_with_the_composite_check_planted_out(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def passed_through(self: Any, writes: list[Any]) -> tuple[list[Any], list[Any]]:
+        return writes, []
+
+    monkeypatch.setattr(DatasetStampingGraph, "_kept_from_members", passed_through)
+    async with factory.context() as adapter:
+        a, written = await _rewrite_through_the_composite_case(adapter)
+        member_view = await adapter.get_node(a, MEMBER_CASE)
+        assert written == a
+        assert member_view is not None
+        assert member_view.properties["family_name"] == "MERCER-JONES"
 
 
 async def test_a_composite_cases_link_between_member_nodes_is_not_seen_by_a_member_case(

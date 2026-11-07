@@ -71,8 +71,6 @@ class Report:
     #: (case id, the composite it now reads, whether the composite was made by this run).
     composed: list[tuple[str, str, bool]] = field(default_factory=list)
     layers_made: list[str] = field(default_factory=list)
-    #: (branch id, the layer it shares): a branch reads and writes its parent's (finding 8).
-    layers_shared: list[tuple[str, str]] = field(default_factory=list)
     #: Each case not placed, with why, in words.
     unplaced: list[str] = field(default_factory=list)
     #: Every write made (or, in a dry run, that would be made), in order.
@@ -140,9 +138,6 @@ class DryRun:
         self._writes.append(f"make the analyst layer of case {investigation_id}")
         return f"(new layer of {investigation_id})"
 
-    async def share_layer(self, investigation_id: str, layer_id: str) -> None:
-        self._writes.append(f"case {investigation_id} (a branch) shares the layer {layer_id}")
-
 
 class _Recording:
     """The real store, with each write noted in the report as it is made."""
@@ -153,13 +148,7 @@ class _Recording:
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._inner, name)
-        if name in {
-            "create_composite",
-            "set_egress",
-            "set_for_case",
-            "ensure_layer",
-            "share_layer",
-        }:
+        if name in {"create_composite", "set_egress", "set_for_case", "ensure_layer"}:
 
             async def noted(*args: Any, **kwargs: Any) -> Any:
                 self._writes.append(f"{name} {args[0] if args else ''}".strip())
@@ -193,9 +182,6 @@ async def migrate(
         for d in await store.list_all()
         if d.kind == COMPOSITE
     }
-    #: Each case's layer as this run leaves it (a dry run's stand-ins included), so a branch,
-    #: which comes after its parent (`all_cases` orders by creation), shares its parent's.
-    layers: dict[str, str] = {}
     for case in cases:
         label = f"{case.name or 'Unnamed case'} ({case.id})"
         chosen = await store.chosen_of_case(case.id)
@@ -205,12 +191,6 @@ async def migrate(
         if {d.owning_unit for d in chosen} != {case.owning_unit}:
             report.unplaced.append(f"{label}: names a dataset of another unit")
             continue
-        parent_layer = layers.get(case.branched_from) if case.branched_from else None
-        if parent_layer is not None and await store.layer_of_case(case.id) is None:
-            # Before anything below could give the branch a layer of its own.
-            await through.share_layer(case.id, parent_layer)
-            report.layers_shared.append((case.id, parent_layer))
-            layers[case.id] = parent_layer
         if len(chosen) == 1:
             report.kept.append(case.id)
             say(f"  {label}: reads {chosen[0].name}, kept")
@@ -231,15 +211,12 @@ async def migrate(
                 composites[key] = made
                 report.composed.append((case.id, made, True))
             say(f"  {label}: names {len(members)} datasets, now reads a composite of them")
-        if case.id in layers:
-            continue
-        held_layer = await store.layer_of_case(case.id)
-        if held_layer is None:
-            held_layer = await through.ensure_layer(
+        # Every case its own empty layer, a branch included (ADR-143 Amendment 1 item 3).
+        if await store.layer_of_case(case.id) is None:
+            await through.ensure_layer(
                 case.id, unit=case.owning_unit, created_by=ACTOR, case_name=case.name
             )
             report.layers_made.append(case.id)
-        layers[case.id] = held_layer
     for line in report.unplaced:
         say(f"  not placed: {line}")
     return report

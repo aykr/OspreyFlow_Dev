@@ -115,15 +115,15 @@ async def test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first(s
     assert [d.id for d in await store.of_case(case, alice)] == [both.id]
 
 
-async def test_a_branch_reads_its_parents_layer(store) -> None:
+async def test_a_branch_has_a_layer_of_its_own(store) -> None:
     alice = _analyst()
     source = await store.create(alice, "Source")
     parent, branch = new_id(), new_id()
     await store.set_for_case(parent, [source.id], alice)
     await store.copy_case(parent, branch)
     assert (await store.ids_of_case(branch))[0] == source.id
-    # The owner's ruling on finding 8: a branch reads and writes its parent's layer.
-    assert await store.layer_of_case(branch) == await store.layer_of_case(parent) is not None
+    # ADR-143 Amendment 1 item 3: never its parent's.
+    assert await store.layer_of_case(branch) not in (None, await store.layer_of_case(parent))
 
 
 async def test_a_layers_egress_is_the_strictest_of_its_cases(store) -> None:
@@ -138,6 +138,22 @@ async def test_a_layers_egress_is_the_strictest_of_its_cases(store) -> None:
     with pytest.raises(UnknownDatasetEgressError):
         await store.set_egress(layer, "any")
     assert (await store.egress_of([layer]))[layer].egress == "contracted"
+
+
+async def test_a_composite_cases_layer_takes_the_strictest_of_members_that_differ(store) -> None:
+    """ADR-136 Amendment 1 on Postgres: members `any` and `contracted`, the composite set to `any`
+    by an administrator; the layer takes `contracted`, under that member's name."""
+    alice = _analyst()
+    loose, tight = await store.create(alice, "Loose"), await store.create(alice, "Tight")
+    await store.set_egress(loose.id, "any")
+    await store.set_egress(tight.id, "contracted")
+    both = await store.create_composite(alice, "Loose and tight", [loose.id, tight.id])
+    await store.set_egress(both.id, "any")
+    case = new_id()
+    await store.set_for_case(case, [both.id], alice)
+    layer = await store.layer_of_case(case)
+    held = (await store.egress_of([layer]))[layer]
+    assert (held.egress, held.name) == ("contracted", "Tight")
 
 
 async def test_the_one_dataset_index_is_refused_while_a_case_names_two(fresh_dsn) -> None:
