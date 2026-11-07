@@ -1,12 +1,17 @@
 """ADR-110 Amendment 15's statement bound, on ClickHouse: setting a refresh's events aside and
 restoring them sends no statement that grows with the events moved, or with the tables they move
-between. Each statement the adapter sends is recorded. No list parameter may hold more than one
-chunk, and every `NOT IN` subquery must be limited to the chunk's own ids. A subquery over a whole
-table is the shape the methods had before (red so, `process/lanes/studio/L1.2a_RED_RECORD.md`).
+between. Each statement the adapter sends is recorded. A statement may carry one list of ids, at
+most one chunk long, and every `NOT IN` subquery must be limited to that list (`has(ids, …)`). A
+subquery over a whole table is the shape the methods had before (red so,
+`process/lanes/studio/L1.2a_RED_RECORD.md`).
 
-The recording client binds each statement with the real client's `bind`, so it refuses a
-placeholder count the real one refuses (rule 15). What ClickHouse itself returns is the conformance
-suite's to prove (`tests/conformance/analytics_port/test_suite.py`, against a real ClickHouse)."""
+The recording client refuses what the real client refuses (rule 15). It binds each statement with
+the real `bind`, so a placeholder count that does not match is refused. And it encodes the bound
+values as the real client sends them, in the request's query string, refusing one over httpx's
+`MAX_URL_LENGTH` as httpx does (`InvalidURL`). That is the refusal a real ClickHouse run met when a
+chunk's ids were bound twice. The ids are ULIDs, the shape the engine writes. What ClickHouse
+itself returns is the conformance suite's to prove (`tests/conformance/analytics_port/test_suite.py`,
+against a real ClickHouse)."""
 
 from __future__ import annotations
 
@@ -14,14 +19,17 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
+import httpx
 from adapters.analytics_clickhouse.adapter import (
     _WITHDRAW_CHUNK,
     AnalyticsClickHouseAdapter,
 )
 from adapters.analytics_clickhouse.client import bind
+from httpx._urlparse import MAX_URL_LENGTH
 from ontology.handling import load_uk_le_scheme
+from ulid import ULID
 
-IDS = [f"ev-{n:05d}" for n in range(2_500)]
+IDS = sorted(str(ULID()) for _ in range(2_500))
 LOAD = "load-refresh"
 
 
@@ -35,7 +43,12 @@ class Recording:
         self.withdrawn: set[str] = set()
 
     def _keep(self, sql: str, params: Sequence[object]) -> None:
-        bind(sql, params)  # refuses a placeholder count the real client refuses
+        _, values = bind(
+            sql, params
+        )  # refuses a placeholder count the real client refuses
+        query = str(httpx.QueryParams(values))
+        if len(query) > MAX_URL_LENGTH:  # as httpx refuses it, before anything is sent
+            raise httpx.InvalidURL("URL component 'query' too long")
         self.sent.append((sql, list(params)))
 
     async def command(self, sql: str, params: Sequence[object] = ()) -> None:
@@ -65,16 +78,20 @@ class Recording:
 
 
 def _unbounded(sent: list[tuple[str, list[object]]]) -> list[str]:
-    """Each statement holding more than one chunk of ids, or a `NOT IN` subquery over a whole table."""
+    """Each statement with more than one list of ids or a list over one chunk, and each `NOT IN`
+    subquery not limited to the statement's own ids."""
     bad = []
     for sql, params in sent:
-        if any(isinstance(p, list) and len(p) > _WITHDRAW_CHUNK for p in params):
+        lists = [p for p in params if isinstance(p, list)]
+        if len(lists) > 1:
+            bad.append(f"more than one list: {sql}")
+        if any(len(p) > _WITHDRAW_CHUNK for p in lists):
             bad.append(f"over a chunk: {sql}")
         for sub in re.findall(
             r"NOT IN\s*\((SELECT [^()]*(?:\([^()]*\)[^()]*)*)\)", sql
         ):
-            if " WHERE " not in f" {sub} ":
-                bad.append(f"a whole table: {sub}")
+            if not re.search(r"\bWHERE has\(ids, event_id\)", sub):
+                bad.append(f"not limited to the chunk: {sub}")
     return bad
 
 
