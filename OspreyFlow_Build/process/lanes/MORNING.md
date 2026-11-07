@@ -106,6 +106,12 @@ Also asked by the lanes:
 
 ## Notes
 
+- **Stopped at the orchestrator's usage limit (about 13:20).** Merged to local main since the last note: studio's Part 0 (`f00afec`) and glass's L2.2 (`fd38da4`). make ci is red only on `test-file-coverage-check`, which waits for your diff, studio's `L1.2a_ci_makefile.diff`. It supersedes L1.1's; apply one, not both. Open:
+  - **Case L3.1:** your ruling "Composites read-only for now" has been sent. Case rewrites L3.1 to refuse every non-layer write in a composite case, then needs a review and yours.
+  - **Studio Part A (`b875c5d`):** not merged. The review found that a link's withdrawal still depends on other cases' rows (`edges_created` differs when a row comes back; the live links and their events differ). That needs your ruling: withdraw only the dropped rows' events and leave every graph element (recommended), or record the residue. Also the case half of `only_this_pipeline` was never shown red, the live test's plants aren't real, and the reds aren't on record. Part B is to start in a fresh studio session.
+  - **Glass L2.3 part 2 (`7aba817`):** must-fixes 1–3 are done; it hit its usage limit. Left: REPORT.md, the minors and a full keyboard run. Reopen it with `lanes_launch.sh resume glass`.
+  - **The Matrix performance budget:** still to be measured by me on a quiet machine.
+
 - **Your ruling, 13:00 — 'Never withdraw nodes':** a snapshot's withdrawal takes back a dropped row's links and events only. This closes a rule-3 leak on main since phase 4: the node staying, and the Runs tab's 'graph writes' figure, revealed that something hidden touched it. ADR-110 Amendment 15 is reserved (`a2de4ad`); studio builds it in Part A, and its allowlisting of the unfiltered read is dropped.
 
 - **12:30, studio L1.2 merged** (`25b1084`, registry ids `0bf628b`). `make ci` on the merge: the trivy images are green now, but `route-coverage-check` (the new preview-graph route isn't in spec 03) and `provenance-annotation-check` (11 'phase N' in spec 09 and DEMO_GUIDE) turned red. That is my process slip: I ran `make ci` after keeping the merge, not before. Studio fixes both as Part 0, and merges now keep `make ci` on the merge result first (`2edd327`). Phase 6's exit is not met (L1.2b).
