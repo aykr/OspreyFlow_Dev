@@ -9,8 +9,11 @@ back only the dropped rows' own events, by the ids their keys record, and never 
 
 This drives the real path: `run_recipe_as` (its ledger row, its metering) over the throwaway
 Postgres's run ledger (`RecipeRunStore`), whose load is `run_published_recipe` with
-`withdraw_dropped` over the real ArcadeDB adapter (`arcadedb_adapter`) and DuckDB analytics. Two
-principals load two cases (`_loader` says why neither is confined to a dataset yet). In each of two
+`withdraw_dropped` over the Conduit's stamping graph on the real ArcadeDB adapter (`stamping`,
+checked against the real dataset store, as `run_resources` builds it) and DuckDB analytics. The
+loader's case and the other case load into one dataset, the third case into its own; each principal
+is confined to its case's by the real `scope_to_case`, as both
+entry points confine it (Part A2, `test_studio_load_stamps_its_case_dataset_live.py`). In each of two
 worlds, the loader
 runs the published pipeline into their case three times: rows A and B; A alone (B dropped); A and B
 (B back). In the second world, between the first two, the other case's loader runs **the same
@@ -22,9 +25,9 @@ what each of those runs changed of what they read:
   run's `edges_created` with them;
 - the live nodes and live links (type, ends and occurrences) around their case's nodes;
 - their case's timeline events (type, time and ends).
-The change, not the state: the other case's own row lands on the same pair and merges into the same
-link before any withdrawal (a cross-case merge, outside this ruling; the studio REPORT has it), so
-the states differ by that row whatever the withdrawal does.
+The change, not the state: the other case's own row lands on the same pair in the same dataset and
+merges into the same link before any withdrawal (by design, ADR-102 Amendment 3), so the states
+differ by that row whatever the withdrawal does.
 
 It also says, in the first world, what the ruling says: the second run leaves every node and link,
 and takes B's event alone. Only the ids and times that differ between any two runs are left out.
@@ -58,6 +61,7 @@ import dataclasses
 from collections import Counter
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -70,6 +74,9 @@ from conduit_common.identity import new_id
 from schemas.analytics import EventFilter, EventListRequest
 from schemas.domain import ExpandRequest, Handling, Principal
 from services.api.config import PostgresConfig
+from services.api.dataset_scope import scope_to_case, set_case_datasets, stamping
+from services.api.datasets import PostgresDatasetStore
+from services.api.investigations import InvestigationStore
 from services.api.load_records import report_view
 from services.api.recipe_runs import RecipeRunStore
 from services.api.studio_publish import run_published_recipe
@@ -101,9 +108,7 @@ async def runs() -> AsyncIterator[RecipeRunStore]:
 
 
 def _loader(name: str) -> Principal:
-    """A loader of one case. Not confined to a dataset (ADR-099): a Studio load stamps no dataset on
-    what it writes until the load-into rule (L3.1, the studio lane's Part C), so a confined principal
-    reads none of it, and the comparison would hold over nothing."""
+    """A loader of one case, before `scope_to_case` confines it to the case's dataset."""
     return Principal(id=name, clearance="SECRET", org_unit="unit-1")
 
 
@@ -134,7 +139,10 @@ class World:
         )  # type: ignore[arg-type]
 
     async def run(self, who: Principal, case: str, rows: list[dict[str, str]]) -> Any:
-        """One full snapshot with *withdraw* of the published pipeline into `case`, as `who`."""
+        """One full snapshot with *withdraw* of the published pipeline into `case`, as `who`
+        (already confined by `scope_to_case`). The stamping context is set to `who`'s datasets, as
+        each entry point's own `scope_to_case` sets it for its run."""
+        set_case_datasets(who.datasets)
         _write(Path(self.draft.source_location), rows)
 
         async def execute(deps: Any, **kwargs: Any) -> Any:
@@ -215,39 +223,81 @@ async def _told(
 ) -> dict[str, Any]:
     """One world: what the loader is told of the second and third runs, and what they read."""
     repo, draft = _published_draft(tmp_path / ("beside" if beside else "alone"))
-    ours, theirs, third = new_id(), new_id(), new_id()
-    loader, other, another = (
-        _loader("loader-1"),
-        _loader("loader-2"),
-        _loader("loader-3"),
+    from tests.services.api.test_studio_load_stamps_its_case_dataset_live import (
+        _case,
+        _dataset,
     )
-    async with (
-        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
-        duckdb_adapter([], SCHEME) as analytics,
-    ):
-        world = World(runs, graph, analytics, repo, draft, monkeypatch)
-        await world.run(loader, ours, [A, B])
-        first = await world.what_they_read(loader, ours)
-        if beside:
-            await world.run(other, theirs, THEIRS)
-            # Rules 3 and 4: a third case withdraws its own B, the very key ours holds (a row key
-            # does not depend on the case). Ours must still be withdrawn as if theirs never was.
-            await world.run(another, third, [B, ELSEWHERE])
-            third_drop, _, _ = await world.run(another, third, [ELSEWHERE])
-            assert third_drop.rows_withdrawn == 1
-        before_drop = await world.what_they_read(loader, ours)
-        theirs_before = await world.what_they_read(other, theirs)
-        second, second_run, second_said = await world.run(loader, ours, [A])
-        assert second.rows_withdrawn == 1, "B was dropped"
-        after_drop = await world.what_they_read(loader, ours)
-        # The other side: their timeline and their reads around B's link are as they were, so
-        # nothing of theirs went with B's withdrawal (a withdrawal by link would take their event).
-        if beside:
-            theirs_after = await world.what_they_read(other, theirs)
-            assert theirs_after["events"] == theirs_before["events"], "their timeline"
-            assert len(theirs_after["events"]) == 2
-        _, third_run, third_said = await world.run(loader, ours, [A, B])
-        after_back = await world.what_they_read(loader, ours)
+
+    dsn = PostgresConfig.from_env().dsn
+    stores = SimpleNamespace(
+        cases=await InvestigationStore.connect(dsn),
+        datasets=await PostgresDatasetStore.connect(dsn),
+    )
+    try:
+        first, second, third_who = (
+            _loader("loader-1"),
+            _loader("loader-2"),
+            _loader("loader-3"),
+        )
+        shared = await _dataset(stores, first)
+        # The other case loads into the loader's own dataset, so its row on B's pair merges into
+        # B's link and its event sits on that link (by design: ADR-102 Amendment 3, ADR-099 decision
+        # 2, ADR-143 "joins the source dataset"). A withdrawal by link would take its event. The
+        # third case has a dataset of its own.
+        cases = [
+            (first, await _case(stores, first, shared)),
+            (second, await _case(stores, second, shared)),
+            (
+                third_who,
+                await _case(stores, third_who, await _dataset(stores, third_who)),
+            ),
+        ]
+        # Each confined to its case's datasets, as both entry points confine it.
+        (loader, ours), (other, theirs), (another, third) = [
+            (await scope_to_case(who, case, stores.datasets), case)
+            for who, case in cases
+        ]
+        async with (
+            arcadedb_adapter(ONTOLOGY, SCHEME) as raw,
+            duckdb_adapter([], SCHEME) as analytics,
+        ):
+            graph = stamping(raw)
+            graph.check_against(stores.datasets)
+            world = World(runs, graph, analytics, repo, draft, monkeypatch)
+            return await _three_runs(
+                world, loader, ours, other, theirs, another, third, beside
+            )
+    finally:
+        await stores.cases.close()
+        await stores.datasets.close()
+
+
+async def _three_runs(
+    world: World, loader: Principal, ours: str, other: Principal, theirs: str,
+    another: Principal, third: str, beside: bool,
+) -> dict[str, Any]:  # fmt: skip
+    await world.run(loader, ours, [A, B])
+    first = await world.what_they_read(loader, ours)
+    if beside:
+        await world.run(other, theirs, THEIRS)
+        # Rules 3 and 4: a third case withdraws its own B, the very key ours holds (a row key
+        # does not depend on the case). Ours must still be withdrawn as if theirs never was.
+        await world.run(another, third, [B, ELSEWHERE])
+        third_drop, _, _ = await world.run(another, third, [ELSEWHERE])
+        assert third_drop.rows_withdrawn == 1
+    before_drop = await world.what_they_read(loader, ours)
+    theirs_before = await world.what_they_read(other, theirs)
+    second, second_run, second_said = await world.run(loader, ours, [A])
+    assert second.rows_withdrawn == 1, "B was dropped"
+    after_drop = await world.what_they_read(loader, ours)
+    # The other side: their timeline and their reads around B's link are as they were, so
+    # nothing of theirs went with B's withdrawal (a withdrawal by link would take their event).
+    if beside:
+        theirs_after = await world.what_they_read(other, theirs)
+        assert theirs_after["events"] == theirs_before["events"], "their timeline"
+        assert len(theirs_after["events"]) == 2
+    _, third_run, third_said = await world.run(loader, ours, [A, B])
+    after_back = await world.what_they_read(loader, ours)
     return {
         "first": first, "second_run": second_run, "second_said": second_said,
         "after_drop": after_drop, "third_run": third_run, "third_said": third_said,
