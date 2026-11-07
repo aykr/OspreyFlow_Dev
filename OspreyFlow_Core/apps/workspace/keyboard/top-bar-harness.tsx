@@ -154,11 +154,9 @@ createRoot(container).render(
           { id: "history", label: "History", icon: "history", onSelect: rail("history") },
           { id: "explore", label: "Explore", icon: "explore", onSelect: rail("explore") },
           { id: "questions", label: "Questions", icon: "questions", onSelect: rail("questions") },
-          { id: "ingest", label: "Ingest Studio", icon: "ingest", onSelect: rail("ingest") },
           // ADR-111 Amendment 3: the Superset boards, drawn inside the Glass.
           { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: rail("dashboards") },
-          // ADR-110 Amendment 1: the Admin area, as `App.tsx` offers it to an administrator.
-          { id: "admin", label: "Admin", icon: "admin", onSelect: rail("admin") },
+          // ADR-145 decision 1: the Ingest Studio and Admin are places, in the switcher, not the rail.
         ]}
       />
       {wantsCanvas ? (

@@ -17,6 +17,7 @@ import type {
   UpdateNotice,
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select, Tabs } from "../design/primitives";
+import { ProposedTypes } from "../linktypes/ProposedTypes";
 import { Schedules } from "./Schedules";
 import { Connections } from "./Connections";
 import { updateWords } from "./updateNotice";
@@ -1109,7 +1110,24 @@ function DemoPacks({ api }: { api: AdminApi }) {
   );
 }
 
-type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "connections" | "demo-packs";
+type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "connections" | "demo-packs" | "types";
+
+/** ADR-145 decision 1: *Proposed types* left the Glass's rail. Until the Studio's Model tab decides
+ * them (A2, ADR-143) they are decided here, behind the same right (`manage_ontology`). */
+function ProposedTypesTab({ api }: { api: AdminApi }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <p className="label">The relationship types analysts of your unit proposed, each to promote, reject or retire.</p>
+      <div>
+        <Button aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+          Review proposed types
+        </Button>
+      </div>
+      <ProposedTypes apiBaseUrl={api.apiBaseUrl} bearerToken={api.bearerToken} open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
 
 export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const tabs = [
@@ -1120,6 +1138,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
     ...(rights.has("administer_system") ? [{ id: "datasets", label: "Datasets" }] : []),
     ...(rights.has("administer_system") ? [{ id: "connections", label: "Connections" }] : []),
     ...(rights.has("administer_system") ? [{ id: "demo-packs", label: "Demo packs" }] : []),
+    ...(rights.has("manage_ontology") ? [{ id: "types", label: "Proposed types" }] : []),
   ];
   const [tab, setTab] = useState<Tab>((tabs[0]?.id as Tab) ?? "system");
   return (
@@ -1134,6 +1153,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
       {tab === "datasets" && rights.has("administer_system") && <Datasets api={api} />}
       {tab === "connections" && rights.has("administer_system") && <Connections api={api} />}
       {tab === "demo-packs" && rights.has("administer_system") && <DemoPacks api={api} />}
+      {tab === "types" && rights.has("manage_ontology") && <ProposedTypesTab api={api} />}
     </section>
   );
 }

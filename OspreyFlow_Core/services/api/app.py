@@ -8749,7 +8749,7 @@ async def resume_recipe_schedule(
 
 @app.get(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/runs",
-    dependencies=[Depends(require_right(Right.READ_DATA_FEEDS))],
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
 )
 async def recipe_runs_route(
     investigation: InvestigationViewerDep,

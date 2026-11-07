@@ -41,7 +41,7 @@ HANDLING = {"classification": "SECRET", "handling_code": "P", "owning_unit": "un
             "originator": "unit-1"}  # fmt: skip
 # The Admin route's right comes with the administrator role, the others' with the viewer's.
 OFFICIAL_READER = Principal(id="viewer-1", clearance="OFFICIAL", org_unit="unit-1",
-                            roles=["source_approver", "reports_viewer", "osprey-admin"],
+                            roles=["source_approver", "reports_viewer", "osprey-admin", "loader"],
                             datasets=["ds-case"])  # fmt: skip
 SECRET_READER = OFFICIAL_READER.model_copy(update={"id": "viewer-2", "clearance": "SECRET"})
 

@@ -52,7 +52,8 @@ export function BrandFrame({ appearance, children }: { appearance: Appearance; c
     <>
       <SkipLink target={MAIN_CONTENT_ID} />
       <div ref={above}>
-        <GovukHeader />
+        {/* ADR-145 decision 3: the place switcher stands inside the GOV.UK header. */}
+        <GovukHeader withPlaces />
         <PhaseBanner phase={appearance.phase} />
       </div>
       {/* Focused by the skip link; not itself a control, so it is not in the Tab order. */}

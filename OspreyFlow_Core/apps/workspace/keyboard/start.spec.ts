@@ -33,7 +33,7 @@ test("the Glass is chosen from Start, then a case, by keyboard", async ({ page }
   await serve(page);
   await page.goto("/keyboard/start-harness.html");
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
-  await press(page, /^Open Glass/);
+  await press(page, /^Open The Glass/);
   await expect(page.getByRole("heading", { name: "Choose a case" })).toBeVisible();
   await press(page, "Operation Ledger (synthetic demo)");
   await expect.poll(() => opened(page)).toEqual({ id: "c1" });
@@ -55,7 +55,7 @@ test("the Ingest Studio is chosen from Start, then the case to load into, by key
 test("Admin is chosen from Start with no case, and Start is back by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/start-harness.html");
-  await press(page, /^Open Admin area/);
+  await press(page, /^Open Admin/);
   await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
   await expect.poll(() => asked).toContain("/v1/admin/people");
   expect(await opened(page)).toBeNull();
@@ -75,10 +75,11 @@ test("the mark returns to Start from a case's workspace by keyboard", async ({ p
   registerCovered(REGISTRY, "return-to-start-from-the-mark-by-keyboard");
 });
 
-test("a usable place opens with its key from anywhere on Home, and a gated one does not", async ({ page }) => {
+test("a place opens with its key from anywhere on Home, and one the rights do not open does not", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/start-harness.html?rights=investigate,manage_people");
-  await expect(page.getByText("You need the Data Engineer role for this. Ask an administrator to add it.")).toBeVisible();
+  // ADR-145 N6: no card for the Studio at all.
+  await expect(page.getByRole("region", { name: "Ingest Studio" })).toHaveCount(0);
   await page.keyboard.press("i");
   await expect(page.getByRole("heading", { level: 1, name: /^Good/ })).toBeVisible();
   await page.keyboard.press("a");

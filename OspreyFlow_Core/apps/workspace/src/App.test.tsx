@@ -261,7 +261,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const url = String(input);
       const body = url.endsWith("/v1/ontology")
         ? { entity_types: [], edge_types: [] }
-        : url.endsWith("/v1/handling-scheme")
+        : // ADR-145 decision 2: someone holding the Glass and the Studio, so the cross-link is offered.
+          url.endsWith("/v1/me/rights")
+          ? { rights: ["investigate", "edit_pipelines"] }
+          : url.endsWith("/v1/handling-scheme")
           ? { name: "test", classification: ["OFFICIAL"], handling_codes: {} }
           : url.endsWith("/v1/hotlists")
             ? { hotlists: [] }
@@ -291,7 +294,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "Back to the investigation" })).toBeTruthy();
+    // ADR-145 decision 2: the banner's cross-link back to the case, in place of the Studio's rail.
+    expect(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ })).toBeTruthy();
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
   });
 
@@ -307,7 +311,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const url = String(input);
       const body = url.endsWith("/v1/investigations")
         ? [{ id: "inv-9", name: "TestCase", level: "editor", created_at: "2026-10-10T09:00:00Z", created_by: "a1" }]
-        : url.endsWith("/v1/ontology")
+        : // ADR-145 N6: the Studio tile's choice is kept only for someone the Studio is open to.
+          url.endsWith("/v1/me/rights")
+          ? { rights: ["investigate", "edit_pipelines"] }
+          : url.endsWith("/v1/ontology")
           ? { entity_types: [], edge_types: [] }
           : [];
       return Promise.resolve(new Response(JSON.stringify(body)));
@@ -333,13 +340,25 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   const holdAllRequests = () => {
     vi.mocked(globalThis.fetch).mockImplementation(() => new Promise<Response>(() => undefined));
   };
+  // Every request held but the rights (ADR-145: no place is offered until they are known).
+  const holdAllButRights = () => {
+    vi.mocked(globalThis.fetch).mockImplementation((input) =>
+      String(input).endsWith("/v1/me/rights")
+        ? Promise.resolve(new Response(JSON.stringify({ rights: ["investigate", "read_alert_queue", "edit_pipelines"] })))
+        : new Promise<Response>(() => undefined),
+    );
+  };
 
-  test("the rail is at the far left and offers the Ingest Studio; the bar begins with the mark", async () => {
-    holdAllRequests();
+  test("the rail is at the far left and the places are in the bar, not the rail; the bar begins with the mark", async () => {
+    holdAllButRights();
     render(<App />);
 
     await screen.findByRole("navigation", { name: "Workspace" });
-    expect(within(rail()).getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
+    // ADR-145 decision 1: the Ingest Studio, Admin and Proposed types left the rail for the switcher.
+    for (const gone of ["Ingest Studio", "Admin", "Proposed types"]) expect(within(rail()).queryByRole("button", { name: gone })).toBeNull();
+    const places = within(screen.getByRole("navigation", { name: "Places" }));
+    expect(places.getByRole("button", { name: "The Glass" }).getAttribute("aria-current")).toBe("page");
+    expect(places.getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
     const header = document.querySelector("header.app-header")!;
     // ADR-114 Amendment 5 point 9: the mark is the way back to Start.
     expect(header.firstElementChild?.getAttribute("aria-label")).toBe("Osprey, go to Home");
@@ -359,29 +378,94 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   });
 
   test("inside the Ingest Studio the bar keeps only what belongs to it", async () => {
-    holdAllRequests();
+    holdAllButRights();
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     render(<App />);
 
-    await screen.findByRole("button", { name: "Back to the investigation" });
+    await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ });
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
     for (const gone of ["Graph", "Map", "Watches", "Export", "History"]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
     expect(screen.queryByRole("combobox", { name: /search entities/i })).toBeNull();
-    // The case menu stays (the Studio's own "goes into" row carries a second one).
-    expect(within(document.querySelector("header.app-header") as HTMLElement).getByRole("button", { name: /^Case:/ })).toBeTruthy();
+    // ADR-145 decision 1: the Studio has no rail.
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    // The case menu stays, in the banner (ADR-145 decision 2; the Studio's own "goes into" row carries a second one).
+    expect(within(screen.getByRole("region", { name: "You are in the Ingest Studio" })).getByRole("button", { name: /^Case:/ })).toBeTruthy();
   });
 
-  test("the rail moves between the apps, and coming back returns to the view that was open", async () => {
-    holdAllRequests();
+  // ADR-145 N6: a hand-off (`?view=ingest|admin`) is a wish, checked against the rights.
+  // Every request held but the rights, so only the rights decide what is drawn.
+  const withRights = (rights: string[]) => {
+    vi.mocked(globalThis.fetch).mockImplementation((input) =>
+      String(input).endsWith("/v1/me/rights")
+        ? Promise.resolve(new Response(JSON.stringify({ rights })))
+        : new Promise<Response>(() => undefined),
+    );
+  };
+
+  test("a hand-off to the Studio opens the Glass for someone the Studio is not open to", async () => {
+    withRights(["investigate"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("region", { name: "You are in the Glass" })).toBeTruthy();
+    expect(document.querySelector("header.app-header")?.getAttribute("data-app")).toBe("glass");
+    expect(screen.queryByRole("region", { name: "You are in the Ingest Studio" })).toBeNull();
+  });
+
+  test("a hand-off to Admin with a case open opens the Admin place, not Admin under the Glass", async () => {
+    withRights(["investigate", "manage_people"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "admin", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("region", { name: "You are in Admin" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "You are in the Glass" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+  });
+
+  test("a hand-off to Admin for someone Admin is not open to lands on Home", async () => {
+    withRights(["investigate"]);
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "admin", at: Date.now() }));
+    render(<App />);
+    expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "You are in Admin" })).toBeNull();
+  });
+
+  // ADR-145 decision 2: choosing another case in the Studio reloads the page (`openCase`); after it,
+  // Back returns to the Glass's view that was open before, on the case now open.
+  test("after a reload in the Studio, Back returns to the Glass's last view on the open case", async () => {
+    withRights(["investigate", "read_alert_queue", "edit_pipelines"]);
+    // In the Glass, on Monitoring; then the page is reloaded into the Studio, as `openCase` does.
+    const first = render(<App />);
+    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
+    first.unmount();
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
+    const went: string[] = [];
+    const realLocation = window.location;
+    Reflect.deleteProperty(window, "location");
+    (window as { location: unknown }).location = { ...realLocation, assign: (url: string | URL) => went.push(String(url)) };
+    try {
+      render(<App />);
+      fireEvent.click(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ }));
+      expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+      // The case is the open one: Back neither changes it nor reloads.
+      expect(sessionStorage.getItem("ospreyflow.investigationId")).toBe("inv-1");
+      expect(went).toEqual([]);
+    } finally {
+      (window as { location: unknown }).location = realLocation;
+    }
+  });
+
+  test("the switcher and the cross-link move between the places, and coming back returns to the view that was open", async () => {
+    holdAllButRights();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Monitoring" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ingest Studio" }));
-    expect(screen.queryByRole("button", { name: "Monitoring" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Back to the investigation" }));
-    expect(screen.getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: "Ingest Studio" }));
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^← Back to .* in the Glass$/ }));
+    expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+    // ADR-145 decision 1: the banner's own Monitoring section marks the same place.
+    expect(within(screen.getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Monitoring" }).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
@@ -448,7 +532,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       expect(await screen.findByText(sentence)).toBeTruthy();
 
       // The owner's answer of 1 November 2026: the alert inbox is in Monitoring's Watches tab.
-      fireEvent.click(screen.getByRole("button", { name: "Monitoring" }));
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Monitoring" }));
       fireEvent.click(await screen.findByRole("tab", { name: "Watches" }));
       fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
       fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));

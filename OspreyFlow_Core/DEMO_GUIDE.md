@@ -394,10 +394,14 @@ PYTHONPATH=.:packages .venv/bin/python3 -m tools.mint_dev_token \
   --roles analyst,source_author,source_approver,loader
 ```
 
-A rendered deployment's own `--demo-analyst` subject already holds all four (`harness/realm.py`),
-so this step is only for the hand-run stack.
+A rendered deployment's demo analyst, `osprey-demo-analyst`, holds the Analyst role alone
+(`harness/realm.py`; ADR-113 decision 8 took its Data Engineer role away), so it is not offered the
+Studio (ADR-145): on a rendered deployment sign in as `osprey-demo-engineer` for this, and on the
+hand-run stack mint the token above.
 
-Then, in the Glass: **Ingest Studio → Connect → "Choose file…"** and pick a file from your own
+Then, from the Glass: **Ingest Studio** in the place switcher (in the top bar, after the mark; inside
+the GOV.UK header under that brand — since 7 November 2026 it is no longer on the rail, ADR-145)
+**→ Connect → "Choose file…"** and pick a file from your own
 computer (it is uploaded to the deployment's `uploaded` folder and selected), or choose one already
 on the server from the list beneath it. Answer the gate questions (handling — the classification may
 be left blank and is then recorded as PUBLIC — legal basis, connector), and continue to Profile →
@@ -740,14 +744,28 @@ this operator-facing guide adjudicates or grants.
 
 A demonstration deployment (`ospreyflow install`, which registers the demo accounts) has four accounts, one per
 seat, each opening exactly its own rail (`spec/06_DECISIONS.md` ADR-113 decision 8). Their passwords
-are in `deploy/generated/<profile>/deployment.env`, never printed:
+are in `deploy/generated/<profile>/deployment.env`, never printed.
+
+**What moved on 7 November 2026 (ADR-145, three places).** The Ingest Studio and Admin left the
+Glass's rail: they are places in the **place switcher** in the top bar (inside the GOV.UK header under
+that brand), and Home shows a card for each place the account opens and none for another. *Proposed
+types* left the rail too: it is a tab of Admin. The Studio has no rail; a line under the top bar says
+where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
+and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
+Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
+*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Each account is offered
+exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
+whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds one of its tabs' rights,
+the Glass for whoever holds a right a case's routes need. A place an account is not offered refuses
+it. No role lost a right; the Studio's pipeline-run history now needs a pipeline right, so the
+analyst and the report viewer, who had no screen for it, are no longer answered there.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |
-| `osprey-demo-analyst` | Analyst | the investigation: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
-| `osprey-demo-engineer` | Data Engineer | the Ingest Studio: pipelines, rules, held rows | `OSPREY_DEMO_ENGINEER_PASSWORD` |
-| `osprey-demo-report-viewer` | Reports Viewer | Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
-| `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | everything, and the Admin area | `OSPREY_DEMO_ADMIN_PASSWORD` |
+| `osprey-demo-analyst` | Analyst | the Glass: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
+| `osprey-demo-engineer` | Data Engineer | the Ingest Studio (pipelines), the Glass (its rules and held rows are Monitoring's) and Admin › Operations | `OSPREY_DEMO_ENGINEER_PASSWORD` |
+| `osprey-demo-report-viewer` | Reports Viewer | the Glass: Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
+| `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | all three places: the Glass, the Ingest Studio and Admin | `OSPREY_DEMO_ADMIN_PASSWORD` |
 
 The engineer holds Editor and the report viewer Viewer on the synthetic demo cases; neither is ever
 granted on a real dataset (rule 9).
@@ -755,7 +773,7 @@ granted on a real dataset (rule 9).
 **The reporting walkthrough** (all synthetic, on "Operation Ledger — AML review"):
 
 1. **As the analyst** — *Reports* in the top bar: the case's figures, counted for the reader.
-2. **As the admin** — *Admin → Dashboards*: register a dashboard identity (its secret is shown once;
+2. **As the admin** — *Admin* in the place switcher, then its *Dashboards* tab: register a dashboard identity (its secret is shown once;
    put it in `REPORT_SYNC_DASHBOARDS`); its *Figures* column says when it last pulled.
 3. **As the case's Author** — *Cases → Who can open this case*: give the dashboard's account id
    Viewer. report-sync pulls the case as that identity within 15 minutes (restart `report-sync` to

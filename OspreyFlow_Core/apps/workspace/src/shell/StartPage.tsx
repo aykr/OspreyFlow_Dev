@@ -7,7 +7,18 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 import { BrandMark } from "./BrandMark";
 import { ClassificationStrip } from "./ClassificationStrip";
 
-export function StartBar({ account, onStart, marking }: { account: ReactNode; onStart?: () => void; marking: string | null }) {
+export function StartBar({
+  account,
+  onStart,
+  marking,
+  places,
+}: {
+  account: ReactNode;
+  onStart?: () => void;
+  marking: string | null;
+  /** The place switcher, on a place's own surface outside a case (ADR-145 decision 1). */
+  places?: ReactNode;
+}) {
   return (
     <>
     {marking && <ClassificationStrip marking={marking} />}
@@ -19,6 +30,7 @@ export function StartBar({ account, onStart, marking }: { account: ReactNode; on
       ) : (
         <BrandMark />
       )}
+      {places}
       <div className="app-header__account" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
         <ThemeToggle variant="icon" />
         {account}

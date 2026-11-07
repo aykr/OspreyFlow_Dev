@@ -1,6 +1,7 @@
 // Home after sign-in (ADR-115 E3 and decision 7; `design/handoff/OspreyFlow Home.dc.html`): every
-// signed-in person's landing with no case open. All three places for everyone, a place the person
-// cannot use dimmed with the role it needs; only the first usable place's button in brass (DESIGN.md
+// signed-in person's landing with no case open. ADR-145 decision 1 and N6: a card for each place the
+// person's rights open, the same list as the place switcher, and none for a place they cannot open
+// (this replaces ADR-115 decision 7's dimmed panels). Only the first card's button in brass (DESIGN.md
 // §3.2: one primary action in a region); G, I and A open them from anywhere on the page. Its figures
 // are `homeData.ts`'s, each counted as the reader. The tiles are a convenience, never the gate.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -9,7 +10,8 @@ import { ROLES } from "../admin/AdminPlace";
 import { currentBrand } from "../brand/brand";
 import { MeshMark } from "../shell/BrandMark";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
-import { homePanels } from "../rights/visibility";
+import { PLACE_KEY, PLACE_NAME } from "../shell/places";
+import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
 import { whenLabel, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
@@ -24,6 +26,8 @@ export interface HomePerson {
 
 export interface HomePageProps {
   rights: ReadonlySet<string>;
+  /** The rights could not be read, so no place is offered (ADR-145 N6): Home says so. */
+  rightsUnread?: boolean;
   person: HomePerson;
   /** `null` while the figures are being read. */
   summary: HomeSummary | null;
@@ -35,14 +39,18 @@ export interface HomePageProps {
   now?: Date;
 }
 
-const PANELS: Record<StartPlace, { title: string; who: string; what: string; key: string }> = {
-  glass: { title: "Glass", who: "For analysts", key: "G",
+// The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
+const WORDS: Record<StartPlace, { who: string; what: string }> = {
+  glass: { who: "For analysts",
            what: "Work a case on the graph, map and timeline. Record assessments with their evidence, and build trends and report packs." },
-  ingest: { title: "Ingest Studio", who: "For data engineers", key: "I",
+  ingest: { who: "For data engineers",
             what: "Draw pipelines from source to load over the domain model. Each transform is tested, and nothing is scripted." },
-  admin: { title: "Admin area", who: "For administrators", key: "A",
+  admin: { who: "For administrators",
            what: "Manage people, roles and dashboard identities, and watch the services. The console never reads case content." },
 }; // prettier-ignore
+const PANELS = Object.fromEntries(
+  (Object.keys(WORDS) as StartPlace[]).map((place) => [place, { ...WORDS[place], title: PLACE_NAME[place], key: PLACE_KEY[place] }]),
+) as Record<StartPlace, { title: string; who: string; what: string; key: string }>;
 
 const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", admin: "Admin area" };
 const GLYPH: Record<Fact["tone"], string> = { ok: "✓", warn: "△", error: "!", info: "·" };
@@ -128,10 +136,10 @@ function AdminPicture({ services }: { services: HomeSummary["services"] }) {
   );
 }
 
-export function HomePage({ rights, person, summary, onChoose, onOpenCase, account, marking, now = new Date() }: HomePageProps) {
-  const panels = useMemo(() => homePanels(rights), [rights]);
-  const allowed = useMemo(() => new Set(panels.filter((p) => p.allowed).map((p) => p.place)), [panels]);
-  const primary = panels.find((p) => p.allowed)?.place;
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, account, marking, now = new Date() }: HomePageProps) {
+  const panels = useMemo(() => startPlaces(rights), [rights]);
+  const allowed = useMemo(() => new Set(panels), [panels]);
+  const primary = panels[0];
   const [tip, setTip] = useState(0);
 
   useEffect(() => {
@@ -176,16 +184,23 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
           </p>
         </section>
 
+        {panels.length === 0 && (
+          <p className="home-section__empty">
+            {rightsUnread
+              ? "What your account may open could not be read just now, so no place is offered. Sign in again, or try again shortly."
+              : "Your account opens no place yet. Ask an administrator to give you a role."}
+          </p>
+        )}
         <div className="home-panels">
-          {panels.map(({ place, allowed: usable, role }) => {
+          {panels.map((place) => {
             const p = PANELS[place];
             const shown = facts(place);
             return (
-              <section key={place} aria-label={p.title} className={`home-panel${usable ? "" : " home-panel--gated"}`}>
+              <section key={place} aria-label={p.title} className="home-panel">
                 <div className={`home-panel__picture${place === "glass" ? " network-canvas" : ""}`}>
                   {place === "glass" && <GlassPicture />}
-                  {place === "ingest" && <StudioPicture held={usable ? (summary?.held ?? null) : null} />}
-                  {place === "admin" && <AdminPicture services={usable ? (summary?.services ?? null) : null} />}
+                  {place === "ingest" && <StudioPicture held={summary?.held ?? null} />}
+                  {place === "admin" && <AdminPicture services={summary?.services ?? null} />}
                 </div>
                 <div className="home-panel__body">
                   <div className="home-panel__head">
@@ -193,16 +208,12 @@ export function HomePage({ rights, person, summary, onChoose, onOpenCase, accoun
                     <span className="home-panel__who">{p.who}</span>
                   </div>
                   <p className="home-panel__what">{p.what}</p>
-                  {usable && (shown ? <Facts facts={shown} /> : <p className="home-panel__reading">Reading…</p>)}
+                  {shown ? <Facts facts={shown} /> : <p className="home-panel__reading">Reading…</p>}
                   <span className="home-panel__spacer" />
-                  {usable ? (
-                    <button type="button" className={`btn${place === primary ? " btn--primary" : ""} home-panel__open`}
-                            onClick={() => onChoose(place)}>
-                      Open {p.title} <kbd className="home-key">{p.key}</kbd>
-                    </button>
-                  ) : (
-                    <p className="home-panel__gate">You need the {role} role for this. Ask an administrator to add it.</p>
-                  )}
+                  <button type="button" className={`btn${place === primary ? " btn--primary" : ""} home-panel__open`}
+                          onClick={() => onChoose(place)}>
+                    Open {p.title} <kbd className="home-key">{p.key}</kbd>
+                  </button>
                 </div>
               </section>
             );

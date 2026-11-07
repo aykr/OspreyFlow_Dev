@@ -320,7 +320,7 @@ ROUTE_RIGHTS = {
     "schedule_preview_route": "schedule_pipelines",
     "pause_recipe_schedule": "schedule_pipelines",
     "resume_recipe_schedule": "schedule_pipelines",
-    "recipe_runs_route": "read_data_feeds",
+    "recipe_runs_route": "run_pipelines",  # ADR-145 Amendment 1: the Studio's alone
 }
 
 
