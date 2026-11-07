@@ -705,7 +705,7 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
+    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
   >(handoff.view === "ingest" ? "ingest" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
@@ -762,8 +762,9 @@ export function App() {
     }
   };
   // ADR-145 decision 2: the Glass's view to come back to from the Studio (`shell/placeMemory.ts`).
+  // Messages (`dossier`) is not kept: it is drawn for one node, which a reload does not keep.
   const lastGlassView = useLastGlassView(view, "ingest", "graph", [
-    "graph", "map", "matrix", "reports", "dashboards", "dossier", "alerts", "ownership",
+    "graph", "map", "matrix", "reports", "dashboards", "alerts", "ownership",
   ] as const);
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
@@ -788,17 +789,13 @@ export function App() {
     });
     return () => cancelAnimationFrame(frame);
   }, [view]);
-  // ADR-145 N6: a place reached by a hand-off (`?view=ingest|admin`) or kept from before is opened only
-  // if the person's rights open it; otherwise Home, or the Glass's own landing view. Hiding is not the
-  // control (the routes refuse anyway); this keeps the screen from offering what would be refused.
+  // ADR-145 N6: the Studio, reached by a hand-off (`?view=ingest`) with a case open, is drawn only if
+  // the person's rights open it; otherwise the Glass's own landing view. (A place chosen outside a
+  // case is checked where it is drawn, in `shell/startScreen.tsx`.) Hiding is not the control — the
+  // routes refuse anyway; this keeps the screen from offering what would be refused.
   useEffect(() => {
-    if (!rightsSettled) return;
-    const open = startPlaces(rights);
-    if ((startChoice === "admin" || startChoice === "ingest" || startChoice === "glass") && !open.includes(startChoice)) {
-      setStartChoice("start");
-    }
-    if (view === "ingest" && !open.includes("ingest")) setView(landingView(rights));
-  }, [rights, rightsSettled, startChoice, view]);
+    if (rightsSettled && view === "ingest" && !startPlaces(rights).includes("ingest")) setView(landingView(rights));
+  }, [rights, rightsSettled, view]);
   // ADR-145 decision 2: the banner's case and the datasets it reads, as this person may see them.
   const caseContext = useCaseContext(API_BASE_URL, bearerToken, investigationId);
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
@@ -1334,7 +1331,7 @@ export function App() {
   // the map, not over Reports, a Superset board or the Admin area, and not to an account that may
   // not investigate (opened under an embedded board, the timeline overlapped it).
   const showsWorkingSetTools =
-    showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards", "admin"].includes(view);
+    showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards"].includes(view);
 
   return (
     // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
@@ -1595,7 +1592,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "admin" && view !== "dashboards" && (
+        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && welcomeOpen && (
               <WorkspaceWelcome

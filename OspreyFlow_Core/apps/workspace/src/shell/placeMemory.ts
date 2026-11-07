@@ -25,18 +25,18 @@ function keep(view: string): void {
   }
 }
 
-/** The Glass's view to come back to: `view` whenever it is not the Studio's, else the last that was
- * (this tab's, across a reload), if it is one of `views`, else `initial`. */
+/** The Glass's view to come back to: the last of `views` that was open (this tab's, across a
+ * reload), else `initial`. A view outside `views` is not kept: Messages (`dossier`) is drawn for one
+ * node, which a reload does not keep, so Back returns to the view open before it. */
 export function useLastGlassView<V extends string>(view: V, studioView: V, initial: V, views: readonly V[]): () => V {
   const last = useRef<V | null>(null);
+  const keeps = (v: string | null): v is V => v !== null && v !== studioView && (views as readonly string[]).includes(v);
   if (last.current === null) {
-    const kept = stored() as V | null;
-    last.current = view !== studioView ? view : kept && views.includes(kept) && kept !== studioView ? kept : initial;
+    const kept = stored();
+    last.current = keeps(view) ? view : keeps(kept) ? kept : initial;
   }
-  if (view !== studioView && last.current !== view) {
+  if (keeps(view) && (last.current !== view || stored() !== view)) {
     last.current = view;
-    keep(view);
-  } else if (view !== studioView && stored() !== view) {
     keep(view);
   }
   return () => last.current as V;

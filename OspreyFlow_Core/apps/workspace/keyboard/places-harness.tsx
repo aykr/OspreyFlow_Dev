@@ -41,7 +41,7 @@ const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
 const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
-type View = "graph" | "map" | "alerts" | "ingest";
+type View = "graph" | "map" | "dossier" | "alerts" | "ingest";
 
 function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
@@ -80,7 +80,12 @@ function Harness() {
         places={<PlaceSwitcher places={places} current={place} onChoose={choose} />}
         views={
           place === "glass"
-            ? (["graph", "map"] as const).map((v) => ({ id: v, label: v === "graph" ? "Graph" : "Map", pressed: view === v, onSelect: () => setView(v) }))
+            ? (["graph", "map", "dossier"] as const).map((v) => ({
+                id: v,
+                label: { graph: "Graph", map: "Map", dossier: "Messages" }[v],
+                pressed: view === v,
+                onSelect: () => setView(v),
+              }))
             : []
         }
         account={null}

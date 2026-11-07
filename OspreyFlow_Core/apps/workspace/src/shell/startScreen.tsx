@@ -45,7 +45,10 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
   if (!input.rightsSettled) {
     return <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading…</div>;
   }
-  const where = investigationId ? startChoice : startFor(startChoice);
+  // ADR-145 N6: a place chosen or handed off (`?view=ingest|admin`) is drawn only if the person's
+  // rights open it, else Home — decided here, before anything of the place is drawn.
+  const chosen = investigationId ? startChoice : startFor(startChoice);
+  const where = chosen === "glass" || chosen === "ingest" || chosen === "admin" ? (startPlaces(rights).includes(chosen) ? chosen : "start") : chosen;
   // ADR-145 decision 1: Home's cards and the switcher go to a place the same way. With a case open
   // behind, the Glass offers the cases with a way back to it, and the Studio opens on it; Admin needs
   // no case either way.

@@ -178,6 +178,25 @@ test("the banner's cross-link goes to the Studio and back to the same case and v
   registerCovered(REGISTRY, "banner-cross-link-by-keyboard");
 });
 
+// Messages is drawn for one node, which a reload does not keep: crossing from it, changing case in the
+// Studio and coming Back returns to the view open before Messages, not to an empty Messages.
+test("from Messages, the cross-link and a case change in the Studio come Back to the view before it", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,edit_pipelines");
+  for (const name of ["Map", "Messages"]) {
+    await page.getByRole("button", { name, exact: true }).focus();
+    await page.keyboard.press("Enter");
+  }
+  await expect(page.getByText("glass, dossier, on case kestrel")).toBeVisible();
+  await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
+  await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
+});
+
 // ADR-145 decision 1 (rule 13): the Glass's sections in the banner, Case · Boards · Monitoring; Boards
 // is coming and does nothing.
 test("the banner's sections move between Case and Monitoring by keyboard, and Boards is coming", async ({ page }) => {
