@@ -5,12 +5,17 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { AdminPlace } from "../src/admin/AdminPlace";
+import { applyHarnessBrand } from "./brandHarness";
+
+// `?brand=govuk` (ADR-145 decision 13): the side list as a GOV.UK side navigation, scanned so.
+await applyHarnessBrand();
 
 const tab = new URLSearchParams(location.search).get("rights") ?? "manage_people,manage_dashboards,administer_system";
 const open = new URLSearchParams(location.search).get("open");
 
 // `?open=connections` (ADR-140 Amendment 4): for the every-harness axe scan, the page serves the
-// Connections tab's list itself and opens the tab. Synthetic (rule 9). Without it, `admin.spec.ts`
+// Connections section's list itself and opens the section. `?open=<section label>` otherwise opens
+// that section from the side list (ADR-145 decision 5), for the scan of a placeholder. Synthetic (rule 9). Without it, `admin.spec.ts`
 // intercepts every call as before.
 if (open === "connections") {
   window.fetch = async (input: RequestInfo | URL) => {
@@ -31,8 +36,11 @@ createRoot(document.getElementById("root")!).render(
 );
 
 if (open) {
+  const label = open === "connections" ? "Connections" : open;
   for (let i = 0; i < 40; i++) {
-    const button = [...document.querySelectorAll<HTMLButtonElement>("button[role=tab]")].find((b) => b.textContent === "Connections");
+    const button = [...document.querySelectorAll<HTMLButtonElement>("nav[aria-label='Admin sections'] button")].find(
+      (b) => b.textContent === label,
+    );
     if (button) {
       button.click();
       break;

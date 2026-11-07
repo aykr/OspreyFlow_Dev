@@ -6,14 +6,15 @@
   padding: var(--sp-16); min-height: 0; flex: 1; overflow-y: auto;
   background: var(--surface-app); color: var(--text-primary);
 }
-.admin-place__title { margin: 0; }
+.admin-place .admin-place__title { margin: 0; }
 .admin-place__body { display: flex; gap: var(--sp-24); align-items: flex-start; min-width: 0; }
 .admin-place__section { display: flex; flex-direction: column; gap: var(--sp-12); flex: 1; min-width: 0; }
+.admin-place__section > h3 { align-self: flex-start; }
 .admin-place__section > h3:focus { outline: none; }
 .admin-place__section > h3:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
 
 .admin-nav { flex: none; width: 220px; display: flex; flex-direction: column; gap: var(--sp-12); }
-.admin-nav__heading { margin: 0 0 var(--sp-4); }
+.admin-nav .admin-nav__heading { margin: 0 0 var(--sp-4); }
 .admin-nav__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .admin-nav__item { border-left: 4px solid transparent; }
 .admin-nav__item--current { border-left-color: var(--brass); background: var(--surface-raised); }
@@ -27,6 +28,7 @@
 
 /* GOV.UK's side navigation: links underlined, the open item's rule and background as GOV.UK draws it,
    the focus state GOV.UK's own (the yellow with its ink). */
+.admin-nav--govuk { width: 280px; }
 .admin-nav--govuk .admin-nav__item--current { background: var(--surface-sunken); }
 .admin-nav--govuk .admin-nav__link { text-decoration: underline; text-underline-offset: 0.1578em; }
 .admin-nav--govuk .admin-nav__item--current .admin-nav__link { text-decoration: none; }
