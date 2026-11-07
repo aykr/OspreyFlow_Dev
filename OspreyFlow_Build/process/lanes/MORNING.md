@@ -16,6 +16,8 @@ New ones are added at the bottom as they happen.
 6. **A swept alert whose cited link can't be read is raised without its node**, rather than stopping the sweep.
 7. **QA: a Studio load writes into the pipeline's own dataset, refused unless that dataset is the case's loading dataset** (Part C, after L3.1; open limit in ADR-110 Amendment 15 until then). This follows your earlier ruling that only a case loading into a dataset sees its pipelines.
 8. **The port guard now reaches every Python process a test starts, and turns uvloop off** (`b232abf`), after the fourth rule 14 breach of the day.
+9. **L3.1 not merged at its final review (00:05):** two blockers. First, a monitor in a case could stamp an alert naming a subject from the case's own layer into the shared source (a rule 3 leak). Second, the migration fails outright once any branch reads its original's layer. My rulings: an alert any of whose referents or links is in the layer is written into the layer, and the migration counts and names a branch as reading its original's layer. Case is fixing both, with tests red first, before merge; your conditional approval still applies to the fixed branch.
+10. **A branch member with no level on the original case does not read the original's layer** (the same reasoning as the alert-jump exception). ADR-144 Amendment 1 decision 2 didn't address members who exist only in the branch.
 
 ## Evening, 7 November: your records of 7 November applied
 
