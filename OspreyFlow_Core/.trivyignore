@@ -47,6 +47,14 @@ CVE-2026-78669 exp:2026-12-14
 CVE-2026-78667 exp:2026-12-14
 CVE-2026-97031 exp:2026-12-14
 
+# CVE-2026-78661 — x/net/html: denial of service while parsing hostile HTML, in the same compose
+# plugin the harness copies from docker:29-cli (x/net 0.60.0; fixed in 0.62.0). The harness runs
+# compose only as a client of the local Docker socket and never hands it HTML to parse. A rebuild
+# without cache on 7 November 2026 still found 0.60.0. The owner's ruling that day was "Rebuild, then
+# dated ignore", so this is excepted until the same date as the lines above: rebuild on a newer
+# docker:*-cli then, and drop it.
+CVE-2026-78661 exp:2026-12-14
+
 # Superset 6.1.0 pins these below their fixes (cryptography <47, msgpack <1.1, pyarrow <19, and
 # pyOpenSSL with cryptography): PKCS#7 decryption and DTLS Superset never uses; msgpack and Arrow it
 # reads only from its own cached results; and it is the optional dashboard, behind the proxy, reading
