@@ -1,20 +1,16 @@
-# studio lane · report · L1.2 (phase 6), after the second review, 7 November 2026
-1. **Rule 4 at the class: met.** `get_authorized_studio_recipe` refuses, as missing, a recipe whose dataset is not the one the path's case loads into (`made_in`). A recipe with no dataset stays in reach, as `reach_clause` keeps such records. `test_studio_preview_routes.py`, for Preview and Test: red against today's dependency (200, not 404); another case loading into the same dataset still reaches the recipe; a viewer is refused (red with the level lowered). Spec 09 §8 states the rule.
-2. **Phase 6's exit: NOT met.** The committed reports map (11 elements, 10 links, conditions, content, six handling parts bound to columns) has not been built from scratch in guided mode, by keyboard or by hand. The harness walk binds one Document's title. Nothing has been walked on the dev stack (no lease: case holds it). DEMO_GUIDE chapter 4 has no from-scratch steps. Left for the next step: the full walk and those steps. Met: `MapScreen` tests migrated; keyboard and axe green; spec 09 updated; the friction fragment.
-3. **Minor items, done:**
-   - publish refuses after a Preview (route test, red against `verify`); the other route tests' reds are on record;
-   - the harness refuses without the approver role, at the save gate's 422, and for unready sample rows;
-   - guided mode keeps the step that feeds an expert step (red case);
-   - the reservation row is back to `reserved`; Amendment 8 names the owner's points (3, 5, 8) and says the exit is not met;
-   - `workingSetOfDryRun` is shared; the preview audit carries `investigation_id`; the extra blank lines are gone.
-4. **Found, not mine:** `test_load_checks.py`'s two verify cases fail on main's own `app.py` too (`KeyError: 'recipes_repo_root'`).
-5. **Commits after main `4acbcec`, oldest first:** `5032dad 9c3eba7 5362702 5d8554a eaab8ee 931e874 36d3d51 1694c46 cdb4a0f f2543b1 f6f4c4c d0ba66e 680286d 9108c10 df08c13 0a11cba d6f7ff2 2eb7c61 10edbd4 39817f8 f0bee29 b620806 8c59653`, then this report.
-6. **Request:** land `process/lanes/studio/L1.2_action_registry.diff` with the merge. It has 16 ids, and `ingest-studio.spec.ts` passes 36/36 with it.
-7. **Hand check, no stack.**
-   1. Run `cd /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace && npx vite --port 5185 --strictPort` and open http://localhost:5185/keyboard/ingest-studio-harness.html.
-   2. Click *Open Visit bookings*, then *+ Extract*. Then *Map: Map*, *Preview* and *Run preview*.
-   3. Then *Deploy* and *Deploy as v3*: refused, "hasn't passed Test".
-   4. Then *Test*, *Run the test*, *Deploy* and *Deploy as v3*: deployed.
-   5. Reload. Click *Open Visit bookings*, *Map: Map*, *Open map editor*, *Choose* on "called", *Entity 1: visitor (Person)* and *Bind called here: name*.
-   6. Repeat on http://localhost:5185/keyboard/ingest-studio-harness.html?brand=govuk. Add `&expert=1` to see an expert step read-only.
-8. **Green:** keyboard 549/549 (full suite); axe 72 (ingest states, three themes); vitest 338 (ingest); ruff, mypy, tsc; Python 1426 of 1427 in the Studio, recipe and route tests. The one failure, `test_a_pipeline_recipe_runs_through_the_pipeline_runner`, hit `asyncpg … pool is closed` mid-run and passes alone. **Questions for the owner:** none. **Running:** nothing of mine; no lease, no stack.
+# studio lane · report · L1.2 (phase 6), after the third review, 7 November 2026
+1. **Third review, (1): done.** The second review's `get_authorized_studio_recipe` check, and the spec 09 §8 text and Amendment 8 point that stated it, are reverted. The owner's load-into rule is L1.2a's. `test_studio_preview_routes.py` now proves main's reach the same through every door: a case whose read set holds the dataset reaches the recipe through open (Preview, Test) and both lists, even one that only reads it; another unit and a viewer are refused. The only-reads case is red with the reverted check replanted (line 173: open 404 while both lists show it).
+2. **(2) Amendment 8: done.** The "Not built" sentence is whole again. The exit is recorded as not met in **both** halves (from scratch in guided mode, and an expert-mode edit of the reports pipeline: the only expert edit is on the harness's own draft). The counts are fixed: 20 new spec cases (16 action, 4 refusal); 8 new axe states (24 scans, 8 label checks) of the harness's 54 and 18.
+3. **(3) Red record: done.** `L1.2_RED_RECORD.md`'s 21 keyboard rows were regenerated in one run against the current spec, so every line cite is current. Its Postgres note: the long run used the case lane's throwaway Postgres on 55433, without the lease. It is now down, so `test_route_rights.py`'s two live cases fail to connect here.
+4. **Phase 6's exit: NOT met** (left for L1.2b): the committed reports map built from scratch in guided mode; an expert-mode edit of the reports pipeline; DEMO_GUIDE chapter 4's from-scratch steps; a live walk under the lease. **Met:** `MapScreen` tests migrated; keyboard and axe green; spec 09 updated; the friction fragment.
+5. **Green here:** the Studio route tests (preview, recipe, publish, schedule, verify, levels) and the access test; ruff and mypy. `test_route_rights.py`'s two live cases need the Postgres that is now down. Earlier this session: keyboard 549/549, axe 72, vitest 338 (ingest). The frontend is unchanged since those runs.
+6. **Found, not mine:** `test_load_checks.py`'s two verify cases fail on main's own `app.py` (`KeyError: 'recipes_repo_root'`), queued in L1.2a.
+7. **Commits after main `76c2773`, oldest first:** `6be919e 30b2ea7 55d244b 9897804 7afb420 386d554 f31e7d5 94eb16a 5eefb88 d3928c8 2cfcf9e 42cf594 7fe0ba3 ac8ed14 74a5c7d 6ba3507 879b0ec ce536b0 7e49092 cbd444b 745ab78 cbd4bb3 862b311 2c3799c 77da37a fefc488`, then this report.
+8. **Request:** land `process/lanes/studio/L1.2_action_registry.diff` (16 ids) with the merge.
+9. **Hand check, no stack:**
+   1. Run `cd /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/apps/workspace && npx vite --port 5185 --strictPort`, then open http://localhost:5185/keyboard/ingest-studio-harness.html.
+   2. Click *Open Visit bookings* and *+ Extract*. Then *Map: Map*, *Preview* and *Run preview*.
+   3. Then *Deploy* and *Deploy as v3*: it is refused. Then *Test*, *Run the test*, *Deploy* and *Deploy as v3*: it deploys.
+   4. Reload, click *Open Visit bookings*, *Map: Map* and *Open map editor*. Then *Choose* on "called", *Entity 1: visitor (Person)* and *Bind called here: name*.
+   5. Repeat with `?brand=govuk`.
+10. **Questions for the owner:** none. **Running:** nothing of mine.
