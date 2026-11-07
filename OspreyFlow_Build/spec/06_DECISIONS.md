@@ -26630,10 +26630,25 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    the data goes there: it never falls back to the source (the owner's ruling of 7 November 2026 on
    the L3.1 review's finding 7). With no case's layer to go into (outside a case, or a case reading
    nothing) the write is refused and nothing is written (`dataset_scope.NoAnalystLayerError`, 409
-   `no_analyst_layer`). Every branch, and every case opened from an alert, has an empty layer of
-   its own and never reads its parent's, which its maker may hold no level on (the owner, 09:25,
-   7 November 2026, withdrawing the earlier ruling on finding 8). Branches are removed altogether
-   in the next builds, so no further branch design is made here.
+   `no_analyst_layer`). **A branch holds no layer of its own** (ADR-144 Amendment 1 decision 2,
+   the owner's ruling of 7 November 2026, "no branches anywhere", which replaces the branch's own
+   layer this item gave it at 09:25 that day): until L3.2 removes branches, a branch reads its
+   original case's dataset and its original case's layer, the layer read-only (`case_layer_reads`;
+   `DatasetStore.read_only_layer_of`). Every write into that layer from the branch is refused in
+   words, before anything is written (409 `branch_layer_read_only`, `datasets.BranchLayerError`):
+   by `analyst_writes_into`, by the store, which makes no layer for a branch, and by the stamping
+   graph's last word, a correction of what is in it included. **A case opened from an alert is
+   not a branch** and keeps an empty layer of its own: its maker may hold no level on the alert's
+   case, so it never reads that case's layer (rule 3; the orchestrator's call within the ruling,
+   7 November 2026; ADR-146 replaces the jump with a private view in L2.9).
+   **A temporary exception, for cases made before L3.1 only.** Such a case made from another
+   records only `branched_from`, as an alert jump's case does, so a branch cannot be told from a
+   jump; `scripts.migrate_cases_to_one_dataset` gives each an empty layer of its own, as rule 3
+   requires, and names and counts them in its output. L3.2 retires them, moving anything in such a
+   layer into the original case's, tagged `from_branch`. Proved by `test_analyst_layer.py`,
+   `test_analyst_layer_store.py`, `test_branch_layer.py`, `test_case_writes.py` (the real branch
+   and jump routes) and `test_migrate_cases_to_one_dataset.py`, each red with the other's
+   behaviour swapped in.
 4. **What is not moved:** marks and links written before this amendment stay in the dataset they were
    written in. Moving them would be a load-shaped change to a dataset other cases read, and is not
    done silently; it waits for its own decision if one is wanted.

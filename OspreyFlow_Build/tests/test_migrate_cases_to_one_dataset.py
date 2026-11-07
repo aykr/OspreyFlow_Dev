@@ -201,18 +201,49 @@ async def test_a_case_naming_a_composite_beside_another_dataset_is_reported(
     assert _state(store) == before
 
 
-async def test_a_branch_is_given_an_empty_layer_of_its_own(
+async def test_a_case_made_from_another_before_l3_1_keeps_an_empty_layer_of_its_own(
     store: InMemoryDatasetStore,
 ) -> None:
-    """ADR-143 Amendment 1 item 3: a branch never reads its parent's layer."""
+    """The temporary exception to ADR-144 Amendment 1 decision 2 (ADR-143 Amendment 1): a case made
+    from another before L3.1 records only `branched_from`, as an alert jump's case does, whose maker
+    may hold no level on the original (rule 3), so it keeps a layer of its own, and the run names
+    it. A branch made from now on holds none (`test_analyst_layer.py`)."""
     store.cases["branch"] = ["enron"]
     cases = [
         CaseRow("enron-case", "Enron", UNIT, None),
         CaseRow("branch", "Branch of Enron", UNIT, "enron-case"),
     ]
-    report = await migrate(store, cases, write=True, say=lambda _: None)
+    lines: list[str] = []
+    report = await migrate(store, cases, write=True, say=lines.append)
     assert report.layers_made == ["enron-case", "branch"]
     parent = await store.layer_of_case("enron-case")
     branch = await store.layer_of_case("branch")
     assert parent and branch and parent != branch
     assert await store.ids_of_case("branch") == ["enron", branch]
+    assert await store.read_only_layer_of("branch") is None
+    (said,) = [line for line in lines if "made from another case" in line]
+    assert said.strip().startswith("1 existing case made from another case keep")
+    assert "Branch of Enron (branch)" in said and "L3.2 retires them" in said
+
+
+async def test_the_migrated_case_check_fails_with_a_branchs_link_swapped_in(
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: given what a branch made now gets (its original's layer, read-only, none of
+    its own), the migrated case holds no layer and reads the original's."""
+
+    async def as_a_branch_now(case: CaseRow, through: Any) -> None:
+        if case.branched_from:
+            store.layer_reads[case.id] = await store.layer_of_case(case.branched_from)  # type: ignore[assignment]
+            return
+        await through.ensure_layer(case.id, unit=case.owning_unit, created_by="t")
+
+    monkeypatch.setattr(migration, "_give_a_layer", as_a_branch_now)
+    store.cases["branch"] = ["enron"]
+    cases = [
+        CaseRow("enron-case", "Enron", UNIT, None),
+        CaseRow("branch", "Branch of Enron", UNIT, "enron-case"),
+    ]
+    await migrate(store, cases, write=True, say=lambda _: None)
+    assert await store.layer_of_case("branch") is None
+    assert await store.read_only_layer_of("branch") == await store.layer_of_case("enron-case")

@@ -558,9 +558,12 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
-    dataset), and its name takes no place in the unit's unique names. A layer is never shared:
-    every branch, and every case opened from an alert, has an empty layer of its own and never
-    reads its parent's (ADR-143 Amendment 1 item 3; branches are removed in the next builds). A
+    dataset), and its name takes no place in the unit's unique names. A layer is written only by
+    its own case: a branch holds none and reads its original case's layer, read-only, every write
+    into it refused (ADR-144 Amendment 1 decision 2; branches are removed in L3.2), while a case
+    opened from an alert has an empty layer of its own and never reads the original's, its maker
+    holding no level on it perhaps (ADR-143 Amendment 1 item 3, with the exception there for
+    cases made from another before L3.1, which each keep a layer of their own). A
     case with no layer yet (one the migration has not reached) is given one by the analyst's own
     writer, inside the route after its level check, never when a request is merely scoped; with
     no case's layer to go into, that write is refused, never written into the source. Its egress (ADR-136 Amendment 1) is the
@@ -602,7 +605,8 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   drives each writer at its real call site.
 - **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
   gives each case that names several datasets a composite of them (one composite per distinct set),
-  gives every case its own layer (a branch included), reports a case it cannot place rather than
+  gives every case its own layer (a case made from another included, named in its output: the
+  exception in ADR-143 Amendment 1 item 3), reports a case it cannot place rather than
   guessing, and then builds
   the one-row index on `investigation_datasets`.
 - **A correction keeps its datasets**: `supersede_node` and `supersede_edge` give the new revision

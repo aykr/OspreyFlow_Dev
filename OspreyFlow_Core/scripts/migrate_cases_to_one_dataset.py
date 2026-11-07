@@ -71,6 +71,8 @@ class Report:
     #: (case id, the composite it now reads, whether the composite was made by this run).
     composed: list[tuple[str, str, bool]] = field(default_factory=list)
     layers_made: list[str] = field(default_factory=list)
+    #: Cases made from another case before L3.1, given a layer of their own (labels).
+    kept_their_own_layer: list[str] = field(default_factory=list)
     #: Each case not placed, with why, in words.
     unplaced: list[str] = field(default_factory=list)
     #: Every write made (or, in a dry run, that would be made), in order.
@@ -215,15 +217,32 @@ async def migrate(
                 f"  {label}: names {len(members)} datasets, now reads a composite of them; "
                 + _READ_ONLY
             )
-        # Every case its own empty layer, a branch included (ADR-143 Amendment 1 item 3).
         if await store.layer_of_case(case.id) is None:
-            await through.ensure_layer(
-                case.id, unit=case.owning_unit, created_by=ACTOR, case_name=case.name
-            )
+            await _give_a_layer(case, through)
             report.layers_made.append(case.id)
+            if case.branched_from:
+                report.kept_their_own_layer.append(label)
+    if report.kept_their_own_layer:
+        count = len(report.kept_their_own_layer)
+        say(
+            f"  {count:,} existing {'case' if count == 1 else 'cases'} made from another case "
+            "keep an empty layer of their own, because a branch can't be told from an alert jump; "
+            "L3.2 retires them: " + ", ".join(report.kept_their_own_layer)
+        )
     for line in report.unplaced:
         say(f"  not placed: {line}")
     return report
+
+
+async def _give_a_layer(case: CaseRow, through: Any) -> None:
+    """Every case its own empty layer, one made from another case included. A branch made from now
+    on holds none and reads its original's (ADR-144 Amendment 1 decision 2), but a case made from
+    another before L3.1 records only `branched_from`, which an alert jump's case records too, and
+    its maker may hold no level on the original (rule 3): so each keeps a layer of its own, the
+    temporary exception ADR-143 Amendment 1 states, until L3.2 retires them."""
+    await through.ensure_layer(
+        case.id, unit=case.owning_unit, created_by=ACTOR, case_name=case.name
+    )
 
 
 #: ADR-099 Amendment 15: what a case reading a composite can still do, said where it becomes one.
