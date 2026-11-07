@@ -24,6 +24,8 @@ QUIET_MIN="${OSPREY_QUIET_MINUTES:-45}"       # a working lane silent this long 
 LEASE_MAX_MIN="${OSPREY_LEASE_MAX_MINUTES:-120}"
 BEHIND_MAX="${OSPREY_BEHIND_MAX:-5}"
 STATES="planning working testing waiting-for-owner blocked ready-to-merge idle"
+# The step table the orchestrator keeps on main (process/lanes/progress.tsv).
+PROGRESS="${OSPREY_PROGRESS_FILE:-$(cd "$(dirname "$0")/.." && pwd)/process/lanes/progress.tsv}"
 mkdir -p "$DIR"
 
 now() { echo "${OSPREY_NOW:-$(date -u +%s)}"; }   # OSPREY_NOW: the test's clock
@@ -117,6 +119,18 @@ show() {
     echo "Dev stack: free"
   fi
   echo "Claude sessions running: $(sessions)"
+  if [ -f "$PROGRESS" ]; then
+    echo; echo "PROGRESS (steps done against the build plan; ■ done ◧ in hand □ to do)"
+    awk -F'\t' '!/^#/ && NF>=4 {
+        lane=$1; if (!(lane in seen)) { seen[lane]=1; order[++n]=lane }
+        total[lane]++; if ($4=="done") done[lane]++
+        bar[lane]=bar[lane] ($4=="done" ? "■" : ($4=="todo" ? "□" : "◧"))
+        if ($4=="review") now[lane]=now[lane] " " $2 " in review"
+        if ($4=="building") now[lane]=now[lane] " " $2 " building"
+      }
+      END { for (i=1;i<=n;i++) { l=order[i]
+        printf "  %-7s %2d/%-2d done  %s%s\n", l, done[l]+0, total[l], bar[l], (now[l] ? "  ·" now[l] : "") } }' "$PROGRESS"
+  fi
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi
   mv "$needs" "$DIR/.needs"

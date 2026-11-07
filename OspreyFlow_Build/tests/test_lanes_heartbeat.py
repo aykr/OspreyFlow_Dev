@@ -181,3 +181,18 @@ def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
     _all_beat(hb)
     lines = _needs(hb("show", OSPREY_WORKTREES=str(worktrees)))
     assert ("glass is 5 or more commits behind main: ask it to rebase" in lines) is flagged
+
+
+def test_progress_shows_each_lanes_steps_done_against_all(hb, tmp_path) -> None:
+    """The progress view counts what the step table says, per lane, and names the step in hand."""
+    table = tmp_path / "progress.tsv"
+    table.write_text(
+        "# comment\n"
+        "studio\tL1.1\tS\tdone\tFirst\nstudio\tL1.2\tL\treview\tSecond\nstudio\tL1.3\tL\ttodo\tThird\n"
+        "case\tL3.1\tL\tbuilding\tOnly\n"
+    )
+    out = hb("show", OSPREY_PROGRESS_FILE=str(table)).stdout
+    progress = out.split("PROGRESS")[1].split("\n\n")[0]
+    rows = {line.split()[0]: " ".join(line.split()) for line in progress.splitlines()[1:] if line.strip()}
+    assert rows["studio"].startswith("studio 1/3 done") and "L1.2 in review" in rows["studio"]
+    assert rows["case"].startswith("case 0/1 done") and "L3.1 building" in rows["case"]

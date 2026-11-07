@@ -1,0 +1,27 @@
+# The lanes' steps and where each stands (ADR-142). Kept by the orchestrator, updated at every merge and
+# review; lanes_heartbeat.sh shows it. Columns, tab-separated: lane, step, size (S/M/L), status
+# (done | review | building | todo), title.
+studio	L1.1	S	done	Phase 4's remainder: make ci green
+studio	L1.2	L	review	Phase 6: the canvas as editor, the Map editor, guided mode
+studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine
+studio	L1.4	M	todo	Phase 7b: the drawers for each step
+studio	L1.5	L	todo	Phase 8: expert steps
+studio	L1.6	M	todo	Phase 9: connectors
+studio	L1.7	L	todo	Phase 10: Operations and external orchestration
+glass	L2.1	M	done	The alerts gap map
+glass	L2.2	L	review	Three places: switcher, banner, Home, rail, GOV.UK header
+glass	L2.3	M	todo	The case screen's first lightening
+glass	L2.4	M	todo	Admin regrouped; Datasets' columns
+glass	L2.5	L	todo	People and roles; custom roles; Disable with transfers
+glass	L2.6	M	todo	Operations' promotions and ageing; Audit
+glass	L2.7	S	todo	The data engineer's Needs you; the Model tab's count
+case	L3.1	L	review	Phase 5 as amended: one dataset per case, composites, the analyst layer
+case	L3.1b	L	todo	Phase 5's target-model half
+case	L3.2	L	todo	Case views replace branches
+case	L3.3	L	todo	Drawing boards
+case	L3.4	L	todo	Promotion
+case	L3.5	M	todo	Analyst-defined link types
+case	L3.6	M	todo	The alert when a load meets a drawn item
+case	L3.7	S	todo	The grading scheme setting and command
+case	L3.8	S	todo	The ownership route for Disable
+docs	D1	M	done	The website: drawing boards and three places, marked coming
