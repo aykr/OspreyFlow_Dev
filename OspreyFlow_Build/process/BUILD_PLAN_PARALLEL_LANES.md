@@ -125,6 +125,20 @@ Follows merges, never runs ahead of them for the guides:
 A lane changes only what it owns. Anything else is a request to the orchestrator, who either makes a
 small shared commit and merges it first or moves the work to the owning lane.
 
+**Review, from 7 November 2026 evening (the orchestrator's judgement; the owner asked for speed and chose
+"Just the four changes").**
+1. *A lane reviews itself first.* Before reporting ready-to-merge, a lane runs the `lane-reviewer`
+   agent on its own branch against its brief and rules 1-15, fixes what it finds, and says so in its
+   report.
+2. *Depth by risk.* A step that touches access (rules 3 and 4), the data model, the analyst layer,
+   provenance or a store gets the orchestrator's full review. A UI-only or docs step gets one
+   review, then merges.
+3. *Two rounds, then carry forward.* After two review rounds, anything left that isn't a blocker
+   (a rule 3 or 4 defect, a failing gate, data written where it must not be) goes into a follow-up
+   item in the lane's next step's brief, and the step merges.
+4. *Briefs name the hard parts.* A brief that touches access names the cross-case and composite
+   cases, the real call site to plant at (rule 15), and what the real dependency refuses.
+
 **Merge order, as practised from 7 November 2026 (the orchestrator's judgement).** `make ci` is run on the
 merge result **before** the merge is kept: the orchestrator merges with `--no-commit`, or on a scratch
 branch, runs `make ci`, and keeps the merge only if it is no redder than `main`. Found when L1.2's merge
