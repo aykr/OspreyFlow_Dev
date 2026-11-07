@@ -449,13 +449,25 @@ async def _referent_handlings(
     known: Mapping[str, Handling],
 ) -> list[Handling]:
     """The markings an alert must not be lower than: every cited event's, everything it writes
-    alongside, and every referenced node's as stored. A node not yet committed (written in this
-    very load's transaction) cannot be read back: its marking as written (`known`) stands in, else
+    alongside, every referenced node's and every cited link's as stored (the links since ADR-146
+    decision 10: a link marked above its ends left the node, and the words it carries, readable by
+    someone who may not see the link). A node or link not yet committed (written in this very
+    load's transaction) cannot be read back: its marking as written (`known`) stands in, else
     `unseen` — the highest marking the load's recipe could give it."""
     handlings = [e.handling for e in finding.events]
     pending = {w.id: w.handling for w in finding.pending}
     handlings.extend(pending.values())
     reader = service_principal(scheme)
+    cited = sorted({e for e in finding.edge_ids if e not in pending and e not in known})
+    handlings.extend(known[e] for e in finding.edge_ids if e not in pending and e in known)
+    stored = {e.id: e.handling for e in await graph.get_edges(cited, reader)} if cited else {}
+    for edge_id in cited:
+        if edge_id in stored:
+            handlings.append(stored[edge_id])
+        elif unseen is not None:
+            handlings.append(unseen)
+        else:
+            raise RuntimeError(f"alert link {edge_id} could not be read for its marking")
     for node_id in finding.node_ids:
         if node_id in pending:
             continue
