@@ -30,6 +30,7 @@ ROUTE_RIGHTS = {
     "create_investigation": "create_case",
     "list_datasets_route": None,
     "create_dataset_route": "create_case",
+    "create_composite_route": "create_case",
     "case_datasets_route": None,
     "set_case_datasets_route": "share_case",
     "list_investigations": None,

@@ -310,12 +310,27 @@ def screen_places(root: Path) -> dict[str, set[str]]:
     return reached
 
 
+def _normal(path: str) -> str:
+    return re.sub(r"\{[a-z_]+(?::path)?\}", "{x}", path)
+
+
 def _callers(route: APIRoute, reached: dict[str, set[str]]) -> set[str]:
-    normal = re.sub(r"\{[a-z_]+(?::path)?\}", "{x}", route.path)
+    """The places whose fragments name the route. A fragment ending in a value
+    (`/v1/datasets/${id}`, the Studio's base for a dataset's routes) is not taken for a route with a
+    word there (`/v1/datasets/composites`) where another route holds an id at that place
+    (`/v1/datasets/{dataset_id}/sources`): the value is that id, not the word."""
+    normal = _normal(route.path)
+    normals = {_normal(r.path) for r in _routes()}
     where: set[str] = set()
     for fragment, places in reached.items():
-        if re.search(re.escape(fragment).replace(r"\{x\}", r"[^/]+") + "$", normal):
-            where |= places
+        found = re.search(re.escape(fragment).replace(r"\{x\}", r"[^/]+") + "$", normal)
+        if found is None:
+            continue
+        if fragment.endswith("{x}") and not normal.endswith("{x}"):
+            an_id_there = normal[: found.end()].rsplit("/", 1)[0] + "/{x}"
+            if any(n == an_id_there or n.startswith(an_id_there + "/") for n in normals):
+                continue
+        where |= places
     return where
 
 
@@ -355,6 +370,18 @@ def test_a_planted_call_from_another_place_is_found(tmp_path: Path) -> None:
         "export function Planted() { void listSources(api, 'd'); return null; }\n"
     )
     assert [w[0] for w in _misplaced(tmp_path)] == ["/v1/datasets/{dataset_id}/sources"] * 2
+
+
+def test_a_dataset_base_is_not_taken_for_the_composites_route_but_a_call_to_it_is() -> None:
+    """The case above's matching, both ways: the Studio's base for a dataset's routes is not a call
+    to `POST /v1/datasets/composites`, which no screen makes; a Studio file naming that route is."""
+    from services.api.app import app
+
+    route = next(
+        r for r in app.routes if isinstance(r, APIRoute) and r.path == "/v1/datasets/composites"
+    )
+    assert _callers(route, {"/v1/datasets/{x}": {"ingest"}}) == set()
+    assert _callers(route, {"/v1/datasets/composites": {"ingest"}}) == {"ingest"}
 
 
 # --- The places' table against the routes --------------------------------------------------------

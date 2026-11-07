@@ -177,7 +177,12 @@ def test_a_second_process_continues_an_investigation_the_first_was_killed_mid(
     private_key, _ = keypair
     headers = _bearer(private_key)
 
-    created = httpx.post(f"{instance_a.base_url}/v1/investigations", headers=headers)
+    # ADR-099 Amendment 12: a case reads exactly one dataset, named or made with it.
+    created = httpx.post(
+        f"{instance_a.base_url}/v1/investigations",
+        headers=headers,
+        json={"new_dataset_name": f"Statelessness {new_id()}"},
+    )
     assert created.status_code == 201, created.text
     investigation_id = created.json()["id"]
     # ADR-099: the case reads only its own dataset, made with it; what is seeded into it belongs

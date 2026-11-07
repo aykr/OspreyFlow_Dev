@@ -200,6 +200,12 @@ class _FakeGraphPort:
             return None
         return node
 
+    async def get_nodes(self, node_ids: list[str], principal: Principal) -> list[Node]:
+        """What the stamping graph's last word reads before a correction, refused as `get_node`
+        refuses: another unit's node is not returned."""
+        found = [await self.get_node(node_id, principal) for node_id in node_ids]
+        return [node for node in found if node is not None]
+
     async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: str) -> str:
         self.superseded.append((node_id, replacement))
         return replacement.id
