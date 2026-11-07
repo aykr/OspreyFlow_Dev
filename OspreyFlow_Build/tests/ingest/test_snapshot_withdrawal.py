@@ -90,6 +90,9 @@ class WithdrawalLedger:
                                    (tuple(e.node_ids), tuple(e.edge_ids), tuple(e.event_ids)))),
             )  # fmt: skip
         for key in report.withdrawn_row_keys:
+            if (report.recipe_id, self.case, key) in self.withdrawn:
+                # As the real table's primary key refuses it (`withdrawn_row_keys_pkey`).
+                raise ValueError("duplicate key value violates withdrawn_row_keys_pkey")
             kept = self.kept_rows.pop((report.recipe_id, self.case, key))
             self.withdrawn[(report.recipe_id, self.case, key)] = (*kept, report.load_id)
 
@@ -108,7 +111,12 @@ class WithdrawalLedger:
     ) -> list[KeptRow]:
         return [
             KeptRow(
-                row_key=k[2], load_id=v[0], node_ids=v[1], edge_ids=v[2], event_ids=v[3]
+                row_key=k[2],
+                load_id=v[0],
+                node_ids=v[1],
+                edge_ids=v[2],
+                event_ids=v[3],
+                withdrawn_before=k in self.withdrawn,
             )
             for k, v in sorted(self.kept_rows.items())
             if k[:2] == (recipe_id, case) and k[2] not in present
@@ -289,6 +297,8 @@ async def test_a_dropped_key_with_no_event_record_is_left_in_place_events_too(
     ledger.kept_rows[("private-cash", CASE, _key(A))] = (load, *unrecorded, None)
     before = events.on_links()
 
+    nodes, links = _live_values(graph), _live_links(graph)
+
     second = await _snapshot(graph, ledger, [B], "load-2", events=events)
 
     assert second.withdrawn_row_keys == [] and events.aside == {}
@@ -296,6 +306,7 @@ async def test_a_dropped_key_with_no_event_record_is_left_in_place_events_too(
     words = "1 dropped row was loaded before rows recorded the events they wrote, and was left in "
     assert second.refresh_notes == [words + "place, its events too"]
     assert events.on_links() == before
+    assert (_live_values(graph), _live_links(graph), graph.withdrawn) == (nodes, links, {})
     assert ("private-cash", CASE, _key(A)) in ledger.kept_rows
 
 
@@ -541,3 +552,29 @@ async def test_a_refresh_recorded_with_withdrawn_nodes_and_links_reverts_them_ba
 
     assert graph.withdrawn == {} and len(_live_links(graph)) == 2
     assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+
+
+async def test_a_row_dropped_after_coming_back_is_left_in_place_in_words() -> None:
+    """Drop, come back, drop again: the second drop cannot move the key aside (the first
+    withdrawal's entry stands, and neither revert can clear it under Amendment 15), so the row is
+    left in place, its new event too, and the run says so. The fake refuses the second move as the
+    real table's primary key does."""
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    await _snapshot(graph, ledger, [A, B], "load-1", events=events)
+    await _snapshot(graph, ledger, [B], "load-2", events=events)
+    await _snapshot(graph, ledger, [A, B], "load-3", events=events)
+    before = events.on_links()
+
+    again = await _snapshot(graph, ledger, [B], "load-4", events=events)
+
+    assert (
+        again.withdrawn_row_keys,
+        again.rows_withdrawn,
+        again.rows_left_in_place,
+    ) == ([], 0, 1)
+    assert events.on_links() == before
+    words = "1 dropped row had come back after an earlier refresh withdrew it, and was left in "
+    assert again.refresh_notes == [
+        words
+        + "place, its events too, until that refresh can be reverted (ADR-110 Amendment 15)"
+    ]

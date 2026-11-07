@@ -121,6 +121,9 @@ class KeptRow:
     node_ids: tuple[str, ...] | None
     edge_ids: tuple[str, ...] | None
     event_ids: tuple[str, ...] | None = None
+    #: An earlier full snapshot withdrew this key and its entry is still in `withdrawn_row_keys`:
+    #: the row came back. Moving it aside again would collide, so it is left (Amendment 15).
+    withdrawn_before: bool = False
 
 #: The record's own id lists: what `unreverted_loads` leaves out, since it answers a question about
 #: a load, not about its elements.
@@ -396,8 +399,11 @@ class RecipeRunStore:
         dropped: list[KeptRow] = []
         async with self._pool.acquire() as conn, conn.transaction():
             async for row in conn.cursor(
-                "SELECT row_key, load_id, node_ids, edge_ids, event_ids FROM loaded_row_keys "
-                "WHERE recipe_id = $1 AND investigation_id = $2 ORDER BY row_key",
+                "SELECT k.row_key, k.load_id, k.node_ids, k.edge_ids, k.event_ids, "
+                "EXISTS (SELECT 1 FROM withdrawn_row_keys w WHERE w.recipe_id = k.recipe_id "
+                "AND w.investigation_id = k.investigation_id AND w.row_key = k.row_key) "
+                "AS withdrawn_before FROM loaded_row_keys k "
+                "WHERE k.recipe_id = $1 AND k.investigation_id = $2 ORDER BY k.row_key",
                 recipe_id,
                 case,
             ):
@@ -410,6 +416,7 @@ class RecipeRunStore:
                         node_ids=None if row["node_ids"] is None else tuple(row["node_ids"]),
                         edge_ids=None if row["edge_ids"] is None else tuple(row["edge_ids"]),
                         event_ids=None if row["event_ids"] is None else tuple(row["event_ids"]),
+                        withdrawn_before=row["withdrawn_before"],
                     )
                 )
         return dropped

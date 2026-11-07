@@ -18,7 +18,9 @@ case or load:
   link;
 - **what it says** (`Withdrawal.notes`), in words, never silently: the dropped keys kept before rows
   recorded the events they wrote, which are left in place, their events too, with no fallback to
-  their links.
+  their links; and the dropped keys an earlier snapshot already withdrew, whose row came back,
+  left in place too (moving them aside again would collide with the earlier withdrawal, which
+  neither revert can clear while the row's return stands: Amendment 15's known limit).
 
 `WithdrawalLedger` is what `RecipeRunStore` answers (`services/api/recipe_runs.py`) and `LedgerSink`
 passes through."""
@@ -47,6 +49,9 @@ class DroppedRow(Protocol):
     @property
     def event_ids(self) -> tuple[str, ...] | None: ...
 
+    @property
+    def withdrawn_before(self) -> bool: ...
+
 
 class WithdrawalLedger(Protocol):
     async def dropped_row_keys(
@@ -62,18 +67,36 @@ class Withdrawal:
 
     row_keys: list[str] = field(default_factory=list)
     event_ids: list[str] = field(default_factory=list)
-    rows_left_in_place: int = 0
+    #: Dropped keys whose record names no events.
+    rows_unrecorded: int = 0
+    #: Dropped keys an earlier snapshot withdrew, whose row came back (`withdrawn_before`).
+    rows_back_again: int = 0
+
+    @property
+    def rows_left_in_place(self) -> int:
+        return self.rows_unrecorded + self.rows_back_again
 
     @property
     def notes(self) -> list[str]:
-        if not self.rows_left_in_place:
-            return []
-        one = self.rows_left_in_place == 1
-        return [
-            f"{self.rows_left_in_place} dropped row{'' if one else 's'} "
-            f"{'was' if one else 'were'} loaded before rows recorded the events they wrote, and "
-            f"{'was' if one else 'were'} left in place, {'its' if one else 'their'} events too"
-        ]
+        words: list[str] = []
+        if self.rows_unrecorded:
+            n = self.rows_unrecorded
+            one = n == 1
+            words.append(
+                f"{n} dropped row{'' if one else 's'} {'was' if one else 'were'} loaded before "
+                f"rows recorded the events they wrote, and {'was' if one else 'were'} left in "
+                f"place, {'its' if one else 'their'} events too"
+            )
+        if self.rows_back_again:
+            n = self.rows_back_again
+            one = n == 1
+            words.append(
+                f"{n} dropped row{'' if one else 's'} had come back after an earlier refresh "
+                f"withdrew {'it' if one else 'them'}, and {'was' if one else 'were'} left in "
+                f"place, {'its' if one else 'their'} events too, until that refresh can be "
+                "reverted (ADR-110 Amendment 15)"
+            )
+        return words
 
 
 async def plan_withdrawal(
@@ -89,9 +112,11 @@ async def plan_withdrawal(
         lambda: {k for k in row_group_keys(recipe, rows) if k is not None}
     )
     dropped = await ledger.dropped_row_keys(recipe.id, case, present=present)
-    recorded = [d for d in dropped if d.event_ids is not None]
+    back_again = [d for d in dropped if d.withdrawn_before]
+    recorded = [d for d in dropped if d.event_ids is not None and not d.withdrawn_before]
     return Withdrawal(
         row_keys=[d.row_key for d in recorded],
         event_ids=list(dict.fromkeys(e for d in recorded for e in d.event_ids or ())),
-        rows_left_in_place=len(dropped) - len(recorded),
+        rows_unrecorded=len(dropped) - len(recorded) - len(back_again),
+        rows_back_again=len(back_again),
     )
