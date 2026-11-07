@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **My calls, 12:05, glass L2.2's third review:** a place is offered only for the rights that reach its entry screen's first read, so the Studio opens for `edit_pipelines` as on main. Legacy `loader` and `source_approver` accounts are no longer offered a Studio that would then refuse them. `/v1/exports` (the compliance ledger) gets an explicit Admin rule. ADR-067 Amendment 1 is released unwritten. **Case L3.1's fourth review:** two more composite gaps (an entity's confirm or retract changes the member; accepting an email finding fails), both inside your existing rulings, so sent to case without a question.
+
 - **Your ruling, 11:40:** only a case that loads into a dataset lists or opens its pipelines, in the store's query. **My sequencing:** it lands as L1.2a after L3.1 (the build plan's merge order), and L1.2 merges on main's current rule first. L1.2b closes phase 6's exit. **Settled from the code, not put to you:** glass's two questions (the seven routes already refuse Analysts on main; schedule preview is exempt from place assignment because it reads no store).
 
 - **Corrected, 11:20:** the 'Re-home the routes' question rested on wrong facts. The first glass review missed that each Studio route also checks a Studio role, and I passed its reading on unverified. So Analysts never could upload or read sources, and Administrators only previewed schedules. Your corrected ruling: no route moves place; places follow the routes' full checks; only the run history narrows, to `run_pipelines`. ADR-145 Amendment 1 is to be rewritten to the true facts before merge. The lesson: I check a reviewer's access claims against the code before they become a question for you.
