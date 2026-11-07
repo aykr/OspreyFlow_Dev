@@ -432,10 +432,10 @@ export const SELECTION_ACTIONS = defineActionRegistry("SELECTION_ACTIONS", [
   "clear-the-selection-with-escape-on-the-canvas",
 ] as const);
 
-/** What a case reads (ADR-099): chosen when the case is made (one dataset, a radio), changed by its Author.
+/** What a case reads (ADR-099): ticked when the case is made, changed by its Author.
  * `keyboard/case-datasets.spec.ts`. */
 export const CASE_DATASETS_ACTIONS = defineActionRegistry("CASE_DATASETS_ACTIONS", [
-  "choose-a-dataset-and-create-a-case-by-keyboard",
+  "tick-datasets-and-create-a-case-by-keyboard",
   "change-what-a-case-reads-by-keyboard",
   // ADR-126: the case's domain models, chosen when it is made and changed by its Author.
   "choose-a-cases-domain-models-when-creating-it-by-keyboard",
