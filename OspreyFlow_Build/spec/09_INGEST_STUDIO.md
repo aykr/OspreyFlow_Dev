@@ -946,13 +946,14 @@ rows' events and their keys, and is refused while a row it withdrew has been loa
 recorded before Amendment 15, whose record lists withdrawn nodes and links, restores those too. A
 pipeline reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
 
-Four limits stand (Amendment 15), the first three until the owner rules. A row that comes back merges into its own
+Three limits stand (Amendment 15), the first two until the owner rules. A row that comes back merges into its own
 link, so its load is not reverted, nor the refresh that withdrew it; the run says so in words. A row
-dropped again after coming back is left in place, its events too, in words. And until a Studio load
-stamps its dataset (ADR-143), two cases' rows on the same pair merge into one link, so one case's
-occurrences and created links can count the other's: that is the load's, not the withdrawal's.
-And a failure to set the events aside after the record is in fails the run in words; the keys are
-already aside, so the refresh's revert reconciles them. That path is not tested.
+dropped again after coming back is left in place, its events too, in words. And a failure to set the events aside after the record is in fails the run in words; the keys are
+already aside, so the refresh's revert reconciles them. That path is not tested. A cross-case link
+merge was examined in Part A2 and is not real on main, by its tests. A Studio load is stamped with
+its case's dataset and its loader confined to it, by the scheduler and by *Run now* alike, so cases
+on two datasets never share a link. Two cases loading into one dataset share it by design, and read
+it alike (Amendment 15's known limits).
 
 **An incremental refresh** (ADR-110 Amendment 10). The source names a watermark column. Each load
 records the highest value it read, and the next refresh by the same pipeline into the same case

@@ -27791,10 +27791,12 @@ the same link, of any case, went with them.
    (`tests/ingest/test_snapshot_withdrawal.py`'s
    `test_a_refresh_recorded_with_withdrawn_nodes_and_links_reverts_them_back`).
 7. **The test of the whole.** `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`
-   drives `run_recipe_as` and `run_published_recipe` over the run ledger, the real ArcadeDB adapter
-   and DuckDB, with two principals of two cases. It runs one published pipeline three times into one
-   case (rows A and B; A; A and B) in two worlds; in the second, the other case runs the same pipeline
-   with B's own row and a link of its own on B's node, and a third case loads and withdraws its own
+   drives `run_recipe_as` and `run_published_recipe` over the run ledger, the Conduit's stamping
+   graph on the real ArcadeDB adapter, and DuckDB. Each principal is confined to its case's datasets
+   by the real `scope_to_case`. It runs one published pipeline three times into one case (rows A and
+   B; A; A and B) in two worlds. In the second, the other case, loading into the same dataset, runs
+   the same pipeline with B's own row and a link of its own on B's node; its row merges into B's link
+   by design (the known limits below). A third case, on its own dataset, loads and withdraws its own
    B, the same row key. It compares, between the worlds, the whole `ScheduleRunView` and
    `report_view` of the second and third runs, and what each run changed of the live nodes, the live
    links (with their occurrences) and the case's timeline. It is shown red with link withdrawal
@@ -27802,8 +27804,9 @@ the same link, of any case, went with them.
    other cases' loads told to the loader, and with `withdrawn_before` asked without the case; the
    ledger's own tests are red with `withdrawn_row_keys_among`, the move's guard, `withdrawn_keys_kept_again`
    and `restore_withdrawn_row_keys` each asked without the case, and with the guard removed
-   (`process/lanes/studio/L1.2a_RED_RECORD.md`). The first four reds ran on the live test before its
-   third case (`5ac854e`); the later ones on the current file. It holds for what the withdrawal changes, not for
+   (`process/lanes/studio/L1.2a_RED_RECORD.md`). Each live red was run again on the file as it now
+   stands (Part A2), with four more aimed at the second and third runs' views, the third run's words
+   and the graph's change when the row comes back. It holds for what the withdrawal changes, not for
    every figure the run gives: the known limits below are why.
 8. **The Studio says it in words.** A source's page and the wizard offer "Withdraw their events;
    their nodes and links stay until their load is reverted", and describe the policy the same way
@@ -27821,12 +27824,22 @@ the same link, of any case, went with them.
   `tests/ingest/test_snapshot_withdrawal.py`).
 - A row dropped again after coming back is left in place, its events too, and the run says so (point
   4): its first withdrawal's entry stands until that refresh can be reverted.
-- A Studio load stamps no dataset on what it writes until the load-into rule (ADR-143, L3.1), so the
-  test's principals are not confined to a dataset. And two cases' rows on the same pair merge into
-  one link with the same audience, so one case's occurrences count the other's, and the other case's
-  row can turn this case's create into a merge. Neither is the withdrawal's; the test compares each
-  run's change, not the state, for that reason. The orchestrator has it as the studio lane's Part A2
-  (to be proved on main first).
+- **Examined in Part A2 and not real on main, by these tests:** the cross-case link merge. Part A's
+  test first drove the raw adapter, which stamps nothing, so it needed unconfined principals and two
+  cases' rows on one pair merged. The Conduit stamps a Studio load with its case's dataset and
+  confines the loader to it, through the scheduler's `check_case` and through *Run now*'s
+  `get_principal` (both `scope_to_case`). A link write merges only within one set of datasets, so
+  cases on two datasets never merge, and each reads only its own.
+  - Proofs: `tests/services/api/test_studio_load_stamps_its_case_dataset_live.py` and
+    `test_studio_run_now_stamps_its_case_dataset_live.py`. They are red with the raw adapter in place
+    of the stamping graph, and with `scope_to_case` taken out of either entry point.
+  - Two cases loading into one dataset do merge, by design. ADR-102 Amendment 3: a link write
+    merges "only when both are visible to exactly the same principals, judged by … the same set of
+    datasets". ADR-099 decision 2: "One person or address seen in two datasets stays one node …
+    visible to a case of either; its links stay with the dataset that wrote them". ADR-143 as
+    amended: "data loaded through the Studio joins the source dataset". Both cases read the same
+    link, count and occurrences, and a case on another dataset reads none of it (the first file).
+  - The test of the whole compares each run's change for that reason.
 - A failure to set the events aside, after the record is in, fails the run in words. The keys are
   already aside, so a rerun does not find those rows dropped again; the revert of the refresh
   reconciles them. Not tested.
