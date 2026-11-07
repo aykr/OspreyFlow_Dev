@@ -1,4 +1,4 @@
-lease glass; 2026-11-07T21:03:27Z; red 1: ReadableEvidence.whole with nodes alone
+lease glass (clean re-run); 2026-11-07T21:43:03Z; red 1: ReadableEvidence.whole with nodes alone
 diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
 index 1864d6a..3d424c4 100644
 --- a/OspreyFlow_Core/services/api/alerts.py
@@ -13,16 +13,13 @@ index 1864d6a..3d424c4 100644
  
  
 >           assert await _listed(stores, graph, analytics, case, TEAMMATE) == []
-E           AssertionError: assert ['01M6VX5Z4KP...MDJXJB6NXHE5'] == []
-E             
-E             Left contains 2 more items, first extra item: '01M6VX5Z4KPWBZ2VJZQ9PJ2AB6'
+E           AssertionError: assert ['01M6VZEKFEV...23WT8ETKQFVW'] == []
+E             Left contains 2 more items, first extra item: '01M6VZEKFEVX72J492XVYRN88S'
 E             Use -v to get more diff
-../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:149: AssertionError
 >               assert raised.id not in await _listed(stores, graph, analytics, case, reader), reader.id
 E               AssertionError: analyst-teammate-live
-E               assert '01M6VX63PG3NR4YE7BP41Y4Q12' not in ['01M6VX63PG3NR4YE7BP41Y4Q12']
-E                +  where '01M6VX63PG3NR4YE7BP41Y4Q12' = Alert(id='01M6VX63PG3NR4YE7BP41Y4Q12', rule_id='typology:01M6VX63JKTYPJX63X98HD2ECJ', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
-../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:180: AssertionError
+E               assert '01M6VZETTSADXYHP7YKT1M4V2E' not in ['01M6VZETTSADXYHP7YKT1M4V2E']
+E                +  where '01M6VZETTSADXYHP7YKT1M4V2E' = Alert(id='01M6VZETTSADXYHP7YKT1M4V2E', rule_id='typology:01M6VZETQ7EVR2ST9FDE8E89X1', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
 FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactions_is_withheld_whole
 FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one
-2 failed, 3 passed in 25.30s
+2 failed, 3 passed in 40.18s

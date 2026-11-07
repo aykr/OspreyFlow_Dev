@@ -1,4 +1,4 @@
-lease glass; 2026-11-07T21:05:07Z; red 2: cited links left out of _referent_handlings
+lease glass (clean re-run); 2026-11-07T21:43:44Z; red 2: cited links left out of _referent_handlings
 diff --git a/OspreyFlow_Core/services/api/rule_evaluation.py b/OspreyFlow_Core/services/api/rule_evaluation.py
 index 856fc78..6f42e09 100644
 --- a/OspreyFlow_Core/services/api/rule_evaluation.py
@@ -14,19 +14,17 @@ index 856fc78..6f42e09 100644
      for edge_id in cited:
          if edge_id in stored:
 >           assert raised.alert_node_id is None
-E           AssertionError: assert '01M6VX91S3EXS9NY6P1GH5R701' is None
-E            +  where '01M6VX91S3EXS9NY6P1GH5R701' = Alert(id='01M6VX91TSCFMVPSDX3BCVSDN2', rule_id='typology:01M6VX91RQAFV69TD97X0TY8C6', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_node_id
+E           AssertionError: assert '01M6VZFX9GDX4D5GFK26ZCZF35' is None
+E            +  where '01M6VZFX9GDX4D5GFK26ZCZF35' = Alert(id='01M6VZFXBQWH08Q5DPRTH0D1FM', rule_id='typology:01M6VZFX93RV5AX3HNHVT1562C', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_node_id
 >           assert node is not None and node.handling.classification == "SECRET"
-E           AssertionError: assert (Node(id='01M6VX95FETPGX5BG1YHNX2GRH', type='Alert', properties={'rule_id': '01M6VX9564F5HA70WAK0DCY6J6', 'typology': '...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]) is not None and 'OFFICIAL' == 'SECRET'
-E             
+E           AssertionError: assert (Node(id='01M6VZG2ERKPDHXJMXTYJ4EG6C', type='Alert', properties={'rule_id': '01M6VZG23HEAG68PSHFKVYM8ZY', 'typology': '...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]) is not None and 'OFFICIAL' == 'SECRET'
 E             - SECRET
 E             + OFFICIAL)
 >           assert (node_id, why) == (None, "unreadable_link")
-E           AssertionError: assert ('01M6VX9B07P...8WY2R4', None) == (None, 'unreadable_link')
-E             
-E             At index 0 diff: '01M6VX9B07PZADZFPVJB8WY2R4' != None
+E           AssertionError: assert ('01M6VZG8527...5C1FSJ', None) == (None, 'unreadable_link')
+E             At index 0 diff: '01M6VZG85272VXS3RW5R5C1FSJ' != None
 E             Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one
 FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node
 FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row
-3 failed, 2 passed in 23.24s
+3 failed, 2 passed in 29.93s
