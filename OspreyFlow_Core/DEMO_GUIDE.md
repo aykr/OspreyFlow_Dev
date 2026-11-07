@@ -754,15 +754,16 @@ where you are ("You are in the Glass · Case … · reads …"), and for an acco
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
 *Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Each account is offered
-exactly the places its rights open (table below; ADR-145 Amendment 1), read from every check the
-places' routes make, and a place it is not offered refuses it. No role lost a right; the Studio's
-pipeline-run history now needs a pipeline right, so the analyst and the report viewer, who had no
-screen for it, are no longer answered there.
+exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
+whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds one of its tabs' rights,
+the Glass for whoever holds a right a case's routes need. A place an account is not offered refuses
+it. No role lost a right; the Studio's pipeline-run history now needs a pipeline right, so the
+analyst and the report viewer, who had no screen for it, are no longer answered there.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |
 | `osprey-demo-analyst` | Analyst | the Glass: graph, map, alerts, ownership, reports | `OSPREY_DEMO_ANALYST_PASSWORD` |
-| `osprey-demo-engineer` | Data Engineer | the Glass, the Ingest Studio (pipelines, rules, held rows) and Admin › Operations | `OSPREY_DEMO_ENGINEER_PASSWORD` |
+| `osprey-demo-engineer` | Data Engineer | the Ingest Studio (pipelines), the Glass (its rules and held rows are Monitoring's) and Admin › Operations | `OSPREY_DEMO_ENGINEER_PASSWORD` |
 | `osprey-demo-report-viewer` | Reports Viewer | the Glass: Reports and Dashboards only — no graph | `OSPREY_DEMO_REPORT_VIEWER_PASSWORD` |
 | `osprey-demo-admin` | Administrator (and Analyst, Data Engineer) | all three places: the Glass, the Ingest Studio and Admin | `OSPREY_DEMO_ADMIN_PASSWORD` |
 

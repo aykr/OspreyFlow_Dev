@@ -26978,34 +26978,39 @@ keyboard or by hand. *Edited in expert mode*: the only expert-mode edit case edi
 draft, not the reports pipeline. Nothing has been walked on the dev stack, and DEMO_GUIDE chapter 4
 still opens the seeded draft. All of it is left to a later step (L1.2b).
 
-### ADR-145, Amendment 1 (7 November 2026) — three places as built: a place follows the rights its routes check; the crossing routes re-homed; the GOV.UK header's local extension
+### ADR-145, Amendment 1 (7 November 2026) — three places as built: each place follows the full checks its routes make; no route moves place; only the Studio's run history narrows; the schedule preview exempt from place assignment; the GOV.UK header's local extension
 
 Status: accepted from the owner's corrected ruling of 7 November 2026 (no route moves place; each
-place is shown from the full checks its routes make), with the orchestrator's settlement of the same
-day on the schedule preview; built in Lane 2's L2.2. Amends decisions 1 and 3 as they are built;
-decision 2 is unchanged. The heading was reserved before the ruling was corrected: no route was
-re-homed in the end, and "the crossing routes" are the one route whose right changed (point 2).
+place is shown from the full checks its routes make), with the orchestrator's settlements of the same
+day under the owner's delegation (the schedule preview exempt; a place offered only where it is
+usable); built in Lane 2's L2.2. Amends decisions 1 and 3 as they are built; decision 2 is unchanged.
 
-1. **A place follows every check its routes make.** `apps/workspace/src/shell/places.json` names the
-   three places and the single rights that open each; a place is offered to whoever holds any one of
-   them. A route's checks are all of them: the right its decorator names (`require_right`), the Studio
-   role its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a Studio
-   role is a right), and the administrator role (`require_admin_role`). A place is offered to whoever
-   one of its routes answers, and its rights in `places.json` are exactly the single rights that do
-   so, each used by a screen of that place. While the rights are not known, or cannot be read, no place
-   is offered. Proved by `test_place_routes.py`, which records what the routes answer every role, legacy
-   role and right granted singly (`shell/placesByRole.json`, to which `placesFor` is held), and checks
-   every call site in the workspace's source against its route's places.
-2. **No role loses a right and no route moves place** (`schemas/rights.py` is unchanged). Before this,
-   the Studio's dataset, connection and folder routes (`add_ingest_files` and `SourceAuthorDep`, so
-   `edit_pipelines` too), its upload (the same two, ADR-067 unchanged), its schedule, pause and resume
-   (`schedule_pipelines` and the approver's role, `publish_pipelines`) and a source's refresh pause and
-   resume (`schedule_pipelines` and `SourceAuthorDep`) already refused Analysts and Administrators. One
-   route answered people with no screen of the Studio:
+1. **A place follows the checks its routes declare, and is offered only where it can be used.**
+   `apps/workspace/src/shell/places.json` names the three places and the single rights that open each; a
+   place is offered to whoever holds any one of them. A route's checks, as the place test reads them, are
+   the right its decorator names (`require_right`), the Studio role its signature or its dependencies ask
+   for (`require_studio_role`, `SourceAuthorDep`; a Studio role is a right) and the administrator role
+   (`require_admin_role`); a check made inside a route's body (such as `_require_administrator`) is not
+   read. A place is offered for the rights that reach its entry screen's first read: the Studio's, the
+   recipe registry (`edit_pipelines`); Admin's, the first read of whichever of its tabs the person holds a
+   right for (`manage_people`, `manage_dashboards`, `operate_schedules`, `administer_system`); the
+   Glass's entry, the case list, is open to every signed-in person, so the Glass is offered for any
+   right one of its routes needs. While the rights are not known, or cannot be read, no place is
+   offered. Proved by `test_place_routes.py`, which records in `shell/placesByRole.json` what each role,
+   legacy role and right granted singly is offered (`placesFor` is held to it), checks each right a place
+   claims reaches a screen of that place, and checks every call site in the workspace's source against
+   its route's places.
+2. **No role loses a right and no route moves place** (`schemas/rights.py` is unchanged). The Studio's
+   dataset, connection and folder routes and its upload ask for `add_ingest_files` and the author's
+   Studio role (`edit_pipelines`), so they refuse an Analyst, and they refuse `right:edit_pipelines`
+   granted alone too; its schedule, pause and resume ask for `schedule_pipelines` and the approver's
+   role (`publish_pipelines`), and a source's refresh pause and resume `schedule_pipelines` and the
+   author's role, so they refuse an Administrator. One route answered people with no screen of the
+   Studio:
 
    | Route | Was | Now | Who stops being answered |
    | --- | --- | --- | --- |
-   | `GET /v1/investigations/{id}/ingest/recipes/{r}/runs` | `read_data_feeds` | `run_pipelines` | Analysts and Reports Viewers (no screen of theirs calls it; the Glass's *Data feeds* keeps its own route) |
+   | `GET /v1/investigations/{id}/ingest/recipes/{r}/runs` | `read_data_feeds` | `run_pipelines` | Analysts, Reports Viewers and `right:read_data_feeds` granted alone (no screen of theirs calls it; the Glass's *Data feeds* keeps its own route) |
 
    Who is now answered there who was not: whoever holds `run_pipelines` without `read_data_feeds` —
    the legacy `loader`, and `right:run_pipelines` granted singly. Data Engineers are answered as before.
@@ -27013,11 +27018,15 @@ re-homed in the end, and "the crossing routes" are the one route whose right cha
    the reference catalogues, which any signed-in person may read; `POST /v1/ingest/schedule-preview`,
    which computes run times from the cron text sent and reads no store (its right, `schedule_pipelines`,
    and its answers are unchanged, administrators included, for Admin › Operations and the Studio's
-   schedule editor alike); and `GET /v1/exports`, the export ledger, which no screen calls.
+   schedule editor alike); and `GET /v1/exports`, the export ledger, an Admin route by its path, exempt
+   only while no screen calls it (a test fails the day one does).
 4. **What each role is offered:** an Analyst the Glass; a Data Engineer the Glass, the Studio and Admin
    (Admin › Operations); an Administrator Admin and the Glass (the case list, for an orphaned case, the
-   rule audit and link-strength influencers); a Reports Viewer the Glass; the Super user all three. The
-   legacy `source_author`, `source_approver` and `loader` are offered the Studio; `compliance` nothing.
+   rule audit and link-strength influencers); a Reports Viewer the Glass; the Super user all three. Of
+   the legacy roles, `source_author` is offered the Studio; `source_approver`, `loader` and `compliance`
+   no place — the first two keep their own Studio routes (publishing and scheduling; running and the run
+   history), which still answer them by their own rights, recorded in `placesByRole.json` as answered
+   though their place is not offered, because the Studio's entry read needs `edit_pipelines`.
 5. **The GOV.UK header's local extension** (decision 3). GOV.UK Frontend 6.6.0's `header` has no
    navigation: its parameters are the product name and the homepage link. So the header carries one
    slot after the logo (`brand/govuk/GovukHeader.tsx`, `withPlaces`, drawn only in the Glass's frame,
@@ -27026,10 +27035,11 @@ re-homed in the end, and "the crossing routes" are the one route whose right cha
    stands; nothing else of GOV.UK Frontend is changed.
 6. **The banner as built** (decision 2): the Glass's Case · Boards · Monitoring, *Boards* drawn as coming
    until Lane 3 builds it; the cross-link keeps the open case and returns to the Glass's last view, kept
-   in the tab's session storage across the reload that choosing another case causes. Not built: the
-   Studio's *Dataset ‹name› ▾* — the Studio chooses its dataset in its own *Dataset* select, and naming
-   it in the banner needs a hook in Lane 1's screens — and that dataset's "feeds n cases" (no route
-   gives a dataset's cases as the reader may see them; rule 7).
+   in the tab's session storage across the reload that choosing another case causes (Messages is not
+   kept: it is drawn for one node, which a reload does not keep). Not built: the Studio's *Dataset ‹name›
+   ▾* — the Studio chooses its dataset in its own *Dataset* select, and naming it in the banner needs a
+   hook in Lane 1's screens — and that dataset's "feeds n cases" (no route gives a dataset's cases as the
+   reader may see them; rule 7).
 
 ### ADR-090, Amendment 5 (7 November 2026) — Proposed types stay in Admin until the Studio's Model tab shows them
 

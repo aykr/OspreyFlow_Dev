@@ -384,18 +384,22 @@ This replaces "there is no application switch" (ADR-097 step 1), which this sect
 **The places.** *The Glass* (analysis: Case · Boards · Monitoring; *Boards* arrives with Lane 3's
 board screens), *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. One
 table, `apps/workspace/src/shell/places.json`, names them and the single rights that open each; a place
-is offered to whoever holds any one of them, and nobody else. While the rights are not yet known, or
+is offered to whoever holds any one of them, and nobody else: the Studio for the right its first read
+needs (`edit_pipelines`, the recipe registry), Admin for the right of one of its tabs, the Glass for any
+right a case's routes need. While the rights are not yet known, or
 cannot be read, no place is offered, and Home says the rights could not be read. Every signed-in
 person reaches the same sign-in; Home is no place, and lists the same places as cards (*Home*, under
 §3.3). A hand-off from the launcher (`?view=ingest|admin`, §2.2) is only a wish: it opens that place
 only if the rights open it, else Home or the Glass's landing view; Admin, a place of its own, opens
 outside the case even with one open.
 
-**Hiding is never the control (rule 3).** A place is offered to whoever one of its own routes answers,
-reading **every check a route makes**: the right its decorator names (`require_right`), the Studio role
-its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a Studio role is a
-right), and the administrator role (`require_admin_role`). So a place hidden from a person is one whose
-every route refuses them. The Conduit's place-routes test (`test_place_routes.py`, in the build tree)
+**Hiding is never the control (rule 3).** A place is offered to whoever its entry can serve, reading the
+checks a route declares: the right its decorator names (`require_right`), the Studio role its signature
+or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a Studio role is a right), and
+the administrator role (`require_admin_role`); a check inside a route's body is not read. A place
+hidden from a person is one whose routes refuse them, but for a legacy role's own Studio actions
+(`source_approver`'s publishing, `loader`'s running), which answer by their own rights and are recorded
+as such. The Conduit's place-routes test (`test_place_routes.py`, in the build tree)
 assigns every route to the place whose screens call it (`/v1/admin/screening-lists` is the Glass's,
 called by Monitoring › Lists); records what the routes answer each role, legacy role and right granted
 singly (`shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
@@ -404,16 +408,17 @@ every call site the workspace's source names against its route's places; and cal
 hidden place, which must not answer. Exempt, with their reasons there: the reference catalogues, which
 any signed-in person may read (as `test_route_rights.py`, the route-rights test, records them), the
 schedule preview, which computes run times from the text sent and reads no store, and the export
-ledger's route, which no screen calls.
+ledger's route (an Admin route), exempt only while no screen calls it.
 
 What each role is offered (the owner's ruling of 7 November 2026; ADR-145 Amendment 1): an
 **Analyst** the Glass; a **Data Engineer** the Glass, the Studio and Admin (Admin › Operations, its
 `operate_schedules`); an **Administrator** Admin and the Glass (the case list, for an orphaned case's
 sharing and removal, the rule audit, link-strength influencers); a **Reports Viewer** the Glass; the
-**Super user** all three. No route moved place and no role lost a right. One route's right changed:
+**Super user** all three; of the legacy roles, `source_author` the Studio, and `source_approver`,
+`loader` and `compliance` no place. No route moved place and no role lost a right. One route's right changed:
 the Studio's pipeline-run history (`GET …/ingest/recipes/{id}/runs`) needs `run_pipelines` where it
-needed `read_data_feeds`, so Analysts and Reports Viewers are no longer answered on a Studio route no
-screen of theirs calls (the Glass's *Data feeds* keeps its own route). The Studio's dataset, upload,
+needed `read_data_feeds`, so Analysts, Reports Viewers and `read_data_feeds` granted alone are no longer
+answered on a Studio route no screen of theirs calls (the Glass's *Data feeds* keeps its own route). The Studio's dataset, upload,
 schedule and refresh routes already asked for a Studio role besides their right, so they never
 answered an Analyst or an Administrator.
 
@@ -443,7 +448,8 @@ holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset�
 in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the open case
 and the Glass's view last open (this replaces the Studio rail's *Back to the investigation*). Choosing
 another case in the Studio reloads the page; the view to return to is kept in the tab's session
-storage, so *Back* still returns to it (`shell/placeMemory.ts`). Under the GOV.UK
+storage, so *Back* still returns to it (`shell/placeMemory.ts`). Messages is not kept: it is drawn for
+one node, which a reload does not keep, so *Back* returns to the view open before it. Under the GOV.UK
 brand the banner is a GOV.UK notification banner, its title the place: 91 pixels tall at 1440 wide,
 title and one line, taken from the workspace's height.
 
