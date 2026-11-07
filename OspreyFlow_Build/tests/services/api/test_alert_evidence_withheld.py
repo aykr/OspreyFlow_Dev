@@ -82,6 +82,8 @@ class Graph:
         self.recorder, self.hidden = recorder, hidden or set()
 
     async def get_nodes(self, node_ids: Any, principal: Principal) -> list[Node]:
+        if isinstance(node_ids, str):
+            raise TypeError("node_ids must be a sequence of ids")
         ids = sorted(set(node_ids))
         self.recorder.calls.append(("get_nodes", len(ids), tuple(ids)))
         return [_node(i) for i in ids if i not in self.hidden]
@@ -91,9 +93,12 @@ class Graph:
         return None if node_id in self.hidden else _node(node_id)
 
     async def edges_among(self, node_ids: Any, principal: Principal) -> list[Edge]:
-        """The links among the nodes, as the reader reads them: here, every link these tests cite."""
-        self.recorder.calls.append(("edges_among", len(set(node_ids)), tuple(sorted(set(node_ids)))))
-        return [_edge(i) for i in ("e-1", "e-2", "e-secret") if i not in self.hidden]
+        """The links among the nodes, as the reader reads them: every link these tests cite runs
+        from n-a to n-b, and is among the nodes only when both its ends are (as the real port's)."""
+        among = set(node_ids)
+        self.recorder.calls.append(("edges_among", len(among), tuple(sorted(among))))
+        links = [_edge(i) for i in ("e-1", "e-2", "e-secret") if i not in self.hidden]
+        return [e for e in links if e.source in among and e.target in among]
 
     async def get_edges(self, edge_ids: Any, principal: Principal) -> list[Edge]:
         if isinstance(edge_ids, str):
@@ -227,6 +232,29 @@ async def test_transactions_are_asked_in_chunks_of_what_is_cited_not_of_what_is_
     assert [c[1] for c in open_reads.calls if c[0].startswith("list_events")] == [200, 200, 51]
 
 
+async def test_an_alert_listed_is_explained_with_every_transaction_it_cites() -> None:
+    """The lane-reviewer's finding 6 (rules 2 and 12): the explanation read its transactions in one
+    request of at most 200, so an alert the queue lists over more (the queue reads them in chunks)
+    was explained with 200 of them and no word of the rest. Red before: 200 of 450."""
+    many = [f"t-{i:03d}" for i in range(450)]
+    big = _alert("big", nodes=["n-a", "n-b"], edges=["e-1"], events=many)
+    _, graph, analytics, _ = _world(set(), [big])
+    why = await alert_queue.explain(TriageStore([big]), graph, analytics, CASE, "big", READER)  # type: ignore[arg-type]
+    assert sorted(t.event_id for t in why.transactions) == many
+
+
+async def test_an_alert_listed_over_a_link_with_an_end_it_does_not_name_is_explained() -> None:
+    """Finding 6, the other half: the queue reads a cited link by its id (`get_edges`), the
+    explanation found it only among the alert's own nodes (`edges_among`), so a link with an end the
+    alert does not name was listed and then refused: G2's symptom, the other way round. Red before:
+    not found."""
+    alert = _alert("one-end", nodes=["n-a"], edges=["e-1"])
+    store, graph, analytics, _ = _world(set(), [alert])
+    assert await _shown(store, graph, analytics) == ["one-end"]
+    why = await alert_queue.explain(TriageStore([alert]), graph, analytics, CASE, "one-end", READER)  # type: ignore[arg-type]
+    assert [e.id for e in why.edges] == ["e-1"]
+
+
 async def test_the_case_queue_inherits_the_check() -> None:
     """`queue` (the Reports figures, the reporting feed and neighbourhood risk count through it)."""
     store, graph, analytics, _ = _world({"t-secret"}, [V1, OVER_TRANSACTION, V2])
@@ -299,7 +327,9 @@ class TriageStore(Store):
         self.writes.append(f"triage {alert_id}")
         return next(a for a in self.alerts if a.id == alert_id)
 
-    async def __getattr__(self, name: str) -> Any:  # any other write
+    def __getattr__(self, name: str) -> Any:  # any other write
+        if name.startswith("__"):
+            raise AttributeError(name)
         raise AssertionError(f"the store was asked to {name}")
 
 

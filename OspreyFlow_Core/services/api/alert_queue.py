@@ -44,6 +44,7 @@ from schemas.domain import (
 )
 
 from .alerts import (
+    EVENT_CHUNK,
     AlertNotFoundError,
     AlertStore,
     AlertTriageConflict,
@@ -217,23 +218,32 @@ async def explain_with_evidence(
     handlings, which a report pack's alert item rests on (ADR-134 decision 1)."""
     row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, reader)
     alert = row.alert
-    edges = await _cited_edges(alert, graph, reader, list(nodes))
-    if len({e.id for e in edges if e.type != "ALERTED_ON"}) < len(set(alert.edge_ids)):
+    # Read as the queue reads them (`read_evidence`): the cited links by their ids, whatever their
+    # ends, and every cited transaction, in chunks cut from the ids. Anything gone since the check
+    # (a revert in between) refuses the whole alert, as the check would have.
+    cited_ids = sorted(set(alert.edge_ids))
+    cited_links = await graph.get_edges(cited_ids, reader) if cited_ids else []
+    if len(cited_links) < len(cited_ids):
         raise AlertNotFoundError(alert_id)
+    edges = [*cited_links, *(e for e in await _cited_edges(alert, graph, reader, list(nodes))
+                            if e.type == "ALERTED_ON")]  # fmt: skip
     transactions: list[ExplainedTransaction] = []
     cited_events: list[EventRecord] = []
     if alert.event_ids:
-        page = await analytics.list_events(
-            EventListRequest(
-                filter=EventFilter(investigation_scope=investigation_id, event_ids=alert.event_ids),
-                limit=200,
-            ),
-            reader,
-        )
-        if page.total < len(set(alert.event_ids)):
+        ids = sorted(set(alert.event_ids))
+        for start in range(0, len(ids), EVENT_CHUNK):
+            chunk = ids[start : start + EVENT_CHUNK]
+            page = await analytics.list_events(
+                EventListRequest(
+                    filter=EventFilter(investigation_scope=investigation_id, event_ids=chunk),
+                    limit=EVENT_CHUNK,
+                ),
+                reader,
+            )
+            cited_events.extend(e for e in page.events if e.event_id in chunk)
+        if len({e.event_id for e in cited_events}) < len(ids):
             # A cited transaction the reader cannot read: the alert is not theirs to see.
             raise AlertNotFoundError(alert_id)
-        cited_events = list(page.events)
         transactions = sorted(
             (
                 ExplainedTransaction(
@@ -244,7 +254,7 @@ async def explain_with_evidence(
                     occurred_at=e.occurred_at,
                     amount=_number(e.properties.get("amount")),
                 )
-                for e in page.events
+                for e in cited_events
             ),
             key=lambda t: t.occurred_at,
         )
