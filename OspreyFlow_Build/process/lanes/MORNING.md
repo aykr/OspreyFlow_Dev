@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **Your ruling, 13:00 — 'Never withdraw nodes':** a snapshot's withdrawal takes back a dropped row's links and events only. This closes a rule-3 leak on main since phase 4: the node staying, and the Runs tab's 'graph writes' figure, revealed that something hidden touched it. ADR-110 Amendment 15 is reserved (`a2de4ad`); studio builds it in Part A, and its allowlisting of the unfiltered read is dropped.
+
 - **12:30, studio L1.2 merged** (`25b1084`, registry ids `0bf628b`). `make ci` on the merge: the trivy images are green now, but `route-coverage-check` (the new preview-graph route isn't in spec 03) and `provenance-annotation-check` (11 'phase N' in spec 09 and DEMO_GUIDE) turned red. That is my process slip: I ran `make ci` after keeping the merge, not before. Studio fixes both as Part 0, and merges now keep `make ci` on the merge result first (`2edd327`). Phase 6's exit is not met (L1.2b).
 
 - **My calls, 12:05, glass L2.2's third review:** a place is offered only for the rights that reach its entry screen's first read, so the Studio opens for `edit_pipelines` as on main. Legacy `loader` and `source_approver` accounts are no longer offered a Studio that would then refuse them. `/v1/exports` (the compliance ledger) gets an explicit Admin rule. ADR-067 Amendment 1 is released unwritten. **Case L3.1's fourth review:** two more composite gaps (an entity's confirm or retract changes the member; accepting an email finding fails), both inside your existing rulings, so sent to case without a question.
