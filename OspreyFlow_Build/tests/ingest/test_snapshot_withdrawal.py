@@ -1,32 +1,26 @@
-"""ADR-110 Amendment 8 point 3: a full snapshot with *withdraw* takes back exactly a dropped row's
-elements, and nothing another row, another load or a live link still rests on.
+"""ADR-110 Amendment 8 point 3, as Amendment 15 (the owner's ruling "Only the rows' events")
+narrows it: a full snapshot with *withdraw* takes back only a dropped row's own events, by the ids
+its key records. It never touches the graph: a dropped row's nodes and links stay until its load is
+reverted. And what the run says is the same whatever other rows, pipelines or cases hold.
 
-The graph is `MergingGraph` (the real store's link merge, and now its withdrawal and restore); the
-ledger is `WithdrawalLedger` below, which answers as `RecipeRunStore` does
-(`tests/services/api/test_row_key_withdrawal_ledger.py` holds the real one to the same answers).
-The live end to end, events and revert included, is
-`tests/services/api/test_source_refresh_snapshot_live.py`. What a mistake would do, and the case
-that catches it:
+The graph is `MergingGraph`; the ledger is `WithdrawalLedger` below, which answers as
+`RecipeRunStore` does (`tests/services/api/test_row_key_withdrawal_ledger.py` holds the real one to
+the same answers); the events go through `studio_publish.withdraw_dropped_rows_events`, the step
+`run_published_recipe` takes after the commit, into `Events`, which sets aside by id as
+`withdraw_events_by_id` does (the analytics conformance suite holds both adapters to it). The live
+end to end is `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py` and
+`test_source_refresh_snapshot_live.py`. What a mistake would do, and the case that catches it:
 
-- a dropped row left in place, or a kept row withdrawn with it
-  (`test_a_second_snapshot_missing_one_row_withdraws_exactly_that_rows_elements`);
-- a node a kept row also names withdrawn under the dropped row
-  (`test_a_node_a_kept_row_also_names_stays`);
-- a link a kept row also wrote withdrawn, or kept silently
-  (`test_a_link_a_kept_row_also_wrote_stays_and_is_counted`);
-- a node withdrawn under a live link that a load keeping no keys wrote to it
-  (`test_a_node_a_keyless_loads_live_link_rests_on_stays`);
-- a key kept before rows recorded what they wrote taken for one that wrote nothing
-  (`test_a_dropped_key_with_no_record_is_left_in_place_and_counted`);
-- a node another pipeline's kept row only matched, with no link to keep it
-  (`test_a_node_another_pipelines_kept_row_names_without_a_link_stays`);
-- a node the snapshot's own new row matched withdrawn, its record not yet in the ledger
-  (`test_a_node_the_snapshots_own_new_row_matches_stays`);
+- a dropped row's events left, or a kept row's taken with them, or any graph element touched
+  (`test_a_second_snapshot_missing_one_row_withdraws_only_that_rows_events`);
+- another row's event on the same link taken, or the run's words moving, with whoever else wrote
+  that link: the same pipeline, another, or another case (rule 3;
+  `test_a_dropped_rows_withdrawal_is_the_same_whoever_else_wrote_its_link`);
+- a key whose record names no events taken as one that wrote none, or its events taken by link
+  (`test_a_dropped_key_with_no_event_record_is_left_in_place_events_too`);
 - *keep* withdrawing anything (`test_keep_withdraws_nothing`);
-- a row that comes back matched to its withdrawn node instead of loaded again
-  (`test_a_row_that_comes_back_is_loaded_again`);
-- a count of kept links telling the loader of a link they may not read (rule 3,
-  `test_a_kept_link_the_loader_may_not_read_is_not_counted`)."""
+- a row that comes back creating a node or a link again
+  (`test_a_row_that_comes_back_is_kept_again_and_creates_nothing`)."""
 
 from __future__ import annotations
 
@@ -34,32 +28,39 @@ from collections.abc import Collection, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
-from services.api.recipe_runs import KeptRow
-from services.api.studio_publish import load_with_rules
-
+import pytest
 from adapters.media_objectstore.testing import InMemoryMediaStore
+from schemas.analytics import EventRecord
 from schemas.ingest import LoadReport, Recipe
+from services.api.recipe_runs import KeptRow
+from services.api.studio_publish import load_with_rules, withdraw_dropped_rows_events
+
 from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
     MergingGraph,
     local_staging,
 )
-from tests.ingest.test_row_elements import _endpoint_ids, _key
+from tests.ingest.test_row_elements import _key
 from tests.ingest.test_row_keys import CASE, LOADER, ONTOLOGY, SCHEME, _recipe, _row
 
-A, B, C = _row("SYN-1", "SYN-2", 1), _row("SYN-3", "SYN-4", 2), _row("SYN-5", "SYN-6", 3)
+A, B, C = (
+    _row("SYN-1", "SYN-2", 1),
+    _row("SYN-3", "SYN-4", 2),
+    _row("SYN-5", "SYN-6", 3),
+)
+OTHER_CASE = "case-other"
 
 
 class WithdrawalLedger:
     """The ledger's row keys, records and withdrawn keys as `RecipeRunStore` keeps them, behind the
     `LoadSink` a run is given: the record and its keys land together after the graph's commit; a
-    withdrawn key moves aside with the refresh's load; the questions are answered over everything
-    kept, of every recipe and case."""
+    withdrawn key moves aside with the refresh's load, its event ids with it."""
 
     def __init__(self) -> None:
-        #: (recipe, case, key) -> (load, node ids or None, edge ids or None)
-        self.kept_rows: dict[tuple[str, str, str], tuple[str, Any, Any]] = {}
-        self.withdrawn: dict[tuple[str, str, str], tuple[str, Any, Any, str]] = {}
+        #: (recipe, case, key) -> (load, node ids, edge ids, event ids), each None if unrecorded
+        self.kept_rows: dict[tuple[str, str, str], tuple[str, Any, Any, Any]] = {}
+        self.withdrawn: dict[tuple[str, str, str], tuple[str, Any, Any, Any, str]] = {}
         self.records: list[LoadReport] = []
+        self.case = CASE
 
     # -- what `load_with_rules` asks of its sink ------------------------------------------------
     async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
@@ -82,18 +83,21 @@ class WithdrawalLedger:
     async def committed(self, report: LoadReport, *, source: str) -> None:
         self.records.append(report)
         for key in report.kept_row_keys:
-            elements = report.kept_row_elements.get(key)
+            e = report.kept_row_elements.get(key)
             self.kept_rows.setdefault(
-                (report.recipe_id, CASE, key),
-                (
-                    report.load_id,
-                    None if elements is None else tuple(elements.node_ids),
-                    None if elements is None else tuple(elements.edge_ids),
-                ),
-            )
+                (report.recipe_id, self.case, key),
+                (report.load_id, *((None,) * 3 if e is None else
+                                   (tuple(e.node_ids), tuple(e.edge_ids), tuple(e.event_ids)))),
+            )  # fmt: skip
         for key in report.withdrawn_row_keys:
-            load, nodes, edges = self.kept_rows.pop((report.recipe_id, CASE, key))
-            self.withdrawn[(report.recipe_id, CASE, key)] = (load, nodes, edges, report.load_id)
+            at = (report.recipe_id, self.case, key)
+            if at in self.withdrawn or at not in self.kept_rows:
+                # As the real ledger's move does (`add_record`, and
+                # `test_the_unit_files_fake_moves_keys_as_the_ledger_does`): a key already withdrawn
+                # is never moved again and stays kept, and a key never kept moves nothing.
+                continue
+            kept = self.kept_rows.pop(at)
+            self.withdrawn[(report.recipe_id, self.case, key)] = (*kept, report.load_id)
 
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None:
         return None
@@ -104,45 +108,59 @@ class WithdrawalLedger:
     async def uncovered(self, load_id: str) -> None:
         return None
 
-    # -- what a withdrawal asks ------------------------------------------------------------------
+    # -- what a withdrawal asks: this pipeline's own keys in this case, and nothing else ---------
     async def dropped_row_keys(
         self, recipe_id: str, case: str, *, present: Collection[str]
     ) -> list[KeptRow]:
         return [
-            KeptRow(row_key=k[2], load_id=v[0], node_ids=v[1], edge_ids=v[2])
+            KeptRow(
+                row_key=k[2],
+                load_id=v[0],
+                node_ids=v[1],
+                edge_ids=v[2],
+                event_ids=v[3],
+                withdrawn_before=k in self.withdrawn,
+            )
             for k, v in sorted(self.kept_rows.items())
             if k[:2] == (recipe_id, case) and k[2] not in present
         ]
 
-    async def elements_kept_by_other_rows(
-        self,
-        node_ids: Sequence[str],
-        edge_ids: Sequence[str],
-        *,
-        recipe_id: str,
-        case: str,
-        excluding: Sequence[str],
-    ) -> tuple[set[str], set[str]]:
-        nodes: set[str] = set()
-        edges: set[str] = set()
-        for (recipe, kept_case, key), (_, kept_nodes, kept_edges) in self.kept_rows.items():
-            if (recipe, kept_case) == (recipe_id, case) and key in set(excluding):
-                continue
-            nodes |= set(kept_nodes or ()) & set(node_ids)
-            edges |= set(kept_edges or ()) & set(edge_ids)
-        return nodes, edges
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        return {
+            k[2]
+            for k in self.withdrawn
+            if k[:2] == (recipe_id, case) and k[2] in set(keys)
+        }
 
-    async def elements_in_other_records(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
-    ) -> tuple[set[str], set[str]]:
-        nodes: set[str] = set()
-        edges: set[str] = set()
-        for record in self.records:
-            if record.load_id in set(excluding_loads):
-                continue
-            nodes |= {*record.created_node_ids, *record.merged_node_ids} & set(node_ids)
-            edges |= {*record.touched_edge_ids} & set(edge_ids)
-        return nodes, edges
+    async def withdrawn_event_ids(self, load_id: str) -> list[str]:
+        return sorted(
+            {e for v in self.withdrawn.values() if v[4] == load_id for e in v[3] or ()}
+        )
+
+
+class Events:
+    """The analytics store's events as `withdraw_events_by_id` and `restore_withdrawn_events` keep
+    them: set aside by id, never by link."""
+
+    def __init__(self) -> None:
+        self.live: dict[str, EventRecord] = {}
+        self.aside: dict[str, tuple[EventRecord, str]] = {}
+
+    async def withdraw_events_by_id(
+        self, event_ids: Sequence[str], load_id: str
+    ) -> int:
+        moved = [i for i in dict.fromkeys(event_ids) if i in self.live]
+        for i in moved:
+            self.aside[i] = (self.live.pop(i), load_id)
+        return len(moved)
+
+    def on_links(self) -> list[tuple[str, str]]:
+        """Each live event as (its link, its time): what a timeline reader sees, without ids."""
+        return sorted(
+            (e.edge_id, e.occurred_at.isoformat()) for e in self.live.values()
+        )
 
 
 async def _snapshot(
@@ -153,15 +171,18 @@ async def _snapshot(
     *,
     withdraw: bool = True,
     recipe: Recipe | None = None,
+    events: Events | None = None,
+    case: str = CASE,
 ) -> LoadReport:
-    report, _, _ = await load_with_rules(
+    ledger.case = case
+    report, written, _ = await load_with_rules(
         recipe or _recipe(),
         rows,
         LOADER,
         graph=graph,  # type: ignore[arg-type]
         ontology=ONTOLOGY,
         load_id=load_id,
-        investigation_scope=CASE,
+        investigation_scope=case,
         source="private_cash.csv",
         media=InMemoryMediaStore(),
         rules=None,
@@ -170,6 +191,11 @@ async def _snapshot(
         withdraw_dropped=withdraw,
     )
     assert report.rejections == [], report.rejections
+    if events is not None:
+        # As `run_published_recipe`: the dropped rows' events go first, then the run's own land.
+        await withdraw_dropped_rows_events(report, ledger, events)  # type: ignore[arg-type]
+        events.live.update({e.event_id: e for e in written})
+    ledger.case = CASE
     return report
 
 
@@ -181,177 +207,174 @@ def _live_links(graph: MergingGraph) -> set[str]:
     return {e.id for e in graph.committed_edges if e.id not in graph.reverted}
 
 
-async def test_a_second_snapshot_missing_one_row_withdraws_exactly_that_rows_elements() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    first = await _snapshot(graph, ledger, [A, B, C], "load-1")
-    b_elements = first.kept_row_elements[_key(B)]
+async def test_a_second_snapshot_missing_one_row_withdraws_only_that_rows_events() -> (
+    None
+):
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    first = await _snapshot(graph, ledger, [A, B, C], "load-1", events=events)
+    b_events = set(first.kept_row_elements[_key(B)].event_ids)
+    assert len(b_events) == 1 and len(events.live) == 3
+    nodes, links = _live_values(graph), _live_links(graph)
 
-    second = await _snapshot(graph, ledger, [A, C], "load-2")
+    second = await _snapshot(graph, ledger, [A, C], "load-2", events=events)
 
-    assert sorted(second.withdrawn_node_ids) == sorted(b_elements.node_ids)
-    assert second.withdrawn_edge_ids == b_elements.edge_ids
-    assert second.withdrawn_row_keys == [_key(B)]
-    assert (second.rows_withdrawn, second.links_kept_an_occurrence) == (1, 0)
-    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-5", "SYN-6"}
-    assert len(_live_links(graph)) == 2
-    assert graph.withdrawn == {i: "load-2" for i in [*b_elements.node_ids, *b_elements.edge_ids]}
+    assert second.withdrawn_row_keys == [_key(B)] and second.rows_withdrawn == 1
+    assert (second.withdrawn_node_ids, second.withdrawn_edge_ids) == ([], []), (
+        "never the graph"
+    )
+    assert (_live_values(graph), _live_links(graph), graph.withdrawn) == (
+        nodes,
+        links,
+        {},
+    )
+    assert set(events.aside) == b_events and {v[1] for v in events.aside.values()} == {
+        "load-2"
+    }
+    assert len(events.live) == 2
+    assert second.links_kept_an_occurrence == 0 and second.refresh_notes == []
     # The key is withdrawn, not kept: a third snapshot does not drop it again.
     assert (CASE, _key(B)) not in {(k[1], k[2]) for k in ledger.kept_rows}
-    third = await _snapshot(graph, ledger, [A, C], "load-3")
-    assert third.withdrawn_row_keys == [] and third.rows_withdrawn == 0
+    third = await _snapshot(graph, ledger, [A, C], "load-3", events=events)
+    assert third.withdrawn_row_keys == [] and len(events.aside) == 1
 
 
-async def test_a_node_a_kept_row_also_names_stays() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    shares_syn_1 = _row("SYN-1", "SYN-7", 4)
-    await _snapshot(graph, ledger, [A, shares_syn_1], "load-1")
-
-    second = await _snapshot(graph, ledger, [shares_syn_1], "load-2")
-
-    ids = _endpoint_ids(graph)
-    assert sorted(second.withdrawn_node_ids) == [ids["SYN-2"]]
-    assert _live_values(graph) == {"SYN-1", "SYN-7"}
+def _what_the_loader_is_told(report: LoadReport) -> tuple[Any, ...]:
+    return (
+        report.rows_withdrawn, report.rows_left_in_place, report.links_kept_an_occurrence,
+        report.refresh_notes, report.withdrawn_node_ids, report.withdrawn_edge_ids,
+        report.nodes_created, report.edges_created,
+    )  # fmt: skip
 
 
-def _payers_only() -> Recipe:
-    """Another pipeline, with a key, whose rows match a payer and write no link: a node it names
-    has no live link of its, so only its kept row's record says it is held."""
-    document = _recipe().model_dump(by_alias=True)
-    document["id"] = "payers-only"
-    template = document["row_template"]
-    template["entities"] = [e for e in template["entities"] if e["ref"] == "from"]
-    template["edges"] = []
-    return Recipe.model_validate(document)
-
-
-async def test_a_node_another_pipelines_kept_row_names_without_a_link_stays() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1")
-    await _snapshot(graph, ledger, [A], "load-p", withdraw=False, recipe=_payers_only())
-
-    second = await _snapshot(graph, ledger, [B], "load-2")
-
-    ids = _endpoint_ids(graph)
-    assert sorted(second.withdrawn_node_ids) == [ids["SYN-2"]], "SYN-1 is the other row's"
-    assert "SYN-1" in _live_values(graph)
-
-
-async def test_a_node_the_snapshots_own_new_row_matches_stays() -> None:
-    """The new row's record is not in the ledger until the commit, and its link is not committed
-    either: only the report says it names SYN-1."""
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1")
-
-    second = await _snapshot(graph, ledger, [B, _row("SYN-1", "SYN-9", 7)], "load-2")
-
-    ids = _endpoint_ids(graph)
-    assert sorted(second.withdrawn_node_ids) == [ids["SYN-2"]]
-    assert {"SYN-1", "SYN-9"} <= _live_values(graph)
-
-
-async def test_a_link_a_kept_row_also_wrote_stays_and_is_counted() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    again = _row("SYN-1", "SYN-2", 5)  # the same pair as A: one link, two occurrences
-    await _snapshot(graph, ledger, [A, again], "load-1")
-    links = _live_links(graph)
-
-    second = await _snapshot(graph, ledger, [again], "load-2")
-
-    assert second.withdrawn_node_ids == [] and second.withdrawn_edge_ids == []
-    assert (second.rows_withdrawn, second.links_kept_an_occurrence) == (1, 1)
-    assert _live_links(graph) == links
-    assert "1 link kept an occurrence from a dropped row" in second.refresh_notes
-
-
-async def test_a_node_a_keyless_loads_live_link_rests_on_stays() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1")
-    # A pipeline with no key links SYN-2 to SYN-8: its record lists SYN-2 as referenced only.
-    keyless = _recipe(deduplicate=False).model_copy(update={"id": "other-pipeline"})
-    await _snapshot(graph, ledger, [_row("SYN-2", "SYN-8", 6)], "load-x", withdraw=False,
-                    recipe=keyless)  # fmt: skip
-
-    second = await _snapshot(graph, ledger, [B], "load-2")
-
-    ids = _endpoint_ids(graph)
-    assert sorted(second.withdrawn_node_ids) == [ids["SYN-1"]], "SYN-2 has a live link"
-    assert "SYN-2" in _live_values(graph)
-
-
-async def test_a_dropped_key_with_no_record_is_left_in_place_and_counted() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1")
-    # As a key kept before Amendment 8: its record unknown.
-    load, _, _ = ledger.kept_rows[("private-cash", CASE, _key(A))]
-    ledger.kept_rows[("private-cash", CASE, _key(A))] = (load, None, None)
-
-    second = await _snapshot(graph, ledger, [B], "load-2")
-
-    assert second.withdrawn_node_ids == [] and second.withdrawn_row_keys == []
-    assert (second.rows_withdrawn, second.rows_left_in_place) == (0, 1)
-    assert (
-        "1 dropped row was loaded before rows recorded what they wrote, and was left in place"
-        in second.refresh_notes
+@pytest.mark.parametrize(
+    "also_written_by", ["nobody", "a kept row of this pipeline", "another pipelines kept row",
+                        "another cases kept row"],
+)  # fmt: skip
+async def test_a_dropped_rows_withdrawal_is_the_same_whoever_else_wrote_its_link(
+    also_written_by: str,
+) -> None:
+    """Amendment 15, rule 3: the dropped row A takes back its own event alone. Another row's event
+    on A's link stays, whoever wrote it; the graph is untouched; and the run tells the loader the
+    same as when nobody else wrote the link."""
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    again = _row("SYN-1", "SYN-2", 5)  # A's pair: A's link, another occurrence
+    own_rows = (
+        [A, B, again] if also_written_by == "a kept row of this pipeline" else [A, B]
     )
-    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+    first = await _snapshot(graph, ledger, own_rows, "load-1", events=events)
+    if also_written_by == "another pipelines kept row":
+        other = _recipe().model_copy(update={"id": "another-pipeline"})
+        await _snapshot(graph, ledger, [again], "load-o", withdraw=False, recipe=other,
+                        events=events)  # fmt: skip
+    if also_written_by == "another cases kept row":
+        await _snapshot(graph, ledger, [again], "load-c", withdraw=False, events=events,
+                        case=OTHER_CASE)  # fmt: skip
+    a_events = set(first.kept_row_elements[_key(A)].event_ids)
+    others = {i: e for i, e in events.live.items() if i not in a_events}
+    nodes, links = _live_values(graph), _live_links(graph)
+
+    snapshot = [B, again] if also_written_by == "a kept row of this pipeline" else [B]
+    second = await _snapshot(graph, ledger, snapshot, "load-2", events=events)
+
+    assert set(events.aside) == a_events
+    assert events.live == others, "every other row's event stays, on A's link too"
+    assert (_live_values(graph), _live_links(graph), graph.withdrawn) == (
+        nodes,
+        links,
+        {},
+    )
+    assert _what_the_loader_is_told(second) == (1, 0, 0, [], [], [], 0, 0)
+
+
+@pytest.mark.parametrize("recorded", ["nothing", "its nodes and links, not its events"])
+async def test_a_dropped_key_with_no_event_record_is_left_in_place_events_too(
+    recorded: str,
+) -> None:
+    """A key kept before rows recorded what they wrote (Amendment 8), or what they wrote but not
+    their events (before Amendment 15), names no events: it is left kept, its events stay, and the
+    run says so. Never a fallback to its links' events."""
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    await _snapshot(graph, ledger, [A, B], "load-1", events=events)
+    load, nodes, edges, _ = ledger.kept_rows[("private-cash", CASE, _key(A))]
+    unrecorded = (None, None) if recorded == "nothing" else (nodes, edges)
+    ledger.kept_rows[("private-cash", CASE, _key(A))] = (load, *unrecorded, None)
+    before = events.on_links()
+
+    nodes, links = _live_values(graph), _live_links(graph)
+
+    second = await _snapshot(graph, ledger, [B], "load-2", events=events)
+
+    assert second.withdrawn_row_keys == [] and events.aside == {}
+    assert (second.rows_withdrawn, second.rows_left_in_place) == (0, 1)
+    words = "1 dropped row was loaded before rows recorded the events they wrote, and was left in "
+    assert second.refresh_notes == [words + "place, its events too"]
+    assert events.on_links() == before
+    assert (_live_values(graph), _live_links(graph), graph.withdrawn) == (
+        nodes,
+        links,
+        {},
+    )
+    assert ("private-cash", CASE, _key(A)) in ledger.kept_rows
 
 
 async def test_keep_withdraws_nothing() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1", withdraw=False)
-    second = await _snapshot(graph, ledger, [B], "load-2", withdraw=False)
-    assert second.withdrawn_row_keys == [] and graph.withdrawn == {}
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    await _snapshot(graph, ledger, [A, B], "load-1", withdraw=False, events=events)
+    second = await _snapshot(
+        graph, ledger, [B], "load-2", withdraw=False, events=events
+    )
+    assert (
+        second.withdrawn_row_keys == [] and graph.withdrawn == {} and events.aside == {}
+    )
     assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+    # A merge with no row coming back says nothing.
+    again = await _snapshot(
+        graph, ledger, [_row("SYN-3", "SYN-4", 8)], "load-3", withdraw=False
+    )
+    assert again.merged_edge_ids and again.refresh_notes == []
 
 
-async def test_a_row_that_comes_back_is_loaded_again() -> None:
-    graph, ledger = MergingGraph(ONTOLOGY), WithdrawalLedger()
-    await _snapshot(graph, ledger, [A, B], "load-1")
-    await _snapshot(graph, ledger, [B], "load-2")
-    withdrawn = set(graph.withdrawn)
+async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None:
+    """Its nodes and its link never left (Amendment 15), so the row matches them and merges into its
+    link: no node or link is created, and its new event is the timeline's only one for it."""
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    await _snapshot(graph, ledger, [A, B], "load-1", events=events)
+    await _snapshot(graph, ledger, [B], "load-2", events=events)
+    links = _live_links(graph)
 
-    back = await _snapshot(graph, ledger, [A, B], "load-3")
+    back = await _snapshot(graph, ledger, [A, B], "load-3", events=events)
 
     assert back.rows_already_loaded == 1 and back.kept_row_keys == [_key(A)]
-    assert back.nodes_created == 2, "a fresh create: the withdrawn nodes are not matched"
-    assert not set(back.created_node_ids) & withdrawn
-    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
-
-
-class BlindToEdges(MergingGraph):
-    """The loader may read no link (rule 3's case): `get_edges` answers nothing."""
-
-    async def get_edges(self, edge_ids: Sequence[str], principal: Any) -> list[Any]:
-        return []
-
-
-async def test_a_kept_link_the_loader_may_not_read_is_not_counted() -> None:
-    graph, ledger = BlindToEdges(ONTOLOGY), WithdrawalLedger()
-    again = _row("SYN-1", "SYN-2", 5)
-    await _snapshot(graph, ledger, [A, again], "load-1")
-    second = await _snapshot(graph, ledger, [again], "load-2")
-    assert second.links_kept_an_occurrence == 0
-    assert not any("kept an occurrence" in note for note in second.refresh_notes)
-    assert second.withdrawn_edge_ids == [], "still kept: only the count is withheld"
+    assert (back.nodes_created, back.edges_created, back.created_edge_ids) == (0, 0, [])
+    assert _live_links(graph) == links and graph.withdrawn == {}
+    assert len(events.live) == 2, "B's, and A's new one; A's first stays set aside"
+    # Amendment 15's known limit, in words: this load merged into A's link, so it is not reverted.
+    unrevertable = (
+        "1 row withdrawn by an earlier refresh came back and merged into its link, which the "
+        "withdrawal left in place: this load cannot be reverted, nor the refresh that withdrew "
+        "it, until the owner rules (ADR-110 Amendment 15)"
+    )
+    assert back.refresh_notes == [unrevertable]
 
 
 # --- the refresh's revert (ADR-110 Amendment 8 point 5) ---------------------------------------
 #
 # What a mistake would do, and the case that catches it:
-# - a revert of the refresh that leaves the dropped row withdrawn, its key aside or its events out
-#   (`test_reverting_the_refresh_restores_the_dropped_row_its_key_and_its_events`);
+# - a revert of the refresh that leaves the dropped row's key aside or its events out
+#   (`test_reverting_the_refresh_restores_the_dropped_rows_key_and_its_events`);
+# - a refresh recorded before Amendment 15, with nodes and links withdrawn, not given them back
+#   (`test_a_refresh_recorded_with_withdrawn_nodes_and_links_reverts_them_back`);
 # - a revert that restores a row a later load has kept again, so it is held twice
 #   (`test_the_refreshs_revert_is_refused_while_a_row_it_withdrew_is_kept_again`);
 # - a revert of the load that created the row leaving it for the refresh's revert to bring back
 #   (`test_after_the_creating_load_is_reverted_the_refreshs_revert_restores_nothing`).
 
-from datetime import UTC, datetime  # noqa: E402
+from datetime import UTC, datetime
 
-import pytest  # noqa: E402
-from services.ingest.load_ledger import load_record_from_report  # noqa: E402
-from services.ingest.load_revert import RevertDeps, RevertRefused, revert  # noqa: E402
+from services.ingest.load_ledger import load_record_from_report
+from services.ingest.load_revert import RevertDeps, RevertRefused, revert
 
-from tests.ingest.test_revert_load import (  # noqa: E402
+from tests.ingest.test_revert_load import (
     Alerts,
     Analytics,
     Audit,
@@ -383,7 +406,9 @@ class RefreshLedger(Ledger):
     async def release_row_keys(self, load_ids: Any) -> int:
         await super().release_row_keys(load_ids)
         gone = [k for k, v in self.keys.kept_rows.items() if v[0] in set(load_ids)]
-        gone_aside = [k for k, v in self.keys.withdrawn.items() if v[0] in set(load_ids)]
+        gone_aside = [
+            k for k, v in self.keys.withdrawn.items() if v[0] in set(load_ids)
+        ]
         for k in gone:
             del self.keys.kept_rows[k]
         for k in gone_aside:
@@ -394,17 +419,17 @@ class RefreshLedger(Ledger):
         return sum(
             1
             for k, v in self.keys.withdrawn.items()
-            if v[3] == load_id and k in self.keys.kept_rows
+            if v[4] == load_id and k in self.keys.kept_rows
         )
 
     async def restore_withdrawn_row_keys(self, load_id: str) -> int:
         back = [
             k for k, v in self.keys.withdrawn.items()
-            if v[3] == load_id and k not in self.keys.kept_rows
+            if v[4] == load_id and k not in self.keys.kept_rows
         ]  # fmt: skip
         for k in back:
-            load, nodes, edges, _ = self.keys.withdrawn.pop(k)
-            self.keys.kept_rows[k] = (load, nodes, edges)
+            load, nodes, edges, event_ids, _ = self.keys.withdrawn.pop(k)
+            self.keys.kept_rows[k] = (load, nodes, edges, event_ids)
         return len(back)
 
 
@@ -434,27 +459,39 @@ def _deps(graph: MergingGraph, ledger: RefreshLedger, steps: Steps) -> RevertDep
     )
 
 
-async def test_reverting_the_refresh_restores_the_dropped_row_its_key_and_its_events() -> None:
+async def test_reverting_the_refresh_restores_the_dropped_rows_key_and_its_events() -> (
+    None
+):
     graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
     await _snapshot(graph, keys, [A, B], "load-1")
     new_row = _row("SYN-1", "SYN-9", 7)
-    await _snapshot(graph, keys, [B, new_row], "load-2")
-    assert "SYN-2" not in _live_values(graph)
+    second = await _snapshot(graph, keys, [B, new_row], "load-2")
+    assert second.rows_withdrawn == 1 and (
+        second.withdrawn_node_ids,
+        second.withdrawn_edge_ids,
+    ) == ([], [])
+    assert len(_live_links(graph)) == 3, "A's stays, with B's and the new row's"
 
     steps = Steps()
     deps = _deps(graph, RefreshLedger(keys), steps)
     await revert("load-2", reverted_by="operator-1", deps=deps, now=NOW)
 
-    assert graph.withdrawn == {}
-    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}, "SYN-9 was the refresh's"
+    assert graph.withdrawn == {} and len(_live_links(graph)) == 2
+    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}, (
+        "SYN-9 was the refresh's"
+    )
     assert {k[2] for k in keys.kept_rows} == {_key(A), _key(B)} and keys.withdrawn == {}
     assert deps.analytics.restored == ["load-2"]  # type: ignore[attr-defined]
     # Its events are put back before its own are retracted, so neither step undoes the other.
-    order = [entry[0] for entry in steps.log if entry[0] in {"events_restored", "events"}]
+    order = [
+        entry[0] for entry in steps.log if entry[0] in {"events_restored", "events"}
+    ]
     assert order == ["events_restored", "events"]
 
 
-async def test_the_refreshs_revert_is_refused_while_a_row_it_withdrew_is_kept_again() -> None:
+async def test_the_refreshs_revert_is_refused_while_a_row_it_withdrew_is_kept_again() -> (
+    None
+):
     graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
     await _snapshot(graph, keys, [A, B], "load-1")
     await _snapshot(graph, keys, [B], "load-2")
@@ -469,21 +506,86 @@ async def test_the_refreshs_revert_is_refused_while_a_row_it_withdrew_is_kept_ag
     assert refusal.reason == "withdrawn_rows_loaded_again" and refusal.count == 1
     assert "1 row(s) it withdrew were loaded again by a later load" in refusal.words()
     assert (_live_values(graph), set(graph.withdrawn)) == live, "nothing changed"
-    # Reverting the later load first lets it through.
-    ledger = RefreshLedger(keys)
-    await revert("load-3", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW)
-    await revert("load-2", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW)
-    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+    # Amendment 15's known consequence: A's link never left, so the later load merged into it, and
+    # a load that merged into a link that already existed is not reverted (ADR-127 decision 6), as
+    # for any load that does. Recorded, not changed: the owner's to rule on (the studio REPORT).
+    with pytest.raises(RevertRefused) as later:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+    assert [r.reason for r in later.value.refusals] == ["merged_links"]
+    assert (_live_values(graph), set(graph.withdrawn)) == live, "nothing changed"
 
 
-async def test_after_the_creating_load_is_reverted_the_refreshs_revert_restores_nothing() -> None:
+async def test_after_the_creating_load_is_reverted_the_refreshs_revert_restores_nothing() -> (
+    None
+):
     graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
     await _snapshot(graph, keys, [A, B], "load-1")
     await _snapshot(graph, keys, [B], "load-2")
     ledger = RefreshLedger(keys)
 
-    await revert("load-1", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW)
-    await revert("load-2", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW)
+    await revert(
+        "load-1", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW
+    )
+    await revert(
+        "load-2", reverted_by="operator-1", deps=_deps(graph, ledger, Steps()), now=NOW
+    )
 
     assert _live_values(graph) == set()
     assert keys.kept_rows == {} and keys.withdrawn == {}
+
+
+async def test_a_refresh_recorded_with_withdrawn_nodes_and_links_reverts_them_back() -> (
+    None
+):
+    """A record written before Amendment 15 (under Amendment 8 point 3) may list withdrawn nodes and
+    links: its revert puts them back, as the graph's `restore_withdrawn` of the load always has.
+    The refresh is built as such a load was: its withdrawal marked in the graph, and in its record."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    first = await _snapshot(graph, keys, [A, B], "load-1")
+    second = await _snapshot(graph, keys, [B], "load-2")
+    a = first.kept_row_elements[_key(A)]
+    tx = await graph.begin_transaction()
+    await graph.withdraw_elements(a.node_ids, a.edge_ids, "load-2", tx)
+    await graph.commit_transaction(tx)
+    second.withdrawn_node_ids, second.withdrawn_edge_ids = (
+        list(a.node_ids),
+        list(a.edge_ids),
+    )
+    assert "SYN-1" not in _live_values(graph)
+
+    await revert("load-2", reverted_by="operator-1",
+                 deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+
+    assert graph.withdrawn == {} and len(_live_links(graph)) == 2
+    assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+
+
+async def test_a_row_dropped_after_coming_back_is_left_in_place_in_words() -> None:
+    """Drop, come back, drop again: the second drop cannot move the key aside (the first
+    withdrawal's entry stands, and neither revert can clear it under Amendment 15), so the row is
+    left in place, its new event too, and the run says so. The fake skips a second move as the real
+    ledger's guard does, so a planner that named the key would be seen here: in the report and the
+    count, not in an error."""
+    graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
+    await _snapshot(graph, ledger, [A, B], "load-1", events=events)
+    await _snapshot(graph, ledger, [B], "load-2", events=events)
+    await _snapshot(graph, ledger, [A, B], "load-3", events=events)
+    before = events.on_links()
+
+    again = await _snapshot(graph, ledger, [B], "load-4", events=events)
+
+    assert (
+        again.withdrawn_row_keys,
+        again.rows_withdrawn,
+        again.rows_left_in_place,
+    ) == ([], 0, 1)
+    assert (again.withdrawn_node_ids, again.withdrawn_edge_ids) == ([], []), (
+        "never the graph"
+    )
+    assert events.on_links() == before
+    words = "1 dropped row had come back after an earlier refresh withdrew it, and was left in "
+    assert again.refresh_notes == [
+        words
+        + "place, its events too, until that refresh can be reverted (ADR-110 Amendment 15)"
+    ]

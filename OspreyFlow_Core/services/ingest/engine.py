@@ -866,6 +866,9 @@ class _RunState:
     #: it wrote (stored ids, once flushed), each once, in the order first met.
     row_nodes: dict[int, dict[NodeId, None]] = field(default_factory=dict)
     row_edges: dict[int, dict[EdgeId, None]] = field(default_factory=dict)
+    #: Amendment 15: by row index, the events each row wrote, by `event_id`, so a full snapshot
+    #: withdraws a dropped row's own events and never another row's on the same link.
+    row_events: dict[int, dict[str, None]] = field(default_factory=dict)
     #: Of `merged_edge_ids`, the links `_write_edge` merged into. The count told to the loader
     #: depends on whether they may read each (`_count_hidden_merges`); a `HOLDS` link is always
     #: counted at its write and is not among them.
@@ -1438,13 +1441,18 @@ def _kept_row_elements(
     one row, but a union whatever the count). Held rows are not kept and have none."""
     nodes: dict[str, dict[NodeId, None]] = {}
     edges: dict[str, dict[EdgeId, None]] = {}
+    events: dict[str, dict[str, None]] = {}
     for row in rows:
         if row.row_key is None or row.row_index in skip_row_indices:
             continue
         nodes.setdefault(row.row_key, {}).update(state.row_nodes.get(row.row_index, {}))
         edges.setdefault(row.row_key, {}).update(state.row_edges.get(row.row_index, {}))
+        events.setdefault(row.row_key, {}).update(state.row_events.get(row.row_index, {}))
     return {
-        key: RowElements(node_ids=list(nodes[key]), edge_ids=list(edges[key])) for key in nodes
+        key: RowElements(
+            node_ids=list(nodes[key]), edge_ids=list(edges[key]), event_ids=list(events[key])
+        )
+        for key in nodes
     }
 
 
@@ -1828,6 +1836,7 @@ async def _write_edge(
             load_id=state.load_id,
         )
         events.append(event)
+        state.row_events.setdefault(row_index, {})[event.event_id] = None
     # Held, not written: the run combines its writes to one per link and writes them at the end of
     # its rows (ADR-127 Amendment 19). The event, and this row's entry in `written`, take the
     # stored id of their link then.

@@ -223,7 +223,7 @@ class _Resolver:
 @pytest.fixture
 def studio(client: TestClient, tmp_path: Path) -> Iterator[TestClient]:
     from tests.services.api.test_studio_verify_routes import _FakeGraphPort, _FakeRunKeys
-    from services.api.app import get_graph, get_ontology, get_recipe_runs
+    from services.api.app import get_graph, get_ontology, get_recipe_runs, get_recipes_repo_root
 
     held = _Rules([
         _rule("r-case", "Listed people", severity="high"),
@@ -244,6 +244,11 @@ def studio(client: TestClient, tmp_path: Path) -> Iterator[TestClient]:
         get_screening_lists: lambda: _Refuses("screening store"), get_compute: lambda: _Refuses("compute"),
         get_alerts_store: lambda: _Refuses("alert store"), get_held_rows: lambda: _Refuses("held-row store"),
         get_valkey: lambda: _Refuses("signature set"),
+        # Verify reads the files a run of the recipe reads (build order step 30): for a published
+        # recipe from its committed file. This draft is unpublished, so the root is never opened; it
+        # is set because the app's lifespan sets it and no test client runs the lifespan (the
+        # verify cases met `KeyError: 'recipes_repo_root'` until L1.2a, 7 November 2026).
+        get_recipes_repo_root: lambda: Path("/no-recipes-repository"),
     })  # fmt: skip
     client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
         tmp_path,

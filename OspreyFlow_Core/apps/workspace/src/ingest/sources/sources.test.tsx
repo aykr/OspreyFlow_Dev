@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
+import { EMPTY_GOVERNANCE, GovernanceFields } from "./GovernanceFields";
 import { RegisterSourceWizard } from "./RegisterSourceWizard";
 import { SourceChooser } from "./SourceChooser";
 import { SourcePage } from "./SourcePage";
@@ -124,7 +125,7 @@ describe("the source page's refresh", () => {
     render(<SourcePage api={API} datasetId="ds-a" source={WATCHED} scheme={SCHEME} onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />);
     expect(
       await screen.findByText(
-        "when a file matching cells-*.csv arrives, reading the whole file and withdrawing what rows it no longer carries had loaded",
+        "when a file matching cells-*.csv arrives, reading the whole file and withdrawing the events of rows it no longer carries; their nodes and links stay until their load is reverted",
       ),
     ).toBeTruthy();
     expect(screen.getByText("eng-1")).toBeTruthy();
@@ -197,5 +198,21 @@ describe("a pipeline's source chooser", () => {
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
       label: "New pipeline", connector_profile: "generic-csv", source_location: SOURCE.location, handling: HANDLING, legal_basis: "Synthetic",
     });  // prettier-ignore
+  });
+});
+
+describe("a full snapshot's dropped rows, in words (ADR-110 Amendment 15)", () => {
+  it("offers to withdraw only their events, and says their nodes and links stay", () => {
+    const value = {
+      ...EMPTY_GOVERNANCE,
+      refresh: { trigger: "watch" as const, pattern: "cells-*.csv", mode: "snapshot" as const, dropped_rows: "keep" as const, owner: "eng-1", paused: false },
+    };
+    render(<GovernanceFields scheme={SCHEME} value={value} onChange={() => undefined} />);
+    expect(screen.getByRole("option", { name: "Keep them and their events" })).toBeTruthy();
+    expect(
+      screen.getByRole("option", {
+        name: "Withdraw their events; their nodes and links stay until their load is reverted (reverting the refresh restores the events)",
+      }),
+    ).toBeTruthy();
   });
 });

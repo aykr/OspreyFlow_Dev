@@ -30,7 +30,12 @@ from ports.graph import AmbiguousElementId, StoredLink, StoredNode
 
 _IDS = re.compile(r"SELECT id FROM `(\w+)` WHERE id IN :ids")
 _RID = re.compile(r"SELECT @rid AS rid FROM `(\w+)` WHERE id IN :ids")
-_UPDATE = re.compile(r"UPDATE `(\w+)` SET reverted = true WHERE id IN :ids")
+_UPDATE = re.compile(
+    # ADR-110 Amendment 6 point 3: reverting the load that made an element also clears
+    # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
+    # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
+    r"UPDATE `(\w+)` SET reverted = true, withdrawn_by_load = null WHERE id IN :ids"
+)
 _LOADS = re.compile(
     r"SELECT id, audit\.load_id AS load_id, reverted, superseded_by FROM `(\w+)` WHERE id IN :ids"
 )
@@ -96,7 +101,9 @@ class TypedStore:
             self.update_sizes.append((m.group(1), len(params["ids"])))
             for i in params["ids"]:
                 if i in table:
+                    # What the statement sets, both of it: the flag and the withdrawal cleared.
                     table[i]["reverted"] = True
+                    table[i]["withdrawn_by_load"] = None
             return []
         if (m := _LOADS.fullmatch(command)) is not None:
             table = self._table(m.group(1))
@@ -175,6 +182,20 @@ async def test_a_revert_sends_sql_by_type_and_no_gremlin_scan() -> None:
     assert {t for t, _ in store.update_sizes} == {"Person", "Document", "ASSOCIATE_OF"}, (
         "an update names only the type that holds the ids"
     )
+
+
+async def test_a_revert_clears_what_a_snapshot_withdrew() -> None:
+    """ADR-110 Amendment 6 point 3: reverting the load that made an element takes it back for good,
+    so a withdrawing refresh's later revert, which restores what it withdrew, finds nothing."""
+    store = TypedStore()
+    store.vertex("Person", "p1")
+    store.edge("ASSOCIATE_OF", "e1", "p1", "p1")
+    store.vertices["Person"]["p1"]["withdrawn_by_load"] = "refresh-1"
+    store.edges["ASSOCIATE_OF"]["e1"]["withdrawn_by_load"] = "refresh-1"
+    await _adapter(store).revert_elements(["p1"], ["e1"], "tx")
+    node = store.vertices["Person"]["p1"]
+    assert (node["reverted"], node["withdrawn_by_load"]) == (True, None)
+    assert store.edges["ASSOCIATE_OF"]["e1"]["withdrawn_by_load"] is None
 
 
 async def test_a_node_id_is_looked_up_among_node_types_only_and_a_link_id_among_link_types_only() -> (

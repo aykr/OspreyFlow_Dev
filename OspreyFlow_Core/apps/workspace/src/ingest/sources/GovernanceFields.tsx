@@ -1,7 +1,8 @@
 // A source's governance as a form (ADR-140 decision 7): its marking (classification and handling
 // code, the originator and the owning unit), the units its rows may name, its legal basis and its
 // refresh policy (ADR-110 Amendment 6): when it is read again, and how each file is read — the whole
-// file each time, keeping or withdrawing the rows it no longer carries, or only the rows past a
+// file each time, keeping the rows it no longer carries or withdrawing their events (ADR-110 Amendment
+// 15: never their nodes or links), or only the rows past a
 // watermark column. Used to register a source and to edit one.
 import type { SourceRefresh } from "../../../../../packages/schemas/generated";
 import { Input } from "../../design/primitives/Input";
@@ -75,7 +76,7 @@ export function refreshInWords(refresh: SourceRefresh | null | undefined): strin
   if (refresh.mode === "incremental")
     return `${when}, reading only the rows past the highest ${refresh.watermark_column ?? ""} already loaded`;
   return refresh.dropped_rows === "withdraw"
-    ? `${when}, reading the whole file and withdrawing what rows it no longer carries had loaded`
+    ? `${when}, reading the whole file and withdrawing the events of rows it no longer carries; their nodes and links stay until their load is reverted`
     : `${when}, reading the whole file and keeping what rows it no longer carries had loaded`;
 }
 
@@ -170,8 +171,11 @@ export function GovernanceFields({
                   set({ refresh: { ...value.refresh, dropped_rows: e.target.value === "withdraw" ? "withdraw" : "keep" } })
                 }
               >
-                <option value="keep">Keep what they loaded</option>
-                <option value="withdraw">Withdraw what they loaded (reverting the refresh restores it)</option>
+                <option value="keep">Keep them and their events</option>
+                <option value="withdraw">
+                  Withdraw their events; their nodes and links stay until their load is reverted (reverting the refresh
+                  restores the events)
+                </option>
               </Select>
             </label>
           ) : (

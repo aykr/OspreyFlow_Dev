@@ -126,6 +126,9 @@ _WEEKDAY_SQL = "CAST(isodow(occurred_at) AS INTEGER) - 1"
 _HOUR_SQL = "CAST(hour(occurred_at) AS INTEGER)"
 
 
+#: Event ids per statement when a refresh sets events aside (`withdraw_events_by_id`).
+_WITHDRAW_CHUNK = 1_000
+
 class AnalyticsDuckDBAdapter:
     def __init__(self, con: duckdb.DuckDBPyConnection, handling_scheme: HandlingScheme) -> None:
         # `occurred_at` is a plain TIMESTAMP holding UTC. DuckDB converts an aware time to the
@@ -881,29 +884,36 @@ class AnalyticsDuckDBAdapter:
         ).fetchall()
         return len(removed) + len(aside)
 
-    async def withdraw_events(self, edge_ids: Sequence[str], load_id: str) -> int:
-        """`AnalyticsPort.withdraw_events`: every event on these links moved to `withdrawn_events`,
+    async def withdraw_events_by_id(self, event_ids: Sequence[str], load_id: str) -> int:
+        """`AnalyticsPort.withdraw_events_by_id`: exactly these events moved to `withdrawn_events`,
         marked with `load_id`, in one transaction; no access step. An event already set aside is not
         in `events`, so it stays with the load that set it aside."""
-        ids = list(dict.fromkeys(edge_ids))
+        ids = list(dict.fromkeys(event_ids))
         if not ids:
             return 0
-        placeholders = ",".join("?" for _ in ids)
+        moved = 0
         self._con.execute("BEGIN TRANSACTION")
         try:
-            self._con.execute(
-                f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
-                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE edge_id IN ({placeholders})",
-                [load_id, *ids],
-            )
-            moved = self._con.execute(
-                f"DELETE FROM events WHERE edge_id IN ({placeholders}) RETURNING event_id", ids
-            ).fetchall()
+            # In bounded chunks, one transaction: no statement grows with the rows withdrawn.
+            for start in range(0, len(ids), _WITHDRAW_CHUNK):
+                chunk = ids[start : start + _WITHDRAW_CHUNK]
+                placeholders = ",".join("?" for _ in chunk)
+                self._con.execute(
+                    f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
+                    f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE event_id IN ({placeholders})",
+                    [load_id, *chunk],
+                )
+                moved += len(
+                    self._con.execute(
+                        f"DELETE FROM events WHERE event_id IN ({placeholders}) RETURNING event_id",
+                        chunk,
+                    ).fetchall()
+                )
             self._con.execute("COMMIT")
         except BaseException:
             self._con.execute("ROLLBACK")
             raise
-        return len(moved)
+        return moved
 
     async def restore_withdrawn_events(self, load_id: str) -> int:
         """`AnalyticsPort.restore_withdrawn_events`: the events `load_id` set aside, moved back

@@ -603,8 +603,9 @@ async def _revert_one(
                     reason=f"load {record.load_id} was reverted and its events removed",
                 )
         if record.rows_withdrawn:
-            # The events of the links it withdrew, back before its own go: they carry the loads
-            # that wrote them, so the retract below leaves them.
+            # The events it set aside (its dropped rows' own, ADR-110 Amendment 15; a link's, for a
+            # refresh recorded before it), back before its own go: they carry the loads that wrote
+            # them, so the retract below leaves them.
             counts["events_restored"] = await deps.analytics.restore_withdrawn_events(
                 record.load_id
             )

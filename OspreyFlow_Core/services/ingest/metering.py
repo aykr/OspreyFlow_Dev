@@ -10,8 +10,9 @@ Every run records, on its report and in the ledger (`RunMetering`):
   is content-addressed, so a file it already keeps is kept once: the figure is what was put, not
   what the store grew by;
 - **graph writes**: every element the run wrote once (`graph_writes`), created, merged into, written
-  by the case's rules, withdrawn, or by an extract or enrich stage; a node matched by reference is
-  not written.
+  by the case's rules, or by an extract or enrich stage; a node matched by reference is not written.
+  A full snapshot's withdrawal writes no element (ADR-110 Amendment 15: it takes back the dropped
+  rows' own events alone), so it is never counted here.
 
 A figure is never 0 for "not measured" (rule 2).
 """
@@ -38,6 +39,8 @@ class CountingMedia:
 
 
 def _load_writes(report: LoadReport) -> int:
+    # A full snapshot's withdrawal writes no element (ADR-110 Amendment 15), so nothing of it is
+    # counted; the run says what it withdrew in `rows_withdrawn` and its notes.
     return (
         len(report.created_node_ids)
         + len(report.merged_node_ids)
@@ -45,8 +48,6 @@ def _load_writes(report: LoadReport) -> int:
         + len(report.rule_node_ids)
         + len(report.rule_created_edge_ids)
         + len(report.rule_merged_edge_ids)
-        + len(report.withdrawn_node_ids)
-        + len(report.withdrawn_edge_ids)
     )
 
 
