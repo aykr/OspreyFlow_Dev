@@ -33,10 +33,9 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-025 Amendment 1 | A split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
 | ADR-099 Amendment 15 | A composite case's write to a node already in a member becomes a new node in the composite, linked by SAME_AS; no member changes (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
 | ADR-140 Amendment 8 | Phase 6 as built: the drawer beside the pipeline, Preview, guided and expert mode, the Map editor's strip and keyboard bind (the owner's rulings of 7 November: Q1 a, Q2 a, Q3 a) | studio | 2026-11-07 | reserved |
-| ADR-145 Amendment 1 | Three places as built: a place follows the rights its routes check; the crossing routes re-homed (the analyst's upload a Glass route; schedule preview, pause and resume Admin routes), so no role loses a right; the GOV.UK header's local extension (the owner's ruling "Re-home the routes", 7 November) | glass | 2026-11-07 | reserved |
+| ADR-145 Amendment 1 | Three places as built: each place follows the full checks its routes make; no route moves place; only the Studio's run history narrows (to run_pipelines); schedule preview exempt from place assignment; the GOV.UK header's local extension (the owner's corrected ruling, 7 November) | glass | 2026-11-07 | reserved |
 | ADR-090 Amendment 5 | Proposed types stay in Admin until the Studio's Model tab shows them (L3.5) (the owner's ruling, 7 November) | glass | 2026-11-07 | reserved |
 | ADR-115 Amendment 6 | Places a person cannot open are hidden, not dimmed (ADR-145 N6; the owner's ruling, 7 November) | glass | 2026-11-07 | reserved |
-| ADR-067 Amendment 1 | The analyst's upload answers as a Glass route (only if its route or right changes; the owner's ruling, 7 November) | glass | 2026-11-07 | reserved |
 
 ## Baseline
 
