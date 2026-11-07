@@ -1,0 +1,20 @@
+lease glass; 2026-11-07T22:51:18Z; red Q2a at 2e5176a: the close repoints nothing
+diff --git a/OspreyFlow_Core/services/api/alert_queue.py b/OspreyFlow_Core/services/api/alert_queue.py
+index ffb5cc1..e8385cd 100644
+--- a/OspreyFlow_Core/services/api/alert_queue.py
++++ b/OspreyFlow_Core/services/api/alert_queue.py
+@@ -484,7 +484,7 @@ async def _close(
+         alert_node_id=confirmed_node,
+         edge_ids=cited,
+         close_proposed_by=proposed_by,
+-        repoint=renamed or None,
++        repoint=None,  # red: no repoint
+     )
+ 
+ 
+>           assert second.id in queued, "the second alert citing the match is still in the queue"
+E           AssertionError: the second alert citing the match is still in the queue
+E           assert '01M6W3BC6GY2E0CMA0RMEWQY68' in {'01M6W3BC6C8WCRGXB1YMRKK02A': Alert(id='01M6W3BC6C8WCRGXB1YMRKK02A', rule_id='typology:01M6W3BC6C8WCRGXB1YMRKK02B', o..., 487279, tzinfo=datetime.timezone.utc), close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E            +  where '01M6W3BC6GY2E0CMA0RMEWQY68' = Alert(id='01M6W3BC6GY2E0CMA0RMEWQY68', rule_id='typology:01M6W3BC6GY2E0CMA0RMEWQY69', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue
+1 failed, 6 deselected in 10.69s

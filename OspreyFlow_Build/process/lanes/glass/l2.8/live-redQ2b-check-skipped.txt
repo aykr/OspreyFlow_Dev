@@ -1,0 +1,39 @@
+lease glass; 2026-11-07T22:51:29Z; red Q2b at 2e5176a: the link check skipped for repointed rows
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 8183b02..0dd5cec 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -331,6 +331,9 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
+     return [seen[k] for k in sorted(seen)]
+ 
+ 
++_REPOINTED: set[str] = set()
++
++
+ async def _repoint_cited_links(
+     conn: asyncpg.Connection, repoint: Mapping[str, str], *, exclude: str
+ ) -> list[str]:
+@@ -347,6 +350,7 @@ async def _repoint_cited_links(
+         await conn.execute(
+             "UPDATE alerts SET edge_ids = $2 WHERE id = $1", r["id"], json.dumps(cited)
+         )
++    _REPOINTED.update(r["id"] for r in rows)  # red: these rows' links are no longer checked
+     return [r["id"] for r in rows]
+ 
+ 
+@@ -751,7 +755,7 @@ class ReadableEvidence:
+         readable."""
+         return (
+             all(i in self.nodes for i in evidence_node_ids(alert))
+-            and set(alert.edge_ids) <= self.edge_ids
++            and (alert.id in _REPOINTED or set(alert.edge_ids) <= self.edge_ids)
+             and set(alert.event_ids) <= self.event_ids
+         )
+ 
+>           assert await _listed(stores, graph, analytics, case, TEAMMATE) == [], (
+E           AssertionError: the repointed alert is still checked whole: one who may not read the match is not given it
+E           assert ['01M6W3BMPQ10CFP45PG7N546KK'] == []
+E             Left contains one more item: '01M6W3BMPQ10CFP45PG7N546KK'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue
+1 failed, 6 deselected in 8.27s
