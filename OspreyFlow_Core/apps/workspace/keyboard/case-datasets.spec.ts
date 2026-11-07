@@ -68,7 +68,10 @@ test("a dataset is chosen with Space and the case made with Enter, reading it", 
     dataset_ids: ["enron"],
     domains: [],
   });
-  registerCovered("CASE_DATASETS_ACTIONS", "tick-datasets-and-create-a-case-by-keyboard");
+  registerCovered(
+    "CASE_DATASETS_ACTIONS",
+    "choose-a-dataset-and-create-a-case-by-keyboard",
+  );
 });
 
 test("the Author changes what the case reads by keyboard", async ({ page }) => {
