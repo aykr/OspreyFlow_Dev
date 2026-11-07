@@ -191,9 +191,11 @@ async def test_the_member_changes_with_both_extraction_checks_removed(
     assert not unchanged and stored
 
 
-async def _picture_in_the_composite_case(*, refused: bool) -> tuple[bool, int]:
-    """Replaces the member's picture from the composite case: whether the member's picture is as it
-    was, and how many files were stored past the member's own."""
+async def _picture_in_the_composite_case(
+    *, refused: bool, action: str = "replace"
+) -> tuple[bool, int]:
+    """Replaces (or removes) the member's picture from the composite case: whether the member's
+    picture is as it was, and how many files were stored past the member's own."""
     from services.api.entity_pictures import EntityPictureService
 
     from adapters.media_objectstore.testing import InMemoryMediaStore
@@ -227,8 +229,12 @@ async def _picture_in_the_composite_case(*, refused: bool) -> tuple[bool, int]:
         before = await service.pictures("member-case", ["car-1"], MEMBER_ONLY)
 
         in_composite = await scope_to_case(ANALYST, CASE, store)
-        replace = service.set(
-            CASE, "car-1", in_composite, name="side.png", data=png + b"2", handling=HANDLING
+        replace = (
+            service.set(
+                CASE, "car-1", in_composite, name="side.png", data=png + b"2", handling=HANDLING
+            )
+            if action == "replace"
+            else service.remove(CASE, "car-1", in_composite)
         )
         if refused:
             with pytest.raises(CompositeReadOnlyError, match="do this in a case that reads"):
@@ -262,6 +268,22 @@ async def test_the_member_picture_is_replaced_with_both_checks_removed(
     _without(monkeypatch, "entity_pictures", "last-word")
     unchanged, stored = await _picture_in_the_composite_case(refused=False)
     assert not unchanged and stored == 1
+
+
+@pytest.mark.parametrize("removed", [("entity_pictures",), ("last-word",)])
+async def test_each_picture_removal_check_holds_alone(
+    removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, *removed)
+    assert await _picture_in_the_composite_case(refused=True, action="remove") == (True, 0)
+
+
+async def test_the_member_picture_is_removed_with_both_checks_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "entity_pictures", "last-word")
+    unchanged, _stored = await _picture_in_the_composite_case(refused=False, action="remove")
+    assert not unchanged
 
 
 async def test_a_picture_is_not_removed_in_a_composite_case() -> None:

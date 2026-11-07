@@ -599,7 +599,7 @@ async def test_the_reject_check_fails_with_it_alone_removed(
 # --- extraction ---------------------------------------------------------------------------------
 
 
-async def _extract(principal: Principal) -> tuple[WritingGraph, InMemoryCandidates]:
+async def _email_service() -> tuple[Any, WritingGraph, InMemoryCandidates]:
     from services.api.email_extraction import EmailExtractionService
 
     working = FakeWorkingSetStore()
@@ -619,8 +619,52 @@ async def _extract(principal: Principal) -> tuple[WritingGraph, InMemoryCandidat
         "local-model",
         recogniser=FakeRecogniser(),
     )
+    return service, graph, candidates
+
+
+async def _extract(principal: Principal) -> tuple[WritingGraph, InMemoryCandidates]:
+    service, graph, candidates = await _email_service()
     await service.extract(CASE, "e1", "ev-1", principal)
     return graph, candidates
+
+
+async def test_a_links_emails_are_not_shown_as_documents_in_a_composite_case() -> None:
+    _, principal = await _in_the_composite_case()
+    service, graph, _ = await _email_service()
+    with pytest.raises(CompositeReadOnlyError):
+        await service.show_as_documents(CASE, "e1", principal, window=None)
+    assert graph.nodes == {}
+
+
+async def test_a_link_the_reader_cannot_see_is_not_found_before_shown_as_documents() -> None:
+    from services.api.email_extraction import LinkNotFoundError
+
+    _, principal = await _in_the_composite_case()
+    service, graph, _ = await _email_service()
+    with pytest.raises(LinkNotFoundError):
+        await service.show_as_documents(CASE, "e-hidden", principal, window=None)
+
+
+@pytest.mark.parametrize("removed", [("email_extraction",), ("last-word",)])
+async def test_each_show_as_documents_check_holds_alone(
+    removed: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without(monkeypatch, *removed)
+    _, principal = await _in_the_composite_case()
+    service, graph, _ = await _email_service()
+    with pytest.raises(CompositeReadOnlyError):
+        await service.show_as_documents(CASE, "e1", principal, window=None)
+    assert graph.nodes == {}
+
+
+async def test_the_emails_are_written_as_documents_with_both_checks_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without(monkeypatch, "email_extraction", "last-word")
+    _, principal = await _in_the_composite_case()
+    service, graph, _ = await _email_service()
+    await service.show_as_documents(CASE, "e1", principal, window=None)
+    assert graph.nodes
 
 
 async def test_an_email_is_not_extracted_in_a_composite_case() -> None:
