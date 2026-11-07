@@ -2,6 +2,32 @@
 
 Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.
 
+## Evening, 7 November: your records of 7 November applied
+
+Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
+
+- **Reserved and appended unchanged:** ADR-146, ADR-143 Am 2, ADR-144 Am 1, ADR-145 Am 4, ADR-140 Am 9, ADR-112 Am 5, ADR-142 Am 1 (`129ebb9`, `ba8a194`). Every number was the one you drafted. **What I changed:** one path in ADR-142 Am 1 (`scripts/lanes_launch.sh` → `OspreyFlow_Build/scripts/lanes_launch.sh`, and the heartbeat's), so citation-check finds them; and three files the records name before their steps build them (`tools/ui_words_check.py`, `tools/no_branches_check.py`, `apps/workspace/src/help/roles.ts`) are allowlisted, with the step that removes each entry.
+- **My own amendment renumbered:** I had used ADR-142 Amendment 1 at 18:15 for "a merge's make ci takes no lease", not yet pushed. I reverted it (`edfe77c`), and it now follows yours as Amendment 2.
+- **The build plan** takes `BUILD_PLAN_CHANGES.md` in full (`ce785b8`), with merge order items 7–14, and `progress.tsv` gains the new steps.
+- **Glass L2.4 part 1 merged** (`d035223`), make ci green on the merge. Part 2's brief is rewritten to the new columns and waits for L3.1 on main.
+- **O-acc built** (ADR-142 Am 1): accounts, `pause`, `pause --now`, `pause-done`, `switch`, `fallback-switch`, `merge-ok`, `orchestrator --account`, the monitor's `paused` state and *Account*. Each check shown red with its own branch removed (`process/lanes/O-acc_RED_RECORD.md`). The runbook's commands are in its new "Accounts, pausing and switching" section. **For you:** write `~/.ospreyflow/accounts.conf` when you want a second account (with no file, every session uses `~/.claude-ayan`, as today), and restart the monitor so it shows the *Account* column.
+
+| Lane · step | State | Next |
+| --- | --- | --- |
+| studio · L1.2a | building (events-only withdrawal, part A redo); holds the lease | its report, then my review; L1.2b unchanged |
+| glass · L2.4 | part 1 merged | part 2 waits for L3.1; then L2.8 (G2, G3, G9) |
+| case · L3.1 | the branch-layer fix is in (`ed83cf9`, `9e516f7`); waiting for the lease for the live set and the migration rehearsal | my review, then the merge |
+| docs | idle | D2 opens after L2.9 merges; no "three places" edits meanwhile |
+
+**Two calls of mine on the branch-layer fix (case asked):**
+- A case opened from an alert keeps an empty layer of its own. Your ruling names branches; taking analyst writes away from alert-jump cases would change what users can do, and ADR-146's private view (L2.9) retires the jump anyway.
+- The migration gives each **existing** case made from another (`branched_from`) an empty layer of its own, because nothing in the table tells a branch from an alert jump, and linking them to the original's layer would let an alert-jumper read it (rule 3). The output names and counts them. It is written into ADR-143 Amendment 1 as a temporary exception to ADR-144 Amendment 1 decision 2, and L3.2's migration moves anything in such a layer into the original's, tagged `from_branch`.
+
+**Questions for you (recommendation first; nothing waits for them but L3.9 and the queue's suppression):**
+- **L5.** Where a fresh drawing's items live: **(a)** in the drawn dataset itself, since for a drawing-first case the drawing is the data; (b) in the case's layer, promoted into the drawn dataset before a merge.
+- **L6.** Who may merge a drawn dataset: **(a)** an Author of the target holding `merge_datasets`, with a second person when the target's policy asks; administrators see every drawn dataset and may retire one; (b) administrators only.
+- **R8.** The team lead's queue tools: **(a)** all four, including *Suppress until…* (a reason, at most 90 days, listed in the inventory); (b) the filters only.
+
 ## Since 08:00 (you were away from about 08:20)
 
 You allowed L1.2, L2.2 and the docs lane's first brief, and merging as overnight. The briefs are at `e1423d4` and `cf1dc54`, and the Studio's build plan is committed at `a56f2f9` so lanes can read it. The studio and glass branches were fast-forwarded to `main`, and docs was set up and opened.
