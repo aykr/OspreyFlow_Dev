@@ -753,7 +753,11 @@ types* left the rail too: it is a tab of Admin. The Studio has no rail; a line u
 where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
-*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Each account is offered
+*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Since ADR-145 Amendment 2
+(the case screen lightened, 7 November 2026) *Monitoring*, with its open-alert count, is reached from
+that line; the rail keeps *Cases* and *Explore*, with *Ownership*, *History*, *Questions* and
+*Dashboards* under its ⋯ *More*; the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*
+under *More views*; and the right-hand column opens with the Inspector only. Each account is offered
 exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
 whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds one of its tabs' rights,
 the Glass for whoever holds a right a case's routes need. A place an account is not offered refuses
@@ -778,7 +782,8 @@ granted on a real dataset (rule 9).
 3. **As the case's Author** — *Cases → Who can open this case*: give the dashboard's account id
    Viewer. report-sync pulls the case as that identity within 15 minutes (restart `report-sync` to
    pull now); every pull is in the export ledger.
-4. **As the report viewer** — *Dashboards* in the rail, or *Reports → Dashboards*: the Superset board,
+4. **As the report viewer** — *Dashboards* under the rail's ⋯ *More* (since ADR-145 Amendment 2), or
+   *Reports → Dashboards*: the Superset board,
    branded OspreyFlow, drawn inside the Glass with no second sign-in. It opens only for someone who
    could count every figure on it (ADR-111 Amendment 3).
 5. **Superset itself** — `http://localhost:8088`, *Sign in with Keycloak* as the admin, for building

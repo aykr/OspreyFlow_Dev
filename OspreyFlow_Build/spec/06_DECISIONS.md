@@ -27057,3 +27057,27 @@ Status: accepted from the owner's ruling of 7 November 2026 (ADR-145 N6). Amends
 card only for each place the person's rights open, the same list as the place switcher; a place they
 cannot open has no card, where decision 7 drew it dimmed with the role it needs. A person whose rights
 open none is told "Your account opens no place yet. Ask an administrator to give you a role."
+
+### ADR-145, Amendment 2 (7 November 2026) — the case screen lightened: variant B
+
+Status: accepted from the owner's choice of 7 November 2026, variant B of the L2.3 prototype round
+(`process/lanes/glass/l2.3/`); built in Lane 2's L2.3 part 2. Records decision 4 as built, and the
+smallest step beyond it the owner chose (N4).
+
+1. **The right-hand column opens with the Inspector only.** Until the analyst folds or opens a panel,
+   Metrics and the Query builder (and any later panel) are folded beneath the Inspector, in their order,
+   each opened by one press on its name (`layout/SidePanelStack.tsx`, `DEFAULT_FOLDED`). Their order and
+   folding stay the analyst's, kept in the browser (ADR-085, ADR-096).
+2. **The rail keeps Cases and Explore.** Ownership, History, Questions and Dashboards are one click away
+   under the rail's ⋯ *More* (`shell/LeftRail.tsx`), whose name says which of them is open. Monitoring,
+   with the case's open-alert count, is the context banner's section (decision 2), not the rail's.
+3. **The view switch keeps Graph and Map.** Matrix and Reports are one click away under *More views*,
+   named after the one of them that is open; someone offered neither Graph nor Map (a Reports Viewer)
+   keeps their views in the switch itself.
+4. **Under the GOV.UK brand** the banner's content line no longer opens with a separator: the place is
+   the banner's title.
+5. **The count.** A keyboard user passes 24 controls before the canvas (25 with the skip link the brand
+   frame adds), from 29 (30). The prototype round counted one fewer for every variant: its harness drew
+   the mark without its *Home* button. The column shows the Inspector's 8 parts, from 15 across three
+   panels. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts` proves
+   each moved action by keyboard.

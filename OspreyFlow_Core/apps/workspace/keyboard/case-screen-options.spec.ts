@@ -1,11 +1,11 @@
 // L2.3 part 1 (ADR-145 decision 4): the case screen's lightening, as a prototype round for the owner.
 // Counts each variant's controls by keyboard alone (rule 13: what a keyboard user passes through), and
-// with `OSPREY_L23_SHOTS=1` writes each variant's screenshot in the dark, light and GOV.UK themes to
-// `OspreyFlow_Build/process/lanes/glass/l2.3/`. The harness is never wired into the app.
+// with `OSPREY_L23_SHOTS=<folder>` writes each variant's screenshot in the dark, light and GOV.UK
+// themes there (the build tree's lane folder, `process/lanes/glass/l2.3/`). The harness is never wired
+// into the app.
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
-const SHOTS = new URL("../../../../OspreyFlow_Build/process/lanes/glass/l2.3/", import.meta.url);
 
 /** Tab stops from the top of the page until the canvas has focus: the controls before the canvas. */
 async function stopsBeforeCanvas(page: Page): Promise<string[]> {
@@ -53,15 +53,16 @@ for (const variant of Object.keys(EXPECTED)) {
 }
 
 test("the screenshots, in the dark, light and GOV.UK themes", async ({ page }) => {
-  test.skip(process.env.OSPREY_L23_SHOTS !== "1", "set OSPREY_L23_SHOTS=1 to write them");
-  mkdirSync(SHOTS, { recursive: true });
+  const shots = process.env.OSPREY_L23_SHOTS;
+  test.skip(!shots, "set OSPREY_L23_SHOTS=<folder> to write them");
+  mkdirSync(shots!, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const variant of Object.keys(EXPECTED)) {
     for (const theme of ["dark", "light", "govuk"] as const) {
       await page.goto(`/keyboard/case-screen-options-harness.html?variant=${variant}${theme === "govuk" ? "&brand=govuk" : ""}`);
       if (theme === "light") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
       await expect(page.getByRole("application", { name: "Network canvas" })).toBeVisible();
-      await page.screenshot({ path: new URL(`${variant}-${theme}.png`, SHOTS).pathname });
+      await page.screenshot({ path: `${shots}/${variant}-${theme}.png` });
     }
   }
 });
