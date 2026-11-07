@@ -62,6 +62,12 @@ live test). The owner ruled "Spec by me, code by L1.1": the orchestrator fixed t
 0; L1.1 fixes the rest; step 0 is committed on `main` and pushed with L1.1's merge, the first `make ci`
 to pass (`PUSH_LOG.md` records it). The owner gave a standing yes to the downloads `make ci` needs.
 
+## The orchestrator's own step
+
+| Step | Work | Size | Exit |
+| --- | --- | --- | --- |
+| O-acc | ADR-142 Amendment 1: `accounts.conf`; `--account` on `open`, `resume`, `headless` and the orchestrator's start; `pause`, `pause --now`, `switch`; the `paused` heartbeat state; `HANDOFF.md`; the merge gate's `wip(` refusal; Prompt R's handoff line; the monitor's *Account* column; `fallback` lines | M | ADR-142 Amendment 1's six tests green and shown red first; the runbook's commands updated; the owner can pause the case lane and resume it on another account by hand |
+
 ## Lane 1 · Studio (`lane/studio`) · Opus · medium
 
 Continues the redesign's build plan (`spec/ingest_studio_redesign/` and `BUILD_PLAN_INGEST_STUDIO.md`).
@@ -71,11 +77,12 @@ Phase 5 is **not** in this lane (ADR-143 C1).
 | --- | --- | --- | --- |
 | L1.1 | Phase 4's remainder: `make ci` green (the causes found at step 0) | S | Phase 4's exit tests green; `make ci` green |
 | L1.2 | Phase 6: the canvas as editor, the Map editor, guided mode | L | Phase 6's exit; GOV.UK axe green |
-| L1.3 | Phase 7a: the staging catalogue's engine (Knowledge Adapters, golden files, staged Parquet, `source_refs`) | L | Golden files per step; provenance survives a Join |
+| L1.3 | Phase 7a: the staging catalogue's engine (Knowledge Adapters, golden files, staged Parquet, `source_refs`); it carries reference lists of kind `screening` (ADR-140 Amendment 9 decision 3), the engine only, no screen | L | Golden files per step; provenance survives a Join; a screening list round-trips through the catalogue |
 | L1.4 | Phase 7b: the drawers for each step | M | Phase 7's exit |
 | L1.5 | Phase 8: expert steps | L | Phase 8's exit |
-| L1.6 | Phase 9: connectors | M | Phase 9's exit |
-| L1.7 | Phase 10: Operations content and external orchestration, inside Admin's *Running › Operations* (ADR-145 decision 9) | L | Phase 10's exit |
+| L1.6 | Phase 9: connectors; and the screening-list connector in Sources, mapping templates (OFAC SDN, OFSI, UN, EU, OpenSanctions where licensed, blank) with synthetic golden files, deployment-wide import and per-dataset subscription, schedule and *Refresh now* (ADR-140 Amendment 9) | L | Phase 9's exit; each template maps its golden file; a rule offers only subscribed lists (with Lane 2) |
+| L1.7 | Phase 10: Operations content and external orchestration, inside Admin's *Running › Operations* (ADR-145 decision 9); and Studio › Releases, the YAML bundle, `packages/schemas/release.schema.json` (a `packages/schemas` commit first), `ospreyflow release export` and `import --dry-run` (ADR-140 Amendment 9 decision 4) | L | Phase 10's exit; ADR-140 Amendment 9's release tests |
+| L1.8 | The Studio's tips and *who can* refusals (ADR-145 Amendment 4 decision 12), from `help/roles.ts`; *Domain model* wording everywhere; `tools/ui_words_check.py` | S | No "target model" on screen; every disabled action says why and who can |
 
 ## Lane 2 · Glass and places (`lane/glass`) · Opus · medium (Sonnet for L2.6–L2.7)
 
@@ -84,10 +91,15 @@ Phase 5 is **not** in this lane (ADR-143 C1).
 | L2.1 | The alerts gap map (ADR-145 N5): every alert's generation, triage, routing and case scope against ADR-109, 130, 133, 134; no code | M | A written map in `spec/` with its open questions as multiple choice for the owner |
 | L2.2 | Three places: the switcher, the context banner and cross-links, Home's cards, the rail losing Ingest Studio, Admin and Proposed types; the GOV.UK header (ADR-145 decisions 1–3) | L | Each role sees only its places, and the hidden places' routes refuse it; `keyboard/shell.spec.ts` and axe (dark, light, GOV.UK) green; DEMO_GUIDE chapters touched say so |
 | L2.3 | The case screen's first lightening (decision 4), from a prototype round the owner rules on first | M | The owner's ruling recorded; `keyboard/panel-frames.spec.ts` green |
-| L2.4 | Admin regrouped into sections (decision 5); Datasets' highest marking and promotion policy columns (decision 8; fields from L3.1) | M | Every section shows only with its right; `keyboard/admin.spec.ts` green |
-| L2.5 | People and roles: the row (R3), Author visibility and *Name an Author* (R1), custom roles (R2), *Disable…* with transfers (A4) | L | Decision 7's refusals at the route; disable refused with an item untransferred |
-| L2.6 | Operations' promotions and ageing (O3), and the Audit section (O2) | M | The overdue alert fires once at N days; audit access test by unit |
-| L2.7 | The data engineer's *Needs you* and the Model tab's count (A2) | S | Keyboard and tooltip cases |
+| L2.4 | Admin regrouped into sections (decision 5); part 2, Datasets' highest marking and promotion policy columns (decision 8; fields from L3.1), and from ADR-145 Amendment 4: the kind (with *Drawn*), the **Authors** and *Change owner…*, **every linked case with its layer's counts, size and state**, a removed case's *Merge* and *Delete* with dry runs; System gains *Dataset owners may be*. Part 2 waits for L3.1 **and** ADR-145 Amendment 4 | M→L | Every section shows only with its right; `keyboard/admin.spec.ts` green; ADR-145 Amendment 4's Datasets and System tests; no layer contents on any route |
+| L2.5 | People and roles: the row (R3), Author visibility and *Name an Author* (R1), custom roles (R2), *Disable…* with transfers (A4); and ADR-112 Amendment 5: `author_rules`, `merge_datasets`, the *Rule author* role and the Super user preset; teams (name, mailbox, a level in a case, ownership); the lead, hand-over and cover; service accounts refused; the guard rails | L | Decision 7's refusals at the route; disable refused with an item untransferred; ADR-112 Amendment 5's tests |
+| L2.6 | Operations' promotions and ageing (O3), and the Audit section (O2); *promotions overdue* goes to the dataset's Authors holding `review_promotions` (ADR-145 Amendment 4 decision 11, R7) | M | The overdue alert fires once at N days; audit access test by unit |
+| L2.7 | The data engineer's *Needs you* and the Model tab's count (A2); Home's *What you can do, and what you answer for*, from the same source as the tips (ADR-145 Amendment 4 decision 12) | M | Keyboard and tooltip cases; the section lists nothing the reader can't see |
+| L2.8 | ADR-146 decision 10: G2, G3 and G9 fixed, each with its test shown red first (the first of the alerts work) | S | The three tests; a friction row each |
+| L2.9 | Four places: Rules and Monitoring in the switcher and the GOV.UK header; the place's shell and tabs; Monitoring and its count leave the Glass (reworking L2.2 and L2.3); the workspace router and `/alerts/<id>`; Home opens the alert; *Open the evidence* as a private view with the way back (R5) | L | ADR-145 Amendment 4's switcher test; ADR-146's address, refusal and way-back tests |
+| L2.10 | One queue (the inbox removed, *what fired it* on every watch alert); the queue's filters; the inventory *What raises alerts*; watches kept there and made from the Glass (*Watch for this*, *Save as a watch*); saved patterns on a schedule (G16); team routing (the new rule-3 read, tests first); the lead's hand-off and taken-back marking; *Raise an alert…* to the case or the dataset (R4). Asks R8 before suppression | L | ADR-146's queue, watch, team and analyst-alert tests |
+| L2.11 | The rule editor: a declared dataset, the *When / If / Then* form, BPMN 2.0 and DMN storage, *Show as BPMN*, *Export*, import refusal, draft, test and live with a second person, *Changes*; `scripts.migrate_rules_to_datasets` (dry run first) | L | ADR-146's editor, round-trip and migration tests |
+| L2.12 | Reporting folded: the case's *Figures* tab (replacing the Reports view) with its Alerts and drawing panels; the Alerts panel for boards; the *Alert monitoring* board (D2); the second dashboards door removed; the Reports Viewer's journey; the canvas's alert badge; the *Roles, teams and Authors* help page and Admin's tips | M | ADR-145 Amendment 4's reporting and Reports Viewer tests |
 
 ## Lane 3 · Case contract and drawing (`lane/case`) · Opus · medium
 
@@ -96,15 +108,16 @@ The riskiest lane: every step starts with its access and existence-leak tests (r
 
 | Step | Work | Size | Exit |
 | --- | --- | --- | --- |
-| L3.1 | Phase 5 as amended (ADR-140 Amendment, ADR-143 decision 1): target model per dataset, reference lists, ADR-126 derived, one dataset per case, composites, **each case's analyst layer and its read set**; `scripts.migrate_cases_to_one_dataset` (dry run first) also creates the layers | L | Phase 5's exit; ADR-143's "unchanged under case B" conformance case green; every seeded case reads one dataset plus its layer |
-| L3.1b | Phase 5's target-model half: `TargetModel`, reference lists, ADR-126 derived, the domain-model node; a `packages/schemas` commit first; Lane 1's files agreed (the owner's ruling "New L3.1b", 7 November, case Q4) | L | Phase 5's exit in full |
-| L3.2 | Case views replace branches (ADR-144), `scripts.migrate_branches_to_views` (dry run first) | L | ADR-144's tests; the selection bar's view actions by keyboard |
-| L3.3 | Drawing boards (ADR-143 decisions 4–7): declare, link by handle, Alt-drag, right-click and keyboard; marking, grading, source; matching; pictures | L | `keyboard/boards.spec.ts`; one field analyst's check of moving versus linking (open question 4) |
-| L3.4 | Promotion (decisions 8 and 10): the sheet, one load, the dataset's policy and highest marking, review; the Studio's *Analyst promotions* list in `ingest/runs/` by agreement with Lane 1 | L | ADR-143's promotion and policy tests; the owner's ruling on online revert (open question 2) |
+| L3.1 | Phase 5 as amended (ADR-140 Amendment, ADR-143 decision 1): target model per dataset, reference lists, ADR-126 derived, one dataset per case, composites, **each case's analyst layer and its read set**; `scripts.migrate_cases_to_one_dataset` (dry run first) also creates the layers. Before merge: branch layers dropped; a branch reads its original case's layer read-only until L3.2 (ADR-144 Amendment 1 decision 2) | L | Phase 5's exit; ADR-143's "unchanged under case B" conformance case green; every seeded case reads one dataset plus its layer; a branch holds no layer of its own (red with the old copy restored) |
+| L3.1b | Phase 5's target-model half: `TargetModel`, reference lists, ADR-126 derived, the domain-model node; a `packages/schemas` commit first; Lane 1's files agreed (the owner's ruling "New L3.1b", 7 November, case Q4); and *domain model* wording; the *Make live* owner step (people, team or both; maker proposed; service account refused; the System setting); the home case made at first *Make live*; `scripts.make_home_cases` (dry run first); the `drawn` dataset kind. Waits for ADR-140 Amendment 9 and ADR-145 Amendment 4 | L | Phase 5's exit in full; ADR-145 Amendment 4's home-case and *Make live* tests |
+| L3.2 | Case views replace branches (ADR-144), `scripts.migrate_branches_to_views` (dry run first); widened by ADR-144 Amendment 1: branches gone from every route, screen, keyboard spec and spec; `tools/no_branches_check.py` in `make ci`; branch-only items to the original case's layer, and anything in a legacy branch's or alert-jump case's own layer (cases made before L3.1, which the migration could not tell apart) moved into the original case's layer, tagged `from_branch` | L | ADR-144's tests; ADR-144 Amendment 1's tests; the selection bar's view actions by keyboard |
+| L3.3 | Drawing boards (ADR-143 decisions 4–7): declare, link by handle, Alt-drag, right-click and keyboard; marking, grading, source; matching; pictures; and from ADR-143 Amendment 2: a board with no case makes a drawn dataset and its home case (decision 5); drawing an item sets its watch (decision 8, with Lane 2's queue); the layer's marking ceiling; the restore test | L | `keyboard/boards.spec.ts`; one field analyst's check of moving versus linking (open question 4); ADR-143 Amendment 2's tests for decisions 3, 4, 5 and 8 |
+| L3.4 | Promotion (decisions 8 and 10): the sheet, one load, the dataset's policy and highest marking, review; the Studio's *Analyst promotions* list in `ingest/runs/` by agreement with Lane 1; and a removed case's layer merged by the dataset's Authors as a promotion, with the read grant for that merge only, and its delete (ADR-143 Amendment 2 decision 1) | L | ADR-143's promotion and policy tests; the owner's ruling on online revert (open question 2); decision 1's tests |
 | L3.5 | Analyst-defined link types (decision 9) and the Model tab's proposals block | M | A proposed type's links cannot be promoted; accepted, they can |
-| L3.6 | The alert when a load meets a drawn item (decision 12) | M | One alert per match per case; *Open the board* |
+| L3.6 | Replaced by ADR-143 Amendment 2 decision 8: no separate alert kind. What is left is the `drawn_watch` kind's queue cases and *Open the board*, built with L2.10 | S | One alert per match per case, withheld from a reader who may not see the item |
 | L3.7 | The grading scheme setting and its change command (decision 11) | S | The dry run writes nothing; grades keep their original |
 | L3.8 | The ownership route Lane 2's *Disable…* reads (views, boards, promotions, proposed types per person) | S | Access test; Lane 2's L2.5 consumes it |
+| L3.9 | Merging a drawn dataset (ADR-143 Amendment 2 decisions 6 and 7): the Studio's *Merge into a dataset…* screen (in `ingest/**` by agreement with Lane 1) with map, match, dry run and merge; the drawing becomes a case view with annotations. **Asks the owner L5 and L6 first** | L | Decisions 6 and 7's tests |
 
 ## Lane 4 · Documentation and collateral (`lane/docs`) · Sonnet (P7 confirmed at step 0: interactive, opened after the first feature merge)
 
@@ -119,6 +132,12 @@ Follows merges, never runs ahead of them for the guides:
   Product Overview, next draft after `Draft1l`): drawing boards as the headline feature, from the
   design reference, marked "coming" until L3.3 and L3.4 are merged; screenshots retaken after each
   merge, in the default and GOV.UK themes.
+- **D2 (after L2.9 merges):** the user, developer and admin guides, the website and the deck: four
+  places; no branches; three alert sources and one queue; Rules and Monitoring and the rule author; home
+  cases, Authors and teams; screening lists; releases; the Reports Viewer's journey; the roles' words from
+  `help/roles.ts`; GOV.UK screenshots too. The website marks unbuilt features *coming*. Exit: `make ci`'s
+  spec and link gates; no "three places" and no "branch" outside the pipeline DAG. Until then the website
+  and deck edits that say "three places" are held (ADR-145 Amendment 4).
 
 ## File ownership
 
@@ -189,6 +208,16 @@ the lane records each one in `REPORT.md`.
 5. L3.4's promotions list in `ingest/runs/` is merged only after Lane 1 has rebased past it, by
    agreement, with Lane 1 told first.
 6. L3.2–L3.5 and L3.8 before L2.5's transfer list is finished.
+7. O-acc before any lane is next opened or resumed.
+8. L3.1 (with branch layers dropped) before L2.4 part 2 and L3.1b.
+9. ADR-145 Amendment 4 and ADR-140 Amendment 9 on `main` before L2.4 part 2, L2.5, L2.7, L2.9, L3.1b and L3.3.
+10. L2.8 before L2.9; L2.9 before L2.10–L2.12; L2.10 before L2.11.
+11. L2.5 before L2.10's team routing and before L3.1b's team owners.
+12. L3.3 and L3.4 before L3.9; L3.9 after the owner answers L5 and L6.
+13. D2 after L2.9, then again after each later merge that changes a screen.
+14. No brief for L2.5, L2.7, L2.9–L2.12, L3.1b–L3.4, L3.6, L3.9 or the new L1.3, L1.6, L1.7 before the
+    owner's records of 7 November are on `main` (`process/inbox/specs_2026-11-07`, applied at the commit
+    that appends them).
 
 ## What the owner checks by hand
 

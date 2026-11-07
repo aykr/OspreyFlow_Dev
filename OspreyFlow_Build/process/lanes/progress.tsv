@@ -6,25 +6,34 @@ studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	building	Pipelines seen only by cases that load into the dataset (after L3.1); main's four red tests
 studio	L1.2c	S	todo	Revert a load whose returning row merged into its own link (pending the owner)
 studio	L1.2b	M	todo	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
-studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine
+studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine; screening lists in it
 studio	L1.4	M	todo	Phase 7b: the drawers for each step
 studio	L1.5	L	todo	Phase 8: expert steps
-studio	L1.6	M	todo	Phase 9: connectors
-studio	L1.7	L	todo	Phase 10: Operations and external orchestration
+studio	L1.6	L	todo	Phase 9: connectors; the screening-list connector and templates
+studio	L1.7	L	todo	Phase 10: Operations, external orchestration; Releases as YAML
+studio	L1.8	S	todo	The Studio's tips and who-can refusals; Domain model wording
 glass	L2.1	M	done	The alerts gap map
 glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
 glass	L2.3	M	done	The case screen's first lightening
-glass	L2.4	M	building	Admin regrouped; Datasets' columns
-glass	L2.5	L	todo	People and roles; custom roles; Disable with transfers
+glass	L2.4	M	done	Admin regrouped into sections (part 1)
+glass	L2.4p2	L	todo	Datasets' columns, Authors, linked cases; System's owners setting (waits for L3.1, ADR-145 Am 4)
+glass	L2.5	L	todo	People and roles; custom roles; Disable; Rule author, teams, leads
 glass	L2.6	M	todo	Operations' promotions and ageing; Audit
-glass	L2.7	S	todo	The data engineer's Needs you; the Model tab's count
-case	L3.1	L	review	Phase 5 as amended: one dataset per case, composites, the analyst layer
-case	L3.1b	L	todo	Phase 5's target-model half
-case	L3.2	L	todo	Case views replace branches
-case	L3.3	L	todo	Drawing boards
-case	L3.4	L	todo	Promotion
+glass	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
+glass	L2.8	S	todo	Alerts: G2, G3 and G9 fixed (access first)
+glass	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
+glass	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
+glass	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
+glass	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
+case	L3.1	L	review	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
+case	L3.1b	L	todo	Phase 5's model half; Make live's owner step; home cases; drawn kind
+case	L3.2	L	todo	Case views replace branches; no branches anywhere
+case	L3.3	L	todo	Drawing boards; drawn datasets; drawn items watched; marking ceiling
+case	L3.4	L	todo	Promotion; a removed case's layer merged or deleted
 case	L3.5	M	todo	Analyst-defined link types
-case	L3.6	M	todo	The alert when a load meets a drawn item
+case	L3.6	S	todo	drawn_watch alerts in the one queue (with L2.10)
 case	L3.7	S	todo	The grading scheme setting and command
 case	L3.8	S	todo	The ownership route for Disable
+case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (asks L5, L6)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
+docs	D2	M	todo	Guides, website, deck: four places, no branches, alerts (after L2.9)
