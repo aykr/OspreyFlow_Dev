@@ -165,26 +165,32 @@ pipeline" (the drawer's **Close** goes back to the step, or lets it go).
   today's dry run up to that step, at the person's own clearance, writing nothing
   (`ingest/dag/NodePreview.tsx`): a source or profile step shows the rows it reads, from the Map sample
   rows, row 1 on until the last or ten rows, and says it is a sample of how many and whether the source
-  has more; a Map or Load step shows the graph it would make, from the dry run (§5), with its counts and
-  rejected rows; an Extract or Enrich step says it has no preview yet. Preview adds no route: the
-  server's own masking of those two routes is the Preview's, so a row the person may not read shows only
-  its shape (ADR-140 rule 3; `tests/ingest/test_node_preview_access.py`). Until phase 7's staging
-  steps, nothing lies between a source and Map, so "up to that step" is the source's rows.
+  has more; a Map or Load step shows the graph it would make, with its counts and rejected rows, from
+  `POST …/ingest/recipes/{id}/preview-graph`: the dry run Test runs (§5), which **marks nothing**. The
+  draft is not marked verified, no file is recorded for *Run now*, and the audit row is
+  `preview_studio_recipe_graph`, never Test's. So a Preview never counts as Test and never satisfies
+  Deploy (`tests/services/api/test_studio_preview_routes.py`; the first build called `verify` itself,
+  found by the review of L1.2). An Extract or Enrich step says it has no preview yet. **Who may preview:**
+  the table Preview reads the sample rows, so it needs `edit_pipelines` and viewer level on the case;
+  the graph Preview needs what Test needs, `verify_pipelines` and editor level, and a person without
+  the right is told so in words. The server's own masking is the Preview's, so a row the person may not
+  read shows only its shape (ADR-140 rule 3; `tests/ingest/test_node_preview_access.py`). Until phase
+  7's staging steps, nothing lies between a source and Map, so "up to that step" is the source's rows.
 - **The pipeline's own screens** (*Load rules*, *Test*, *Deploy*, the profile and the draft's own
   settings) open in the same drawer, wider, each the existing screen hosted whole.
 - **Guided and expert mode** (ADR-140 decision 3; Amendment 1.3). **Guided**, every person's default,
   shows the steps as a **numbered list** in the order they run, each opening the same drawer, beside a
   picture of the pipeline with nothing to press. **Expert** shows the canvas as the editor. A step
   guided mode does not offer (an expert step, phase 8) is listed, labelled "Expert step, read-only here"
-  and opened read-only, never hidden. The mode is a per-person preference **kept in the person's browser**,
+  and opened read-only, never hidden, and guided mode's *Remove selected* refuses it. The mode is a per-person preference **kept in the person's browser**,
   keyed by their user name (`ingest/dag/studioMode.ts`; the owner's ruling Q1 a, 7 November 2026): with
   no preference store on the server, a second browser starts in guided mode again, and a browser that
   refuses storage stays guided. Everyone may switch to expert mode until `write_sql_transforms` exists
   (the owner's ruling Q3 a): the right gates the SQL and fuzzy steps when phase 8 builds them.
   *Show YAML* is not yet built.
 - **Map** opens the **Map editor** (`ingest/map/MapEditor.tsx`, §4): the pipeline collapses to a
-  **strip** across the top, each step a button, Map marked as where the person is; a step on the strip
-  goes back to the pipeline with that step chosen in its drawer.
+  **strip** across the top, each other step a button, Map said as where the person is (not a button);
+  a step on the strip goes back to the pipeline with that step chosen in its drawer.
 
 **Two gates, both in words (rule 2).** Saving a pipeline refuses a graph that breaks the rules
 (a cycle, a second domain root, a source reaching no load, an extract not fed by a map, an unknown

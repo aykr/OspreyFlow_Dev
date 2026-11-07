@@ -26900,8 +26900,9 @@ and `accept_types` (in the Data Engineer role).
 
 ### ADR-140, Amendment 8 (7 November 2026) — phase 6 as built: the drawer beside the pipeline, Preview, guided and expert mode, the Map editor's strip and keyboard bind
 
-Status: accepted 7 November 2026. The owner answered three multiple-choice questions, each with the
-recommended option (Q1 a, Q2 a, Q3 a). Built by the studio lane in step L1.2, redesign phase 6. ADR-140
+Status: built under the owner's rulings of 7 November 2026. The owner answered three multiple-choice
+questions, each with the recommended option (Q1 a, Q2 a, Q3 a). Built by the studio lane in step
+L1.2, redesign phase 6, and corrected after its review the same day (point 2). ADR-140
 and ADR-108 Amendment 6 stand, except where this amendment says otherwise. `09_INGEST_STUDIO.md` §1.0
 and §4 carry the detail.
 
@@ -26910,13 +26911,18 @@ and §4 carry the detail.
    *Deploy*, the profile and the draft's own settings open in the same drawer, each the existing screen
    hosted whole. No hosted screen has a "Back to the pipeline" button any more. The drawer's *Close*
    returns to the step.
-2. **Preview (decision 14, built) adds no route.** A source or profile step reads the Map sample rows,
-   from the first row until the last row or the tenth. A Map or Load step reads the dry run. Both read
-   with the person's own token, so the server's masking applies to Preview as it does elsewhere
-   (rule 3). `tests/ingest/test_node_preview_access.py` proves this sequence. It was shown red on each
-   path by switching off that path's masking. Until phase 7, nothing sits between a source and Map, so
-   "up to that step" means the source's rows. An Extract or Enrich step has no preview yet, and the
-   drawer says so.
+2. **Preview (decision 14, built) writes nothing that counts as Test.** A source or profile step reads
+   the Map sample rows, from the first row until the last row or the tenth (`edit_pipelines`, viewer
+   level). A Map or Load step reads a new route, `POST …/ingest/recipes/{id}/preview-graph`. It runs the
+   same dry run as `verify`, under the same right and level (`verify_pipelines`, editor), but it does not
+   mark the draft verified, records no file for *Run now* to be held to, and audits as
+   `preview_studio_recipe_graph`. Both read with the person's own token, so the server's masking applies
+   (rule 3). The first build called `verify` itself, so a Preview silently satisfied Deploy and the audit
+   could not tell the two apart; the review of L1.2 found it. `tests/services/api/test_studio_preview_routes.py`
+   was shown red against that call, and `tests/ingest/test_node_preview_access.py` proves the masking of
+   both paths, each shown red by switching that path's masking off. Until phase 7, nothing sits between
+   a source and Map, so "up to that step" means the source's rows. An Extract or Enrich step has no
+   preview yet, and the drawer says so.
 3. **The mode is kept in the person's browser (Q1 a).** It is keyed by the user name
    (`ingest/dag/studioMode.ts`), and every person starts in guided mode (Amendment 1.3). This is the
    cost of having no preference store on the server: a new browser starts in guided mode again. A
@@ -26925,11 +26931,12 @@ and §4 carry the detail.
 4. **Guided mode is a numbered list** of the steps in run order. Each opens the same drawer, with a
    picture of the pipeline beside the list that has nothing to press. A step's button carries the same
    name in both modes ("Source: Call log"), so one keyboard path serves both. A step outside the closed
-   catalogue (an expert step, phase 8) is listed, labelled and opened read-only. It is never hidden.
+   catalogue (an expert step, phase 8) is listed, labelled and opened read-only, and guided mode's
+   *Remove selected* refuses it. It is never hidden.
 5. **Expert mode is open to everyone until `write_sql_transforms` exists (Q3 a).** The right gates the
    SQL and fuzzy steps when phase 8 builds them. Until then an expert step is read-only in both modes.
 6. **The Map editor's strip (brief §6.5, built).** Map collapses the pipeline to a strip of step
-   buttons across the top, with Map marked as the current step. A step on the strip returns to the
+   buttons across the top, with Map said as the current step rather than offered as a button. A step on the strip returns to the
    pipeline with that step chosen. The columns pane, the template canvas and the inspector are
    today's, kept.
 7. **The keyboard bind closes spec 09 §4's disclosed gap ("select both and press Enter").** Each column
@@ -26944,8 +26951,11 @@ and §4 carry the detail.
    "bound".
 
 **Tests.**
-- **Keyboard** (rule 13): ten new cases in `keyboard/ingest-studio.spec.ts`, ending with the reports
-  pipeline built from scratch in guided mode by keys alone. Each was shown red with its handler removed.
+- **Keyboard** (rule 13): seventeen new cases in `keyboard/ingest-studio.spec.ts`, among them the
+  reports pipeline built from scratch in guided mode by keys alone, an edit in expert mode, and a Map
+  Preview that leaves Deploy refused until Test runs. The harness refuses as the routes do. Each case
+  was shown red with its handler removed, each planted change and failing assertion recorded with the
+  studio lane's report.
 - **Axe:** eight new states of `keyboard/ingest-studio-harness.html` in `a11y/every-harness.spec.ts`,
   scanned in the dark, light and GOV.UK themes.
 - **Migrated:** `MapScreen`'s five test files became `map/MapEditor.*.test.tsx`, with the same
