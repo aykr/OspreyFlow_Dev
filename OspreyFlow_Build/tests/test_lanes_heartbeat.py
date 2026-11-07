@@ -270,3 +270,18 @@ def test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_bea
     show = hb("show")
     assert _needs(show) == ["case is waiting for you: Q1: which of a, b or c?"]
     assert "glass is waiting for the lease: round 1 fixes in" in show.stdout.split("FOR THE ORCHESTRATOR")[1]
+
+
+def test_shows_run_at_once_do_not_mix_their_lines(hb) -> None:
+    """Found 7 November 2026, 23:45: the owner's running `watch` and the orchestrator's `show` wrote the
+    same temporary files, so a line appeared twice, and the old script's line beside the new one's."""
+    import concurrent.futures
+
+    _all_beat(hb)
+    assert hb("beat", "glass", "ready-to-merge", "L2.8 done").returncode == 0
+    assert hb("beat", "case", "waiting-for-owner", "Q1: which of a, b or c?").returncode == 0
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        outs = list(pool.map(lambda _: hb("show").stdout, range(16)))
+    for out in outs:
+        assert _needs(type("S", (), {"stdout": out})()) == ["case is waiting for you: Q1: which of a, b or c?"], out
+        assert out.count("glass is ready to merge") == 1, out

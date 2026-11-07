@@ -97,8 +97,9 @@ overall() {
 
 # Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
 show() {
-  local needs="$DIR/.needs.tmp"; : > "$needs"
-  local mine="$DIR/.orchestrator.tmp"; : > "$mine"
+  # Each run its own files: the owner's `watch` and anyone's `show` may run at the same moment.
+  local needs mine
+  needs="$(mktemp "$DIR/.needs.XXXXXX")"; mine="$(mktemp "$DIR/.orchestrator.XXXXXX")"
   overall
   for lane in $LANES; do
     local f="$DIR/$lane.beat" state="-" note="" at="" ago="never" ab="-" lc="-"
