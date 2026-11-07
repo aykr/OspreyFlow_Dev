@@ -17,15 +17,14 @@ that catches it:
   hidden (`test_a_preview_needs_tests_right`,
   `test_a_preview_of_another_units_recipe_is_not_found`);
 - an uncleared reader seeing values (`test_a_preview_masks_values_for_a_reader_not_cleared`);
-- rule 4 at the class (the second review of L1.2): a recipe reached through a case that does not
-  load into the recipe's dataset. `get_authorized_studio_recipe` checked the recipe's unit alone,
-  so an editor of case B could dry-run case A's recipe through B's path, under B's rule gate and
-  row keys. The recipe must belong to the dataset the path's case loads into (`made_in`, the rule
-  that gave the recipe its dataset), or it is missing, for Preview and Test alike
-  (`test_a_recipe_is_missing_through_a_case_that_only_reads_its_dataset`); another case loading
-  into the same dataset reaches it
-  (`test_a_recipe_is_reached_through_another_case_loading_into_its_dataset`); a viewer of the
-  case is refused Preview and Test (`test_a_viewer_of_the_case_is_refused_preview_and_test`)."""
+- main's current reach, the same through every door (the third review of L1.2): a case whose read
+  set holds the recipe's dataset reaches it through open (Preview, Test) and through both lists,
+  even a case that only reads the dataset; another unit, and a viewer, are refused
+  (`test_a_case_reading_the_dataset_reaches_the_recipe_through_open_and_both_lists`,
+  `test_another_units_recipe_is_refused_through_open_and_both_lists`,
+  `test_a_viewer_of_the_case_is_refused_preview_and_test`). The owner's ruling of 7 November, that
+  only a case loading into a dataset lists or opens its pipelines, is a store query the next step
+  (L1.2a) builds after L3.1; these cases change with it."""
 
 from __future__ import annotations
 
@@ -150,7 +149,7 @@ def test_a_preview_masks_values_for_a_reader_not_cleared(
     assert "07960112334" not in str(body)
 
 
-# --- Rule 4 at the class: the recipe belongs to the path case's dataset -------------------------
+# --- Main's current reach, the same through open and both lists --------------------------------
 
 
 def _in_case(datasets: list[str]) -> Principal:
@@ -159,26 +158,34 @@ def _in_case(datasets: list[str]) -> Principal:
     return SOURCE_AUTHOR.model_copy(update={"datasets": datasets})
 
 
-@pytest.mark.parametrize("route", ["preview-graph", "verify"])
-def test_a_recipe_is_missing_through_a_case_that_only_reads_its_dataset(
-    graph_client: TestClient, tmp_path: Path, route: str
-) -> None:
-    _ready(graph_client, tmp_path, dataset_id="ds-a")
-    # Case B loads into its own dataset and only reads A's.
-    app.dependency_overrides[get_principal] = lambda: _in_case(["ds-b", "ds-a"])
-    response = graph_client.post(f"{RECIPE}/{route}")
-    assert response.status_code == 404
-    assert response.json()["error"] == "studio_recipe_not_found"
-    assert graph_client.studio_recipes.draft.verified_at is None  # type: ignore[attr-defined]
+LISTS = (
+    "/v1/investigations/inv-1/ingest/recipes",
+    "/v1/investigations/inv-1/ingest/recipe-registry",
+)
 
 
-@pytest.mark.parametrize("route", ["preview-graph", "verify"])
-def test_a_recipe_is_reached_through_another_case_loading_into_its_dataset(
-    graph_client: TestClient, tmp_path: Path, route: str
+@pytest.mark.parametrize("datasets", [["ds-a"], ["ds-b", "ds-a"]], ids=["loads-into", "only-reads"])
+def test_a_case_reading_the_dataset_reaches_the_recipe_through_open_and_both_lists(
+    graph_client: TestClient, tmp_path: Path, datasets: list[str]
 ) -> None:
     _ready(graph_client, tmp_path, dataset_id="ds-a")
-    app.dependency_overrides[get_principal] = lambda: _in_case(["ds-a", "ds-c"])
-    assert graph_client.post(f"{RECIPE}/{route}").status_code == 200
+    app.dependency_overrides[get_principal] = lambda: _in_case(datasets)
+    assert graph_client.post(f"{RECIPE}/preview-graph").status_code == 200
+    assert graph_client.post(f"{RECIPE}/verify").status_code == 200
+    for listed in LISTS:
+        response = graph_client.get(listed)
+        assert response.status_code == 200
+        assert [d["recipe_id"] for d in response.json()] == ["recipe-1"]
+
+
+def test_another_units_recipe_is_refused_through_open_and_both_lists(
+    graph_client: TestClient, tmp_path: Path
+) -> None:
+    _ready(graph_client, tmp_path, owning_unit="unit-2")
+    for route in ("preview-graph", "verify"):
+        assert graph_client.post(f"{RECIPE}/{route}").status_code == 404
+    for listed in LISTS:
+        assert graph_client.get(listed).json() == []
 
 
 class _ViewerOnly(AnyCase):

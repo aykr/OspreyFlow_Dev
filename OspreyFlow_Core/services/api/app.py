@@ -1815,25 +1815,7 @@ async def get_authorized_studio_recipe(
     role gate for reading your own unit's draft, only for the actions
     (create/edit/publish/schedule) the routes below gate separately."""
     try:
-        recipe = await studio_recipes.get_authorized(recipe_id, principal)
-        # Rule 4 (the second review of L1.2, 7 November 2026): a recipe belongs to the dataset of
-        # the case it was made in (`made_in`, ADR-099 Amendment 3), and every Studio route reaches
-        # it through the case the path names, whose rule gate, row keys and loads it then uses.
-        # So the recipe must belong to the dataset that case loads into, the Studio's own scope
-        # (ADR-140 Amendment 2), or it is missing: an editor of case B reached case A's recipe
-        # through B's path while only the unit was checked. Proved by
-        # `test_studio_preview_routes.py`'s `test_a_recipe_is_missing_through_a_case_that_only_...`.
-        # A recipe made before that amendment names no dataset and stays in reach until it is
-        # placed, as `dataset_scope.reach_clause` keeps every such record (`scripts.stamp_datasets`
-        # cannot place a recipe: it has no case of its own); the Conduit's own unlimited work, with
-        # `datasets is None`, reaches all.
-        if (
-            recipe.dataset_id is not None
-            and principal.datasets is not None
-            and recipe.dataset_id != made_in(principal)
-        ):
-            raise StudioRecipeNotFoundError(recipe_id)
-        return recipe
+        return await studio_recipes.get_authorized(recipe_id, principal)
     except StudioRecipeNotFoundError:
         await audit.record(
             principal=principal,
