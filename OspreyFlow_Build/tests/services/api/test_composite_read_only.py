@@ -3,12 +3,15 @@
 write in it, and every write into a composite's id, is refused in words: 409 `composite_read_only`,
 "do this in a case that reads that dataset", before anything is written.
 
-Each write path is driven at its real call site, red with its refusal planted out:
+Each write path is driven at its real call site. Each check has its own red companion, removing
+that check alone (`_without`): where the stamping graph's last word also stands behind a service's
+check, each is shown holding with the other removed, and the write made only with both removed.
 
 - node corrections over HTTP (`nodes/{node}/confirm`, `/retract`), and the 404 for a node the
   reader cannot see, which must not become a 409;
 - a link change (`LinkChangeService.change`, and the stamping graph's last word over HTTP);
-- an alert closed as a true positive, refused before its transaction;
+- an alert closed as a true positive, refused before its transaction, unless what it confirms is
+  wholly the case's layer's (an alert raised in the case, Amendment 15 item 2);
 - accepting and rejecting a finding (`review.accept_candidate`, `reject_candidate`: every accept
   path's shared write), and a finding the reader cannot read still answering not found;
 - email extraction (`EmailExtractionService.extract`), with nothing written and nothing stored;
@@ -137,7 +140,11 @@ def _without(monkeypatch: pytest.MonkeyPatch, *checks: str) -> None:
     for check in checks:
         if check in SERVICES:
             module = importlib.import_module(f"services.api.{check}")
-            monkeypatch.setattr(module, "refuse_in_a_composite_case", allowed)
+            name = (
+                "refuse_unless_in_the_layer" if check == "alert_queue"
+                else "refuse_in_a_composite_case"
+            )  # fmt: skip
+            monkeypatch.setattr(module, name, allowed)
         elif check == "node-route":
             monkeypatch.setattr(app_module, "refuse_writing_a_node_in_a_composite_case", allowed)
         elif check == "last-word":
@@ -405,7 +412,9 @@ async def test_supersede_node_has_the_last_word() -> None:
 # --- an alert closed as a true positive -----------------------------------------------------------
 
 
-async def _close(principal: Principal) -> tuple[list[object], _NodeGraph]:
+async def _close(
+    principal: Principal, *, in_the_layer: str | None = None
+) -> tuple[list[object], _NodeGraph]:
     from services.api import alert_queue
     from services.api.alerts import Alert, AlertMode
 
@@ -418,6 +427,8 @@ async def _close(principal: Principal) -> tuple[list[object], _NodeGraph]:
             return object()
 
     member_node = _member_node(ProvenanceState.INFERRED)
+    if in_the_layer is not None:  # an alert raised in the composite case (Amendment 15 item 2)
+        member_node = member_node.model_copy(update={"datasets": [in_the_layer]})
     graph = _NodeGraph(member_node)
     alerts = _Store()
     alert = Alert(
@@ -448,6 +459,16 @@ async def test_an_alert_closed_as_a_true_positive_is_refused_before_any_write() 
     _, principal = await _in_the_composite_case()
     with pytest.raises(CompositeReadOnlyError):
         await _close(principal)
+
+
+async def test_an_alert_raised_in_the_layer_is_closed_as_a_true_positive() -> None:
+    """Monitors keep working (Amendment 15 item 2): an alert raised in a composite case is the
+    case's layer's, and confirming it changes no member."""
+    store, principal = await _in_the_composite_case()
+    layer = await store.ensure_layer(CASE, unit="unit-1", created_by=ANALYST.id)
+    principal = await scope_to_case(ANALYST, CASE, store)
+    triaged, graph = await _close(principal, in_the_layer=layer)
+    assert graph.superseded == ["p1"] and len(triaged) == 1
 
 
 @pytest.mark.parametrize("removed", [("alert_queue",), ("last-word",)])

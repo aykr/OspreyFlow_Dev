@@ -172,6 +172,19 @@ async def refuse_in_a_composite_case() -> None:
         raise _refusal(composite)
 
 
+async def refuse_unless_in_the_layer(elements: Sequence[Node | Edge]) -> None:
+    """`refuse_in_a_composite_case` for a write that changes elements already read: it goes ahead
+    in a composite case only when each is wholly the case's layer's (an alert's own node and its
+    `SAME_AS`, written there, ADR-099 Amendment 15 item 2), as the stamping graph's last word
+    would judge it; any other is refused before anything is written."""
+    composite = await _composite_read()
+    if composite is None:
+        return
+    layer = analyst_layer()
+    if layer is None or any(set(e.datasets) != {layer} for e in elements):
+        raise _refusal(composite)
+
+
 async def refuse_writing_a_node_in_a_composite_case(
     graph: GraphPort, node_id: NodeId, principal: Principal
 ) -> None:
@@ -482,6 +495,7 @@ __all__: Sequence[str] = (
     "CompositeReadOnlyError",
     "reads_a_composite",
     "refuse_in_a_composite_case",
+    "refuse_unless_in_the_layer",
     "refuse_writing_a_node_in_a_composite_case",
     "NoAnalystLayerError",
     "set_case_datasets",

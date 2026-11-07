@@ -52,7 +52,7 @@ from .alerts import (
     evidence_node_ids,
     read_evidence,
 )
-from .dataset_scope import refuse_in_a_composite_case
+from .dataset_scope import refuse_unless_in_the_layer
 
 #: The properties that name an entity, most telling first.
 _NAME_PROPERTIES = (
@@ -460,9 +460,16 @@ async def _close(
             and e.provenance.state is not ProvenanceState.ASSERTED
         ]  # fmt: skip
         if (node is not None and node.provenance.state is not ProvenanceState.ASSERTED) or matches:
-            # ADR-099 Amendment 15: a close that confirms writes, and a composite is read-only;
-            # refused here, before any write, so the close is never left half done.
-            await refuse_in_a_composite_case()
+            # ADR-099 Amendment 15: a close that confirms writes, and a composite is read-only:
+            # in a composite case it goes ahead only for what is wholly the case's layer's (an
+            # alert raised there, item 2), else is refused here, before any write, so the close is
+            # never left half done.
+            confirming: list[Node | Edge] = (
+                [node]
+                if node is not None and node.provenance.state is not ProvenanceState.ASSERTED
+                else []
+            )
+            await refuse_unless_in_the_layer([*confirming, *matches])
             tx = await graph.begin_transaction()
             try:
                 if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
