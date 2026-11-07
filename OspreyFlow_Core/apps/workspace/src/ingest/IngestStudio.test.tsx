@@ -14,6 +14,7 @@ vi.mock("./verify/VerifyScreen", () => ({ VerifyScreen: () => null }));
 vi.mock("./publish/PublishScreen", () => ({ PublishScreen: () => null }));
 vi.mock("./ProfileScreen", () => ({ ProfileScreen: () => null }));
 vi.mock("./ConnectScreen", () => ({ ConnectScreen: () => null }));
+vi.mock("./dag/NodePreview", () => ({ NodePreview: () => null }));
 
 afterEach(() => {
   cleanup();

@@ -406,6 +406,7 @@ export function ElementInspector({
                     onChange={(next) => setProperty(name, next)}
                     onRemove={() => setProperty(name, null)}
                     allowOptional
+                    target={name}
                   />
                 </div>
               ))}
@@ -574,6 +575,7 @@ export function ElementInspector({
                 sourceFieldNames={sourceFieldNames}
                 transforms={transforms}
                 onChange={(at) => onChangeEdge({ ...edge, temporal: { ...edge.temporal, at } })}
+                target="when it occurred"
               />
             )}
           </div>
@@ -716,6 +718,7 @@ export function ElementInspector({
                   onChange={(next) => setEdgeProperty(name, next)}
                   onRemove={() => setEdgeProperty(name, null)}
                   allowOptional
+                  target={name}
                 />
               </div>
             ))}

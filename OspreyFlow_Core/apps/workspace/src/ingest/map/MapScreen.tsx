@@ -24,11 +24,13 @@
 // What the spec does not prove by keyboard is named here, not implied: a value map on a binding
 // (the binding editor's own named controls, reached the same way, with no step of their own yet).
 //
-// **Disclosed simplification, still deferred.** §4's keyboard shortcut ("select both and press
-// Enter" to bind a source field to a property) is not wired: a field is bound by drag-and-drop (a
-// source field chip onto a property's binding editor) or, by keyboard, through the binding editor's
-// own column select. This is the one specific shortcut path left, the same way `GlassCanvas.tsx`
-// discloses its own curved-edge gap rather than silently shipping a partial version of the spec.
+// **The keyboard bind** (spec 09 §4, "select both and press Enter"; ADR-140 Amendment 8, phase 6):
+// a column is chosen with its *Choose* button in the Source fields pane, and stays chosen; every
+// field binding in the inspector then offers *Bind <column> here*, and Enter on it binds the column
+// through the same path a drop takes (`FieldBindingEditor`'s `setFieldAt(0, …)`). A click on each
+// does the same, so a mouse user may click the column and then the element, as §6.5 asks.
+// `keyboard/ingest-studio.spec.ts` proves it end to end. The gap this paragraph disclosed until
+// 7 November 2026 is closed.
 import { useEffect, useState } from "react";
 
 import type {
@@ -62,6 +64,7 @@ import { LinkList } from "./LinkList";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
 import { listSources } from "../sources/api";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
+import { ChosenColumnContext } from "./chosenColumn";
 import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, updateEntityByRef, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
 
 export interface MapScreenProps {
@@ -70,7 +73,8 @@ export interface MapScreenProps {
   investigationId: string;
   bearerToken: string;
   recipeId: string;
-  onBack: () => void;
+  /** Absent when the screen is hosted in the pipeline's drawer (ADR-108 Amendment 6.1: nothing replaces the canvas, so there is nothing to go back to). */
+  onBack?: () => void;
   /** Fired whenever this screen's own idea of the draft changes — a fresh
    * fetch or a successful "Save draft" — so `IngestStudio.tsx` can gate
    * Verify on `row_template` being present without reaching into this
@@ -128,6 +132,8 @@ export function MapScreen({
   // above the source's. The source's own profile route is deliberately not read here.
   const [readsFrom, setReadsFrom] = useState<string | null>(null);
   const [rowIndex, setRowIndex] = useState(0);
+  // Spec 09 §4's keyboard bind (ADR-140 Amendment 8): a column chosen to bind.
+  const [chosenColumn, setChosenColumn] = useState<string | null>(null);
   const [sampleRow, setSampleRow] = useState<MapSampleRow | null>(null);
 
   useEffect(() => {
@@ -205,7 +211,7 @@ export function MapScreen({
   if (error || !draft || !columns || !ontology) {
     return (
       <div style={{ padding: "var(--sp-16)" }}>
-        <Button onClick={onBack}>← Back to the pipeline</Button>
+        {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <div role="alert" style={{ marginTop: "var(--sp-8)" }}>
           {error ?? "Map could not load this source."}
         </div>
@@ -345,7 +351,7 @@ export function MapScreen({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)", padding: "var(--sp-16)" }}>
-        <Button onClick={onBack}>← Back to the pipeline</Button>
+        {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Map — {draft.label}</h1>
         <div style={{ flex: 1 }} />
         {saveError && (
@@ -364,6 +370,8 @@ export function MapScreen({
       <div style={{ display: "grid", gridTemplateColumns: "280px minmax(0, 1fr) 340px", flex: 1, minHeight: 0, gap: "var(--sp-8)" }}>
         <SourceFieldsPanel
           readsFrom={readsFrom}
+          chosenColumn={chosenColumn}
+          onChooseColumn={setChosenColumn}
           columns={columns}
           sampleRow={sampleRow}
           boundFieldNames={boundFieldNames}
@@ -420,6 +428,7 @@ export function MapScreen({
         </div>
 
         <div style={{ overflow: "auto" }}>
+          <ChosenColumnContext.Provider value={{ column: chosenColumn, clear: () => setChosenColumn(null) }}>
           {inspectorSelection ? (
             <ElementInspector
               selection={inspectorSelection}
@@ -451,6 +460,7 @@ export function MapScreen({
               Select an element to edit its settings, or add one with "+ entity".
             </p>
           )}
+          </ChosenColumnContext.Provider>
         </div>
       </div>
     </div>

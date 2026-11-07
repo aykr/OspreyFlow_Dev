@@ -37,7 +37,8 @@ export interface VerifyScreenProps {
   investigationId: string;
   bearerToken: string;
   recipeId: string;
-  onBack: () => void;
+  /** Absent when the screen is hosted in the pipeline's drawer (ADR-108 Amendment 6.1: nothing replaces the canvas, so there is nothing to go back to). */
+  onBack?: () => void;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -66,6 +67,15 @@ interface EntityCountRow {
 interface EdgeCountRow {
   type: string;
   created: number;
+}
+
+/** The graph a dry run would make, as a throwaway working set the ordinary canvas draws: the one
+ * builder Test and the drawer's graph Preview (`dag/NodePreview.tsx`) share. */
+export function workingSetOfDryRun(report: VerifyReport): WorkingSet {
+  const ws = createWorkingSet();
+  for (const node of report.nodes ?? []) ws.graph.addNode(node.id, { data: node });
+  for (const edge of report.edges ?? []) ws.graph.addEdgeWithKey(edge.id, edge.source, edge.target, { data: edge });
+  return ws;
 }
 
 export function VerifyScreen({ apiBaseUrl,
@@ -98,15 +108,8 @@ export function VerifyScreen({ apiBaseUrl,
     setError(null);
     try {
       const result = await runVerify(apiBaseUrl, bearerToken, investigationId, recipeId);
-      const ws = createWorkingSet();
-      for (const node of result.nodes ?? []) {
-        ws.graph.addNode(node.id, { data: node });
-      }
-      for (const edge of result.edges ?? []) {
-        ws.graph.addEdgeWithKey(edge.id, edge.source, edge.target, { data: edge });
-      }
       setReport(result);
-      setWorkingSet(ws);
+      setWorkingSet(workingSetOfDryRun(result));
     } catch (err) {
       setError(friendlyError(err));
       setReport(null);
@@ -145,7 +148,7 @@ export function VerifyScreen({ apiBaseUrl,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Back to the pipeline</Button>
+        {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Test{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
         <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>

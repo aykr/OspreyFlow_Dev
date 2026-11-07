@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 //
+// Migrated in phase 6 from `MapScreen.*.test.tsx`: the same assertions, against the Map editor as the Studio hosts it.
 // 9 October 2026, the data engineer's journey: typing a new Ref for an entity in Map did nothing.
 // The screen applied an entity's change by looking the entity up by its *new* ref, found none and
 // dropped the change, so an entity could never be renamed (`rowTemplate.test.ts` already expected
@@ -9,7 +10,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MapCanvasProps } from "./MapCanvas";
-import { MapScreen } from "./MapScreen";
+import { MapEditor } from "./MapEditor";
+import { STRIP } from "./mapEditorTestSupport";
 
 const ONTOLOGY = {
   version: 1,
@@ -57,7 +59,7 @@ afterEach(cleanup);
 
 async function mount(): Promise<void> {
   render(
-    <MapScreen apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" onBack={() => undefined} />,
+    <MapEditor apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" pipeline={STRIP} mapNodeId="map" onStep={() => undefined} />,
   );
   await screen.findByText("+ entity");
 }

@@ -7,7 +7,7 @@ import { useState } from "react";
 import type { PipelineGraph, PipelineNode } from "../../../../../packages/schemas/generated";
 import { pipelineLayout } from "./pipelineLayout";
 
-const KIND_NAMES: Record<string, string> = {
+export const KIND_NAMES: Record<string, string> = {
   domain_model: "Domain model",
   source: "Source",
   profile: "Profile",
@@ -15,6 +15,10 @@ const KIND_NAMES: Record<string, string> = {
   extract: "Extract",
   enrich: "Enrich",
   load: "Load",
+  // The expert steps (ADR-140 decisions 12 and 13), named here so guided mode can label one it
+  // reads; their editors are phase 8's.
+  sql_transform: "SQL transform",
+  fuzzy_match: "Fuzzy match",
 };
 
 const COLUMN_WIDTH = 190;
@@ -28,9 +32,12 @@ export interface PipelineCanvasProps {
    * controlled picker and its built-in read-only settings section stays out of the page. */
   selectedId?: string | null;
   onSelect?: (node: PipelineNode) => void;
+  /** Guided mode's picture of the DAG (ADR-140 decision 3): drawn the same, chosen from nothing;
+   * the numbered list beside it is where a step is chosen. */
+  readOnly?: boolean;
 }
 
-export function PipelineCanvas({ pipeline, selectedId, onSelect }: PipelineCanvasProps) {
+export function PipelineCanvas({ pipeline, selectedId, onSelect, readOnly = false }: PipelineCanvasProps) {
   const controlled = onSelect !== undefined;
   const [ownChoice, setOwnChoice] = useState<PipelineNode | null>(null);
   const chosen = controlled
@@ -87,6 +94,34 @@ export function PipelineCanvas({ pipeline, selectedId, onSelect }: PipelineCanva
           const at = placed.get(node.id);
           if (!at) return null;
           const kind = KIND_NAMES[node.kind] ?? node.kind;
+          if (readOnly) {
+            return (
+              <div
+                key={node.id}
+                style={{
+                  position: "absolute",
+                  left: at.column * COLUMN_WIDTH,
+                  top: at.row * ROW_HEIGHT,
+                  width: NODE_WIDTH,
+                  height: NODE_HEIGHT,
+                  display: "grid",
+                  alignContent: "center",
+                  gap: "var(--sp-2)",
+                  padding: "var(--sp-8)",
+                  background: "var(--surface-raised)",
+                  color: "var(--text-primary)",
+                  border: chosen?.id === node.id ? "2px solid var(--border-strong)" : "1px solid var(--border-subtle)",
+                  borderRadius: "var(--r-control)",
+                  boxSizing: "border-box",
+                }}
+              >
+                <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-12)" }}>{kind}</span>{" "}
+                <span style={{ fontSize: "var(--fs-13)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {node.label}
+                </span>
+              </div>
+            );
+          }
           return (
             <button
               key={node.id}

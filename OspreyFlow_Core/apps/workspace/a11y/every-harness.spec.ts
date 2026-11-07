@@ -79,6 +79,11 @@ const EXTRA_STATES: Record<string, string[]> = {
     // ADR-140 Amendment 4: the register wizard's governance step, a source's page, and a source
     // chosen in a pipeline.
     "tab=sources&register=1", "tab=sources&source=1", "tab=sources&source=1&edit=1", "pipeline=source",
+    // Phase 6 (ADR-108 Amendment 6, ADR-140 decision 3): a step's drawer in guided and in expert
+    // mode, a source's and Map's Preview, Test and Deploy in the drawer, an expert step read in
+    // guided mode, and the Map editor under its strip with a column chosen to bind.
+    "pipeline=guided", "pipeline=expert&mode=expert", "pipeline=preview", "pipeline=map-preview",
+    "pipeline=test", "pipeline=deploy", "pipeline=expert-step&expert=1", "pipeline=map",
   ],
   // ADR-140 Amendment 4: the Connections tab, served by the page itself.
   "admin-harness.html": ["open=connections&rights=administer_system"],

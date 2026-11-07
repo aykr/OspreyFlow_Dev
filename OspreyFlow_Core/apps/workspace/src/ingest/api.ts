@@ -288,7 +288,9 @@ async function parseCodedErrorOrThrow<T>(response: Response, action: string): Pr
     } catch {
       // Not a JSON error body — fall through with the generic detail below.
     }
-    const code = typeof body.error === "string" ? body.error : "unknown_error";
+    // A right the route needs comes back inside `detail` (`require_right`'s 403), not at the top.
+    const nested = typeof body.detail === "object" && body.detail !== null ? (body.detail as { error?: unknown }).error : undefined;
+    const code = typeof body.error === "string" ? body.error : typeof nested === "string" ? nested : "unknown_error";
     throw new ProfileError(code, causeOf(body, `${action}: ${response.status}`));
   }
   return (await response.json()) as T;
@@ -425,6 +427,22 @@ export async function runVerify(
     headers: authHeaders(bearerToken),
   });
   return parseCodedErrorOrThrow(response, "POST /v1/ingest/recipes/{id}/verify");
+}
+
+/** Phase 6's graph *Preview* of a Map or Load step (ADR-140 Amendment 8 point 2): the dry run Test
+ * runs, marking nothing, so it never counts as Test and never satisfies Deploy. Same refusals as
+ * `runVerify` (the right `verify_pipelines`, editor level, the same coded errors). */
+export async function previewGraph(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+): Promise<VerifyReport> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/preview-graph`, {
+    method: "POST",
+    headers: authHeaders(bearerToken),
+  });
+  return parseCodedErrorOrThrow(response, "POST /v1/ingest/recipes/{id}/preview-graph");
 }
 
 // --- Checks on load (ADR-133 decision 6, stage (d); 09_INGEST_STUDIO.md §5a) ---------------------

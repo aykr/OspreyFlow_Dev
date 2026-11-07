@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 //
+// Migrated in phase 6 from `MapScreen.*.test.tsx`: the same assertions, against the Map editor as the Studio hosts it.
 // ADR-127 decision 3, Amendment 2 (B2-2b): Map reads the columns Connect declared for a marking
 // from the draft's handling, offers an element exactly those, tells the analyst which declared part
 // an element leaves unbound, saves the binding into the template, and shows the server's own cause
@@ -9,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RowTemplate } from "../../../../../packages/schemas/generated";
 import type { MapCanvasProps } from "./MapCanvas";
-import { MapScreen } from "./MapScreen";
+import { MapEditor } from "./MapEditor";
+import { STRIP } from "./mapEditorTestSupport";
 
 const ONTOLOGY = {
   version: 1,
@@ -70,7 +72,7 @@ afterEach(cleanup);
 
 async function mountWithAnEntity() {
   render(
-    <MapScreen apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" onBack={() => undefined} />,
+    <MapEditor apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" pipeline={STRIP} mapNodeId="map" onStep={() => undefined} />,
   );
   fireEvent.click(await screen.findByText("+ entity"));
   fireEvent.click(screen.getByLabelText("Override handling for this element"));

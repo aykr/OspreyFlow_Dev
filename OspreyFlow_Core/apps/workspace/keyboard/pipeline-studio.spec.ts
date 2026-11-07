@@ -284,9 +284,13 @@ test("the source settings open from the first source's node by keyboard", async 
   // The Connect gate whole: the file, the marking, the legal basis — proven by its own unit
   // tests; reaching it from the node is this test's.
   await expect(page.getByRole("button", { name: "Choose file…" })).toBeVisible();
-  await page.getByRole("button", { name: "Back to the pipeline" }).focus();
-  await page.keyboard.press("Enter");
+  // Phase 6 (ADR-108 Amendment 6.1): the Connect gate opens in the drawer, beside the pipeline,
+  // which never left; the drawer's Close goes back to the source node.
   await expect(page.getByRole("group", { name: "Pipeline" })).toBeVisible();
+  await page.getByRole("button", { name: "Close the drawer" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Choose file…" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "The draft's own settings" })).toBeVisible();
   registerCovered(REGISTRY, "open-the-source-settings-by-keyboard");
 });
 
@@ -360,7 +364,11 @@ test("the map editor opens from its node by keyboard", async ({ page }) => {
   await open.focus();
   await page.keyboard.press("Enter");
   // The map editor is the existing MapScreen, proven by its own specs; reaching it is this test's.
+  // Phase 6 (brief §6.5): the pipeline collapses to the strip across the top, never lost.
   await expect(page.getByRole("group", { name: "Pipeline" })).toBeHidden();
+  const strip = page.getByRole("navigation", { name: "Pipeline strip" });
+  await expect(strip.getByText("Map: Map")).toHaveAttribute("aria-current", "step");
+  await expect(strip.getByRole("button", { name: "Map: Map" })).toHaveCount(0);
   registerCovered(REGISTRY, "open-the-map-editor-by-keyboard");
 });
 
