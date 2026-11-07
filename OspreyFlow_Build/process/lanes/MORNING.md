@@ -2,6 +2,19 @@
 
 Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.
 
+## Since 08:00 (you were away from about 08:20)
+
+You allowed L1.2, L2.2 and the docs lane's first brief, and merging as overnight. The briefs are at `e1423d4` and `cf1dc54`, and the Studio's build plan is committed at `a56f2f9` so lanes can read it. The studio and glass branches were fast-forwarded to `main`, and docs was set up and opened.
+
+| Lane · step | State at 08:40 | What it needs |
+| --- | --- | --- |
+| studio · L1.2 | plan written; **three questions for you, in its window only** | your answers, there |
+| glass · L2.2 | plan written; **three questions for you, in its window only** (the place rule against role bundles; where *Proposed types* lives; who owns `App.tsx` and the rights) | your answers, there |
+| docs · website | done; reviewed and **not merge-ready**: its friction row has 4 cells (the assembler refuses it); 'a reviewed load' contradicts ADR-143; the two new pages are missing from `publish_pages.sh`, so they would 404; nobody has looked at them in a browser | type `read your nudge` in its window |
+| case · L3.1 | says every review item is built; wider live run under the lease | my second review, then yours. Not merged |
+
+Nothing merged since glass, and nothing pushed. A lane that asks you a question only in its window, rather than in `REPORT.md` as Prompt L says, cannot be answered from here (O3).
+
 ## Lanes
 
 | Lane · step | State | Commits on `lane/<x>` | What proves it | Left |
