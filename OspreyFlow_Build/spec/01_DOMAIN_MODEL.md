@@ -552,8 +552,9 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   ADR-099 Amendments 12 and 13, ADR-143 decision 1):
   - **`source`**: loaded through the Studio or a seed;
   - **`composite`**: names two or more of its unit's source datasets (`members`) and holds none of
-    their data; read at read time as its own id and its members (so what is written into it is
-    read). Made by `POST /v1/datasets/composites`, or by the migration;
+    their data; read at read time as its own id and its members. Read-only for now: nothing is
+    written into it, and a case reading it writes only into its own layer (ADR-099 Amendment 15).
+    Made by `POST /v1/datasets/composites`, or by the migration;
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing

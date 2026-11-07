@@ -26678,17 +26678,32 @@ composite case's write to a member's node made a copy of it in the composite; no
    analyst layer: extraction (an email's, a Document's, the case's ingest), and accepting or
    rejecting what it found; a question's accepted proposal; an entity's picture, set, replaced or
    removed; confirming or retracting a node; changing a link; closing an alert as a true positive
-   (which confirms); and loading, running, scheduling, publishing or uploading in the Ingest Studio.
-   And any write into a composite's id, under a case or not: the Studio reaches a dataset with no
-   case (`scope_to_dataset`), and a composite is refused there too. Each is refused in words (409
-   `composite_read_only`, "do this in a case that reads that dataset"), before anything is written
-   or stored.
+   whose confirmation is not wholly the case's layer's; drawing a site's grid; rejecting or
+   releasing held rows; and loading, running, scheduling, publishing or uploading in the Ingest
+   Studio. A schedule whose case reads a composite, or whose recipe's dataset is one, is neither run,
+   re-timed nor resumed in the Admin area, and the scheduler refuses each of its slots in words
+   (`check_case`), so a case switched to a composite after its schedule was set starts no run that
+   would write in part. And any write into a composite's id, under a case or not: the Studio reaches
+   a dataset with no case (`scope_to_dataset`), and a composite is refused there too. Each is
+   refused in words (409 `composite_read_only`, "do this in a case that reads that dataset", naming
+   the composite to an asker who may be told dataset names, Amendment 11), before anything is
+   written or stored. `scripts.stamp_datasets`, which writes by raw SQL past the stamping graph,
+   writes nothing of a composite case's into a member: its canvas elements in no dataset are counted
+   as unplaced, in words. `scripts.migrate_cases_to_one_dataset` tells each case it makes or keeps
+   a composite that it is now read-only.
 2. **What is kept.** An entity marked by hand and a manual `SAME_AS` or `NOT_SAME_AS` go into the
    case's analyst layer, as in any case (ADR-143 Amendment 1); they change no member. Reading is
    untouched. So are the case's own records that are not dataset content: a saved pattern, a watch,
-   a monitor, and an alert's triage short of a confirm (a close as a true positive confirms, and is
-   refused under item 1). They are the case's, not any dataset's, and keep working in a composite
-   case (the orchestrator's call within the owner's ruling, 7 November 2026).
+   a monitor, and an alert's triage short of a confirm. They are the case's, not any dataset's, and
+   keep working in a composite case (the orchestrator's call within the owner's ruling, 7 November
+   2026). A monitor's alert, raised there by a scheduled rule or a list's re-screening, is written
+   into the case's layer with its `ALERTED_ON` and what it writes alongside (a screening hit's
+   listed party and its `SAME_AS`, new and inferred): a link of the layer's is of another audience
+   than a member's, so it merges into none (`rule_evaluation.write_alert_node`). A rule made in the
+   case names the composite's own id, which holds nothing, so a re-screening reads it as its case
+   (`screening_refresh`). Closing such an alert as a true positive confirms only the layer's
+   elements and goes ahead; a close that would confirm anything else is refused under item 1
+   (`dataset_scope.refuse_unless_in_the_layer`; the orchestrator's call, 7 November 2026).
 3. **Where it is decided, and in what order.** Each writing service refuses after its own read of
    what it would change, so a node, link, finding or picture the reader cannot see still answers as
    not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
@@ -26696,15 +26711,23 @@ composite case's write to a member's node made a copy of it in the composite; no
    that comes after the case's level check, and the Studio's routes of a dataset after the dataset's
    own gate, so a caller the case or dataset is not for is answered 404. `DatasetStampingGraph`
    refuses as the last word: in a composite case, any write, correction, revert, withdrawal or
-   restore whose datasets are not the case's layer alone; and any naming a composite's id, the
-   dataset store answering which ids are composites (`composites_among`).
+   restore whose datasets are not the case's layer alone, and a correction of an element the case
+   cannot see (in the same words, which say nothing, since every other correction there is refused
+   too); and any naming a composite's id, the dataset store answering which ids are composites
+   (`composites_among`), a correction under no case's scope included.
 
-Proved by `tests/services/api/test_composite_read_only.py` (each write path at its real call site,
-red with its refusal planted out; a reader who cannot see the element answered 404; the loading routes
-and the Studio, with a non-member answered 404; the layer still written),
-`tests/services/api/test_composite_writes_live.py` (an extraction and a picture, on ArcadeDB, the
-member unchanged) and `tests/conformance/graph_port/test_composite_write_to_member_node.py` (finding
-5: a write to a member's node refused and the member unchanged, red with the refusal planted out).
+Proved by `tests/services/api/test_composite_read_only.py` (each write path at its real call site; a
+reader who cannot see the element answered 404; the loading routes and the Studio, with a non-member
+answered 404; the layer still written), `test_composite_schedules.py` (the scheduler, the Admin
+area's schedule routes, the grid, held rows, the loading dependency on every loading route, and the
+corrections' last word), `test_composite_monitors.py` (a scheduled rule and a re-screening each
+raising one alert into the layer), `test_composite_writes_live.py` (an extraction and a picture, on
+ArcadeDB, the member unchanged), `test_datasets_store.py` (`composites_among` on Postgres),
+`tests/test_stamp_datasets.py`, `tests/test_migrate_cases_to_one_dataset.py`, and
+`tests/conformance/graph_port/test_composite_write_to_member_node.py` (finding 5: a write to a
+member's node refused and the member unchanged). Each check has its own red companion that removes
+that check alone; where the last word also stands behind a service's check, each is shown holding
+with the other removed, and the write made only with both removed.
 
 ### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
 

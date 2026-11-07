@@ -58,8 +58,9 @@ async def setup():  # type: ignore[no-untyped-def]
             )
         )
     case = new_id()
-    # ADR-099 Amendment 12: a case reading both reads a composite of them; its records are placed
-    # under the composite's own id (Amendment 14).
+    # ADR-099 Amendment 12: a case reading both reads a composite of them; its records (not
+    # dataset content, so they keep working there, Amendment 15 item 2) are placed under the
+    # composite's own id, the first of its read set (Amendment 14).
     for dataset_id in (f"fixture-corp-{unit}", f"enron-{unit}"):
         await read_also(datasets, case, dataset_id, owner)
     (composite,) = await datasets.chosen_of_case(case)

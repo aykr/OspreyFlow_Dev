@@ -46,8 +46,10 @@ layer exists).
 (`set_for_case`). What a request under the case reads, its *read set* (`ids_of_case`), is that
 dataset (a composite as its own id, then its members) **plus** the case's own layer, and nothing
 else. The order matters to writers that take the first (`dataset_scope.made_in`, the stamping
-graph): the first is the case's source, or a composite's own id (ADR-099 Amendment 14). The
-analyst's own writes name the layer instead (ADR-143 Amendment 1, `dataset_scope.analyst_layer`). A
+graph): the first is the case's source, or a composite's own id (ADR-099 Amendment 14), which a
+record made in the case names; a composite is read-only for now, so the stamping graph writes
+nothing into it (Amendment 15). The analyst's own writes name the layer instead (ADR-143
+Amendment 1, `dataset_scope.analyst_layer`). A
 deployment made before this keeps reading every dataset a case named until
 `scripts.migrate_cases_to_one_dataset` places it; the one-row index on `investigation_datasets` is
 built once no case names two.

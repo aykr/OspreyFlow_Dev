@@ -151,7 +151,8 @@ dataset and gets a layer of its own. Under a case, what is written joins its sou
 by hand and a manual link or split join its layer (ADR-143 Amendment 1). A case reading a composite
 writes nothing but into its layer: every other write is 409 `composite_read_only` ("do this in a
 case that reads that dataset"), and so is any write into a composite's id (ADR-099 Amendments 14
-and 15; the Studio's routes of a composite too). `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+and 15; the Studio's routes of a composite too). Its monitors keep working, their alerts raised into
+its layer, and its scheduled loads are refused, each slot in words. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
 among them, `name` names the new case. Without a body it forks the whole working set, as before. The
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
@@ -347,10 +348,10 @@ GET    /v1/investigations/{id}/ingest/recipes/{rid}/runs   the recipe's run ledg
 GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
 GET    /v1/admin/schedules              every schedule (operate_schedules)
 GET    /v1/admin/schedules/{rid}/runs   one schedule's run ledger (operate_schedules)
-PUT    /v1/admin/schedules/{rid}        change one schedule (operate_schedules)
-POST   /v1/admin/schedules/{rid}/run    run it now (operate_schedules)
+PUT    /v1/admin/schedules/{rid}        change one schedule; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
+POST   /v1/admin/schedules/{rid}/run    run it now; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
 POST   /v1/admin/schedules/{rid}/pause  pause it (operate_schedules)
-POST   /v1/admin/schedules/{rid}/resume resume it (operate_schedules)
+POST   /v1/admin/schedules/{rid}/resume resume it; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)
@@ -645,7 +646,7 @@ POST   /v1/investigations/{id}/rules   deploy one: a typology, its parameters, i
 POST   /v1/investigations/{id}/rules/{rule_id}/retire   retire one (never deleted), Author
 GET    /v1/investigations/{id}/rules/audit   the rule audit, newest first, paged, Author or the unit's admin
 GET    /v1/investigations/{id}/held-rows   rows a failing pre-commit rule held, at or below the reader's marking, Editor
-POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason, Author
+POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason; 409 `composite_read_only` in a case reading a composite (ADR-099 Amendment 15), Author
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/held-rows/release   load named held rows of one load, Author and Loader
 POST   /v1/investigations/{id}/rules/sentence/compile   a rule sentence checked against the ontology and compiled to its drawn pattern, Viewer
 POST   /v1/investigations/{id}/rules/sentence/read   a drawn pattern read back as the sentence, its other blanks kept, Viewer
@@ -788,7 +789,7 @@ POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed �
 GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/claim   open → claimed by the caller, Editor
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/release   claimed (by the caller) → open, Editor
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor. A true positive (which confirms) in a case reading a composite is 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15), the alert left as it was
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor. In a case reading a composite, a true positive that would confirm anything not wholly the case's analyst layer's is 409 `composite_read_only` ("do this in a case that reads that dataset"), nothing written and the alert left as it was; one raised there, its node and `SAME_AS` in the layer, is closed (ADR-099 Amendment 15)
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entities and cited links into the working set, Editor
 ```
 
@@ -915,7 +916,7 @@ POST   /v1/investigations/{id}/sites                          create; multipart,
 GET    /v1/investigations/{id}/sites/{site_id}                one site's own metadata
 GET    /v1/investigations/{id}/sites/{site_id}/image           the site's uploaded image, proxied
 PATCH  /v1/investigations/{id}/sites/{site_id}/control-points  set the georeferencing control points
-POST   /v1/investigations/{id}/sites/{site_id}/grid            place the grid; its cells become real location entities
+POST   /v1/investigations/{id}/sites/{site_id}/grid            place the grid; its cells become real location entities; 409 `composite_read_only` in a case reading a composite, before the grid is stored (ADR-099 Amendment 15)
 ```
 
 A **site** is A1's own mechanism (`08_ACCEPTANCE_SCENARIOS.md`): an uploaded floor plan or

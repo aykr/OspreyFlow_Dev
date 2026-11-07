@@ -218,7 +218,7 @@ async def scope_to_dataset(
     that dataset (the case's first, ADR-099 decision 6; a composite's own id, Amendment 14);
     otherwise `None`. The reach is exactly the Studio's dataset switcher's (ADR-140 Amendment 2): a
     dataset a case of theirs only reads, and another unit's, are not reached. Writes made through it
-    are stamped with the dataset."""
+    are stamped with the dataset, and refused when it is a composite (Amendment 15)."""
     for case, _level in await cases.list_for(principal):
         ids = await store.ids_of_case(case.id)
         if ids and ids[0] == dataset_id:

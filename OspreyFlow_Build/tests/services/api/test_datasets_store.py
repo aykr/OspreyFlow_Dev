@@ -77,3 +77,38 @@ async def test_postgres_names_no_dataset_to_a_reader_with_no_role(store) -> None
         reader = author.model_copy(update={"id": "reader", "roles": roles})
         assert [d.name for d in await store.list_for(reader)] == ["Enron corpus", "Fixture Corp"]
         assert [d.id for d in await store.of_case(case, reader)] == [second.id]
+
+
+async def _a_composite_and_its_case(store) -> tuple[set[str], str, str]:
+    """A source, a composite of two, and a case reading the composite (so it has a layer)."""
+    first = await store.create(ALICE, f"Members A {new_id()}")
+    second = await store.create(ALICE, f"Members B {new_id()}")
+    composite = await store.create_composite(ALICE, f"Both {new_id()}", [first.id, second.id])
+    case = new_id()
+    await store.set_for_case(case, [composite.id], ALICE)
+    layer = await store.ensure_layer(case, unit=ALICE.org_unit, created_by=ALICE.id)
+    return {first.id, second.id}, composite.id, layer
+
+
+async def test_postgres_answers_which_ids_are_composites(store) -> None:
+    """ADR-099 Amendment 15: the stamping graph's last word asks the store which ids are
+    composites; the test registries answer `set()`, so only this proves the real query. A source,
+    a layer and an id nobody registered are not composites."""
+    members, composite, layer = await _a_composite_and_its_case(store)
+    asked = [*sorted(members), composite, layer, f"no-such-{new_id()}"]
+    assert await store.composites_among(asked) == {composite}
+    assert await store.composites_among(sorted(members)) == set()
+    assert await store.composites_among([]) == set()
+
+
+async def test_the_composite_check_fails_answered_as_the_fakes_answer(
+    store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: with the store answering as the test registries do, the check above is red."""
+
+    async def as_the_fakes(self: object, dataset_ids: object) -> set[str]:
+        return set()
+
+    monkeypatch.setattr(PostgresDatasetStore, "composites_among", as_the_fakes)
+    _members, composite, _layer = await _a_composite_and_its_case(store)
+    assert await store.composites_among([composite]) != {composite}
