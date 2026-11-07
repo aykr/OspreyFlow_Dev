@@ -84,7 +84,7 @@ def _rule(**more: Any) -> TypologyRule:
 def _no_layer(monkeypatch: pytest.MonkeyPatch) -> None:
     """The refusal back: the alert names nothing, as before, and the stamping graph judges it."""
 
-    async def nothing() -> list[str]:
+    async def nothing(*_args: Any) -> list[str]:
         return []
 
     monkeypatch.setattr(rule_evaluation, "_alert_datasets", nothing)

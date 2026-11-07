@@ -109,6 +109,12 @@ def analyst_layer() -> str | None:
     return _CASE_LAYER.get()
 
 
+def read_only_layer() -> str | None:
+    """The original case's layer a branch reads, read-only (ADR-144 Amendment 1 decision 2); `None`
+    outside a branch, or for a reader the link does not apply to."""
+    return _READ_ONLY_LAYER.get()
+
+
 async def analyst_writes_into() -> list[str]:
     """The `datasets` an analyst's own write names (a mark made by hand, a manual link or split):
     the case's layer, never a source (ADR-143 Amendment 1 item 3). A case the migration has not
@@ -538,5 +544,6 @@ __all__: Sequence[str] = (
     "refuse_unless_in_the_layer",
     "refuse_writing_a_node_in_a_composite_case",
     "NoAnalystLayerError",
+    "read_only_layer",
     "set_case_datasets",
 )
