@@ -1,0 +1,6 @@
+E       AssertionError: assert (Handling(classification='OFFICIAL', handling_code='P', action_code=None, sanitisation_code=None, originator='unit-1', owning_unit='unit-1', review_date=None, legal_basis=None) is not None and 'OFFICIAL' == 'SECRET'
+E         
+E         - SECRET
+E         + OFFICIAL)
+E       AssertionError: assert 'OFFICIAL' == 'SECRET'
+E         

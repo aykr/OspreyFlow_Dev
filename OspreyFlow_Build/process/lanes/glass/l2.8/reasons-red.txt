@@ -1,0 +1,9 @@
+E       assert (False)
+E        +  where False = <built-in method startswith of str object at 0x10946c8f0>('a link it cites could not be read')
+E        +    where <built-in method startswith of str object at 0x10946c8f0> = "its referents' restricted markings belong to different units".startswith
+E       assert (False)
+E        +  where False = <built-in method startswith of str object at 0x10946c8f0>('the marking of something it names could not be read')
+E        +    where <built-in method startswith of str object at 0x10946c8f0> = "its referents' restricted markings belong to different units".startswith
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py::test_an_unreadable_cited_link_is_said_as_one
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py::test_a_referent_unseen_in_the_load_is_said_as_one
+2 failed, 5 passed in 1.35s

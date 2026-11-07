@@ -1,0 +1,12 @@
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_an_alert_over_hidden_evidence_is_withheld_whole[hidden_alert0-e-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_an_alert_over_hidden_evidence_is_withheld_whole[hidden_alert1-t-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_withholding_says_nothing_by_count_or_order[hidden_alert0-e-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_withholding_says_nothing_by_count_or_order[hidden_alert1-t-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_reads_are_the_same_whether_the_evidence_is_hidden_or_not[hidden_alert0-e-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_reads_are_the_same_whether_the_evidence_is_hidden_or_not[hidden_alert1-t-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_transactions_are_asked_in_chunks_of_what_is_cited_not_of_what_is_found
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_case_queue_inherits_the_check
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence[e-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence[t-1]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence[n-b]
+11 failed, 2 passed in 0.45s
