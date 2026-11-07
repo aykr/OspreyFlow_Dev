@@ -167,7 +167,10 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
             loop.add_signal_handler(sig, stop.set)
 
     logger.info("worker %s: started for %s", consumer_name(), sorted(registered_job_types()))
-    await run_forever(worker, sorted(registered_job_types()), stop=stop)
+    try:
+        await run_forever(worker, sorted(registered_job_types()), stop=stop)
+    finally:
+        await datasets.close()
     logger.info("worker %s: stopped", consumer_name())
     return 0
 
