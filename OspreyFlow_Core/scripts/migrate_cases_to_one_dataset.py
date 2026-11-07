@@ -193,7 +193,8 @@ async def migrate(
             continue
         if len(chosen) == 1:
             report.kept.append(case.id)
-            say(f"  {label}: reads {chosen[0].name}, kept")
+            kept = f"  {label}: reads {chosen[0].name}, kept"
+            say(kept + (f"; {_READ_ONLY}" if chosen[0].kind == COMPOSITE else ""))
         elif any(d.kind != SOURCE for d in chosen):
             report.unplaced.append(f"{label}: names a composite beside another dataset")
             continue
@@ -210,7 +211,10 @@ async def migrate(
                 )
                 composites[key] = made
                 report.composed.append((case.id, made, True))
-            say(f"  {label}: names {len(members)} datasets, now reads a composite of them")
+            say(
+                f"  {label}: names {len(members)} datasets, now reads a composite of them; "
+                + _READ_ONLY
+            )
         # Every case its own empty layer, a branch included (ADR-143 Amendment 1 item 3).
         if await store.layer_of_case(case.id) is None:
             await through.ensure_layer(
@@ -220,6 +224,13 @@ async def migrate(
     for line in report.unplaced:
         say(f"  not placed: {line}")
     return report
+
+
+#: ADR-099 Amendment 15: what a case reading a composite can still do, said where it becomes one.
+_READ_ONLY = (
+    "a composite is read-only for now, so the case can no longer load, extract or correct, only "
+    "read, mark by hand and link into its own layer; load in a case that reads one of its datasets"
+)
 
 
 def _parse(argv: list[str] | None) -> argparse.Namespace:

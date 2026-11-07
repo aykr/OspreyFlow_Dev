@@ -89,6 +89,26 @@ async def test_a_dry_run_writes_nothing(store: InMemoryDatasetStore) -> None:
     assert len(report.layers_made) == 5
 
 
+async def test_a_case_made_a_composite_is_told_it_is_now_read_only(
+    store: InMemoryDatasetStore,
+) -> None:
+    """ADR-099 Amendment 15: the migration's own words say what a composite case can still do,
+    for each case it makes one, in a dry run as in the real one, and none for a source's case."""
+    for write in (False, True):
+        lines: list[str] = []
+        await migrate(store, SEEDED, write=write, say=lines.append)
+        said = {line.split(":")[0].strip(): line for line in lines}
+        for case in ("both-case", "both-again"):
+            (line,) = [v for k, v in said.items() if f"({case})" in k]
+            assert "read-only for now" in line and "load in a case that reads" in line
+        assert not any("read-only" in v for k, v in said.items() if "(enron-case)" in k)
+    # Run again: the composite case is kept, and told so again.
+    lines = []
+    await migrate(store, SEEDED, write=True, say=lines.append)
+    (again,) = [line for line in lines if "(both-case)" in line]
+    assert "kept" in again and "read-only for now" in again
+
+
 async def test_the_dry_run_check_fails_with_the_real_store_handed_in(
     store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
