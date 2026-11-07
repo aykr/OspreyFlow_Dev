@@ -802,6 +802,27 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   // paused with why and resumed.
   "set-a-sources-refresh-mode-by-keyboard",
   "pause-and-resume-a-sources-refresh-by-keyboard",
+  // ADR-140 Amendment 8 (redesign phase 6): the drawer, Preview, Test, the two modes, the Map
+  // editor's strip and keyboard bind, and the reports pipeline built from scratch in guided mode.
+  "open-a-steps-drawer-beside-the-canvas-by-keyboard",
+  "preview-a-source-step-by-keyboard",
+  "preview-maps-graph-by-keyboard",
+  "test-the-pipeline-in-the-drawer-by-keyboard",
+  "switch-guided-and-expert-mode-by-keyboard",
+  "open-a-step-from-the-guided-list-by-keyboard",
+  "read-an-expert-step-in-guided-mode-by-keyboard",
+  "go-back-to-a-step-from-the-map-strip-by-keyboard",
+  "bind-a-column-by-choosing-both-and-enter",
+  "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard",
+  // The review of L1.2: guided mode's read-only expert step, an edit in expert mode, the load rules
+  // from the Load step, letting a chosen column go, and the drawer's Settings after Preview.
+  "an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",
+  "edit-a-step-in-expert-mode-by-keyboard",
+  "open-load-rules-from-the-load-step-by-keyboard",
+  "let-go-a-chosen-column-by-keyboard",
+  "go-back-to-a-steps-settings-from-preview-by-keyboard",
+  // The second review: guided mode may not remove the step that feeds an expert step.
+  "the-step-feeding-an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
