@@ -29,7 +29,7 @@ from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Hotlist, HotlistAudience, Monitor, Node, Principal
 
-from .alerts import evidence_available
+from .alerts import AlertNotFoundError, AlertStore, evidence_available
 from .evidence_brief import display_name
 from .hotlists import HotlistNotFoundError
 from .investigations import Investigation
@@ -236,6 +236,25 @@ async def alert_to_view(
     )
 
 
+async def jumpable_alert(
+    alerts: AlertStore,
+    alert_id: str,
+    *,
+    principal: Principal,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+) -> Alert:
+    """The alert a jump branches from: the principal's own, and every node, link and transaction it
+    cites readable to them now, or refused exactly as a missing alert, before anything is created
+    (ADR-146 decision 10's address test, which supersedes ADR-124 decision 1's seeding of the
+    readable referents for an alert whose evidence is not whole: those referents are the entities
+    the hidden link or transactions tie together)."""
+    alert = await alerts.get_authorized(alert_id, principal)
+    if not await evidence_available(alert, principal, graph, analytics):
+        raise AlertNotFoundError(alert_id)
+    return alert
+
+
 async def fetch_jumpable_referents(
     alert: Alert, *, principal: Principal, graph: GraphPort
 ) -> list[Node]:
@@ -270,4 +289,5 @@ __all__ = [
     "MonitorList",
     "alert_to_view",
     "fetch_jumpable_referents",
+    "jumpable_alert",
 ]

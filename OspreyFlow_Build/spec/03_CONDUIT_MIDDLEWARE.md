@@ -617,7 +617,11 @@ and is listed only in cases reading that dataset. A match in another dataset wri
 even a `notify` stub, and an alert's entities are read as its case reads them. `POST .../jump` branches a fresh
 investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
 identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
-second implementation of it. `Alert.investigation_id` (the triggering event's own investigation,
+second implementation of it. An alert any of whose cited nodes, links or transactions the jumper
+cannot read now is refused exactly as a missing alert, before any case is made (ADR-146 decision
+10's address test, which for this case supersedes ADR-124 decision 1's seeding of whatever
+referents are readable: those are the entities the hidden link or transactions tie together).
+`Alert.investigation_id` (the triggering event's own investigation,
 where the underlying ingest or resolution that raised the alert happened) may be absent — a
 resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
 unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation). The

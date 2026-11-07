@@ -775,6 +775,7 @@ from .watch_routes import (
     MonitorList,
     alert_to_view,
     fetch_jumpable_referents,
+    jumpable_alert,
 )
 from .worker import JobWorker
 from .working_set.models import (
@@ -6325,6 +6326,7 @@ async def jump_alert_route(
     audit: AuditDep,
     valkey: ValkeyDep,
     datasets: DatasetsDep,
+    analytics: AnalyticsDep,
 ) -> AlertJumpResult:
     """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
     link to the originating investigation." The link is `branch.branched_from` — the identical
@@ -6333,7 +6335,9 @@ async def jump_alert_route(
     may be `None` (the resolution trigger's own producer carries no single investigation) — the
     branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
     `None` rather than silently pointed at a wrong investigation."""
-    alert = await alerts_store.get_authorized(alert_id, principal)
+    alert = await jumpable_alert(
+        alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics
+    )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
     branch = await investigations.create(
