@@ -18,9 +18,12 @@ What it does, in order, each step safe to run again:
    its parent's if it is a branch (parents first). A case with none of these gets a dataset of its
    own, named after it, so it never reads everything or nothing by accident.
 4. Stamps what is on each case's canvas and has no dataset yet (an entity the analyst marked or
-   accepted before ADR-099) with the case's first dataset.
+   accepted before ADR-099) with the case's first dataset. Not in a case reading a composite, which
+   is read-only for now (ADR-099 Amendment 15): this writes by raw SQL, past the stamping graph,
+   so it writes nothing into a member there, and counts those elements as unplaced, in words.
 5. Rewrites each case's working-set copies of its nodes and links with their datasets, since the
-   canvas is projected from those copies (`WorkingSetService._project`).
+   canvas is projected from those copies (`WorkingSetService._project`); in a composite case, a
+   copy the graph does not place is left as it was.
 6. Places the Conduit's own records made before ADR-099 Amendment 3 (`place_records`): a link-type
    proposal or an alert records the case it was made in, and takes that case's first dataset. A
    saved pattern, watch, monitor or Studio recipe records no case, so nothing says which dataset it
@@ -45,6 +48,7 @@ from typing import Any
 import asyncpg
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.datasets import (
+    COMPOSITE,
     Dataset,
     DatasetStore,
     PostgresDatasetStore,
@@ -86,6 +90,9 @@ class StampReport:
     case_datasets: dict[str, list[str]] = field(default_factory=dict)
     own_datasets_made: list[str] = field(default_factory=list)
     canvas_stamped: int = 0
+    #: A composite case's canvas elements in no dataset, by case: written into no member, since a
+    #: composite is read-only for now (ADR-099 Amendment 15).
+    unplaced_in_composite: dict[str, int] = field(default_factory=dict)
     derived: int = 0
     refused: list[str] = field(default_factory=list)
     unstamped: dict[str, int] = field(default_factory=dict)
@@ -403,8 +410,15 @@ async def stamp(
         report.case_datasets[case.id] = list(held)
         say(f"  case {case.name or case.id}: reads {', '.join(held)}")
 
+        # A composite case writes nothing into a member (ADR-099 Amendment 15); in a dry run, a
+        # case that would be given more than one dataset is one.
+        composite = len(held) > 1 or any(
+            d.kind == COMPOSITE for d in await datasets.chosen_of_case(case.id)
+        )
+
         # 4. What is on the canvas and in no dataset joins the case's first.
         first = held[0]
+        unplaced_here = 0
         if node_ids or edge_ids:
             for type_name in types:
                 for start in range(0, max(len(node_ids), len(edge_ids)), LOOKUP_BATCH):
@@ -417,6 +431,9 @@ async def stamp(
                         f"WHERE id IN :ids AND {_IN_NO_DATASET}",
                         {"ids": chunk},
                     )
+                    if composite:
+                        unplaced_here += unplaced
+                        continue
                     if write and unplaced:
                         await sql.query(
                             f"UPDATE {type_name} SET datasets = [:ds] "
@@ -425,9 +442,21 @@ async def stamp(
                         )
                     report.canvas_stamped += unplaced
 
+        if composite and unplaced_here:
+            report.unplaced_in_composite[case.id] = unplaced_here
+            noun = "element" if unplaced_here == 1 else "elements"
+            say(
+                f"  case {case.name or case.id} reads a composite, which is read-only for now: "
+                f"{unplaced_here:,} {noun} on its canvas in no dataset not placed (nothing is "
+                "written into a member; place them from a case that reads that dataset)"
+            )
+        # The copy of an element the graph does not hold: stamped with the case's first dataset,
+        # but in a composite case left as it was.
+        placed_in = [] if composite else [first]
+
         # 5. The working set's own copies, which the canvas is drawn from: the graph's current
         # body where it holds the element (its datasets, and its counts if a load was written
-        # again), else the copy stamped with the case's first dataset.
+        # again), else the copy stamped as above.
         if write and (node_ids or edge_ids):
             node_bodies = await _bodies_by_id(sql, node_types, node_ids, node_from_element_map)
             edge_types = [physical_type_name(t.name) for t in ontology.edge_types]
@@ -438,7 +467,7 @@ async def stamp(
                 case.id,
                 [
                     node_bodies.get(n.id)
-                    or n.model_copy(update={"datasets": n.datasets or [first]})
+                    or n.model_copy(update={"datasets": n.datasets or placed_in})
                     for n in nodes.values()
                 ],
             )
@@ -446,7 +475,7 @@ async def stamp(
                 case.id,
                 [
                     edge_bodies.get(e.id)
-                    or e.model_copy(update={"datasets": e.datasets or [first]})
+                    or e.model_copy(update={"datasets": e.datasets or placed_in})
                     for e in edges.values()
                 ],
             )
