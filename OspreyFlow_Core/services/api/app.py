@@ -380,12 +380,13 @@ from .compute_routes import (
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .dataset_scope import (
-    CorrectionInCompositeError,
+    CompositeReadOnlyError,
     NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
     outside_any_case,
-    refuse_correcting_a_members_node,
+    refuse_in_a_composite_case,
+    refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
     scope_to_dataset,
 )
@@ -1762,6 +1763,16 @@ async def _audit_denied(
 
 
 InvestigationViewerDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.VIEWER))]
+
+
+async def refuse_loading_in_a_composite_case(investigation: InvestigationViewerDep) -> None:
+    """ADR-099 Amendment 15: a case reading a composite loads, runs, schedules, publishes and
+    uploads nothing (a composite is read-only for now). After the case's own level check, so a
+    caller who may not open the case is still answered as for a missing one."""
+    await refuse_in_a_composite_case()
+
+
+NoLoadingInACompositeCase = Depends(refuse_loading_in_a_composite_case)
 InvestigationEditorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.EDITOR))]
 InvestigationAuthorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))]
 #: Access management: an Author, or the administrator's safety net (ADR-052 §4).
@@ -2356,14 +2367,14 @@ async def _unknown_dataset_handler(request: Request, exc: UnknownDatasetError) -
     )
 
 
-@app.exception_handler(CorrectionInCompositeError)
-async def _correction_in_composite_handler(
-    request: Request, exc: CorrectionInCompositeError
+@app.exception_handler(CompositeReadOnlyError)
+async def _composite_read_only_handler(
+    request: Request, exc: CompositeReadOnlyError
 ) -> JSONResponse:
-    """ADR-099 Amendment 15 (the owner, 7 November 2026): a member's link is not corrected in a case
-    reading a composite; nothing was written."""
+    """ADR-099 Amendment 15 (the owner, 7 November 2026): a composite is read-only for now; nothing
+    was written."""
     return JSONResponse(
-        status_code=409, content={"error": "correct_in_member_case", "detail": str(exc)}
+        status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
     )
 
 
@@ -3884,7 +3895,7 @@ async def compute_metric_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/extract",
-    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES)), NoLoadingInACompositeCase],
 )
 async def run_extraction_route(
     investigation: InvestigationEditorDep,
@@ -4048,8 +4059,8 @@ async def confirm_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
-    # ADR-099 Amendment 15: a member's node is not corrected in a case reading a composite.
-    await refuse_correcting_a_members_node(graph, node_id, principal)
+    # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
+    await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await confirm_node(graph, node_id, principal, tx=tx)
@@ -4157,8 +4168,8 @@ async def retract_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
-    # ADR-099 Amendment 15: a member's node is not corrected in a case reading a composite.
-    await refuse_correcting_a_members_node(graph, node_id, principal)
+    # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
+    await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await retract_node(graph, node_id, principal, tx=tx)
@@ -5324,7 +5335,7 @@ async def designate_in_document_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/documents",
-    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES)), NoLoadingInACompositeCase],
 )
 async def upload_document_route(
     investigation: InvestigationEditorDep,
@@ -7521,6 +7532,16 @@ StudioDatasetDep = Annotated[str, Depends(require_studio_dataset)]
 SourceAuthorDep = Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))]
 
 
+async def refuse_loading_a_composite(dataset_id: StudioDatasetDep, datasets: DatasetsDep) -> None:
+    """The same for the Studio's own routes of a dataset (ADR-140 Amendment 4): a composite is
+    read, never loaded. After the dataset's own gate, which answers 404 to anyone it is not for."""
+    if await datasets.composites_among([dataset_id]):
+        raise CompositeReadOnlyError
+
+
+NoLoadingAComposite = Depends(refuse_loading_a_composite)
+
+
 def _source_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
 
@@ -7639,7 +7660,7 @@ async def list_dataset_sources(
 @app.post(
     "/v1/datasets/{dataset_id}/sources",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES)), NoLoadingAComposite],
 )
 async def register_dataset_source(
     dataset_id: StudioDatasetDep,
@@ -7767,7 +7788,7 @@ async def get_dataset_source_lineage(
 
 @app.patch(
     "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingAComposite],
 )
 async def edit_dataset_source_governance(
     dataset_id: StudioDatasetDep,
@@ -7833,7 +7854,7 @@ async def _set_source_refresh_paused(
 
 @app.post(
     "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingAComposite],
 )
 async def pause_source_refresh(
     dataset_id: StudioDatasetDep,
@@ -7855,7 +7876,7 @@ async def pause_source_refresh(
 
 @app.post(
     "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingAComposite],
 )
 async def resume_source_refresh(
     dataset_id: StudioDatasetDep,
@@ -7943,7 +7964,7 @@ _UPLOAD_REFUSAL_STATUS = {
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/source-files",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES)), NoLoadingInACompositeCase],
 )
 async def upload_ingest_source_file(
     investigation: InvestigationEditorDep,
@@ -8009,7 +8030,7 @@ def _with_default_classification(
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def create_studio_recipe_draft(
     investigation: InvestigationEditorDep,
@@ -8056,7 +8077,7 @@ def _check_deduplicate(config: DeduplicateConfig | None, columns: list[str] | No
 
 @app.patch(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_draft(
     investigation: InvestigationEditorDep,
@@ -8111,7 +8132,7 @@ async def update_studio_recipe_draft(
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_pipeline(
     investigation: InvestigationEditorDep,
@@ -8256,7 +8277,7 @@ async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_row_template(
     investigation: InvestigationEditorDep,
@@ -8570,7 +8591,7 @@ async def read_load_checks(
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/checks",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def set_load_checks(
     investigation: InvestigationEditorDep,
@@ -8632,7 +8653,7 @@ async def list_studio_recipe_registry(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish",
-    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES))],
+    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def publish_studio_recipe(
     investigation: InvestigationEditorDep,
@@ -8730,7 +8751,7 @@ async def publish_studio_recipe(
 
 @app.patch(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8809,7 +8830,7 @@ async def _set_recipe_schedule_paused(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/pause",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def pause_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8824,7 +8845,7 @@ async def pause_recipe_schedule(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/resume",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def resume_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8858,7 +8879,7 @@ async def recipe_runs_route(
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/versions",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def create_studio_recipe_version(
     investigation: InvestigationEditorDep,
@@ -8886,7 +8907,7 @@ async def create_studio_recipe_version(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run",
-    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def run_studio_recipe(
     investigation: InvestigationEditorDep,
@@ -10559,7 +10580,7 @@ async def list_held_rows(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoLoadingInACompositeCase],
 )
 async def release_held_rows_route(
     investigation: InvestigationAuthorDep,

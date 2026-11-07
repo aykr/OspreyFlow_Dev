@@ -49,7 +49,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-from .dataset_scope import as_written_in_this_case, will_be_written_as
+from .dataset_scope import refuse_in_a_composite_case
 from .event_scope import CaseRecords, link_event_filter
 from .link_ids import as_stored
 from .link_notes import LinkNotFoundError
@@ -278,20 +278,19 @@ class EmailExtractionService:
         using: Literal["recogniser", "model"] = "model",
     ) -> EmailExtractionResult:
         event = await self._event_on_link(investigation_id, edge_id, event_id, principal)
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the email is read
         now = datetime.now(UTC)
         node, edges = self._document_writes(event, principal, now)
         # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
         await self._working_set.ensure_room(
             investigation_id,
-            [await will_be_written_as(self._graph, node.id, principal)],
+            [node.id],
             [e.id for e in edges],
             principal,
         )
 
         tx = await self._graph.begin_transaction()
         try:
-            # The id the write returns: under a case reading a composite whose member holds this
-            # Document, the composite's own copy of it (ADR-099 Amendment 15).
             (stored_id,) = await self._graph.upsert_nodes([node], tx)
             edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
         except Exception:
@@ -364,6 +363,7 @@ class EmailExtractionService:
             events.extend(page.events)
             if not page.events or len(events) >= page.total:
                 break
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the link is read
 
         documents = [e for e in events if _has_text(e)]
         if events and not documents:
@@ -378,7 +378,7 @@ class EmailExtractionService:
             edges.extend(mentions)
         await self._working_set.ensure_room(
             investigation_id,
-            [await will_be_written_as(self._graph, n.id, principal) for n in nodes],
+            [n.id for n in nodes],
             [e.id for e in edges],
             principal,
         )
@@ -415,10 +415,7 @@ class EmailExtractionService:
         link."""
         await self._event_on_link(investigation_id, edge_id, event_id, principal)
         record = await self._candidates.get_authorized(candidate_id, principal)
-        document_id = await as_written_in_this_case(
-            self._graph, email_document_id(event_id), principal
-        )
-        if record.document_id != document_id:
+        if record.document_id != email_document_id(event_id):
             raise EmailNotFoundError("candidate")
         await reject_candidate(self._candidates, candidate_id, principal)
 
@@ -431,11 +428,7 @@ class EmailExtractionService:
         principal: Principal,
     ) -> EmailAcceptResult:
         await self._event_on_link(investigation_id, edge_id, event_id, principal)
-        # In a case reading a composite, the composite's own copy of the email's Document, under
-        # which its findings were filed (ADR-099 Amendment 15).
-        document_id = await as_written_in_this_case(
-            self._graph, email_document_id(event_id), principal
-        )
+        document_id = email_document_id(event_id)
         record = await self._candidates.get_authorized(candidate_id, principal)
         if record.document_id != document_id:
             raise EmailNotFoundError("candidate")

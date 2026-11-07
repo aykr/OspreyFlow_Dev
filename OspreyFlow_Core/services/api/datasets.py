@@ -174,6 +174,8 @@ class DatasetStore(Protocol):
         self, principal: Principal, name: str, *, suffix_if_taken: bool = False
     ) -> Dataset: ...
     async def known(self, dataset_ids: Sequence[str]) -> set[str]: ...
+    #: Which of these are composites: read-only for now (ADR-099 Amendment 15).
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]: ...
     #: Every case's analyst layer: what the corpus-wide resolution run leaves to each case.
     async def layer_ids(self) -> set[str]: ...
     async def register(self, dataset: Dataset) -> Dataset: ...
@@ -409,6 +411,9 @@ class InMemoryDatasetStore:
 
     async def known(self, dataset_ids: Sequence[str]) -> set[str]:
         return {d for d in dataset_ids if d in self.datasets}
+
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]:
+        return {d for d in dataset_ids if d in self.datasets and self.datasets[d].kind == COMPOSITE}
 
     async def layer_ids(self) -> set[str]:
         return {d.id for d in self.datasets.values() if d.kind == ANALYST_LAYER}
@@ -740,6 +745,16 @@ class PostgresDatasetStore:
     async def layer_ids(self) -> set[str]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch("SELECT id FROM datasets WHERE kind = 'analyst_layer'")
+        return {r["id"] for r in rows}
+
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]:
+        if not dataset_ids:
+            return set()
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id FROM datasets WHERE id = ANY($1::text[]) AND kind = 'composite'",
+                list(set(dataset_ids)),
+            )
         return {r["id"] for r in rows}
 
     async def list_for(self, reader: Principal) -> list[Dataset]:

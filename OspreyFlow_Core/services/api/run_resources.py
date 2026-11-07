@@ -168,8 +168,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     # ADR-099: the services write through `DatasetStampingGraph`, so whatever the Conduit writes
     # for a case belongs to the case's dataset (`dataset_scope.py`).
     graph: GraphPort = cast(
-        GraphPort,
-        stamping(GraphArcadeDBAdapter(arcadedb_client, handling_scheme), scheme=handling_scheme),
+        GraphPort, stamping(GraphArcadeDBAdapter(arcadedb_client, handling_scheme))
     )
     await graph.apply_schema(ontology)
 

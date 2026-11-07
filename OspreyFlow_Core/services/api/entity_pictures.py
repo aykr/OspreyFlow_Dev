@@ -54,7 +54,7 @@ from schemas.domain import (
 )
 
 from .change_provenance import PICTURE_MARKER, without_link_ids
-from .dataset_scope import composite_members, refuse_correcting_a_member
+from .dataset_scope import refuse_in_a_composite_case
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
 from .link_ids import as_stored
@@ -182,14 +182,9 @@ class EntityPictureService:
         return node
 
     async def _current(
-        self,
-        node_ids: Sequence[str],
-        principal: Principal,
-        *,
-        not_in: frozenset[str] = frozenset(),
+        self, node_ids: Sequence[str], principal: Principal
     ) -> dict[str, tuple[Edge, Node]]:
-        """Each entity's picture as `principal` may see it: its link and its Document. `not_in`
-        leaves out links in those datasets (a composite case's members, ADR-099 Amendment 15)."""
+        """Each entity's picture as `principal` may see it: its link and its Document."""
         if not node_ids:
             return {}
         found = await self._graph.expand(
@@ -209,8 +204,6 @@ class EntityPictureService:
             if edge.type != DEPICTS or edge.target not in wanted:
                 continue
             if edge.properties.get("shown") is False or edge.source not in documents:
-                continue
-            if not_in and set(edge.datasets) & not_in:
                 continue
             held = current.get(edge.target)
             if held is None or edge.audit.created_at > held[0].audit.created_at:
@@ -300,14 +293,8 @@ class EntityPictureService:
         if skip_if_picture_history and await self._has_picture_history(node_id, principal):
             return None
         before = (await self._current([node_id], principal)).get(node_id)
-        if before is not None:  # ADR-099 Amendment 15: before any file is stored
-            members = await composite_members()
-            if members and set(before[0].datasets) & members:
-                # The shown picture is a member's (newer than the case's own, say): the case
-                # replaces its own picture if it has one, and never the member's.
-                own = (await self._current([node_id], principal, not_in=members)).get(node_id)
-                before = own if own is not None else before
-            await refuse_correcting_a_member(before[0].datasets)
+        # ADR-099 Amendment 15: a composite is read-only; refused before any file is stored.
+        await refuse_in_a_composite_case()
 
         ref = reference_for(data, content_type)
         document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
@@ -506,7 +493,7 @@ class EntityPictureService:
         if current is None:
             raise PictureNotFoundError(node_id)
         old, _ = current
-        await refuse_correcting_a_member(old.datasets)  # ADR-099 Amendment 15
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the picture is read
         # Still withheld after the full read (a record stored so): the successor would carry the
         # removal's own marker and nothing else, replacing every stored source. Not found, as
         # `link_changes._in_full` answers it.

@@ -14,8 +14,7 @@ What a mistake here would do, and the case that catches it:
 - accepted proposals and extractions following the analyst's writes into the layer, each through
   its real accept path: `test_an_accepted_extraction_or_proposal_lands_in_the_source_not_the_layer`,
   each with its red half;
-- a composite case's added data landing in one member, which every case reading that member
-  would then see: `test_a_composite_cases_write_lands_under_the_composite_id`.
+- a composite case's write reaching a member: refused, in `test_composite_read_only.py`.
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ from services.api.dataset_scope import (
     analyst_layer,
     analyst_writes_into,
     case_datasets,
-    made_in,
     outside_any_case,
     scope_to_case,
     set_case_datasets,
@@ -48,7 +46,6 @@ from schemas.domain import (
     AuditStub,
     Handling,
     Node,
-    NodeWrite,
     Principal,
     Provenance,
     ProvenanceState,
@@ -322,36 +319,8 @@ async def test_the_source_check_fails_with_unnamed_writes_stamped_into_the_layer
     assert await accept(store) != ["src"]
 
 
-async def test_a_composite_cases_write_lands_under_the_composite_id(
-    store: InMemoryDatasetStore,
-) -> None:
-    principal = await _case_reading(store, "both")
-    layer = await store.layer_of_case(CASE)
-    assert principal.datasets == ["both", "src", "other", layer]
-    inner = WritingGraph()
-    graph = stamping(inner)
-    tx = await graph.begin_transaction()
-    (written_id,) = await graph.upsert_nodes([_write("p1")], tx)
-    await graph.commit_transaction(tx)
-    assert inner.nodes[written_id].datasets == ["both"]
-    # A record made in the case (a watch, a saved pattern) belongs to the composite too.
-    assert made_in(principal) == "both"
-
-
-def _write(node_id: str) -> NodeWrite:
-    return NodeWrite(
-        id=node_id,
-        type="Person",
-        properties={"family_name": "MERCER", "given_names": "Dana"},
-        provenance=Provenance(
-            state=ProvenanceState.ASSERTED,
-            sources=[SourceRef(document_id="d", locator="l", excerpt_hash="")],
-            first_seen=datetime(2026, 11, 7, tzinfo=UTC),
-        ),
-        handling=HANDLING,
-        created_by=ANALYST.id,
-        created_at=datetime(2026, 11, 7, tzinfo=UTC),
-    )
+# A case reading a composite writes nothing but into its own layer: ADR-099 Amendment 15, in
+# `test_composite_read_only.py`.
 
 
 # --- a branch has an empty layer of its own (ADR-143 Amendment 1 item 3) -----------------------

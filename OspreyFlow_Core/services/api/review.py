@@ -54,7 +54,7 @@ from ports.recognise import RecognisePort
 from schemas.domain import Handling, NodeId, OntologySchema, Principal
 from schemas.model import ExtractionRequest
 
-from .dataset_scope import reach_clause
+from .dataset_scope import reach_clause, refuse_in_a_composite_case
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS extraction_candidates (
@@ -494,6 +494,9 @@ async def accept_candidate(
     same begin/commit-or-rollback shape `services/api/working_set/service.py`'s manual
     link/split already established."""
     record = await store.get_authorized(candidate_id, principal)
+    # ADR-099 Amendment 15: every accept path comes here (a document's, an email's, a question's),
+    # and a composite is read-only; refused once the finding is read, before anything is written.
+    await refuse_in_a_composite_case()
     if record.status is not CandidateStatus.PENDING:
         raise CandidateNotPendingError(candidate_id)
 
@@ -527,6 +530,7 @@ async def reject_candidate(
     store: ExtractionCandidateStore, candidate_id: str, principal: Principal
 ) -> None:
     record = await store.get_authorized(candidate_id, principal)
+    await refuse_in_a_composite_case()  # ADR-099 Amendment 15
     if record.status is not CandidateStatus.PENDING:
         raise CandidateNotPendingError(candidate_id)
     await store.mark_reviewed(
