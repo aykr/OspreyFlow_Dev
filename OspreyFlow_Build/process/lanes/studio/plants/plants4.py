@@ -51,6 +51,8 @@ PLANTS = {
 SCHEDULER = f"{CORE}/services/api/scheduler.py"
 TICK = "tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset"
 SHARED = "tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none"
+RUNS_PY = f"{CORE}/services/api/recipe_runs.py"
+CHUNK = "tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds"
 MULTI = {
     "S1": ("owners resolved for every due recipe before any runs (the refactor the stamp's order forbids)", SCHEDULER, [
         ("        for recipe in await self.recipes.scheduled():\n            try:\n                await self._consider(",
@@ -67,6 +69,13 @@ MULTI = {
         ("            if k[:2] == (recipe_id, case) and k[2] in set(keys)\n",
          "            if k[0] == recipe_id and k[2] in set(keys)\n"),
     ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_the_unit_files_fake_moves_keys_as_the_ledger_does"]),
+    "C1": ("withdrawn_row_keys_among unchunked: one ANY of every key", RUNS_PY, [
+        ('            for start in range(0, len(unique), _KEY_CHUNK):\n                rows = await conn.fetch(\n                    "SELECT row_key FROM withdrawn_row_keys', '            for start in range(0, 1):\n                rows = await conn.fetch(\n                    "SELECT row_key FROM withdrawn_row_keys'),
+        ('                    unique[start : start + _KEY_CHUNK],\n                )\n                found.update(', '                    unique,\n                )\n                found.update('),
+    ], [CHUNK]),
+    "C2": ("withdrawn_row_keys_among stopping after one chunk", RUNS_PY, [
+        ('            for start in range(0, len(unique), _KEY_CHUNK):\n                rows = await conn.fetch(\n                    "SELECT row_key FROM withdrawn_row_keys', '            for start in range(0, min(len(unique), 1), _KEY_CHUNK):\n                rows = await conn.fetch(\n                    "SELECT row_key FROM withdrawn_row_keys'),
+    ], [CHUNK]),
     "S3": ("scope_to_case stamps the case's dataset but confines nobody", SCOPE, [
         ('    return principal.model_copy(update={"datasets": datasets})\n',
          '    return principal.model_copy(update={"datasets": None})\n'),

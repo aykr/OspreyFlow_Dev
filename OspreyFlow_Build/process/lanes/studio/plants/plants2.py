@@ -1,5 +1,5 @@
 """Round 1's plants: each (file, old, new, tests), run, first failure printed, restored by md5."""
-import hashlib, os, re, subprocess, sys
+import hashlib, os, re, subprocess, sys, time
 from pathlib import Path as _P
 ROOT = _P(__file__).resolve().parents[5]
 CORE = str(ROOT / "OspreyFlow_Core")
@@ -30,8 +30,8 @@ PLANTS = [
      '"AND w.investigation_id = k.investigation_id AND w.row_key = k.row_key) "\n                "AS withdrawn_before',
      '"AND w.row_key = k.row_key) "\n                "AS withdrawn_before', [LIVE, LEDGER]),
     ("g: withdrawn_row_keys_among asked without the case", RUNS,
-     '"SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                "AND investigation_id = $2 AND row_key = ANY($3::text[])",\n',
-     '"SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                "AND $2::text IS NOT NULL AND row_key = ANY($3::text[])",\n', [LEDGER]),
+     '"SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",\n',
+     '"SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND $2::text IS NOT NULL AND row_key = ANY($3::text[])",\n', [LEDGER]),
 ]
 env = {**os.environ, "OSPREY_LANE": "studio", "ARCADEDB_HTTP_PORT": "2491", "POSTGRES_PORT": "55433",
        "POSTGRES_PASSWORD": "throwaway", "VALKEY_PORT": "6379", "CLICKHOUSE_HTTP_PORT": "18123"}
@@ -51,4 +51,4 @@ for name, path, old, new, tests in PLANTS:
     summary = [l for l in out.splitlines() if re.search(r"\d+ (passed|failed)", l)]
     failed = [l.split("::")[-1] for l in out.splitlines() if l.startswith("FAILED")]
     firsts = [l for l in out.splitlines() if l.startswith("E   ")][:2]
-    print(f"## {name}\nrun: {summary[-1] if summary else out[-400:]}\nfailed: {failed}\nfirst: {firsts}\nrestored md5 {digest}\n")
+    print(f"## {name} ({time.strftime('%H:%M:%SZ', time.gmtime())})\nrun: {summary[-1] if summary else out[-400:]}\nfailed: {failed}\nfirst: {firsts}\nrestored md5 {digest}\n")

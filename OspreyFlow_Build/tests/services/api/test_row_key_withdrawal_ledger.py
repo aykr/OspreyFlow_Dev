@@ -287,8 +287,12 @@ async def test_the_unit_files_fake_moves_keys_as_the_ledger_does(
 async def test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds(
     runs: RecipeRunStore,
 ) -> None:
-    """Asked in chunks of `_KEY_CHUNK`, as `kept_row_keys` is: every withdrawn key past the first
-    chunk is still found (red with the loop stopped after one chunk, `L1.2a_RED_RECORD.md`)."""
+    """Asked in chunks of `_KEY_CHUNK`, as `kept_row_keys` is. Every statement it sends to Postgres
+    is recorded, and none may carry more than one chunk of keys, while every withdrawn key past the
+    first chunk is still found. Red with the query unchunked (one `ANY` of every key), and with the
+    loop stopped after one chunk (`L1.2a_RED_RECORD.md`)."""
+    from contextlib import asynccontextmanager
+
     from services.api.recipe_runs import _KEY_CHUNK
 
     recipe, case, first, refresh = new_id(), new_id(), new_id(), new_id()
@@ -299,7 +303,34 @@ async def test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds
         run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=keys
     )
 
-    assert await runs.withdrawn_row_keys_among(recipe, case, keys) == set(keys)
+    sent: list[list[Any]] = []
+    pool = runs._pool
+
+    class Recording:
+        """The real pool's connection, every `fetch` kept with its values."""
+
+        def __init__(self, conn: Any) -> None:
+            self._conn = conn
+
+        async def fetch(self, sql: str, *values: Any) -> Any:
+            sent.append(list(values))
+            return await self._conn.fetch(sql, *values)
+
+    class RecordingPool:
+        @asynccontextmanager
+        async def acquire(self) -> Any:
+            async with pool.acquire() as conn:
+                yield Recording(conn)
+
+    runs._pool = RecordingPool()  # type: ignore[assignment]
+    try:
+        found = await runs.withdrawn_row_keys_among(recipe, case, keys)
+    finally:
+        runs._pool = pool
+    assert found == set(keys)
+    lists = [len(v) for values in sent for v in values if isinstance(v, list)]
+    assert lists and max(lists) <= _KEY_CHUNK, f"keys per statement: {lists}"
+    assert sum(lists) == len(keys)
 
 
 async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(

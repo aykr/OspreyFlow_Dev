@@ -1,5 +1,5 @@
 """Plant each restored behaviour in studio_publish.py, run the tests, restore by md5."""
-import hashlib, os, re, subprocess, sys
+import hashlib, os, re, subprocess, sys, time
 from pathlib import Path as _P
 ROOT = _P(__file__).resolve().parents[5]
 CORE = str(ROOT / "OspreyFlow_Core")
@@ -67,7 +67,7 @@ try:
         summary = [l for l in out.splitlines() if re.search(r"\d+ (passed|failed)", l)]
         firsts = [l for l in out.splitlines() if l.startswith("E   ")][:3]
         failed = [l.split("::")[-1] for l in out.splitlines() if l.startswith("FAILED")]
-        print(f"## {name}\nrun: {summary[-1] if summary else out[-500:]}\nfailed: {failed}\nfirst: {firsts}\n")
+        print(f"## {name} ({time.strftime('%H:%M:%SZ', time.gmtime())})\nrun: {summary[-1] if summary else out[-500:]}\nfailed: {failed}\nfirst: {firsts}\n")
 finally:
     open(TARGET, "w").write(orig)
     assert hashlib.md5(open(TARGET).read().encode()).hexdigest() == digest
