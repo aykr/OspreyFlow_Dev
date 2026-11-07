@@ -114,7 +114,7 @@ async def test_the_real_run_leaves_every_seeded_case_reading_one_dataset_plus_it
         assert layer is not None and store.datasets[layer].kind == ANALYST_LAYER
         reads = await store.ids_of_case(case.id)
         if chosen.kind == COMPOSITE:
-            assert reads == [*chosen.members, chosen.id, layer]
+            assert reads == [chosen.id, *chosen.members, layer]
         else:
             assert reads == [chosen.id, layer]
     # The two cases naming the same set share one composite, members in the first case's order,

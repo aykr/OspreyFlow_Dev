@@ -764,6 +764,11 @@ class WorkingSetService:
             handling=nodes_by_id[node_a].handling,
             audit=AuditStub(created_at=now, created_by=principal.id),
         )
+        # ADR-143 Amendment 1: the analyst's own decision is written in the case's analyst layer.
+        from ..dataset_scope import analyst_writes_into
+
+        into = analyst_writes_into()
+        new_edge = new_edge.model_copy(update={"datasets": into})
         edge_write = EdgeWrite(
             id=new_edge.id,
             type=edge_type,
@@ -774,6 +779,7 @@ class WorkingSetService:
             handling=new_edge.handling,
             created_by=principal.id,
             created_at=now,
+            datasets=into,
         )
 
         tx = await self._graph.begin_transaction()

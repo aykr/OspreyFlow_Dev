@@ -43,10 +43,10 @@ layer exists).
 
 **One dataset per case.** A case chooses exactly one dataset, a source or a composite
 (`set_for_case`). What a request under the case reads, its *read set* (`ids_of_case`), is that
-dataset (a composite as its members, then its own id) **plus** the case's own layer, and nothing
+dataset (a composite as its own id, then its members) **plus** the case's own layer, and nothing
 else. The order matters to writers that take the first (`dataset_scope.made_in`, the stamping
-graph): the first is the case's source, or a composite's first member, exactly as before this
-change (where writes go is the owner's: ADR-143 open question 1, ADR-099 Amendment 12 item 5). A
+graph): the first is the case's source, or a composite's own id (ADR-099 Amendment 14). The
+analyst's own writes name the layer instead (ADR-143 Amendment 1, `dataset_scope.analyst_layer`). A
 deployment made before this keeps reading every dataset a case named until
 `scripts.migrate_cases_to_one_dataset` places it; the one-row index on `investigation_datasets` is
 built once no case names two.
@@ -128,15 +128,16 @@ def as_its_case(layer: Dataset, others: Sequence[Dataset]) -> Dataset:
 
 def read_set(chosen: Sequence[Dataset], layer: str | None) -> list[str]:
     """ADR-143 decision 1: what a request under a case reads, from what the case chose and its
-    layer. A composite reads as its members then its own id (ADR-099 Amendment 12 item 3). A case
-    that has chosen nothing reads nothing, its layer included."""
+    layer. A composite reads as its own id then its members (ADR-099 Amendment 12 item 3), its
+    own id first because the first is where the case's writes go (Amendment 14). A case that has
+    chosen nothing reads nothing, its layer included."""
     if not chosen:
         return []
     ids: list[str] = []
     for dataset in chosen:
+        ids.append(dataset.id)
         if dataset.kind == COMPOSITE:
             ids.extend(dataset.members)
-        ids.append(dataset.id)
     if layer is not None:
         ids.append(layer)
     return list(dict.fromkeys(ids))

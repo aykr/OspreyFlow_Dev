@@ -40,6 +40,7 @@ from schemas.domain import (
     SourceRef,
 )
 
+from .dataset_scope import analyst_writes_into
 from .dossier import MessageSpan, get_document_view
 from .email_extraction import _edge_from_write, _node_from_write
 from .event_scope import CaseRecords, visible_ancestors, with_inherited
@@ -163,7 +164,8 @@ class DocumentReaderService:
         designation: Designation,
         principal: Principal,
     ) -> DesignationResult:
-        """Writes the marked words as an asserted node linked to the Document (ADR-098 decision 5).
+        """Writes the marked words as an asserted node linked to the Document (ADR-098 decision 5),
+        both in the case's analyst layer (ADR-143 Amendment 1), not in the Document's dataset.
         Only on a Document the analyst can read here (rule 4: one they cannot see refuses as one
         that does not exist), and only for words that are at that place in the text it shows."""
         if designation.entity_type not in DESIGNATABLE_TYPES:
@@ -182,6 +184,7 @@ class DocumentReaderService:
             excerpt_hash=hashlib.sha256(designation.text.encode("utf-8")).hexdigest(),
         )
         provenance = Provenance(state=ProvenanceState.ASSERTED, sources=[source], first_seen=now)
+        into = analyst_writes_into()
         node = NodeWrite(
             id=new_node_id(),
             type=designation.entity_type,
@@ -190,6 +193,7 @@ class DocumentReaderService:
             handling=document.handling,
             created_by=principal.id,
             created_at=now,
+            datasets=into,
         )
         mention = EdgeWrite(
             id=new_edge_id(),
@@ -200,6 +204,7 @@ class DocumentReaderService:
             handling=document.handling,
             created_by=principal.id,
             created_at=now,
+            datasets=into,
         )
         # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
         await self._working_set.ensure_room(investigation_id, [node.id], [mention.id], principal)

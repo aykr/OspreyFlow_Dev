@@ -101,7 +101,7 @@ async def test_a_layer_is_refused_as_a_missing_dataset_and_its_name_is_free(stor
     assert (await store.create(alice, taken)).name == taken
 
 
-async def test_a_case_reads_one_dataset_and_a_composite_reads_as_its_members(store) -> None:
+async def test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first(store) -> None:
     alice = _analyst()
     first, second = await store.create(alice, "First"), await store.create(alice, "Second")
     case = new_id()
@@ -110,7 +110,7 @@ async def test_a_case_reads_one_dataset_and_a_composite_reads_as_its_members(sto
     both = await store.create_composite(alice, "Both", [first.id, second.id])
     await store.set_for_case(case, [both.id], alice)
     layer = await store.layer_of_case(case)
-    assert await store.ids_of_case(case) == [first.id, second.id, both.id, layer]
+    assert await store.ids_of_case(case) == [both.id, first.id, second.id, layer]
     assert [d.id for d in await store.of_case(case, alice)] == [both.id]
 
 

@@ -13,8 +13,14 @@ added, a Studio load run from the case) must belong to one of the case's dataset
 vanish from the case as it is written. Rather than ask every write path to remember, the request's
 case is held in a context variable when its principal is scoped, and `DatasetStampingGraph`, the
 graph the Conduit's services are given, stamps any write that names no dataset with the case's
-first. A write that names its datasets keeps them. Outside a request (a background job, a script)
-nothing is stamped, and those writers name their own.
+first: its source, or a composite's own id (ADR-099 Amendment 14). A write that names its datasets
+keeps them. Outside a request (a background job, a script) nothing is stamped, and those writers
+name their own.
+
+**The analyst's own writes** (ADR-143 Amendment 1): an entity marked by hand and a manual `SAME_AS`
+or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`).
+Accepted question proposals, accepted extractions and loads name nothing, and so land in the
+source as before.
 """
 
 from __future__ import annotations
@@ -29,16 +35,31 @@ from schemas.domain import EdgeWrite, NodeId, NodeWrite, Principal
 from .datasets import DatasetStore
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
+_CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
 
 
-def set_case_datasets(datasets: Sequence[str] | None) -> None:
+def set_case_datasets(datasets: Sequence[str] | None, *, layer: str | None = None) -> None:
     """Called once per request, by `app.get_principal`: the datasets of the request's case, or
-    `None` outside a case."""
+    `None` outside a case, and the case's analyst layer when it has one in that read set."""
     _CASE_DATASETS.set(tuple(datasets) if datasets is not None else None)
+    _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
     return _CASE_DATASETS.get()
+
+
+def analyst_layer() -> str | None:
+    """The request's case's analyst layer, where the analyst's own writes go (ADR-143 Amendment 1);
+    `None` outside a case, or for a case with no layer yet, whose writes then go where every other
+    write of the case goes."""
+    return _CASE_LAYER.get()
+
+
+def analyst_writes_into() -> list[str]:
+    """The `datasets` an analyst's own write names: the layer, or none, to be stamped as usual."""
+    layer = analyst_layer()
+    return [layer] if layer is not None else []
 
 
 async def scope_to_case(
@@ -47,7 +68,8 @@ async def scope_to_case(
     """`principal`, reading only the datasets of `investigation_id`. Says nothing about whether the
     principal may open the case: that is the route's own level check."""
     datasets = await store.ids_of_case(investigation_id)
-    set_case_datasets(datasets)
+    layer = await store.layer_of_case(investigation_id) if datasets else None
+    set_case_datasets(datasets, layer=layer)
     return principal.model_copy(update={"datasets": datasets})
 
 
@@ -59,9 +81,10 @@ async def scope_to_dataset(
     principal: Principal, dataset_id: str, cases: _CasesOf, store: DatasetStore
 ) -> Principal | None:
     """`principal`, reading `dataset_id` alone, when one of the cases it holds a level in loads into
-    that dataset (the case's first, ADR-099 decision 6); otherwise `None`. The reach is exactly the
-    Studio's dataset switcher's (ADR-140 Amendment 2): a dataset a case of theirs only reads, and
-    another unit's, are not reached. Writes made through it are stamped with the dataset."""
+    that dataset (the case's first, ADR-099 decision 6; a composite's own id, Amendment 14);
+    otherwise `None`. The reach is exactly the Studio's dataset switcher's (ADR-140 Amendment 2): a
+    dataset a case of theirs only reads, and another unit's, are not reached. Writes made through it
+    are stamped with the dataset."""
     for case, _level in await cases.list_for(principal):
         ids = await store.ids_of_case(case.id)
         if ids and ids[0] == dataset_id:
@@ -267,5 +290,7 @@ __all__: Sequence[str] = (
     "case_datasets",
     "outside_any_case",
     "scope_to_case",
+    "analyst_layer",
+    "analyst_writes_into",
     "set_case_datasets",
 )

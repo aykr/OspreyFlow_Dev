@@ -143,6 +143,7 @@ def _node_from_write(write: NodeWrite) -> Node:
         provenance=write.provenance,
         handling=write.handling,
         audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+        datasets=list(write.datasets),
     )
 
 
@@ -157,6 +158,7 @@ def _edge_from_write(write: EdgeWrite) -> Edge:
         provenance=write.provenance,
         handling=write.handling,
         audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+        datasets=list(write.datasets),
     )
 
 

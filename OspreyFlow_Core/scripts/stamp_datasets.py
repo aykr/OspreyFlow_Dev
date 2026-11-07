@@ -355,9 +355,9 @@ async def stamp(
         edge_ids = sorted(await working_sets.edge_ids(case.id))
         if not held:
             chosen: list[str] = []
-            named = SEED_CASE_NAMES.get(case.name)
-            if named:
-                chosen.append(named)
+            seeded = SEED_CASE_NAMES.get(case.name)
+            if seeded:
+                chosen.append(seeded)
             for seed_id, prefix in SEED_LOAD_PREFIXES.items():
                 load_id = f"{prefix}:{case.id}"
                 for type_name in node_types:
@@ -466,8 +466,8 @@ async def stamp(
         for row in await sql.gremlin(f"g.{step}().values('datasets').unfold().groupCount()"):
             for dataset_id, count in (row or {}).items():
                 named[str(dataset_id)] = named.get(str(dataset_id), 0) + int(count)
-    held = await datasets.known(sorted(named))
-    report.unregistered = {d: n for d, n in sorted(named.items()) if d not in held}
+    registered = await datasets.known(sorted(named))
+    report.unregistered = {d: n for d, n in sorted(named.items()) if d not in registered}
     if report.unregistered:
         say("  naming a dataset nobody registered (no case can read them):")
         for dataset_id, count in report.unregistered.items():
@@ -507,12 +507,10 @@ async def place_records(
     """Step 6. A record whose case reads no dataset yet is left as it is, and counted with the
     unplaced; one that already has a dataset is never moved, so a second run changes nothing."""
     report = RecordsReport()
-    # The first of the case's read set (`DatasetStore.ids_of_case`): its dataset, or a composite's
-    # first member (ADR-099 Amendment 12; where a composite case's records go is the owner's).
+    # The first of the case's read set (`DatasetStore.ids_of_case`): its dataset, a composite's own
+    # id included (ADR-099 Amendment 14).
     first_dataset = (
-        "(SELECT COALESCE((SELECT m.member_id FROM composite_members m "
-        "WHERE m.composite_id = d.dataset_id ORDER BY m.position LIMIT 1), d.dataset_id) "
-        "FROM investigation_datasets d "
+        "(SELECT d.dataset_id FROM investigation_datasets d "
         "WHERE d.investigation_id = r.investigation_id ORDER BY d.position LIMIT 1)"
     )
     for table in (*_PLACED_BY_CASE, *_NO_CASE):

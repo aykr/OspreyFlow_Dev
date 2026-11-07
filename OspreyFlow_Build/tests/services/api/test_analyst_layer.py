@@ -70,8 +70,8 @@ def store() -> InMemoryDatasetStore:
 
 
 def assert_read_set(read: Sequence[str], *, source: Sequence[str], layer: str) -> None:
-    """The one check every read-set test makes: the source (or a composite's members and its own
-    id), then the case's own layer, and nothing else."""
+    """The one check every read-set test makes: the source (or a composite's own id and its
+    members, ADR-099 Amendment 14), then the case's own layer, and nothing else."""
     assert list(read) == [*source, layer]
 
 
@@ -122,7 +122,7 @@ async def test_the_read_set_check_fails_with_the_layer_missing_or_another_layer_
         assert_read_set(scoped.datasets or [], source=["enron"], layer=layer_a)
 
 
-async def test_a_composite_case_reads_its_members_its_own_id_and_its_layer(
+async def test_a_composite_case_reads_its_own_id_its_members_and_its_layer(
     store: InMemoryDatasetStore,
 ) -> None:
     both = await store.create_composite(ALICE, "Enron and Fixture", ["enron", "fixture"])
@@ -130,7 +130,7 @@ async def test_a_composite_case_reads_its_members_its_own_id_and_its_layer(
     layer = await store.layer_of_case("case-c")
     assert layer
     assert_read_set(
-        await store.ids_of_case("case-c"), source=["enron", "fixture", both.id], layer=layer
+        await store.ids_of_case("case-c"), source=[both.id, "enron", "fixture"], layer=layer
     )
     # A member-only case reads neither the other member nor the composite.
     await store.set_for_case("case-e", ["enron"], ALICE)
