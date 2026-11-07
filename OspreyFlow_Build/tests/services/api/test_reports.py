@@ -118,7 +118,8 @@ async def _write(graph: object, nodes: list[NodeWrite], edges: list[EdgeWrite] =
 async def _report(stores: dict[str, object], graph: object, case: str, **kw: object) -> ReportFigures:
     # ADR-126: a case's packs choose its figures; a case of none (POLE) unless the test says so.
     kw.setdefault("domains", [])
-    return await case_report(alerts=stores["alerts"], graph=graph, analytics=NO_TRANSACTIONS,
+    analytics = kw.pop("analytics", NO_TRANSACTIONS)
+    return await case_report(alerts=stores["alerts"], graph=graph, analytics=analytics,
                              held=stores["held"],  # type: ignore[arg-type]
                              compute=ComputeRustworkxAdapter(), investigation_id=case,
                              reader=READER, today=TODAY, ontology=ONTOLOGY,
@@ -160,6 +161,52 @@ async def test_a_hidden_alert_changes_no_figure(stores: dict[str, object]) -> No
         await stores["alerts"].save(_alert(hidden_case, [a, secret], "circular_flow"))  # type: ignore[attr-defined]
         assert _without_time(await _report(stores, graph, seen)) == _without_time(
             await _report(stores, graph, hidden_case))
+
+
+def _transaction(case: str, source: str, target: str, classification: str) -> Any:
+    from schemas.analytics import EventRecord
+
+    return EventRecord(event_id=new_id(), edge_id=new_edge_id(), edge_type="TRANSACTED", source_id=source,
+                       target_id=target, occurred_at=datetime.now(UTC), investigation_scope=case,
+                       handling=_handling(classification))  # fmt: skip
+
+
+def _duckdb() -> Any:
+    import duckdb
+
+    from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
+    from adapters.analytics_duckdb.schema import create_events_table
+
+    con = duckdb.connect(":memory:")
+    create_events_table(con)
+    return AnalyticsDuckDBAdapter(con, SCHEME)
+
+
+async def test_an_alert_over_a_transaction_the_reader_cannot_read_changes_no_figure(
+    stores: dict[str, object],
+) -> None:
+    """ADR-146 decision 10 (G2), inherited by the figures: two cases identical but for one alert
+    whose every node the reader can read and one of whose transactions (the real DuckDB adapter's
+    own refusal) they cannot. Each case also holds an alert over a transaction they can read, so
+    the transactions are read and counted. Red with the queue's check on nodes alone: the hidden
+    case counted one more."""
+    seen, hidden_case = f"case-{new_id()}", f"case-{new_id()}"
+    analytics = _duckdb()
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        a, b = await _write(graph, [_node("Person", {"family_name": "A"}), _node("Person", {"family_name": "B"})])
+        for case in (seen, hidden_case):
+            readable = _transaction(case, a, b, "OFFICIAL")
+            await analytics.load_events([readable])
+            await stores["alerts"].save(  # type: ignore[attr-defined]
+                _alert(case, [a, b], "structuring").model_copy(update={"event_ids": [readable.event_id]}))
+        secret = _transaction(hidden_case, a, b, "SECRET")
+        await analytics.load_events([secret])
+        await stores["alerts"].save(  # type: ignore[attr-defined]
+            _alert(hidden_case, [a, b], "circular_flow").model_copy(update={"event_ids": [secret.event_id]}))
+        shown = await _report(stores, graph, seen, analytics=analytics)
+        assert shown.alerts_total == 1
+        assert _without_time(shown) == _without_time(
+            await _report(stores, graph, hidden_case, analytics=analytics))
 
 
 async def test_held_figures_are_for_editors_only(stores: dict[str, object]) -> None:
@@ -317,6 +364,31 @@ async def _case_with_an_alert() -> str:
         await alerts.close()
 
 
+async def _case_with_an_alert_and_one_over_a_hidden_link() -> str:
+    """`_case_with_an_alert`'s case, with a second alert over two people the Viewer can read and
+    the SECRET link between them they cannot, in the running app's own database."""
+    case = await _case_with_an_alert()
+    alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, SCHEME)
+        await graph.apply_schema(load_default_ontology())
+        a, b = await _write(graph, [_node("Person", {"family_name": n}, dataset=dataset_for(AUTHOR))
+                                    for n in ("C", "D")])  # fmt: skip
+        tx = await graph.begin_transaction()
+        (link,) = await graph.upsert_edges(
+            [EdgeWrite(id=new_edge_id(), type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
+                       handling=_handling("SECRET"), created_by="test", created_at=datetime.now(UTC),
+                       datasets=[dataset_for(AUTHOR)])], tx)  # fmt: skip
+        await graph.commit_transaction(tx)
+        await alerts.save(_alert(case, [a, b], "circular_flow", dataset=dataset_for(AUTHOR))
+                          .model_copy(update={"edge_ids": [link]}))  # fmt: skip
+        return case
+    finally:
+        await client.aclose()
+        await alerts.close()
+
+
 @contextmanager
 def _app_client() -> Iterator[TestClient]:
     """The real app, driven as `test_the_view_and_the_feed_agree...` always has, with the `explore`
@@ -370,6 +442,25 @@ def test_the_view_and_the_feed_agree_and_the_feed_is_recorded(
         feeds = [e for e in ledger.json()["entries"] if e["investigation_id"] == case]
         assert [(e["artefact_kind"], e["principal_id"]) for e in feeds] == [("report_feed", VIEWER)] * 2, \
             "each feed read, JSON and CSV, is in the export ledger; the view is not"
+
+
+def test_the_feed_counts_no_alert_over_a_link_the_reader_cannot_read(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-146 decision 10 (G2), inherited by the reporting feed at its route: the case's second
+    alert rests on two people the Viewer can read and a SECRET link between them they cannot
+    (written through the app's own graph adapter); the feed counts the first alert alone, in JSON
+    and in CSV. Red with the queue's check on nodes alone: the feed said 2."""
+    key, _ = keypair
+    case = asyncio.run(_case_with_an_alert_and_one_over_a_hidden_link())
+    with _app_client() as client:
+        feed = client.get(f"/v1/investigations/{case}/reports/feed", headers=_as(key, VIEWER))
+        assert feed.status_code == 200, feed.text
+        assert feed.json()["alerts_total"] == 1
+        csv = client.get(f"/v1/investigations/{case}/reports/feed?format=csv", headers=_as(key, VIEWER))
+        assert "total,alerts,,,1" in csv.text.splitlines(), csv.text
+        raised = [int(r.split(",")[-1]) for r in csv.text.splitlines() if r.startswith("raised,")]
+        assert sum(raised) == 1 and "circular_flow" not in csv.text, csv.text
 
 
 # --- ADR-126: the POLE figures are the reader's own, at the route ------------------------------

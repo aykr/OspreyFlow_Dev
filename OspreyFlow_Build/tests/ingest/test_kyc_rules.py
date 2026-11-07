@@ -378,6 +378,56 @@ async def test_a_document_that_lapses_is_caught_by_the_daily_sweep_once(stores: 
         await stores["valkey"].delete("kyc:sweep:last")
 
 
+async def test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on(
+    stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """b21f316 live (L2.8): the sweep judges each lapsed customer and then raises; a load revert can
+    take back a link the finding cites in between. That alert is raised without its node (no node
+    rather than one marked by a guess), the next customer's alert with its node, and the sweep
+    finishes. Red with ed8b0aa's raise: `raise_committed` raised, and the whole day's sweep stopped
+    at the first customer (`kyc_sweep.sweep` catches nothing)."""
+    import services.api.kyc_sweep as kyc_sweep
+
+    await stores["valkey"].delete("kyc:sweep:last")
+    expiries = await KycExpiryStore.connect(PostgresConfig.from_env().dsn)
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(DocumentVerificationParams()))
+    try:
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            gate = _gate(stores, graph, [rule], case)
+            gate.expiries = expiries
+            lapses = datetime.now(UTC).date() + timedelta(days=30)
+            await _onboard(graph, gate, [
+                _application(name, owner_company="", document_title="Passport", document_kind="passport",
+                             document_expires=lapses.isoformat())
+                for name in ("Reverted Shipping Ltd", "Kept Haulage Ltd")
+            ])  # fmt: skip
+            reverted = await graph.find_node("Organisation", "name", "Reverted Shipping Ltd", OFFICER)
+            assert reverted is not None
+            judged = kyc_sweep.judge_lapsed
+            taken_back: list[str] = []
+
+            async def judge_then_revert(rule: Any, deployer: Any, customer_id: str, *rest: Any) -> Any:
+                found = await judged(rule, deployer, customer_id, *rest)
+                if customer_id == reverted.id:
+                    taken_back.extend(e for f in found for e in f.edge_ids)
+                    tx = await graph.begin_transaction()
+                    await graph.revert_elements([], taken_back, tx)
+                    await graph.commit_transaction(tx)
+                return found
+
+            monkeypatch.setattr(kyc_sweep, "judge_lapsed", judge_then_revert)
+            report = await _swept(stores, graph, expiries, lapses + timedelta(days=1))
+            mine = await _alerts(stores, case)
+            assert len(mine) == 2 and report.failures == [], "the sweep went on past the reverted link"
+            assert taken_back, "the reverted customer's finding cites its link"
+            node_of = {reverted.id in a.referent_node_ids: a.alert_node_id for a in mine}
+            assert node_of[True] is None and node_of[False] is not None
+    finally:
+        await expiries.close()
+        await stores["valkey"].delete("kyc:sweep:last")
+
+
 async def test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_read() -> None:
     """Every case above builds its `RuleGate` by hand, so none could see the run and release routes'
     own factory drop the screening list: found live, 11 October 2026 — the onboarding pipeline's
@@ -419,7 +469,7 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
         nair = next(a for a in alerts if "Nair" in (a.words or ""))
 
-        closed = await dispose(stores["alerts"], graph, case, petrov.id, OFFICER,
+        closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
                                disposition="true_positive", reason="Matches the list entry")  # fmt: skip
         why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
         matches = [e for e in why.edges if e.type == "SAME_AS"]
@@ -427,7 +477,7 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         assert matches[0].provenance.state is ProvenanceState.ASSERTED
         assert matches[0].provenance.confirmed_by == OFFICER.id
 
-        await dispose(stores["alerts"], graph, case, nair.id, OFFICER,
+        await dispose(stores["alerts"], graph, gate.analytics, case, nair.id, OFFICER,
                       disposition="false_positive", reason="A different person")  # fmt: skip
         nair_match = [e for e in await graph.edges_among(nair.referent_node_ids, OFFICER) if e.type == "SAME_AS"]
         assert [e.provenance.state for e in nair_match] == [ProvenanceState.INFERRED]
