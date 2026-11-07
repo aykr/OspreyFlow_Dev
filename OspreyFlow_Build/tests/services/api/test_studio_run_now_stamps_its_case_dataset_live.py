@@ -33,7 +33,7 @@ from services.api.studio_publish import run_published_recipe
 from starlette.datastructures import State
 
 from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
-from tests.ingest.test_row_keys import ONTOLOGY, SCHEME, _published_draft
+from tests.ingest.test_row_keys import ONTOLOGY, SCHEME
 from tests.services.api.test_snapshot_withdrawal_tells_nothing_live import (
     SOURCE,
     _write,
@@ -44,6 +44,7 @@ from tests.services.api.test_studio_load_stamps_its_case_dataset_live import (
     _case,
     _conduits_graph,
     _dataset,
+    fresh_published_draft,
     stores,  # noqa: F401 (the fixture)
 )
 
@@ -136,7 +137,7 @@ async def _told(
     *,
     beside: bool,
 ) -> dict[str, Any]:
-    repo, draft = _published_draft(tmp_path / ("beside" if beside else "alone"))
+    repo, draft = fresh_published_draft(tmp_path / ("beside" if beside else "alone"))
     _write(Path(draft.source_location), [PAIR])
     loader, other = _loader("loader"), _loader("other")
     ours = await _case(stores, loader, await _dataset(stores, loader))

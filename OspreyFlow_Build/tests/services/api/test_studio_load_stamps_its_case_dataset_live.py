@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -62,6 +62,21 @@ from tests.services.api.test_snapshot_withdrawal_tells_nothing_live import (
 PAIR = _row("SYN-1", "SYN-2", 1)
 ANOTHER_DAY = _row("SYN-1", "SYN-2", 2)
 VALUES = ("SYN-1", "SYN-2")
+
+
+def fresh_published_draft(path: Path) -> tuple[Path, Any]:
+    """`_published_draft`, under a recipe id of its own: the run ledger in Postgres outlives a test,
+    and every row-key question is per recipe. Under the shared id, one world would see another
+    world's rows, and every earlier session's, as "another case's"."""
+    from services.api.studio_publish import serialise_recipe
+    from services.ingest.recipe_loader import load_recipe
+
+    repo, draft = _published_draft(path)
+    fresh = f"private-cash-{new_id().lower()}"
+    recipe = load_recipe(repo / draft.git_path).model_copy(update={"id": fresh})
+    git_path = f"recipes/{fresh}.yaml"
+    (repo / git_path).write_text(serialise_recipe(recipe))
+    return repo, draft.model_copy(update={"recipe_id": fresh, "git_path": git_path})
 
 
 @pytest.fixture
@@ -178,7 +193,7 @@ class World:
 async def _in_a_world(
     stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
 ) -> tuple[World, Any]:
-    repo, draft = _published_draft(tmp_path / name)
+    repo, draft = fresh_published_draft(tmp_path / name)
     return World(stores, None, repo, draft, monkeypatch), arcadedb_adapter(
         ONTOLOGY, SCHEME
     )
@@ -259,3 +274,91 @@ async def test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_read
     assert third_read == {"nodes": [], "links": []}, (
         "another dataset's case reads none of it"
     )
+
+
+async def test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset(
+    stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scheduler itself (`ScheduleExecutor.tick` and `run_now`) over the real `check_case` and
+    `run`: `run` scopes nothing of its own, so each run's stamp is whatever its own `_owner` set
+    just before it (`_consider_slot`, `run_now`). Two pipelines due in one tick, in two cases on two
+    datasets, and a third run now in a third, each read their own link alone. Red if owners are
+    resolved for every recipe before any runs (`L1.2a_RED_RECORD.md`). A source refresh through
+    `case_for_dataset` is not driven here: this fixture's pipeline names no dataset, which a watch
+    refuses."""
+    from services.api.config import ValkeyConfig
+    from services.api.scheduler import ScheduleExecutor
+    from valkey.asyncio import Valkey
+
+    owners = [
+        Principal(id=f"owner-{new_id()}", clearance="SECRET", org_unit="unit-1",
+                  roles=["source_approver"])
+        for _ in range(3)
+    ]  # fmt: skip
+    cases = [await _case(stores, o, await _dataset(stores, o)) for o in owners]
+    set_at, slot = (
+        datetime(2026, 6, 1, 12, tzinfo=UTC),
+        datetime(2026, 6, 2, 5, tzinfo=UTC),
+    )
+    published = [fresh_published_draft(tmp_path / f"pipeline-{n}") for n in range(3)]
+    repos = {draft.recipe_id: repo for repo, draft in published}
+    drafts = [
+        draft.model_copy(update={
+            "schedule_cron": "0 6 * * *", "schedule_owner": o.id, "schedule_set_at": set_at,
+            "schedule_case": case,
+        })
+        for (_, draft), o, case in zip(published, owners, cases, strict=True)
+    ]  # fmt: skip
+    for draft in drafts:
+        _write(Path(draft.source_location), [PAIR])
+
+    async def execute(deps: Any, **kwargs: Any) -> Any:
+        recipe = kwargs["recipe"]
+        return await run_published_recipe(
+            recipe, kwargs["principal"], graph=deps.graph, ontology=ONTOLOGY, load_id=new_id(),
+            investigation_scope=kwargs["investigation_id"], repo_root=repos[recipe.recipe_id],
+            analytics=None, media=kwargs["media"], scheme=SCHEME, sink=kwargs["sink"],
+        )  # fmt: skip
+
+    monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+    monkeypatch.setattr(run_module, "resolve_source_handling", lambda draft: SOURCE)
+    monkeypatch.setattr(
+        "services.api.scheduler.resolve_source_handling", lambda draft: SOURCE
+    )
+
+    class Due:
+        async def scheduled(self) -> list[Any]:
+            return drafts[:2]
+
+        async def set_paused(self, *_: Any, **__: Any) -> None:
+            return None
+
+    async def resolve(owner_id: str) -> Principal:
+        return next(o for o in owners if o.id == owner_id)
+
+    async def notify(*_: Any) -> None:
+        return None
+
+    config = ValkeyConfig.from_env()
+    valkey = Valkey(host=config.host, port=config.port)
+    world = World(stores, None, published[0][0], drafts[0], monkeypatch)
+    try:
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as raw:
+            world.graph = await _conduits_graph(raw, stores)
+            closures = world.executor()
+            scheduler = ScheduleExecutor(
+                recipes=Due(), runs=stores.runs, valkey=valkey, scheme=SCHEME,  # type: ignore[arg-type]
+                resolve_owner=resolve, check_case=closures.check_case, run=closures.run,
+                notify=notify, watch_files=None, source_watches=None, case_for_dataset=None,
+            )  # fmt: skip
+            await scheduler.tick(slot + timedelta(seconds=20))
+            await scheduler.run_now(drafts[2])
+            reads = [
+                await world.reads(await closures.check_case(o, case))
+                for o, case in zip(owners, cases, strict=True)
+            ]
+    finally:
+        await valkey.aclose()
+
+    own = {"nodes": ["SYN-1", "SYN-2"], "links": [("TRANSACTED", "SYN-1", "SYN-2", 1)]}
+    assert reads == [own, own, own], "each run stamped with its own case's dataset"

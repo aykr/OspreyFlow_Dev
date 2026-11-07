@@ -82,7 +82,7 @@ from services.api.recipe_runs import RecipeRunStore
 from services.api.studio_publish import run_published_recipe
 
 from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
-from tests.ingest.test_row_keys import ONTOLOGY, ROWS, SCHEME, _published_draft, _row
+from tests.ingest.test_row_keys import ONTOLOGY, ROWS, SCHEME, _row
 
 SOURCE = Handling(
     classification="OFFICIAL",
@@ -222,11 +222,13 @@ async def _told(
     beside: bool,
 ) -> dict[str, Any]:
     """One world: what the loader is told of the second and third runs, and what they read."""
-    repo, draft = _published_draft(tmp_path / ("beside" if beside else "alone"))
     from tests.services.api.test_studio_load_stamps_its_case_dataset_live import (
         _case,
         _dataset,
+        fresh_published_draft,
     )
+
+    repo, draft = fresh_published_draft(tmp_path / ("beside" if beside else "alone"))
 
     dsn = PostgresConfig.from_env().dsn
     stores = SimpleNamespace(
