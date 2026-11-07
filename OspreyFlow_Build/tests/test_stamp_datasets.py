@@ -333,8 +333,8 @@ async def _composite_case(store: _Store, *, write: bool = True) -> tuple[StampRe
     fixture = await store.graph.get_node(store.ids["fixture"], EVERYONE)
     assert enron_a is not None and fixture is not None
     await store.working_sets.add_nodes(BOTH_CASE.id, [enron_a, fixture, _body(hand)])
-    # The seeds first, so the Enron and Fixture Corp people carry their datasets.
-    await store.run()
+    # One run, as on a deployment: step 2 stamps the seeds' people, so step 3 makes the case a
+    # composite before step 2a would derive the mark from its Document.
     report = await store.run(write=write, cases=[*CASES, BOTH_CASE])
     return report, hand.id
 
@@ -354,7 +354,8 @@ async def test_a_composite_cases_unplaced_elements_are_written_into_no_member(
     copies = await store.working_sets.source_fidelity_nodes(BOTH_CASE.id)
     assert copies[hand].datasets == []
     assert report.unplaced_in_composite == {BOTH_CASE.id: 1}
-    assert report.canvas_stamped == 0
+    # Only the Enron case's own mark is stamped from a canvas, none of the composite case's.
+    assert report.canvas_stamped == 1 and await store.datasets_of("marked") == ["enron"]
 
 
 async def test_the_derivation_check_fails_with_it_alone_removed(

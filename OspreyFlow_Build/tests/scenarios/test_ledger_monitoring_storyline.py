@@ -244,6 +244,9 @@ class _Datasets:
     async def layer_of_case(self, investigation_id: str) -> str | None:
         return None
 
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        return None  # not a branch
+
     async def chosen_of_case(self, investigation_id: str) -> list[object]:
         return []  # a source, never a composite
 
