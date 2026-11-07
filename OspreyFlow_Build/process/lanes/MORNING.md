@@ -8,9 +8,9 @@ You allowed L1.2, L2.2 and the docs lane's first brief, and merging as overnight
 
 | Lane · step | State at 08:40 | What it needs |
 | --- | --- | --- |
-| studio · L1.2 | plan written; **three questions for you, in its window only** | your answers, there |
-| glass · L2.2 | plan written; **three questions for you, in its window only** (the place rule against role bundles; where *Proposed types* lives; who owns `App.tsx` and the rights) | your answers, there |
-| docs · website | done; reviewed and **not merge-ready**: its friction row has 4 cells (the assembler refuses it); 'a reviewed load' contradicts ADR-143; the two new pages are missing from `publish_pages.sh`, so they would 404; nobody has looked at them in a browser | type `read your nudge` in its window |
+| studio · L1.2 | you answered Q1–Q3 (a, a, a) at about 09:20; building; ADR-140 Amendment 8 reserved (`6b3895b`) | its report when it is ready |
+| glass · L2.2 | you chose 'Rights decide' and narrowing the crossing rights; building. The narrowing changes ADR-112's bundles, so it needs a reserved amendment (I check at review) | its report when it is ready |
+| docs · website | **merged locally** as `fb03eae` after review fixes and a rebase; session closed. Your rulings: a section turns 'Built' as soon as its feature merges, in text only; i2 is named once the import's ADR is accepted | none. The publish script still does not copy the two new pages (README.md says so) |
 | case · L3.1 | says every review item is built; wider live run under the lease | my second review, then yours. Not merged |
 
 Nothing merged since glass, and nothing pushed. A lane that asks you a question only in its window, rather than in `REPORT.md` as Prompt L says, cannot be answered from here (O3).
