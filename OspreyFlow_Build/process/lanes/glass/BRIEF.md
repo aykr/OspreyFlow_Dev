@@ -1,36 +1,37 @@
-# Glass lane · brief L2.3, part 2 · build variant B of the case screen's lightening
+# Glass lane · brief L2.4, part 1 · Admin regrouped into sections
 
-Written by the orchestrator, 7 November 2026. The owner chose **variant B** from part 1's prototype round
-(`process/lanes/glass/l2.3/`, the harness `keyboard/case-screen-options-harness.html?variant=b`). Opus,
-medium. Size M.
+Written by the orchestrator, 7 November 2026, after L2.3's merge (`d4fe5e5`). Opus, medium. Size M. Part 2
+(the Datasets section's *Highest marking it may hold* and *Promotion of drawn items* columns, ADR-145
+decision 8) waits for Lane 3's L3.1, whose fields it reads; I will tell you when it lands.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (13 above all); ADR-145 decision 4 and N4; ADR-085, ADR-096 (the
-panels' order and folding); `spec/02_GLASS_FRONTEND.md` (the case screen, the rail, the view switch).
-Reserved for you: **ADR-145 Amendment 2**, which records variant B (heading
-`### ADR-145, Amendment 2 (7 November 2026) — …`).
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4 and 13 above all); ADR-145 decisions 5 and 13, A1, O4;
+ADR-110 Amendments 1 and 14 (Admin as a place, in sections; each section keeps the right its tab
+required); ADR-112 (rights); `spec/02_GLASS_FRONTEND.md`'s Admin area; the navigation prototype (*Signed
+in as* Administrator).
 
-**Build variant B in the product** (`src/**`), as the harness shows it:
-1. The right-hand column opens with the Inspector only. Metrics and the Query builder are one click away,
-   keeping their order and folding.
-2. The rail keeps Cases and Explore. Ownership, History, Questions and Dashboards go under the rail's
-   ⋯ More. Monitoring stays reachable from the banner's sections.
-3. The view switch keeps Graph and Map, with Matrix and Reports under More views.
-4. The GOV.UK banner's stray leading "·" is fixed (`shell/ContextBanner.tsx`).
-All of this in dark, light and GOV.UK.
+**Build.** The Admin place as a side list of sections, each shown only to a holder of its right (ADR-145
+decision 5):
+- **People:** People and roles; Roles; Dashboard identities.
+- **Data:** Datasets; Connections.
+- **Running:** Operations; System.
+- **Policies:** Grading scheme; Approval rights; Uploads.
+- **Audit.**
+- **Demo packs.**
+
+Today's tabs move into their sections unchanged. A section with nothing built yet (Roles, Grading
+scheme, Uploads, Audit) is shown as a "coming" placeholder, and only to holders of its right. Under the
+GOV.UK brand the list is a GOV.UK side navigation (decision 13).
 
 **Tests first.**
-- A keyboard case for every new or moved action: More on the rail, each destination under it, More
-  views, and the column's one-click panels. Each is shown red with its handler removed. Send me the new
-  registry ids as a diff; I land them with your merge.
-- Every existing keyboard case that reaches a moved destination is updated, not deleted.
-- Axe in all three themes.
-- A count test: the case screen has 24 Tab stops before the canvas (red if a control returns), and the
-  column shows 8 parts.
+- Every section shows only with its right, **and** each section's routes refuse a principal without it.
+  The test is red with the routes' check removed; hiding alone must not pass (rule 3). Take the place
+  test's approach from L2.2: the routes' full checks, not a hand-kept list.
+- Keyboard cases in `keyboard/admin.spec.ts` for moving between sections, each red with its handler
+  removed (rule 13). Send me the registry ids as a diff; I land them with your merge.
+- Axe in dark, light and GOV.UK.
 
-**Files.** The Glass lane's map plus `apps/workspace/src/canvas/**`'s panel host only if the column lives
-there. Tell me if so; I ratify at merge. `canvas/**` is Lane 3's, so keep to the column's host.
+**Files.** The Glass lane's map (`admin/**`, `shell/**`). `spec/02` in the same commits.
 
-**Exit.** Variant B in the product; the keyboard, axe and count tests green; `spec/02` and ADR-145
-Amendment 2 written; DEMO_GUIDE chapters that name a moved rail entry updated (text only); a friction
-fragment. **Report** (at most twenty lines): the exit, the proving tests, the commits, one hand check
-(full commands and where to click, default and GOV.UK). Owner questions go to me by message.
+**Exit.** Every section shows only with its right; `keyboard/admin.spec.ts` and axe green; `spec/02`
+updated; a friction fragment. **Report** (at most twenty lines), with questions for the owner sent to me
+by message.

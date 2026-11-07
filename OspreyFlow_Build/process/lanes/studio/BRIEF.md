@@ -5,6 +5,9 @@ is on `lane/studio` at `ef9b35d`; its `REPORT.md` items 1–10 say where everyth
 say where Part B starts. Read them first. Opus, medium. Parts in order; message the orchestrator
 (`ospreyflow-7e`) ready-to-merge after each.
 
+**First:** `git rebase main`. `06_DECISIONS.md` will conflict where your ADR-110 Amendment 15 and main's newer
+amendments both append at the end of the file. Keep main's text whole and put your rewritten Amendment 15 after it.
+
 **Binds.** `process/CLAUDE.md` rules 1–15 (rule 3 above all; rule 14 with the leased throwaway stack,
 `SESSIONS_RUNBOOK.md` §4); ADR-110 Amendments 6–13; `spec/09_INGEST_STUDIO.md`.
 
