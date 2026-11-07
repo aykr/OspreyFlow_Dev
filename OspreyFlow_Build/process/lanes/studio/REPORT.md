@@ -1,19 +1,25 @@
-# studio lane · report · L1.1 (make ci green), 6 November 2026
+# studio lane · report · L1.2 (phase 6: the canvas as editor, the Map editor, guided mode), 7 November 2026
 
-**`make ci` stays red after this merge.** Four things still fail: conformance's r1/r14 (item 7), the two trivy image jobs (item 7a), and the six live files, which no CI job has run yet (item 4). This lane's own gates (ruff, mypy) are green.
-
-1. **Met: `ruff check .` is clean** in `OspreyFlow_Core` (`b4e5bea`). The cause was I001, import order, not unused imports: `TRUST_EMAIL_*` is used at `main.py:891`.
-2. **Met: `mypy packages services harness` is clean** (373 files). Both faults were typing gaps, not real faults. The geometric `_offset`'s only caller ran at import, before the rebind; `apply.py`'s env `held` is last used before its rebind. So no red-first test was needed. Fixes: `_fraction_of` (`b39ae1f`) and `files_held` (`bcf5e25`).
-3. **Met: the touched tests are green.** 228 passed, 10 skipped: `tests/test_pid_*`, `tests/demo_fixtures`, `harness/test_store_volumes`, `test_update_apply`, `test_apply_*`, `cli/test_doctor`, `test_apply_verb`, `test_install`.
-4. **Open (owner's file): `make -C OspreyFlow_Build test-file-coverage-check`.** It flags six unwired live files, not one: `test_pin_calls_refresh_live`, `test_row_key_withdrawal_ledger`, `test_run_metering_ledger`, `test_source_refresh_{incremental,snapshot}_live` and `test_source_watermark_ledger`. All six use the throwaway Postgres; three (`test_pin_calls_refresh_live`, `test_source_refresh_{incremental,snapshot}_live`) also need ArcadeDB. None of the six has run in CI yet, so their first `conformance` run is untested. The fix is the diff below.
-5. **Met: the friction fragment** is `process/friction/2026-11-06-studio-make-ci-green.md`.
-6. **Request (diff):** `OspreyFlow_Build/process/lanes/studio/L1.1_ci_makefile.diff`. Apply it from the repository root with `git apply OspreyFlow_Build/process/lanes/studio/L1.1_ci_makefile.diff`. It adds the six files to `ci.yml`'s `conformance` job (which has Postgres, ArcadeDB, ClickHouse and Valkey) after `test_load_checks.py`, to the `test` job's ignores, and to the `Makefile`'s `test:` ignores. The gate fails on today's files and passes on the patched copies; `git apply --check` is clean.
-7. **Request (found, not fixed; outside the brief):** `tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval` and `test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval` were already red at `83ff99e`, this lane's base, with or without this lane's change. Since `2f24d85` (3 November) a date gets a time of day, but both tests still expect midnight (`_start_of`). They run in the live `conformance` job, so the full `make ci` will be red there too. Suggest a nudge to this lane: should the assertion follow ADR-120 Amendment 18?
-7a. **Request (from your 22:41 message; outside the files I may touch, and not a pin bump):**
-- **`trivy-image-harness`** (golang.org/x/net in the compose plugin, CVE-2026-78661). `harness/Dockerfile:82` copies the plugin from the floating `docker:29-cli`, and the build already uses `--pull`, so there's no pin to move. Proposed fix: move `FROM` to the first `docker:*-cli` whose compose is built against x/net 0.62.0 or later, checked with `trivy image` on the bare tag first, as round 05 did. Failing that, add a dated `.trivyignore` entry until upstream ships.
-- **`trivy-image-superset`** (Debian 12 `apt`/`libapt-pkg6.0`, CVE-2026-109518, fixed in 2.6.2). `deploy/superset/Dockerfile:14` already runs `apt-get upgrade`, so a rebuild picks up 2.6.2 once bookworm-security has it. Proposed fix: rebuild with `--no-cache` to rule out a cached layer. If 2.6.2 isn't in bookworm yet, add a dated `.trivyignore` entry, or move the `FROM` digest to a newer `apache/superset` image.
-8. **Noted:** `ruff format --check` would reformat `main.py` and `pid_plan.py`, as it already did before this step. CI doesn't run `ruff format`, so I left both alone.
-9. **Commits:** `dbc3956`, `4f958f5`, `e9b8b31` (rebased onto `9d00433`), plus a docs commit for this report, the fragment and the diff.
-10. **Questions for the owner:** none.
-11. **Hand check for the owner:** after applying the diff, run `make -C OspreyFlow_Build test-file-coverage-check` from the repository root. It should print "733 test file(s), 0 allowlisted, no new drift."
-12. **Running:** nothing of mine. No dev stack, no lease, no background jobs.
+1. **Met in the harness, not yet walked live: the reports pipeline built from scratch in guided mode.** Proved by keys alone in `keyboard/ingest-studio.spec.ts`, "the reports pipeline is built from scratch in guided mode by keyboard". The walk is: name it, choose its registered source, Preview the rows, map a report to a Document with the keyboard bind, Test, then Deploy as v1. Expert mode opens the same drawer from the canvas ("a step's drawer opens beside the canvas…").
+2. **Met: `MapScreen` tests migrated and green.** The five files are now `map/MapEditor.*.test.tsx`, with the same assertions run against the Map editor. Vitest passes 2601 of 2602. The one failure is `matrix/MatrixView.budget.test.tsx`, a timing budget that took 3.9 s against 2.5 s under full-suite load; it passes alone, and this branch doesn't touch matrix.
+3. **Met: keyboard green.** Full suite 539/539. There are ten new cases, each shown red with its handler removed, plus a planted lost save of the mode choice.
+4. **Met: axe green.** Full suite 352/352. There are eight new Studio states, each scanned in dark, light and GOV.UK.
+   - The scan found a real defect: bound Map columns were faded below 4.5:1 contrast. They are now outlined and labelled "bound".
+5. **Met: Preview access test (rule 4).** `tests/ingest/test_node_preview_access.py` was shown red on each read path by switching off that path's masking.
+6. **Met: spec 09 updated.** §1.0 and §4 are updated, and the §4 keyboard-bind gap is closed. ADR-140 Amendment 8 is written and its reservation is marked `written`.
+7. **Met: friction fragment.** `process/friction/2026-11-07-studio-phase-6-canvas.md`.
+8. **Left:**
+   - *Show YAML* is not built.
+   - No live walk was done against the dev stack (no lease taken).
+   - The SAME_AS score waits for phase 8 (your Q2 a).
+   - The mode is kept per browser (your Q1 a).
+9. **Commits** (11, on `13a77d1`): `65785b4` (the access test), `b8a3f78` (Preview and the mode preference), `d75c09b` (the drawer and guided list), `ba5d0b5` (the Map strip and keyboard bind), `440a1bc` (the fixes), `795b0f3` (the test migration), `0b9aafe` (the keyboard and axe cases), `e83a35e` (spec 09), `b04566d` (Amendment 8), `bbb844f` (the friction row), and this report.
+10. **Request: `keyboard/actionRegistry.ts`.** Apply `process/lanes/studio/L1.2_action_registry.diff` with `git apply OspreyFlow_Build/process/lanes/studio/L1.2_action_registry.diff` from the repository root. It adds the ten ids; with them in, `ingest-studio.spec.ts` passes 26/26.
+11. **Request: `OspreyFlow_Core/DEMO_GUIDE.md` chapter 4** (not this lane's file). It should say that the pipeline opens in guided mode, that Test and Deploy open in the drawer, and that Map has a strip and *Choose* / *Bind here*.
+12. **Questions for the owner:** none.
+13. **Hand check, no stack needed.** From the repository root: `cd OspreyFlow_Core/apps/workspace && npx vite --port 5185`.
+    - Open http://localhost:5185/keyboard/ingest-studio-harness.html. Click *Open Visit bookings*, then *Source: Call log*, *Preview* and *Run preview*.
+    - Then *Map: Map*, *Open map editor*, *Choose* on "called", *Entity 1*, and *Bind called here: name*.
+    - Then *Expert* and *Test*.
+    - Repeat with `?brand=govuk` added to the URL.
+14. **Running:** nothing of mine. No dev stack, no lease, no background jobs.
