@@ -1,4 +1,4 @@
-# Case lane · L3.1 · report (7 November 2026, after the final review, the branch ruling and the rule-14 breach)
+# Case lane · L3.1 · report (7 November 2026, after the final review, the branch ruling, the rule-14 breach and the leased re-run)
 
 **Phase 5's exit moved to L3.1b, by the owner's ruling.** The target-model half (`TargetModel`, reference lists, ADR-126 derived, the domain-model node) is L3.1b's. Writing into a composite is a later step of its own. Below is what L3.1 meets.
 
@@ -55,7 +55,25 @@
     - the place scan took the Studio's dataset base for a call to the composites route;
     - a review fake lacked `get_nodes`;
     - the statelessness case named no dataset.
-- **The re-run under the next lease: PENDING.** It covers the 16 files, everything from `services/api/test_investigation_levels.py` on, and the 24, all with `-rf`. A throwaway ClickHouse runs on 18123 for it. Each failure shared with main is shown on main's code under the same lease; event_frequency's 30-day RANGE overflow is main's.
+- **The targeted re-run, after the guard fix (b232abf), in two parts.** Each part ran under its own lease `case`. A throwaway `osprey-test-clickhouse` ran on 127.0.0.1:18123 the Makefile's way and was removed after. Before each start I checked lsof and the pytest's own environment. Each failure was then run on main's code under the same lease.
+  - **Part 1**, lease taken 22:12:00Z, at d02032c (on main b82a88f). It covered the 16 files and ran into `services/api`: 22:13:20Z until one SIGINT at 22:29:12Z. 1,920 tests ran: 1,901 passed and 19 failed.
+    - On main, 22:29:29–22:35:20Z, 17 of the 19 fail too:
+      - 1 ClickHouse case: event_frequency's 30-day RANGE overflow, main's. The other 118 ClickHouse cases pass.
+      - 4 model_litellm and 4 recognise_stanza cases: no model services on the test stack.
+      - golden recall, 1 of `test_kyc_rules.py`, pid recipes r1 and r14, typology rule routes, and the phase 6, phase 8 and witness-statement scenarios.
+    - The other 2:
+      - the local `osprey.yaml`, which is not code;
+      - a watch-route test's expired token ("Signature has expired", in a long test). Alone, under the same lease (22:35:34–22:40:32Z), it passed 1/1.
+    - Released 22:40:43Z.
+  - **Part 2**, lease taken 23:00:23Z, at 437a70e (on main ff6e7a2). It covered everything from `tests/services/api/test_investigation_levels.py` on, 289 files, so it also re-measures runs (a)–(e) below: 23:00:42–23:33:48Z, 12 failed, 4,586 passed, 10 skipped.
+    - On main, 23:34:01–23:34:32Z, 5 of the 12 fail too: the admin guide's appendix and 4 in `test_media_blob.py`.
+    - The other 7:
+      - **3 were mine**, fixed in 6444033 and green under the same lease (23:35:35–23:36:01Z, 36/36 with their files): the screening-list routes' dataset fake lacked what `scope_to_case` asks (2), and the ClickHouse statelessness case named no dataset (1).
+      - This report's own citation (fixed here).
+      - The CI wiring of this lane's five live files, which `ci-wiring.patch` covers (the orchestrator's): `test_trigger_layers.py`, `test_analyst_layer_store.py`, `test_case_writes_store.py`, `test_composite_writes_live.py` and `test_migrate_cases_to_one_dataset_store.py`.
+      - `test_layout`: this worktree's local, gitignored `graphify-out` at the root.
+      - `test_studio_publish_routes`' pipeline-runner case ("pool is closed"). It passed alone on the branch under the same lease, and on main. It depends on order in a long run, and the cause is not found.
+    - Released 23:36:13Z.
 
 ## The rule-14 breach (7 November, 20:49–21:40Z)
 
@@ -72,7 +90,7 @@
   - A runner script never sets the lane or a leased port: `pt.sh` has neither now, and the rehearsal script is deleted. I export them by hand, under the lease.
   - Before a stack-free run, I check the run's own environment, not the script's text.
   - The orchestrator is fixing the guard, as its file. It will hand itself to every Python child, turn uvloop off under it, and guard 18123. I'll rebase before the next run.
-  - The figures from (a)–(e) measure nothing of the stack. Each is re-run under my own lease after the guard lands, `test_statelessness` and the `services/api` run included.
+  - The figures from (a)–(e) measure nothing of the stack. They are replaced by the two-part re-run above, under my own lease after the guard landed. `test_statelessness` and `services/api` from `test_investigation_levels.py` on are in part 2; `services/api` before it was measured in the leased whole run from 19:02:30Z.
 
 ## The lane's reviewer (lane-reviewer, on this branch before ready-to-merge)
 
@@ -81,9 +99,9 @@ Each finding was fixed, red first:
 - a mark was derived into a member before the stamping knew its case was a composite: the stamping now places every case before it derives;
 - the route census listed six routes of twenty: it now finds them by discovery (`LOADING_PREFIXES`, `NOT_BY_THE_ROUTE`).
 
-## Commits (on main at 15de302)
+## Commits (on main at ff6e7a2)
 
-fc9dea3 396f62b 7c85971 4b49e48 337285a c5c5594 6776fb9 8b391ff a5c8188 1c1e16e 9703550 94dbc2b 269d11c 50a69e7 c14565b 77cba95 46950f1 27e4239 4b23395 31ba22b f83e05d c67ca63 91364b5 ae89567 601490e f01a05c 85229b9 cb06486 98c6bee 8d080aa 9a34b24 735b7b8 83b905c 94ffe7b c385e3a 0ac4093 033e14a 7553b7b 4b97571 2a4c936 8642f84 7b88eb8 6cd3b57 8d04929 0802768 081da67 adabe54 f6bba10 c631875 ed83cf9 9e516f7 449dead 19bffba 4a453a8 cf6bc5a bff988e, and this report with the friction row.
+fc9dea3 396f62b 7c85971 4b49e48 337285a c5c5594 6776fb9 8b391ff a5c8188 1c1e16e 9703550 94dbc2b 269d11c 50a69e7 c14565b 77cba95 46950f1 27e4239 4b23395 31ba22b f83e05d c67ca63 91364b5 ae89567 601490e f01a05c 85229b9 cb06486 98c6bee 8d080aa 9a34b24 735b7b8 83b905c 94ffe7b c385e3a 0ac4093 033e14a 7553b7b 4b97571 2a4c936 8642f84 7b88eb8 6cd3b57 8d04929 0802768 081da67 adabe54 f6bba10 c631875 ed83cf9 9e516f7 449dead 19bffba 4a453a8 cf6bc5a bff988e 6444033, as rebased onto main ff6e7a2 (the hashes before the rebases are the ones cited above; `git log main..lane/case` has the current ones), and this report with the friction row.
 
 ## With the orchestrator
 
@@ -101,7 +119,7 @@ fc9dea3 396f62b 7c85971 4b49e48 337285a c5c5594 6776fb9 8b391ff a5c8188 1c1e16e 
 - Other phases' tests:
   - `scenarios/test_phase{3_working_set,6a_glass_surfaces,7_stage6c_watch_routes,8_exit_criterion_end_to_end,8_exit_over_the_wire}.py` and `scenarios/test_ledger_monitoring_storyline.py`;
   - `resolve/test_trigger.py`;
-  - `services/api/test_{app,case_domains,change_stream,dataset_scope,datasets,datasets_store,document_reader,email_extraction,evaluation,explore_routes,add_by_identifiers_route,sources_withheld_routes,screening_refresh,place_routes,route_rights,review_routes,statelessness}.py`;
+  - `services/api/test_{app,case_domains,change_stream,dataset_scope,datasets,datasets_store,document_reader,email_extraction,evaluation,explore_routes,add_by_identifiers_route,sources_withheld_routes,screening_refresh,screening_list_routes,place_routes,route_rights,review_routes,statelessness,statelessness_clickhouse}.py`;
   - `working_set/test_{branch_by_filter,delta_projection,manual_resolution,manual_resolution_access_control,manual_assertion_uses_the_stores_link_id}.py`;
   - `test_{case_seed,stamp_datasets,stamp_records}.py`.
 - New tests: `test_composite_schedules.py`, `test_composite_monitors.py` and `test_branch_layer.py`.
