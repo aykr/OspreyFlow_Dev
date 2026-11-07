@@ -1,21 +1,23 @@
 # Morning, 7 November 2026
 
-Written by the orchestrator at 00:05, while still watching. Nothing has been pushed. Nothing has been merged into local `main`, which is at `d319175`.
+Written by the orchestrator at 00:05 and updated at 05:45. Nothing has been pushed. Local `main` holds one merge, studio's L1.1 (`32c0f36`); the friction rows are assembled at `4124466`.
 
 ## Lanes
 
 | Lane · step | State | Commits on `lane/<x>` | What proves it | Left |
 | --- | --- | --- | --- | --- |
-| studio · L1.1 | ready to merge, **not rebased** | `b4e5bea` `b39ae1f` `bcf5e25` `95bee33` `6b30d7f` | `ruff check .` and mypy are clean; 228 touched tests pass. The lane-reviewer passed it. | Your `ci.yml`/Makefile diff. Two r1/r14 PID tests have been red since `2f24d85`. The two trivy findings. |
+| studio · L1.1 | **merged locally** as `32c0f36`; session closed by you | `dbc3956` `4f958f5` `e9b8b31` (after the rebase) | ruff and mypy clean; reviewed; `make ci` on the merge is red on 3 gates, down from 5 (below) | your diff; r1/r14 PID tests red since `2f24d85`; the two trivy findings |
 | glass · L2.1 | ready to merge, **not rebased**; 3 review fixes not yet made | `fec0e07` `b98668a` | the map, `spec/glass_redesign/ALERTS_GAP_MAP.md` | The reviewer's three must-fix items: K10's schedule requirement, the inbox's `reach_clause`, the gate claim. ADR-146 after your answers. |
 | case · L3.1 | waiting for you; **not to be merged tonight** (your rule 4) | `774388a` `3f1bc01` `2bb69c9` `b3906c1` `8708ddd` | `test_analyst_layer.py` (conformance: case B unchanged, under the case lease) and the read-set and store tests, each shown red first. 477 of 478 pass; the one failure was already failing at `83ff99e`. | Phase 5's target-model half (Q4 below); out-of-map files to ratify; 5 minor open items. |
 | docs | not opened (P7: after the first merge) | none | none | none |
 
-**Why nothing merged:** studio and glass both finished their turn before reading my nudges, and an idle session never beats, so neither has seen "rebase on main". To unblock them, type `read your nudge` in the studio and glass windows. Glass will then make its three fixes.
+**Since 05:30:** you closed glass and I reopened it on Prompt R. Its first open swallowed the nudge (an `open`/`resume` defect, fixed red first at `f93e1df`), so I sent it again, and glass is now making the three review fixes before it rebases. Studio rebased once you woke it, and was merged.
 
 **Waiting:** I cannot see the windows. No lane reported a permission prompt, and none shows the signs of one: every lane is idle at its prompt, not mid-tool. Case was silent for 31 minutes while its live suite ran; that was a real run, not a stall.
 
 ## make ci
+
+**On the merge `32c0f36`** (full run, 05:38–05:42): red on `trivy-image-harness`, `trivy-image-superset` and `test-file-coverage-check` only. ruff and mypy are green. That is three of the baseline's five, and nothing new.
 
 The full run is at `54fbd3d`, with downloads. It has five failures, which are the baseline:
 1. Core `lint` (ruff I001)
