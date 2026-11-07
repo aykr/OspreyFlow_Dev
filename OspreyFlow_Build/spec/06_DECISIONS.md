@@ -26623,8 +26623,8 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    model or pipeline output that a person confirmed (rule 5), and belong with the data they came from.
 3. **How:** the request's case's layer is held beside its read set when the principal is scoped
    (`dataset_scope.analyst_layer`); the two writers in item 1 name it on what they write. Every other
-   write names no dataset and is stamped with the case's first, exactly as before (ADR-099 Amendment
-   14 for a composite). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
+   write names no dataset and is stamped with the case's first, exactly as before; in a case reading
+   a composite every other write is refused (ADR-099 Amendments 14 and 15). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
    reached) is given one by the writer of item 1's data, inside the route and so only after its
    level check (never when a request is merely scoped, which comes first and writes nothing), and
    the data goes there: it never falls back to the source (the owner's ruling of 7 November 2026 on
@@ -26654,77 +26654,55 @@ site, under a principal scoped by `scope_to_case`; the branch through the branch
 `tests/services/api/test_case_writes_store.py` (item 5, Postgres, with a member of another case of
 the same unit) and `tests/resolve/test_trigger_layers.py` (item 6, ArcadeDB).
 
-### ADR-099, Amendment 14 (7 November 2026) — data added to a case reading a composite is written under the composite's own id
+### ADR-099, Amendment 14 (7 November 2026) — a case reading a composite adds no data: a composite is read-only for now
 
-Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026). Decision 6 reads: "Data
-added to a case joins its dataset; for a case reading a composite, the composite's own id." A
-composite's members are never written by a case reading the composite: a write naming a node already
-in a member becomes a new node of the composite (Amendment 15), so no case reading only a member sees
-what the composite case added. The read set (`DatasetStore.ids_of_case`) lists a
-composite's own id **first**, then its members, then the case's layer; the first is what every writer
-naming no dataset is stamped with (the stamping graph, `dataset_scope.made_in` for records made in the
-case, and `scripts.stamp_datasets` for records placed afterwards), and what the Studio's dataset reach
-(`scope_to_dataset`) matches. An entity marked by hand and a manual link go to the layer instead (ADR-143
-Amendment 1). Amendment 12 item 4 (entity resolution across members writing into the composite) is
-unchanged and still to be built. Proved by `test_a_composite_cases_write_lands_under_the_composite_id`.
+Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026, first that such data be
+written under the composite's own id, then, after the L3.1 reviews, that composites are read-only for
+now). Decision 6 reads: "Data added to a case joins its dataset; a case reading a composite adds
+none." A case reading a composite reads its members (the read set, `DatasetStore.ids_of_case`, lists
+the composite's own id, then its members, then the case's layer) and keeps its own analyst layer
+(ADR-143 Amendment 1), but nothing is loaded, extracted, uploaded, accepted or corrected into it or
+its members (Amendment 15). Writing into a composite becomes its own later step, with its own
+decision. Amendment 12 item 4 (entity resolution across members writing into the composite) waits
+for that step. Proved by `tests/services/api/test_composite_read_only.py`.
 
-### ADR-099, Amendment 15 (7 November 2026) — a composite case's write to a node already in a member becomes a new node in the composite, linked by SAME_AS; no member changes
+### ADR-099, Amendment 15 (7 November 2026) — in a case reading a composite, only its analyst layer is written; every other write is refused in words
 
-Status: accepted; the owner's ruling on the L3.1 review's finding 5 (7 November 2026). The review
-measured that a write under the composite's id naming an element already in a member was merged into
-that element (its properties become the latest write's), so a case reading only the member saw the
-change. Now such a write is written as a **new** node of the composite, with a `SAME_AS` (score 1.0,
-asserted, in the composite) from it to the member's node; the member's node is not written (rule 6:
-entities are never merged in storage). It is decided in the Conduit's write path, the stamping graph
-(`DatasetStampingGraph._kept_from_members`), asked as the request's own principal (the composite and
-its members, under its handling), so the answer tells the caller nothing it cannot already read. A
-new link between member nodes was already the composite's alone.
+Status: accepted; the owner's ruling of 7 November 2026, after the L3.1 reviews found one write path
+after another by which a composite case changed its members (a write merged into a member's node; a
+correction; a picture; an extraction's accept and reject; a content-derived id; the Studio reaching
+the composite with no case at all). It replaces an earlier version of this amendment, under which a
+composite case's write to a member's node made a copy of it in the composite; no copy is made.
 
-- **One copy per member node, so a writer may write it again.** The copy's id is the member node's
-  and the composite's (`dataset_scope.composite_copy_id`), and so is its `SAME_AS`'s: writing the
-  same node again in the case (an email extracted twice; the email Document's id is fixed, and the
-  seeded Enron and Fixture Corp composite meets exactly this) writes the same copy and adds nothing.
-- **What is written beside it names the copy.** For the rest of the request, a link written to or
-  from the member's node (`upsert_edges`, `bulk_load_edges`) and the canvas's copy of what was
-  written (`WorkingSetService.add_written`) name the composite's copy, by one rewrite
-  (`dataset_scope.to_copies`); a writer reads back the id the write returns, as
-  `EmailExtractionService` does for the candidates it files under it, and counts the working set's
-  room by the copy's id (`will_be_written_as`). A later request finds the copy again by its id
-  (`as_written_in_this_case`): accepting or rejecting an email's findings in the composite case
-  finds them under the copy, and the accepted entity's `MENTIONED_IN` names the copy.
-- **Made once, even at once.** The copy and its `SAME_AS` are made in a transaction of their own
-  before the caller's write; two requests making the same copy at the same moment both end well
-  with the one copy, the second taking the first's (the store's unique id refuses the second, as
-  `ensure_layer` takes a layer made at once). Its `SAME_AS` is written only when the copy is made,
-  so writing the node again adds no occurrence: the link records where the copy came from, not a
-  sighting. A copy left when the caller's own write then fails is the one its next write reaches.
-- **Its marking and its standing.** The `SAME_AS` takes the stricter marking of its two ends, as
-  `same_as_writer._handling_for` marks one. It is `asserted`: it records that the copy was made from
-  that node, not a judgement that two records match. The copy keeps the write's own provenance, so
-  an `inferred` write (an accepted extraction, rule 5) makes an `inferred` copy.
-- **A correction of a member's element is refused** (the owner's ruling, 7 November 2026). A
-  correction hides the old element from every reader, and a composite cannot hide a member's
-  element from its own readers alone, so in a composite case changing a member's link
-  (`links/{edge}/change`), replacing or removing a picture a member holds, confirming or retracting
-  a member's node (`nodes/{node}/confirm`, `/retract`), and closing an alert as a true positive
-  that would confirm a member's node or link are refused, in words ("correct this in a case that
-  reads that dataset"; 409 `correct_in_member_case`), before anything is stored, so no member ever
-  changes and no close is left half done. The composite's own elements may still be corrected:
-  replacing a picture when a member's newer one is shown supersedes the case's own picture (which,
-  newest, is then shown), and the member's is left as it was; only with no picture of its own is
-  the replace a correction of the member's, and refused.
-  Each correcting route or service refuses as soon as it holds the element
-  (`dataset_scope.refuse_correcting_a_member`), and the stamping graph's `supersede_node` and
-  `supersede_edge` refuse as the last word.
-- **Not covered.** A write naming a member's node the caller cannot read at all (only reachable by a
-  content-derived id; a composite has no pipelines) merges as before.
+1. **What is refused.** In a case reading a composite, every write other than into the case's own
+   analyst layer: extraction (an email's, a Document's, the case's ingest), and accepting or
+   rejecting what it found; a question's accepted proposal; an entity's picture, set, replaced or
+   removed; confirming or retracting a node; changing a link; closing an alert as a true positive
+   (which confirms); and loading, running, scheduling, publishing or uploading in the Ingest Studio.
+   And any write into a composite's id, under a case or not: the Studio reaches a dataset with no
+   case (`scope_to_dataset`), and a composite is refused there too. Each is refused in words (409
+   `composite_read_only`, "do this in a case that reads that dataset"), before anything is written
+   or stored.
+2. **What is kept.** An entity marked by hand and a manual `SAME_AS` or `NOT_SAME_AS` go into the
+   case's analyst layer, as in any case (ADR-143 Amendment 1); they change no member. Reading is
+   untouched, and so are records made in the case that are not dataset content (a saved pattern, a
+   watch, an alert's triage).
+3. **Where it is decided, and in what order.** Each writing service refuses after its own read of
+   what it would change, so a node, link, finding or picture the reader cannot see still answers as
+   not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
+   `refuse_writing_a_node_in_a_composite_case`). The case's loading routes refuse by a dependency
+   that comes after the case's level check, and the Studio's routes of a dataset after the dataset's
+   own gate, so a caller the case or dataset is not for is answered 404. `DatasetStampingGraph`
+   refuses as the last word: in a composite case, any write, correction, revert, withdrawal or
+   restore whose datasets are not the case's layer alone; and any naming a composite's id, the
+   dataset store answering which ids are composites (`composites_among`).
 
-Proved on ArcadeDB by `tests/conformance/graph_port/test_composite_write_to_member_node.py` (shown
-red with the check planted out; the marking) and, at the email extraction's real call site, by
-`tests/services/api/test_composite_writes_live.py` (the links and canvas name the copy; a second
-extraction adds nothing; a member's picture neither replaced nor removed; each red before), and
-`tests/services/api/test_composite_corrections.py` (a member's link not changed, the composite's
-own still changeable; red before).
+Proved by `tests/services/api/test_composite_read_only.py` (each write path at its real call site,
+red with its refusal planted out; a reader who cannot see the element answered 404; the loading routes
+and the Studio, with a non-member answered 404; the layer still written),
+`tests/services/api/test_composite_writes_live.py` (an extraction and a picture, on ArcadeDB, the
+member unchanged) and `tests/conformance/graph_port/test_composite_write_to_member_node.py` (finding
+5: a write to a member's node refused and the member unchanged, red with the refusal planted out).
 
 ### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
 

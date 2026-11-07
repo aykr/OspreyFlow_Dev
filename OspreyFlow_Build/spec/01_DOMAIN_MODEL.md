@@ -576,16 +576,17 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   degree, bucket, neighbourhood or path read under another case of the same source
   (`tests/conformance/graph_port/test_analyst_layer.py`, shown red with the layer added to the other
   case's read set); the read set itself is `tests/services/api/test_analyst_layer.py`.
-- **What a case writes joins the first of its read set** unless the write names another (decision
-  6): the source, or a composite's own id (Amendment 14). A composite case's write naming a node
-  already in a member becomes a new node of the composite, linked to the member's by `SAME_AS`, so
-  no member is written by a case reading the composite (Amendment 15). A **correction** of a
-  member's element in such a case (confirming or retracting a node, changing a link, replacing or
-  removing a picture, closing an alert as a true positive) is refused, in words (409
-  `correct_in_member_case`, "correct this in a case that reads that dataset"), before anything is
-  written. Accepted question proposals, accepted extractions and loads are written as above. The
-  Conduit's own writes for a case are stamped by `DatasetStampingGraph` (Amendment 1 decision 2), and
-  an element's properties are the latest write's (decision 2).
+- **What a case writes joins its source** unless the write names another (decision 6): accepted
+  question proposals, accepted extractions and loads. The Conduit's own writes for a case are
+  stamped by `DatasetStampingGraph` (Amendment 1 decision 2), and an element's properties are the
+  latest write's (decision 2).
+- **A composite is read-only for now** (Amendments 14 and 15; the owner, 7 November 2026). A case
+  reading a composite reads its members and keeps its own analyst layer, and writes nothing else:
+  extraction and its accept and reject, a question's accepted proposal, a picture, confirming or
+  retracting a node, changing a link, a close that confirms, and the Studio's loads, runs and
+  schedules are refused in words (409 `composite_read_only`, "do this in a case that reads that
+  dataset"), before anything is written; so is any write into a composite's id. What the reader
+  cannot see answers as not found first. Writing into a composite is its own later step.
 - **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity
   marked by hand in the reader (the node and its `MENTIONED_IN` link) and a manual `SAME_AS` or
   `NOT_SAME_AS` (§4) name the layer, which the request holds beside its read set
