@@ -42,7 +42,9 @@ What a mistake would do, and what catches it (`L1.2a_RED_RECORD.md` has each sho
   same;
 - d: the rows' events taken by their links: the other case's timeline moves;
 - e: a count told to the loader taken from other cases' rows (the old `links_kept_an_occurrence`
-  and its words, from every row of every case): the run's view and the report's differ;
+  and its words, from every row of every case): the report's view differs between the worlds
+  (`second_said` fails before the graph comparison is reached; `ScheduleRunView` carries no
+  withdrawal figure, so it cannot differ);
 - f: `dropped_row_keys`'s `withdrawn_before` asked without the case: the third case's own
   withdrawal of the same key leaves the loader's B in place (`B was dropped` fails). The other
   question, `withdrawn_row_keys_among`, cannot differ here (the loader's case withdrew B too); its

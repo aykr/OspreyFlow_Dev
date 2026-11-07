@@ -27157,8 +27157,10 @@ the same link, of any case, went with them.
    links (with their occurrences) and the case's timeline. It is shown red with link withdrawal
    restored, with it each of the two ledger reads, with events taken by link, with a count from
    other cases' loads told to the loader, and with `withdrawn_before` asked without the case; the
-   ledger's own test is red with `withdrawn_row_keys_among` asked without the case
-   (`process/lanes/studio/L1.2a_RED_RECORD.md`). It holds for what the withdrawal changes, not for
+   ledger's own tests are red with `withdrawn_row_keys_among`, the move's guard, `withdrawn_keys_kept_again`
+   and `restore_withdrawn_row_keys` each asked without the case, and with the guard removed
+   (`process/lanes/studio/L1.2a_RED_RECORD.md`). The first four reds ran on the live test before its
+   third case (`5ac854e`); the later ones on the current file. It holds for what the withdrawal changes, not for
    every figure the run gives: the known limits below are why.
 8. **The Studio says it in words.** A source's page and the wizard offer "Withdraw their events;
    their nodes and links stay until their load is reverted", and describe the policy the same way
