@@ -172,7 +172,9 @@ narrowed.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │                     OFFICIAL — the highest marking in view                         │ strip, 20px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ ◆ Osprey  Case 4471 — layering ▾  [ Search…  / ]  [Graph|Map]  Export ⚙        👤  │ top bar, 44px
+│ ◆ Osprey  The Glass|Ingest Studio|Admin  [ Search…  / ]  [Graph|Map]  Export  👤  │ top bar, 44px
+├────────────────────────────────────────────────────────────────────────────────────┤
+│ You are in the Glass · Case 4471 — layering ▾ · reads Prison intel   Open … ↗     │ banner, 32px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ▾ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -192,9 +194,9 @@ narrowed.
 The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
 *Alerts* — named *Monitoring* since ADR-133 — (the one alert queue, its rules, the watches with their alert inbox in its *Watches* tab, held rows and audit — ADR-109, §3.3; the rail's own *Watches* entry was removed by the owner's answer of 1 November 2026, ADR-133 Amendment 5),
 *Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
-questions to the model, ADR-098, §3.1), *Proposed types* (administrators only, ADR-090 C3) and the
-*Ingest Studio*; in the Ingest
-Studio it holds *Back to the investigation*. Each is an icon button whose accessible name is its label;
+questions to the model, ADR-098, §3.1) and *Dashboards* (ADR-111 Amendment 3). It is the Glass's alone:
+the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
+switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible name is its label;
 *Show names* widens the rail to show the labels and *Hide names* narrows it again. *Alerts* carries the case's open
 and claimed alerts as a count (said in its name, "Alerts, 3 open"), and *Help*, above *Show names*,
 reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
@@ -330,13 +332,16 @@ workspace its height back (ADR-132 Amendment 5). The service's name is in the pa
 
 One row, 40px. From the left:
 
-- **The mark**: the solid-cut osprey in brass and the word *Osprey* (`spec/design/`). It is not a
-  button.
+- **The mark**: the solid-cut osprey in brass and the word *Osprey* (`spec/design/`); a button back to
+  Home (ADR-114 Amendment 5 point 9).
+- **The place switcher** (§2.0a): a navigation named *Places* listing the places the person's rights
+  open, the one on screen marked as the current page. Under the GOV.UK brand it stands inside the
+  GOV.UK header instead, not in this bar.
 - **The case menu**, `<name> ▾` (its accessible name keeps `Case: <name>`; at least 240px wide, ADR-097
-  step 3): opens the cases the account can reach (the open one marked),
-  `All cases`, and `New case`. The name may be cut short with an ellipsis; its full text is the
-  button's title. The Ingest Studio's own "Data loaded from this studio goes into" row uses the
-  same menu.
+  step 3), now in the **context banner** under the bar (§2.0a): opens the cases the account can reach
+  (the open one marked), `All cases`, and `New case`. The name may be cut short with an ellipsis; its
+  full text is the button's title. The Ingest Studio's own "Data loaded from this studio goes into"
+  row uses the same menu.
 - **Search**, with its **Filters** control as an icon inside the box at its right-hand end (a small
   count beside it when filters are on). Its accessible name is still `Filters`, or `Filters (n)`.
   Choosing a result draws it with everything within three links, counted first and asked about
@@ -362,15 +367,76 @@ One row, 40px. From the left:
   setup harness follow it and carry the same button; ADR-072).
 - **The account**, at the right-hand end (item 5 above).
 
-There is no application switch: the Ingest Studio is reached from the rail, and while it is open the
-bar shows a brass line under it and drops what belongs only to the Glass (search, the view switch,
-Export). *Back to the investigation* on the rail returns to the Glass view that was last open.
-Monitoring (with the watches in its Watches tab), Ownership, History and Proposed types are on the rail; the resolution threshold, named **Match strictness** for what
+While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
+the Glass (search, the view switch, Export). Monitoring (with the watches in its Watches tab),
+Ownership and History are on the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
 outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
+
+### 2.0a Three places: the switcher, the context banner, Home (ADR-145 decisions 1–3)
+
+This replaces "there is no application switch" (ADR-097 step 1), which this section said until
+7 November 2026.
+
+**The places.** *The Glass* (analysis: Case · Boards · Monitoring; *Boards* arrives with Lane 3's
+board screens), *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. One
+table, `apps/workspace/src/shell/places.json`, names them and the rights that open each; a place is
+offered to whoever holds any one of its rights, and nobody else. Every signed-in person reaches the
+same sign-in; Home is no place, and lists the same places as cards (*Home*, under §3.3).
+
+**Hiding is never the control (rule 3).** A place's rights are exactly the rights its own routes need,
+so a place hidden from a person is one whose every route refuses them. The test is the Conduit's
+place-routes test (`test_place_routes.py`, in the build tree): it assigns every Conduit route to the place
+whose screens call it (a route two places call, such as the schedule preview used by the Studio and by
+Admin › Operations, is named with both; `/v1/admin/screening-lists` is the Glass's, called by Monitoring
+› Lists), checks `places.json` against the routes' rights, and calls every route of each hidden place
+as each built-in role and the *Super user* preset, expecting `403 right_required`. It was shown red with
+one Admin route's and one Studio route's `require_right` removed.
+
+What each role is offered, with the rights as the owner's ruling of 7 November 2026 ("narrow those
+rights") leaves them: an **Analyst** the Glass; a **Data Engineer** the Glass, the Studio and Admin
+(Admin › Operations, its `operate_schedules`); an **Administrator** Admin and the Glass (the case list,
+for an orphaned case's sharing and removal, the rule audit, link-strength influencers and the export
+ledger); a **Reports Viewer** the Glass; the **Super user** all three. Until ADR-112's amendment lands
+(the Analyst loses `add_ingest_files`, the Administrator `schedule_pipelines`) and Lane 1 moves the
+pipeline-run history (`GET …/ingest/recipes/{id}/runs`) off `read_data_feeds`, an Analyst and a Reports
+Viewer are also offered the Studio, and an Administrator the Studio too, because those routes still
+answer them; the test holds each of these as a strict expected failure that turns red when it lands.
+
+**The switcher.** In the top bar after the mark, one button per place in the table's order, the current
+one `aria-current="page"`. Choosing Admin leaves the case for the Admin place (it needs none); choosing
+the Studio opens it on the open case; choosing the Glass returns to the Glass view last open. Under the
+GOV.UK brand the switcher stands inside the GOV.UK header (ADR-132 Amendment 6). GOV.UK Frontend 6.6.0's
+`header` has no navigation (its parameters are the product name and the homepage link), so the header
+carries a small local extension: one slot after the logo (`brand/govuk/GovukHeader.tsx`, drawn only in
+the Glass's frame, not on the identity provider's sign-in page), styled on the header's own colours
+(`shell/places.css`). The amendment recording the extension is reserved with the orchestrator.
+
+**The context banner.** One line under the top bar (`shell/ContextBanner.tsx`), a region named by its
+first words:
+- in the Glass: "You are in the Glass · ‹case menu› · reads ‹the case's datasets›";
+- in the Studio: "You are in the Ingest Studio · Dataset ‹the case's dataset› · for ‹case menu›";
+- in Admin: "You are in Admin".
+
+The datasets are the case's, as `GET /v1/investigations/{id}/datasets` answers this reader. Not drawn:
+decision 2's "feeds n cases" in the Studio. No route gives a dataset's cases as the reader may see
+them, and a count over cases they cannot see would break rule 7; it waits for that route. A person
+holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset› in the Ingest Studio ↗*
+in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the same case
+and the view last open (this replaces the Studio rail's *Back to the investigation*). Under the GOV.UK
+brand the banner is a GOV.UK notification banner, its title the place.
+
+**Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). Its tabs are as
+before, each behind its right, with **Proposed types** (`manage_ontology`) among them: it left the
+Glass's rail, and is decided here until the Studio's Model tab holds it (ADR-145 A2).
+
+**Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
+banner's cross-link and Home's cards end to end, each shown red with its handler removed (rule 13);
+`a11y/every-harness.spec.ts` scans `keyboard/places-harness.html` in the dark, light and GOV.UK
+variants, in each place.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
@@ -426,8 +492,8 @@ delta stream are built once per case, and it signs back in by itself (`from=case
 ### 2.2 Opening from the launcher
 
 The launcher (`make launch`, `05_DEPLOYMENT.md` §3) opens the Glass with `?from=launcher`, and with
-`&view=ingest` for its Ingest Studio tile. The Ingest Studio is a view of the Glass, reached from the
-left rail, so the two tiles differ only in this parameter. It works only within a case: with none
+`&view=ingest` for its Ingest Studio tile. The Ingest Studio is a place reached from the place
+switcher (§2.0a), so the two tiles differ only in this parameter. It works only within a case: with none
 open it says so rather than calling routes that belong to one (ADR-099 Amendment 4 decision 5). `from=launcher` tells the Glass that the person has just
 signed in there, so it starts its own sign-in without waiting for a click; the identity provider
 already knows them, so no password is asked. If that cannot be done (no identity-provider session,
@@ -1106,20 +1172,22 @@ Admin titles the card for it; a refused sign-in says why in the card.
 
 **Home (ADR-114 Amendment 5 point 9; ADR-115 decision 7, E3).** With no case open, every signed-in
 person lands on Home (`design/handoff/OspreyFlow Home.dc.html`): a greeting naming the account, its
-clearance and roles; the three places — *Glass*, *Ingest Studio*, *Admin console* — each with a
-picture, its figures and an *Open* button with its key (G, I, A, page-wide, never while typing); a
-place the person cannot use is dimmed and says "You need the {role} role for this. Ask an
-administrator to add it." Only the first usable place's button is brass. *Needs your attention* lists
+clearance and roles; a card for each place the person's rights open — *The Glass*, *Ingest Studio*,
+*Admin* (ADR-145 decision 1 and N6, the switcher's list, §2.0a) — each with a picture, its figures and
+an *Open* button with its key (G, I, A, page-wide, never while typing). A place the rights do not open
+has no card (this replaces ADR-115 decision 7's dimmed panel naming the role it needs); a person whose
+rights open none is told "Your account opens no place yet. Ask an administrator to give you a role."
+Only the first card's button is brass. *Needs your attention* lists
 open and own-claimed alerts, rows still held and failing dashboard pulls, newest first, only for
 usable places; *Recent cases* the person's cases with their level and what each holds as they see
 it; *Ways of working* four habits. Every figure comes from the route its place already has, case by
 case, counted as the reader — Home adds no read path; a case that refuses (403) is left out, one that
 fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose the case to load into*,
-*Admin console* to the Admin area with no case; the mark returns to Home from anywhere.
+*Admin* to the Admin place with no case; the mark returns to Home from anywhere.
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
-running system, behind the same sign-in — *Admin* on the rail, or Start's *Admin* tile with no case
-open — with a tab per right: *People and
+running system, behind the same sign-in — *Admin* in the place switcher or Home's *Admin* card, a place
+of its own with no case (ADR-145 decision 1, ADR-110 Amendment 14) — with a tab per right: *People and
 roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
 Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
 (clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or
