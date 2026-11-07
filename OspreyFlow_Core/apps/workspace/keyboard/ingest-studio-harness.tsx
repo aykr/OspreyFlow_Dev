@@ -128,6 +128,24 @@ const asked: { method: string; path: string; body?: string }[] = [];
 let created: Record<string, unknown> | null = null;
 (window as unknown as { __asked: typeof asked }).__asked = asked;
 
+// The routes' refusals, as the Conduit answers them (rule 15: a fake models what the real route
+// refuses, not only what it grants; the review of L1.2, 7 November 2026). `verify` and `preview-graph`
+// need the right `verify_pipelines` and editor level; `publish` needs `publish_pipelines` and a draft
+// verified since its last edit; any edit of a draft (its pipeline, its settings, its map) clears that
+// mark, `verify` sets it, and `preview-graph` leaves it alone. `?rights=no-test` drops the right.
+const RIGHTS = new Set(["edit_pipelines", "verify_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines"]);
+if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
+const LEVELS: Record<string, string> = { "inv-1": "author", "inv-2": "editor" };
+const refusal = (path: string, right: string, level: "viewer" | "editor"): Response | null => {
+  if (!RIGHTS.has(right))
+    return new Response(JSON.stringify({ detail: { error: "right_required", right } }), { status: 403 });
+  const caseId = path.match(/\/v1\/investigations\/([^/]+)\//)?.[1] ?? "";
+  const order = ["viewer", "editor", "author"];
+  if (order.indexOf(LEVELS[caseId] ?? "") < order.indexOf(level))
+    return new Response(JSON.stringify({ detail: `This needs ${level} on the case.` }), { status: 403 });
+  return null;
+};
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const path = new URL(String(input)).pathname;
   const method = init?.method ?? "GET";
@@ -176,26 +194,41 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       return reply({ row_index: index, values: rows[index], values_masked: false, is_last_row: index === rows.length - 1 });
     }
     if (path.endsWith("/profile")) return reply(recipe === "r-new" ? REPORTS_PROFILE : PROFILE);
-    if (path.endsWith("/verify") && method === "POST") return reply(VERIFY);
+    if ((path.endsWith("/verify") || path.endsWith("/preview-graph")) && method === "POST") {
+      const refused = refusal(path, "verify_pipelines", "editor");
+      if (refused) return refused;
+      // Test marks the draft verified, which Deploy's gate reads; a Preview marks nothing.
+      if (path.endsWith("/verify")) {
+        if (recipe === "r-new" && created) created = { ...created, verified_at: day(0, 10) };
+        else draft = { ...draft, verified_at: day(0, 10) };
+      }
+      return reply(VERIFY);
+    }
     if (path.endsWith("/row-template") && method === "PUT") {
       const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      if (recipe === "r-new" && created) created = { ...created, ...sent };
-      else draft = { ...draft, ...sent };
+      if (recipe === "r-new" && created) created = { ...created, ...sent, verified_at: null };
+      else draft = { ...draft, ...sent, verified_at: null };
       return reply(recipe === "r-new" ? created : draft);
     }
   }
   if (path === "/v1/ontology") return reply(ONTOLOGY);
   if (path === "/v1/ingest/transforms") return reply([]);
+  if (path.endsWith("/publish") && method === "POST") {
+    const refused = refusal(path, "publish_pipelines", "editor");
+    if (refused) return refused;
+    const target = path.endsWith("/r-new/publish") ? created : draft;
+    if (!target?.verified_at) return reply({ error: "studio_recipe_not_verified" }, 409);
+  }
   if (created && path.endsWith("/ingest/recipes/r-new/publish") && method === "POST") {
     created = { ...created, status: "published", git_path: "recipes/r-new.yaml" };
     return reply(created);
   }
   if (path.endsWith("/ingest/recipes/r-visits/pipeline") && method === "PUT") {
-    draft = { ...draft, pipeline: JSON.parse(String(init?.body)) };
+    draft = { ...draft, pipeline: JSON.parse(String(init?.body)), verified_at: null };
     return reply(draft);
   }
   if (path.endsWith("/ingest/recipes/r-visits") && method === "PATCH") {
-    draft = { ...draft, ...(JSON.parse(String(init?.body)) as object) };
+    draft = { ...draft, ...(JSON.parse(String(init?.body)) as object), verified_at: null };
     return reply(draft);
   }
   if (path.endsWith("/ingest/recipes") && method === "POST") {
@@ -206,11 +239,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return reply(created, 201);
   }
   if (created && path.endsWith("/ingest/recipes/r-new/pipeline") && method === "PUT") {
-    created = { ...created, pipeline: JSON.parse(String(init?.body)) };
+    created = { ...created, pipeline: JSON.parse(String(init?.body)), verified_at: null };
     return reply(created);
   }
   if (created && path.endsWith("/ingest/recipes/r-new") && method === "PATCH") {
-    created = { ...created, ...(JSON.parse(String(init?.body)) as object), ready_for_profile: true };
+    created = { ...created, ...(JSON.parse(String(init?.body)) as object), ready_for_profile: true, verified_at: null };
     return reply(created);
   }
   if (created && path.endsWith("/ingest/recipes/r-new")) return reply(created);

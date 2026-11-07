@@ -1,7 +1,9 @@
 // *Preview* on one node of the pipeline (ADR-140 decision 14; ADR-108 Amendment 6.3; redesign brief
 // §6): today's dry run up to that node, shown as the node's table, or, on Map and Load, as the graph
-// it would make. It adds no route and no write. A source or profile node reads the Map sample rows
-// (row 0 on, until the last row or `PREVIEW_ROWS`); a Map or Load node reads the dry run (`verify`).
+// it would make. It writes nothing. A source or profile node reads the Map sample rows (row 0 on,
+// until the last row or `PREVIEW_ROWS`); a Map or Load node reads `preview-graph`, the dry run Test
+// runs, which marks nothing, so a Preview never counts as Test or satisfies Deploy (the review of
+// L1.2 found the first build calling `verify` itself, which marks the draft verified).
 // Both read with the person's own token, so the server's own masking and access checks are the
 // Preview's: a row the person may not read is shape-masked there, never here
 // (`tests/ingest/test_node_preview_access.py` proves the sequence below, rule 4). Until phase 7's
@@ -19,9 +21,10 @@ import { Button } from "../../design/primitives/Button";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
 import { createWorkingSet, type WorkingSet } from "../../workingset/store";
-import { ProfileError, fetchOntologySchema, fetchSampleRow, runVerify } from "../api";
+import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
 
-/** The most rows a table Preview reads; `test_node_preview_access.py` holds the same number. */
+/** The most rows a table Preview reads. The one place this number is written:
+ * `tests/ingest/test_node_preview_access.py` reads it from this line. */
 export const PREVIEW_ROWS = 10;
 
 const PREVIEW_ERRORS: Record<string, string> = {
@@ -31,6 +34,7 @@ const PREVIEW_ERRORS: Record<string, string> = {
   source_unreadable: "The source could not be read. Check it is still where the source says.",
   source_handling_incomplete: "This source's marking is incomplete, so it cannot be previewed.",
   ontology_violation: "The map does not match the target model. Open the map editor and check the element named.",
+  right_required: "A graph Preview runs Test's dry run, so it needs the right to test pipelines, which you do not hold.",
 };
 
 function words(err: unknown): string {
@@ -73,9 +77,9 @@ export function NodePreview({ apiBaseUrl, bearerToken, investigationId, recipeId
     setRows(read);
   }
 
-  async function previewGraph() {
+  async function previewTheGraph() {
     const [result, schema] = await Promise.all([
-      runVerify(apiBaseUrl, bearerToken, investigationId, recipeId),
+      previewGraph(apiBaseUrl, bearerToken, investigationId, recipeId),
       fetchOntologySchema(apiBaseUrl, bearerToken),
     ]);
     const ws = createWorkingSet();
@@ -89,7 +93,7 @@ export function NodePreview({ apiBaseUrl, bearerToken, investigationId, recipeId
     setBusy(true);
     setProblem(null);
     try {
-      await (shape === "table" ? previewTable() : previewGraph());
+      await (shape === "table" ? previewTable() : previewTheGraph());
     } catch (err: unknown) {
       setProblem(words(err));
     } finally {

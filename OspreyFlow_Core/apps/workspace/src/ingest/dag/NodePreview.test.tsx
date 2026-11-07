@@ -14,7 +14,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function serve(lastRow: number, masked = false) {
+/** Models the two routes as the Conduit answers them, refusals included (rule 15): `preview-graph`
+ * needs `verify_pipelines` (`require_right`'s 403 puts the code inside `detail`), and `verify`, which
+ * marks the draft verified, is a route a Preview must never call. */
+function serve(lastRow: number, masked = false, { canTest = true } = {}) {
   const calls: { url: string; method: string; auth: string | null }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -27,7 +30,10 @@ function serve(lastRow: number, masked = false) {
         return new Response(JSON.stringify({ row_index: index, values: { caller: masked ? "Xxx-0000" : `SYN-${index}` },
           values_masked: masked, is_last_row: index === lastRow }));  // prettier-ignore
       }
-      if (path.endsWith("/verify"))
+      if (path.endsWith("/verify")) return new Response(JSON.stringify({ error: "a_preview_must_not_call_verify" }), { status: 500 });
+      if (path.endsWith("/preview-graph") && !canTest)
+        return new Response(JSON.stringify({ detail: { error: "right_required", right: "verify_pipelines" } }), { status: 403 });
+      if (path.endsWith("/preview-graph"))
         return new Response(JSON.stringify({ rows_read: 3, sample_is_whole_source: true, values_masked: false,
           entities_by_type: { Person: { created: 2, referenced: 1 } }, edges_by_type: { KNOWS: { created: 1 } },
           rejections: [{ reason: "bad number", count: 1, samples: [] }], nodes: [], edges: [] }));  // prettier-ignore
@@ -67,13 +73,20 @@ describe("Preview on a node", () => {
     expect(screen.getByText("Xxx-0000")).toBeTruthy();
   });
 
-  it("previews Map as the graph the dry run would make, through the dry run alone", async () => {
+  it("says in words that a graph Preview needs the right to test, when the route refuses it", async () => {
+    serve(0, false, { canTest: false });
+    render(<NodePreview {...props} node={{ id: "m", kind: "load", label: "Load", config: {} }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run preview" }));
+    expect(await screen.findByText(/needs the right to test pipelines/)).toBeTruthy();
+  });
+
+  it("previews Map as the graph the dry run would make, through the dry run that marks nothing", async () => {
     const calls = serve(0);
     render(<NodePreview {...props} node={{ id: "m", kind: "map", label: "Map", config: {} }} />);
     fireEvent.click(screen.getByRole("button", { name: "Run preview" }));
     expect(await screen.findByText("From a sample of 3 rows: 2 would be created, 1 referenced, 1 links; 1 rows rejected.")).toBeTruthy();
     expect(screen.getByText("dry-run-graph")).toBeTruthy();
-    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/v1/investigations/inv-1/ingest/recipes/r1/verify"]);
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/v1/investigations/inv-1/ingest/recipes/r1/preview-graph"]);
     expect(calls.every((c) => c.auth === "Bearer persons-own-token")).toBe(true);
   });
 
