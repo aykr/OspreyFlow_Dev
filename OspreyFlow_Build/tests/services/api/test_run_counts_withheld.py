@@ -81,7 +81,7 @@ def reader(clearance: str, unit: str = "unit-1", codes: tuple[str, ...] = ("P", 
     return Principal(
         id=f"reader-{clearance}-{unit}", clearance=clearance, org_unit=unit,
         receivable_handling_codes=list(codes),
-        roles=["source_approver", "reports_viewer", "osprey-admin"], datasets=["ds-case"],
+        roles=["source_approver", "reports_viewer", "osprey-admin", "loader"], datasets=["ds-case"],
     )  # fmt: skip
 
 

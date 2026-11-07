@@ -7,7 +7,7 @@
       "key": "g",
       "sections": ["Case", "Boards", "Monitoring"],
       "rights": [
-        "ask_model", "branch_case", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
+        "add_ingest_files", "ask_model", "branch_case", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
         "edit_graph", "export", "extract_files", "investigate", "keep_watches", "load_screening_lists",
         "manage_strength_influencers", "propose_link_type", "read_alert_queue", "read_data_feeds",
         "read_export_ledger", "read_held_rows", "read_report_feed", "read_reports", "read_rule_audit",
@@ -21,8 +21,7 @@
       "key": "i",
       "sections": ["1 Model", "2 Sources", "3 Pipelines", "4 Runs"],
       "rights": [
-        "add_ingest_files", "edit_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines",
-        "verify_pipelines"
+        "edit_pipelines", "publish_pipelines", "run_pipelines", "verify_pipelines"
       ]
     },
     {
@@ -32,7 +31,7 @@
       "sections": [],
       "rights": [
         "administer_system", "manage_dashboards", "manage_geospatial", "manage_ontology", "manage_people",
-        "operate_schedules"
+        "operate_schedules", "schedule_pipelines"
       ]
     }
   ]

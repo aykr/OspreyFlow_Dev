@@ -34,7 +34,7 @@ from tests.services.api.any_case import AnyCase
 
 CASE = "/v1/investigations/inv-1/ingest/recipes"
 APPROVER = Principal(id="approver-1", clearance="OFFICIAL", org_unit="unit-1",
-                     roles=["source_approver", "reports_viewer"])  # fmt: skip
+                     roles=["source_approver", "reports_viewer", "loader"])  # fmt: skip
 AUTHOR = Principal(id="author-1", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"])
 NOW = datetime(2026, 6, 2, 12, tzinfo=UTC)
 HANDLING = {"classification": "SECRET", "handling_code": "P", "owning_unit": "unit-1",

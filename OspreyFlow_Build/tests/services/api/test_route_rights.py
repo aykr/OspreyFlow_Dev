@@ -176,15 +176,15 @@ ROUTE_RIGHTS = {
     "get_yardstick_route": None,
     "list_ingest_source_files": "add_ingest_files",
     # ADR-140 Amendment 4: connections and registered sources, on dataset routes.
-    "list_ingest_connections": "add_ingest_files",
+    "list_ingest_connections": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
     "list_admin_connections": "administer_system",
     "add_admin_connection": "administer_system",
-    "list_dataset_source_files": "add_ingest_files",
-    "list_dataset_sources": "add_ingest_files",
-    "register_dataset_source": "add_ingest_files",
-    "get_dataset_source": "add_ingest_files",
-    "get_dataset_source_profile": "add_ingest_files",
-    "get_dataset_source_lineage": "add_ingest_files",
+    "list_dataset_source_files": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    "list_dataset_sources": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    "register_dataset_source": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    "get_dataset_source": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    "get_dataset_source_profile": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
+    "get_dataset_source_lineage": "edit_pipelines",  # ADR-145 Amendment 1: the Studio's alone
     "edit_dataset_source_governance": "edit_pipelines",
     "pause_source_refresh": "schedule_pipelines",
     "resume_source_refresh": "schedule_pipelines",
@@ -320,7 +320,7 @@ ROUTE_RIGHTS = {
     "schedule_preview_route": "schedule_pipelines",
     "pause_recipe_schedule": "schedule_pipelines",
     "resume_recipe_schedule": "schedule_pipelines",
-    "recipe_runs_route": "read_data_feeds",
+    "recipe_runs_route": "run_pipelines",  # ADR-145 Amendment 1: the Studio's alone
 }
 
 
