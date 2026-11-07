@@ -11,7 +11,7 @@
    - the kept-link count taken from every row: the report view differs.
    `test_source_refresh_snapshot_live.py`, updated to Amendment 15, passes (2 of 2).
 4. **Lease:** studio, "Part A live: two snapshot-withdrawal live files". Taken 12:47:45Z, released 12:49:13Z. The four throwaway containers were stopped when the lease came to me; I started them, ran the two files and stopped them.
-5. **`test_load_checks.py`: met for the two verify cases** (`464b5ad`), which were red on main with `KeyError`. The file has 9 tests, 4 Postgres-backed. My Part A run ran all 9 against the case lane's throwaway Postgres without the lease (breach 2). I did not rerun the 4 under my own lease.
+5. **`test_load_checks.py`: met** (`464b5ad`). The two verify cases were red on main with `KeyError`. The whole file (9 tests, 4 Postgres-backed) passes 9 of 9 on the throwaway stack under lease studio, "Part A: test_load_checks.py, the whole file": taken 12:50:19Z, run 12:50:24Z to 12:50:27Z, stack stopped, released 12:50:30Z. This closes the omission. The earlier run of all 9 was unleased (breach 2).
 6. **Two rule 14 breaches** (reported, in the friction row): that run, and an earlier `tests/ingest -k "not live"` run whose name filter missed files that reach the stack.
 7. **Request:** apply `process/lanes/studio/L1.2a_ci_makefile.diff` (ci.yml and `OspreyFlow_Build/Makefile`). It supersedes L1.1's and wires L1.1's six live files plus the new one; with it, the test-file coverage check reads "737 test file(s), 0 allowlisted, no new drift".
 8. **Commits after main `bc853bd`:** `4d35c07 464b5ad 5061df4 cb84f7f b56b24e 8a0fca5 cc8967b efb8bdd e690ade`, then this report. **Questions:** none. **Running:** nothing; the lease is released and the stack is down.
