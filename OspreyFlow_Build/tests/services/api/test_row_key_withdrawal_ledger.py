@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from conduit_common.identity import new_id
@@ -262,6 +263,35 @@ async def test_the_unit_files_fake_moves_keys_as_the_ledger_does(
         assert await runs.withdrawn_event_ids(load) == await fake.withdrawn_event_ids(
             load
         ), load
+
+    def told(dropped: list[Any]) -> dict[str, tuple[bool, Any]]:
+        return {d.row_key: (d.withdrawn_before, d.event_ids) for d in dropped}
+
+    real = told(await runs.dropped_row_keys(recipe, CASE, present=set()))
+    assert real == told(await fake.dropped_row_keys(recipe, CASE, present=set()))
+    assert real[k1][0] is True and real[k2][0] is False, (
+        "k1 came back after its withdrawal"
+    )
+    among = await runs.withdrawn_row_keys_among(recipe, CASE, keys)
+    assert among == await fake.withdrawn_row_keys_among(recipe, CASE, keys) == {k1}
+
+
+async def test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds(
+    runs: RecipeRunStore,
+) -> None:
+    """Asked in chunks of `_KEY_CHUNK`, as `kept_row_keys` is: every withdrawn key past the first
+    chunk is still found (red with the loop stopped after one chunk, `L1.2a_RED_RECORD.md`)."""
+    from services.api.recipe_runs import _KEY_CHUNK
+
+    recipe, case, first, refresh = new_id(), new_id(), new_id(), new_id()
+    keys = [f"key-{n:06d}" for n in range(_KEY_CHUNK + 5)]
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(first, recipe, case), row_keys=keys)
+    await runs.add_record(
+        run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=keys
+    )
+
+    assert await runs.withdrawn_row_keys_among(recipe, case, keys) == set(keys)
 
 
 async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(
