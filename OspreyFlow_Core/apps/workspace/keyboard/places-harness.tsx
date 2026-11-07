@@ -22,6 +22,7 @@ import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
 import { initialInvestigationId } from "../src/investigation/investigationId";
 import { placesFor, type PlaceId } from "../src/shell/places";
+import { LeftRail } from "../src/shell/LeftRail";
 import { TopBar } from "../src/shell/TopBar";
 
 declare global {
@@ -41,7 +42,7 @@ const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
 const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
-type View = "graph" | "map" | "dossier" | "alerts" | "ingest";
+type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "alerts" | "ingest";
 
 function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
@@ -89,6 +90,17 @@ function Harness() {
               }))
             : []
         }
+        // ADR-145 Amendment 2: Matrix and Reports one click away, as `App.tsx` offers them.
+        moreViews={
+          place === "glass"
+            ? (["matrix", "reports"] as const).map((v) => ({
+                id: v,
+                label: { matrix: "Matrix", reports: "Reports" }[v],
+                pressed: view === v,
+                onSelect: () => setView(v),
+              }))
+            : []
+        }
         account={null}
       />
       <ContextBanner
@@ -98,7 +110,8 @@ function Harness() {
             ? [
                 { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView("graph") },
                 { id: "boards", label: "Boards", current: false },
-                { id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts") },
+                // `?badge=1`: Monitoring with its open count, as `App.tsx` draws it (ADR-145 Amendment 2).
+                { id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts"), badge: params.has("badge") ? 3 : undefined },
               ]
             : []
         }
@@ -118,9 +131,28 @@ function Harness() {
       {place === "admin" ? (
         <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={rights} />
       ) : (
-        <main aria-label="Place content">
-          <p>{`${place}, ${view}, on case ${caseId}`}</p>
-        </main>
+        <div style={{ display: "flex", minHeight: 0 }}>
+          {place === "glass" && (
+            // The Glass's rail as `App.tsx` splits it (ADR-145 Amendment 2): Cases and Explore, the rest
+            // under ⋯ More.
+            <LeftRail
+              items={[
+                { id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined },
+                { id: "explore", label: "Explore", icon: "explore", onSelect: () => undefined },
+              ]}
+              more={[
+                { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => undefined },
+                { id: "history", label: "History", icon: "history", onSelect: () => undefined },
+                { id: "questions", label: "Questions", icon: "questions", onSelect: () => undefined },
+                { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: () => undefined },
+              ]}
+              onHelp={() => undefined}
+            />
+          )}
+          <main aria-label="Place content">
+            <p>{`${place}, ${view}, on case ${caseId}`}</p>
+          </main>
+        </div>
       )}
     </div>
   );
@@ -128,6 +160,21 @@ function Harness() {
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
+// `?open=more` or `?open=views`: the rail's ⋯ More or the top bar's More views drawn open, so the
+// accessibility scan sees the menu itself (`a11y/every-harness.spec.ts`).
+const opening = params.get("open");
+if (opening) {
+  const press = () => {
+    const button =
+      opening === "more"
+        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label^="More"]')
+        : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More views"));
+    if (button) button.click();
+    else setTimeout(press, 50);
+  };
+  setTimeout(press, 0);
+}
+
 createRoot(container).render(
   <BrandFrame
     appearance={

@@ -112,12 +112,17 @@ function holdRequests() {
 
 const viewButton = (name: string) =>
   within(screen.getByRole("group", { name: "View" })).getByRole("button", { name });
+// ADR-145 Amendment 2 (variant B): the Matrix is under More views, one click away.
+const chooseMatrix = () => {
+  fireEvent.click(screen.getByRole("button", { name: /^More views|^Matrix▾/ }));
+  fireEvent.click(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Matrix" }));
+};
 const entities = () => screen.getByRole("grid", { name: /^Entities in this view/ });
 const rowOf = (name: RegExp) =>
   within(entities()).getAllByRole("row").find((r) => within(r).queryByRole("rowheader", { name }))!;
 const props = () => canvas.props as unknown as GlassCanvasProps;
 
-test("the view switch offers the Matrix beside the Graph and the Map", async () => {
+test("the view switch offers the Graph and the Map, and the Matrix one click away under More views", async () => {
   window.history.replaceState({}, "", "/?investigation=case-1");
   holdRequests();
   render(<App />);
@@ -125,9 +130,11 @@ test("the view switch offers the Matrix beside the Graph and the Map", async () 
   const names = within(screen.getByRole("group", { name: "View" }))
     .getAllByRole("button")
     .map((b) => b.textContent);
-  expect(names.slice(0, 3)).toEqual(["Graph", "Map", "Matrix"]);
-  fireEvent.click(viewButton("Matrix"));
-  expect(viewButton("Matrix").getAttribute("aria-pressed")).toBe("true");
+  expect(names).toEqual(["Graph", "Map"]);
+  chooseMatrix();
+  // The view open is one of More views': the button names it, and its menu marks it as current.
+  fireEvent.click(screen.getByRole("button", { name: /^Matrix/ }));
+  expect(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Matrix" }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("heading", { name: "Matrix" })).toBeTruthy();
   // The same working set, read again from nothing: three people, two links.
   expect(entities().querySelector("caption")?.textContent).toMatch(/^Entities in this view, 3\./);
@@ -142,7 +149,7 @@ test("a selection made on the canvas is the Matrix's selection, and the Matrix's
 
   // Canvas to Matrix: the canvas reports a selection, as a click on ADEYEMI does.
   act(() => props().onSelectionChange?.(["p2"]));
-  fireEvent.click(viewButton("Matrix"));
+  chooseMatrix();
   expect(rowOf(/ADEYEMI/).getAttribute("aria-selected")).toBe("true");
   expect(rowOf(/OKAFOR/).getAttribute("aria-selected")).toBe("false");
 
@@ -166,12 +173,12 @@ test("Expand and Show on a row go to the Graph and use the canvas's own Expand a
   render(<App />);
   await waitFor(() => expect(canvas.props).not.toBeNull());
 
-  fireEvent.click(viewButton("Matrix"));
+  chooseMatrix();
   fireEvent.click(screen.getByRole("button", { name: "Show OKAFOR, Callum on the graph" }));
   expect(viewButton("Graph").getAttribute("aria-pressed")).toBe("true");
   await waitFor(() => expect(focusOnNode).toHaveBeenCalledWith("p1"));
 
-  fireEvent.click(viewButton("Matrix"));
+  chooseMatrix();
   fireEvent.click(screen.getByRole("button", { name: "Expand BRENNAN" }));
   expect(viewButton("Graph").getAttribute("aria-pressed")).toBe("true");
   await waitFor(() => expect(expandNode).toHaveBeenCalledWith("p3"));

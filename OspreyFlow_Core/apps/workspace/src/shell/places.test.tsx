@@ -92,6 +92,19 @@ describe("the context banner", () => {
     expect(screen.getByRole("region", { name: "You are in Admin" }).textContent).toBe("You are in Admin");
   });
 
+  it("under GOV.UK starts its line with no separator, the place being the banner's title", () => {
+    applyBrand("govuk");
+    render(<ContextBanner place="glass" sections={[{ id: "case", label: "Case", current: true, onSelect: () => {} }]} datasets={["Prison intel"]} />);
+    const content = document.querySelector(".govuk-notification-banner__content")!;
+    expect(content.firstElementChild?.className).not.toContain("context-banner__sep");
+    expect(content.querySelectorAll(".context-banner__sep").length).toBe(1);
+  });
+
+  it("carries Monitoring's open count on its section, said in its name", () => {
+    render(<ContextBanner place="glass" sections={[{ id: "monitoring", label: "Monitoring", current: false, onSelect: () => {}, badge: 3 }]} />);
+    expect(screen.getByRole("button", { name: "Monitoring 3 open" }).querySelector(".context-banner__badge")?.textContent).toBe("3");
+  });
+
   it("is a GOV.UK notification banner under that brand", () => {
     applyBrand("govuk");
     render(<ContextBanner place="admin" />);

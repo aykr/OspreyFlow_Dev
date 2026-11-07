@@ -28,6 +28,8 @@ export interface BannerSection {
   current: boolean;
   /** Absent: the section is coming, drawn but not yet usable. */
   onSelect?: () => void;
+  /** How many are open there (Monitoring's alerts, ADR-115 E6); none drawn for nothing. */
+  badge?: number;
 }
 
 export interface ContextBannerProps {
@@ -80,12 +82,22 @@ export function useCaseContext(
 
 export function ContextBanner({ place, sections = [], caseSwitcher, datasets, crossLink }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
-  const sep = <span className="context-banner__sep" aria-hidden="true">·</span>;
+  // Under GOV.UK the place is the banner's title, so its content line starts with no separator.
+  let first = true;
+  const sepEl = <span className="context-banner__sep" aria-hidden="true">·</span>;
+  const next = () => {
+    if (govuk && first) {
+      first = false;
+      return null;
+    }
+    first = false;
+    return sepEl;
+  };
   const line = (
     <>
       {sections.length > 0 && (
         <>
-          {sep}
+          {next()}
           <nav aria-label={`In ${PLACE_NAME[place].replace(/^The /, "the ")}`} className="context-banner__sections">
             {sections.map((section) => (
               <button
@@ -97,6 +109,16 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
                 onClick={section.onSelect}
               >
                 {section.onSelect ? section.label : `${section.label} (coming)`}
+                {/* The count's name is its visible text and "open", so the visible label stays in the
+                    accessible name (WCAG 2.5.3): "Monitoring 3 open". */}
+                {section.badge ? (
+                  <>
+                    {" "}
+                    <span className="value context-banner__badge">{section.badge > 99 ? "99+" : section.badge.toLocaleString("en-GB")}</span>
+                    {" "}
+                    <span className="visually-hidden">open</span>
+                  </>
+                ) : null}
               </button>
             ))}
           </nav>
@@ -104,19 +126,19 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
       )}
       {place === "glass" && caseSwitcher && (
         <>
-          {sep}
+          {next()}
           {caseSwitcher}
         </>
       )}
       {place === "glass" && datasets && datasets.length > 0 && (
         <>
-          {sep}
+          {next()}
           <span>reads {names(datasets)}</span>
         </>
       )}
       {place === "ingest" && caseSwitcher && (
         <>
-          {sep}
+          {next()}
           <span>for</span>
           {caseSwitcher}
         </>

@@ -12,6 +12,16 @@ import { SidePanelStack } from "../src/layout/SidePanelStack";
 
 await applyHarnessBrand();
 
+// ADR-145 Amendment 2: with nothing stored the column opens with the Inspector only. The walkthroughs
+// here move and size every panel, so a fresh page starts with none folded (a reload keeps what was
+// folded); `?defaults=1` keeps the default.
+try {
+  if (new URLSearchParams(location.search).has("defaults")) localStorage.removeItem("ospreyflow.side-panels-folded");
+  else if (localStorage.getItem("ospreyflow.side-panels-folded") === null) localStorage.setItem("ospreyflow.side-panels-folded", "[]");
+} catch {
+  // A private window: the default then applies.
+}
+
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 

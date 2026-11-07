@@ -722,7 +722,8 @@ export function App() {
       cancelled = true;
     };
   }, [investigationId, bearerToken, counts.nodes, counts.edges]);
-  // ADR-115 E6: the rail's Alerts badge, the case's queue counted as the reader (rule 3).
+  // ADR-115 E6: the open-alert count, the case's queue counted as the reader (rule 3), drawn on the
+  // banner's Monitoring section since ADR-145 Amendment 2 (it left the rail).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!investigationId || !bearerToken || !rights?.has("read_alert_queue")) {
@@ -1328,6 +1329,30 @@ export function App() {
   // The timeline and the status line describe the working set: they belong beside the graph and
   // the map, not over Reports, a Superset board or the Admin area, and not to an account that may
   // not investigate (opened under an embedded board, the timeline overlapped it).
+  // ADR-097 step 1: the places the analyst goes to inside the Glass (ADR-145 Amendment 2 splits them
+  // between the rail and its ⋯ More).
+  const railTools = [
+    { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
+    // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
+    { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
+    { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
+    { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
+    { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
+    // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
+    { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
+  ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
+  // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
+  // Someone offered none of Graph and Map (a Reports Viewer) has theirs in the switch itself.
+  const allowedViews = [
+    { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
+    { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
+    // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same data.
+    { id: "matrix", label: "Matrix", pressed: view === "matrix", onSelect: () => setView("matrix") },
+    // ADR-111: the case's figures for people who read rather than investigate.
+    { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
+  ].filter((v) => (viewsFor(rights) as string[]).includes(v.id));
+  const mainViews = allowedViews.filter((v) => v.id === "graph" || v.id === "map");
+  const otherViews = allowedViews.filter((v) => v.id !== "graph" && v.id !== "map");
   const showsWorkingSetTools =
     showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards"].includes(view);
 
@@ -1378,20 +1403,14 @@ export function App() {
         views={
           app === "glass"
             ? [
-                ...[
-                  { id: "graph", label: "Graph", pressed: view === "graph", onSelect: () => setView("graph") },
-                  { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
-                  // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same data.
-                  { id: "matrix", label: "Matrix", pressed: view === "matrix", onSelect: () => setView("matrix") },
-                  // ADR-111: the case's figures for people who read rather than investigate.
-                  { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
-                ].filter((v) => (viewsFor(rights) as string[]).includes(v.id)),
+                ...(mainViews.length > 0 ? mainViews : otherViews),
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") }]
                   : []),
               ]
             : []
         }
+        moreViews={app === "glass" && mainViews.length > 0 ? otherViews : []}
         actions={
           view === "graph" ? (
             // `02_GLASS_FRONTEND.md` §10: the export drawer, for the whole case.
@@ -1423,7 +1442,7 @@ export function App() {
                 { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView(landingView(rights)) },
                 { id: "boards", label: "Boards", current: false },
                 ...((railEntries(rights) as string[]).includes("alerts")
-                  ? [{ id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts") }]
+                  ? [{ id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts"), badge: alertCount }]
                   : []),
               ]
             : []
@@ -1451,22 +1470,11 @@ export function App() {
           Glass's alone; the Studio has none. */}
       {app === "glass" && (
       <LeftRail
-        items={[
-                { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
-                // ADR-133 decision 5 (ADR-109 ruling 5 before it, as Alerts): the Monitoring place —
-                // the one alert queue for every kind, rules and templates, watches, held rows, audit.
-                // The owner's answer of 1 November 2026: watches are reached from its Watches tab
-                // alone; the rail has no Watches entry.
-                { id: "alerts", label: "Monitoring", icon: "alerts" as const, onSelect: () => setView("alerts"), pressed: view === "alerts", badge: alertCount },
-                // ADR-109 ruling 5: enhanced due diligence — ultimate beneficial ownership.
-                { id: "ownership", label: "Ownership", icon: "ownership" as const, onSelect: () => setView("ownership"), pressed: view === "ownership" },
-                { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
-                { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
-                { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
-                // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
-                { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
-        ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id))}
-        // ADR-115 E6: Help reopens the welcome panel, as `?` does.
+        // ADR-145 Amendment 2 (variant B): the rail keeps Cases and Explore; Ownership, History,
+        // Questions and Dashboards are one click away under its ⋯ More; Monitoring, with its open
+        // count, is the banner's section.
+        items={railTools.filter((entry) => entry.id === "cases" || entry.id === "explore")}
+        more={railTools.filter((entry) => entry.id !== "cases" && entry.id !== "explore")}
         onHelp={() => setWelcomeOpen(true)}
       />
       )}

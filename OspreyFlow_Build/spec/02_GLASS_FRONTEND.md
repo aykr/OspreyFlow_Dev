@@ -191,14 +191,19 @@ narrowed.
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the analyst goes to, in this order: *Cases*,
-*Alerts* — named *Monitoring* since ADR-133 — (the one alert queue, its rules, the watches with their alert inbox in its *Watches* tab, held rows and audit — ADR-109, §3.3; the rail's own *Watches* entry was removed by the owner's answer of 1 November 2026, ADR-133 Amendment 5),
-*Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Explore* (where to start in the case's data, ADR-100, §3.1), *Questions* (the case's
-questions to the model, ADR-098, §3.1) and *Dashboards* (ADR-111 Amendment 3). It is the Glass's alone:
+The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 1) holds the places the
+analyst goes to most (ADR-145 Amendment 2, the owner's choice of variant B): *Cases* and *Explore* (where
+to start in the case's data, ADR-100, §3.1), then **⋯ More**, a menu of the rest, one click away:
+*Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Questions* (the case's
+questions to the model, ADR-098, §3.1) and *Dashboards* (ADR-111 Amendment 3). *More*'s name says which of
+them is open ("More, History open"). *Monitoring* (the one alert queue, its rules, the watches with
+their alert inbox in its *Watches* tab, held rows and audit — ADR-109, ADR-133, §3.3) is the context
+banner's section (§2.0a), not the rail's. It is the Glass's alone:
 the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
 switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible name is its label;
-*Show names* widens the rail to show the labels and *Hide names* narrows it again. *Alerts* carries the case's open
-and claimed alerts as a count (said in its name, "Alerts, 3 open"), and *Help*, above *Show names*,
+*Show names* widens the rail to show the labels and *Hide names* narrows it again. The banner's
+*Monitoring* carries the case's open and claimed alerts as a count (said in its name, "Monitoring 3
+open"), and *Help*, above *Show names*,
 reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
 hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
@@ -256,6 +261,13 @@ set of widgets:
    in what the Conduit itself returns. `Sign out` ends the session at the identity provider
    (`end_session_endpoint`) and clears the Glass's own memory and session storage; it does not
    itself alter what any control shows.
+
+**What the column opens with (ADR-145 decision 4, Amendment 2).** Until the analyst folds or opens a
+panel, the right-hand column opens with the Inspector only; Metrics and the Query builder are folded
+beneath it, in their order, each opened by one press on its name (and on the Graph, *Find
+connections*). What the analyst folds or opens is kept in this browser, as before. The column then
+shows the Inspector's parts alone: at most 7 for a node, 6 for a link, where with every panel open it
+showed up to 13 (`keyboard/case-screen-parts.spec.ts`).
 
 **Hiding panels (ADR-082).** The right-hand column (the Inspector with the metrics and the query
 builder) and the timeline can each be hidden with a *Hide* button and brought back with *Show*. The
@@ -353,7 +365,9 @@ One row, 40px. From the left:
   property; it starts after two characters and says `Type at least 2 characters to search.` while
   there is one (ADR-074).
 - **The view switch**, a segmented group named *View*: Graph, Map, and Messages when a dossier is
-  open. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
+  open; then **More views ▾** (ADR-145 Amendment 2), a menu of Matrix and Reports, one click away,
+  named after the one of them that is open. A person offered neither Graph nor Map (a Reports Viewer)
+  has their views in the switch itself. The pressed one is drawn in primary text with a 2px underline, not in brass (ADR-097: brass is
   for the primary action, focus and the selection).
 - **Export**, for the whole case, on the Graph: one menu button, `Export ▾`, that opens the export panel
   (`aria-expanded`, not a pressed state; ADR-097 step 3).
@@ -368,8 +382,8 @@ One row, 40px. From the left:
 - **The account**, at the right-hand end (item 5 above).
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
-the Glass (search, the view switch, Export). Monitoring (with the watches in its Watches tab),
-Ownership and History are on the rail; the resolution threshold, named **Match strictness** for what
+the Glass (search, the view switch, Export). Monitoring (with the watches in its Watches tab) is the
+banner's section, Ownership and History are under the rail's ⋯ More; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
@@ -457,6 +471,13 @@ title and one line, taken from the workspace's height.
 before, each behind its right, with **Proposed types** (`manage_ontology`) among them: it left the
 Glass's rail, and is decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090
 Amendment 5). Its routes ask for the administrator role as well as `manage_ontology`.
+
+**The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
+deployed page, whose brand frame adds the skip link first — in this order: the mark, the three places,
+search with *Add many from a list* and *Filters*, Graph, Map, *More views*, *Export*, the theme, the
+account; the banner's Case, Boards and Monitoring, the case menu and the cross-link; the rail's Cases,
+Explore, ⋯ More, Help and Show names; and the Graph's *Match strictness*. `App.chrome.test.tsx` counts
+them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
 banner's cross-link (through the real case module and a reload), its sections and Home's cards end to
@@ -1107,8 +1128,8 @@ listed one to a line beneath it (three alerts' words joined into one sentence co
 stored or drawn on the node: the score is a read, and another analyst may read another. Its keyboard
 case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
 
-**The Reports view (ADR-111).** A third entry in the top bar's view switch — *Graph · Map ·
-Reports* — for people who read rather than investigate (a case Viewer and above). It draws the case's
+**The Reports view (ADR-111).** An entry of the top bar's view switch — under *More views* since
+ADR-145 Amendment 2, or in the switch itself for someone offered neither Graph nor Map — for people who read rather than investigate (a case Viewer and above). It draws the case's
 figures as the Conduit counts them for this reader (`GET …/reports`): the alerts of the period
 ("3 alerts in the last 12 weeks"), alerts raised each week by typology (stacked bars in the channel
 tokens, with a key), open alerts by age (under a day, 1 to 7 days, 7 to 30, over 30), outcomes by
@@ -1560,7 +1581,8 @@ Not negotiable and cheaper to build in than to retrofit.
   cannot" case, over a deliberately disconnected fixture node.
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data. **What it is (built 1 November 2026, GDS
-  remediation plan A1):** *Matrix* in the view switch beside *Graph* and *Map*, open to anyone who
+  remediation plan A1):** *Matrix* in the view switch — under *More views*, beside *Graph* and *Map*,
+since ADR-145 Amendment 2 — open to anyone who
   may investigate. Two HTML tables over the working set's own graph — no request of its own, so
   nothing the reader may not see can reach it (rule 3) and it carries no count but the rows it shows
   (rule 7): *Entities* (Name as the row header, as the canvas names the node; Type; its own Marking,

@@ -285,6 +285,9 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // the places on it, and inside the Studio the rail leads back to the investigation. Each case below
   // keeps the point of the one it replaces.
   const rail = () => screen.getByRole("navigation", { name: "Workspace" });
+  // ADR-145 Amendment 2 (variant B): Monitoring, with its open count, is the banner's section.
+  const monitoring = async () =>
+    within(await screen.findByRole("navigation", { name: "In the Glass" })).findByRole("button", { name: /^Monitoring/ });
 
   test("after the Ingest Studio tile, the Ingest Studio is the one showing", async () => {
     sessionStorage.setItem(
@@ -371,9 +374,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     holdAllRequests();
     render(<App />);
     const rail = await screen.findByRole("navigation", { name: "Workspace" });
-    await within(rail).findByRole("button", { name: "Monitoring" });
     expect(within(rail).queryByRole("button", { name: "Watches" })).toBeNull();
-    fireEvent.click(within(rail).getByRole("button", { name: "Monitoring" }));
+    // ADR-145 Amendment 2: Monitoring is the banner's section, not the rail's.
+    expect(within(rail).queryByRole("button", { name: /^Monitoring/ })).toBeNull();
+    fireEvent.click(await monitoring());
     expect(await screen.findByRole("tab", { name: "Watches" })).toBeTruthy();
   });
 
@@ -436,7 +440,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     withRights(["investigate", "read_alert_queue", "edit_pipelines"]);
     // In the Glass, on Monitoring; then the page is reloaded into the Studio, as `openCase` does.
     const first = render(<App />);
-    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
+    fireEvent.click(await monitoring());
     first.unmount();
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     const went: string[] = [];
@@ -446,7 +450,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     try {
       render(<App />);
       fireEvent.click(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ }));
-      expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+      expect((await monitoring()).getAttribute("aria-current")).toBe("page");
       // The case is the open one: Back neither changes it nor reloads.
       expect(sessionStorage.getItem("ospreyflow.investigationId")).toBe("inv-1");
       expect(went).toEqual([]);
@@ -459,13 +463,12 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     holdAllButRights();
     render(<App />);
 
-    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
+    fireEvent.click(await monitoring());
     fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: "Ingest Studio" }));
     expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^← Back to .* in the Glass$/ }));
-    expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
-    // ADR-145 decision 1: the banner's own Monitoring section marks the same place.
-    expect(within(screen.getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Monitoring" }).getAttribute("aria-current")).toBe("page");
+    // ADR-145 decision 1 and Amendment 2: the banner's Monitoring section marks the place open.
+    expect((await monitoring()).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
@@ -532,7 +535,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       expect(await screen.findByText(sentence)).toBeTruthy();
 
       // The owner's answer of 1 November 2026: the alert inbox is in Monitoring's Watches tab.
-      fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Monitoring" }));
+      fireEvent.click(await monitoring());
       fireEvent.click(await screen.findByRole("tab", { name: "Watches" }));
       fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
       fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
