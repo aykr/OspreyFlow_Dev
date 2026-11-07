@@ -16,19 +16,41 @@ that catches it:
 - the Preview widening who may read the graph: Test's right and level, a recipe of another unit
   hidden (`test_a_preview_needs_tests_right`,
   `test_a_preview_of_another_units_recipe_is_not_found`);
-- an uncleared reader seeing values (`test_a_preview_masks_values_for_a_reader_not_cleared`)."""
+- an uncleared reader seeing values (`test_a_preview_masks_values_for_a_reader_not_cleared`);
+- rule 4 at the class (the second review of L1.2): a recipe reached through a case that does not
+  load into the recipe's dataset. `get_authorized_studio_recipe` checked the recipe's unit alone,
+  so an editor of case B could dry-run case A's recipe through B's path, under B's rule gate and
+  row keys. The recipe must belong to the dataset the path's case loads into (`made_in`, the rule
+  that gave the recipe its dataset), or it is missing, for Preview and Test alike
+  (`test_a_recipe_is_missing_through_a_case_that_only_reads_its_dataset`); another case loading
+  into the same dataset reaches it
+  (`test_a_recipe_is_reached_through_another_case_loading_into_its_dataset`); a viewer of the
+  case is refused Preview and Test (`test_a_viewer_of_the_case_is_refused_preview_and_test`)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app, get_audit, get_principal
+from services.api.app import (
+    app,
+    get_audit,
+    get_investigations,
+    get_principal,
+    get_recipes_repo_root,
+)
+from services.api.investigations import AccessLevel, InsufficientAccessError, Investigation
 
+from schemas.domain import Principal
+from tests.services.api.any_case import AnyCase
 from tests.services.api.test_app import _FakeAudit
+from tests.services.api.test_studio_publish_routes import git_repo  # noqa: F401  (a fixture)
 from tests.services.api.test_studio_recipe_routes import (
     _UNCLEARED_HANDLING,
     NO_ROLE_ANALYST,
+    SOURCE_APPROVER,
+    SOURCE_AUTHOR,
     _ready_draft,
 )
 from tests.services.api.test_studio_verify_routes import (  # noqa: F401  (fixtures)
@@ -90,6 +112,19 @@ def test_a_preview_shows_the_graph_test_would_show(
     assert graph_client.studio_recipes.draft.verified_at is not None  # type: ignore[attr-defined]
 
 
+def test_deploy_is_refused_after_a_preview_until_test_runs(
+    graph_client: TestClient, tmp_path: Path, git_repo: Path
+) -> None:
+    """The store's own gate, `StudioRecipeStore.publish`'s 409, is what a Preview must not open."""
+    _ready(graph_client, tmp_path)
+    app.dependency_overrides[get_recipes_repo_root] = lambda: git_repo
+    assert graph_client.post(f"{RECIPE}/preview-graph").status_code == 200
+    app.dependency_overrides[get_principal] = lambda: SOURCE_APPROVER
+    refused = graph_client.post(f"{RECIPE}/publish", json={})
+    assert refused.status_code == 409
+    assert refused.json()["error"] == "studio_recipe_not_verified"
+
+
 def test_a_preview_needs_tests_right(graph_client: TestClient, tmp_path: Path) -> None:
     _ready(graph_client, tmp_path)
     app.dependency_overrides[get_principal] = lambda: NO_ROLE_ANALYST
@@ -113,3 +148,53 @@ def test_a_preview_masks_values_for_a_reader_not_cleared(
     body = graph_client.post(f"{RECIPE}/preview-graph").json()
     assert body["values_masked"] is True
     assert "07960112334" not in str(body)
+
+
+# --- Rule 4 at the class: the recipe belongs to the path case's dataset -------------------------
+
+
+def _in_case(datasets: list[str]) -> Principal:
+    """The principal `get_principal` gives a case route: scoped to the path case's datasets, the
+    one it loads into first (`dataset_scope.scope_to_case`)."""
+    return SOURCE_AUTHOR.model_copy(update={"datasets": datasets})
+
+
+@pytest.mark.parametrize("route", ["preview-graph", "verify"])
+def test_a_recipe_is_missing_through_a_case_that_only_reads_its_dataset(
+    graph_client: TestClient, tmp_path: Path, route: str
+) -> None:
+    _ready(graph_client, tmp_path, dataset_id="ds-a")
+    # Case B loads into its own dataset and only reads A's.
+    app.dependency_overrides[get_principal] = lambda: _in_case(["ds-b", "ds-a"])
+    response = graph_client.post(f"{RECIPE}/{route}")
+    assert response.status_code == 404
+    assert response.json()["error"] == "studio_recipe_not_found"
+    assert graph_client.studio_recipes.draft.verified_at is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("route", ["preview-graph", "verify"])
+def test_a_recipe_is_reached_through_another_case_loading_into_its_dataset(
+    graph_client: TestClient, tmp_path: Path, route: str
+) -> None:
+    _ready(graph_client, tmp_path, dataset_id="ds-a")
+    app.dependency_overrides[get_principal] = lambda: _in_case(["ds-a", "ds-c"])
+    assert graph_client.post(f"{RECIPE}/{route}").status_code == 200
+
+
+class _ViewerOnly(AnyCase):
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: AccessLevel
+    ) -> Investigation:
+        if need != AccessLevel.VIEWER:
+            raise InsufficientAccessError(f"{need.value} needed")
+        return await super().get_authorized(investigation_id, principal, need=need)
+
+
+@pytest.mark.parametrize("route", ["preview-graph", "verify"])
+def test_a_viewer_of_the_case_is_refused_preview_and_test(
+    graph_client: TestClient, tmp_path: Path, route: str
+) -> None:
+    _ready(graph_client, tmp_path)
+    app.dependency_overrides[get_investigations] = _ViewerOnly
+    assert graph_client.post(f"{RECIPE}/{route}").status_code == 403
+    assert graph_client.studio_recipes.draft.verified_at is None  # type: ignore[attr-defined]
