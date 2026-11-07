@@ -42,24 +42,35 @@ One Postgres table, `alerts` (`services/api/alerts.py` 76–108), holds every al
 - **Severity:** `low | medium | high`.
 - **Audience:** `case | team | owner`.
 
-**There is no registry of kinds.** A new kind has to touch twelve places by hand:
-- `AlertKind` and `AlertFactKind`;
-- `_KIND_SQL`, `_SEVERITY_SQL`, `DEFAULT_SEVERITY` and `_AUDIENCE_SQL`/`queue_scope` in
-  `services/api/alerts.py`;
-- `_row_to_fact`, the same file;
-- `summary_of` in `services/api/alert_queue.py`;
-- `_RULE_GROUP` in `services/api/reports.py`;
-- `GROUP_NAMES` in `services/api/trends.py`;
-- the trend predicate in `packages/adapters/analytics_duckdb/alert_facts.py`;
-- `needs_second_person`;
-- the Glass's `typologyLabel` (`apps/workspace/src/alerts/names.ts` 30–48).
+**There is no registry of kinds.** A new kind has to touch fifteen places by hand. (A first count
+said twelve against a list of thirteen; it also merged `_AUDIENCE_SQL` with `queue_scope` and left
+out `TYPOLOGY_SEVERITY`.)
+1. `AlertKind` (`packages/schemas/domain.py` 881);
+2. `AlertFactKind` (`packages/schemas/analytics.py` 556);
+3. `DEFAULT_SEVERITY` (`services/api/alerts.py` 171–175);
+4. `TYPOLOGY_SEVERITY` (`services/api/alerts.py` 176–179), for a new typology with its own default;
+5. `_KIND_SQL` (`services/api/alerts.py` 196–200);
+6. `_SEVERITY_SQL` (`services/api/alerts.py` 201–210);
+7. `_SHARED_SQL` and `_AUDIENCE_SQL` (`services/api/alerts.py` 217–224);
+8. `queue_scope` (`services/api/alerts.py` 227–245);
+9. `_row_to_fact` (`services/api/alerts.py` 293);
+10. `summary_of` (`services/api/alert_queue.py` 68);
+11. `needs_second_person` (`services/api/alert_queue.py` 314–319);
+12. `_RULE_GROUP` (`services/api/reports.py` 134);
+13. `GROUP_NAMES` (`services/api/trends.py` 110);
+14. the kind map in `packages/adapters/analytics_duckdb/alert_facts.py` (32);
+15. the Glass's `typologyLabel` (`apps/workspace/src/alerts/names.ts` 30–48).
 
 **Two lists, not one.**
 - **The queue.** The Monitoring place's *Queue* tab reads `GET …/alert-queue`
   (`services/api/app.py` 9279), which serves all three kinds.
 - **The inbox.** The *Watches* tab's alert inbox (`apps/workspace/src/watches/AlertInbox.tsx`)
   reads `GET …/alerts` (`services/api/app.py` 6271). That route returns every alert the reader
-  *owns*, with no case filter (`services/api/alerts.py` 439–448).
+  *owns*, with no case filter. The dataset reach does apply: `list_authorized` adds
+  `reach_clause(principal, 2)` (`services/api/alerts.py` 439–448), which keeps the read to the
+  datasets in the reader's principal, plus any alert that names no dataset
+  (`services/api/dataset_scope.py` 73–83). So the inbox shows the reader's alerts from *every case
+  whose datasets the open case reaches*, not only the open case's alerts.
 - **Where ADR-130's explanation is.** ADR-130's "what fired it" (`fired_on`, the hotlist's identifier
   and review date) is only in the inbox's view (`services/api/watch_routes.py` 161–204). It is not in
   the queue's `AlertExplanation` (`packages/schemas/domain.py` 1339–1361).
@@ -71,16 +82,16 @@ The *Tests* column names the test that would fail if the cell were violated (rul
 | # | Kind (where it lives) | Generated | Triaged | Routed | Case scope | Tests |
 | --- | --- | --- | --- | --- | --- | --- |
 | K1 | **Flow typologies**: `structuring`, `rapid_movement`, `circular_flow` (`typology`) | **Built.** When a load runs, before or after commit, as the rule declares. `RuleGate.pre_commit` / `post_commit` (`services/api/rule_evaluation.py` 811–999). The row is built by `alert_row` (551–569). Each finding alerts once (Valkey signature, 715–723). A failing pre-commit rule holds the rows (fail closed). | **Built.** Case queue. Medium by default, no severity written (`services/api/alerts.py` 172). Claim and release. *Give to* a case Editor or Author. Closed with the closed list plus words. Never needs a second person (not high). | **Built.** The case's members. People only (ADR-133 Amendment 7, `services/api/app.py` 9349–9363). Nothing is sent outside the Glass. | **Built.** `investigation_id` is the loading case. Evaluated as the deployer within the rule's dataset (`services/api/rule_evaluation.py` 678–688). Events are read through `AnalyticsPort.list_events` with the access step in the WHERE. **Contradicted** for the queue list: see G2. | `tests/ingest/test_typology_rules.py` 329, 491, 531, 550 |
-| K2 | **AML templates**: `high_risk_jurisdiction`, `large_cash`, `dormant_reactivated`, `velocity_rise` (`typology`) | **Built.** As K1, through `judge_aml` (`services/api/aml_rules.py` 163). The last two run after commit only (`packages/schemas/domain.py` 1059–1067). | **Built**, as K1. Medium. | **Built**, as K1 | **Built**, as K1. An account's history is read through `AnalyticsPort.account_activity` as the deployer. | `tests/services/api/test_aml_rules.py` 197, 269 |
-| K3 | **KYC screening**: `kyc_screening`, with beneficial owners (`typology`) | **Built**, with three triggers. (1) When a load runs, before or after commit (`services/api/kyc_rules.py` 223–273), writing the listed party and an `inferred` `SAME_AS`. (2) When a list is refreshed: by hand, on the list's schedule, or by command. This re-screens every customer of every active screening rule, as each rule's deployer (`services/api/screening_refresh.py` 280–397). (3) Never manually per alert. | **Built.** High (`services/api/alerts.py` 176), so closing a case alert needs a second person (`services/api/alert_queue.py` 314–319): proposed, then approved by another member, never the proposer. A true match also confirms the `SAME_AS` (ADR-109 Amendment 7). | **Built**, as K1 | **Built.** On re-screening, the deployer is cut to the rule's dataset, else to the case's (`services/api/screening_refresh.py` 322–328). Its words name the customer, the listed party, the list and the score (`services/api/kyc_rules.py` 257–261). | `tests/ingest/test_kyc_rules.py` 235, 405; `tests/services/api/test_screening_refresh.py` 290; `tests/scenarios/test_ledger_monitoring_storyline.py` 514 |
-| K4 | **Shared contact details**: `shared_attributes` (`typology`) | **Built.** When a load runs (`services/api/kyc_rules.py` 391–449) | **Built.** Low (`services/api/alerts.py` 177) | **Built**, as K1 | **Built.** Its words name the endpoint's value and the other customers (`services/api/kyc_rules.py` 428–442). | `tests/ingest/test_kyc_rules.py` |
-| K5 | **Unverified customer**: `document_verification` (`typology`) | **Built.** When a load runs (`services/api/kyc_rules.py` 452–482). Also **on a schedule**: the daily sweep of lapsed documents (`services/api/kyc_sweep.py` 50–132), with one replica claiming each day. | **Built.** Medium | **Built**, as K1 | **Built.** Read as each rule's deployer. Documents loaded before a case had a rule are not swept (ADR-109 Amendment 4, disclosed). | `tests/ingest/test_kyc_rules.py` 338 |
-| K6 | **Drawn pattern**: `pattern` (`typology`) | **Built.** After a load commits only. The saved pattern is matched as the deployer (`services/api/pattern_rules.py` 30–72). One alert per distinct match. Past `max_matches` it is refused in words. | **Built.** Medium | **Built**, as K1 | **Built.** Its words name up to five matched nodes. | `tests/ingest/test_pattern_rules.py` 94, 110 |
-| K7 | **Sentence rule**, "this case" or "whole deployment": `sentence` (`typology`) | **Built.** Before commit, after commit, or **on a schedule** (`services/api/rule_schedule.py` 140–238, run as the author resolved afresh). A hit set to "hold" holds rows and raises **no** alert (`services/api/rule_evaluation.py` 867–877). | **Built.** The severity is the sentence's own. A whole-deployment rule is `pending` until a second person approves (`services/api/typology_rules.py` 239–248, 430–473). | **Contradicted.** The builder's *Alert goes to: my team* (`apps/workspace/src/alerts/SentenceBuilder.tsx` 586–593) writes `alerts.team`. But a typology row's audience is always `case` (`services/api/alerts.py` 223), and `_queued` drops the team (`services/api/alert_queue.py` 96). The alert goes to the whole case either way (G6). | **Built.** A deployment-wide rule is judged within the loading case's datasets (`services/api/rule_evaluation.py` 684–687). | `tests/services/api/test_sentence_rules.py` 145, 197; `tests/services/api/test_rule_schedule.py` 194; `tests/services/api/test_rule_maker_checker_routes.py` 139, 204 |
-| K8 | **Sentence rule, "just me"** (`monitor` kind, `rule_id` `monitor:sentence:<id>`) | **Built.** As K7, but after commit only. No `Alert` node is written (`services/api/rule_evaluation.py` 493–494). | **Built.** Audience `owner`, so the owner closes it alone. Claimed, never given. | **Built.** Its author alone | **Built**, within its case's datasets | `tests/services/api/test_sentence_rules.py` |
+| K2 | **AML templates**: `high_risk_jurisdiction`, `large_cash`, `dormant_reactivated`, `velocity_rise` (`typology`) | **Built.** As K1, through `judge_aml` (`services/api/aml_rules.py` 163). The last two run after commit only (`packages/schemas/domain.py` 1059–1067). | **Built**, as K1. Medium (`services/api/alerts.py` 172). | **Built**, as K1 (`services/api/app.py` 9349–9363) | **Built**, as K1. An account's history is read through `AnalyticsPort.account_activity` as the deployer (`services/api/aml_rules.py` 163). | `tests/services/api/test_aml_rules.py` 197, 269 |
+| K3 | **KYC screening**: `kyc_screening`, with beneficial owners (`typology`) | **Built**, with three triggers. (1) When a load runs, before or after commit (`services/api/kyc_rules.py` 223–273), writing the listed party and an `inferred` `SAME_AS`. (2) When a list is refreshed: by hand, on the list's schedule, or by command. This re-screens every customer of every active screening rule, as each rule's deployer (`services/api/screening_refresh.py` 280–397). (3) Never manually per alert. | **Built.** High (`services/api/alerts.py` 177), so closing a case alert needs a second person (`services/api/alert_queue.py` 314–319): proposed, then approved by another member, never the proposer. A true match also confirms the `SAME_AS` (ADR-109 Amendment 7). | **Built**, as K1 (`services/api/app.py` 9349–9363) | **Built.** On re-screening, the deployer is cut to the rule's dataset, else to the case's (`services/api/screening_refresh.py` 322–328). Its words name the customer, the listed party, the list and the score (`services/api/kyc_rules.py` 257–261). | `tests/ingest/test_kyc_rules.py` 235, 405; `tests/services/api/test_screening_refresh.py` 290; `tests/scenarios/test_ledger_monitoring_storyline.py` 514 |
+| K4 | **Shared contact details**: `shared_attributes` (`typology`) | **Built.** When a load runs (`services/api/kyc_rules.py` 391–449) | **Built.** Low (`services/api/alerts.py` 178) | **Built**, as K1 (`services/api/app.py` 9349–9363) | **Built.** Its words name the endpoint's value and the other customers (`services/api/kyc_rules.py` 428–442). | `tests/ingest/test_kyc_rules.py` 192 |
+| K5 | **Unverified customer**: `document_verification` (`typology`) | **Built.** When a load runs (`services/api/kyc_rules.py` 452–482). Also **on a schedule**: the daily sweep of lapsed documents (`services/api/kyc_sweep.py` 50–132), with one replica claiming each day. | **Built.** Medium (`services/api/alerts.py` 172) | **Built**, as K1 (`services/api/app.py` 9349–9363) | **Built.** Read as each rule's deployer (`services/api/kyc_sweep.py` 50–132). Documents loaded before a case had a rule are not swept (ADR-109 Amendment 4, disclosed). | `tests/ingest/test_kyc_rules.py` 338 |
+| K6 | **Drawn pattern**: `pattern` (`typology`) | **Built.** After a load commits only. The saved pattern is matched as the deployer (`services/api/pattern_rules.py` 30–72). One alert per distinct match. Past `max_matches` it is refused in words. | **Built.** Medium (`services/api/alerts.py` 172) | **Built**, as K1 (`services/api/app.py` 9349–9363) | **Built.** Its words name up to five matched nodes (`services/api/pattern_rules.py` 30–72). | `tests/ingest/test_pattern_rules.py` 94, 110 |
+| K7 | **Sentence rule**, "this case" or "whole deployment": `sentence` (`typology`) | **Built.** Before commit, after commit, or **on a schedule** (`services/api/rule_schedule.py` 140–238, run as the author resolved afresh). A hit set to "hold" holds rows and raises **no** alert (`services/api/rule_evaluation.py` 867–877). | **Built.** The severity is the sentence's own. A whole-deployment rule is `pending` until a second person approves (`services/api/typology_rules.py` 239–248, 430–473). | **Contradicted.** The builder's *Alert goes to: my team* (`apps/workspace/src/alerts/SentenceBuilder.tsx` 586–593) writes `alerts.team`. (`services/api/sentence_rules.py` 84). But a typology row's audience is always `case` (`services/api/alerts.py` 223), and `_queued` drops the team (`services/api/alert_queue.py` 96). The alert goes to the whole case either way (G6). | **Built.** A deployment-wide rule is judged within the loading case's datasets (`services/api/rule_evaluation.py` 684–687). | `tests/services/api/test_sentence_rules.py` 145, 197; `tests/services/api/test_rule_schedule.py` 194; `tests/services/api/test_rule_maker_checker_routes.py` 139, 204 |
+| K8 | **Sentence rule, "just me"** (`monitor` kind, `rule_id` `monitor:sentence:<id>`) | **Built.** As K7, but after commit only. No `Alert` node is written (`services/api/rule_evaluation.py` 493–494). | **Built.** No team is written (`services/api/sentence_rules.py` 85–87), so the audience is `owner` (`services/api/alerts.py` 217–224) and the owner closes it alone (`services/api/alert_queue.py` 314–319). Claimed, never given (`services/api/alert_queue.py` 466–470). | **Built.** Its author alone (`services/api/sentence_rules.py` 85–87) | **Built**, within its case's datasets (`services/api/sentence_rules.py` 83) | `tests/services/api/test_sentence_rules.py` 162 |
 | K9 | **Hotlist** (`hotlist`) | **Built.** When a load reaches the change stream, and after a manual resolution link (`services/api/evaluation.py` 144–236; `services/api/recipe_run.py` 400–470). Matched as the unscoped service principal (the exemption ADR-038 records). A `notify` policy writes a stub with no evidence. | **Built.** High by default (`services/api/alerts.py` 173), so a hotlist shared with a team needs a second person to close. It is claimed, never given (`services/api/alert_queue.py` 466–470). Its review date passing raises nothing (not asked for). | **Built.** The owner, plus the owner's organisational unit while its audience is `team` *now* (`services/api/alerts.py` 217–221; ADR-133 ruling 3). | **Partly.** It is not tied to a case: it shows in every case whose datasets reach it (`queue_scope`, `services/api/alerts.py` 242–243). `investigation_id` is only a hint. ADR-130's file and row explanation is in the inbox only (G1). | `tests/services/api/test_monitoring_queue.py` 201–280; `tests/services/api/test_alert_view_explains.py` 153, 259; `tests/services/api/test_evaluation.py` 217, 320 |
-| K10 | **Monitor**, a saved-pattern watch (`monitor`) | **Built.** On the change stream, as K9, matched as the owner within the monitor's dataset (`services/api/evaluation.py` 239–315). Never pre-commit, never scheduled, although spec 02 calls it "run on a schedule". | **Built.** Medium. Claimed, never given. | **Contradicted** against its own docstring. The team is always written (`services/api/evaluation.py` 308) and every monitor row with a team is shared (`services/api/alerts.py` 218), which matches ADR-133 Amendment 1 item 2. But `needs_second_person`'s docstring calls them owner-only (`services/api/alert_queue.py` 316–318), and there is no "only me" setting for a monitor. | **Partly**, as K9 | `tests/services/api/test_evaluation.py` 631, 703; `tests/services/api/test_monitors.py` 61 |
-| K11 | **Scheduled-run notice** (no kind, `rule_id` `schedule:<recipe>`) | **Built.** When a scheduled or watched pipeline run is refused or fails (`services/api/scheduler.py` 142–159, 496–502). | **None.** It is never queued, triaged, trended or counted. | **Built.** The schedule's owner's inbox only | **Partly.** No `dataset_id`, so it is in reach of every case its owner opens. | `tests/services/api/test_schedule_notice.py` 30 |
+| K10 | **Monitor**, a saved-pattern watch (`monitor`) | **Contradicted.** It runs on the change stream only, as K9, matched as the owner within the monitor's dataset (`services/api/evaluation.py` 239–315). It is never pre-commit and never scheduled. Spec 02 says a saved-pattern monitor is "run on a schedule against new data", and that this is the CoLP deck's "automatic daily searches" requirement (`spec/02_GLASS_FRONTEND.md` 918–920). No schedule runs one: `services/api/rule_schedule.py` schedules sentence rules only (140–238). See G16 and Q3. | **Built.** Medium (`services/api/alerts.py` 174). Claimed, never given (`services/api/alert_queue.py` 466–470). | **Contradicted** against its own docstring. The team is always written (`services/api/evaluation.py` 308) and every monitor row with a team is shared (`services/api/alerts.py` 218), which matches ADR-133 Amendment 1 item 2. But `needs_second_person`'s docstring calls them owner-only (`services/api/alert_queue.py` 316–318), and there is no "only me" setting for a monitor. | **Partly**, as K9 | `tests/services/api/test_evaluation.py` 631, 703; `tests/services/api/test_monitors.py` 61 |
+| K11 | **Scheduled-run notice** (no kind, `rule_id` `schedule:<recipe>`) | **Built.** When a scheduled or watched pipeline run is refused or fails (`services/api/scheduler.py` 142–159, 496–502). | **None.** It has no typology and no `hotlist:` or `monitor:` prefix, so `_KIND_SQL` gives it no kind (`services/api/alerts.py` 196–200), and it is never queued, triaged, trended or counted. | **Built.** The schedule's owner's inbox only (`services/api/scheduler.py` 142–159; `services/api/alerts.py` 439–448) | **Partly.** No `dataset_id` (`services/api/scheduler.py` 142–159), so `reach_clause` keeps it in reach of every case its owner opens (`services/api/dataset_scope.py` 81). | `tests/services/api/test_schedule_notice.py` 30 |
 
 **Next to the alerts, but not alerts.**
 - **Held rows** (`services/api/held_rows.py`) are a quarantine with no alert row, read by marking in
@@ -168,10 +179,10 @@ not this lane (see the report).
 
 | # | Gap | Status | Evidence |
 | --- | --- | --- | --- |
-| G1 | **Two lists of the same alerts.** The queue holds all three kinds. The Watches inbox holds the owner's alerts of every case, including typology alerts they deployed, plus schedule notices. ADR-130's explanation lives only in the inbox. ADR-133 decision 5 ("one alert queue for every kind") and decision 7 ("ADR-130's shape, extended to every kind") are partly built. | Partly | `services/api/app.py` 6271, 9279; `services/api/watch_routes.py` 161–204; `packages/schemas/domain.py` 1339–1361 |
+| G1 | **Two lists of the same alerts.** The queue holds all three kinds. The Watches inbox holds the owner's alerts with no case filter, kept only to the open case's dataset reach, so it shows alerts from every case reaching the same datasets: typology alerts they deployed, plus schedule notices, which name no dataset and so are always in reach (`services/api/alerts.py` 439–448; `services/api/dataset_scope.py` 73–83). ADR-130's explanation lives only in the inbox. ADR-133 decision 5 ("one alert queue for every kind") and decision 7 ("ADR-130's shape, extended to every kind") are partly built. | Partly | `services/api/app.py` 6271, 9279; `services/api/watch_routes.py` 161–204; `packages/schemas/domain.py` 1339–1361 |
 | G2 | **Rule 3: the queue list checks nodes only.** The list drops an alert whose *nodes* the reader cannot see, but not one whose cited *links or transactions* they cannot see, so the list can show an alert whose explanation answers 404. That says a hidden element exists. The module's own docstring and spec 03 §3.8a say links and transactions are checked. `close_for_elements` admits the gap. | Contradicted | `services/api/alert_queue.py` 116–127 (vs 11–15); `services/api/alerts.py` 628–630 |
-| G3 | **Rule 3, untested: the inbox returns an alert's words whatever the evidence.** `alert_to_view` withholds the referents when the evidence is not available, but returns `words` as stored. A typology alert's words name customers, list entries and identifiers, and it sits in its deployer's inbox. No test covers a worded alert with hidden evidence: the redaction test uses a hotlist alert with no words. | Partly (untested) | `services/api/watch_routes.py` 205–232; `tests/scenarios/test_phase7_stage6c_watch_routes.py` |
-| G4 | **No registry of kinds.** ADR-143 decision 12 asks for "its own rule kind". A new kind touches twelve places (§1), and a missed one goes silently uncounted, because `_KIND_SQL` gives NULL and the row is never queued. | Partly | `services/api/alerts.py` 196–224 |
+| G3 | **Rule 3, untested: the inbox returns an alert's words whatever the evidence.** `alert_to_view` withholds the referents when the evidence is not available, but returns `words` as stored. A typology alert's words name customers, list entries and identifiers. It sits in its deployer's inbox, which has no case filter, only the dataset reach (`services/api/alerts.py` 439–448), so it is read from any case reaching its dataset, as a principal whose access may differ from the one the case it was raised in gave. No test covers a worded alert with hidden evidence: the redaction test uses a hotlist alert with no words. | Partly (untested) | `services/api/watch_routes.py` 205–232; `tests/scenarios/test_phase7_stage6c_watch_routes.py` |
+| G4 | **No registry of kinds.** ADR-143 decision 12 asks for "its own rule kind". A new kind touches fifteen places (§1), and a missed one goes silently uncounted, because `_KIND_SQL` gives NULL and the row is never queued. | Partly | `services/api/alerts.py` 196–224 |
 | G5 | **Hotlist and monitor alerts have no case.** They follow the dataset reach, not the case, so the journey "from an alert to its case" has no case to go to for them. | Partly (as designed, ADR-099 Amendment 3) | `services/api/alerts.py` 242–243 |
 | G6 | **"Alert goes to: my team" does nothing to who sees it.** A sentence rule's team is written but never read for a typology alert. | Contradicted (ADR-133 decision 1, "the team the alert goes to") | `services/api/alerts.py` 223; `services/api/alert_queue.py` 96 |
 | G7 | **No way back** from the canvas or the case to the alert. Home opens the case, not the alert. There is no link to an alert. | Not built (no ADR asks) | `apps/workspace/src/alerts/AlertQueue.tsx` 112; `apps/workspace/src/home/HomePage.tsx` 214–235 |
@@ -183,6 +194,7 @@ not this lane (see the report).
 | G13 | **Coverage gaps (rules 13 and 15).** Held rows and Audit are not axe-scanned in any theme: the harness switches only rules, watches and lists. The alerts and watch-panel harnesses have no GOV.UK scan. These actions have no keyboard case: *Withdraw the close*, *Read a saved pattern as a sentence*, Home's attention rows. | Partly | `apps/workspace/keyboard/monitoring-harness.tsx` 281; `apps/workspace/a11y/every-harness.spec.ts` |
 | G14 | **Stale docstrings.** These say what was true before ADR-133 or ADR-134: monitors are owner-only; `record_match` is the only constructor; `investigation_id` is "not an access-control scope" (it scopes typology alerts in `queue_scope`); Reports count typology only; no hotlist store exists. | Contradicted (comments only) | `services/api/alert_queue.py` 7–8, 316–318; `packages/schemas/domain.py` 687–691; `services/api/alerts.py` 23–30 |
 | G15 | **N1 and N2 are not built** (§3). N2 needs routing by *right* (reviewers and administrators), which no alert has. N1 needs a judge with no deployer. | Not built | ADR-143 decision 12; ADR-145 decision 9 |
+| G16 | **A saved-pattern monitor never runs on a schedule.** Spec 02 makes the schedule the CoLP deck's "automatic daily searches" requirement. A monitor is judged only when a load reaches the change stream; nothing runs it daily. The only scheduled rules are sentence rules (K7). Spec 02 is not rewritten here: whether the code or the requirement moves is the owner's choice (Q3). | Contradicted | `spec/02_GLASS_FRONTEND.md` 918–920; `services/api/evaluation.py` 239–315; `services/api/rule_schedule.py` 1–18 |
 
 ## 6. Questions for the owner (round 1, multiple choice)
 
@@ -203,15 +215,24 @@ The recommendation is first in each question.
   - *Promotions overdue* is not a case alert. It shows in the top bar's *Needs you* (ADR-145
     decision 11) and on Admin › Operations, to each person holding `review_promotions` for the
     dataset and to administrators.
-- **B.** Both in the case's queue: the overdue alert in the case the promotion came from.
+- **B.** Both in the case's queue: the overdue alert in the case the promotion came from. This
+  **amends ADR-145 decision 9**, which raises the overdue alert "to the reviewers and
+  administrators", not to a case's members.
 - **C.** A fourth queue kind, *board*, for the drawn-item alert. The overdue alert as in A.
 
-**Q3. What should "Alert goes to: my team" mean on a case rule?** (G6)
-- **A (recommended).** The case's members still all see it. The team becomes a label and a queue
-  filter, and the queue gains filters for *mine*, *team*, *unassigned* and *older than N days* for a
-  team lead (G8).
-- **B.** Only members of the author's unit see it. That is a new rule-3 read, with its tests first.
-- **C.** Remove the choice from the builder. The case's members see it, as today.
+*ADR-143 decision 12 asks for "its own rule kind".* A and B meet it at the rule level: the drawn-item
+alert gets its own typology and rule kind (beside `pattern` and `sentence`), inside the existing
+`typology` queue kind, so it touches the typology places of §1's fifteen and not the queue-kind
+ones. C meets it at the queue level too, and touches all fifteen (G4).
+
+**Q3. A saved-pattern monitor and "automatic daily searches".** (G16) Spec 02 says a monitor runs on
+a schedule and calls that the CoLP requirement; the code runs it only when a load arrives.
+- **A (recommended).** Build the schedule: a monitor gains "on a schedule (daily or weekly)" beside
+  "as data loads", run as its owner resolved afresh, one replica per slot, as `rule_schedule.py`
+  already does for sentence rules. Spec 02 then stays as written.
+- **B.** Amend the requirement by ADR: a monitor runs as data loads, and "automatic daily searches"
+  is met by a sentence rule set to run daily (K7). Spec 02's sentence is corrected by that ADR.
+- **C.** Both: the ADR records B now, and A is built later.
 
 **Q4. From an alert to the case and back.** (G7)
 - **A (recommended).** Opening an alert's evidence opens it as a private view of its case (ADR-144
@@ -221,5 +242,15 @@ The recommendation is first in each question.
 - **B.** Only Home's rows open the alert. *Show on the canvas* stays as it is, with no way back.
 - **C.** As today.
 
-A second round would take: whether a lead may give a team hotlist alert to a named person; whether a
-taken-back alert is said apart in the queue (G12); and suppression with an expiry (G11).
+## 7. Questions for the owner (round 2, once round 1 is answered)
+
+**Q5. What should "Alert goes to: my team" mean on a case rule?** (G6)
+- **A (recommended).** The case's members still all see it. The team becomes a label and a queue
+  filter, and the queue gains filters for *mine*, *team*, *unassigned* and *older than N days* for a
+  team lead (G8).
+- **B.** Only members of the author's unit see it. That is a new rule-3 read, with its tests first.
+- **C.** Remove the choice from the builder. The case's members see it, as today.
+
+The rest of round 2 is still to be written as multiple choice: whether a lead may give a team hotlist
+alert to a named person; whether a taken-back alert is said apart in the queue (G12); and suppression
+with an expiry (G11).
