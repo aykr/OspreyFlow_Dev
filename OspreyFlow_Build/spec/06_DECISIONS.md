@@ -27129,8 +27129,10 @@ the same link, of any case, went with them.
    moving it aside again would collide with it after the graph has committed. The run says "1
    dropped row had come back after an earlier refresh withdrew it, and was left in place, its events
    too, until that refresh can be reverted" (`test_snapshot_withdrawal.py`'s
-   `test_a_row_dropped_after_coming_back_is_left_in_place_in_words`, whose fake refuses the second
-   move as the table's primary key does; `test_row_key_withdrawal_ledger.py`).
+   `test_a_row_dropped_after_coming_back_is_left_in_place_in_words`). The ledger never moves such a
+   key a second time: `add_record`'s move skips a key the case already has withdrawn, so it stays
+   kept (`test_row_key_withdrawal_ledger.py`, red with the guard removed). The unit file's fake
+   skips it the same way, so a planner that named the key is seen in the run's report.
 5. **Metering counts no withdrawal**: it writes no element. A merge counts as the create it stands
    for (`tests/ingest/test_metering.py`'s
    `test_a_rows_write_counts_the_same_whether_it_merged_or_created`, red with merges uncounted). A
@@ -27172,6 +27174,8 @@ the same link, of any case, went with them.
   place: this load cannot be reverted, nor the refresh that withdrew it, until the owner rules"
   (asked of this pipeline's own keys in the case alone, `RecipeRunStore.withdrawn_row_keys_among`;
   `tests/ingest/test_snapshot_withdrawal.py`).
+- A row dropped again after coming back is left in place, its events too, and the run says so (point
+  4): its first withdrawal's entry stands until that refresh can be reverted.
 - A Studio load stamps no dataset on what it writes until the load-into rule (ADR-143, L3.1), so the
   test's principals are not confined to a dataset. And two cases' rows on the same pair merge into
   one link with the same audience, so one case's occurrences count the other's, and the other case's
