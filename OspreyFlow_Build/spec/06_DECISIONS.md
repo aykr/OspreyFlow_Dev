@@ -27085,3 +27085,18 @@ smallest step beyond it the owner chose (N4).
    and 15 were its stand-in's. On the Graph a fourth panel, *Find connections*, has no parts and is
    folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
    proves each moved action by keyboard.
+
+### ADR-142, Amendment 1 (7 November 2026) — a merge's make ci takes no lease
+
+Status: accepted by the orchestrator under the owner's delegation of operational judgements (7 November 2026,
+recorded in `process/BUILD_PLAN_PARALLEL_LANES.md`). Decision 6 had the orchestrator hold the stack's lease while it merged
+and ran `make ci`, so that a merge could not contend with a lane's live tests. Two facts make that unnecessary.
+`make ci` reaches no stack: its gates are static checks, unit tests and image scans, and its one pytest
+target over a store (`conformance-guard`) runs only the guard's own case. And since `tests/port_guard.py`
+refuses the leased stack's ports (2491, 55433, 6379) unless `OSPREY_LANE` names the lease's holder, nothing
+the orchestrator runs without the lease can reach the stack by mistake. So from this amendment on, a merge
+and its `make ci` take no lease, and the lease is for live runs only. Everything else in decision 6 stands:
+`make ci` runs on the merge result before the merge is kept (`BUILD_PLAN_PARALLEL_LANES.md`), a red result
+is never pushed, and every push is logged with its hash. The test is `tests/test_port_guard.py`'s
+`test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease`, red with the holder check removed.
+
