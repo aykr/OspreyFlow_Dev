@@ -1,6 +1,6 @@
 # OspreyFlow website: going live
 
-The site is seven files and a folder:
+The site is seven pages and a folder:
 
 | File | What it is |
 | --- | --- |
@@ -10,7 +10,7 @@ The site is seven files and a folder:
 | `monitoring.html` | Monitoring and alerting (build order step 12). Hand-written, no external requests. |
 | `drawing-boards.html` | Drawing boards (7 November 2026): ADR-143's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
 | `three-places.html` | Three places (7 November 2026): ADR-145's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
-| `assets/` | The two new pages' screenshots (about 1.2 MB, ten JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
+| `assets/` | The screenshots of `public-sector.html` and `monitoring.html` (about 1.2 MB, ten JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
 ## How it is published
@@ -23,10 +23,12 @@ The site is the product repository's `gh-pages` branch, served at `https://aykr.
 2. `marketing_site/publish_pages.sh --push` (which stops unless the product checkout's `origin` is
    `https://github.com/aykr/OspreyFlow.git`) copies `index.html`, `intro-video.html`,
    `public-sector.html`, `monitoring.html`, `assets/`, `.nojekyll` and, if present, `CNAME` onto the
-   product repository's `gh-pages` branch.
+   product repository's `gh-pages` branch. **It does not copy `drawing-boards.html` or `three-places.html`**
+   (7 November 2026): published as it stands, the home page's and the other pages' links to them would give
+   "not found". The script's file list is the orchestrator's to change; until it is, do not publish.
 3. Check the pages at that address (the checklist below).
 
-The new pages link to each other, to `index.html`, to `index.html#start` and to `intro-video.html`
+The hand-written pages link to each other, to `index.html`, to `index.html#start` and to `intro-video.html`
 only. They do not link to the repository, so `repoUrl` is the one place the address changes.
 `OspreyFlow_Build/tests/test_website_wording.py` holds every page to that one address, and the home page
 to the product's statement: "OspreyFlow is an open source intelligence mapping, anti-money-laundering
@@ -87,6 +89,7 @@ reading the home page's decoded template, and runs in `make test`.
       one is done, change the pages to say so, and update the test.
 - [ ] The Service Standard points on `public-sector.html` still match the latest re-audit in
       `process/gds/gds_compliance_report.md`.
+- [ ] `publish_pages.sh` copies every page in this folder, `drawing-boards.html` and `three-places.html` included.
 - [ ] Every page opens at the new address, with no request to another site, no horizontal scroll at
       phone width, and the light and dark themes both readable.
 - [ ] The screenshots are still the current product. They come from the synthetic Prison Intelligence
