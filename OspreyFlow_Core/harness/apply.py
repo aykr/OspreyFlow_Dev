@@ -1045,7 +1045,7 @@ def reapply(
         # refused download changes nothing and the next apply sees the same change.
         _fetch_models(model_downloads.commands(compose_file), stage / "compose.yaml")
         # ADR-114 Amendment 35 point 7: held, so a refused move of the stores puts them back.
-        held = store_volumes.FilesHeld(out_dir)
+        files_held = store_volumes.FilesHeld(out_dir)
         # `copytree` copies each file's mode with it, so `deployment.env` arrives `600` (ADR-137
         # decision 2) over a file that was looser.
         move_into_place(stage, out_dir)
@@ -1056,7 +1056,7 @@ def reapply(
     uploads_ready(compose_file)
     # ADR-114 Amendment 35: the stores' data moved into their named volumes once; the move stops
     # the whole deployment, so all of it is started again afterwards.
-    moved = stores_moved(compose_file, held)
+    moved = stores_moved(compose_file, files_held)
     if restart or removed:
         _run(
             _compose(compose_file)

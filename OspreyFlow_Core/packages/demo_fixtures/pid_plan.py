@@ -2624,7 +2624,7 @@ DAY_HOUR_WEIGHTS: Mapping[int, int] = HOUR_COUNTS
 DAY_WEEKDAY_WEIGHTS: Mapping[int, int] = WEEKDAY_COUNTS
 
 
-def _offset(*parts: object) -> float:
+def _fraction_of(*parts: object) -> float:
     """A number in [0, 1) fixed by `parts`: no draw from any generator, so nothing else moves."""
     digest = hashlib.blake2b("|".join(map(str, parts)).encode(), digest_size=8).digest()
     return int.from_bytes(digest, "big") / 2**64
@@ -2655,7 +2655,7 @@ def _times_in(first: date, last: date, n: int, *parts: object, by_weekday: bool)
     slots = _day_slots(first.weekday(), (last - first).days + 1, by_weekday)
     ends = [s[3] for s in slots]
     total = ends[-1]
-    phi = _offset(*parts)
+    phi = _fraction_of(*parts)
     out: list[datetime] = []
     for i in range(n):
         x = ((phi + i / n) % 1.0) * total
