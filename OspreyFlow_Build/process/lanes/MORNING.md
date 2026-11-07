@@ -36,6 +36,7 @@ Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; 
 **Questions for you (recommendation first; nothing waits for them but L3.9 and the queue's suppression):**
 - **L5.** Where a fresh drawing's items live: **(a)** in the drawn dataset itself, since for a drawing-first case the drawing is the data; (b) in the case's layer, promoted into the drawn dataset before a merge.
 - **L6.** Who may merge a drawn dataset: **(a)** an Author of the target holding `merge_datasets`, with a second person when the target's policy asks; administrators see every drawn dataset and may retire one; (b) administrators only.
+- **QB (studio, Part A2): a person loaded into two datasets.** ADR-099 decision 2 says the same person seen in two datasets "stays one node … visible to a case of either". But a load confined to dataset X cannot see dataset S's node, so it makes a second node, and today's code already does this. **(a)** Amend decision 2 to say so. A confined load matches only within its reach, so two cases on two datasets make two nodes. Resolution's scored `SAME_AS` (rule 6) joins them, and nothing of S is detectable from X (rule 3). (b) Make the load match across datasets: that lets X detect S's node, a rule 3 leak, so it isn't advised. Nothing waits on this; the record is just wrong until it's amended.
 - **R8.** The team lead's queue tools: **(a)** all four, including *Suppress until…* (a reason, at most 90 days, listed in the inventory); (b) the filters only.
 
 ## Since 08:00 (you were away from about 08:20)
