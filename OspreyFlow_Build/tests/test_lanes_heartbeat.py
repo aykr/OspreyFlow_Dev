@@ -183,9 +183,9 @@ def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
     assert ("glass is 5 or more commits behind main: ask it to rebase" in lines) is flagged
 
 
-def test_each_lane_is_one_tree_of_its_progress_state_and_steps_in_hand(hb, tmp_path) -> None:
-    """One view: a lane's header line carries its steps done against all and its state; the steps in
-    hand and its note hang under it."""
+def test_each_lane_reads_as_a_checklist_of_every_step_in_words(hb, tmp_path) -> None:
+    """The view says in words what is done and what is left: an overall total, then per lane a
+    heading with its count and state, and every step on its own line with its status spelled out."""
     table = tmp_path / "progress.tsv"
     table.write_text(
         "# comment\n"
@@ -195,12 +195,13 @@ def test_each_lane_is_one_tree_of_its_progress_state_and_steps_in_hand(hb, tmp_p
     )
     hb("beat", "studio", "working", "on the drawer")
     out = hb("show", OSPREY_PROGRESS_FILE=str(table)).stdout
-    lines = out.splitlines()
-    head = next(i for i, line in enumerate(lines) if line.startswith("studio "))
-    assert " 1/4 " in lines[head] and "working" in lines[head]
-    block = lines[head + 1 : head + 4]
-    assert any("L1.2 in review: Second step" in line for line in block)
-    assert any("on the drawer" in line for line in block)
-    case = next(line for line in lines if line.startswith("case "))
-    assert " 0/1 " in case
-    assert "PROGRESS" not in out and "LAST-BEAT" not in out
+    flat = [" ".join(line.split()) for line in out.splitlines()]
+    assert "OVERALL: 1 of 5 steps done · 1 in review · 1 being built · 2 to do" in flat
+    head = next(i for i, line in enumerate(flat) if line.startswith("STUDIO:"))
+    assert flat[head].startswith("STUDIO: 1 of 4 done · working")
+    steps = flat[head + 1 : head + 5]
+    assert steps[0] == "done L1.1 First"
+    assert steps[1].startswith("in review L1.2 Second step") and "now: on the drawer" in steps[1]
+    assert steps[2] == "to do L1.3 Third" and steps[3] == "to do L1.4 Fourth"
+    assert any(line.startswith("CASE: 0 of 1 done") for line in flat)
+    assert any(line.startswith("being built L3.1 Only step") for line in flat)

@@ -72,21 +72,28 @@ sessions() {
   pgrep $a -f '(^|/)claude(-ayan)?( |$)' 2>/dev/null | wc -l | tr -d ' '
 }
 
-# A lane's progress from the step table: line 1 "done/total bar", then "STEP in review: title" lines.
+# A lane's steps from the step table: line 1 "done total", then "status<TAB>step<TAB>title" per step.
 progress_of() {
   [ -f "$PROGRESS" ] || return 0
   awk -F'\t' -v lane="$1" '!/^#/ && NF>=4 && $1==lane {
       total++; if ($4=="done") done++
-      bar = bar ($4=="done" ? "■" : ($4=="todo" ? "□" : "◧"))
-      if ($4=="review") hand[++h] = $2 " in review: " $5
-      if ($4=="building") hand[++h] = $2 " building: " $5
+      word = ($4=="done" ? "done" : ($4=="review" ? "in review" : ($4=="building" ? "being built" : "to do")))
+      line[++n] = word "\t" $2 "\t" $5
     }
-    END { if (total) { printf "%d/%d %s\n", done+0, total, bar; for (i=1;i<=h;i++) print hand[i] } }' "$PROGRESS"
+    END { if (total) { printf "%d %d\n", done+0, total; for (i=1;i<=n;i++) print line[i] } }' "$PROGRESS"
+}
+
+# The whole build in one line.
+overall() {
+  [ -f "$PROGRESS" ] || return 0
+  awk -F'\t' '!/^#/ && NF>=4 { n++; c[$4]++ }
+    END { if (n) printf "OVERALL: %d of %d steps done · %d in review · %d being built · %d to do\n\n", c["done"]+0, n, c["review"]+0, c["building"]+0, c["todo"]+0 }' "$PROGRESS"
 }
 
 # Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
 show() {
   local needs="$DIR/.needs.tmp"; : > "$needs"
+  overall
   for lane in $LANES; do
     local f="$DIR/$lane.beat" state="-" note="" at="" ago="never" ab="-" lc="-"
     if [ -f "$f" ]; then
@@ -116,13 +123,20 @@ show() {
       fi
     fi
     if [ -s "$DIR/$lane.nudge" ]; then note="(unread nudge) $note"; fi
-    local prog head steps count bar
+    local prog head steps done total merged
     prog="$(progress_of "$lane")"; head="$(printf '%s\n' "$prog" | head -1)"; steps="$(printf '%s\n' "$prog" | tail -n +2)"
-    count="${head%% *}"; bar="${head#* }"; [ -n "$head" ] || { count="-"; bar=""; }
-    printf '%-7s %5s  %s   %s · beat %s\n' "$lane" "$count" "$bar" "$state" "$ago"
-    printf '        %s vs main · last commit %s\n' "$ab" "$lc"
-    if [ -n "$steps" ]; then printf '%s\n' "$steps" | sed 's/^/        ├─ /'; fi
-    [ -n "$note" ] && printf '        └─ %s\n' "${note:0:100}"
+    done="${head%% *}"; total="${head#* }"
+    merged=""
+    case "$ab" in +0/*) merged="all merged" ;; +*) merged="${ab%%/*} commits not yet merged"; merged="${merged#+}" ;; esac
+    printf '%s: ' "$(echo "$lane" | tr '[:lower:]' '[:upper:]')"
+    [ -n "$head" ] && printf '%s of %s done · ' "$done" "$total"
+    printf '%s · last heard %s%s\n' "$state" "$ago" "${merged:+ · $merged}"
+    if [ -n "$steps" ]; then
+      printf '%s\n' "$steps" | awk -F'\t' -v note="${note:0:90}" '{
+          now = ""; if (!told && ($1=="in review" || $1=="being built") && note != "") { now = "   <- now: " note; told = 1 }
+          printf "  %-12s %-6s %s%s\n", $1, $2, $3, now }
+        END { if (!told && note != "") printf "  note: %s\n", note }'
+    elif [ -n "$note" ]; then printf '  note: %s\n' "${note:0:90}"; fi
     echo
   done
   echo
