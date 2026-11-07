@@ -153,7 +153,9 @@ async def test_a_match_on_a_node_the_reader_may_not_see_reads_as_no_node_at_all(
 ):
     """ADR-110 Amendment 15 point 5's last sentence: the engine asks `find_node` under the loader's
     principal, so a node they may not see is not matched, and the row creates exactly as when no
-    node exists. The run they are told of, and its figures, are the same in both worlds."""
+    node exists. The run they are told of, and its figures, are the same in both worlds. The fake
+    hides SYN-1 from the loader alone, as an adapter's access filter would, so an engine asking
+    under any other principal finds it and the worlds differ (red so, `L1.2a_RED_RECORD.md`)."""
     from typing import Any
 
     from services.api.studio_publish import load_with_rules
@@ -165,11 +167,9 @@ async def test_a_match_on_a_node_the_reader_may_not_see_reads_as_no_node_at_all(
         async def find_node(
             self, entity_type: str, field: str, value: str, principal: Any
         ) -> Any:
-            return (
-                None
-                if value == "SYN-1"
-                else await super().find_node(entity_type, field, value, principal)
-            )
+            if value == "SYN-1" and principal == LOADER:
+                return None
+            return await super().find_node(entity_type, field, value, principal)
 
     async def told(graph: MergingGraph, *, someone_elses: bool) -> tuple[Any, ...]:
         async def load(
