@@ -557,8 +557,12 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
-    dataset), and its name takes no place in the unit's unique names. A branch has a layer of its
-    own (a layer is never shared with another case). Its egress (ADR-136 Amendment 1) is the
+    dataset), and its name takes no place in the unit's unique names. A branch reads and writes its
+    parent case's layer and has none of its own (the owner's ruling of 7 November 2026 on the L3.1
+    review's finding 8; a branch of a branch shares the same one, `branch_layers`); no other case
+    shares a layer. A case with no layer yet (one the migration has not reached) is given one when
+    a request is scoped to it, so the analyst's own writes never fall back to the source (the
+    owner's ruling on finding 7). Its egress (ADR-136 Amendment 1) is the
     strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`),
     so it changes no verdict and its own name is in no refusal; an administrator cannot set it.
 - **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
@@ -585,12 +589,14 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   drives each writer at its real call site.
 - **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
   gives each case that names several datasets a composite of them (one composite per distinct set),
-  gives every case its layer, reports a case it cannot place rather than guessing, and then builds
+  gives every case its layer (a branch its parent's), reports a case it cannot place rather than
+  guessing, and then builds
   the one-row index on `investigation_datasets`.
 - **A correction keeps its datasets**: `supersede_node` and `supersede_edge` give the new revision
   every dataset of the old one (Amendment 2 decision 2).
-- **A `SAME_AS` link is in the datasets both its records share**, so a match across two datasets is
-  in none and no case reads it (Amendment 2 decision 3, §4).
+- **A `SAME_AS` link written by resolution is in the datasets both its records share**, so a match
+  across two datasets is in none and no case reads it (Amendment 2 decision 3, §4). A manual
+  `SAME_AS` or `NOT_SAME_AS` is in the case's analyst layer (ADR-143 Amendment 1).
 - **Events carry no dataset**: they stay keyed by case in the analytics store (decision 7).
 - **A dataset is referred to by its id, and only when registered** (Amendment 6): a write naming a
   dataset the registry does not hold is refused whole. A unit's dataset names are unique, case and
@@ -752,9 +758,12 @@ The design:
    re-projects the view; it does not touch storage.
 4. Analyst decisions are edges too: a manual link is a `SAME_AS` with score 1.0 and
    `provenance.state = asserted`; a manual split is a `NOT_SAME_AS` edge that the projection
-   always honours and no future resolution run may override. Both are written in the case's
-   analyst layer (ADR-143 Amendment 1, §2.2a), so another case reading the same source neither
-   sees nor is collapsed by them.
+   always honours. Both are written in the case's analyst layer (ADR-143 Amendment 1, §2.2a), so
+   another case reading the same source neither sees nor is collapsed by them. The corpus-wide
+   resolution run therefore honours only a split in a dataset other than a layer (one written
+   before the amendment, in the source): a split only in case A's layer does not stop the run
+   writing a `SAME_AS` that case B reads, and case A's own projection still keeps the pair apart
+   (`services/resolve/trigger.honoured_splits`; `tests/resolve/test_trigger_layers.py`).
 
 The Glass surfaces τ as a slider with three labelled detents — **Strict (0.99)**, **Balanced
 (0.95)**, **Broad (0.80)** — and shows the analyst who moved it what changed: "3 entities merged,

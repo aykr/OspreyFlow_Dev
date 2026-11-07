@@ -381,7 +381,7 @@ POST   /v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw  
 GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
-GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=)
+GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=); the unit's, less those kept in another case's analyst layer (a mark made by hand there, ADR-143 Amendment 1 item 5)
 ```
 
 **The block above illustrates an earlier, abandoned ingest design — `09_INGEST_STUDIO.md`'s own

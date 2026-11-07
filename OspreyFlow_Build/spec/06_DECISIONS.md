@@ -26609,7 +26609,7 @@ the analyst who sends it; the approver is a data engineer of the dataset or an A
 the proposer. Admin › Policies › Approval rights shows how many people can approve each, and warns when
 fewer than two can.
 
-### ADR-143, Amendment 1 (7 November 2026) — where today's analyst writes go
+### ADR-143, Amendment 1 (7 November 2026) — where today's analyst writes go: hand-marking and manual links into the layer, accepted proposals and extractions into the source
 
 Status: accepted; the owner's ruling on open question 1 ("Split", 7 November 2026), built at L3.1.
 Open question 1 is closed. Of the analyst writes that existed before the layer:
@@ -26625,15 +26625,30 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    (`dataset_scope.analyst_layer`); the two writers in item 1 name it on what they write. Every other
    write names no dataset and is stamped with the case's first, exactly as before (ADR-099 Amendment
    14 for a composite). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
-   reached) writes item 1's data where it writes everything else.
+   reached) is given one when a request is scoped to it, and item 1's data goes there: it never
+   falls back to the source (the owner's ruling of 7 November 2026 on the L3.1 review's finding 7).
+   A branch reads and writes its parent case's layer and has none of its own (the owner's ruling on
+   finding 8), so what the analyst drew and branched with is still read in the branch.
 4. **What is not moved:** marks and links written before this amendment stay in the dataset they were
    written in. Moving them would be a load-shaped change to a dataset other cases read, and is not
    done silently; it waits for its own decision if one is wanted.
+5. **What a mark leaves beside it is the case's too.** A mark made by hand is also kept as an
+   accepted extraction candidate (the marked words, the node's id, `analyst:<id>`); that record
+   carries the layer's id and is read only under a case that reads the layer, not by the whole unit
+   (`review.ExtractionCandidateStore`, through `dataset_scope.reach_clause`). A model's candidate
+   carries none and is the unit's, as before.
+6. **The corpus-wide resolution run honours only splits outside a layer.** It reads every
+   `NOT_SAME_AS` under its service principal; a split only in a layer is its case's own decision,
+   kept by that case's projection, and does not stop a `SAME_AS` in the source that every other
+   case reads (`services/resolve/trigger.honoured_splits`; the layers come from the dataset store,
+   a required argument of the run).
 
-Proved by `tests/services/api/test_case_writes.py` (each writer at its real call site, under a
-principal scoped by `scope_to_case`).
+Proved by `tests/services/api/test_case_writes.py` (each writer and each accept path at its real call
+site, under a principal scoped by `scope_to_case`; the branch through the branch route),
+`tests/services/api/test_case_writes_store.py` (item 5, Postgres, with a member of another case of
+the same unit) and `tests/resolve/test_trigger_layers.py` (item 6, ArcadeDB).
 
-### ADR-099, Amendment 14 (7 November 2026) — a composite case's added data is written under the composite's own id
+### ADR-099, Amendment 14 (7 November 2026) — data added to a case reading a composite is written under the composite's own id
 
 Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026). Decision 6 reads: "Data
 added to a case joins its dataset; for a case reading a composite, the composite's own id." A
@@ -26645,6 +26660,13 @@ case, and `scripts.stamp_datasets` for records placed afterwards), and what the 
 (`scope_to_dataset`) matches. An entity marked by hand and a manual link go to the layer instead (ADR-143
 Amendment 1). Amendment 12 item 4 (entity resolution across members writing into the composite) is
 unchanged and still to be built. Proved by `test_a_composite_cases_write_lands_under_the_composite_id`.
+
+**Open, for the owner (the L3.1 review's finding 5).** A write under the composite's id to an element
+already in a member is merged into that element: its `datasets` gain the composite's id, and its
+properties become the latest write's, so a case reading only the member sees the changed properties.
+A new link between member nodes is not seen there. Measured on ArcadeDB by
+`tests/conformance/graph_port/test_composite_write_to_member_node.py`, whose first case is
+`xfail(strict=True)` until the owner rules.
 
 ### ADR-136, Amendment 1 (7 November 2026) — a case's analyst layer takes the strictest egress of the case's sources
 
