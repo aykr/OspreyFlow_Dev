@@ -26685,8 +26685,10 @@ composite case's write to a member's node made a copy of it in the composite; no
    or stored.
 2. **What is kept.** An entity marked by hand and a manual `SAME_AS` or `NOT_SAME_AS` go into the
    case's analyst layer, as in any case (ADR-143 Amendment 1); they change no member. Reading is
-   untouched, and so are records made in the case that are not dataset content (a saved pattern, a
-   watch, an alert's triage).
+   untouched. So are the case's own records that are not dataset content: a saved pattern, a watch,
+   a monitor, and an alert's triage short of a confirm (a close as a true positive confirms, and is
+   refused under item 1). They are the case's, not any dataset's, and keep working in a composite
+   case (the orchestrator's call within the owner's ruling, 7 November 2026).
 3. **Where it is decided, and in what order.** Each writing service refuses after its own read of
    what it would change, so a node, link, finding or picture the reader cannot see still answers as
    not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
