@@ -106,6 +106,10 @@ Also asked by the lanes:
 
 ## Notes
 
+- **18:10, case L3.1's final review: not merged** (your go-ahead was conditional on it passing). Eight fixes sent, all my calls within your read-only ruling: a composite case's leftover canvas items are reported as unplaced, never written into a member; monitors keep working, with a composite case's alert nodes going into its layer; schedules and runs on a composite are refused before anything is written; the corrections' last word closed; a red companion per check; the Postgres composite check tested on Postgres; a migration rehearsal on a seeded throwaway stack.
+- **A risk for you:** running `scripts.migrate_cases_to_one_dataset` makes every case that names several datasets a read-only composite case, your own deployment's included (no loading, extraction or confirming there until composite writing is designed). Case's rehearsal will list which seeded cases that hits.
+- **Studio's shared schema commit** (RowElements.event_ids) is on main, with make ci green.
+
 - **18:00, first push.** `make ci` fully green; `main` pushed to `origin` at `03a3dae`, and `git ls-remote` matches (PUSH_LOG.md). Merged since the last note: glass L2.3 (variant B, `d4fe5e5`) and the CI wiring (`03a3dae`, your diffs, applied by me on your word). **My calls while you were away:** glass's three L2.4 questions (placeholders' rights; Proposed types under Data; Approval rights a placeholder), all as recommended. Case's records that aren't dataset content keep working in a composite case. Studio adds event ids (A), with the schema as a shared commit first. I ended studio's exhausted session and opened a fresh one.
 
 - **Stopped at the orchestrator's usage limit (about 13:20).** Merged to local main since the last note: studio's Part 0 (`f00afec`) and glass's L2.2 (`fd38da4`). make ci is red only on `test-file-coverage-check`, which waits for your diff, studio's `L1.2a_ci_makefile.diff`. It supersedes L1.1's; apply one, not both. Open:
