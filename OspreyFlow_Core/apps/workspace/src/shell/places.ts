@@ -24,10 +24,14 @@ export const PLACE_NAME: Record<PlaceId, string> = Object.fromEntries(PLACES.map
   string
 >;
 
-/** The places a person's rights open, in the switcher's order. While the rights are not yet known
- * (`null`), the Glass and the Studio, as the Glass always showed; Admin only once a right is known. */
+/** The places a person's rights open, in the switcher's order. While the rights are not yet known,
+ * or could not be read (`null`), none: a place is offered only on a right the Conduit has named. */
 export function placesFor(rights: ReadonlySet<string> | null): PlaceId[] {
-  return PLACES.filter((place) =>
-    rights === null ? place.id !== "admin" : place.rights.some((right) => rights.has(right)),
-  ).map((place) => place.id);
+  if (rights === null) return [];
+  return PLACES.filter((place) => place.rights.some((right) => rights.has(right))).map((place) => place.id);
 }
+
+export const PLACE_KEY: Record<PlaceId, string> = Object.fromEntries(PLACES.map((p) => [p.id, p.key.toUpperCase()])) as Record<
+  PlaceId,
+  string
+>;

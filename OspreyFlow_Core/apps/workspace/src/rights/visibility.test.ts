@@ -102,7 +102,8 @@ describe("Start", () => {
     expect(startPlaces(new Set(READER))).toEqual(["glass"]);
     expect(startPlaces(new Set(["manage_ontology"]))).toEqual(["admin"]);
     expect(startPlaces(new Set())).toEqual([]);
-    expect(startPlaces(null)).toEqual(["glass", "ingest"]);
+    // ADR-145 N6: nothing is offered until the rights are known.
+    expect(startPlaces(null)).toEqual([]);
   });
 
   it("lands everyone on Home, a person with one place too, and goes to the place they chose", () => {

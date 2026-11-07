@@ -4,8 +4,11 @@
 // A person who holds both the Glass and the Studio gets the cross-link between them, which keeps the
 // case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3).
 //
-// Not drawn: the Studio's "feeds n cases". No route gives a dataset's cases as the reader may see
-// them, and an unfiltered count is refused by rule 7 (`02_GLASS_FRONTEND.md` §2.0).
+// In the Glass the banner carries the place's sections, Case · Boards · Monitoring (decision 1);
+// *Boards* is drawn as coming until its screens are built. Not drawn: the Studio's dataset choice
+// ("Dataset ‹name› ▾" — the Studio's own dataset state, which its screens do not yet have) and its
+// "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an unfiltered
+// count is refused by rule 7; `02_GLASS_FRONTEND.md` §2.0a).
 import { useEffect, useState, type ReactNode } from "react";
 
 import { currentBrand } from "../brand/brand";
@@ -18,8 +21,18 @@ export interface CrossLink {
   onFollow: () => void;
 }
 
+export interface BannerSection {
+  id: string;
+  label: string;
+  current: boolean;
+  /** Absent: the section is coming, drawn but not yet usable. */
+  onSelect?: () => void;
+}
+
 export interface ContextBannerProps {
   place: PlaceId;
+  /** The place's sections (the Glass's Case · Boards · Monitoring). */
+  sections?: readonly BannerSection[];
   /** The case switcher, in the Glass and the Studio. */
   caseSwitcher?: ReactNode;
   /** The names of the datasets the open case reads; `null` while read or when refused. */
@@ -64,11 +77,30 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, caseSwitcher, datasets, crossLink }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, crossLink }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   const sep = <span className="context-banner__sep" aria-hidden="true">·</span>;
   const line = (
     <>
+      {sections.length > 0 && (
+        <>
+          {sep}
+          <nav aria-label={`In ${PLACE_NAME[place].replace(/^The /, "the ")}`} className="context-banner__sections">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className={govuk ? "govuk-link context-banner__section" : "context-banner__section"}
+                aria-current={section.current ? "page" : undefined}
+                aria-disabled={section.onSelect ? undefined : "true"}
+                onClick={section.onSelect}
+              >
+                {section.onSelect ? section.label : `${section.label} (coming)`}
+              </button>
+            ))}
+          </nav>
+        </>
+      )}
       {place === "glass" && caseSwitcher && (
         <>
           {sep}

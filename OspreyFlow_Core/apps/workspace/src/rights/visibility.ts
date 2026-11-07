@@ -38,7 +38,8 @@ export function startPlaces(rights: Rights): StartPlace[] {
 }
 
 /** Home itself, or the place chosen on it. ADR-115 decision 7: every signed-in person lands on Home
- * with no case open — a person with one usable place still sees the others, and whom to ask. */
+ * with no case open. ADR-115 Amendment 6 (ADR-145 N6): Home shows only the places the person's rights
+ * open; one they cannot open is hidden, not dimmed. */
 export function startFor(chosen: StartPlace | "start" | null): StartPlace | "start" {
   return chosen ?? "start";
 }

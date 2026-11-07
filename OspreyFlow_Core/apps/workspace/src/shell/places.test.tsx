@@ -26,7 +26,8 @@ describe("the places' table", () => {
   it("opens each place for any one of its rights and for nothing else", () => {
     for (const place of PLACES) for (const right of place.rights) expect(placesFor(new Set([right]))).toContain(place.id);
     expect(placesFor(new Set(["a_right_nobody_has"]))).toEqual([]);
-    expect(placesFor(null)).toEqual(["glass", "ingest"]);
+    // Rights not yet known, or not read: no place is offered on a guess.
+    expect(placesFor(null)).toEqual([]);
   });
 });
 
@@ -84,6 +85,28 @@ describe("the context banner", () => {
     applyBrand("govuk");
     render(<ContextBanner place="admin" />);
     expect(screen.getByRole("region", { name: "You are in Admin" }).className).toContain("govuk-notification-banner");
+  });
+});
+
+describe("the banner's sections", () => {
+  it("draws the Glass's Case · Boards · Monitoring, Boards as coming, and goes to the one chosen", () => {
+    const monitoring = vi.fn();
+    render(
+      <ContextBanner
+        place="glass"
+        sections={[
+          { id: "case", label: "Case", current: true, onSelect: () => {} },
+          { id: "boards", label: "Boards", current: false },
+          { id: "monitoring", label: "Monitoring", current: false, onSelect: monitoring },
+        ]}
+      />,
+    );
+    const nav = within(screen.getByRole("navigation", { name: "In the Glass" }));
+    expect(nav.getAllByRole("button").map((b) => b.textContent)).toEqual(["Case", "Boards (coming)", "Monitoring"]);
+    expect(nav.getByRole("button", { name: "Case" }).getAttribute("aria-current")).toBe("page");
+    expect(nav.getByRole("button", { name: "Boards (coming)" }).getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(nav.getByRole("button", { name: "Monitoring" }));
+    expect(monitoring).toHaveBeenCalled();
   });
 });
 

@@ -10,6 +10,7 @@ import { ROLES } from "../admin/AdminPlace";
 import { currentBrand } from "../brand/brand";
 import { MeshMark } from "../shell/BrandMark";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
+import { PLACE_KEY, PLACE_NAME } from "../shell/places";
 import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
 import { whenLabel, type Fact, type HomeSummary, type Place } from "./homeData";
@@ -36,14 +37,18 @@ export interface HomePageProps {
   now?: Date;
 }
 
-const PANELS: Record<StartPlace, { title: string; who: string; what: string; key: string }> = {
-  glass: { title: "The Glass", who: "For analysts", key: "G",
+// The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
+const WORDS: Record<StartPlace, { who: string; what: string }> = {
+  glass: { who: "For analysts",
            what: "Work a case on the graph, map and timeline. Record assessments with their evidence, and build trends and report packs." },
-  ingest: { title: "Ingest Studio", who: "For data engineers", key: "I",
+  ingest: { who: "For data engineers",
             what: "Draw pipelines from source to load over the domain model. Each transform is tested, and nothing is scripted." },
-  admin: { title: "Admin", who: "For administrators", key: "A",
+  admin: { who: "For administrators",
            what: "Manage people, roles and dashboard identities, and watch the services. The console never reads case content." },
 }; // prettier-ignore
+const PANELS = Object.fromEntries(
+  (Object.keys(WORDS) as StartPlace[]).map((place) => [place, { ...WORDS[place], title: PLACE_NAME[place], key: PLACE_KEY[place] }]),
+) as Record<StartPlace, { title: string; who: string; what: string; key: string }>;
 
 const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", admin: "Admin area" };
 const GLYPH: Record<Fact["tone"], string> = { ok: "✓", warn: "△", error: "!", info: "·" };

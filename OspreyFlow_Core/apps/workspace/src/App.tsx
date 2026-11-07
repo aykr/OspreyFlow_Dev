@@ -51,6 +51,7 @@ import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
 import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
+import { useLastGlassView } from "./shell/placeMemory";
 import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
@@ -759,7 +760,8 @@ export function App() {
       window.setTimeout(() => revealPanel(place.panel), 0);
     }
   };
-  const lastGlassView = useRef<"graph" | "map" | "matrix" | "reports" | "admin" | "dashboards" | "dossier" | "alerts" | "ownership">("graph");
+  // ADR-145 decision 2: the Glass's view to come back to from the Studio (`shell/placeMemory.ts`).
+  const lastGlassView = useLastGlassView(view, "ingest", "graph");
   // ADR-109 phase B: an alert put on the canvas is highlighted once the canvas has drawn it.
   const pendingHighlight = useRef<string[] | null>(null);
   useEffect(() => {
@@ -783,7 +785,6 @@ export function App() {
     });
     return () => cancelAnimationFrame(frame);
   }, [view]);
-  if (view !== "ingest") lastGlassView.current = view;
   // ADR-145 decision 2: the banner's case and the datasets it reads, as this person may see them.
   const caseContext = useCaseContext(API_BASE_URL, bearerToken, investigationId);
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
@@ -1338,7 +1339,7 @@ export function App() {
             onChoose={(place) => {
               if (place === "admin") setStartChoice("admin");
               else if (place === "ingest") setView("ingest");
-              else if (app !== "glass") setView(lastGlassView.current);
+              else if (app !== "glass") setView(lastGlassView());
             }}
           />
         }
@@ -1406,6 +1407,18 @@ export function App() {
           cross-link between the Glass and the Studio for a person who holds both. */}
       <ContextBanner
         place={app}
+        // ADR-145 decision 1: the Glass's sections; Boards is coming (Lane 3's board screens).
+        sections={
+          app === "glass"
+            ? [
+                { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView(landingView(rights)) },
+                { id: "boards", label: "Boards", current: false },
+                ...((railEntries(rights) as string[]).includes("alerts")
+                  ? [{ id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts") }]
+                  : []),
+              ]
+            : []
+        }
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
@@ -1419,7 +1432,7 @@ export function App() {
         datasets={caseContext.datasets}
         crossLink={crossLinkFor(app, startPlaces(rights), caseContext.name, caseContext.datasets, {
           toStudio: () => setView("ingest"),
-          toGlass: () => setView(lastGlassView.current),
+          toGlass: () => setView(lastGlassView()),
         })}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>

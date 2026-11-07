@@ -337,9 +337,17 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   const holdAllRequests = () => {
     vi.mocked(globalThis.fetch).mockImplementation(() => new Promise<Response>(() => undefined));
   };
+  // Every request held but the rights (ADR-145: no place is offered until they are known).
+  const holdAllButRights = () => {
+    vi.mocked(globalThis.fetch).mockImplementation((input) =>
+      String(input).endsWith("/v1/me/rights")
+        ? Promise.resolve(new Response(JSON.stringify({ rights: ["investigate", "read_alert_queue", "edit_pipelines"] })))
+        : new Promise<Response>(() => undefined),
+    );
+  };
 
   test("the rail is at the far left and the places are in the bar, not the rail; the bar begins with the mark", async () => {
-    holdAllRequests();
+    holdAllButRights();
     render(<App />);
 
     await screen.findByRole("navigation", { name: "Workspace" });
@@ -367,7 +375,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   });
 
   test("inside the Ingest Studio the bar keeps only what belongs to it", async () => {
-    holdAllRequests();
+    holdAllButRights();
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     render(<App />);
 
@@ -384,14 +392,16 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   });
 
   test("the switcher and the cross-link move between the places, and coming back returns to the view that was open", async () => {
-    holdAllRequests();
+    holdAllButRights();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Monitoring" }));
+    fireEvent.click(await within(await screen.findByRole("navigation", { name: "Workspace" })).findByRole("button", { name: "Monitoring" }));
     fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: "Ingest Studio" }));
-    expect(screen.queryByRole("button", { name: "Monitoring" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^← Back to .* in the Glass$/ }));
-    expect(screen.getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(rail()).getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
+    // ADR-145 decision 1: the banner's own Monitoring section marks the same place.
+    expect(within(screen.getByRole("navigation", { name: "In the Glass" })).getByRole("button", { name: "Monitoring" }).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
@@ -458,7 +468,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       expect(await screen.findByText(sentence)).toBeTruthy();
 
       // The owner's answer of 1 November 2026: the alert inbox is in Monitoring's Watches tab.
-      fireEvent.click(screen.getByRole("button", { name: "Monitoring" }));
+      fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Monitoring" }));
       fireEvent.click(await screen.findByRole("tab", { name: "Watches" }));
       fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
       fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
