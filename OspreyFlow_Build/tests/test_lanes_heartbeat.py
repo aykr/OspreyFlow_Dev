@@ -147,3 +147,37 @@ def test_watch_notifies_once_per_new_line_not_on_every_pass(hb) -> None:
     notes = hb.notified.read_text().splitlines()
     # A new watch starts with nothing seen, so all three are new to it, once each.
     assert len(notes) == 5, notes
+
+
+def _repo_with_lane(base: Path, ahead: int, behind: int) -> Path:
+    """A repository with `main` and `lane/glass`, the lane `ahead` commits ahead and `behind`
+    behind, and the worktree folder the monitor looks in, as `lanes_launch.sh setup` makes it."""
+    env = {**os.environ, "GIT_AUTHOR_NAME": "T", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+           "GIT_COMMITTER_NAME": "T", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+    repo = base / "repo"
+    repo.mkdir()
+
+    def git(*a: str, cwd: Path = repo) -> None:
+        subprocess.run(["git", *a], cwd=cwd, env=env, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    git("branch", "lane/glass")
+    for i in range(behind):
+        git("commit", "-q", "--allow-empty", "-m", f"main {i}")
+    wt = base / "wt" / "glass"
+    git("worktree", "add", "-q", str(wt), "lane/glass")
+    for i in range(ahead):
+        git("commit", "-q", "--allow-empty", "-m", f"lane {i}", cwd=wt)
+    return base / "wt"
+
+
+@pytest.mark.parametrize(("ahead", "flagged"), [(2, True), (0, False)])
+def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
+    hb, tmp_path, ahead, flagged
+) -> None:
+    """A merged lane (nothing ahead of main) is not asked to rebase however far main has moved."""
+    worktrees = _repo_with_lane(tmp_path, ahead=ahead, behind=6)
+    _all_beat(hb)
+    lines = _needs(hb("show", OSPREY_WORKTREES=str(worktrees)))
+    assert ("glass is 5 or more commits behind main: ask it to rebase" in lines) is flagged

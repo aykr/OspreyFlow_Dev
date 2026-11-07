@@ -92,12 +92,13 @@ show() {
       echo "$lane has never sent a heartbeat" >> "$needs"
     fi
     if [ -d "$WT/$lane" ]; then
-      local cnt behind
+      local cnt behind ahead
       cnt=$(git -C "$WT/$lane" rev-list --left-right --count "main...lane/$lane" 2>/dev/null || echo "? ?")
       ab="$(echo "$cnt" | awk '{print "+"$2"/-"$1}')"
       lc=$(git -C "$WT/$lane" log -1 --format=%cr "lane/$lane" 2>/dev/null | sed 's/ ago//' || echo "-")
-      behind=$(echo "$cnt" | awk '{print $1}')
-      if [ "$behind" != "?" ] && [ "$behind" -ge "$BEHIND_MAX" ]; then
+      behind=$(echo "$cnt" | awk '{print $1}'); ahead=$(echo "$cnt" | awk '{print $2}')
+      # A merged lane (nothing ahead of main) has nothing to rebase, however far main has moved.
+      if [ "$behind" != "?" ] && [ "$ahead" != "0" ] && [ "$behind" -ge "$BEHIND_MAX" ]; then
         echo "$lane is $BEHIND_MAX or more commits behind main: ask it to rebase" >> "$needs"
       fi
     fi
