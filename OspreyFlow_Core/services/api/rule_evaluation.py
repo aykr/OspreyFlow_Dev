@@ -73,6 +73,7 @@ from schemas.domain import (
 )
 
 from .alerts import AlertStore
+from .dataset_scope import analyst_writes_into, reads_a_composite
 from .audit import AuditWriter
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
@@ -504,6 +505,18 @@ async def _referent_handlings(
     return handlings
 
 
+async def _alert_datasets() -> list[str]:
+    """What an alert's own node and `ALERTED_ON` links name, and what it writes alongside. Monitors
+    keep working in a case reading a composite (ADR-099 Amendment 15 item 2), which is read-only
+    for now, so there they go into the case's analyst layer, which the case reads (made here if it
+    has none); an `ALERTED_ON` from the layer's node to a member's node is the layer's link, and
+    changes no member. Elsewhere they name nothing, and the stamping graph places them in the
+    case's dataset as before."""
+    if await reads_a_composite():
+        return await analyst_writes_into()
+    return []
+
+
 async def write_alert_node(
     graph: GraphPort,
     scheme: HandlingScheme,
@@ -524,9 +537,16 @@ async def write_alert_node(
 
     if is_just_me(finding.rule):
         return None  # an alert for its author alone puts nothing in the case's graph
+    into = await _alert_datasets()
     if finding.pending:
-        pending_nodes = [w for w in finding.pending if isinstance(w, NodeWrite)]
-        pending_edges = [w for w in finding.pending if isinstance(w, EdgeWrite)]
+        # What the finding writes alongside (a screening hit's listed party and its `SAME_AS`) is
+        # new, the rule's own and `inferred`: in a composite case it goes into the layer with the
+        # alert. A link of the layer's is of another audience than a member's, so it never merges
+        # into one; a write naming a dataset of its own keeps it, and the stamping graph judges it.
+        pending = [w if w.datasets or not into else w.model_copy(update={"datasets": into})
+                   for w in finding.pending]  # fmt: skip
+        pending_nodes = [w for w in pending if isinstance(w, NodeWrite)]
+        pending_edges = [w for w in pending if isinstance(w, EdgeWrite)]
         record.node_ids.extend(await graph.upsert_nodes(pending_nodes, tx))
         record.edges(pending_edges, await graph.upsert_edges(pending_edges, tx))
     marking = alert_handling(
@@ -558,6 +578,7 @@ async def write_alert_node(
         created_by=finding.deployer.id,
         created_at=now,
         load_id=load_id,
+        datasets=into,
     )
     (node_id,) = await graph.upsert_nodes([node], tx)
     record.node_ids.append(node_id)
@@ -573,6 +594,7 @@ async def write_alert_node(
             created_by=finding.deployer.id,
             created_at=now,
             load_id=load_id,
+            datasets=into,
         )
         for target in finding.node_ids
     ]

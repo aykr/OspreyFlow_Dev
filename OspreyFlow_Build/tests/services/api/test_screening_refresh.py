@@ -175,6 +175,15 @@ class _Datasets:
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         return [DATASET] if investigation_id == CASE else []
 
+    async def layer_of_case(self, investigation_id: str) -> str | None:
+        return None
+
+    async def chosen_of_case(self, investigation_id: str) -> list[object]:
+        return []  # a source, never a composite
+
+    async def composites_among(self, dataset_ids: object) -> set[str]:
+        return set()
+
 
 def _rule(rule_id: str = "rule-screen", owner: str = OFFICER.id) -> TypologyRule:
     return TypologyRule(id=rule_id, investigation_id=CASE, owner_id=owner, name="Screening",

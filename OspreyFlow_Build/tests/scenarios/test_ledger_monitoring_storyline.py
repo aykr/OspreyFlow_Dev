@@ -241,6 +241,15 @@ class _Datasets:
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         return [DATASET] if investigation_id == self.case else []
 
+    async def layer_of_case(self, investigation_id: str) -> str | None:
+        return None
+
+    async def chosen_of_case(self, investigation_id: str) -> list[object]:
+        return []  # a source, never a composite
+
+    async def composites_among(self, dataset_ids: object) -> set[str]:
+        return set()
+
 
 async def subscribe(scene: Scene) -> None:
     await scene.screening.subscribe(
