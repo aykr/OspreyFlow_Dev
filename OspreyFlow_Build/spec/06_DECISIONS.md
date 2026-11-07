@@ -27086,49 +27086,72 @@ smallest step beyond it the owner chose (N4).
    folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
    proves each moved action by keyboard.
 
-### ADR-110, Amendment 15 (7 November 2026) — a snapshot's withdrawal takes back links and events only, never nodes, so nothing a reader sees varies with what they cannot read
+### ADR-110, Amendment 15 (7 November 2026) — a full snapshot's withdrawal takes back only the dropped rows' own events, never a node or a link, so nothing a reader sees varies with what they cannot read
 
-Status: accepted 7 November 2026, on the owner's ruling "Never withdraw nodes" (put to the owner by
-the orchestrator after the review of L1.2a's Part A). Built by the studio lane in L1.2a. Amendments 8
-and 9 are unchanged except where this says so.
+Status: accepted 7 November 2026, on the owner's ruling "Only the rows' events" (put to the owner by
+the orchestrator after the review of L1.2a's Part A; it replaces the same day's "Never withdraw
+nodes"). Built by the studio lane in L1.2a, Part A redone. Amendments 8 and 9 are unchanged except
+where this says so.
 
-**Why.** Amendment 8 point 3 withdrew a dropped row's nodes too, except one that another kept row,
-another load or a live link still rested on, and it asked the last through the port's unfiltered
-`live_edges_touching`. That answer reached the loader in two ways:
-- the node stayed or went, which they could see;
-- the run's metering counted withdrawn nodes and links among its `graph_writes`, which
-  `GET …/recipes/{id}/runs` returns to anyone `may_see_counts` allows.
+**Why.** Amendment 8 point 3 withdrew a dropped row's nodes, links and events, except what another
+kept row, another load or a live link still held, and "Never withdraw nodes" kept the links' part.
+Whether a link went still depended on other cases' rows and loads, which the ledger was asked about
+(`elements_kept_by_other_rows`, `elements_in_other_records`) and the loader may not read. So the
+run's counts, the live links and the timeline differed with data the loader cannot read (rule 3's
+hidden degree). And the events went by link (`withdraw_events(edge_ids)`), so another row's event on
+the same link, of any case, went with them.
 
-So a link or a row of another case, which the loader may not read, moved what they saw (rule 3's
-hidden degree). The revert's own use of the read is an operator's command, never a route, and was
-no precedent.
-
-1. **Nodes are never withdrawn.** A snapshot's withdrawal takes back a dropped row's links and their
-   events alone, and leaves its nodes as *keep* leaves every element. `plan_withdrawal` no longer
-   asks `live_edges_touching`, so the read is confined to the revert again
-   (`tests/test_unfiltered_node_lookup_confined.py`, unchanged, green because the call is gone).
-   `withdrawn_node_ids` stays in the record and the report, always empty. A row that comes back
-   matches its nodes and writes its link again.
-2. **A kept link is counted only from this pipeline's own rows in the case** (the snapshot's own,
-   and its other kept ones), and only among links the loader may read. A link kept because another
-   case's or another pipeline's row, or another load, holds it is kept and never counted. The
-   ledger answers the narrower question with `elements_kept_by_other_rows(...,
-   only_this_pipeline=True)`. This narrows Amendment 9 point 2, which counted a readable link kept
-   by any row.
-3. **Metering does not count a withdrawal** among `graph_writes`. Which of a dropped row's links go
-   depends on rows and loads the reader may not read, so the count would show them. The run says
-   what it withdrew in `rows_withdrawn` and its notes.
-4. **The test of the whole.** `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`
-   drives `run_recipe_as` over the run ledger and runs one pipeline's two snapshots twice. In the
-   second world, another case keeps a row writing the dropped row's link and a link of its own on
-   the dropped row's node. The test compares the whole `ScheduleRunView`, the whole `report_view`
-   and the case's live nodes between the two worlds. It is shown red with node withdrawal restored,
-   with metering's count of withdrawals restored, and with the kept-link count taken from every row.
-5. **A merge moves no figure either.** Metering counts each write a row makes once, in whichever list
-   the engine put it: a node created or merged into, a link created or merged into
-   (`touched_edge_ids`). So a row whose node and link merge into ones the reader may not see counts
-   exactly as the create it stands for (`tests/ingest/test_metering.py`'s
+1. **Only the dropped rows' own events are withdrawn.** Each kept row key records the events its row
+   wrote, by `event_id` (`RowElements.event_ids`; the run ledger's `event_ids` column on
+   `loaded_row_keys` and `withdrawn_row_keys`). A full snapshot with *withdraw* moves its dropped
+   keys aside with its load's record, as Amendment 8 point 4 has it, and once the record is in sets
+   aside exactly the events those keys record (`AnalyticsPort.withdraw_events_by_id`, which replaces
+   `withdraw_events`; `RecipeRunStore.withdrawn_event_ids`). Another row's event on the same link
+   stays, whoever wrote it (the analytics conformance suite's
+   `test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link`).
+2. **The graph is never touched.** A dropped row's nodes and links stay, with no row holding them,
+   until its load is reverted, as *keep* leaves every element. `withdrawn_node_ids` and
+   `withdrawn_edge_ids` stay in the record and the report, always empty for a refresh after this
+   amendment, and `links_kept_an_occurrence` is always 0. A link still counts the occurrence the
+   dropped row gave it until then. A row that comes back matches its nodes and merges into its own
+   link: it creates nothing, and adds an occurrence to the link.
+3. **The withdrawal asks the ledger one question**: this pipeline's kept keys in this case that the
+   snapshot no longer carries (`dropped_row_keys`). The two reads about other rows and loads are
+   removed, `only_this_pipeline` with them. `plan_withdrawal` needs no graph and no principal.
+4. **A key whose record names no events is left in place**: kept before rows recorded what they
+   wrote (Amendment 8), or before they recorded their events (a key written between Amendment 8 and
+   this one has `event_ids` NULL). Its key stays kept and its events stay; there is no fallback to
+   its links' events. The run says so: "1 dropped row was loaded before rows recorded the events they
+   wrote, and was left in place, its events too", counted in `rows_left_in_place`.
+5. **Metering counts no withdrawal**: it writes no element. A merge counts as the create it stands
+   for (`tests/ingest/test_metering.py`'s
    `test_a_rows_write_counts_the_same_whether_it_merged_or_created`, red with merges uncounted). A
-   `reference` to a node the reader may not see reads as no node at all (`find_node` under their
-   principal), so it creates, exactly as when no node exists.
+   `reference` to a node the reader may not see reads as no node at all, so it creates, exactly as
+   when no node exists.
+6. **A record written earlier reverts as before.** A refresh recorded under Amendment 8 or under
+   "Never withdraw nodes" may list nodes and links in `withdrawn_node_ids` and `withdrawn_edge_ids`,
+   marked in the graph with its load. Its revert puts them back by the load (`GraphPort.
+   restore_withdrawn`), and puts back the events it set aside (`restore_withdrawn_events`) and its
+   keys, as Amendment 8 point 5 has it; a refresh after this amendment withdrew nothing in the
+   graph, so its revert's graph step restores nothing
+   (`tests/ingest/test_snapshot_withdrawal.py`'s
+   `test_a_refresh_recorded_with_withdrawn_nodes_and_links_reverts_them_back`).
+7. **The test of the whole.** `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`
+   drives `run_recipe_as` and `run_published_recipe` over the run ledger, the real ArcadeDB adapter
+   and DuckDB, with two principals of two cases. It runs one published pipeline three times into one
+   case (rows A and B; A; A and B) in two worlds; in the second, the other case runs the same pipeline
+   with B's own row and a link of its own on B's node. It compares, between the worlds, the whole
+   `ScheduleRunView` and `report_view` of the second and third runs, and what each run changed of
+   the live nodes, the live links (with their occurrences) and the case's timeline. It is shown red
+   with link withdrawal restored, and with it each of the two ledger reads
+   (`process/lanes/studio/L1.2a_RED_RECORD.md`).
 
+**Known limits, recorded, not changed.**
+- A load that merged into a link that already existed is not reverted (ADR-127 decision 6). A row
+  that comes back merges into its own link, so its load is not reverted, and the refresh that
+  withdrew it is refused while it is kept again (Amendment 8 point 5): neither is reverted until the
+  owner rules (the studio lane's report).
+- A Studio load stamps no dataset on what it writes until the load-into rule (ADR-143, L3.1), so the
+  test's principals are not confined to a dataset. And two cases' rows on the same pair merge into
+  one link with the same audience, so one case's occurrences count the other's. Neither is the
+  withdrawal's; the test compares each run's change, not the state, for that reason.
