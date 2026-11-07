@@ -161,7 +161,7 @@ class World:
             self._deps(), principal=who, recipe=self.draft, investigation_id=case,
             source_location=None, trigger="source_refresh",
         )  # fmt: skip
-        # The run's own row, by its load: the recipe id is shared by both cases and both worlds.
+        # The run's own row, by its load: the recipe id is shared by every case in this world.
         (row,) = [
             r for r in await self.runs.for_recipe(self.draft.recipe_id, limit=50)
             if r.load_id == report.load_id
@@ -243,9 +243,9 @@ async def _told(
         )
         shared = await _dataset(stores, first)
         # The other case loads into the loader's own dataset, so its row on B's pair merges into
-        # B's link and its event sits on that link (by design: ADR-102 Amendment 3, ADR-099 decision
-        # 2, ADR-143 "joins the source dataset"). A withdrawal by link would take its event. The
-        # third case has a dataset of its own.
+        # B's link and its event sits on that link (by design: ADR-102 Amendment 3; ADR-110
+        # Amendment 17). A withdrawal by link would take its event. The third case has a dataset of
+        # its own.
         cases = [
             (first, await _case(stores, first, shared)),
             (second, await _case(stores, second, shared)),

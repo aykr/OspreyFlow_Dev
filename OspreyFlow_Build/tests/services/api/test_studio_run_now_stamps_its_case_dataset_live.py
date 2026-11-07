@@ -6,12 +6,20 @@ ADR-102 Amendment 3).
 drives `POST /v1/investigations/{case}/ingest/recipes/{recipe}/run` through the ASGI app in process
 (httpx's `ASGITransport`, on the test's own event loop, which the real stores' pools belong to).
 The route runs with the real `get_principal`, the real case and dataset stores in Postgres, and the
-Conduit's stamping graph over real ArcadeDB. Two stand-ins remain. The token resolver maps a bearer
-token to its account, so identity is not under test, but what `get_principal` does with it is. And
-the recipe store returns the one published draft. The load is `run_published_recipe` over
-`deps.graph`, as in the scheduler's file. The loader's answer and what they read are the same
-whether or not another case, on another dataset, loaded the same pair first. Red with
-`scope_to_case` taken out of `get_principal` (`process/lanes/studio/L1.2a_RED_RECORD.md`)."""
+Conduit's stamping graph over real ArcadeDB. The loader's answer and what they read are the same
+whether or not another case, reading another dataset, loaded the same pair first. Red with
+`scope_to_case` taken out of `get_principal`, and with its stamp kept but its confinement dropped.
+
+Every stand-in, so the claim is no wider than the test:
+- the token resolver (`_Accounts`) maps a bearer token to its account: identity is not under test,
+  what `get_principal` does with it is;
+- the recipe store (`_Recipes`) grants the one published draft to any principal;
+- the app's state (`_Held`) answers every name it is not given with a store holding nothing;
+- `_execute_recipe_run` is replaced by `run_published_recipe` over `deps.graph`, as in the other two
+  live files, so the rule gate, `run_published_pipeline` and the change stream are not driven;
+- `resolve_source_handling` is patched to the source's marking.
+So the stamping and the confinement are proven up to the recipe run (ADR-110 Amendment 17). Driving
+the real `_execute_recipe_run` is carried to Part C (`process/lanes/studio/L1.2a_RED_RECORD.md`)."""
 
 from __future__ import annotations
 

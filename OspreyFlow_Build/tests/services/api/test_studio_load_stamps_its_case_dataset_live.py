@@ -18,14 +18,21 @@ makes it. The route's own scoping is `test_studio_run_now_stamps_its_case_datase
   when both are visible to exactly the same principals, judged by … the same set of datasets
   (ADR-099)". On two datasets, a confined load matches within its reach alone, so each case writes its own
   nodes and link (ADR-099 Amendment 16). (ADR-143's "joins the source dataset" is not cited: the
-  stamp is the case's first dataset until Part C, Amendment 15's known limits.) Both rows merge
+  stamp is the case's first dataset until Part C, Amendment 17.) Both rows merge
   into one link, and both cases read the same link, count and occurrences. A third case on another
   dataset reads none of it.
 
 The test is written to `ids_of_case`'s contract (a case's datasets, its first the one it loads
 into), not its current body; L3.1's analyst layer adds to a case's read set. It is red with the
 raw adapter in place of the stamping graph, and with `scope_to_case` taken out of `check_case`
-(`process/lanes/studio/L1.2a_RED_RECORD.md`)."""
+(`process/lanes/studio/L1.2a_RED_RECORD.md`).
+
+Stand-ins, so the claim is no wider than the test: `_execute_recipe_run` is replaced by
+`run_published_recipe` over `deps.graph` (the rule gate, `run_published_pipeline` and the change
+stream are not driven); `resolve_source_handling` is patched to the source's marking; the executor's
+state answers the run's other dependencies with placeholders; the tick's owners resolve from a list
+and its recipes from a list of drafts. The stamping and the confinement are proven up to the recipe
+run (ADR-110 Amendment 17)."""
 
 from __future__ import annotations
 
