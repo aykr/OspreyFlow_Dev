@@ -27149,10 +27149,13 @@ the same link, of any case, went with them.
    drives `run_recipe_as` and `run_published_recipe` over the run ledger, the real ArcadeDB adapter
    and DuckDB, with two principals of two cases. It runs one published pipeline three times into one
    case (rows A and B; A; A and B) in two worlds; in the second, the other case runs the same pipeline
-   with B's own row and a link of its own on B's node. It compares, between the worlds, the whole
-   `ScheduleRunView` and `report_view` of the second and third runs, and what each run changed of
-   the live nodes, the live links (with their occurrences) and the case's timeline. It is shown red
-   with link withdrawal restored, and with it each of the two ledger reads
+   with B's own row and a link of its own on B's node, and a third case loads and withdraws its own
+   B, the same row key. It compares, between the worlds, the whole `ScheduleRunView` and
+   `report_view` of the second and third runs, and what each run changed of the live nodes, the live
+   links (with their occurrences) and the case's timeline. It is shown red with link withdrawal
+   restored, with it each of the two ledger reads, with events taken by link, with a count from
+   other cases' loads told to the loader, and with `withdrawn_before` asked without the case; the
+   ledger's own test is red with `withdrawn_row_keys_among` asked without the case
    (`process/lanes/studio/L1.2a_RED_RECORD.md`). It holds for what the withdrawal changes, not for
    every figure the run gives: the known limits below are why.
 8. **The Studio says it in words.** A source's page and the wizard offer "Withdraw their events;
