@@ -7320,6 +7320,10 @@ async def set_site_grid(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="the site needs 4 control points before a grid can be drawn",
         )
+    # ADR-099 Amendment 15: drawing the grid loads its cells, so not in a case reading a composite;
+    # after the site's own check (a site the caller cannot reach is not found), before the grid is
+    # stored.
+    await refuse_in_a_composite_case()
     updated = await sites.set_grid(site.id, principal, rows=body.rows, cols=body.cols)
 
     assert updated.control_points is not None  # checked above; narrows the type for mypy
@@ -7536,7 +7540,10 @@ async def refuse_loading_a_composite(dataset_id: StudioDatasetDep, datasets: Dat
     """The same for the Studio's own routes of a dataset (ADR-140 Amendment 4): a composite is
     read, never loaded. After the dataset's own gate, which answers 404 to anyone it is not for."""
     if await datasets.composites_among([dataset_id]):
-        raise CompositeReadOnlyError
+        # Named: past the dataset's gate, which only someone it is for reaches.
+        held = await datasets.egress_of([dataset_id])
+        name = held[dataset_id].name if dataset_id in held else None
+        raise CompositeReadOnlyError(name, in_a_case=False)
 
 
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
@@ -9042,7 +9049,11 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
 
     async def check_case(owner: Principal, case: str) -> Principal:
         await state.investigations.get_authorized(case, owner, need=AccessLevel.EDITOR)
-        return await scope_to_case(owner, case, state.datasets)
+        scoped = await scope_to_case(owner, case, state.datasets)
+        # ADR-099 Amendment 15: a run is a load, so none in a case reading a composite, before
+        # `run_recipe_as` writes anything; the executor says so in words.
+        await refuse_in_a_composite_case()
+        return scoped
 
     async def run(
         owner: Principal,
@@ -10716,7 +10727,7 @@ async def release_held_rows_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/held-rows/reject",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoLoadingInACompositeCase],
 )
 async def reject_held_rows(
     investigation: InvestigationAuthorDep,
@@ -11139,6 +11150,21 @@ async def _scheduled_recipe(studio_recipes: StudioRecipeStore, recipe_id: str) -
     raise HTTPException(status_code=404, detail={"error": "schedule_not_found"})
 
 
+async def _refuse_a_composite_schedule(recipe: StudioRecipeDraft, datasets: DatasetStore) -> None:
+    """ADR-099 Amendment 15, for the Admin area's schedule routes, after the schedule is found: a
+    schedule whose case reads a composite, or whose recipe's dataset is one, is neither run,
+    re-timed nor resumed (409 `composite_read_only`), so none starts a run that would write in
+    part. The executor refuses each slot again (`check_case`), for a case switched since."""
+    ids = [recipe.dataset_id] if recipe.dataset_id else []
+    if recipe.schedule_case:
+        ids.extend(d.id for d in await datasets.chosen_of_case(recipe.schedule_case))
+    if ids and (found := await datasets.composites_among(ids)):
+        # Named: an operator of schedules holds a right, so may be told dataset names (A11).
+        held = await datasets.egress_of(sorted(found))
+        names = [held[d].name for d in sorted(found) if d in held]
+        raise CompositeReadOnlyError(names[0] if names else None, in_a_case=False)
+
+
 @app.get(
     "/v1/investigations/{investigation_id}/data-feeds",
     dependencies=[Depends(require_right(Right.READ_DATA_FEEDS))],
@@ -11421,11 +11447,13 @@ async def run_schedule_now_route(
     handling_scheme: HandlingSchemeDep,
     executor: ScheduleExecutorDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
     """*Run now* (ADR-110 Amendment 3, point 2): at once, **as the schedule's owner**, with every
     check a scheduled slot gets — refused in words (409) if the owner may not run it. The
     administrator is named in the audit as who asked; the run itself is the owner's."""
     recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(recipe, datasets)
     await audit.record(principal=principal, action="run_schedule_now",
                        resolved_query={"recipe_id": recipe_id, "run_as": recipe.schedule_owner},
                        result_cardinality=1)  # fmt: skip
@@ -11462,10 +11490,11 @@ async def change_schedule_route(
     handling_scheme: HandlingSchemeDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
     """*Change schedule* (ADR-110 Amendment 3, point 2): a new time, refused in words if it could
     not be kept; **the owner is kept**, and the administrator named in the audit."""
-    await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(await _scheduled_recipe(studio_recipes, recipe_id), datasets)
     zone = body.timezone or DEFAULT_TIMEZONE
     validate_schedule(body.cron, zone)
     await studio_recipes.retime(recipe_id, cron=body.cron, timezone=zone, now=datetime.now(UTC))
@@ -11489,8 +11518,9 @@ async def resume_schedule_route(
     recipe_runs: RecipeRunsDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
-    await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(await _scheduled_recipe(studio_recipes, recipe_id), datasets)
     await studio_recipes.set_paused(recipe_id, paused=False, reason=None)
     await audit.record(principal=principal, action="resume_schedule",
                        resolved_query={"recipe_id": recipe_id}, result_cardinality=1)  # fmt: skip

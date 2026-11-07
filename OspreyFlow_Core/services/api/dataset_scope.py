@@ -48,7 +48,7 @@ from schemas.domain import (
     Principal,
 )
 
-from .datasets import COMPOSITE, DatasetStore
+from .datasets import COMPOSITE, Dataset, DatasetStore, reads_dataset_names
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
@@ -65,10 +65,14 @@ class CompositeReadOnlyError(Exception):
     case's own analyst layer, in a case reading a composite, or any write into a composite's id.
     Refused before anything is written; a composite is read-only for now."""
 
-    def __init__(self) -> None:
+    def __init__(self, composite: str | None = None, *, in_a_case: bool = True) -> None:
+        #: `composite`: its name, where the asker may be told dataset names (ADR-099 Amendment 11,
+        #: `reads_dataset_names`); otherwise none is named. `in_a_case`: false for a write into a
+        #: composite's id with no case (the Studio's routes of a dataset, a schedule's).
+        named = f"the composite “{composite}”" if composite else "a composite"
+        said = f"This case reads {named}" if in_a_case else f"This is {named}"
         super().__init__(
-            "This case reads a composite, which is read-only for now: do this in a case that "
-            "reads that dataset."
+            f"{said}, which is read-only for now: do this in a case that reads that dataset."
         )
 
 
@@ -137,13 +141,25 @@ def with_the_layer(principal: Principal) -> Principal:
     return principal.model_copy(update={"datasets": list(held)})
 
 
-async def reads_a_composite() -> bool:
-    """Whether the request's case reads a composite (ADR-099 Amendment 12)."""
+async def _composite_read() -> Dataset | None:
+    """The composite the request's case reads, if it reads one (ADR-099 Amendment 12)."""
     scope = _CASE_SCOPE.get()
     if scope is None:
-        return False
+        return None
     chosen = await scope[1].chosen_of_case(scope[0])
-    return len(chosen) == 1 and chosen[0].kind == COMPOSITE
+    return chosen[0] if len(chosen) == 1 and chosen[0].kind == COMPOSITE else None
+
+
+async def reads_a_composite() -> bool:
+    """Whether the request's case reads a composite (ADR-099 Amendment 12)."""
+    return await _composite_read() is not None
+
+
+def _refusal(composite: Dataset) -> CompositeReadOnlyError:
+    """The refusal, naming the composite to an asker who may be told dataset names."""
+    scope = _CASE_SCOPE.get()
+    named = scope is not None and reads_dataset_names(scope[2])
+    return CompositeReadOnlyError(composite.name if named else None)
 
 
 async def refuse_in_a_composite_case() -> None:
@@ -151,8 +167,9 @@ async def refuse_in_a_composite_case() -> None:
     own analyst layer, is refused. A writing service calls this after its own read of what it would
     change, so what the reader cannot see still answers as not found, and before it writes or
     stores anything."""
-    if await reads_a_composite():
-        raise CompositeReadOnlyError
+    composite = await _composite_read()
+    if composite is not None:
+        raise _refusal(composite)
 
 
 async def refuse_writing_a_node_in_a_composite_case(
@@ -327,11 +344,12 @@ class DatasetStampingGraph:
         if self._dataset is not None:
             return
         layer = analyst_layer()
-        if await reads_a_composite() and (not datasets or datasets != {layer}):
-            raise CompositeReadOnlyError
+        composite = await _composite_read()
+        if composite is not None and (not datasets or datasets != {layer}):
+            raise _refusal(composite)
         if self._registry is not None and datasets:
             if await self._registry.composites_among(sorted(datasets)):
-                raise CompositeReadOnlyError
+                raise CompositeReadOnlyError(in_a_case=False)
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
@@ -349,25 +367,47 @@ class DatasetStampingGraph:
         await self._written()
         return ids
 
-    async def _refuse_correcting(self, held: Sequence[Node] | Sequence[Edge]) -> None:
+    async def _refuse_correcting(
+        self, held: Sequence[Node] | Sequence[Edge], replacement: Sequence[str]
+    ) -> None:
         """A correction keeps the old element's datasets (Amendment 2 decision 2), so it is judged
-        by them: refused unless wholly the case's layer's, as any other write."""
-        for old in held:
-            await self._refuse_into_a_composite(set(old.datasets))
+        by them and by what the replacement names. In a case reading a composite it goes ahead only
+        for an old element the case can see and that is wholly the case's layer's; one it cannot
+        see is refused in the same words, which says nothing, since every other correction there is
+        refused too. Under no case's scope (the Studio's, `scope_to_dataset`), the dataset it is
+        made in and what the replacement names are still asked of the registry: no composite's."""
+        if self._dataset is not None:
+            return
+        named = set(replacement)
+        if await reads_a_composite():
+            if not held:
+                await refuse_in_a_composite_case()
+            for old in held:
+                await self._refuse_into_a_composite(set(old.datasets) | named)
+            return
+        into = self._into()
+        await self._refuse_into_a_composite(
+            named | ({into} if into else set()) | {d for old in held for d in old.datasets}
+        )
+
+    async def _held_for(self, read: Callable[[Principal], Awaitable[Any]]) -> list[Any]:
+        """The old element, as the request's case reads it; nothing outside a case."""
+        scope = _CASE_SCOPE.get()
+        if scope is None or self._dataset is not None:
+            return []
+        return list(await read(scope[2]))
 
     # A correction or a revert changes what is counted too; each clears what was kept after it.
     async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: Any) -> NodeId:
-        scope = _CASE_SCOPE.get()
-        if scope is not None and self._dataset is None:
-            await self._refuse_correcting(await self._inner.get_nodes([node_id], scope[2]))
+        held = await self._held_for(lambda reader: self._inner.get_nodes([node_id], reader))
+        await self._refuse_correcting(held, replacement.datasets)
         new_id = await self._inner.supersede_node(node_id, replacement, tx)
         await self._written()
         return new_id
 
     async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any) -> str:
-        scope = _CASE_SCOPE.get()
-        if scope is not None and self._dataset is None:
-            await self._refuse_correcting(await self._inner.get_edges([edge_id], scope[2]))
+        held = await self._held_for(lambda reader: self._inner.get_edges([edge_id], reader))
+        await self._refuse_correcting(held, replacement.datasets)
         new_id = await self._inner.supersede_edge(edge_id, replacement, tx)
         await self._written()
         return new_id
