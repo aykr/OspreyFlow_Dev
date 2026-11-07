@@ -13,9 +13,12 @@ catches it:
   (`test_a_withdrawn_key_kept_again_is_counted_until_that_load_is_reverted`);
 - the revert of the load that kept a key leaving it to be restored later
   (`test_reverting_the_load_that_kept_a_withdrawn_key_leaves_nothing_to_restore`);
-- an element kept by another row, of any pipeline or case, or listed by another load's record,
-  withdrawn under it (`test_the_elements_another_kept_row_holds_are_found_whoever_kept_it`,
-  `test_the_elements_another_unreverted_loads_record_lists_are_found`);
+- a key's events lost on the way in or back, or a row recorded before Amendment 15 read as one that
+  wrote no events (`test_a_keys_record_is_kept_with_it_and_a_key_kept_before_records_none`,
+  `test_a_key_recorded_before_its_events_reads_as_none`);
+- the events a refresh sets aside taken from another load's withdrawn rows, or the withdrawal
+  asking anything about another row, case or load (Amendment 15;
+  `test_a_refreshs_withdrawn_events_are_its_own_rows_alone`);
 - a run under a changed `deduplicate` let through while a withdrawn key under the old one waits to
   be restored (`test_a_withdrawn_keys_definition_still_counts`)."""
 
@@ -25,11 +28,11 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
+from conduit_common.identity import new_id
+from schemas.ingest import RowElements
 from services.api.config import PostgresConfig
 from services.api.recipe_runs import RecipeRunStore
 
-from conduit_common.identity import new_id
-from schemas.ingest import LoadRecord, RowElements
 from tests.services.api.test_recipe_runs import _keyed, _started
 
 T0 = datetime(2026, 11, 6, 6, 0, tzinfo=UTC)
@@ -44,8 +47,8 @@ async def runs() -> AsyncIterator[RecipeRunStore]:
         await store.close()
 
 
-def _elements(nodes: list[str], edges: list[str]) -> RowElements:
-    return RowElements(node_ids=nodes, edge_ids=edges)
+def _elements(nodes: list[str], edges: list[str], events: list[str] | None = None) -> RowElements:
+    return RowElements(node_ids=nodes, edge_ids=edges, event_ids=events or [])
 
 
 async def test_a_keys_record_is_kept_with_it_and_a_key_kept_before_records_none(
@@ -58,7 +61,7 @@ async def test_a_keys_record_is_kept_with_it_and_a_key_kept_before_records_none(
         run_id,
         _keyed(load, recipe, case),
         row_keys=[k1, k2],
-        row_elements={k1: _elements(["n1", "n2"], ["e1"]), k2: _elements(["n1"], [])},
+        row_elements={k1: _elements(["n1", "n2"], ["e1"], ["v1"]), k2: _elements(["n1"], [])},
     )
     # A key kept before Amendment 8 has no record: NULL, not an empty one.
     await runs.add_record(run_id, _keyed(new_id(), recipe, case), row_keys=[legacy])
@@ -67,7 +70,10 @@ async def test_a_keys_record_is_kept_with_it_and_a_key_kept_before_records_none(
     assert set(dropped) == {k1, legacy}
     assert dropped[k1].load_id == load
     assert dropped[k1].node_ids == ("n1", "n2") and dropped[k1].edge_ids == ("e1",)
-    assert dropped[legacy].node_ids is None and dropped[legacy].edge_ids is None
+    assert dropped[k1].event_ids == ("v1",)
+    assert (dropped[legacy].node_ids, dropped[legacy].edge_ids, dropped[legacy].event_ids) == (
+        None, None, None,
+    )  # fmt: skip
     # Per recipe and case (rule 3): another case drops nothing of these.
     assert await runs.dropped_row_keys(recipe, new_id(), present=set()) == []
 
@@ -82,7 +88,7 @@ async def test_a_withdrawn_key_is_not_kept_nor_dropped_again_and_its_restore_put
         run_id,
         _keyed(first, recipe, case),
         row_keys=[k1, k2],
-        row_elements={k1: _elements(["n1"], ["e1"]), k2: _elements(["n2"], ["e2"])},
+        row_elements={k1: _elements(["n1"], ["e1"], ["v1"]), k2: _elements(["n2"], ["e2"])},
         row_key_fingerprint="fp",
     )
     await runs.add_record(run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=[k1])
@@ -95,7 +101,9 @@ async def test_a_withdrawn_key_is_not_kept_nor_dropped_again_and_its_restore_put
     (back,) = [
         d for d in await runs.dropped_row_keys(recipe, case, present={k2}) if d.row_key == k1
     ]
-    assert (back.load_id, back.node_ids, back.edge_ids) == (first, ("n1",), ("e1",))
+    assert (back.load_id, back.node_ids, back.edge_ids, back.event_ids) == (
+        first, ("n1",), ("e1",), ("v1",),
+    )  # fmt: skip
     assert await runs.fingerprints(recipe, case) == {"fp": 1}
 
 
@@ -131,76 +139,52 @@ async def test_reverting_the_load_that_kept_a_withdrawn_key_leaves_nothing_to_re
     assert await runs.kept_row_keys(recipe, case, [k1, k2]) == set()
 
 
-async def test_the_elements_another_kept_row_holds_are_found_whoever_kept_it(
-    runs: RecipeRunStore,
-) -> None:
-    recipe, other_recipe, case, other_case = new_id(), new_id(), new_id(), new_id()
-    dropped, kept_here, kept_there, withdrawn = new_id(), new_id(), new_id(), new_id()
-    n_mine, n_shared, n_far, n_gone = new_id(), new_id(), new_id(), new_id()
-    e_mine, e_shared = new_id(), new_id()
-    run_id = await _started(runs, recipe)
-    await runs.add_record(
-        run_id,
-        _keyed(new_id(), recipe, case),
-        row_keys=[dropped, kept_here, withdrawn],
-        row_elements={
-            dropped: _elements([n_mine, n_shared, n_far, n_gone], [e_mine, e_shared]),
-            kept_here: _elements([n_shared], [e_shared]),
-            withdrawn: _elements([n_gone], []),
-        },
-    )
-    # Another pipeline, in another case, holds `n_far`.
-    await runs.add_record(
-        run_id,
-        _keyed(new_id(), other_recipe, other_case),
-        row_keys=[kept_there],
-        row_elements={kept_there: _elements([n_far], [])},
-    )
-    # A withdrawn key holds nothing: `n_gone` is not kept by it.
-    await runs.add_record(run_id, _keyed(new_id(), recipe, case), withdrawn_row_keys=[withdrawn])
-
-    nodes, edges = await runs.elements_kept_by_other_rows(
-        [n_mine, n_shared, n_far, n_gone],
-        [e_mine, e_shared],
-        recipe_id=recipe,
-        case=case,
-        excluding=[dropped],
-    )
-    assert nodes == {n_shared, n_far}
-    assert edges == {e_shared}
-    assert await runs.elements_kept_by_other_rows(
-        [], [], recipe_id=recipe, case=case, excluding=[dropped]
-    ) == (set(), set())
-
-
-async def test_the_elements_another_unreverted_loads_record_lists_are_found(
-    runs: RecipeRunStore,
-) -> None:
+async def test_a_key_recorded_before_its_events_reads_as_none(runs: RecipeRunStore) -> None:
+    """A key kept under Amendment 8 has its nodes and links but no events (the column is NULL): it
+    reads as `None`, which the withdrawal leaves in place, never as a row that wrote none."""
     recipe, case = new_id(), new_id()
-    mine, other, reverted = new_id(), new_id(), new_id()
-    n_mine, n_other, n_merged, n_reverted = new_id(), new_id(), new_id(), new_id()
-    e_touched = new_id()
+    k1 = new_id()
     run_id = await _started(runs, recipe)
-
-    def record(load: str, **ids: list[str]) -> LoadRecord:
-        return _keyed(load, recipe, case).model_copy(
-            update={"created_node_ids": [], "touched_edge_ids": [], "created_edge_ids": [], **ids}
-        )
-
-    await runs.add_record(run_id, record(mine, created_node_ids=[n_mine, n_other]))
     await runs.add_record(
-        run_id,
-        record(other, created_node_ids=[n_other], merged_node_ids=[n_merged],
-               touched_edge_ids=[e_touched]),
+        run_id, _keyed(new_id(), recipe, case), row_keys=[k1],
+        row_elements={k1: _elements(["n1"], ["e1"], ["v1"])},
     )  # fmt: skip
-    await runs.add_record(run_id, record(reverted, created_node_ids=[n_reverted]))
-    await runs.mark_reverted(reverted, reverted_by="admin-1", at=T0)
-
-    nodes, edges = await runs.elements_in_other_records(
-        [n_mine, n_other, n_merged, n_reverted], [e_touched], excluding_loads=[mine]
+    await runs._pool.execute(
+        "UPDATE loaded_row_keys SET event_ids = NULL WHERE recipe_id = $1 AND row_key = $2",
+        recipe,
+        k1,
     )
-    assert nodes == {n_other, n_merged}
-    assert edges == {e_touched}
+    (dropped,) = await runs.dropped_row_keys(recipe, case, present=set())
+    assert (dropped.node_ids, dropped.edge_ids, dropped.event_ids) == (("n1",), ("e1",), None)
+
+
+async def test_a_refreshs_withdrawn_events_are_its_own_rows_alone(runs: RecipeRunStore) -> None:
+    """Amendment 15: the events a refresh sets aside are those its withdrawn keys record, and no
+    other: not another refresh's, in this case or another, nor a kept row's on the same link. The
+    two reads that asked about other rows and loads are gone."""
+    recipe, case, other_case = new_id(), new_id(), new_id()
+    first, refresh, theirs, their_refresh = new_id(), new_id(), new_id(), new_id()
+    dropped, kept, their_dropped = new_id(), new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(
+        run_id, _keyed(first, recipe, case), row_keys=[dropped, kept],
+        row_elements={dropped: _elements(["n1"], ["e1"], ["v1", "v2"]),
+                      kept: _elements(["n1"], ["e1"], ["v3"])},
+    )  # fmt: skip
+    await runs.add_record(
+        run_id, _keyed(theirs, recipe, other_case), row_keys=[their_dropped],
+        row_elements={their_dropped: _elements(["n1"], ["e1"], ["v9"])},
+    )  # fmt: skip
+    await runs.add_record(run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=[dropped])
+    await runs.add_record(
+        run_id, _keyed(their_refresh, recipe, other_case), withdrawn_row_keys=[their_dropped]
+    )
+
+    assert await runs.withdrawn_event_ids(refresh) == ["v1", "v2"]
+    assert await runs.withdrawn_event_ids(their_refresh) == ["v9"]
+    assert await runs.withdrawn_event_ids(first) == []
+    assert not hasattr(runs, "elements_kept_by_other_rows")
+    assert not hasattr(runs, "elements_in_other_records")
 
 
 async def test_a_withdrawn_keys_definition_still_counts(runs: RecipeRunStore) -> None:

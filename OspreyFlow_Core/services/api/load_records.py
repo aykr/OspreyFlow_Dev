@@ -86,20 +86,7 @@ class _RunLedger(Protocol):
         self, recipe_id: str, case: str, *, present: Collection[str]
     ) -> Sequence[DroppedRow]: ...
 
-    async def elements_kept_by_other_rows(
-        self,
-        node_ids: Sequence[str],
-        edge_ids: Sequence[str],
-        *,
-        recipe_id: str,
-        case: str,
-        excluding: Sequence[str],
-        only_this_pipeline: bool = False,
-    ) -> tuple[set[str], set[str]]: ...
-
-    async def elements_in_other_records(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
-    ) -> tuple[set[str], set[str]]: ...
+    async def withdrawn_event_ids(self, load_id: str) -> list[str]: ...
 
 
 class LedgerSink:
@@ -158,33 +145,14 @@ class LedgerSink:
     def hold_row_keys(self, recipe_id: str, case: str) -> AbstractAsyncContextManager[None]:
         return self._ledger.hold_row_keys(recipe_id, case)
 
-    # ADR-110 Amendment 8 point 3: what a full snapshot's withdrawal asks of the ledger.
+    # ADR-110 Amendments 8 point 3 and 15: what a full snapshot's withdrawal asks of the ledger.
     async def dropped_row_keys(
         self, recipe_id: str, case: str, *, present: Collection[str]
     ) -> Sequence[DroppedRow]:
         return await self._ledger.dropped_row_keys(recipe_id, case, present=present)
 
-    async def elements_kept_by_other_rows(
-        self,
-        node_ids: Sequence[str],
-        edge_ids: Sequence[str],
-        *,
-        recipe_id: str,
-        case: str,
-        excluding: Sequence[str],
-        only_this_pipeline: bool = False,
-    ) -> tuple[set[str], set[str]]:
-        return await self._ledger.elements_kept_by_other_rows(
-            node_ids, edge_ids, recipe_id=recipe_id, case=case, excluding=excluding,
-            only_this_pipeline=only_this_pipeline,
-        )  # fmt: skip
-
-    async def elements_in_other_records(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], *, excluding_loads: Sequence[str]
-    ) -> tuple[set[str], set[str]]:
-        return await self._ledger.elements_in_other_records(
-            node_ids, edge_ids, excluding_loads=excluding_loads
-        )
+    async def withdrawn_event_ids(self, load_id: str) -> list[str]:
+        return await self._ledger.withdrawn_event_ids(load_id)
 
     async def watermark(
         self, recipe_id: str, case: str, source_id: str
