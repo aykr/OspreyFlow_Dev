@@ -444,6 +444,7 @@ async def _close(
     alert_id = alert.id
     confirmed_node: str | None = None
     cited: list[str] | None = None
+    renamed: dict[str, str] = {}
     if disposition == "true_positive":
         node = nodes.get(alert.alert_node_id) if alert.alert_node_id is not None else None
         # ADR-109 Amendment 7 (owner ruling, 11 October 2026): a true positive on a screening alert
@@ -483,6 +484,7 @@ async def _close(
         alert_node_id=confirmed_node,
         edge_ids=cited,
         close_proposed_by=proposed_by,
+        repoint=renamed or None,
     )
 
 

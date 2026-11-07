@@ -308,3 +308,92 @@ async def test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_
         node = await graph.get_node(alert.alert_node_id, ANALYST)  # type: ignore[arg-type]
         assert node is not None and node.handling.classification == "OFFICIAL"
         assert await _listed(stores, graph, analytics, case, TEAMMATE) == [alert.id]
+
+
+async def test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """The orchestrator's Q2 (the lane-reviewer's finding 5). A true positive on a screening alert
+    confirms its inferred `SAME_AS`, which the graph supersedes with a new revision, and the
+    closed alert cites the new one. A second open alert citing the same match cited the old
+    revision, which `get_edges` no longer returns, so G2's link check withheld it from every reader
+    while its trend fact still counted it open. Now every alert citing a confirmed link is
+    repointed in the close's own transaction (`AlertStore.set_queue_triage`). Red without the
+    repoint: the second alert was gone from the queue.
+
+    The readers (rule 3: the repoint must never widen what anyone reads). The match is SECRET; the
+    two people it joins are OFFICIAL. The reader who closes the first alert and keeps the second,
+    SECRET-cleared, may read the new revision, and could read the old one, which carried nothing
+    more (a confirmed revision keeps the match's marking). The OFFICIAL teammate may read both
+    people but not the match, old or new: the queue's full check still runs on the repointed row
+    for them, and they are never given it. Red for that half with the link check skipped
+    (`ReadableEvidence.whole` without its links): the teammate was given the repointed alert."""
+    from conduit_common.identity import new_edge_id, new_node_id
+    from schemas.domain import (
+        AlertMode,
+        EdgeWrite,
+        Handling,
+        NodeWrite,
+        Provenance,
+        ProvenanceState,
+        SourceRef,
+    )
+
+    case = f"case-{new_id()}"
+    now = T0
+    official = Handling(classification="OFFICIAL", handling_code="P", originator="verify",
+                        owning_unit="verify")  # fmt: skip
+    secret = official.model_copy(update={"classification": "SECRET"})
+    cleared = SECRET_LOADER
+    asserted = Provenance(state=ProvenanceState.ASSERTED, first_seen=now,
+                          sources=[SourceRef(document_id="t", locator="r", excerpt_hash="")])  # fmt: skip
+    person, listed = (
+        NodeWrite(id=new_node_id(), type="Person", properties={"family_name": n}, provenance=asserted,
+                  handling=official, created_by="t", created_at=now)
+        for n in ("Petrov", "PETROVA")
+    )  # fmt: skip
+    match = EdgeWrite(
+        id=new_edge_id(), type="SAME_AS", source=person.id, target=listed.id,
+        properties={"score": 0.98, "model_version": "screening:Synthetic list"}, basis="probabilistic",
+        provenance=Provenance(state=ProvenanceState.INFERRED, first_seen=now, extracted_by="screening:t",
+                              sources=[SourceRef(document_id="list", locator="e-1", excerpt_hash="")]),
+        handling=secret, created_by="t", created_at=now,
+    )  # fmt: skip
+    facts: list[Any] = []
+
+    async def keep(batch: list[Any]) -> None:
+        facts.extend(batch)
+
+    stores["alerts"].fact_sink = keep
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes([person, listed], tx)
+        (link,) = await graph.upsert_edges([match], tx)
+        await graph.commit_transaction(tx)
+        first, second = (
+            Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
+                  referent_node_ids=[person.id, listed.id], edge_ids=[link], investigation_id=case,
+                  created_at=now, typology="kyc_screening", words=f"Petrov matches PETROVA ({i})",
+                  severity="medium")
+            for i in (1, 2)
+        )  # fmt: skip
+        for alert in (first, second):
+            await stores["alerts"].save(alert, handlings=[official, secret])
+        assert await _listed(stores, graph, analytics, case, cleared) == sorted([first.id, second.id])
+        assert await _listed(stores, graph, analytics, case, TEAMMATE) == []
+
+        closed = await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, cleared,
+                                           disposition="true_positive", reason="matches the entry")  # fmt: skip
+        (revision,) = closed.edge_ids
+        assert revision != link, "the confirmed match is a new revision"
+        queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                         case, cleared)}  # fmt: skip
+        assert second.id in queued, "the second alert citing the match is still in the queue"
+        assert queued[second.id].edge_ids == [revision]
+        (fact,) = [f for f in facts if f.alert_id == second.id][-1:]
+        assert fact.outcome == "open", "and its trend fact agrees: open"
+        assert await _listed(stores, graph, analytics, case, TEAMMATE) == [], (
+            "the repointed alert is still checked whole: one who may not read the match is not given it"
+        )
+        with pytest.raises(AlertNotFoundError):
+            await alert_queue.explain(stores["alerts"], graph, analytics, case, second.id, TEAMMATE)

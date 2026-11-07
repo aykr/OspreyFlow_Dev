@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -331,6 +331,25 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
     return [seen[k] for k in sorted(seen)]
 
 
+async def _repoint_cited_links(
+    conn: asyncpg.Connection, repoint: Mapping[str, str], *, exclude: str
+) -> list[str]:
+    """Every alert but `exclude` citing an old revision in `repoint`, made to cite the new one, in
+    the caller's transaction (rows locked as they are read). Returns the ids it changed."""
+    rows = await conn.fetch(
+        "SELECT id, edge_ids FROM alerts WHERE id <> $1 "
+        "AND COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $2::text[] FOR UPDATE",
+        exclude,
+        sorted(repoint),
+    )
+    for r in rows:
+        cited = [repoint.get(e, e) for e in json.loads(r["edge_ids"])]
+        await conn.execute(
+            "UPDATE alerts SET edge_ids = $2 WHERE id = $1", r["id"], json.dumps(cited)
+        )
+    return [r["id"] for r in rows]
+
+
 class AlertStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -546,14 +565,22 @@ class AlertStore:
         alert_node_id: str | None = None,
         edge_ids: Sequence[str] | None = None,
         close_proposed_by: str | None = None,
+        repoint: Mapping[str, str] | None = None,
     ) -> Alert:
         """`set_triage` for the one queue: the same single statement, and the alert must still be
         in the reader's queue scope as it is written, so a triage can reach no alert the queue
         would not show them. `close_proposed_by` (ADR-133 decision 7): who proposed closing a
         high-severity alert; kept, with when, while the same person stays named, and cleared with
-        `None`."""
+        `None`.
+
+        `repoint` (old link id → its new revision): links this close confirmed. Every other alert
+        citing an old revision is repointed to the new one in the same transaction, so none of them
+        is withheld for citing a link that only moved (the queue reads a link by its id, ADR-146
+        decision 10; the orchestrator's Q2). Not scoped to the reader: it changes which revision an
+        alert cites, never what anyone may read, and returns nothing of the alerts it touched."""
         scope, extra = queue_scope(principal, investigation_id, 11)
-        async with self._pool.acquire() as conn:
+        moved: list[str] = []
+        async with self._pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $2, assignee = $3, disposition = $4, "
                 "disposition_reason = $5, decided_by = $6, "
@@ -576,9 +603,11 @@ class AlertStore:
                 close_proposed_by,
                 *extra,
             )
-        if row is None:
-            raise AlertTriageConflict(alert_id)
-        await self.publish_facts([alert_id])
+            if row is None:
+                raise AlertTriageConflict(alert_id)
+            if repoint:
+                moved = await _repoint_cited_links(conn, repoint, exclude=alert_id)
+        await self.publish_facts([alert_id, *moved])
         return _row_to_alert(row)
 
     async def set_triage(
