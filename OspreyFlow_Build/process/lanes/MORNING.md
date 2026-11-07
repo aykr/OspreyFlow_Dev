@@ -25,6 +25,8 @@ Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; 
 
 **A visible change, my call (glass, L2.8b):** the rule audit's log of fired rules will stop showing the words of entries written before L2.8b that name an alert, because those entries don't record the alert's links and transactions, so nobody can check whether the reader may see them (rule 3). The entries stay; only their words are withheld. Say if you would rather have those old entries' words shown to Authors and unit administrators regardless.
 
+**Found on main, not from any lane (studio, 20:50 under its lease):** ClickHouse's `event_frequency` fails on main at `2be871d`. Its RANGE frame offset of 2592000000 (30 days in milliseconds) isn't a 32-bit integer, and ClickHouse refuses it. `make ci` doesn't run ClickHouse, so it stays green. I'll schedule the fix as a small shared step after the current merges.
+
 **Questions for you (recommendation first; nothing waits for them but L3.9 and the queue's suppression):**
 - **L5.** Where a fresh drawing's items live: **(a)** in the drawn dataset itself, since for a drawing-first case the drawing is the data; (b) in the case's layer, promoted into the drawn dataset before a merge.
 - **L6.** Who may merge a drawn dataset: **(a)** an Author of the target holding `merge_datasets`, with a second person when the target's policy asks; administrators see every drawn dataset and may retire one; (b) administrators only.
