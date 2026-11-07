@@ -146,6 +146,12 @@ lane fixes what. The owner still rules on what a person sees or can do, who may 
 model and any product decision an ADR records, published claims, real data, anything outside the
 private repository, and the protected `Makefile` and `ci.yml`.
 
+**While the owner is away (the owner, 7 November 2026, ~17:30).** The orchestrator may merge Lane 3's L3.1 once its
+final review passes and `make ci` is no redder, leaving the plain-language summary in `MORNING.md`, and may
+apply the CI-wiring diffs to the protected `.github/workflows/ci.yml` and `OspreyFlow_Build/Makefile` itself,
+each checked with `git apply --check` and `make ci`, pushing once `make ci` is fully green (ADR-142
+decision 6).
+
 **Owner questions go through the orchestrator (the owner, 7 November).** A lane sends a question for the
 owner to the orchestrator's session by cross-session message, as multiple choice, instead of asking in
 its own window. The orchestrator batches the questions for the owner and sends the answers back, and

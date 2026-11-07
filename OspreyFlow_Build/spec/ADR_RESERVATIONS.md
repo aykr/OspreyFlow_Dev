@@ -37,7 +37,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-090 Amendment 5 | Proposed types stay in Admin until the Studio's Model tab shows them (L3.5) (the owner's ruling, 7 November) | glass | 2026-11-07 | written |
 | ADR-115 Amendment 6 | Places a person cannot open are hidden, not dimmed (ADR-145 N6; the owner's ruling, 7 November) | glass | 2026-11-07 | written |
 | ADR-110 Amendment 15 | A snapshot's withdrawal takes back a dropped row's links and events only, never its nodes, so nothing a reader sees varies with what they cannot read (rule 3; the owner's ruling "Never withdraw nodes", 7 November) | studio | 2026-11-07 | reserved |
-| ADR-145 Amendment 2 | The case screen lightened: the column opens with the Inspector only; the rail keeps Cases and Explore, the rest under ⋯ More; the view switch keeps Graph and Map, the rest under More views (the owner's choice of variant B, 7 November) | glass | 2026-11-07 | reserved |
+| ADR-145 Amendment 2 | The case screen lightened: the column opens with the Inspector only; the rail keeps Cases and Explore, the rest under ⋯ More; the view switch keeps Graph and Map, the rest under More views (the owner's choice of variant B, 7 November) | glass | 2026-11-07 | written |
 
 ## Baseline
 

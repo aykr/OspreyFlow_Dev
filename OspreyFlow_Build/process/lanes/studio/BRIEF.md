@@ -1,37 +1,45 @@
-# Studio lane · brief L1.2a and L1.2b · main's red tests, phase 6's exit, then pipelines by loading case
+# Studio lane · brief L1.2a part A (redo) and L1.2b · events-only withdrawal, then phase 6's exit
 
-Written by the orchestrator, 7 November 2026, after L1.2's merge (`25b1084`). Opus, medium. Do the parts in
-this order. Part C waits for L3.1's merge, and I will tell you when it lands. Stop at a clean, committed
-point after each part, and message me ready-to-merge for it, so each part merges on its own.
+Written by the orchestrator, 7 November 2026, for a **fresh studio session**. The previous session's work
+is on `lane/studio` at `ef9b35d`; its `REPORT.md` items 1–10 say where everything stands, and items 9–10
+say where Part B starts. Read them first. Opus, medium. Parts in order; message the orchestrator
+(`ospreyflow-7e`) ready-to-merge after each.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it; the leased stack is the throwaway
-test stack, `SESSIONS_RUNBOOK.md` §4); ADR-140 and Amendment 8; `spec/09_INGEST_STUDIO.md`;
-`spec/ingest_studio_redesign/BUILD_PLAN_INGEST_STUDIO.md` phase 6.
+**Binds.** `process/CLAUDE.md` rules 1–15 (rule 3 above all; rule 14 with the leased throwaway stack,
+`SESSIONS_RUNBOOK.md` §4); ADR-110 Amendments 6–13; `spec/09_INGEST_STUDIO.md`.
 
-**Part A (L1.2a, now): main's four red tests,** all on `main` since before the lanes:
-- `test_revert_elements_by_type` and `test_write_onto_a_reverted_node`: the tests' expected SQL lacks the
-  `withdrawn_by_load = null` the revert now writes. Decide which is right, from ADR-110 Amendments 8–9.
-- `test_unfiltered_node_lookup_confined`: `services/ingest/snapshot_withdrawal.py` calls
-  `GraphPort.live_edges_touching` outside the confined modules. This is rule 3's guard. Either the read
-  is confined, or it is shown to read no case's data and allowlisted with a stated reason. Test first.
-- `test_load_checks.py`'s two verify cases: the `studio` fixture never overrides `get_recipes_repo_root`.
+**Part A, redo: the owner's ruling of 7 November, "Only the rows' events".** A full-snapshot refresh with
+*withdraw* takes back **only the dropped rows' own events** (their timeline and analytics rows). It never
+touches graph elements, links or nodes. A dropped row's links and nodes stay until its load is
+reverted. Why: whether a link went depended on other cases' rows, so the run's counts, the live links
+and the timeline differed with data the loader cannot read (rule 3).
+- `services/ingest/snapshot_withdrawal.py`: no graph change at all; drop both ledger reads that look at
+  other cases (`elements_kept_by_other_rows`, `elements_in_other_records`). `services/api/studio_publish.py`:
+  withdraw the rows' events by their own key, not by edge ids (they are keyed by edge today; find the
+  row's key). Drop `only_this_pipeline` if nothing needs it. Metering counts no withdrawal.
+- Rewrite ADR-110 Amendment 15 on the branch (its title too: the reservation row will take your title at
+  merge) and spec 09's "A full snapshot with withdraw" paragraph: nodes and links are left with no row
+  until a revert, and how records written earlier with a non-empty `withdrawn_node_ids` revert.
+- **The proof, rule 15's shape:** the real ArcadeDB adapter (`arcadedb_adapter`) and two real principals of
+  different cases; the same recipe run in the other case; through `run_recipe_as` and
+  `run_published_recipe`. Compare everything the loader is told, including after the row comes back
+  (`edges_created`), plus the live nodes, the live links and the timeline events, with and without the
+  other case's row and link. Red with link withdrawal restored and with each ledger read restored, kept
+  on record (`process/lanes/studio/L1.2a_RED_RECORD.md`, in the pattern of `L1.2_RED_RECORD.md`). Rewrite
+  `tests/ingest/test_snapshot_withdrawal.py`, `test_snapshot_withdrawal_tells_nothing_live.py`,
+  `test_source_refresh_snapshot_live.py` to the rule.
+- Minors: `metering.py:12-13`; the live test's docstring; the `Withdrawal` docstring; delete
+  `process/lanes/studio/L1.1_ci_makefile.diff` (superseded by `L1.2a_ci_makefile.diff`; add the live files
+  this part adds to that diff).
 
-**Part B (L1.2b, now): phase 6's exit.** The Prison Intelligence reports pipeline is built from scratch in
-guided mode by someone following the demo script, and edited in expert mode. So: write the from-scratch
-steps into `DEMO_GUIDE.md` chapter 4 (New pipeline, choose the registered source, + entity, the
-bindings the committed reports map makes); make the harness walk build what the reports map builds;
-add an expert-mode edit of the reports pipeline; walk it live once on the throwaway stack under the
-lease, naming the lease. Record what is and is not met.
+**Part B (L1.2b): phase 6's exit.** As `REPORT.md` items 9–10 say: the Prison Intelligence reports
+pipeline built from scratch in guided mode (the committed map's eleven elements and ten links) by the
+harness walk and by `DEMO_GUIDE.md` chapter 4's steps; an expert-mode edit of it; one live walk of the
+running product on the throwaway stack under the lease, naming it.
 
-**Part C (L1.2a, after L3.1 merges): the owner's ruling of 7 November.** Only a case that loads into a
-dataset lists or opens its pipelines. Enforce it in the store's query for `get_authorized`,
-`list_drafts` and `list_all` with one clause (`dataset_id` = the loading dataset, and the NULL case
-decided and tested). Parametrise every `AuthorizedStudioRecipeDep` and `RunnableStudioRecipeDep` route
-(nineteen) with a cross-case case and a composite principal built by `scope_to_case`. The fake store
-must refuse what the real one refuses. This needs an amendment: ask me to reserve it.
+**Part C waits** for L3.1's merge, and I will tell you (the owner's load-into rule for pipelines; see
+`BRIEF.md` history at `ee56678`).
 
-**Files.** The Studio lane's map; `DEMO_GUIDE.md` chapter 4 (ratified for part B). Take the lease for
-every live run, the throwaway stack included.
-
-**Report** per part (Prompt L's format, at most twenty lines, in `REPORT.md`), with questions for the
-owner sent to me by message.
+**Every live run takes the lease** (`OspreyFlow_Build/scripts/stack_lease.sh acquire studio "<purpose>"`),
+the throwaway stack included; nothing reaches 2491, 55433 or 6379 without it. Questions for the owner go
+to the orchestrator by message, as multiple choice. Copy every hash you send from git output.
