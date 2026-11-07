@@ -24,3 +24,11 @@ config/weights.yaml
 # names the Operations view phase 10 builds from Schedules.tsx (ADR-145 decision 9 places it in
 # Admin). Remove this entry when phase 10 lands.
 apps/workspace/src/admin/Operations.tsx
+
+# Not yet written: the owner's records of 7 November (ADR-140 Amendment 9, ADR-144 Amendment 1, ADR-145
+# Amendment 4) name the gates and the one source of role wording their steps build: L1.8 builds
+# ui_words_check.py, L3.2 no_branches_check.py, L2.12 (with L2.7 and L1.8) help/roles.ts. Remove each
+# entry when its step lands.
+tools/ui_words_check.py
+tools/no_branches_check.py
+apps/workspace/src/help/roles.ts

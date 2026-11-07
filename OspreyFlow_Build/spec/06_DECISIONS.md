@@ -27136,3 +27136,595 @@ decisions 5 and 13 as built, and what they left open.
    `keyboard/admin.spec.ts` proves moving between sections and opening a coming one, each red with the
    list's handler removed. Axe scans the list, every section shown and a placeholder open, in dark,
    light and GOV.UK.
+
+## ADR-146 — The alerts journey: three sources, one queue, and Rules and Monitoring as a place of its own — ACCEPTED (design)
+
+Status: accepted from the owner's rulings of 7 November 2026 on the alerts gap map
+(`spec/glass_redesign/ALERTS_GAP_MAP.md`, Q1–Q5) and the assessment's questions R1–R7 and M1, put as
+multiple-choice questions and tried in the navigation prototype (*Rules and Monitoring*, and the *Build
+review* artboard). **Not built.** Built in Lane 2 (L2.8–L2.12), with Lane 3 for drawn-item watches (L3.3)
+and Lane 1 for screening lists (L1.3, L1.6). Amends ADR-109, ADR-130, ADR-133 and ADR-134 where they place
+or route alerts; ADR-145 Amendment 4 adds the place to the switcher.
+
+**Design reference.** The navigation prototype, *Navigation* B: *Signed in as* Analyst, Super user or Rule
+author, then *Rules and Monitoring*; and the *Build review* artboard, its *Rules and Monitoring* section.
+
+### Context
+
+The gap map proved, against the code, that alerting confuses by its structure: five things raise alerts,
+set up in three tabs of one place, run at different times and land in two lists (G1), and nothing links an
+alert to what raised it, or back. Home opens the case, not the alert (G10); there is no way back from the
+canvas (G7) because alerts have no address; a team lead has no team view (G8); "my team" on a sentence rule
+is stored and never read (G6); a saved-pattern monitor runs only on load though spec 02 promises daily
+searches (G16). Two findings break rule 3 whatever the design: the queue checks an alert's nodes but not its
+links or transactions (G2), and the inbox returns an alert's words while withholding its evidence (G3).
+
+### The owner's rulings of 7 November 2026
+
+- **Three sources.** "I would like to simplify the idea of alerting into 3 sources": rules, watches, and
+  alerts an analyst raises.
+- **One queue** (gap map Q1, A): the Watches inbox goes.
+- **R1.** Rules and Monitoring is a top-level place "alongside with glass, ingest studio and admin console",
+  for a new *Rule author* role ("rule authors may not be highly technical, hence merging this role with
+  developers does not seem right"). "The rule editor should always work on a declared dataset."
+- **R2, option C.** Standard underneath, simple on screen: BPMN 2.0 and DMN stored from day one, the guided
+  form on screen ("I don't want to make the interface overtly complex").
+- **R3.** Watches are made in three places, kept with the rules, and run by every load; never a pipeline node.
+- **R4.** Analysts raise alerts to their case or to the dataset.
+- **R5.** Each alert has an address; Home opens the alert; the evidence opens as a private view with a way back.
+- **R6.** Screening lists are imported and mapped in the Studio (ADR-140 Amendment 9); rules read them.
+- **R7.** *Promotions overdue* is not a case alert (ADR-145 Amendment 4).
+- **M1, aligned.** The place's tabs: *Alerts*, *What raises alerts*, *Held rows*, *Changes*.
+- "The rules editor should also show an inventory of all configured alerts in one place. In Glass there
+  should [be] alert notifications as part of dashboards."
+- Gap map Q3 (A): the monitor's schedule is built. Q4 (A): the way back. Q5 (B, by the ruling on teams):
+  "my team" means the named team only.
+
+### Decision
+
+1. **Three sources, one queue.**
+   - **Rules**: typology, KYC and sentence rules. Screening lists are inputs a rule reads, not a source.
+   - **Watches**: hotlists, saved patterns, watches set from the Glass, and watches set by drawing.
+   - **Raised by an analyst**: not configured; raised by hand.
+
+   Every alert, of every source, lands in one queue in Rules and Monitoring › *Alerts*. The Watches inbox
+   is removed; its *what fired it* (the identifier, the file, the row) is shown on every alert of a watch.
+   The `alerts.kind` column keeps `typology`, `hotlist` and `monitor` and gains `analyst` and `drawn_watch`
+   (a watch set by drawing); the queue's fifteen kind-dependent places (G4) are listed in the first commit
+   and each gets its case.
+
+2. **Rules and Monitoring is a place.** It is offered to holders of `triage_alerts` or `author_rules`
+   (ADR-112 Amendment 5) and to no one else (N6, hidden not dimmed, ADR-115 Amendment 6). Monitoring leaves
+   the Glass: the Glass's *Alerts* entries and the banner's "Monitoring n open" become a count on the
+   switcher's *Rules and Monitoring*. Its tabs:
+   - **Alerts**: the one queue, with filters *Mine*, *Team*, *Unassigned*, *Older than N days* and *All*,
+     and an alert's detail beside it (decision 6).
+   - **What raises alerts**: the inventory (decision 5).
+   - **Held rows** and **Changes**: as today's tabs, moved.
+
+3. **The rule editor.**
+   - **A declared dataset.** A rule names one dataset, or one composite, chosen first and never changed.
+     The conditions offer only that dataset's live domain model's types, properties and links, and its
+     subscribed screening lists. A whole-deployment rule is converted to one rule per dataset by a one-off
+     command, `scripts.migrate_rules_to_datasets`, dry run first; the dry run writes nothing.
+   - **The form.** *When* (as data loads; on a schedule; when a screening list refreshes) · *If* (conditions
+     picked from lists, never typed, as rule 8 asks of the Studio's guided mode) · *Then* (raise an alert at
+     a severity, to a named team or to the dataset's home case).
+   - **Stored to the standards.** Each rule is saved as a BPMN 2.0 process of three elements (a start event,
+     a business-rule task that calls the decision, an end event that raises the alert) and a DMN decision
+     table for its *If*. *Show as BPMN* draws it read-only; *Export* gives the `.bpmn` and `.dmn` files.
+     Only the elements OspreyFlow runs are accepted; an import with others is refused, naming them. Routing
+     and escalation (to a team, after N days, to a second person) may add BPMN elements to the same process
+     later, with no migration.
+   - **Draft, test, live.** A rule is draft or live, as a domain model is (ADR-140 R12). *Test* runs the draft
+     against the dataset's last 30 days and says how many alerts it would have raised; a rule cannot go live
+     untested. *Make live* needs a second person when the dataset's policy asks (ADR-145 A3). Every change is
+     audited and listed in *Changes*.
+   - **Where its alerts go is said before saving:** "Its alerts will appear in Alerts, seen by the 6 members
+     of Prison intel data team and the home case's Authors."
+
+4. **Watches.** Made in three places; kept and run in one way.
+   - **Made:** in the Glass, by an analyst's *Watch for this* on an entity or *Save as a watch* on a query
+     pattern; in Rules and Monitoring, by a rule author's hotlist import; on a drawing board, automatically
+     for each drawn item (ADR-143 Amendment 2, replacing decision 12's own alert kind).
+   - **Kept** in *What raises alerts*, each on a declared dataset, with an owner (a person or a team) and an
+     expiry.
+   - **Run** by every load into its dataset, whatever pipeline loads it, and saved patterns also on their own
+     schedule (daily by default, set per watch), as `rule_schedule.py` already does for sentence rules, one
+     replica per slot, run as the owner resolved afresh (G16). A watch is never a pipeline node; a run's
+     report in the Studio says, read-only, how many watches matched and links to them.
+
+5. **The inventory, *What raises alerts*.** Every rule and watch in one list, whoever made it and where:
+   name and maker, source (Rule or Watch), dataset, owner, draft or live, expiry, when it last fired, alerts
+   in the last 30 days, and the share closed as *not of interest*. Filters on each column. A rule's row opens
+   its editor; a watch's row opens it. Screening lists the rules read are shown read-only beneath, with their
+   version, entries and last refresh.
+
+6. **An alert's address and journey (R5).**
+   - Each alert has a route, `/alerts/<id>`, that Home, the canvas, a board, an email and the queue all open.
+     The product gains a router for this; every place it opens keeps its existing access checks.
+   - **Home** lists *Needs your attention*, titled by what raised it ("Hotlist Prison contacts: 07700 900412
+     in Kestrel", never "Alert alert", G10). A row opens the alert, not the case. Where a board counts the
+     alert's rule, the row also offers *Open the dashboard*.
+   - **The alert's detail**: what raised it, with *Open the rule* or *Open the watch*, which opens **that**
+     rule or watch, not the list; what fired it; who has it and its age; *See the trend*; *Open the
+     evidence*; close. A rule opened from an alert says so ("Opened from alert A14, which this rule raised"),
+     with *← Back to the alert* and *Show its alerts*.
+   - ***Open the evidence*** opens the alert's case in the Glass as a private view (ADR-144 decision 4),
+     whose banner reads "From alert A14 · ← Back to the alert", returning to the alert, still open.
+   - **Closing** opens the next alert in the person's queue. High severity proposes the close for a second
+     person, as today; a proposed close counts as open everywhere, on Home, the switcher's count and in
+     trends (G9).
+
+7. **Raised by an analyst (R4).** *Raise an alert…* on query results, a question's answer and the selection
+   bar. Its form asks for a title, a severity, a reason, and where it goes:
+   - **this case**: its members see it;
+   - **the dataset**: everyone with a case on the dataset sees it as a *dataset alert*, in the home case's
+     queue (ADR-145 Amendment 4); the home case's Authors close it.
+
+   The alert keeps its evidence, the items and the query or question that found them, and names who raised
+   it. A dataset alert may cite only the dataset's own items: if the selection holds a drawn item, which only
+   its case can see, the form offers to promote it first or to raise the alert to this case only.
+
+8. **Teams.** "Alert goes to" names a team (ADR-112 Amendment 5): only the team's members see that rule's
+   alerts, plus the home case's Authors. This is a new rule-3 read; its tests come first (rule 4). The
+   queue's *Team* filter shows the person's teams' alerts. A team's lead may give a team alert to a named
+   member (audited); a taken-back alert is marked apart (G12); *Suppress until…* is open (R8, below).
+
+9. **The Glass shows alerts where people already look,** without becoming a second place to work them: Home's
+   *Needs your attention*; an *Alerts* panel on each case's *Figures* (open by source and age, the newest
+   few); an *Alerts* panel any board may include, including the monitoring dashboard (ADR-145 Amendment 4,
+   D2). Every count is taken as the reader (rule 7). Every notification opens the alert in Rules and
+   Monitoring; the canvas shows a small badge on an item with an open alert.
+
+10. **The two access fixes, first and regardless (G2, G3).** Before any of the above, Lane 2 fixes, each
+    with a test shown red first: the queue checks an alert's links and transactions as well as its nodes,
+    and withholds an alert whose evidence the reader may not see; the inbox (until it goes) and every list
+    that shows an alert's words withholds them with its evidence. The miscounted *closing* (G9) is fixed in
+    the same step.
+
+### Still open (the owner's questions)
+
+- **R8.** The team lead's tools: all four (filters, hand-off, taken-back marked, *Suppress until…* with a
+  reason, at most 90 days, listed in the inventory), or the filters only. Recommendation: all four. L2.10
+  builds the filters and hand-off, which every option includes, and asks before suppression.
+
+### Tests that would fail (rule 12)
+
+- An alert of each source is in the one queue and nowhere else; the inbox route is gone (404).
+- A rule names one dataset: changing it after saving is refused; its conditions offer no type outside that
+  dataset's live model (red with a second dataset's type offered).
+- The migration's dry run writes nothing; its real run leaves no whole-deployment rule and one rule per
+  dataset with the same conditions.
+- A rule cannot go live untested; with a second-person policy, it goes live only on approval.
+- The stored BPMN and DMN round-trip: export then import gives the same rule; an import with an unsupported
+  element is refused, naming it.
+- A watch matches on every load into its dataset through two different pipelines; a saved pattern fires on
+  its schedule with no load (G16).
+- *Open the rule* from an alert opens that rule (red with it opening the list).
+- `/alerts/<id>` for a reader who may not see the alert is refused exactly as a missing alert (ADR-099
+  decision 5).
+- *Open the evidence*, then *← Back to the alert*, returns to the same alert, still open.
+- An analyst's dataset alert citing a drawn item is refused at the route, not only in the form.
+- Only a team's members and the home case's Authors see a team-routed alert (red with the team check
+  removed).
+- G2: an alert over a link the reader may not see is withheld (red with only nodes checked). G3: no alert's
+  words reach a reader who may not see its evidence.
+- A proposed close counts as open on Home, the switcher's count and in trends.
+- Keyboard (rule 13): every tab, filter, *Open the rule*, *Open the evidence*, the way back, *Raise an
+  alert…*, *Watch for this*, *Show as BPMN*, *Test*, *Make live*; each red with its handler removed.
+- Axe in dark, light and GOV.UK for every screen of the place.
+
+### Cost
+
+A new place and its route; a router in the workspace; the queue and inbox merged; the editor's BPMN and DMN
+storage (a small, pinned, licence-checked library for the XML, or a hand-written serialiser for the three
+elements, whichever the licence register allows); a one-off rule migration. The gap map's fifteen
+kind-dependent places each change once.
+
+### ADR-143, Amendment 2 (7 November 2026) — the analyst layer's lifecycle; drawn datasets and merging them; drawn items watched
+
+Status: accepted from the owner's rulings of 7 November 2026 on the assessment's questions L1–L3 and L7 and
+the discussion of drawn datasets. ADR-143 is unchanged except where this says so. Built in Lane 3 (L3.1,
+L3.3, L3.4, L3.9) and Lane 2 (L2.4 part 2).
+
+**Decision.**
+
+1. **A removed case's layer (L1).** Removing a case (soft, `investigations.removed_at`, as today) keeps its
+   layer, read-only. Three things may happen to it, each with a dry run first that writes nothing, and an
+   audit entry:
+   - **Merged into the dataset** by one of the dataset's Authors (ADR-145 Amendment 4), as a promotion of
+     the layer's unpromoted items: one load under the dataset's promotion policy (a second person if the
+     policy asks), revertible (decision 8). Merging means reading the items, which only the case's members
+     could; opening the merge sheet grants that Author read access to that one layer, for that merge alone,
+     recorded in the audit, as a promotion reviewer reads what they review.
+   - **Deleted** by one of the dataset's Authors, or by an administrator. Promoted items are never touched.
+   - **Left** as it is. Nothing deletes a layer on its own.
+2. **Administrators see layers as counts (L2).** Admin › Datasets lists every case linked to each dataset,
+   with each case's layer as item count and size, and its state (open, removed); never its contents
+   (rule 7). This replaces "never listed anywhere, Admin included" for Admin's Datasets section only.
+3. **A layer's marking ceiling (L3).** A layer may hold nothing marked above its case's dataset's highest
+   allowed marking (ADR-145 A3); a drawn item asking for more is refused in words, naming the ceiling. For a
+   drawn dataset (decision 5), its maker sets that ceiling when making it, within their own clearance.
+4. **Backup.** One restore test names a layer: back up, restore, and a drawn item and its picture come back
+   in the right case's layer and no other.
+5. **A drawing with no case makes a drawn dataset.** *New drawing board* with no case and no dataset makes,
+   in one step:
+   - a dataset of a new kind, `drawn`, named after the drawing, whose domain model is a starter pack the
+     analyst picks (FIBO, NIEM, STIX) or bare POLE, always on (ADR-140);
+   - its case, the dataset's home case (ADR-145 Amendment 4), with the analyst as its Author;
+   - the board.
+
+   It is a third way to start a case (ADR-140 R16, as Amendment 9 says). A drawn dataset is listed in the
+   Studio and in Admin › Datasets with a *Drawn* badge; no other case reads it unless its Author shares it;
+   no pipeline loads into it; no rule runs on it until it is merged.
+6. **Merging a drawn dataset into another** is a developer's or an administrator's call, in the Studio's
+   *Merge into a dataset…*, in four steps:
+   1. **Map the models:** each drawn type to one of the target's types, or proposed as a new one
+      (decision 9).
+   2. **Match:** the *Looks like a loaded item* pairs are reviewed, as on a board (decision 6).
+   3. **Dry run:** what would be added and what would match; nothing written.
+   4. **Merge:** one load into the target (`trigger = drawn_merge`), under the target's promotion policy,
+      reviewed in Runs, audited, revertible.
+7. **After a merge (L7).** The case reads the target dataset. The drawing becomes a **case view with
+   annotations**: its items are now the target's loaded items, laid out as drawn, and what didn't become
+   data stays as annotations on the view (the analyst's notes and source notes, the gradings and markings as
+   drawn, "drawn by A. Field, merged as load 8812" on each item). The view keeps its sharing; drawing again
+   opens a new board from it. The drawn dataset is kept read-only for its audit.
+8. **Drawn items are watched (replaces decision 12's own alert kind).** Drawing an item sets a watch for it
+   on the case's dataset (ADR-146 decision 4), kept with the case's watches, owned by the item's author. A
+   load that meets it raises an ordinary watch alert, kind `drawn_watch`, in the one queue, its action *Open
+   the board*. Withdrawing the item ends the watch. It is withheld whole from a reader who may not see the
+   drawn item (rule 3), as decision 12 required.
+
+**Still open (the owner's questions; L3.9 asks before it builds them).**
+- **L5.** Where a fresh drawing's items live. Recommendation A: in the drawn dataset itself, since for a
+  drawing-first case the drawing is the data. B: in the case's layer, with the Author promoting into the drawn
+  dataset before a merge.
+- **L6.** Who may merge a drawn dataset. Recommendation A: an Author of the target dataset who also holds the
+  Studio right to merge (ADR-112 Amendment 5, `merge_datasets`), with a second person when the target's
+  policy asks; administrators see every drawn dataset and may retire one no longer used. B: administrators
+  only.
+
+**Tests (shown red first).** A removed case's layer survives removal and is reachable only by its merge or
+delete, each refused without its right; the merge's read grant ends when the merge closes (red with it kept);
+Admin › Datasets shows counts and size and no item, label or property; a drawn item above the ceiling is
+refused at the route; the restore test; a drawn dataset is offered to no case but its own and to no pipeline;
+the merge's dry run writes nothing, and a merged drawing leaves a case view whose items are the target's and
+whose annotations hold every drawn note; a load meeting a drawn item raises one `drawn_watch` alert per match
+per case, withheld from a reader who may not see the item.
+
+### ADR-144, Amendment 1 (7 November 2026) — no branches anywhere: not in the code, the screens, the guides or the specs, and no branch has a layer
+
+Status: accepted from the owner's ruling of 7 November 2026: "I would like to clean up the concept of branch
+from all interfaces and specifications, I think we addressed this in the previous iteration where we
+determined the hierarchy between dataset and case." ADR-144 is unchanged except where this says so.
+
+**The hierarchy, said once.** A **dataset** holds data and has one domain model. A **case** reads one
+dataset (or one composite) and holds its analyst layer, its views and its boards. A **view** is a saved lens
+on a case. There is nothing between a case and a view, and no case is made from another.
+
+**Decision.**
+
+1. **No branch is made, listed or read**, by any route, screen, script or test, once L3.2 merges. Every place
+   that does today is listed in L3.2's first commit (the routes `POST …/branch` and the branch tabs and
+   windows, `branched_from`, the Cases tree, *Branch to a new case*, *Branch selected (n)*, `branchNodes.ts`,
+   the keyboard and capture specs that name a branch) and each is removed or becomes its view equivalent
+   (decision 4).
+2. **No branch has a layer.** ADR-143 decision 1 gives each case one analyst layer; a branch is not a case
+   kind that gets one. L3.1 drops `copy_case`'s new layer and `test_a_branch_has_a_layer_of_its_own` before
+   it merges; until L3.2 removes branches, a branch reads its original case's layer (read-only in the
+   branch), as it reads its original case's dataset.
+3. **The migration** (decision 6) is unchanged, and also: anything only in a branch is written into the
+   **original case's** layer, tagged `from_branch: <name>`, so no branch content is lost and none needs a
+   layer of its own.
+4. **The words.** "Branch" is removed from the product's screens and from `spec/00`–`spec/09`, the guides,
+   the website and the deck, except: a pipeline's branch in the Studio's DAG (a different meaning, kept),
+   git branches in the process documents, and the history in earlier ADRs, which stay as written (ADRs are
+   amended, never edited; this amendment and ADR-084 Amendment 5 supersede them).
+
+**Tests.** After L3.2: no route under `/v1/investigations/*/branch*` exists (404); a scan of `apps/workspace/src`
+and `services/api` for `branch` outside the pipeline DAG and git finds nothing (`tools/no_branches_check.py`,
+wired into `make ci`, red with one planted occurrence); the migration's dry run writes nothing, and its real
+run leaves no branch and every branch-only item in its original case's layer with its tag.
+
+### ADR-145, Amendment 4 (7 November 2026) — four places; a home case per dataset and its Authors; reporting folded into the places; roles made clear
+
+Status: accepted from the owner's rulings of 7 November 2026 on the assessment's questions D1–D5, L4, R1, R7
+and the discussions of authorship, teams and roles, tried in the navigation prototype. ADR-145 is unchanged
+except where this says so. If Amendment 3 (Admin's sections as built) is not yet merged, this follows it.
+Built in Lane 2 (L2.4 part 2, L2.5, L2.7, L2.9, L2.12), Lane 1 (the *Make live* step, with L3.1b) and Lane 3
+(making the home case, L3.1b).
+
+**Decision.**
+
+1. **Four places.** The switcher holds the Glass, the Ingest Studio, **Rules and Monitoring** (ADR-146) and
+   Admin. N6 holds: each person sees only the places their roles open. Under the GOV.UK brand the fourth
+   place sits in the same header switch (N3). The context banner reads "You are in Rules and Monitoring"
+   there. L2.9 reworks L2.2's switcher and L2.3's Monitoring count: the count moves from the Glass's banner
+   to the switcher's *Rules and Monitoring*.
+
+2. **A home case per dataset (D3).** Every dataset has one **home case**, made when the dataset is first made
+   live in an environment (decision 4), named for it and of its unit. It holds the dataset's own reports, its
+   dataset-wide alerts (hotlist, monitor and analyst dataset alerts with no working case, G5) and its
+   promotion reviews. Analysts' working cases read the dataset exactly as before. A home case cannot be
+   removed while its dataset exists. `scripts.make_home_cases` gives every existing dataset its home case,
+   dry run first.
+
+3. **One concept of ownership: the dataset's Authors (L4, "one concept").** There is no steward role. A
+   dataset's **Authors** are the Authors of its home case: the same level (ADR-052), word and screen as any
+   case's Author. Owning is not acting: an Author answers for the dataset and may merge or delete a removed
+   case's layer (ADR-143 Amendment 2); reviewing a promotion, accepting a proposed type, merging a drawn
+   dataset and making a model live each also need that Studio right (ADR-112 Amendment 5).
+
+4. **Naming them at *Make live* (D5).** The first *Make live* of a dataset in an environment ends with *Who
+   answers for this dataset?*. The dataset's maker is proposed first. The answer is people, a team (ADR-112
+   Amendment 5), or both, as Admin › System's setting allows (decision 7). A service account is refused. The
+   dataset cannot go live without an answer. The answer becomes the home case's Authors, audited.
+
+5. **Environments.** Definitions (the domain model, pipelines, reference lists) move between environments as
+   a release (ADR-140 Amendment 9, D4); membership never moves. Each environment's first *Make live* makes its
+   own home case and asks its own owners. In dev and test the home case is made over synthetic data (rule 9).
+
+6. **Admin › Datasets** (L2.4 part 2, with ADR-145 decision 8's columns):
+   - the dataset's kind (*Source*, *Composite*, *Drawn*), unit, highest marking and promotion policy;
+   - its **Authors** (people, a team, or both) and *Change owner…*, offering the same choice as *Make live*,
+     audited;
+   - **every linked case**, with its layer's item count, size and state; for a removed case, *Merge into the
+     dataset* and *Delete*, each with its dry run (ADR-143 Amendment 2). Never a layer's contents.
+
+7. **Admin › System: *Dataset owners may be*** people and teams (the default), people only, or teams only. It
+   governs *Make live* and *Change owner…*, so a client who wants no person's name shown as an owner chooses
+   teams only.
+
+8. **Reporting folded into the places, with no Reports place (D1, a combination).**
+
+   | Reporting | Where it lives |
+   | --- | --- |
+   | Superset boards, including the monitoring dashboard | The Glass's rail *Dashboards*, the one door. The second door inside a case's Reports view goes |
+   | A case's own counts | The case's *Figures* tab (replacing the Reports view), with its *Alerts* panel (ADR-146 decision 9) and drawing figures: drawn, promoted, awaiting review, withdrawn |
+   | A dataset's own reports and dataset-wide alerts | The dataset's home case, read as any case |
+   | Alert figures | Beside the queue in Rules and Monitoring: *See the trend* on an alert or a rule; an alert figure opens the queue filtered to it |
+   | Deployment-wide operations | Admin › Operations, as decision 9 |
+
+   ADR-145's open question 2 is closed by this.
+
+9. **The monitoring dashboard gets its screen now (D2).** ADR-134's figures, already served, are drawn as a
+   board on the Glass's *Dashboards*, *Alert monitoring*: alerts raised per rule and week, closed by outcome,
+   time to close, hotlist matches, and the team view (unassigned, mine, older than seven days, the share
+   closed as not of interest). *See the trend* in Rules and Monitoring opens it filtered to the alert's rule
+   and period.
+
+10. **The Reports Viewer's journey.** A Reports Viewer opens the Glass only, read-only. Home lists the alerts
+    on the cases they can read, including dataset alerts through home cases they view, and *Your cases*.
+    *Open in its case* enters the case on its *Figures*, under "From alert A14 · ← Back to your alerts", with
+    the panel the alert concerns outlined; *Open the dashboard* opens the board behind it, filtered to the
+    alert. They never work an alert. (Prototyped: *Reports Viewer: alerts to case to dashboards*.)
+
+11. **Promotions overdue (R7).** Not a case alert: it shows in the top bar's *Needs you* and on Admin ›
+    Operations, to the dataset's Authors who hold `review_promotions`, and to administrators (decision 9 as
+    amended).
+
+12. **Roles made clear.**
+    - **On Home, *What you can do, and what you answer for*,** worked out live for the person signed in: the
+      places they can open; what they can do, in plain words, by place; their level in each case, with
+      "through Prison intel data team" where a team gives it; and what they answer for, each with what is
+      waiting ("Author of Prison intel: 2 promotions to review", "Lead of Prison intel data team: 3 unassigned
+      alerts", "Covering as lead until 14 Nov", "Owner of 4 watches, 1 expiring this week"). Each line opens
+      where to act; *Why can I do this?* names the role or team behind it. It shows only what the person may
+      already see.
+    - **Tips and help in Admin and the Ingest Studio.** Every role, right, level, team and lead has a short tip
+      where it appears (Admin › Roles, People and Datasets; *Make live*'s owner step; the Studio's review,
+      accept-type and merge screens). An action a person can't take says why and who can ("You need Review
+      promotions; D. Engineer and S. Lead have it"), never only greyed out. One help page, *Roles, teams and
+      Authors*, opens from both places.
+    - **One set of words.** The tips, the help page and the guides take their wording from one source,
+      `apps/workspace/src/help/roles.ts`, so they cannot drift; Lane 4 builds the guides' sections from it.
+      Every tip is reachable by keyboard (rule 13) and themed for GOV.UK.
+
+**Tests (shown red first).** The switcher shows Rules and Monitoring only with `triage_alerts` or
+`author_rules`, and its routes refuse without them (rule 3, as L2.2's place test). Every dataset has exactly
+one home case after `make_home_cases` (its dry run writes nothing), and a home case cannot be removed. *Make
+live* is refused with no owner, with a service account, and against the System setting; its owners become
+the home case's Authors. A team owner's members are Authors while in the team and not after (red with
+membership read once). Admin › Datasets never returns a layer's contents. The Home section lists nothing the
+reader can't see (red with one hidden case's count added). The Reports Viewer reaches Figures and boards from
+an alert and nothing else. Keyboard and axe (dark, light, GOV.UK) for the switcher, *Make live*'s owner step,
+Datasets, System, the Home section and every tip.
+
+### ADR-140, Amendment 9 (7 November 2026) — "domain model" on screen; a drawn dataset as a third way to start a case; screening lists; releases as YAML; the owner step in *Make live*
+
+Status: accepted from the owner's rulings of 7 November 2026 (the domain-model discussion, R6, D4, D5). ADR-140
+is unchanged except where this says so. Built in Lane 1 (L1.3, L1.6, L1.7) and Lane 3 (L3.1b).
+
+**Decision.**
+
+1. **"Domain model" on screen.** Every dataset has one model, from a starter pack (FIBO, NIEM, STIX) or bare
+   POLE, always on (R2, R3, unchanged). The screens, guides and help call it the **domain model**; the code
+   and spec 01 keep `TargetModel`. ("Every dataset needs to define its own domain model, the domain model can
+   be inherited from a starter pack e.g., FIBO.")
+2. **R16 gains a third way to start a case.** The new-case form offers *Use an existing dataset*, *Make a new
+   dataset* (loaded in the Studio), and, from *New drawing board* with no case, **a drawn dataset** made with
+   its case and board (ADR-143 Amendment 2, decision 5).
+3. **Screening lists (R6), as reference lists of kind `screening`** (decision 6):
+   - **Imported once for the deployment** through a list connector in Studio › Sources, with its licence
+     recorded in `00_ARCHITECTURE.md` §7 before its connector ships (as today), and **subscribed to per
+     dataset**: a dataset's rules read only the lists it subscribes to. This keeps ADR-146's declared-dataset
+     rule without importing a list once per dataset.
+   - **Mapped from a template per known format** (OFAC SDN, OFSI consolidated, UN, EU, OpenSanctions where
+     licensed) to one screening shape: primary name, aliases, date of birth, nationality, identifiers,
+     programme. Each template is tested against synthetic golden files (rule 9). A list no template covers (a
+     client's own CSV) is mapped field by field from a blank template, saved as that list's own template.
+   - **Refreshed** on a schedule, with *Refresh now* in the Studio and, for `author_rules`, in Rules and
+     Monitoring. A refresh re-screens only the changed entries (as today), and a match stays `inferred` until a
+     person confirms it (rule 5). Rules and Monitoring shows each list read-only: version, entries, last
+     refresh, failures.
+4. **Releases between environments (D4), as YAML.** *Export* in Studio › Releases writes one bundle:
+   - a manifest, `apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, `metadata` (name, version) and `spec`
+     (the domain model's file, the pinned pack versions, the pipelines, the reference lists' definitions,
+     the connections **by name only**, and a SHA-256 of every file), following Kubernetes' conventions so it
+     can sit in a ConfigMap or be applied by a GitOps tool;
+   - one YAML file each for the domain model, each pipeline and each reference list's definition; a small
+     list's rows as a CSV named by its checksum.
+
+   Never in a bundle: credentials, loaded data, case membership, owners, or the rows of a licensed screening
+   list. The manifest's schema is published (`packages/schemas/release.schema.json`) so scripts and CI can
+   check a bundle. `ospreyflow release export` and `ospreyflow release import --dry-run` do what the Studio's
+   buttons do. **Importing lands everything as a draft**; *Make live* stays a person's audited step, so
+   applying a file never puts a model live by itself. An in-cluster operator that applies bundles is a later
+   step, not this one.
+5. ***Make live* gains the owner step** at a dataset's first *Make live* in an environment, and makes its home
+   case (ADR-145 Amendment 4, decisions 2 and 4). R12 is otherwise unchanged.
+
+**Tests (shown red first).** No screen string says "target model" (`tools/ui_words_check.py`, in `make ci`).
+A dataset's rule offers only the lists it subscribes to. Each format template maps its golden file to the
+expected screening rows. An export contains no credential, membership, owner or licensed row (a planted
+secret in `deployment.env` and a planted licensed row never appear in it); export then import round-trips
+the model, pipelines and lists as drafts; `--dry-run` writes nothing; an imported model is not live until a
+person makes it live.
+
+### ADR-112, Amendment 5 (7 November 2026) — the Rule author role, two more rights, and teams
+
+Status: accepted from the owner's rulings of 7 November 2026 (R1, D5, the teams discussion). ADR-112 and its
+Amendment 4 (roles an administrator defines) are unchanged except where this says so. Built in Lane 2
+(L2.5), with the rights' route checks in each owning lane.
+
+**Decision.**
+
+1. **Three new rights.**
+   - `author_rules`: write, test and make live rules and hotlists in Rules and Monitoring, on the datasets the
+     holder's unit may read. Opens Rules and Monitoring.
+   - `merge_datasets`: merge a drawn dataset into another in the Studio (ADR-143 Amendment 2). Opens the
+     Ingest Studio.
+   - `triage_alerts` (existing) now also opens Rules and Monitoring.
+2. **A built-in role, *Rule author*:** `author_rules` and `triage_alerts`. It is not a developer role: it
+   holds no Studio right. The *Super user* preset gains `author_rules`. *Analyst* keeps `triage_alerts`, so an
+   analyst works alerts and sets watches but reads rules without editing them.
+3. **Teams.** *Make this role a team* gives a custom role a display name and a contact mailbox (a
+   distribution list, which is a contact, never a sign-in). A team may:
+   - hold a level in a case, as a person does (Author, Editor, Viewer). A person's level in a case is the
+     highest they hold, in their own name or through a team, and ends when they leave the team;
+   - own a dataset (ADR-145 Amendment 4) and receive a rule's alerts (ADR-146 decision 8).
+
+   Membership of a case by role is new (ADR-052 names people only); every read that resolves a case's
+   members resolves teams at the time of the read, never cached across a membership change.
+4. **The team lead.** One member is marked as the team's lead. In the queue, the lead sees the team's filters
+   and may give a team alert to a named member (audited). The lead may **hand over** the role to another
+   member, or name a **cover until a date**, after which it returns automatically. Only a member may be lead
+   or cover; both people are told; every change is audited. An administrator can name a lead or a cover. A
+   team is never left without a lead: disabling the lead asks who takes over, as *Disable…* does for what a
+   person owns (A4).
+5. **Service accounts own nothing and receive no alerts.** A principal marked as a service account can't be a
+   case member, a dataset owner, a team member or a lead; each is refused at the route.
+6. **Guard rails** (Amendment 4's, extended): a role cannot hold both `promote_to_dataset` and
+   `review_promotions`, or both `propose_types` and `accept_types`. A rule's second person (ADR-146
+   decision 3) is another holder of `author_rules`, never the rule's own author.
+
+**Tests (shown red first).** Each new right's routes refuse without it; *Rule author* opens Rules and
+Monitoring and not the Studio; a team's level in a case is gained and lost with membership (red with
+membership cached); a lead's hand-over and cover change who may hand off alerts, and the cover ends on its
+date; a service account is refused as member, owner, team member and lead; the guard rails refuse each pair.
+
+### ADR-142, Amendment 1 (7 November 2026) — each session on a chosen Claude account; a lane can be paused and resumed on another
+
+Status: accepted from the owner's requests of 7 November 2026: "I will need an option for the orchestrator to
+invoke a claude session with a different subscription … specify the account to be used for the claude
+worker session", and "build in the arrangement that allows me to pause worker lanes and switch them to
+different claude accounts". ADR-142 is unchanged except where this says so. Built by the orchestrator in
+`OspreyFlow_Build/scripts/lanes_launch.sh` and `OspreyFlow_Build/scripts/lanes_heartbeat.sh`, tests red first.
+
+**Today.** `lanes_launch.sh` starts every session under one config directory (`~/.claude-ayan`), changed
+only for a whole run through `OSPREY_CLAUDE_CONFIG_DIR`. A lane can be stopped only by closing its window,
+which loses whatever was not committed and leaves its heartbeat looking stalled.
+
+**Decision.**
+
+1. **An account is a Claude Code config directory.** The owner signs each subscription in once, by hand,
+   under its own directory (`CLAUDE_CONFIG_DIR=~/.claude-client claude`, then `/login`). The tooling never
+   signs in, never reads, copies or prints what such a directory holds, and no credential is written to the
+   repository, a brief, a report or a message.
+
+2. **The map, outside the repository.** `~/.ospreyflow/accounts.conf` names the accounts and the defaults:
+
+   ```
+   account ayan   = ~/.claude-ayan
+   account client = ~/.claude-client
+   orchestrator   = ayan
+   lane studio    = client
+   lane glass     = ayan
+   lane case      = client
+   lane docs      = ayan
+   fallback case  = ayan     # optional, written only by the owner
+   ```
+
+   A lane with no line uses the orchestrator's account. A missing file means every session uses the
+   orchestrator's account, as today.
+
+3. **Choosing at launch.** `lanes_launch.sh open|resume|headless <lane> [model] [--account <name>]`
+   overrides the map for that one session. The runbook's orchestrator start command takes `--account` too.
+   The launcher refuses an account that `accounts.conf` doesn't name, or whose directory doesn't exist, and
+   names the account in the Terminal tab's title and on the session's first line.
+
+4. **Pausing a lane** (`lanes_launch.sh pause <lane>`). A pause is a clean stop the lane resumes from, not a
+   kill:
+   1. The orchestrator writes `pause requested` to the lane's heartbeat and nudges it (or the owner types
+      `pause` in its window).
+   2. The lane stops at the next safe point: never mid-tool, never holding the dev-stack lease (it releases
+      the lease first, `stack_lease.sh release`).
+   3. It commits any unfinished work to its own branch as one commit titled `wip(<lane>): paused at <step>`.
+      A `wip(` commit is never merged: the merge gate refuses a branch whose history holds one until the
+      lane rewrites it into its proper commits after resuming.
+   4. It writes `process/lanes/<lane>/HANDOFF.md`, at most thirty lines: the step and part; the last
+      commit; what is done, what is next, what was running; open questions; anything the next session must
+      not redo. It commits it with the wip commit.
+   5. It beats `paused` (a new heartbeat state beside planning, working, testing, waiting-for-owner,
+      blocked, ready-to-merge and idle) and ends its session.
+
+   `lanes_launch.sh pause <lane> --now` is for when the lane cannot answer, for example at its usage limit.
+   The orchestrator then records the branch head and the worktree's uncommitted files in `HANDOFF.md` from
+   outside, commits nothing on the lane's behalf, and marks the lane `paused (unclean)`.
+
+5. **Switching and resuming** (`lanes_launch.sh resume <lane> --account <name>`).
+   - The new session starts on Prompt R, with `HANDOFF.md` read first, in the same worktree and on the
+     same branch. A Claude Code conversation does not move between accounts, so the handoff file is the
+     only memory that carries over. Prompt R gains: "If `HANDOFF.md` exists, read it before anything else,
+     and delete it in your first commit after the wip commit is rewritten."
+   - `lanes_launch.sh switch <lane> --account <name>` is pause then resume, in one command, for the owner.
+   - The account a lane runs on is recorded in its heartbeat and in `progress.tsv`'s notes, never its
+     directory's contents.
+
+6. **Never switched silently.** The orchestrator never pauses, switches or resumes a lane on its own,
+   except under a `fallback <lane> = <account>` line the owner wrote: then, when that lane stops at its usage
+   limit, the orchestrator may run `switch` to the fallback account once, and records it in
+   `PUSH_LOG.md` and `MORNING.md`. Without a fallback line, a lane at its usage limit is listed under
+   *Needs you* with its account named.
+
+7. **The monitor.** `lanes_heartbeat.sh show` adds an *Account* column and the `paused` state, with how long
+   each lane has been paused. A paused lane is never reported as stalled.
+
+**Tests (shown red first).**
+- A lane started with `--account client` runs with `CLAUDE_CONFIG_DIR` set to that account's directory
+  (red with the default used); an unknown account, or a missing directory, is refused before any session
+  starts.
+- `pause` on a lane holding the lease releases it before the session ends (red with the release removed).
+- The merge gate refuses a branch with a `wip(` commit in its history.
+- `resume` after `pause` starts Prompt R with `HANDOFF.md` named first.
+- No file the scripts write contains the contents of an account directory (a planted token in a fake
+  account directory never appears in any output, log or committed file).
+- The orchestrator's watch mode never runs `switch` without a `fallback` line (red with the check removed).
+
+
+### ADR-142, Amendment 2 (7 November 2026) — a merge's make ci takes no lease
+
+Status: accepted by the orchestrator under the owner's delegation of operational judgements (7 November 2026,
+recorded in `process/BUILD_PLAN_PARALLEL_LANES.md`). Decision 6 had the orchestrator hold the stack's lease while it merged
+and ran `make ci`, so that a merge could not contend with a lane's live tests. Two facts make that unnecessary.
+`make ci` reaches no stack: its gates are static checks, unit tests and image scans, and its one pytest
+target over a store (`conformance-guard`) runs only the guard's own case. And since `tests/port_guard.py`
+refuses the leased stack's ports (2491, 55433, 6379) unless `OSPREY_LANE` names the lease's holder, nothing
+the orchestrator runs without the lease can reach the stack by mistake. So from this amendment on, a merge
+and its `make ci` take no lease, and the lease is for live runs only. Everything else in decision 6 stands:
+`make ci` runs on the merge result before the merge is kept (`BUILD_PLAN_PARALLEL_LANES.md`), a red result
+is never pushed, and every push is logged with its hash. The test is `tests/test_port_guard.py`'s
+`test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease`, red with the holder check removed.
+
