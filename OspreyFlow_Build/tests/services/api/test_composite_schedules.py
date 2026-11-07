@@ -21,18 +21,21 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Annotated, Any
 
 import pytest
+from fastapi import Depends
 from services.api import app as app_module
 from services.api.dataset_scope import (
     CompositeReadOnlyError,
     DatasetStampingGraph,
+    refuse_in_a_composite_case,
     scope_to_case,
     set_case_datasets,
     stamping,
 )
 from services.api.datasets import COMPOSITE, Dataset, InMemoryDatasetStore
+from services.api.investigations import AccessLevel, InsufficientAccessError
 from services.api.scheduler import ScheduleRunRefused
 
 from ontology.handling import load_uk_le_scheme
@@ -336,6 +339,33 @@ class _Recipes:
         raise _Stop
 
 
+class _ViewerOnly:
+    """Cases whose one member holds the viewer level only: a higher need is a 403's error, as the
+    real store answers (`InsufficientAccessError`)."""
+
+    def __init__(self) -> None:
+        from .test_analyst_layer import _Investigations
+
+        self._inner = _Investigations()
+
+    async def create(self, principal: Principal, *, name: str) -> Any:
+        return await self._inner.create(principal, name=name)
+
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: AccessLevel
+    ) -> Any:
+        case = await self._inner.get_authorized(investigation_id, principal, need=need)
+        if need is not AccessLevel.VIEWER:
+            raise InsufficientAccessError(f"this needs {need.value}")
+        return case
+
+    async def list_for(self, principal: Principal) -> list[tuple[Any, AccessLevel]]:
+        return [(c, AccessLevel.VIEWER) for c, _ in await self._inner.list_for(principal)]
+
+    async def hidden_tab_ids(self, principal: Principal) -> set[str]:
+        return set()
+
+
 async def _case_route(
     method: str,
     path: str,
@@ -343,6 +373,7 @@ async def _case_route(
     body: Any = None,
     content: bytes | None = None,
     without_the_dependency: bool = False,
+    a_viewer: bool = False,
 ) -> tuple[Any, dict[str, list[Any]]]:
     """`path` under a case reading the composite, through the real `get_principal`, so the case is
     in scope as in a deployment; each store a recorder that stops the route where it writes."""
@@ -351,7 +382,7 @@ async def _case_route(
     from .test_analyst_layer import _Investigations as Investigations
 
     store = _store()
-    investigations = Investigations()
+    investigations = _ViewerOnly() if a_viewer else Investigations()
     case = await investigations.create(OWNER, name="Both")
     await store.set_for_case(case.id, [BOTH], OWNER, case_name="Both")
     sites, held, recipes = _Sites(), _HeldRows(), _Recipes()
@@ -425,6 +456,46 @@ async def test_held_rows_are_not_rejected_nor_a_schedule_set_in_a_composite_case
     assert answer is not None and answer.status_code == 409, answer and answer.text
     assert answer.json()["error"] == "composite_read_only"
     assert wrote == {"grid": [], "held": [], "schedule": []}
+
+
+_AT_VIEWER_AS_IT_WAS = app_module._authorized_at(AccessLevel.VIEWER)
+
+
+async def _refusal_as_it_was(
+    investigation: Annotated[Any, Depends(_AT_VIEWER_AS_IT_WAS)],
+) -> None:
+    """The loading refusal at 19bffba: after a viewer's check, not the route's own."""
+    await refuse_in_a_composite_case()
+
+
+@pytest.mark.parametrize(("path", "body", "_kind"), DEPENDENCY_ROUTES)
+async def test_a_viewer_is_answered_403_not_told_the_case_reads_a_composite(
+    path: str, body: Any, _kind: str
+) -> None:
+    """The refusal runs after the route's own level, so a viewer learns only that they may not do
+    this, not that the case reads a composite; nothing is written either way."""
+    method = "PATCH" if path.endswith("/schedule") else "POST"
+    answer, wrote = await _case_route(method, path, body=body, a_viewer=True)
+    assert answer is not None and answer.status_code == 403, answer and answer.text
+    assert "composite" not in answer.text
+    assert wrote == {"grid": [], "held": [], "schedule": []}
+
+
+@pytest.mark.parametrize(("path", "body", "_kind"), DEPENDENCY_ROUTES)
+async def test_the_viewer_is_told_of_the_composite_with_the_old_viewer_dependency(
+    path: str, body: Any, _kind: str
+) -> None:
+    """Rule 15, red: the refusal as it was at 19bffba, after a viewer's check, answers a viewer 409
+    composite_read_only ahead of the route's own 403."""
+    for refusal in (
+        app_module.refuse_loading_in_a_composite_case,
+        app_module.refuse_deciding_held_rows_in_a_composite_case,
+    ):
+        app_module.app.dependency_overrides[refusal] = _refusal_as_it_was
+    method = "PATCH" if path.endswith("/schedule") else "POST"
+    answer, _ = await _case_route(method, path, body=body, a_viewer=True)
+    assert answer is not None and answer.status_code == 409, answer and answer.text
+    assert answer.json()["error"] == "composite_read_only"
 
 
 def _without_the_loading_dependency() -> None:
