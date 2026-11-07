@@ -1,14 +1,20 @@
-# glass lane · report · L2.3 part 1, the case screen's lightening: a prototype round (7 November 2026)
+# glass lane · report · L2.3 part 2, variant B of the case screen's lightening (7 November 2026)
 
-1. **Harness:** `keyboard/case-screen-options-harness.{html,tsx}`, never wired into the app. It uses the real shell (top bar, place switcher, banner, rail, `SidePanelStack`), with stand-ins for search, the panels' contents and the canvas. `?variant=today|a|b|c`.
-2. **How counted:** Tab stops from the top of the page until the canvas has focus, at 1440 by 900, including the skip link. `keyboard/case-screen-options.spec.ts` pins the counts; its screenshot test runs only with `OSPREY_L23_SHOTS=1`. The ADR's "some 25" measures 29 here (28 without the skip link). The right-hand column's 3 panels hold 15 parts.
-3. **Today** (reference): 29 before the canvas; the column shows 15 parts.
-4. **A, ADR-145 decision 4 as written:** 29 before the canvas; 8 parts shown. The column opens with the Inspector; Metrics and the Query builder are folded below it, in their order. One click further: Metrics and the Query builder. Trade-off: nothing before the canvas changes.
-5. **B, A plus a trimmed rail and view switch:** 24 before the canvas; 8 parts shown. The rail keeps Cases and Explore (Monitoring is already in the banner); Ownership, History, Questions and Dashboards go under the rail's ⋯ *More*. The view switch keeps Graph and Map, with Matrix and Reports under *More views*. Trade-off: six destinations are one click further, but the rail still shows the two used most.
-6. **C, B with no rail:** 20 before the canvas; 8 parts shown. The rail's tools become one *Tools ▾* menu in the banner; Help moves to the account menu; the canvas gains the rail's 48px. Trade-off: the fewest stops and the most canvas, but every tool is behind a menu, and Monitoring's open-alert count, which the rail carries today, needs a new place.
-7. **Screenshots:** `process/lanes/glass/l2.3/{today,a,b,c}-{dark,light,govuk}.png`, 12 files.
-8. **Axe:** `every-harness.spec.ts` scans every variant in dark, light and GOV.UK; 16 pass.
-9. **Question sent to the orchestrator:** which lightening part 2 builds. **B (recommended)**, A, C, or keep today's column.
-10. **Found:** under GOV.UK the banner's content line opens with a stray "·" (`shell/ContextBanner.tsx`). I left it for part 2, since this part allows no `src` change.
-11. **Commit:** eff7570, plus the commit holding this report. No `src/**` change.
-12. **Still running:** nothing. No dev stack or lease used.
+1. **Variant B in the product: met.**
+   - The column opens with the Inspector only (`layout/SidePanelStack.tsx`, `DEFAULT_FOLDED`); the column's host is the lane's own, so `canvas/**` is untouched.
+   - The rail keeps Cases and Explore; Ownership, History, Questions and Dashboards go under its ⋯ More (`shell/LeftRail.tsx`).
+   - The view switch keeps Graph and Map; Matrix and Reports go under More views (`shell/TopBar.tsx`).
+   - Monitoring's open count moves to the banner's section. The GOV.UK banner's leading "·" is gone.
+2. **Count: met, with a correction.** `App.chrome.test.tsx` counts the real `App`: 24 controls before the canvas, 25 with the deployed skip link. Part 1's harness drew the mark without its Home button, so all its counts were one short; today is 29 (30). The test is red with Ownership back on the rail. The column test (Inspector open, the rest folded) is red with the default removed.
+3. **Keyboard: met.** New cases in `shell.spec.ts`: each destination under More with Escape back to ⋯; More views; the column's folded panels opening with one keypress. Each is red with its handler removed. Moved cases are updated, not deleted: the rail entries, the views, and `App.test` / `App.matrix.test`, now through the banner's Monitoring and More views. Full suite 562/562 on 5185 under `CI=1`.
+4. **Axe: met** in dark, light and GOV.UK: 48 harness scans and 12 real screens. **Vitest:** 2627 pass, 1 fail, the load-only Matrix budget, which passes alone.
+5. **Docs: met.** ADR-145 Amendment 2 is written with the corrected count. `spec/02` covers the rail, the view switch, the column's default and §2.0a's count. DEMO_GUIDE §8a and step 4 are updated. The friction row is in.
+6. **Request:** the three `SHELL_ACTIONS` ids as a diff (sent): `rail-more-by-keyboard`, `more-views-by-keyboard`, `open-a-folded-panel-by-keyboard`.
+7. **Hand check.** From `OspreyFlow_Core`: `.venv/bin/ospreyflow start --build`, then `.venv/bin/ospreyflow open`. As the analyst, open a case:
+   - The column shows the Inspector, with Metrics and Query builder folded.
+   - The rail shows Cases, Explore and ⋯.
+   - ⋯ → History works.
+   - More views → Matrix works.
+   - The banner's Monitoring carries the count.
+   - Repeat with `?brand=govuk`: the banner has no leading "·".
+8. **Still running:** nothing. No dev stack or lease used.
