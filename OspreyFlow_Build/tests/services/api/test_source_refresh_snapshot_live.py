@@ -1,5 +1,5 @@
-"""Redesign phase 4's exit (ADR-110 Amendments 6 and 8): a second full snapshot missing one row
-withdraws exactly that row's elements and events, and the refresh's revert restores them.
+"""ADR-110 Amendments 6, 8 and 15: a second full snapshot missing one row withdraws exactly that
+row's links and events, never its nodes, and the refresh's revert restores them.
 
 Live, end to end, through the path a source refresh takes (`run_published_recipe` with
 `withdraw_dropped`, a `LedgerSink` over the real run ledger): ArcadeDB on `ARCADEDB_HTTP_PORT`,
@@ -149,12 +149,11 @@ async def test_a_second_snapshot_missing_one_row_withdraws_it_and_the_revert_res
         second = await refresh.snapshot([A, C])
 
         assert second.rows_already_loaded == 2 and second.rows_withdrawn == 1  # type: ignore[attr-defined]
-        assert len(second.withdrawn_node_ids) == 2 and len(second.withdrawn_edge_ids) == 1  # type: ignore[attr-defined]
-        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-5", "SYN-6"}
+        # ADR-110 Amendment 15: the dropped row's link and its event go; its nodes never do.
+        assert second.withdrawn_node_ids == [] and len(second.withdrawn_edge_ids) == 1  # type: ignore[attr-defined]
+        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
         assert await refresh.events() == 2, "the dropped row's event leaves the timeline too"
-        withdrawn = [*second.withdrawn_node_ids, *second.withdrawn_edge_ids]  # type: ignore[attr-defined]
-        assert await graph.get_nodes(second.withdrawn_node_ids, LOADER) == []  # type: ignore[attr-defined]
-        assert withdrawn
+        assert await graph.get_edges(second.withdrawn_edge_ids, LOADER) == []  # type: ignore[attr-defined]
 
         await refresh.revert(second.load_id)  # type: ignore[attr-defined]
 
@@ -175,8 +174,9 @@ async def test_a_row_that_comes_back_is_loaded_again_once(
 
         back = await refresh.snapshot([A, B, C])
 
-        assert back.rows_already_loaded == 2 and back.nodes_created == 2  # type: ignore[attr-defined]
-        assert not set(back.created_node_ids) & set(second.withdrawn_node_ids)  # type: ignore[attr-defined]
+        # Its nodes never left (Amendment 15): matched, not created; its link is written again.
+        assert back.rows_already_loaded == 2 and back.nodes_created == 0  # type: ignore[attr-defined]
+        assert back.created_edge_ids and not set(back.created_edge_ids) & set(second.withdrawn_edge_ids)  # type: ignore[attr-defined]
         assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
         assert await refresh.events() == 3, "each event held once"
         # The refresh that withdrew B is not reverted while B is loaded again.
