@@ -72,10 +72,21 @@ sessions() {
   pgrep $a -f '(^|/)claude(-ayan)?( |$)' 2>/dev/null | wc -l | tr -d ' '
 }
 
-# Prints the table; writes the lines that need the owner to $DIR/.needs
+# A lane's progress from the step table: line 1 "done/total bar", then "STEP in review: title" lines.
+progress_of() {
+  [ -f "$PROGRESS" ] || return 0
+  awk -F'\t' -v lane="$1" '!/^#/ && NF>=4 && $1==lane {
+      total++; if ($4=="done") done++
+      bar = bar ($4=="done" ? "■" : ($4=="todo" ? "□" : "◧"))
+      if ($4=="review") hand[++h] = $2 " in review: " $5
+      if ($4=="building") hand[++h] = $2 " building: " $5
+    }
+    END { if (total) { printf "%d/%d %s\n", done+0, total, bar; for (i=1;i<=h;i++) print hand[i] } }' "$PROGRESS"
+}
+
+# Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
 show() {
   local needs="$DIR/.needs.tmp"; : > "$needs"
-  printf '%-8s %-18s %-10s %-9s %-14s %s\n' LANE STATE LAST-BEAT AHEAD/BEH LAST-COMMIT NOTE
   for lane in $LANES; do
     local f="$DIR/$lane.beat" state="-" note="" at="" ago="never" ab="-" lc="-"
     if [ -f "$f" ]; then
@@ -105,7 +116,14 @@ show() {
       fi
     fi
     if [ -s "$DIR/$lane.nudge" ]; then note="(unread nudge) $note"; fi
-    printf '%-8s %-18s %-10s %-9s %-14s %s\n' "$lane" "$state" "$ago" "$ab" "$lc" "${note:0:60}"
+    local prog head steps count bar
+    prog="$(progress_of "$lane")"; head="$(printf '%s\n' "$prog" | head -1)"; steps="$(printf '%s\n' "$prog" | tail -n +2)"
+    count="${head%% *}"; bar="${head#* }"; [ -n "$head" ] || { count="-"; bar=""; }
+    printf '%-7s %5s  %s   %s · beat %s\n' "$lane" "$count" "$bar" "$state" "$ago"
+    printf '        %s vs main · last commit %s\n' "$ab" "$lc"
+    if [ -n "$steps" ]; then printf '%s\n' "$steps" | sed 's/^/        ├─ /'; fi
+    [ -n "$note" ] && printf '        └─ %s\n' "${note:0:100}"
+    echo
   done
   echo
   if [ -d "$LEASE" ]; then
@@ -119,18 +137,6 @@ show() {
     echo "Dev stack: free"
   fi
   echo "Claude sessions running: $(sessions)"
-  if [ -f "$PROGRESS" ]; then
-    echo; echo "PROGRESS (steps done against the build plan; ■ done ◧ in hand □ to do)"
-    awk -F'\t' '!/^#/ && NF>=4 {
-        lane=$1; if (!(lane in seen)) { seen[lane]=1; order[++n]=lane }
-        total[lane]++; if ($4=="done") done[lane]++
-        bar[lane]=bar[lane] ($4=="done" ? "■" : ($4=="todo" ? "□" : "◧"))
-        if ($4=="review") now[lane]=now[lane] " " $2 " in review"
-        if ($4=="building") now[lane]=now[lane] " " $2 " building"
-      }
-      END { for (i=1;i<=n;i++) { l=order[i]
-        printf "  %-7s %2d/%-2d done  %s%s\n", l, done[l]+0, total[l], bar[l], (now[l] ? "  ·" now[l] : "") } }' "$PROGRESS"
-  fi
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi
   mv "$needs" "$DIR/.needs"

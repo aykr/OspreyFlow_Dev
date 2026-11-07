@@ -183,17 +183,24 @@ def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
     assert ("glass is 5 or more commits behind main: ask it to rebase" in lines) is flagged
 
 
-def test_progress_shows_each_lanes_steps_done_against_all(hb, tmp_path) -> None:
-    """The progress view counts what the step table says, per lane, and names the step in hand."""
+def test_each_lane_is_one_tree_of_its_progress_state_and_steps_in_hand(hb, tmp_path) -> None:
+    """One view: a lane's header line carries its steps done against all and its state; the steps in
+    hand and its note hang under it."""
     table = tmp_path / "progress.tsv"
     table.write_text(
         "# comment\n"
-        "studio\tL1.1\tS\tdone\tFirst\nstudio\tL1.2\tL\treview\tSecond\nstudio\tL1.3\tL\ttodo\tThird\n"
+        "studio\tL1.1\tS\tdone\tFirst\nstudio\tL1.2\tL\treview\tSecond step\nstudio\tL1.3\tL\ttodo\tThird\n"
         "studio\tL1.4\tM\ttodo\tFourth\n"
-        "case\tL3.1\tL\tbuilding\tOnly\n"
+        "case\tL3.1\tL\tbuilding\tOnly step\n"
     )
+    hb("beat", "studio", "working", "on the drawer")
     out = hb("show", OSPREY_PROGRESS_FILE=str(table)).stdout
-    progress = out.split("PROGRESS")[1].split("\n\n")[0]
-    rows = {line.split()[0]: " ".join(line.split()) for line in progress.splitlines()[1:] if line.strip()}
-    assert rows["studio"].startswith("studio 1/4 done") and "L1.2 in review" in rows["studio"]
-    assert rows["case"].startswith("case 0/1 done") and "L3.1 building" in rows["case"]
+    lines = out.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.startswith("studio "))
+    assert " 1/4 " in lines[head] and "working" in lines[head]
+    block = lines[head + 1 : head + 3]
+    assert any("L1.2 in review: Second step" in line for line in block)
+    assert any("on the drawer" in line for line in block)
+    case = next(line for line in lines if line.startswith("case "))
+    assert " 0/1 " in case
+    assert "PROGRESS" not in out and "LAST-BEAT" not in out
