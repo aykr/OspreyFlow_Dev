@@ -247,3 +247,15 @@ def test_a_lane_at_its_usage_limit_names_its_account_for_the_owner(hb, tmp_path)
     assert hb("beat", "glass", "blocked", "usage limit").returncode == 0
     [line] = _needs(hb("show"))
     assert line.startswith("glass stopped at its usage limit on account ayan")
+
+
+def test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners(hb) -> None:
+    """The orchestrator passes the lease; a lane waiting for it needs nothing from the owner (found
+    7 November 2026: studio and glass both under Needs you while case held the lease)."""
+    _all_beat(hb)
+    assert hb("beat", "glass", "blocked", "L2.8: waiting for the glass lease for the live round").returncode == 0
+    assert hb("beat", "studio", "blocked", "a real block: the fixture repository is gone").returncode == 0
+    show = hb("show")
+    assert _needs(show) == ["studio is blocked: a real block: the fixture repository is gone"]
+    mine = show.stdout.split("FOR THE ORCHESTRATOR")[1]
+    assert "glass is waiting for the lease: L2.8: waiting for the glass lease" in mine

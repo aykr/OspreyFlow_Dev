@@ -113,6 +113,7 @@ show() {
         waiting-for-owner) echo "$lane is waiting for you: $note" >> "$needs" ;;
         blocked)
           case "$note" in
+            *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
             *"usage limit"*) echo "$lane stopped at its usage limit on account $(cat "$DIR/$lane.account" 2>/dev/null || echo default): switch it (lanes_launch.sh switch $lane --account <name>) or write a fallback line" >> "$needs" ;;
             *) echo "$lane is blocked: $note" >> "$needs" ;;
           esac ;;
