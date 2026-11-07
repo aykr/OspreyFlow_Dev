@@ -12,13 +12,7 @@
    - **Other callers:** post-commit audits `rule_failed`; a schedule records its slot failed; a screening refresh drops the rule's count. Carried to L2.10.
    - **Audit reasons:** `_raise_row` (`:971`) gives the true one of three; it said "units" for every case (3f60f6e).
    - **In a load:** a link the load writes stands in at its own marking (`:857`, f94fdc3).
-4. **Tests:** every fix was red first; records are in `l2.8/`. Lease `glass` "L2.8 wide re-run, clean", 21:42–22:09Z.
-   - **Live reds and greens:** re-run at 21:43–21:46Z.
-   - **Wide set:** 45 files, 1,617 passed, 3 failed, and none of the 3 is lane code: main's KYC test (item 5), phase 8's 403, and the rule list (10 rules for a new case).
-   - **Fix set after the rebase:** 28 files; it agrees once the screening test's leftover list is removed.
+4. **Tests:** every fix red first, records in `l2.8/`, lease `glass` "L2.8 wide re-run, clean" 21:42–22:09Z: live reds and greens re-run 21:43–21:46Z; wide set, 45 files, 1,617 passed, 3 failed, none lane code (main's KYC test in 5, phase 8's 403, a rule list of 10 for a new case); the 28-file fix set after the rebase agrees once the screening test's leftover list is removed.
 5. **Main's:** `test_kyc_rules`' true-positive test (13 October) expects `closed`. Since 4fd664a (ADR-133(d)) such an alert goes to `closing`. The screening tests also leave "Synthetic list" behind, which breaks a later KYC run.
-6. **Lane-reviewer:**
-   - **Fixed:** (2) f94fdc3; (6) f522eb9; (8) spec 03 and friction, f3f8988; (12) and (14) the fakes.
-   - **For L2.8b:** (1) the rule audit.
-   - **Questions:** **Q1–Q6:** (3) the jump, (5) superseded links, (9) the backfill, (8) app.py's docstring, (1) held rows' words, (4) G3 from a second case. (13) pack items are checked by nodes alone. (10) is checked at the L3.1 rebase.
-   - **Please ratify (11):** app.py, reports.py, risk.py, rule_evaluation.py and App.chrome.test.tsx. **Still running:** nothing; the stack is down and the lease released.
+6. **Lane-reviewer:** fixed (2) f94fdc3, (6) f522eb9, (8) spec 03 and friction f3f8988, (12) and (14) the fakes; (1) the rule audit is L2.8b. **Questions Q1–Q6:** (3) jump, (5) superseded links, (9) backfill, (8) app.py's docstring, (1) held rows' words, (4) G3 from a second case; (13) pack items are checked by nodes alone; (10) at the L3.1 rebase.
+7. **Please ratify (11):** app.py, reports.py, risk.py, rule_evaluation.py, App.chrome.test.tsx. **Still running:** nothing; stack down, lease released.
