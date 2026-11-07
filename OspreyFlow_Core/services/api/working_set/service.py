@@ -765,9 +765,10 @@ class WorkingSetService:
             audit=AuditStub(created_at=now, created_by=principal.id),
         )
         # ADR-143 Amendment 1: the analyst's own decision is written in the case's analyst layer.
-        from ..dataset_scope import analyst_writes_into
+        from ..dataset_scope import analyst_writes_into, with_the_layer
 
         into = await analyst_writes_into()
+        principal = with_the_layer(principal)
         new_edge = new_edge.model_copy(update={"datasets": into})
         edge_write = EdgeWrite(
             id=new_edge.id,
@@ -1182,8 +1183,22 @@ class WorkingSetService:
         ADR-099: the copy is stamped as the write was (`DatasetStampingGraph`), each element that
         names no dataset given the request's case's first; otherwise the canvas, drawn from these
         copies, would hold back what the case has just written."""
-        from ..dataset_scope import case_datasets
+        from ..dataset_scope import case_datasets, redirected
 
+        # ADR-099 Amendment 15: a member's node the write turned into the composite's copy is put
+        # on the canvas as that copy, and a link beside it names the copy, as the store holds them.
+        nodes = [
+            n if redirected(n.id) == n.id else n.model_copy(update={"id": redirected(n.id)})
+            for n in nodes
+        ]
+        edges = [
+            e
+            if redirected(e.source) == e.source and redirected(e.target) == e.target
+            else e.model_copy(
+                update={"source": redirected(e.source), "target": redirected(e.target)}
+            )
+            for e in edges
+        ]
         held = case_datasets()
         if held:
             into = [held[0]]

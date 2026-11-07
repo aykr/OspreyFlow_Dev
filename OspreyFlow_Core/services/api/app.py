@@ -3264,7 +3264,10 @@ async def branch_investigation(
     )
     # ADR-099: a branch reads what its parent reads.
     await datasets.copy_case(
-        investigation.id, new_investigation.id, case_name=new_investigation.name
+        investigation.id,
+        new_investigation.id,
+        case_name=new_investigation.name,
+        created_by=principal.id,
     )
     if window is not None:
         outcome = await working_set.branch_add(
@@ -3340,7 +3343,10 @@ async def branch_investigation_by_filter(
         domains=investigation.domains_to_inherit(),
     )
     await datasets.copy_case(
-        investigation.id, new_investigation.id, case_name=new_investigation.name
+        investigation.id,
+        new_investigation.id,
+        case_name=new_investigation.name,
+        created_by=principal.id,
     )
     outcome = await working_set.branch_add(new_investigation.id, nodes, edges, principal)
     await publish_delta(valkey, new_investigation.id, outcome.delta)
@@ -6409,7 +6415,9 @@ async def jump_alert_route(
     if alert.dataset_id is not None:
         await datasets.set_for_case(branch.id, [alert.dataset_id], principal, case_name=branch.name)
     elif alert.investigation_id is not None:
-        await datasets.copy_case(alert.investigation_id, branch.id, case_name=branch.name)
+        await datasets.copy_case(
+            alert.investigation_id, branch.id, case_name=branch.name, created_by=principal.id
+        )
     if not await datasets.ids_of_case(branch.id):
         own = await datasets.create(principal, branch.name, suffix_if_taken=True)
         await datasets.set_for_case(branch.id, [own.id], principal, case_name=branch.name)

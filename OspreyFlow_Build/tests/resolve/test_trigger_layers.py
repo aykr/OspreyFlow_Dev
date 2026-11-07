@@ -25,6 +25,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from services.api.dataset_scope import scope_to_case, set_case_datasets
+from services.api.datasets import ANALYST_LAYER, Dataset, InMemoryDatasetStore
 from services.resolve import trigger
 from services.resolve.projection import THRESHOLD_BALANCED, compute_clusters
 from services.resolve.trigger import run_resolution_for_entity_type
@@ -52,12 +54,37 @@ async def _layers() -> set[str]:
 
 
 LAYER_B = "analyst-layer-case-b"
-CASE_A = Principal(
-    id="analyst-a", clearance="OFFICIAL", org_unit="unit-1", datasets=[SOURCE, LAYER_A]
-)
-CASE_B = Principal(
-    id="analyst-b", clearance="OFFICIAL", org_unit="unit-1", datasets=[SOURCE, LAYER_B]
-)
+
+
+async def _readers() -> tuple[Principal, Principal]:
+    """A reader of case A and one of case B, scoped as `get_principal` scopes a request
+    (`scope_to_case`), each case reading the source and its own layer."""
+    store = InMemoryDatasetStore()
+    made = datetime(2026, 11, 1, tzinfo=UTC)
+    store.add(
+        Dataset(id=SOURCE, name=SOURCE, owning_unit="unit-1", created_at=made, created_by="t")
+    )
+    for case, layer in (("case-a", LAYER_A), ("case-b", LAYER_B)):
+        store.add(
+            Dataset(
+                id=layer,
+                name=f"Analyst layer: {case}",
+                owning_unit="unit-1",
+                created_at=made,
+                created_by="t",
+                kind=ANALYST_LAYER,
+                layer_of=case,
+            )
+        )
+        store.cases[case] = [SOURCE]
+    analyst = Principal(id="analyst", clearance="OFFICIAL", org_unit="unit-1")
+    try:
+        return (
+            await scope_to_case(analyst, "case-a", store),
+            await scope_to_case(analyst, "case-b", store),
+        )
+    finally:
+        set_case_datasets(None)
 
 
 async def _clusters(graph: Any, ids: list[str], reader: Principal) -> set[str]:
@@ -120,8 +147,19 @@ async def _run_with_split_in(dataset: str) -> tuple[int, int, int, int]:
             analyst_layers=_layers,
         )
         await graph.commit_transaction(tx)
-        in_a = await _clusters(graph, [a_id, b_id], CASE_A)
-        in_b = await _clusters(graph, [a_id, b_id], CASE_B)
+        case_a, case_b = await _readers()
+        assert case_a.datasets == [SOURCE, LAYER_A] and case_b.datasets == [SOURCE, LAYER_B]
+        in_a = await _clusters(graph, [a_id, b_id], case_a)
+        in_b = await _clusters(graph, [a_id, b_id], case_b)
+        if dataset == LAYER_A:
+            # The conflict is on A's split, for A's review; B reads no split at all.
+            seen_a = await graph.expand(ExpandRequest(node_ids=[a_id], depth=1), case_a)
+            (split,) = [e for e in seen_a.edges if e.type == "NOT_SAME_AS"]
+            assert split.properties.get("conflict_pending") is True
+            assert split.datasets == [LAYER_A]
+            seen_b = await graph.expand(ExpandRequest(node_ids=[a_id], depth=1), case_b)
+            assert [e for e in seen_b.edges if e.type == "NOT_SAME_AS"] == []
+            assert await graph.get_edges([split.id], case_b) == []
         return result.same_as_written, result.conflicts_recorded, len(in_a), len(in_b)
 
 

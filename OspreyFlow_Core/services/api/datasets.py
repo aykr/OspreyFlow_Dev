@@ -9,8 +9,8 @@ the datasets of each unit, and the datasets of each case.
 **Who may name what.** A case names exactly one dataset, a source or a composite, of its own unit
 (ADR-099 Amendment 12). A dataset of another unit, an analyst layer and one that does not exist are
 refused with the same answer, so a refusal says nothing about another unit's data or a layer.
-Changing a case's dataset is its Author's (the route's level); a branch takes its parent's, and
-reads and writes its parent's layer.
+Changing a case's dataset is its Author's (the route's level); a branch, and a case opened from an
+alert, takes its parent's dataset and has an empty analyst layer of its own (ADR-143 Amendment 1).
 
 **Names are unique within a unit (ADR-099 Amendment 6),** ignoring case and spacing, so two of a
 unit's datasets never read alike; the id stays what every element and case refers to. A dataset
@@ -192,8 +192,14 @@ class DatasetStore(Protocol):
         *,
         case_name: str | None = None,
     ) -> list[Dataset]: ...
+    #: `created_by`: the person making the branch, whose new layer it is.
     async def copy_case(
-        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+        self,
+        from_investigation_id: str,
+        to_investigation_id: str,
+        *,
+        case_name: str | None = None,
+        created_by: str | None = None,
     ) -> None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
@@ -475,7 +481,12 @@ class InMemoryDatasetStore:
         return await self.of_case(investigation_id, principal)
 
     async def copy_case(
-        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+        self,
+        from_investigation_id: str,
+        to_investigation_id: str,
+        *,
+        case_name: str | None = None,
+        created_by: str | None = None,
     ) -> None:
         """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
         empty layer of its own: it never reads its parent's layer, which its maker may hold no
@@ -487,7 +498,7 @@ class InMemoryDatasetStore:
             await self.ensure_layer(
                 to_investigation_id,
                 unit=parent.owning_unit,
-                created_by=parent.created_by,
+                created_by=created_by or parent.created_by,
                 case_name=case_name,
             )
 
@@ -912,7 +923,12 @@ class PostgresDatasetStore:
         return cast(DatasetEgress, before), _row(row)
 
     async def copy_case(
-        self, from_investigation_id: str, to_investigation_id: str, *, case_name: str | None = None
+        self,
+        from_investigation_id: str,
+        to_investigation_id: str,
+        *,
+        case_name: str | None = None,
+        created_by: str | None = None,
     ) -> None:
         """A branch, and a case opened from an alert, reads its parent's chosen dataset and has an
         empty layer of its own: it never reads its parent's layer, which its maker may hold no
@@ -937,7 +953,7 @@ class PostgresDatasetStore:
             await self.ensure_layer(
                 to_investigation_id,
                 unit=parent["owning_unit"],
-                created_by=parent["created_by"],
+                created_by=created_by or parent["created_by"],
                 case_name=case_name,
             )
 

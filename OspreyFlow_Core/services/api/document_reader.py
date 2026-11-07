@@ -40,7 +40,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-from .dataset_scope import analyst_writes_into
+from .dataset_scope import analyst_writes_into, with_the_layer
 from .dossier import MessageSpan, get_document_view
 from .email_extraction import _edge_from_write, _node_from_write
 from .event_scope import CaseRecords, visible_ancestors, with_inherited
@@ -185,6 +185,7 @@ class DocumentReaderService:
         )
         provenance = Provenance(state=ProvenanceState.ASSERTED, sources=[source], first_seen=now)
         into = await analyst_writes_into()
+        principal = with_the_layer(principal)
         node = NodeWrite(
             id=new_node_id(),
             type=designation.entity_type,

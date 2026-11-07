@@ -32,10 +32,12 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
-from conduit_common.identity import new_edge_id, new_node_id, now_utc
+from conduit_common.identity import now_utc
+from ontology.handling import HandlingScheme
 from ports.graph import BulkGraphLoader, GraphPort
 from schemas.domain import (
     EdgeWrite,
+    Handling,
     NodeId,
     NodeWrite,
     Principal,
@@ -56,6 +58,24 @@ _CASE_SCOPE: ContextVar[tuple[str, DatasetStore, Principal] | None] = ContextVar
 )
 
 
+#: ADR-099 Amendment 15: a member's node a composite case's write was turned into the composite's
+#: copy of, by the member node's id, for the rest of the request: so a link written beside it, and
+#: the canvas's copy, name the copy (`redirected`).
+_REDIRECTED: ContextVar[dict[str, str] | None] = ContextVar("redirected", default=None)
+
+
+def redirected(node_id: str) -> str:
+    """`node_id`, or the composite's copy this request's write made of it (Amendment 15)."""
+    held = _REDIRECTED.get()
+    return held.get(node_id, node_id) if held else node_id
+
+
+def composite_copy_id(composite: str, member_node: str) -> str:
+    """The id of a composite's copy of a member's node: one per pair, so writing the same node again
+    in the composite case writes the same copy and adds nothing (Amendment 15)."""
+    return f"{member_node}@{composite}"
+
+
 class NoAnalystLayerError(Exception):
     """An analyst's own write with no case's layer to write into: outside a case, or in a case
     that reads nothing. Refused, never written into a source (ADR-143 Amendment 1 item 3)."""
@@ -73,6 +93,7 @@ def set_case_datasets(
     _CASE_DATASETS.set(tuple(datasets) if datasets is not None else None)
     _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
     _CASE_SCOPE.set(scope if datasets is not None else None)
+    _REDIRECTED.set({} if datasets is not None else None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
@@ -108,6 +129,15 @@ async def analyst_writes_into() -> list[str]:
     )
     set_case_datasets([*held, layer], layer=layer, scope=scope)
     return [layer]
+
+
+def with_the_layer(principal: Principal) -> Principal:
+    """`principal` reading its case's read set as it now stands: after `analyst_writes_into` has
+    made the case's layer mid-request, so the rest of the request reads what it has just written."""
+    held = case_datasets()
+    if held is None or principal.datasets is None or list(held) == list(principal.datasets):
+        return principal
+    return principal.model_copy(update={"datasets": list(held)})
 
 
 async def scope_to_case(
@@ -172,6 +202,19 @@ def _stamp_nodes(nodes: Sequence[NodeWrite], into: str | None) -> list[NodeWrite
     return [n if n.datasets else n.model_copy(update={"datasets": [into]}) for n in nodes]
 
 
+def _to_copies(edges: Sequence[EdgeWrite]) -> list[EdgeWrite]:
+    """Each link's ends, the composite's copies where this request's write made one (Amendment
+    15), so a link written beside a redirected node names the node the case wrote."""
+    if not _REDIRECTED.get():
+        return list(edges)
+    return [
+        e
+        if redirected(e.source) == e.source and redirected(e.target) == e.target
+        else e.model_copy(update={"source": redirected(e.source), "target": redirected(e.target)})
+        for e in edges
+    ]
+
+
 def _stamp_edges(edges: Sequence[EdgeWrite], into: str | None) -> list[EdgeWrite]:
     if into is None:
         return list(edges)
@@ -211,10 +254,12 @@ class DatasetStampingGraph:
         *,
         dataset: str | None = None,
         registry: DatasetRegistry | None = None,
+        scheme: HandlingScheme | None = None,
     ) -> None:
         self._inner = inner
         self._dataset = dataset
         self._registry = registry
+        self._scheme = scheme
         #: Ids the registry has confirmed. A dataset is never deleted, so a confirmation holds.
         self._confirmed: set[str] = set()
         #: Called after every write the store accepted (ADR-100 Amendment 3: kept figures cleared).
@@ -294,17 +339,22 @@ class DatasetStampingGraph:
             return writes, []
         out: list[NodeWrite] = []
         links: list[EdgeWrite] = []
+        moved = _REDIRECTED.get()
+        held_by_id = {n.id: n for n in held}
         for write in writes:
             if write.id not in in_a_member:
                 out.append(write)
                 continue
-            fresh = write.model_copy(update={"id": new_node_id(), "datasets": [composite]})
-            out.append(fresh)
+            member_node = held_by_id[write.id]
+            copy = composite_copy_id(composite, write.id)
+            if moved is not None:
+                moved[write.id] = copy
+            out.append(write.model_copy(update={"id": copy, "datasets": [composite]}))
             links.append(
                 EdgeWrite(
-                    id=new_edge_id(),
+                    id=composite_copy_id(composite, f"same-as:{write.id}"),
                     type="SAME_AS",
-                    source=fresh.id,
+                    source=copy,
                     target=write.id,
                     properties={"score": 1.0},
                     provenance=Provenance(
@@ -318,7 +368,7 @@ class DatasetStampingGraph:
                         ],
                         first_seen=now_utc(),
                     ),
-                    handling=write.handling,
+                    handling=self._stricter(write.handling, member_node.handling),
                     created_by=write.created_by,
                     created_at=write.created_at,
                     datasets=[composite],
@@ -326,8 +376,16 @@ class DatasetStampingGraph:
             )
         return out, links
 
+    def _stricter(self, a: Handling, b: Handling) -> Handling:
+        """The stricter of two markings by classification, as `same_as_writer._handling_for`
+        chooses for a `SAME_AS`; with no scheme known, the write's own."""
+        if self._scheme is None:
+            return a
+        rank = {c: i for i, c in enumerate(self._scheme.classification)}
+        return b if rank.get(b.classification, -1) > rank.get(a.classification, -1) else a
+
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
-        stamped = _stamp_edges(edges, self._into())
+        stamped = _stamp_edges(_to_copies(edges), self._into())
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
@@ -375,7 +433,7 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
 
     async def bulk_load_edges(self, edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
         inner: Any = self.inner
-        stamped = _stamp_edges(edges, self._into())
+        stamped = _stamp_edges(_to_copies(edges), self._into())
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
@@ -383,13 +441,18 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
 
 
 def stamping(
-    inner: GraphPort, *, dataset: str | None = None, registry: DatasetRegistry | None = None
+    inner: GraphPort,
+    *,
+    dataset: str | None = None,
+    registry: DatasetRegistry | None = None,
+    scheme: HandlingScheme | None = None,
 ) -> DatasetStampingGraph:
     """The stamping graph over `inner`: a `BulkGraphLoader` exactly when `inner` is one. With a
-    `registry`, every write's datasets are checked against it first."""
+    `registry`, every write's datasets are checked against it first; with the deployment's handling
+    `scheme`, a link it writes between two nodes takes the stricter of their markings."""
     if isinstance(inner, BulkGraphLoader):
-        return BulkDatasetStampingGraph(inner, dataset=dataset, registry=registry)
-    return DatasetStampingGraph(inner, dataset=dataset, registry=registry)
+        return BulkDatasetStampingGraph(inner, dataset=dataset, registry=registry, scheme=scheme)
+    return DatasetStampingGraph(inner, dataset=dataset, registry=registry, scheme=scheme)
 
 
 __all__: Sequence[str] = (
@@ -403,6 +466,9 @@ __all__: Sequence[str] = (
     "scope_to_case",
     "analyst_layer",
     "analyst_writes_into",
+    "with_the_layer",
+    "composite_copy_id",
+    "redirected",
     "NoAnalystLayerError",
     "set_case_datasets",
 )

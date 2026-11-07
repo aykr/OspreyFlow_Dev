@@ -139,11 +139,9 @@ async def test_the_layer_is_held_for_the_request_and_only_inside_a_case(
     assert analyst_layer() is None
 
 
-async def test_an_entity_marked_by_hand_is_written_into_the_layer(
-    store: InMemoryDatasetStore,
-) -> None:
-    principal = await _case_reading(store, "src")
-    layer = await store.layer_of_case(CASE)
+async def _mark_by_hand(principal: Principal) -> tuple[WritingGraph, Any]:
+    """`DocumentReaderService.designate` under the case `principal` is scoped to: the graph it
+    wrote, and its result."""
     doc = _document(email_document_id("ev-1"))
     working = FakeWorkingSetStore()
     await working.add_nodes(CASE, [_in("src", node("a")), _in("src", node("b")), doc])
@@ -163,11 +161,33 @@ async def test_an_entity_marked_by_hand_is_written_into_the_layer(
         Designation(entity_type="Person", text="Dana MERCER", start=start, end=start + 11),
         principal,
     )
+    return written, result
+
+
+async def test_an_entity_marked_by_hand_is_written_into_the_layer(
+    store: InMemoryDatasetStore,
+) -> None:
+    principal = await _case_reading(store, "src")
+    layer = await store.layer_of_case(CASE)
+    written, result = await _mark_by_hand(principal)
     assert written.nodes[result.node_id].datasets == [layer]
     (mention,) = [e for e in written.committed_edges if e.source == result.node_id]
     assert mention.datasets == [layer]
     # The canvas's copy is the stored one, so a reader of the case is sent it.
     assert [n.datasets for n in result.delta.nodes] == [[layer]]
+
+
+async def test_a_mark_made_by_hand_in_a_case_with_no_layer_goes_into_a_layer_made_for_it(
+    store: InMemoryDatasetStore,
+) -> None:
+    """Ruling 7 through `designate`: the case had no layer; the mark makes it and goes into it."""
+    store.cases[CASE] = ["src"]
+    principal = await scope_to_case(ANALYST, CASE, store)
+    assert await store.layer_of_case(CASE) is None
+    written, result = await _mark_by_hand(principal)
+    layer = await store.layer_of_case(CASE)
+    assert layer is not None
+    assert written.nodes[result.node_id].datasets == [layer]
 
 
 @pytest.mark.parametrize("assertion", ["manual_link", "manual_split"])
@@ -405,38 +425,99 @@ async def test_a_branch_of_a_selection_holding_layer_items_reads_a_layer_of_its_
     assert analyst_layer() == own
 
 
-async def _opened_from_an_alert(store: InMemoryDatasetStore) -> tuple[str, Principal]:
-    """The alert jump's two calls (`app.alert_jump_route`): the new case copies what the alert's
-    case reads, then the jumper is scoped to it. The jumper holds no level on the alert's case."""
-    await store.set_for_case(CASE, ["src"], ANALYST, case_name="The alert's case")
-    stranger = Principal(id="jumper", clearance="OFFICIAL", org_unit=UNIT)
-    await store.copy_case(CASE, "opened", case_name="Opened from alert a-1")
-    return "opened", await scope_to_case(stranger, "opened", store)
+def _jumped_from_bobs_alert(store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Through the real `POST .../alerts/{alert}/jump`, with the real dataset store: Bob's case
+    raised the alert; Alice, holding no level on Bob's case, opens a case from it in her own.
+    Returns the principal the route read the alert's entities as, in the new case."""
+    from services.api import app as app_module
+    from services.api.alerts import Alert, AlertMode
+    from services.api.app import (
+        app,
+        get_alerts_store,
+        get_datasets,
+        get_graph,
+        get_history,
+        get_valkey,
+        get_working_set,
+    )
+
+    from .test_case_domains import (
+        ALICE,
+        BOB,
+        _Alerts,
+        _as,
+        _Audit,
+        _Cases,
+        _Delta,
+        _History,
+        _Valkey,
+    )
+
+    cases = _Cases()
+    cases.seed_case("bobs-case", owner=BOB, domains=[], name="Bob's case")
+    cases.seed_case("alices-case", owner=ALICE, domains=[], name="Alice's case")
+    alert = Alert(
+        id="al-1",
+        rule_id="r-1",
+        owner_id="alice",
+        mode=AlertMode.FULL,
+        referent_node_ids=[],
+        investigation_id="bobs-case",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    seen: list[Principal] = []
+
+    async def _referents(*args: object, principal: Principal, **kwargs: object) -> list[object]:
+        seen.append(principal)
+        return []
+
+    monkeypatch.setattr(app_module, "fetch_jumpable_referents", _referents)
+    http = _as(ALICE, cases, _Audit())
+    app.dependency_overrides[get_datasets] = lambda: store
+    app.dependency_overrides[get_alerts_store] = lambda: _Alerts(alert)
+    app.dependency_overrides[get_graph] = lambda: object()
+    app.dependency_overrides[get_working_set] = lambda: _Delta()
+    app.dependency_overrides[get_history] = lambda: _History()
+    app.dependency_overrides[get_valkey] = lambda: _Valkey()
+    try:
+        jumped = http.post("/v1/investigations/alices-case/alerts/al-1/jump")
+    finally:
+        app.dependency_overrides.clear()
+    assert jumped.status_code == 201, jumped.text
+    (jumper,) = seen
+    return jumper
 
 
 async def test_a_case_opened_from_an_alert_never_reaches_the_alerts_cases_layer(
-    store: InMemoryDatasetStore,
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _opened, jumper = await _opened_from_an_alert(store)
-    parent_layer = await store.layer_of_case(CASE)
-    assert parent_layer is not None
-    assert parent_layer not in (jumper.datasets or [])
-    assert analyst_layer() not in (None, parent_layer)
+    from .test_case_domains import BOB
+
+    await store.set_for_case("bobs-case", ["src"], BOB, case_name="Bob's case")
+    bobs_layer = await store.layer_of_case("bobs-case")
+    jumper = _jumped_from_bobs_alert(store, monkeypatch)
+    assert bobs_layer is not None and bobs_layer not in (jumper.datasets or [])
+    assert "src" in (jumper.datasets or [])  # it reads what Bob's case reads, less the layer
 
 
 async def test_the_alert_jump_check_fails_with_the_sharing_put_back(
     store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Rule 15: ruling 8's sharing, where it lived (`layer_of_case` answering a branch with its
-    parent's layer), and the same check sees the jumper reach the alert's case's layer."""
+    parent's layer), and the same check sees Alice reach Bob's case's layer."""
+    from .test_case_domains import BOB
+
+    await store.set_for_case("bobs-case", ["src"], BOB, case_name="Bob's case")
     real = store.layer_of_case
 
     async def shared(investigation_id: str) -> str | None:
-        return await real(CASE if investigation_id == "opened" else investigation_id)
+        own = await real(investigation_id)
+        made_for_jump = investigation_id not in ("bobs-case", "alices-case")
+        return await real("bobs-case") if made_for_jump else own
 
     monkeypatch.setattr(store, "layer_of_case", shared)
-    _opened, jumper = await _opened_from_an_alert(store)
-    assert await real(CASE) in (jumper.datasets or [])
+    jumper = _jumped_from_bobs_alert(store, monkeypatch)
+    assert await real("bobs-case") in (jumper.datasets or [])
 
 
 # --- a case with no layer yet (the owner's ruling on finding 7, 7 November 2026) ---------------
@@ -511,31 +592,68 @@ def test_an_administrator_setting_a_layers_egress_is_refused_as_a_missing_datase
 # --- a layer is never made for a caller the case refuses (must-fix 3, second review) -----------
 
 
-async def test_a_caller_the_case_refuses_is_refused_as_for_a_missing_case_and_makes_no_layer(
+async def _asked_by_a_non_member(
     store: InMemoryDatasetStore,
-) -> None:
-    """`get_principal` scopes the request (`scope_to_case`) before the route's level check, so it
-    must write nothing: a case with no layer yet, asked for by someone holding no level on it, is
-    answered as a case that does not exist, and is left with no layer."""
+) -> tuple[Any, Any, str]:
+    """Bob makes a case with no layer yet (one the migration has not reached); Alice, of the same
+    unit and holding no level on it, asks for it through the real `get_principal`. Returns her
+    answer, the answer for a case that does not exist, and the case's id."""
     from services.api.app import app, get_audit, get_investigations
 
     from .test_analyst_layer import _Audit, _Investigations
     from .test_dataset_scope import _Resolver
 
-    store.cases["case-z"] = ["src"]  # a case the migration has not reached: no layer
+    investigations = _Investigations()
+    bob = Principal(id="bob", clearance="OFFICIAL", org_unit=UNIT)
+    case = await investigations.create(bob, name="Bob's case")
+    store.cases[case.id] = ["src"]
     saved = {k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets")}
-    app.state.principal_resolver = _Resolver()
+    app.state.principal_resolver = _Resolver()  # Alice (`ANALYST`), not a member
     app.state.datasets = store
-    app.dependency_overrides[get_investigations] = _Investigations
+    app.dependency_overrides[get_investigations] = lambda: investigations
     app.dependency_overrides[get_audit] = _Audit
     try:
         http = TestClient(app, headers={"Authorization": "Bearer token"})
-        refused = http.get("/v1/investigations/case-z/datasets")
+        refused = http.get(f"/v1/investigations/{case.id}/datasets")
         missing = http.get("/v1/investigations/no-such-case/datasets")
     finally:
         app.dependency_overrides.clear()
         for key, value in saved.items():
             setattr(app.state, key, value)
+    return refused, missing, case.id
+
+
+async def test_a_caller_the_case_refuses_is_refused_as_for_a_missing_case_and_makes_no_layer(
+    store: InMemoryDatasetStore,
+) -> None:
+    """`get_principal` scopes the request (`scope_to_case`) before the route's level check, so it
+    must write nothing: Alice, holding no level on Bob's case, is answered as for a case that does
+    not exist, and Bob's case is left with no layer (must-fix 3, second and third reviews)."""
+    refused, missing, case = await _asked_by_a_non_member(store)
     assert refused.status_code == 404
     assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
-    assert await store.layer_of_case("case-z") is None
+    assert await store.layer_of_case(case) is None
+
+
+async def test_the_no_layer_check_fails_with_the_layer_made_on_scoping(
+    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: `ensure_layer` put back into scoping, where `get_principal` calls it (as the code
+    stood after ruling 7), and the same check sees Bob's case given a layer by Alice's refused
+    request."""
+    from services.api import app as app_module
+
+    real = app_module.scope_to_case
+
+    async def making(principal: Principal, investigation_id: str, held: Any) -> Principal:
+        chosen = await held.chosen_of_case(investigation_id)
+        if chosen:
+            await held.ensure_layer(
+                investigation_id, unit=chosen[0].owning_unit, created_by=principal.id
+            )
+        return await real(principal, investigation_id, held)
+
+    monkeypatch.setattr(app_module, "scope_to_case", making)
+    refused, _missing, case = await _asked_by_a_non_member(store)
+    assert refused.status_code == 404
+    assert await store.layer_of_case(case) is not None

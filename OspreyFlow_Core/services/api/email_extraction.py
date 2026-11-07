@@ -286,12 +286,15 @@ class EmailExtractionService:
 
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.upsert_nodes([node], tx)
+            # The id the write returns: under a case reading a composite whose member holds this
+            # Document, the composite's own copy of it (ADR-099 Amendment 15).
+            (stored_id,) = await self._graph.upsert_nodes([node], tx)
             edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+        node = node.model_copy(update={"id": stored_id})
         delta = await self._working_set.add_written(
             investigation_id,
             [_node_from_write(node)],
@@ -375,12 +378,13 @@ class EmailExtractionService:
         if nodes:
             tx = await self._graph.begin_transaction()
             try:
-                await self._graph.upsert_nodes(nodes, tx)
+                stored_ids = await self._graph.upsert_nodes(nodes, tx)
                 edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
             except Exception:
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)
+            nodes = [n.model_copy(update={"id": i}) for n, i in zip(nodes, stored_ids, strict=True)]
         delta = await self._working_set.add_written(
             investigation_id,
             [_node_from_write(n) for n in nodes],

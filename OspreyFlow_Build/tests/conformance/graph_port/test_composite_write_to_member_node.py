@@ -20,6 +20,7 @@ import pytest
 from services.api.dataset_scope import DatasetStampingGraph, set_case_datasets, stamping
 from services.api.datasets import Dataset, InMemoryDatasetStore
 
+from ontology.handling import load_uk_le_scheme
 from ports.graph import GraphPort
 from schemas.domain import Principal
 from tests.conformance.graph_port.test_suite import _edge, _node, _write
@@ -58,15 +59,15 @@ async def _loaded(adapter: GraphPort) -> tuple[str, str]:
     return a, b
 
 
-def _in_the_composite_case(adapter: GraphPort) -> GraphPort:
+def _in_the_composite_case(adapter: GraphPort, reader: Principal = COMPOSITE_CASE) -> GraphPort:
     """The stamping graph over `adapter`, with a request scoped to the composite case."""
     store = InMemoryDatasetStore()
     for dataset_id in (MEMBER, OTHER_MEMBER):
         store.add(_dataset(dataset_id))
     store.add(_dataset(COMPOSITE, kind="composite", members=[MEMBER, OTHER_MEMBER]))
     store.cases["case-c"] = [COMPOSITE]
-    set_case_datasets(COMPOSITE_CASE.datasets, scope=("case-c", store, COMPOSITE_CASE))
-    return stamping(adapter)
+    set_case_datasets(reader.datasets, scope=("case-c", store, reader))
+    return stamping(adapter, scheme=load_uk_le_scheme())
 
 
 def _dataset(dataset_id: str, **kind: object) -> Dataset:
@@ -147,3 +148,30 @@ async def test_a_composite_cases_link_between_member_nodes_is_not_seen_by_a_memb
         assert (await adapter.neighbourhood_stats(a, COMPOSITE_CASE)).degree == before.degree + 1
         assert (await adapter.neighbourhood_stats(a, MEMBER_CASE)).degree == before.degree
         assert await adapter.edges_among([a, b], MEMBER_CASE) == []
+
+
+async def test_the_same_as_takes_the_stricter_marking_of_its_two_ends(
+    factory: GraphAdapterFactory,
+) -> None:
+    """As `same_as_writer._handling_for` marks a `SAME_AS`: a SECRET member node, written again in
+    the composite case at OFFICIAL by a reader cleared to SECRET, is linked to its copy at
+    SECRET."""
+    cleared = COMPOSITE_CASE.model_copy(update={"clearance": "SECRET"})
+    async with factory.context() as adapter:
+        (secret,), _ = await _write(
+            adapter,
+            [_node("Person", classification="SECRET", datasets=[MEMBER], family_name="MERCER")],
+            [],
+        )
+        graph = _in_the_composite_case(adapter, cleared)
+        rewrite = _node("Person", classification="OFFICIAL", family_name="MERCER").model_copy(
+            update={"id": secret, "datasets": []}
+        )
+        tx = await graph.begin_transaction()
+        (copy,) = await graph.upsert_nodes([rewrite], tx)
+        await graph.commit_transaction(tx)
+        set_case_datasets(None)
+        (link,) = [
+            e for e in await adapter.edges_among([copy, secret], cleared) if e.type == "SAME_AS"
+        ]
+        assert link.handling.classification == "SECRET"
