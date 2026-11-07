@@ -928,12 +928,20 @@ recorded under the trigger `source_refresh`:
 - a pipeline needing attention is recorded *blocked*, and a keyless one *refused* in words;
 - three refusals in a row pause the source's policy, not the pipeline.
 
-**A full snapshot with *withdraw*** (ADR-110 Amendments 8 and 9). Each kept row key records what its
-row wrote. The keys a snapshot no longer carries are its dropped rows. Their nodes, links and events
-are withdrawn in the refresh's own load, except what another kept row, another load or a live link
-still rests on. The run says in words how many rows it withdrew, how many links kept an occurrence
-from a dropped row, and how many dropped rows were loaded before rows recorded what they wrote and
-were left in place. A row that comes back is loaded again. Reverting the refresh restores the rows,
+**A full snapshot with *withdraw*** (ADR-110 Amendments 8, 9 and 15). Each kept row key records
+what its row wrote. The keys a snapshot no longer carries are its dropped rows. Their **links and
+events** are withdrawn in the refresh's own load, except what another kept row or another load still
+holds. **Their nodes are never withdrawn** (Amendment 15, the owner's ruling "Never withdraw
+nodes"). Whether a node could go depends on links and rows the loader may not read: another case's
+link resting on it, another case's row naming it. Whether it stayed or went would then tell them so,
+through the graph and through the run's figures (rule 3's hidden degree). A node is left as *keep*
+leaves every element. The run says in words how many rows it withdrew, how many links kept an
+occurrence because this pipeline's own rows in the case also wrote them (only those the loader may
+read), and how many dropped rows were loaded before rows recorded what they wrote and were left in
+place. A link kept because another case's or another pipeline's row, or another load, holds it is
+kept and never counted. The run's metering does not count a withdrawal among its graph writes.
+Nothing the run says varies with anything the loader may not read
+(`tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`). A row that comes back is loaded again. Reverting the refresh restores the rows,
 their events and their keys, and is refused while a row it withdrew has been loaded again. A pipeline
 reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
 

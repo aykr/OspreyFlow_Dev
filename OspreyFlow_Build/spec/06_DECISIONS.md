@@ -27085,3 +27085,46 @@ smallest step beyond it the owner chose (N4).
    and 15 were its stand-in's. On the Graph a fourth panel, *Find connections*, has no parts and is
    folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
    proves each moved action by keyboard.
+
+### ADR-110, Amendment 15 (7 November 2026) — a snapshot's withdrawal takes back links and events only, never nodes, so nothing a reader sees varies with what they cannot read
+
+Status: accepted 7 November 2026, on the owner's ruling "Never withdraw nodes" (put to the owner by
+the orchestrator after the review of L1.2a's Part A). Built by the studio lane in L1.2a. Amendments 8
+and 9 are unchanged except where this says so.
+
+**Why.** Amendment 8 point 3 withdrew a dropped row's nodes too, except one that another kept row,
+another load or a live link still rested on, and it asked the last through the port's unfiltered
+`live_edges_touching`. That answer reached the loader in two ways:
+- the node stayed or went, which they could see;
+- the run's metering counted withdrawn nodes and links among its `graph_writes`, which
+  `GET …/recipes/{id}/runs` returns to anyone `may_see_counts` allows.
+
+So a link or a row of another case, which the loader may not read, moved what they saw (rule 3's
+hidden degree). The revert's own use of the read is an operator's command, never a route, and was
+no precedent.
+
+1. **Nodes are never withdrawn.** A snapshot's withdrawal takes back a dropped row's links and their
+   events alone, and leaves its nodes as *keep* leaves every element. `plan_withdrawal` no longer
+   asks `live_edges_touching`, so the read is confined to the revert again
+   (`tests/test_unfiltered_node_lookup_confined.py`, unchanged, green because the call is gone).
+   `withdrawn_node_ids` stays in the record and the report, always empty. A row that comes back
+   matches its nodes and writes its link again.
+2. **A kept link is counted only from this pipeline's own rows in the case** (the snapshot's own,
+   and its other kept ones), and only among links the loader may read. A link kept because another
+   case's or another pipeline's row, or another load, holds it is kept and never counted. The
+   ledger answers the narrower question with `elements_kept_by_other_rows(...,
+   only_this_pipeline=True)`. This narrows Amendment 9 point 2, which counted a readable link kept
+   by any row.
+3. **Metering does not count a withdrawal** among `graph_writes`. Which of a dropped row's links go
+   depends on rows and loads the reader may not read, so the count would show them. The run says
+   what it withdrew in `rows_withdrawn` and its notes.
+4. **The test of the whole.** `tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py`
+   drives `run_recipe_as` over the run ledger and runs one pipeline's two snapshots twice. In the
+   second world, another case keeps a row writing the dropped row's link and a link of its own on
+   the dropped row's node. The test compares the whole `ScheduleRunView`, the whole `report_view`
+   and the case's live nodes between the two worlds. It is shown red with node withdrawal restored,
+   with metering's count of withdrawals restored, and with the kept-link count taken from every row.
+5. **Disclosed, not changed:** metering's `graph_writes` still counts merges into existing nodes
+   and links (ADR-110 Amendment 12). A merge into an element the reader may not read moves it, as
+   the withdrawal did. That is the orchestrator's to sequence, since it is not this ruling's scope.
+
