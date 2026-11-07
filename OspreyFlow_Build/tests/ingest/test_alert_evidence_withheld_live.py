@@ -242,11 +242,13 @@ async def test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_n
 async def test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row(
     stores: dict[str, Any], analytics: AnalyticsPort
 ) -> None:
-    """The load path's companion: in the load's own transaction, a cited link whose marking cannot
-    be read and no highest marking to stand in (`unseen`) writes no node, rather than one marked
-    below the link; the row is still raised after the commit, and the audit says why. Red with the
-    fallback removed (the link skipped, not refused): a node was written at the accounts'
-    OFFICIAL."""
+    """`_alert_node_in_load`'s own contract, the companion the orchestrator asked for: in the
+    load's transaction, a cited link whose marking cannot be read and no highest marking to stand
+    in (`unseen=None`) writes no node, rather than one marked below the link; the row is still
+    raised after the commit, and the audit says why. No real load reaches this today: every load
+    that runs rules passes `unseen` (`studio_publish.py`, `recipe_handlings`), and a link the load
+    writes stands in at its marking as written (the test below). Red with the fallback removed
+    (the link skipped, not refused): a node was written at the accounts' OFFICIAL."""
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         loaded, _ = await _hidden_world(stores, graph, analytics, case, "IL")
@@ -268,3 +270,41 @@ async def test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_sti
         )
         assert raised.alert_node_id is None
         assert raised.id in [a.id for a in await _case_alerts(stores, SECRET_LOADER, case)]
+
+
+def _referencing_with_a_secret_override() -> Any:
+    """The ledger recipe, with its payee given a SECRET override it never writes: the payee is a
+    reference (`on_match: reference`) to an account already loaded, so every row's link, its
+    transactions and both its ends are OFFICIAL, while the highest marking the recipe could give
+    a row (`recipe_handlings`, the load's `unseen`) is SECRET."""
+    template = RECIPE.row_template.model_copy(deep=True)
+    payee = next(e for e in template.entities if e.ref == "payee")
+    payee.handling = {"classification": "SECRET"}
+    return RECIPE.model_copy(update={"row_template": template})
+
+
+async def test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_recipes_highest(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """The lane-reviewer's finding 2, at the real call site (`load_with_rules` → `pre_commit`,
+    `unseen` set from the recipe): the link a load writes cannot be read back before the commit, so
+    its marking as written stands in, as a node's does. Red before the fix: `known` held the
+    nodes' markings alone, the link took the recipe's highest (SECRET), and the alert's node with
+    it, so a teammate who may read every account, link and transaction the alert cites was told
+    nothing of it."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row("GBOVMULE", "GBOVX", 10, T0 - timedelta(days=30)),
+                     _row("GBOVY", "GBOVHUB", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+        rows = [_row("GBOVMULE", "GBOVHUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case), rows,
+                    recipe=_referencing_with_a_secret_override())  # fmt: skip
+        (alert,) = await _case_alerts(stores, ANALYST, case)
+        (link,) = await graph.get_edges(alert.edge_ids, TEAMMATE)
+        assert link.handling.classification == "OFFICIAL"
+        node = await graph.get_node(alert.alert_node_id, ANALYST)  # type: ignore[arg-type]
+        assert node is not None and node.handling.classification == "OFFICIAL"
+        assert await _listed(stores, graph, analytics, case, TEAMMATE) == [alert.id]

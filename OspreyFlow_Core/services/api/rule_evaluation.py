@@ -852,7 +852,9 @@ class RuleGate:
         written: Sequence[NodeWrite | EdgeWrite] = (),
     ) -> PreCommitVerdict:
         verdict = PreCommitVerdict()
-        known = {w.id: w.handling for w in written if isinstance(w, NodeWrite)}
+        # What this load wrote, nodes and links, cannot be read back before the commit: each
+        # stands in at its marking as written, never at the recipe's highest (`unseen`).
+        known = {w.id: w.handling for w in written}
         for rule in (r for r in self.rules if r.trigger == "pre_commit"):
             flow_rows = self._rows_for(rule, events, written)
             reason: str | None = None

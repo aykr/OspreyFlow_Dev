@@ -1,0 +1,5 @@
+lease glass (clean re-run); 2026-11-07T21:48:39Z; red 6: in a load, known holds the nodes' markings alone (HEAD 7c1bbd6)
+>           assert node is not None and node.handling.classification == "OFFICIAL"
+E           assert (None is not None)
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_recipes_highest
+1 failed, 5 deselected in 8.46s
