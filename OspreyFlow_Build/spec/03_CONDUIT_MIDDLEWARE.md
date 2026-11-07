@@ -771,8 +771,16 @@ POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entitie
 
 Every member of the case reads every rule-raised alert of it, whoever deployed the rule; an alert
 any of whose entities, cited links or transactions the reader cannot read is left out of the list
-and its count, and opening or acting on it answers 404 (ADR-039's all-or-nothing). The summary names
-entities as the reader sees them, never by id. A move between statuses is one conditional update,
+and its count, and opening or acting on it answers 404 (ADR-039's all-or-nothing). Every node, link
+and transaction the listed alerts cite is read once per kind, in one batch, as the reader, through each
+adapter's own access step (`alerts.read_evidence`; transactions in requests cut from the ids cited), so
+the reads are the same whatever is hidden, and an alert is dropped before anything is counted, ordered
+or returned (ADR-146 decision 10, gap map G2: until 7 November 2026 the list read nodes alone). Claim,
+release, disposition, approve-close, send-back, assign and the canvas make the same check, so each
+refuses exactly what the list withholds, writing and auditing nothing. The reader's own alerts
+(`GET .../alerts`, the inbox until ADR-146 removes it) make it too: an alert whose evidence is not all
+readable comes with no words and no referents (G3). The summary names entities as the reader sees them,
+never by id. A move between statuses is one conditional update,
 so two members acting at once cannot both win: the loser gets 409 `alert_moved_on`. A true positive
 confirms the `Alert` node (asserted, `confirmed_by` the member, rule 5); a false positive leaves it
 `inferred`. The canvas route seeds all or, past the cap, nothing (`limit_exceeded`, rule 2).
