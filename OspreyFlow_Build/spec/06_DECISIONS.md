@@ -27124,7 +27124,11 @@ no precedent.
    the dropped row's node. The test compares the whole `ScheduleRunView`, the whole `report_view`
    and the case's live nodes between the two worlds. It is shown red with node withdrawal restored,
    with metering's count of withdrawals restored, and with the kept-link count taken from every row.
-5. **Disclosed, not changed:** metering's `graph_writes` still counts merges into existing nodes
-   and links (ADR-110 Amendment 12). A merge into an element the reader may not read moves it, as
-   the withdrawal did. That is the orchestrator's to sequence, since it is not this ruling's scope.
+5. **A merge moves no figure either.** Metering counts each write a row makes once, in whichever list
+   the engine put it: a node created or merged into, a link created or merged into
+   (`touched_edge_ids`). So a row whose node and link merge into ones the reader may not see counts
+   exactly as the create it stands for (`tests/ingest/test_metering.py`'s
+   `test_a_rows_write_counts_the_same_whether_it_merged_or_created`, red with merges uncounted). A
+   `reference` to a node the reader may not see reads as no node at all (`find_node` under their
+   principal), so it creates, exactly as when no node exists.
 

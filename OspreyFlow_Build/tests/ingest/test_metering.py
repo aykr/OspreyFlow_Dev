@@ -8,6 +8,8 @@ What a mistake would do, and the case that catches it:
 - a write left out of the count, or one counted twice, or a snapshot's withdrawal counted, which
   would tell of rows and loads the reader may not read (ADR-110 Amendment 15;
   `test_a_loads_graph_writes_are_every_element_it_wrote_once`);
+- a merge into an element the reader may not see counted otherwise than the create it stands for
+  (ADR-110 Amendment 15; `test_a_rows_write_counts_the_same_whether_it_merged_or_created`);
 - a pipeline's stages left out (`test_a_pipelines_graph_writes_add_its_branches_and_stages`);
 - an incremental refresh's rows below the watermark left out of the rows read
   (`test_the_rows_read_are_every_row_of_the_file`);
@@ -45,6 +47,17 @@ def test_a_loads_graph_writes_are_every_element_it_wrote_once() -> None:
     # a full snapshot's withdrawal is not counted (ADR-110 Amendment 15: which links go depends on
     # rows and loads the reader may not read).
     assert graph_writes(report) == 2 + 1 + 2 + 1 + 2
+
+
+def test_a_rows_write_counts_the_same_whether_it_merged_or_created() -> None:
+    """ADR-110 Amendment 15 (the owner's ruling that nothing a reader sees varies with what they
+    may not read): a row whose node and link merge into ones the reader may not see, where the
+    same row alone would have created them, moves `graph_writes` by nothing. Each write is counted
+    once, in whichever list the engine put it."""
+    created = _load(created_node_ids=["n1", "n2"], touched_edge_ids=["e1"], created_edge_ids=["e1"])
+    merged = _load(created_node_ids=["n1"], merged_node_ids=["hidden"], touched_edge_ids=["e9"],
+                   merged_edge_ids=["e9"])  # fmt: skip
+    assert graph_writes(created) == graph_writes(merged) == 3
 
 
 def test_a_pipelines_graph_writes_add_its_branches_and_stages() -> None:
