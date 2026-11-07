@@ -52,7 +52,7 @@ ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "product_tree_link_allowlist
 sys.path.insert(0, str(CORE))
 sys.path.insert(0, str(REPO_ROOT / "packages"))
 
-from tools.route_coverage_check import APACHE_DOC_PATHS  # noqa: E402
+from tools.spec_doc_paths import SCANNED_DOC_PATHS  # noqa: E402
 
 #: Filenames whose mere appearance in an Apache-scoped document's own prose is the violation —
 #: a citation, a path reference, or a bare mention by name. Matched as a filename, not a full
@@ -81,7 +81,7 @@ _MARKER_PATTERN = re.compile(
 )
 
 
-def find_violations(doc_paths: tuple[Path, ...] = APACHE_DOC_PATHS) -> list[tuple[str, int, str]]:
+def find_violations(doc_paths: tuple[Path, ...] = SCANNED_DOC_PATHS) -> list[tuple[str, int, str]]:
     """Returns `(relative_path, line_number, matched_marker)` for every private-tree reference
     found in every Apache-scoped document. A pure function over the given paths, so the fixture
     test below can call it against a throwaway file instead of this repository's own real docs."""

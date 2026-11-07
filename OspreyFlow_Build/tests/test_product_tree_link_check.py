@@ -70,4 +70,7 @@ def test_apache_doc_paths_is_the_same_set_route_coverage_check_uses() -> None:
     own docstring: imported, not redeclared) — this pins that they cannot silently diverge."""
     from tools.product_tree_link_check import find_violations as _find
 
-    assert _find.__defaults__[0] is APACHE_DOC_PATHS
+    # Since the owner's ruling of 7 November 2026 ("Widen to all of spec/") the gate scans every spec
+    # document (`tools/spec_doc_paths.py`), which must still include the shared Apache-scoped set.
+    assert set(APACHE_DOC_PATHS) <= set(_find.__defaults__[0])
+    assert not any(p.name == "06_DECISIONS.md" for p in _find.__defaults__[0])

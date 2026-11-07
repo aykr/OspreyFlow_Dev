@@ -18,3 +18,12 @@ spec/09_INGEST_STUDIO.md	Stage 4
 spec/09_INGEST_STUDIO.md	Stage 5
 spec/09_INGEST_STUDIO.md	stage 1
 spec/09_INGEST_STUDIO.md	stage 3
+
+# The owner's ruling of 7 November 2026 widened this gate to every spec document. Two false positives
+# came with it: the alerts gap map numbers its questions for the owner in rounds (a round of
+# questions, not a build round), and the owner's redesign brief names its own build plan's phases
+# when it says what the plan does first. Neither ties a rule to the build calendar.
+spec/glass_redesign/ALERTS_GAP_MAP.md	round 1
+spec/glass_redesign/ALERTS_GAP_MAP.md	round 2
+spec/ingest_studio_redesign/INGEST_STUDIO_REDESIGN_BRIEF_v2.md	phase 1
+spec/ingest_studio_redesign/INGEST_STUDIO_REDESIGN_BRIEF_v2.md	phase 10

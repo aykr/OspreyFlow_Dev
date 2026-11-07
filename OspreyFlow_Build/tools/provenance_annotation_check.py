@@ -43,7 +43,7 @@ ALLOWLIST_PATH = REPO_ROOT / "tests" / "fixtures" / "provenance_annotation_allow
 sys.path.insert(0, str(CORE))
 sys.path.insert(0, str(REPO_ROOT / "packages"))
 
-from tools.route_coverage_check import APACHE_DOC_PATHS  # noqa: E402
+from tools.spec_doc_paths import SCANNED_DOC_PATHS  # noqa: E402
 
 #: The build-calendar vocabulary a provenance annotation is built from, found by reading the real
 #: annotations this gate was built to catch, not guessed. Word-bounded so "Stage" inside an
@@ -66,7 +66,7 @@ _PATTERN = re.compile(
 )
 
 
-def find_violations(doc_paths: tuple[Path, ...] = APACHE_DOC_PATHS) -> list[tuple[str, int, str]]:
+def find_violations(doc_paths: tuple[Path, ...] = SCANNED_DOC_PATHS) -> list[tuple[str, int, str]]:
     """Returns `(relative_path, line_number, matched_text)` for every provenance annotation found
     in every Apache-scoped document. A pure function over the given paths, so the fixture test can
     call it against a throwaway file instead of this repository's own real docs."""
