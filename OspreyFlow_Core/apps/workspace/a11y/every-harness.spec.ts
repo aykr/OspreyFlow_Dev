@@ -36,6 +36,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "start-harness.html": ["rights=investigate"],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   "places-harness.html": ["place=ingest", "place=admin"],
+  // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
+  "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
   // The Matrix view (GDS remediation plan A1) with rows selected, and long enough to page.
   "matrix-harness.html": ["select=p2,p4", "many=1", "strength=1"],
   // ADR-139: the two new filter metrics chosen; a link's strength explained in the Inspector; the
