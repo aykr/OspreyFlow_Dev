@@ -1,40 +1,25 @@
-// The Ingest Studio as ADR-108 phase B ships it: a pipelines home, the canvas as the one editing
-// surface, and each stage's editor opened from its node — the 1–9 wizard is gone (ruling Q6).
-// The save gate stays the server's: a violation comes back as words and is shown, never swallowed.
+// The Ingest Studio's Pipelines place (ADR-108 phase B; phase 6, ADR-108 Amendment 6): a pipelines
+// home, then the pipeline with a drawer beside it (`NodeDrawer`), drawn as the canvas in expert mode
+// and as a numbered list in guided mode. The save gate stays the server's: a violation comes back as
+// words and is shown, never swallowed.
 import { useEffect, useState } from "react";
 
 import type {
-  DomainPackEntry,
   PipelineGraph,
   PipelineNode,
   StudioRecipeDraft,
 } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
-import { Select } from "../../design/primitives/Select";
-import {
-  createDraft,
-  fetchDomainPacks,
-  fetchDraft,
-  fetchRecipeRegistry,
-  savePipeline,
-} from "../api";
-import { ChecksScreen } from "../checks/ChecksScreen";
-import { ConnectScreen } from "../ConnectScreen";
-import { MapScreen } from "../map/MapScreen";
-import { ProfileScreen } from "../ProfileScreen";
+import { createDraft, fetchDraft, fetchRecipeRegistry, savePipeline } from "../api";
+import { MapEditor } from "../map/MapEditor";
 import { PublishScreen } from "../publish/PublishScreen";
-import { SourceChooser } from "../sources/SourceChooser";
 import { statusWords } from "../studio/vocabulary";
-import { VerifyScreen } from "../verify/VerifyScreen";
+import { GuidedSteps } from "./GuidedSteps";
+import { NodeDrawer, type DrawerPane } from "./NodeDrawer";
 import { PipelineCanvas } from "./PipelineCanvas";
-import {
-  addEnrichAfter,
-  addExtractAfter,
-  addSourceChain,
-  removeNode,
-  withNodeConfig,
-} from "./pipelineGraphEdit";
+import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
+import { readStudioMode, writeStudioMode, type StudioMode } from "./studioMode";
 
 export interface PipelineStudioProps {
   apiBaseUrl: string;
@@ -42,14 +27,19 @@ export interface PipelineStudioProps {
   investigationId: string;
   /** A pipeline was deployed or reopened: the readiness strip and the Runs tab read again. */
   onChanged?: () => void;
+  /** The signed-in person, whose guided or expert mode this is (ADR-140 decision 3). */
+  username?: string | null;
 }
 
 type View =
   | { at: "home" }
-  | { at: "canvas"; recipeId: string }
-  | { at: "connect" | "profile" | "map" | "checks" | "verify" | "publish"; recipeId: string; fromHome?: boolean };
+  | { at: "canvas"; recipeId: string; selectedId?: string | null }
+  | { at: "map"; recipeId: string; pipeline: PipelineGraph; mapNodeId: string }
+  // A published or flagged recipe from before pipelines has no canvas: it opens where it is
+  // republished, and goes back to the home.
+  | { at: "publish"; recipeId: string };
 
-export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onChanged }: PipelineStudioProps) {
+export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onChanged, username }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
 
   if (view.at === "home") {
@@ -59,30 +49,15 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onCha
         bearerToken={bearerToken}
         investigationId={investigationId}
         onOpen={(recipe) =>
-          // A published or flagged recipe from before pipelines has no canvas: it opens where it is
-          // republished. A draft, new or old, is drawn on the canvas.
           setView(
             recipe.pipeline || recipe.status === "draft"
               ? { at: "canvas", recipeId: recipe.recipe_id }
-              : { at: "publish", recipeId: recipe.recipe_id, fromHome: true },
+              : { at: "publish", recipeId: recipe.recipe_id },
           )
         }
       />
     );
   }
-  const stage = { apiBaseUrl, bearerToken, investigationId, recipeId: view.recipeId };
-  const back = () =>
-    setView("fromHome" in view && view.fromHome ? { at: "home" } : { at: "canvas", recipeId: view.recipeId });
-  if (view.at === "connect") {
-    // The source node's own editor: the Connect gate rehosted whole (spec 09 §2 — the connector
-    // catalogue, the file, the marking and the legal basis), pinned to this pipeline's draft.
-    return <ConnectScreen {...stage} recipeId={view.recipeId} onBack={back} />;
-  }
-  if (view.at === "profile") return <ProfileScreen {...stage} onBack={back} />;
-  if (view.at === "map") return <MapScreen {...stage} onBack={back} />;
-  // ADR-133 decision 6, stage (d): the rules that judge this pipeline's loads, attached here.
-  if (view.at === "checks") return <ChecksScreen {...stage} onBack={back} />;
-  if (view.at === "verify") return <VerifyScreen {...stage} onBack={back} />;
   if (view.at === "publish") {
     return (
       <PublishScreen
@@ -90,24 +65,41 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onCha
         bearerToken={bearerToken}
         investigationId={investigationId}
         recipeId={view.recipeId}
-        onBack={back}
+        onBack={() => setView({ at: "home" })}
         onSelectRecipe={() => undefined}
         onReopenedForEditing={() => {
           onChanged?.();
-          back();
+          setView({ at: "canvas", recipeId: view.recipeId });
         }}
         onRan={onChanged}
       />
     );
   }
+  if (view.at === "map") {
+    return (
+      <MapEditor
+        apiBaseUrl={apiBaseUrl}
+        bearerToken={bearerToken}
+        investigationId={investigationId}
+        recipeId={view.recipeId}
+        pipeline={view.pipeline}
+        mapNodeId={view.mapNodeId}
+        onStep={(node) => setView({ at: "canvas", recipeId: view.recipeId, selectedId: node.id })}
+      />
+    );
+  }
   return (
     <PipelineEditor
+      key={view.recipeId}
       apiBaseUrl={apiBaseUrl}
       bearerToken={bearerToken}
       investigationId={investigationId}
       recipeId={view.recipeId}
+      initialSelectedId={view.selectedId ?? null}
+      username={username ?? null}
+      onChanged={onChanged}
       onHome={() => setView({ at: "home" })}
-      onOpenStage={(at) => setView({ at, recipeId: view.recipeId })}
+      onOpenMap={(pipeline, mapNodeId) => setView({ at: "map", recipeId: view.recipeId, pipeline, mapNodeId })}
     />
   );
 }
@@ -195,21 +187,28 @@ function PipelinesHome({
   );
 }
 
+
 function PipelineEditor({
   apiBaseUrl,
   bearerToken,
   investigationId,
   recipeId,
+  initialSelectedId,
+  username,
+  onChanged,
   onHome,
-  onOpenStage,
+  onOpenMap,
 }: PipelineStudioProps & {
   recipeId: string;
+  initialSelectedId: string | null;
   onHome: () => void;
-  onOpenStage: (at: "connect" | "profile" | "map" | "checks" | "verify" | "publish") => void;
+  onOpenMap: (pipeline: PipelineGraph, mapNodeId: string) => void;
 }) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
   const [pipeline, setPipeline] = useState<PipelineGraph | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
+  const [pane, setPane] = useState<DrawerPane>({ at: "node", view: "settings" });
+  const [mode, setMode] = useState<StudioMode>(() => readStudioMode(username));
   const [problems, setProblems] = useState<string[]>([]);
   const [said, setSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -264,18 +263,38 @@ function PipelineEditor({
     setPipeline(next);
     void save(next);
   };
+  const choose = (node: PipelineNode) => {
+    setSelectedId(node.id);
+    setPane({ at: "node", view: "settings" });
+  };
+  const switchMode = (next: StudioMode) => {
+    setMode(next);
+    writeStudioMode(username, next);
+  };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "var(--sp-16)", padding: "var(--sp-16)", alignItems: "start" }}>
-      <div style={{ display: "grid", gap: "var(--sp-12)", minWidth: 0 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-16)", padding: "var(--sp-16)", alignItems: "start" }}>
+      <div style={{ flex: "1 1 480px", display: "grid", gap: "var(--sp-12)", minWidth: 0 }}>
         <header style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
           <Button onClick={onHome}>Pipelines</Button>
           <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>{draft.label}</h2>
           <span className="label">{`v${draft.version} · ${statusWords(draft.status)}`}</span>
           <span style={{ flex: 1 }} />
-          <Button onClick={() => onOpenStage("checks")}>Load rules</Button>
-          <Button onClick={() => onOpenStage("verify")}>Test</Button>
-          <Button onClick={() => onOpenStage("publish")}>Deploy</Button>
+          {/* ADR-140 decision 3 and Amendment 1.3: two modes over one pipeline, guided by default, a
+              per-person preference. */}
+          <div role="group" aria-label="Mode" style={{ display: "flex", gap: "var(--sp-4)" }}>
+            <Button aria-pressed={mode === "guided"} onClick={() => switchMode("guided")}>
+              Guided
+            </Button>
+            <Button aria-pressed={mode === "expert"} onClick={() => switchMode("expert")}>
+              Expert
+            </Button>
+          </div>
+          <Button onClick={() => setPane({ at: "checks" })}>Load rules</Button>
+          <Button onClick={() => setPane({ at: "test" })}>Test</Button>
+          <Button variant="primary" onClick={() => setPane({ at: "deploy" })}>
+            Deploy
+          </Button>
         </header>
         <div role="toolbar" aria-label="Pipeline stages" style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap" }}>
           <Button disabled={busy} onClick={() => change(addSourceChain(pipeline, "New source"))}>
@@ -295,7 +314,11 @@ function PipelineEditor({
           </Button>
           <Button
             disabled={busy || !selected || selected.kind === "domain_model"}
-            onClick={() => selected && change(removeNode(pipeline, selected.id))}
+            onClick={() => {
+              if (!selected) return;
+              setSelectedId(null);
+              change(removeNode(pipeline, selected.id));
+            }}
           >
             Remove selected
           </Button>
@@ -314,273 +337,37 @@ function PipelineEditor({
             {said}
           </p>
         )}
-        <div style={{ overflow: "auto" }}>
-          <PipelineCanvas pipeline={pipeline} selectedId={selectedId} onSelect={(n) => setSelectedId(n.id)} />
-        </div>
+        {mode === "guided" ? (
+          <>
+            <GuidedSteps pipeline={pipeline} selectedId={selectedId} onSelect={choose} />
+            <div style={{ overflow: "auto" }}>
+              <PipelineCanvas pipeline={pipeline} selectedId={selectedId} onSelect={choose} readOnly />
+            </div>
+          </>
+        ) : (
+          <div style={{ overflow: "auto" }}>
+            <PipelineCanvas pipeline={pipeline} selectedId={selectedId} onSelect={choose} />
+          </div>
+        )}
       </div>
-      <aside aria-label="Stage settings" style={{ display: "grid", gap: "var(--sp-8)", alignContent: "start" }}>
-        {!selected && <p className="label">Choose a stage on the canvas to set it up.</p>}
-        {selected?.kind === "domain_model" && (
-          <DomainPanel
-            apiBaseUrl={apiBaseUrl}
-            bearerToken={bearerToken}
-            node={selected}
-            disabled={busy}
-            onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
-          />
-        )}
-        {selected?.kind === "source" &&
-          ((pipeline.nodes ?? []).find((n) => n.kind === "source")?.id === selected.id ? (
-            // The pipeline's first source carries the draft itself: its editor is the Connect
-            // gate rehosted whole (file, connector catalogue, marking, legal basis — spec 09 §2),
-            // found missing from phase B on 10 October 2026, when the start felt like naming a
-            // pipeline into a void.
-            // ADR-140 Amendment 4: the first source names a registered source, whose governance
-            // comes with it; the Connect gate's marking questions leave the pipeline.
-            <SourceChooser
-              apiBaseUrl={apiBaseUrl}
-              bearerToken={bearerToken}
-              investigationId={investigationId}
-              draft={draft}
-              disabled={busy}
-              onUsed={(updated, source) => {
-                setDraft(updated);
-                change(withNodeConfig(pipeline, selected.id, { ...(selected.config ?? {}), source_id: source.id }));
-              }}
-              onOpenDraftSettings={() => onOpenStage("connect")}
-            />
-          ) : (
-            <SourcePanel
-              draft={draft}
-              node={selected}
-              disabled={busy}
-              onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
-            />
-          ))}
-        {selected?.kind === "profile" && (
-          <StagePanel title="Profile" words="Run and read the source's profile.">
-            <Button onClick={() => onOpenStage("profile")}>Open profile</Button>
-          </StagePanel>
-        )}
-        {selected?.kind === "map" && (
-          <StagePanel title="Map" words="Bind the source's fields to the domain model.">
-            <Button onClick={() => onOpenStage("map")}>Open map editor</Button>
-          </StagePanel>
-        )}
-        {selected?.kind === "extract" && (
-          <ExtractPanel
-            node={selected}
-            disabled={busy}
-            onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
-          />
-        )}
-        {selected?.kind === "enrich" && (
-          <EnrichPanel
-            node={selected}
-            disabled={busy}
-            onApply={(config) => change(withNodeConfig(pipeline, selected.id, config))}
-          />
-        )}
-        {selected?.kind === "load" && (
-          <StagePanel title="Load" words={`Writes into this case's dataset${draft.dataset_id ? ` (${draft.dataset_id})` : ""}, idempotent and revertible by load.`} />
-        )}
-      </aside>
+      <NodeDrawer
+        apiBaseUrl={apiBaseUrl}
+        bearerToken={bearerToken}
+        investigationId={investigationId}
+        recipeId={recipeId}
+        draft={draft}
+        pipeline={pipeline}
+        node={selected}
+        pane={pane}
+        mode={mode}
+        busy={busy}
+        onPane={setPane}
+        onClose={() => (pane.at === "node" ? setSelectedId(null) : setPane({ at: "node", view: "settings" }))}
+        onChange={change}
+        onDraft={setDraft}
+        onOpenMapEditor={() => selected && onOpenMap(pipeline, selected.id)}
+        onChanged={onChanged}
+      />
     </div>
-  );
-}
-
-function StagePanel({ title, words, children }: { title: string; words: string; children?: React.ReactNode }) {
-  return (
-    <section aria-label={`${title} settings`} style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 style={{ margin: 0, fontSize: "var(--fs-13)" }}>{title}</h3>
-      <p className="label" style={{ margin: 0 }}>
-        {words}
-      </p>
-      {children}
-    </section>
-  );
-}
-
-function DomainPanel({
-  apiBaseUrl,
-  bearerToken,
-  node,
-  disabled,
-  onApply,
-}: {
-  apiBaseUrl: string;
-  bearerToken: string;
-  node: PipelineNode;
-  disabled: boolean;
-  onApply: (config: Record<string, unknown>) => void;
-}) {
-  const [packs, setPacks] = useState<DomainPackEntry[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    fetchDomainPacks(apiBaseUrl, bearerToken)
-      .then((found) => !cancelled && setPacks(found))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBaseUrl, bearerToken]);
-  const current = (node.config?.pack as string) ?? "pole";
-  return (
-    <section aria-label="Domain model settings" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 style={{ margin: 0, fontSize: "var(--fs-13)" }}>Domain model</h3>
-      <p className="label" style={{ margin: 0 }}>
-        What this pipeline's data means. The pack adds its types over the POLE core.
-      </p>
-      <div role="radiogroup" aria-label="Domain pack" style={{ display: "grid", gap: "var(--sp-4)" }}>
-        {packs.map((pack) => (
-          <label key={pack.name} style={{ display: "grid", gap: "var(--sp-2)" }}>
-            <span style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
-              <input
-                type="radio"
-                name="domain-pack"
-                checked={current === pack.name}
-                disabled={disabled}
-                onChange={() => onApply({ ...node.config, pack: pack.name })}
-              />
-              {pack.label}
-            </span>
-            {(pack.entity_types?.length ?? 0) > 0 && (
-              <span className="label" style={{ paddingLeft: "var(--sp-24)" }}>
-                {`Adds ${pack.entity_types!.join(", ")}`}
-              </span>
-            )}
-          </label>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function SourcePanel({
-  draft,
-  node,
-  disabled,
-  onApply,
-}: {
-  draft: StudioRecipeDraft;
-  node: PipelineNode;
-  disabled: boolean;
-  onApply: (config: Record<string, unknown>) => void | Promise<void>;
-}) {
-  const [connector, setConnector] = useState<string>(
-    (node.config?.connector_profile as string) ?? draft.connector_profile ?? "",
-  );
-  const [location, setLocation] = useState<string>(
-    (node.config?.source_location as string) ?? draft.source_location ?? "",
-  );
-  return (
-    <section aria-label="Source settings" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 style={{ margin: 0, fontSize: "var(--fs-13)" }}>Source</h3>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Connector profile</span>
-        <Input aria-label="Connector profile" value={connector} onChange={(e) => setConnector(e.target.value)} />
-      </label>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Source location</span>
-        <Input aria-label="Source location" value={location} onChange={(e) => setLocation(e.target.value)} />
-      </label>
-      <Button
-        disabled={disabled}
-        onClick={() =>
-          void onApply({ ...node.config, connector_profile: connector || null, source_location: location || null })
-        }
-      >
-        Apply source settings
-      </Button>
-    </section>
-  );
-}
-
-/** ADR-108 rulings Q1–Q3: the extract stage's declared settings — recogniser or model, the media
- * kind, where findings go (queue by default), and the handling override (below source needs an
- * Author and a reason; the engine enforces it in phase C, the words are honest now). */
-function ExtractPanel({
-  node,
-  disabled,
-  onApply,
-}: {
-  node: PipelineNode;
-  disabled: boolean;
-  onApply: (config: Record<string, unknown>) => void;
-}) {
-  const config = node.config ?? {};
-  const [library, setLibrary] = useState<string>((config.library as string) ?? "stanza");
-  const [media, setMedia] = useState<string>((config.media as string) ?? "text");
-  const [output, setOutput] = useState<string>((config.output as string) ?? "review_queue");
-  return (
-    <section aria-label="Extract settings" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 style={{ margin: 0, fontSize: "var(--fs-13)" }}>Extract</h3>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Library</span>
-        <Select aria-label="Extraction library" value={library} onChange={(e) => setLibrary(e.target.value)}>
-          <option value="stanza">Stanza (fast recogniser)</option>
-          <option value="spacy">spaCy (fast recogniser)</option>
-          <option value="transformers">Transformers NER (fast recogniser)</option>
-          <option value="model">The deployment's language model (deep)</option>
-          <option value="whisper">faster-whisper (audio transcription)</option>
-          <option value="vision">Qwen2-VL (image and video)</option>
-        </Select>
-      </label>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Media kind</span>
-        <Select aria-label="Media kind" value={media} onChange={(e) => setMedia(e.target.value)}>
-          <option value="text">Document (text)</option>
-          <option value="image">Image</option>
-          <option value="audio">Audio</option>
-        </Select>
-      </label>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Findings go to</span>
-        <Select aria-label="Findings go to" value={output} onChange={(e) => setOutput(e.target.value)}>
-          <option value="review_queue">The review queue (bulk accept)</option>
-          <option value="inferred_graph">The graph, as inferred — never asserted</option>
-        </Select>
-      </label>
-      <p className="label" style={{ margin: 0 }}>
-        Findings inherit the source&apos;s marking and legal basis. Marking below the source needs an
-        Author and a written reason, and the run report says so.
-      </p>
-      <Button disabled={disabled} onClick={() => onApply({ ...config, library, media, output })}>
-        Apply extract settings
-      </Button>
-    </section>
-  );
-}
-
-/** ADR-108 ruling Q5: local gazetteers first; an online provider only from the deployment's
- * allow-list, and a run that used one says so. */
-function EnrichPanel({
-  node,
-  disabled,
-  onApply,
-}: {
-  node: PipelineNode;
-  disabled: boolean;
-  onApply: (config: Record<string, unknown>) => void;
-}) {
-  const config = node.config ?? {};
-  const [geocoder, setGeocoder] = useState<string>((config.geocoder as string) ?? "local_gazetteer");
-  return (
-    <section aria-label="Enrich settings" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 style={{ margin: 0, fontSize: "var(--fs-13)" }}>Enrich</h3>
-      <p className="label" style={{ margin: 0 }}>
-        Parses unstructured addresses (deepparse) and geocodes them for the map.
-      </p>
-      <label style={{ display: "grid", gap: "var(--sp-2)" }}>
-        <span className="label">Geocode against</span>
-        <Select aria-label="Geocode against" value={geocoder} onChange={(e) => setGeocoder(e.target.value)}>
-          <option value="local_gazetteer">The loaded gazetteers (on this deployment)</option>
-          <option value="online_allowlist">An allowed online provider — disclosed per run</option>
-        </Select>
-      </label>
-      <Button disabled={disabled} onClick={() => onApply({ ...config, geocoder })}>
-        Apply enrich settings
-      </Button>
-    </section>
   );
 }

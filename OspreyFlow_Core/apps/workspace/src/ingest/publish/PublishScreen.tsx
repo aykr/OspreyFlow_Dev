@@ -54,7 +54,8 @@ export interface PublishScreenProps {
   recipeId: string | null;
   /** ADR-099 Amendment 3: the Studio works within a case, so there always is one. */
   investigationId: string;
-  onBack: () => void;
+  /** Absent when hosted in the pipeline's drawer (ADR-108 Amendment 6.1). */
+  onBack?: () => void;
   /** Fired once a recipe is chosen from the registry picker, so the host
    * (`IngestStudio`) can adopt it as the active draft — the same draft
    * Map/Verify would then also act on if the analyst switches tabs. */
@@ -338,7 +339,7 @@ export function PublishScreen({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        {mode === "deploy" && <Button onClick={onBack}>← Back</Button>}
+        {mode === "deploy" && onBack && <Button onClick={onBack}>← Back</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>
           {mode === "deploy" ? "Deploy" : "Runs and schedule"}
           {draft ? ` — ${draft.label}` : ""}

@@ -37,7 +37,8 @@ export interface VerifyScreenProps {
   investigationId: string;
   bearerToken: string;
   recipeId: string;
-  onBack: () => void;
+  /** Absent when the screen is hosted in the pipeline's drawer (ADR-108 Amendment 6.1: nothing replaces the canvas, so there is nothing to go back to). */
+  onBack?: () => void;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -145,7 +146,7 @@ export function VerifyScreen({ apiBaseUrl,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Back to the pipeline</Button>
+        {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Test{draft ? ` — ${draft.label}` : ""}</h1>
         <div style={{ flex: 1 }} />
         <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>

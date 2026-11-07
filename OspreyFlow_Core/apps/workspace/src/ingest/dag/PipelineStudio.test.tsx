@@ -12,6 +12,7 @@ vi.mock("../ProfileScreen", () => ({ ProfileScreen: () => <p>profile-screen</p> 
 vi.mock("../map/MapScreen", () => ({ MapScreen: () => <p>map-screen</p> }));
 vi.mock("../verify/VerifyScreen", () => ({ VerifyScreen: () => <p>verify-screen</p> }));
 vi.mock("../publish/PublishScreen", () => ({ PublishScreen: () => <p>publish-screen</p> }));
+vi.mock("./NodePreview", () => ({ NodePreview: () => <p>node-preview</p> }));
 
 import { PipelineStudio } from "./PipelineStudio";
 
@@ -192,4 +193,81 @@ describe("PipelineStudio", () => {
       expect(extract.config).toMatchObject({ library: "spacy", output: "inferred_graph" });
     });
   });
+
+  // --- Phase 6 (ADR-108 Amendment 6, ADR-140 decision 3): the drawer, and the two modes ----------
+
+  it("opens Test, Deploy and the Connect gate in the drawer, with the pipeline still in view", async () => {
+    serve();
+    mount();
+    await openPipeline();
+    for (const [press, shown] of [["Test", "verify-screen"], ["Deploy", "publish-screen"]] as const) {
+      fireEvent.click(screen.getByRole("button", { name: press }));
+      expect(await screen.findByText(shown)).toBeTruthy();
+      expect(screen.getByRole("group", { name: "Pipeline" })).toBeTruthy();
+      expect(within(screen.getByRole("complementary", { name: "Drawer" })).getByText(shown)).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Source: Carrier B" }));
+    fireEvent.click(await screen.findByRole("button", { name: "The draft's own settings" }));
+    expect(await screen.findByText("connect-screen")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Steps" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close the drawer" }));
+    expect(screen.queryByText("connect-screen")).toBeNull();
+  });
+
+  it("previews a node from its drawer", async () => {
+    serve();
+    mount();
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Map: Map" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Preview" }));
+    expect(await screen.findByText("node-preview")).toBeTruthy();
+  });
+
+  it("starts in guided mode: the numbered steps, and a picture of the canvas with nothing to press", async () => {
+    window.localStorage.clear();
+    serve();
+    mount();
+    await openPipeline();
+    expect(screen.getByRole("button", { name: "Guided" }).getAttribute("aria-pressed")).toBe("true");
+    const steps = within(screen.getByRole("list", { name: "Steps" })).getAllByRole("button");
+    expect(steps.map((b) => b.textContent)).toEqual([
+      "Domain model: Domain model", "Source: Carrier B", "Profile: Profile", "Map: Map", "Load: Load",
+    ]);  // prettier-ignore
+    expect(within(screen.getByRole("group", { name: "Pipeline" })).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("switches to expert mode, where the canvas is the editor, and keeps the choice for the person", async () => {
+    window.localStorage.clear();
+    serve();
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" username="engineer-1" />);
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Expert" }));
+    expect(screen.queryByRole("list", { name: "Steps" })).toBeNull();
+    expect(within(screen.getByRole("group", { name: "Pipeline" })).getAllByRole("button")).toHaveLength(5);
+    cleanup();
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" username="engineer-1" />);
+    await openPipeline();
+    expect(screen.getByRole("button", { name: "Expert" }).getAttribute("aria-pressed")).toBe("true");
+    window.localStorage.clear();
+  });
+
+  it("shows an expert step in guided mode, labelled and read-only", async () => {
+    window.localStorage.clear();
+    const withSql = {
+      nodes: [...CHAIN.nodes!, { id: "sql", kind: "sql_transform", label: "Visits per week", config: { sql: "SELECT 1" } }],
+      edges: [...CHAIN.edges!, { source: "profile", target: "sql" }],
+    } as unknown as PipelineGraph;
+    serve({ registry: [draft(withSql)] });
+    vi.mocked(fetch).mockImplementation((async (url: string) =>
+      ({ ok: true, status: 200, json: async () => (String(url).endsWith("/ingest/recipe-registry") ? [draft(withSql)] : draft(withSql)) }) as Response) as never);
+    mount();
+    await openPipeline();
+    expect(screen.getByText("Expert step, read-only here")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "SQL transform: Visits per week" }));
+    const step = await screen.findByRole("region", { name: "Expert step" });
+    expect(within(step).getByText("SELECT 1")).toBeTruthy();
+    expect(within(step).queryAllByRole("button")).toHaveLength(0);
+    expect(within(step).queryAllByRole("textbox")).toHaveLength(0);
+  });
 });
+

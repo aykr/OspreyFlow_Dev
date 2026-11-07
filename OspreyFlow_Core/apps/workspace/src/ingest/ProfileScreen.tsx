@@ -28,7 +28,8 @@ export interface ProfileScreenProps {
   investigationId: string;
   bearerToken: string;
   recipeId: string;
-  onBack: () => void;
+  /** Absent when the screen is hosted in the pipeline's drawer (ADR-108 Amendment 6.1: nothing replaces the canvas, so there is nothing to go back to). */
+  onBack?: () => void;
 }
 
 // `generate_ts.py`'s index only re-exports the interfaces, not every
@@ -184,7 +185,7 @@ export function ProfileScreen({ apiBaseUrl,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
-        <Button onClick={onBack}>← Back to the pipeline</Button>
+        {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
         <h1 style={{ fontSize: "1.1em", margin: 0 }}>
           Profile{draft ? ` — ${draft.label}` : ""}
         </h1>
