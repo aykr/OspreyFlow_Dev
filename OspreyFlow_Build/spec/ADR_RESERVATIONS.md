@@ -47,6 +47,8 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-112 Amendment 5 | The Rule author role, two more rights, and teams (the owner's records of 7 November) | orchestrator | 2026-11-07 | written |
 | ADR-142 Amendment 1 | Each session on a chosen Claude account; a lane can be paused and resumed on another (the owner's records of 7 November) | orchestrator | 2026-11-07 | written |
 | ADR-142 Amendment 2 | A merge's make ci takes no lease: it touches no stack, and the port guard refuses the leased stack to anyone not holding the lease | orchestrator | 2026-11-07 | written |
+| ADR-124 Amendment 17 | A jump to an alert whose evidence is not whole for the reader is refused exactly as a missing alert, before anything is created (rule 3; ADR-146's address test; L2.8's Q1, the orchestrator's settlement, 7 November) | glass | 2026-11-07 | reserved |
+| ADR-109 Amendment 9 | Confirming a link's new revision repoints every open alert citing the old one in the same close, and the queue checks the new revision for every reader (L2.8's Q2, the orchestrator's settlement, 7 November) | glass | 2026-11-07 | reserved |
 
 ## Baseline
 
