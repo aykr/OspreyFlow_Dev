@@ -1,32 +1,24 @@
-# glass lane · report · L2.4 part 1, Admin regrouped into sections (7 November 2026)
+# glass lane · report · L2.8, alerts withheld whole (7 November 2026; hashes as rebased on b232abf)
 
-1. **Sections: met.** Admin is a side list from `admin/sections.json`: People, Data, Running, Policies, Audit, Demo packs. Each section shows only to a holder of its right. Roles, Grading scheme, Approval rights, Uploads and Audit are "(coming)" placeholders that call nothing. Under GOV.UK the list is a GOV.UK side navigation. Each screen is its own file in `admin/sections/` (Schedules stays put: other lanes import it).
-2. **Routes refuse: met (rule 3).** `test_admin_sections.py` (25 tests):
-   - derives each section's routes from its screen and that screen's imports;
-   - holds each route to the section's right, by declared checks and over HTTP;
-   - holds the component `SCREENS` draws to the file the JSON names;
-   - finds every `/v1/admin` route some section's.
-
-   It went red with the real egress route's check removed, then naming another right, and with `SCREENS` drawing the wrong file.
-3. **Keyboard: met.** `keyboard/admin.spec.ts` (19) adds moving between sections and opening a coming one, each red with the side list's handler removed. **Ids for the registry** (please land them): `move-between-admin-sections-by-keyboard` and `open-a-coming-admin-section-by-keyboard` in `ADMIN_ACTIONS`.
-4. **Axe: met.** Dark, light and GOV.UK: the harness now applies `?brand=`, and every section is listed with a placeholder open. Full scan: 384 pass.
-5. **Other checks:**
-   - Vitest: 2640 pass, 1 fail (the Matrix budget, not ours).
-   - Keyboard, full suite: 562 pass, 1 skipped (the L2.3 screenshot case, which needs `OSPREY_L23_SHOTS`).
-   - Python: place, section, route-rights and stand-alone tests all pass.
-   - lanes-check and the citation checks are green.
-6. **Docs: met.** ADR-145 Amendment 3, `spec/02`'s Admin area, the DEMO_GUIDE and a friction row.
-7. **Questions to the owner** (settled by the orchestrator): Q1 the placeholders' rights, (a); Q2 Proposed types under Data, (a); Q3 Approval rights as a placeholder, (a).
-8. **Lane-reviewer findings and what was done:**
-   - (1) `SCREENS` was held to nothing: fixed, with a new test shown red.
-   - (2) The place test's exemptions were skipped for every section: now each skip is named per section, with its reason.
-   - (3) DEMO_GUIDE is outside the map: **please ratify.**
-   - (4) This report: written.
-   - (5) Administer_system alone now lands on Datasets, not System: recorded in Amendment 3; the place test's `ENTRY` was updated.
-   - (6) The scanner's blind spots: stated in its docstring.
-   - (7–9) A wrong count, overstated red claims and a stale citation: corrected.
-   - (11) Sub-headings: now h4.
-   - (12) Wording: "link-styled buttons".
-   - (10) Duplicated `utc` and handling-scheme reads: left; the move kept them as they were.
-9. **For the owner:** a holder of `operate_schedules` alone sees Operations, but the schedule preview (`schedule_pipelines`) refuses them. This predates the lane, is recorded in Amendment 3, and nothing was changed.
-10. **Still running:** nothing. No dev stack and no lease.
+1. **G2: met.** One check withholds an alert unless the reader can read all of it: `alerts.read_evidence` (`alerts.py:730`), with `ReadableEvidence.whole` (`:709`) and `evidence_available` (`:773`). It reads every cited node, link and transaction, one batch per kind, as the reader. Transactions go in chunks cut from the cited ids, so the reads are the same whatever is hidden: no leak by count, order or work.
+   - **Callers:** `alert_queue.monitoring_queue` and `queue` (`:105`, `:140`), and `_visible_row` (`:160`) for claim, release, dispose, approve_close, send_back, assign and the canvas.
+   - **Explanation:** `explain_with_evidence` (`:209`) reads what the check reads (f522eb9).
+   - **Parameter-only edits:** app.py's 7 read routes (6275, 6298, 9173, 9234, 9270, 9306, 9369) and 7 triage routes (9516–9686); `reports.alert_report` and `case_report` (`:174`, `:294`); `risk.neighbourhood_risk` (`:44`).
+2. **G3: met.** `alert_to_view` (`watch_routes.py:208`) withholds an alert's words with its evidence.
+   - **Where words leave the Conduit:** the queue summary, explanation, packs and inbox are checked; trend facts carry no words; the `Alert` node is fixed (7fac778); the rule audit is L2.8b.
+   - **G9: met.** `closing` counts as open on Home, the badge and the trends, and the pack sentence is fixed.
+3. **(ii) and the raise:** `_referent_handlings` (`rule_evaluation.py:464`) counts cited links. Measured live: the loader writes a link marked above its ends, never above its own transactions.
+   - **After a commit:** a cited link that can't be read raises the row with no node (`:458`, `:995`). Before, it stopped the whole day's KYC sweep with only a log line.
+   - **Other callers:** post-commit audits `rule_failed`; a schedule records its slot failed; a screening refresh drops the rule's count. Carried to L2.10.
+   - **Audit reasons:** `_raise_row` (`:971`) gives the true one of three; it said "units" for every case (3f60f6e).
+   - **In a load:** a link the load writes stands in at its own marking (`:857`, f94fdc3).
+4. **Tests:** every fix was red first; records are in `l2.8/`. Lease `glass` "L2.8 wide re-run, clean", 21:42–22:09Z.
+   - **Live reds and greens:** re-run at 21:43–21:46Z.
+   - **Wide set:** 45 files, 1,617 passed, 3 failed, and none of the 3 is lane code: main's KYC test (item 5), phase 8's 403, and the rule list (10 rules for a new case).
+   - **Fix set after the rebase:** 28 files; it agrees once the screening test's leftover list is removed.
+5. **Main's:** `test_kyc_rules`' true-positive test (13 October) expects `closed`. Since 4fd664a (ADR-133(d)) such an alert goes to `closing`. The screening tests also leave "Synthetic list" behind, which breaks a later KYC run.
+6. **Lane-reviewer:**
+   - **Fixed:** (2) f94fdc3; (6) f522eb9; (8) spec 03 and friction, f3f8988; (12) and (14) the fakes.
+   - **For L2.8b:** (1) the rule audit.
+   - **Questions:** **Q1–Q6:** (3) the jump, (5) superseded links, (9) the backfill, (8) app.py's docstring, (1) held rows' words, (4) G3 from a second case. (13) pack items are checked by nodes alone. (10) is checked at the L3.1 rebase.
+   - **Please ratify (11):** app.py, reports.py, risk.py, rule_evaluation.py and App.chrome.test.tsx. **Still running:** nothing; the stack is down and the lease released.
