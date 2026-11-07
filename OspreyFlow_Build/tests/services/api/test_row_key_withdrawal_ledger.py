@@ -185,6 +185,84 @@ async def test_another_cases_withdrawal_of_the_same_key_is_never_ours(
     assert await runs.withdrawn_row_keys_among(recipe, ours, [k1]) == set()
     assert await runs.withdrawn_row_keys_among(recipe, theirs, [k1]) == {k1}
 
+    # Ours is moved aside when our own refresh drops it: their entry never blocks the move.
+    our_refresh = new_id()
+    await runs.add_record(
+        run_id, _keyed(our_refresh, recipe, ours), withdrawn_row_keys=[k1]
+    )
+    assert await runs.kept_row_keys(recipe, ours, [k1]) == set(), "ours was moved"
+    assert await runs.withdrawn_event_ids(our_refresh) == ["v1"]
+
+
+async def test_another_cases_key_never_blocks_or_takes_a_refreshs_revert(
+    runs: RecipeRunStore,
+) -> None:
+    """Rules 3 and 4, the revert's reads: our case keeping the same key their refresh withdrew does
+    not count as "kept again" (their revert is not refused because of us, which would tell them our
+    row exists), and their revert moves their key back though ours stays kept. Red with either
+    query's `investigation_id` condition removed (`L1.2a_RED_RECORD.md`)."""
+    recipe, ours, theirs = new_id(), new_id(), new_id()
+    our_load, their_load, their_refresh = new_id(), new_id(), new_id()
+    k1 = new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(their_load, recipe, theirs), row_keys=[k1],
+                          row_elements={k1: _elements(["n1"], ["e1"], ["v9"])})  # fmt: skip
+    await runs.add_record(
+        run_id, _keyed(their_refresh, recipe, theirs), withdrawn_row_keys=[k1]
+    )
+    await runs.add_record(run_id, _keyed(our_load, recipe, ours), row_keys=[k1],
+                          row_elements={k1: _elements(["n1"], ["e1"], ["v1"])})  # fmt: skip
+
+    assert await runs.withdrawn_keys_kept_again(their_refresh) == 0
+    assert await runs.restore_withdrawn_row_keys(their_refresh) == 1
+    assert await runs.kept_row_keys(recipe, theirs, [k1]) == {k1}
+    assert await runs.kept_row_keys(recipe, ours, [k1]) == {k1}
+
+
+async def test_the_unit_files_fake_moves_keys_as_the_ledger_does(
+    runs: RecipeRunStore,
+) -> None:
+    """Rule 15's fixture rule, both ways: `test_snapshot_withdrawal.py`'s `WithdrawalLedger` stands
+    in for this store, so the same records go to both and what each then keeps and has withdrawn
+    must match. That covers a key kept, withdrawn, kept again, named withdrawn again (the guard
+    skips it), and named withdrawn though never kept (nothing moves), with no error from either."""
+    from schemas.ingest import LoadReport
+
+    from tests.ingest.test_row_keys import CASE
+    from tests.ingest.test_snapshot_withdrawal import WithdrawalLedger
+
+    recipe, k1, k2, never = new_id(), new_id(), new_id(), new_id()
+    loads = [new_id() for _ in range(4)]
+    steps: list[tuple[str, list[str], list[str]]] = [
+        (loads[0], [k1, k2], []),
+        (loads[1], [], [k1]),
+        (loads[2], [k1], []),
+        (loads[3], [], [k1, never]),
+    ]
+    fake = WithdrawalLedger()
+    run_id = await _started(runs, recipe)
+    for load, kept, withdrawn in steps:
+        elements = {
+            k: _elements([f"n-{k}"], [f"e-{k}"], [f"v-{load}-{k}"]) for k in kept
+        }
+        await runs.add_record(run_id, _keyed(load, recipe, CASE), row_keys=kept,
+                              row_elements=elements, withdrawn_row_keys=withdrawn)  # fmt: skip
+        await fake.committed(
+            LoadReport.model_construct(recipe_id=recipe, load_id=load, kept_row_keys=kept,
+                                       kept_row_elements=elements, withdrawn_row_keys=withdrawn),
+            source="cash.csv",
+        )  # fmt: skip
+
+    keys = [k1, k2, never]
+    assert await runs.kept_row_keys(recipe, CASE, keys) == await fake.kept(
+        recipe, CASE, keys
+    )
+    assert await runs.kept_row_keys(recipe, CASE, keys) == {k1, k2}
+    for load in loads:
+        assert await runs.withdrawn_event_ids(load) == await fake.withdrawn_event_ids(
+            load
+        ), load
+
 
 async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(
     runs: RecipeRunStore,
