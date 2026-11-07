@@ -16,7 +16,9 @@ What it does, in order, each step safe to run again:
 3. Gives every case that reads nothing yet its datasets: those of the seeds that loaded into it
    (their load ids name it, or it bears the seed's case name), those of what is on its canvas, and
    its parent's if it is a branch (parents first). A case with none of these gets a dataset of its
-   own, named after it, so it never reads everything or nothing by accident.
+   own, named after it, so it never reads everything or nothing by accident. Then, so a composite
+   case is known first, what was derived from stamped data joins it (a Document, an entity found in
+   one, a link between two placed ends), except what is on a composite case's canvas.
 4. Stamps what is on each case's canvas and has no dataset yet (an entity the analyst marked or
    accepted before ADR-099) with the case's first dataset. Not in a case reading a composite, which
    is read-only for now (ADR-099 Amendment 15): this writes by raw SQL, past the stamping graph,
@@ -136,8 +138,14 @@ def _flat(value: Any) -> list[str]:
 
 
 async def _set_datasets(
-    sql: _Sql, type_name: str, placed: dict[str, list[str]], *, write: bool
+    sql: _Sql,
+    type_name: str,
+    placed: dict[str, list[str]],
+    *,
+    write: bool,
+    exclude: set[str] | frozenset[str] = frozenset(),
 ) -> int:
+    placed = {k: v for k, v in placed.items() if k not in exclude}
     if not write:
         return len(placed)
     by_datasets: dict[tuple[str, ...], list[str]] = {}
@@ -152,7 +160,13 @@ async def _set_datasets(
     return len(placed)
 
 
-async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
+async def _derive(
+    sql: _Sql,
+    ontology: OntologySchema,
+    *,
+    write: bool,
+    exclude: set[str] | frozenset[str] = frozenset(),
+) -> int:
     count = 0
     unplaced = 'filter(or(hasNot("datasets"), values("datasets").unfold().count().is(0)))'
     # A Document: the datasets shared by everything linked to it.
@@ -170,7 +184,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             shared = _shared(neighbours)
             if shared:
                 placed[r["id"]] = shared
-        count += await _set_datasets(sql, document, placed, write=write)
+        count += await _set_datasets(sql, document, placed, write=write, exclude=exclude)
     # An entity found in a Document: that Document's datasets.
     node_types = [physical_type_name(t.name) for t in ontology.entity_types]
     holders: dict[str, list[str]] = {}
@@ -188,7 +202,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             found = [holders[d] for d in sources if holders.get(d)]
             if found:
                 placed[element_id] = sorted({d for ds in found for d in ds})
-        count += await _set_datasets(sql, type_name, placed, write=write)
+        count += await _set_datasets(sql, type_name, placed, write=write, exclude=exclude)
     # A link: the datasets its two ends share.
     for edge in ontology.edge_types:
         label = physical_type_name(edge.name)
@@ -203,7 +217,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             shared = _shared([_flat(r["a"]), _flat(r["b"])])
             if shared:
                 placed[r["id"]] = shared
-        count += await _set_datasets(sql, label, placed, write=write)
+        count += await _set_datasets(sql, label, placed, write=write, exclude=exclude)
     return count
 
 
@@ -343,17 +357,9 @@ async def stamp(
         report.stamped_by_source[seed.id] = total
         say(f"  {seed.name}: {total:,} elements {'stamped' if write else 'to stamp'}")
 
-    # 2a. What was derived from data joins the data it was derived from (as resolution now writes
-    # a `SAME_AS`): a Document the datasets shared by what it is linked to, an entity the Document
-    # it was found in, a link the datasets its two ends share. In that order, since each reads
-    # what the one before it placed.
-    report.derived = await _derive(sql, ontology, write=write)
-    say(
-        f"  derived from stamped data: {report.derived:,} elements "
-        f"{'stamped' if write else 'to stamp'}"
-    )
-
-    # 3 to 5, per case, parents first.
+    # 3, per case, parents first: what each reads, so a composite case is known before anything of
+    # its canvas is derived into a member (step 2a, below).
+    placed_cases: list[tuple[CaseRow, list[str], list[str], list[str], bool]] = []
     for case in _parents_first(cases):
         # What the case names (a composite as its members), never its read set: that holds the
         # case's own analyst layer, which no other case may name (ADR-143 decision 1).
@@ -416,6 +422,28 @@ async def stamp(
             d.kind == COMPOSITE for d in await datasets.chosen_of_case(case.id)
         )
 
+        placed_cases.append((case, list(held), node_ids, edge_ids, composite))
+
+    # 2a, after 3. What was derived from data joins the data it was derived from (as resolution
+    # now writes a `SAME_AS`): a Document the datasets shared by what it is linked to, an entity the
+    # Document it was found in, a link the datasets its two ends share. In that order, since each
+    # reads what the one before it placed. Not what is on a composite case's canvas: the stamping
+    # writes nothing of its into a member (ADR-099 Amendment 15), and a mark made by hand cites the
+    # member's Document it was made on.
+    in_composites = {
+        element_id
+        for _c, _h, on_nodes, on_edges, in_a_composite in placed_cases
+        if in_a_composite
+        for element_id in (*on_nodes, *on_edges)
+    }
+    report.derived = await _derive(sql, ontology, write=write, exclude=in_composites)
+    say(
+        f"  derived from stamped data: {report.derived:,} elements "
+        f"{'stamped' if write else 'to stamp'}"
+    )
+
+    # 4 and 5, per case, parents first.
+    for case, held, node_ids, edge_ids, composite in placed_cases:
         # 4. What is on the canvas and in no dataset joins the case's first.
         first = held[0]
         unplaced_here = 0

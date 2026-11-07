@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from scripts.stamp_datasets import CaseRow, StampReport, _Sql, stamp
@@ -318,9 +319,15 @@ BOTH_CASE = CaseRow("case-both", "Both", "unit-1", None)
 
 
 async def _composite_case(store: _Store, *, write: bool = True) -> tuple[StampReport, str]:
-    hand = _person("email:ev-2")  # marked by hand on the composite case's canvas, in no dataset
+    """A composite case's canvas holding a mark made by hand before ADR-099, in no dataset, on an
+    Enron email's Document, citing it as `DocumentReaderService.designate` does: the shape step 2a
+    would derive into the member."""
+    email = _person("enron-corpus").model_copy(
+        update={"type": "Document", "properties": {"title": "An Enron email"}}
+    )
+    hand = _person(email.id)
     tx = await store.graph.begin_transaction()
-    await store.graph.upsert_nodes([hand], tx)
+    await store.graph.upsert_nodes([email, hand], tx)
     await store.graph.commit_transaction(tx)
     enron_a = await store.graph.get_node(store.ids["enron_a"], EVERYONE)
     fixture = await store.graph.get_node(store.ids["fixture"], EVERYONE)
@@ -348,6 +355,24 @@ async def test_a_composite_cases_unplaced_elements_are_written_into_no_member(
     assert copies[hand].datasets == []
     assert report.unplaced_in_composite == {BOTH_CASE.id: 1}
     assert report.canvas_stamped == 0
+
+
+async def test_the_derivation_check_fails_with_it_alone_removed(
+    store: _Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: with step 2a no longer leaving a composite case's canvas out, the mark is
+    derived into the member from the Document it cites."""
+    from scripts import stamp_datasets
+
+    derive = stamp_datasets._derive  # noqa: SLF001
+
+    async def everything(*args: Any, **kwargs: Any) -> int:
+        return await derive(*args, **{**kwargs, "exclude": frozenset()})
+
+    monkeypatch.setattr(stamp_datasets, "_derive", everything)
+    _report, hand = await _composite_case(store)
+    node = await store.graph.get_node(hand, EVERYONE)
+    assert node is not None and node.datasets == ["enron"]
 
 
 async def test_a_composite_cases_unplaced_elements_are_said_in_words(store: _Store) -> None:
