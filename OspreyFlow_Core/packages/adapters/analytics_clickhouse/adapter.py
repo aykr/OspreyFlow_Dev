@@ -117,9 +117,24 @@ def _time(value: object) -> datetime:
 
 def _row_to_event(row: Sequence[Any]) -> EventRecord:
     (
-        event_id, edge_id, edge_type, source_id, target_id, occurred_at, duration_s, cell_site,
-        lat, lon, direction, properties, investigation_scope, classification, handling_code,
-        owning_unit, originator, load_id,
+        event_id,
+        edge_id,
+        edge_type,
+        source_id,
+        target_id,
+        occurred_at,
+        duration_s,
+        cell_site,
+        lat,
+        lon,
+        direction,
+        properties,
+        investigation_scope,
+        classification,
+        handling_code,
+        owning_unit,
+        originator,
+        load_id,
     ) = row
     return EventRecord(
         event_id=event_id,
@@ -194,6 +209,7 @@ _HOUR_SQL = "toInt32(toHour(occurred_at))"
 
 #: Event ids per statement when a refresh sets events aside (`withdraw_events_by_id`).
 _WITHDRAW_CHUNK = 1_000
+
 
 class AnalyticsClickHouseAdapter:
     def __init__(self, client: ClickHouseClient, handling_scheme: HandlingScheme) -> None:
@@ -344,9 +360,7 @@ class AnalyticsClickHouseAdapter:
             )
         ]
         points = [
-            TrendPoint(
-                period_start=_time(p), series=None if g is None else str(g), value=float(v)
-            )
+            TrendPoint(period_start=_time(p), series=None if g is None else str(g), value=float(v))
             for p, g, v, _, _ in rows
         ]
         return TrendResult(
@@ -749,9 +763,7 @@ class AnalyticsClickHouseAdapter:
 
     # --- event_frequency (ADR-133 decision 1, stage (b)), as the DuckDB adapter's ---------------
 
-    async def event_frequency(
-        self, req: FrequencyRequest, principal: Principal
-    ) -> FrequencyResult:
+    async def event_frequency(self, req: FrequencyRequest, principal: Principal) -> FrequencyResult:
         predicate = self._predicate(req.filter, principal)
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
@@ -811,9 +823,7 @@ class AnalyticsClickHouseAdapter:
 
     # --- account_activity (ADR-133 decision 2, stage (c)) -------------------------------------
 
-    async def account_activity(
-        self, req: ActivityRequest, principal: Principal
-    ) -> ActivityResult:
+    async def account_activity(self, req: ActivityRequest, principal: Principal) -> ActivityResult:
         window = req.filter.window
         assert window is not None and window.valid_from is not None and window.valid_to is not None
         unbounded = self._predicate(req.filter.model_copy(update={"window": None}), principal)
@@ -929,8 +939,9 @@ class AnalyticsClickHouseAdapter:
                 await self._ch.command(
                     f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
                     f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, event_id) "
-                    "AND event_id NOT IN (SELECT event_id FROM withdrawn_events)",
-                    [load_id, ids],
+                    "AND event_id NOT IN "
+                    "(SELECT event_id FROM withdrawn_events WHERE has(?, event_id))",
+                    [load_id, ids, ids],
                 )
                 await self._ch.command(
                     "ALTER TABLE events DELETE WHERE has(?, event_id)" + _SYNC, [ids]
@@ -940,18 +951,29 @@ class AnalyticsClickHouseAdapter:
 
     async def restore_withdrawn_events(self, load_id: str) -> int:
         """`AnalyticsPort.restore_withdrawn_events`: the events `load_id` set aside, copied back as
-        they were, then deleted from `withdrawn_events`; each step safe to repeat, as above."""
-        (row,) = await self._ch.rows(
-            "SELECT count() FROM withdrawn_events WHERE withdrawn_by_load = ?", [load_id]
-        )
-        moved = int(row[0])
-        if moved:
+        they were, then deleted from `withdrawn_events`; each step safe to repeat, as above. Read
+        and copied in bounded chunks, by event id: no statement grows with the events restored."""
+        moved = 0
+        after = ""
+        while True:
+            page = await self._ch.rows(
+                "SELECT DISTINCT event_id FROM withdrawn_events "
+                "WHERE withdrawn_by_load = ? AND event_id > ? ORDER BY event_id LIMIT ?",
+                [load_id, after, _WITHDRAW_CHUNK],
+            )
+            ids = [str(r[0]) for r in page]
+            if not ids:
+                break
             await self._ch.command(
                 f"INSERT INTO events ({EVENT_COLUMNS}) "
                 f"SELECT {EVENT_COLUMNS} FROM withdrawn_events "
-                "WHERE withdrawn_by_load = ? AND event_id NOT IN (SELECT event_id FROM events)",
-                [load_id],
+                "WHERE withdrawn_by_load = ? AND has(?, event_id) "
+                "AND event_id NOT IN (SELECT event_id FROM events WHERE has(?, event_id))",
+                [load_id, ids, ids],
             )
+            moved += len(ids)
+            after = ids[-1]
+        if moved:
             await self._ch.command(
                 "ALTER TABLE withdrawn_events DELETE WHERE withdrawn_by_load = ?" + _SYNC, [load_id]
             )
