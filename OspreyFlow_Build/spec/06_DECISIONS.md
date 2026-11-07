@@ -26692,17 +26692,23 @@ new link between member nodes was already the composite's alone.
   `same_as_writer._handling_for` marks one. It is `asserted`: it records that the copy was made from
   that node, not a judgement that two records match. The copy keeps the write's own provenance, so
   an `inferred` write (an accepted extraction, rule 5) makes an `inferred` copy.
+- **A correction of a member's link is refused** (the owner's ruling, 7 November 2026). A
+  correction hides the old element from every reader, and a composite cannot hide a member's
+  element from its own readers alone, so in a composite case changing a member's link
+  (`links/{edge}/change`) and replacing or removing a picture a member holds are refused, in words
+  ("correct this in a case that reads that dataset"; 409 `correct_in_member_case`), before anything
+  is stored, so no member ever changes. The composite's own links may still be corrected. Each
+  correcting service refuses as soon as it holds the link (`dataset_scope.refuse_correcting_a_member`),
+  and the stamping graph's `supersede_edge` refuses as the last word.
 - **Not covered.** A write naming a member's node the caller cannot read at all (only reachable by a
-  content-derived id; a composite has no pipelines) merges as before. A **correction** of a member's
-  element made in a composite case (`supersede_edge`: a link's change, a picture replaced) still
-  changes the member: a correction hides the old element from every reader, and a composite has no
-  way to hide a member's element from its own readers alone. The owner decides (the case lane's
-  report, 7 November 2026).
+  content-derived id; a composite has no pipelines) merges as before.
 
 Proved on ArcadeDB by `tests/conformance/graph_port/test_composite_write_to_member_node.py` (shown
 red with the check planted out; the marking) and, at the email extraction's real call site, by
 `tests/services/api/test_composite_writes_live.py` (the links and canvas name the copy; a second
-extraction adds nothing; both red before).
+extraction adds nothing; a member's picture neither replaced nor removed; each red before), and
+`tests/services/api/test_composite_corrections.py` (a member's link not changed, the composite's
+own still changeable; red before).
 
 ### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
 
