@@ -32,7 +32,7 @@ describe("the places' table", () => {
   });
 
   // The routes' own answer for every role, legacy role and right granted singly, recorded by the
-  // Conduit's place-routes test from every check each route makes: `placesFor` must agree with it.
+  // Conduit's place-routes test from the checks each route declares: `placesFor` must agree with it.
   it("offers each role exactly the places the routes answer it in", () => {
     for (const [name, { rights, places }] of Object.entries(BY_ROLE.roles)) {
       expect([name, placesFor(new Set(rights))]).toEqual([name, places]);
@@ -83,7 +83,7 @@ describe("the context banner", () => {
     expect(within(banner).getByRole("button", { name: "Case Kestrel" })).toBeTruthy();
   });
 
-  it("in the Studio names the dataset and the case it loads for; in Admin, the place alone", () => {
+  it("in the Studio names the case and leaves its dataset to the Studio's own select; in Admin, the place alone", () => {
     render(<ContextBanner place="ingest" caseSwitcher={<button type="button">Case Kestrel</button>} datasets={["Prison intel"]} />);
     // The Studio names its dataset in its own select; the banner does not repeat the case's.
     expect(screen.getByRole("region", { name: "You are in the Ingest Studio" }).textContent).not.toContain("Prison intel");

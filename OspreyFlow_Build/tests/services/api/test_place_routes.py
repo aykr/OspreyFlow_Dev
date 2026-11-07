@@ -2,17 +2,20 @@
 a person only the places their rights open, and **each hidden place's routes refuse that
 person** (rule 3: hiding a place is never the control).
 
-A route's checks are all of them (`_checks`): the right its decorator names (`require_right`), the
+A route's checks, as read here (`_checks`), are the right its decorator names (`require_right`), the
 Studio role its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a
-Studio role is a right, `_STUDIO_ROLE_RIGHT`), and the administrator role (`require_admin_role`).
-A route answers a person only if every check does, so this file refuses what the real route refuses
-(rule 15). Each route belongs to the place whose screens call it (`PLACE_RULES`), and:
+Studio role is a right, `_STUDIO_ROLE_RIGHT`), and the administrator role (`require_admin_role`). A
+check made inside a route's body (such as `_require_administrator`) is not read, so this file may
+offer a place a body check then refuses, never the reverse (rule 15). Each route belongs to the
+place whose screens call it (`PLACE_RULES`), and:
 
-1. a place is offered to whoever some route of that place answers. `shell/placesByRole.json` records
-   that for every role, legacy role and right granted singly, and the Glass's `placesFor` is held to
-   it (`shell/places.test.tsx`); `shell/places.json`'s rights are exactly the single rights that
-   open a place, and each is used by a screen of that place (read from the workspace's source);
-2. every route of a place hidden from a person refuses them over HTTP (403);
+1. a place is offered for the rights that reach its entry screen's first read (`ENTRY`; the Glass's
+   case list is everyone's, so any of its routes). `shell/placesByRole.json` records that for every
+   role, legacy role and right granted singly, and the Glass's `placesFor` is held to it
+   (`shell/places.test.tsx`); `shell/places.json`'s rights are exactly the single rights that open a
+   place, and each reaches a screen of that place (read from the workspace's source);
+2. every route of a place hidden from a person refuses them, but for routes they hold the checks of
+   (a legacy role's own Studio actions), recorded per role as `answered_hidden`;
 3. each call site in the workspace's source is among its route's places (shown red by a planted
    Admin screen importing a Studio call, `test_a_planted_call_from_another_place_is_found`).
 """
@@ -40,6 +43,7 @@ BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"^/v1/admin/screening-lists", frozenset({"glass"}), "Monitoring › Lists (alerts/api.ts)"),
     (r"^/v1/admin/", frozenset({"admin"}), "the Admin place"),
+    (r"^/v1/exports$", frozenset({"admin"}), "the export ledger, Admin's right (ADR-112 A8)"),
     (r"/ingest/recipes/\{recipe_id\}/held-rows/release$", frozenset({"glass"}),
      "Monitoring's held rows (alerts/api.ts)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
@@ -49,7 +53,8 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 
-#: Routes no place is shown from, each with its reason: they read nothing of the deployment.
+#: Routes no place is shown from, each with its reason: the catalogues and the preview read nothing
+#: of the deployment; the export ledger reads the deployment but no screen calls it yet.
 EXEMPT = {
     # Reference catalogues: any signed-in person (`test_route_rights.py` records them as `None`).
     "list_connectors": "a reference catalogue",
@@ -59,9 +64,21 @@ EXEMPT = {
     # text it is sent; Admin › Operations and the Studio's schedule editor both call it.
     "schedule_preview_route": "computes run times from the text sent; reads no store",
     # No screen calls the export ledger's route yet, so no place is shown from it; its own right,
-    # Admin's (ADR-112 A8), refuses everyone else (`test_route_rights.py`).
+    # Admin's (ADR-112 A8), refuses everyone else (`test_route_rights.py`). Exempt only while no
+    # screen calls it (`test_the_export_ledger_is_exempt_only_while_no_screen_calls_it`).
     "list_exports_route": "no screen calls it",
 }
+
+#: A place must be usable, not only answered (the orchestrator's settlement, 7 November 2026): the
+#: Studio and Admin are offered for the rights their entry screen's first read needs. The Studio's
+#: is the recipe registry (`ingest/api.ts`'s `fetchRecipeRegistry`); Admin's is the first read of
+#: whichever of its tabs the person holds a right for. The Glass's entry, the case list, is open to
+#: every signed-in person, so the Glass is offered for any right one of its routes needs.
+ENTRY = {
+    "ingest": {"list_studio_recipe_registry"},
+    "admin": {"list_people_route", "list_dashboards_route", "list_schedules_route",
+              "system_status_route", "list_link_type_proposals_route"},
+}  # fmt: skip
 
 #: What each named role is offered (ADR-145 decision 7 lists the places).
 EXPECTED_PLACES = {
@@ -109,7 +126,8 @@ def _checks_of(dependant: object) -> set[str]:
 
 
 def _checks(route: APIRoute) -> frozenset[str]:
-    """Every check the route makes, its decorator's and its signature's, nested ones included."""
+    """The checks the route declares, its decorator's and its signature's, nested ones included;
+    not one made inside its body."""
     return frozenset(_checks_of(route.dependant))
 
 
@@ -130,10 +148,26 @@ def _placed() -> list[APIRoute]:
     return [r for r in _routes() if _checks(r) and r.endpoint.__name__ not in EXEMPT]
 
 
+def _entry_routes(place: str) -> list[APIRoute]:
+    if place in ENTRY:
+        return [r for r in _routes() if r.endpoint.__name__ in ENTRY[place]]
+    return [r for r in _placed() if place in places_of(r.path)]
+
+
 def offered(roles: list[str]) -> list[str]:
-    """The places some route answers this person in, from the routes alone (not `places.json`)."""
-    found = {p for r in _placed() if _answers(r, roles) for p in places_of(r.path)}
-    return [p for p in PLACE_ORDER if p in found]
+    """The places whose entry this person's checks reach, from the routes alone (not
+    `places.json`): the Studio's and Admin's entry reads, any route of the Glass."""
+    return [p for p in PLACE_ORDER if any(_answers(r, roles) for r in _entry_routes(p))]
+
+
+def answered_hidden(roles: list[str]) -> list[str]:
+    """Routes of a place not offered to this person that still answer them, by their own checks:
+    the Studio's run routes for a `loader`, say, whose Studio is not offered because its entry
+    read needs `edit_pipelines`. Recorded per role in `placesByRole.json`, so each is seen."""
+    hidden = set(PLACE_ORDER) - set(offered(roles))
+    return sorted(
+        r.endpoint.__name__ for r in _placed() if places_of(r.path) <= hidden and _answers(r, roles)
+    )
 
 
 def _places_json() -> dict[str, frozenset[str]]:
@@ -143,7 +177,11 @@ def _places_json() -> dict[str, frozenset[str]]:
 
 def _by_role() -> dict[str, dict[str, list[str]]]:
     return {
-        name: {"rights": sorted(str(r) for r in rights_for(roles)), "places": offered(roles)}
+        name: {
+            "rights": sorted(str(r) for r in rights_for(roles)),
+            "places": offered(roles),
+            "answered_hidden": answered_hidden(roles),
+        }
         for name, roles in sorted(TOKEN_ROLES.items())
     }
 
@@ -335,7 +373,7 @@ def test_a_check_in_a_route_s_signature_is_read() -> None:
 
 
 def _openers(place: str) -> set[frozenset[str]]:
-    sets = {_checks(r) for r in _placed() if place in places_of(r.path)}
+    sets = {_checks(r) for r in _entry_routes(place)}
     return {s for s in sets if not any(o < s for o in sets)}
 
 
@@ -355,17 +393,26 @@ def test_places_json_names_exactly_the_single_rights_that_open_each_place() -> N
             assert covered, (place, sorted(combined))
 
 
-def test_each_right_a_place_claims_is_used_by_a_screen_of_that_place() -> None:
+def test_each_right_a_place_claims_reaches_a_screen_of_that_place() -> None:
     """The other direction: a right in `places.json` opens its place only if a screen of that place
-    calls a route that right alone answers, so nobody is offered an empty place."""
+    calls an entry route that right alone answers, so nobody is offered an empty place (red with a
+    `loader`'s `run_pipelines` planted in the Studio's rights)."""
     reached = screen_places(WORKSPACE_SRC)
     unused = []
     for place, rights in _places_json().items():
         for right in rights:
-            routes = [r for r in _placed() if _checks(r) == {right} and place in places_of(r.path)]
+            routes = [r for r in _entry_routes(place) if _checks(r) == {right}]
             if not any(place in _callers(r, reached) for r in routes):
                 unused.append((place, right))
     assert unused == []
+
+
+def test_the_entry_reads_are_the_places_own() -> None:
+    """A rule that names an entry read no route has, or one in another place, proves nothing."""
+    names = {r.endpoint.__name__: r for r in _routes()}
+    for place, entries in ENTRY.items():
+        for name in entries:
+            assert name in names and place in places_of(names[name].path), (place, name)
 
 
 def test_the_record_of_places_by_role_is_the_routes() -> None:
@@ -407,6 +454,15 @@ def test_an_analyst_is_refused_on_the_dataset_s_sources_routes(name: str) -> Non
     assert response.status_code == 403 and "studio role" in response.text, (name, response.text)
 
 
+def test_the_export_ledger_is_exempt_only_while_no_screen_calls_it() -> None:
+    """The day a screen calls `GET /v1/exports`, this fails: take it out of `EXEMPT`, and it is an
+    Admin route like the others (the legacy `compliance` role, holding its right alone, is then
+    offered Admin, or the screen's place)."""
+    route = next(r for r in _routes() if r.endpoint.__name__ == "list_exports_route")
+    assert places_of(route.path) == {"admin"}
+    assert _callers(route, screen_places(WORKSPACE_SRC)) == set()
+
+
 def test_the_schedule_preview_reads_no_store() -> None:
     """Why it is exempt: its only dependencies are who is asking and their right, and the body."""
     route = next(r for r in _routes() if r.endpoint.__name__ == "schedule_preview_route")
@@ -424,16 +480,39 @@ def test_the_schedule_preview_reads_no_store() -> None:
     assert _checks(route) == {"schedule_pipelines"}
 
 
-def test_a_schedule_an_administrator_owns_still_runs() -> None:
-    """`scheduler.py`'s run check refuses a schedule whose owner lacks `schedule_pipelines`; an
-    administrator keeps it, so a schedule they own passes that check."""
-    import inspect
+def test_a_schedule_an_administrator_owns_still_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`scheduler.py`'s own run check (`ScheduleExecutor._owner`) refuses a schedule whose owner
+    lacks `schedule_pipelines`: an administrator's schedule passes it, an analyst's is refused."""
+    import asyncio
+    from types import SimpleNamespace
 
     from services.api import scheduler
 
-    source = inspect.getsource(scheduler)
-    assert "Right.SCHEDULE_PIPELINES not in rights_for(owner.roles)" in source
-    assert Right.SCHEDULE_PIPELINES in rights_for(["osprey-admin"])
+    monkeypatch.setattr(scheduler, "resolve_source_handling", lambda recipe: None)
+    monkeypatch.setattr(scheduler, "principal_may_view", lambda handling, owner, scheme: True)
+    people = {
+        who: Principal(id=who, clearance="SECRET", org_unit="unit-1", roles=[role])
+        for who, role in (("adm-1", "osprey-admin"), ("ana-1", "analyst"))
+    }
+    executor = object.__new__(scheduler.ScheduleExecutor)
+
+    async def resolve(owner_id: str) -> Principal:
+        return people[owner_id]
+
+    async def check_case(owner: Principal, case: str) -> Principal:
+        return owner
+
+    executor._resolve = resolve  # type: ignore[method-assign]
+    executor.check_case = check_case
+    executor.scheme = None  # type: ignore[assignment]
+
+    def run(owner: str) -> object:
+        recipe = SimpleNamespace(schedule_owner=owner, schedule_case="case-1")
+        return asyncio.run(executor._owner(recipe))  # type: ignore[arg-type]
+
+    assert run("adm-1")[0].id == "adm-1"  # type: ignore[index]
+    with pytest.raises(scheduler._Refused, match="schedule_pipelines"):
+        run("ana-1")
 
 
 def _path(route: APIRoute) -> str:
@@ -445,16 +524,18 @@ def _path(route: APIRoute) -> str:
 
 @pytest.mark.parametrize("role", sorted(TOKEN_ROLES))
 def test_every_route_of_a_hidden_place_refuses_the_role(role: str) -> None:
-    """Every check a route makes (`_checks`) refuses this person on each route of each place hidden
-    from them. And over HTTP, without the stores, none of those routes answers them: a check's 403,
+    """The checks (`_checks`) of each route of each place hidden from this person refuse them, but
+    for the routes recorded as `answered_hidden`. And over HTTP, without the stores, none of those
+    routes answers them: a check's 403,
     or a 404 or 500 where a store or a case is reached before the checks, but never a success. A
     case's or a dataset's lookup cannot stand in for the checks: the dataset is given as reached."""
     from services.api.app import app, get_principal, require_studio_dataset
 
     roles = TOKEN_ROLES[role]
     hidden = set(PLACE_ORDER) - set(offered(roles))
-    routes = [r for r in _placed() if places_of(r.path) <= hidden]
-    assert [r.endpoint.__name__ for r in routes if _answers(r, roles)] == []
+    recorded = set(json.loads(BY_ROLE_JSON.read_text())["roles"][role]["answered_hidden"])
+    routes = [r for r in _placed() if places_of(r.path) <= hidden and not _answers(r, roles)]
+    assert set(answered_hidden(roles)) == recorded, "placesByRole.json is out of date"
     who = Principal(id=f"place-{role}", clearance="SECRET", org_unit="unit-1", roles=roles)
     answered: list[tuple[str, int]] = []
     refused_by_a_check = 0

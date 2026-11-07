@@ -21,7 +21,7 @@
       "key": "i",
       "sections": ["1 Model", "2 Sources", "3 Pipelines", "4 Runs"],
       "rights": [
-        "edit_pipelines", "publish_pipelines", "run_pipelines", "verify_pipelines"
+        "edit_pipelines"
       ]
     },
     {
