@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **Corrected, 11:20:** the 'Re-home the routes' question rested on wrong facts. The first glass review missed that each Studio route also checks a Studio role, and I passed its reading on unverified. So Analysts never could upload or read sources, and Administrators only previewed schedules. Your corrected ruling: no route moves place; places follow the routes' full checks; only the run history narrows, to `run_pipelines`. ADR-145 Amendment 1 is to be rewritten to the true facts before merge. The lesson: I check a reviewer's access claims against the code before they become a question for you.
+
 - **My judgement, 11:05, under your delegation:** dev-up's ports stay as they are. Moving ArcadeDB off 2480 would have pointed the demo guide's reset (`drop database`), the hand-run Conduit and `seed_paysim` at your deployment, because they default to `localhost:2480`. The leased stack is now the throwaway test stack the lanes already used, and the lease checks it.
 
 - **main's fast test tier** (`ci.yml`'s `test` job, not `make ci`) has three real failures from phase 4's withdrawal: `test_revert_elements_by_type` and `test_write_onto_a_reverted_node` (SQL expectations), and `test_unfiltered_node_lookup_confined` (`snapshot_withdrawal.py` calls `live_edges_touching`). Your ruling: studio fixes them as L1.2a, after L1.2. Two more fail on this machine only: `test_deployment_schema` (your local `osprey.yaml`) and `test_layout` (`graphify-out` at the root).
