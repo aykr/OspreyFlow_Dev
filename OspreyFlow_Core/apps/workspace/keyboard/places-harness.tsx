@@ -2,8 +2,10 @@
 // frame, the real `TopBar` with the real `PlaceSwitcher` (inside the GOV.UK header under `?brand=govuk`),
 // the real `ContextBanner` with the Glass's sections and its cross-link, and the real Admin place,
 // wired as `App.tsx` wires them — the view to come back to through the same `useLastGlassView`. `?rights=`
-// gives the person's rights. The case and the view are state here, changed by keyboard, so a cross-link
-// that lost either would show it; what was chosen is on `window.__PLACES__`.
+// gives the person's rights. The open case is the real module's (`investigation/investigationId.ts`),
+// and choosing another is the real `openCase`, which reloads the page as the Glass does (here, back
+// into this harness with `?investigation=` and `?view=`), so a cross-link that lost the case or the
+// view across that reload would show it; what was chosen is on `window.__PLACES__`.
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -17,6 +19,8 @@ import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
+import { openCase } from "../src/investigation/cases";
+import { initialInvestigationId } from "../src/investigation/investigationId";
 import { placesFor, type PlaceId } from "../src/shell/places";
 import { TopBar } from "../src/shell/TopBar";
 
@@ -26,6 +30,8 @@ declare global {
   }
 }
 window.__PLACES__ = { chosen: [], crossed: [] };
+// A walkthrough starts in a fresh tab; a reload inside it (`openCase`) keeps the tab's storage.
+if (!new URLSearchParams(location.search).has("investigation")) sessionStorage.clear();
 
 // The Admin place's reads answer empty: nothing here is under test but its frame (rule 9: synthetic).
 window.fetch = async () => new Response("[]", { status: 200 });
@@ -34,16 +40,26 @@ const brand = await applyHarnessBrand();
 const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
-const CASES = { kestrel: "Kestrel", harrier: "Harrier" } as const;
-type CaseId = keyof typeof CASES;
+const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
 type View = "graph" | "map" | "alerts" | "ingest";
 
 function Harness() {
-  const start = (params.get("place") as PlaceId | null) ?? places[0] ?? "glass";
+  const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : "graph");
-  const [caseId, setCaseId] = useState<CaseId>("kestrel");
-  const lastGlassView = useLastGlassView(view, "ingest", "graph");
+  const caseId = initialInvestigationId() ?? "kestrel";
+  const lastGlassView = useLastGlassView(view, "ingest", "graph", ["graph", "map", "alerts"] as const);
+  // The real `openCase`, its reload kept inside the harness.
+  const reopen = (id: string) =>
+    openCase(id, view === "ingest" ? "ingest" : undefined, (url) => {
+      const next = new URLSearchParams(new URL(url, location.href).search);
+      const here = new URLSearchParams(location.search);
+      here.set("investigation", next.get("investigation") ?? id);
+      here.delete("place");
+      if (next.get("view")) here.set("view", next.get("view")!);
+      else here.delete("view");
+      location.assign(`${location.pathname}?${here}`);
+    });
   const place: PlaceId = admin ? "admin" : view === "ingest" ? "ingest" : "glass";
   const choose = (to: PlaceId) => {
     window.__PLACES__!.chosen.push(to);
@@ -52,8 +68,8 @@ function Harness() {
     else if (to === "glass" && view === "ingest") setView(lastGlassView());
   };
   const caseMenu = (
-    <button type="button" className="btn" onClick={() => setCaseId(caseId === "kestrel" ? "harrier" : "kestrel")}>
-      Case: {CASES[caseId]}
+    <button type="button" className="btn" onClick={() => reopen(caseId === "kestrel" ? "harrier" : "kestrel")}>
+      Case: {CASES[caseId] ?? caseId}
     </button>
   );
   return (
@@ -81,8 +97,8 @@ function Harness() {
             : []
         }
         caseSwitcher={place === "admin" ? undefined : caseMenu}
-        datasets={place === "admin" ? null : ["Prison intel"]}
-        crossLink={crossLinkFor(place, places, CASES[caseId], ["Prison intel"], {
+        datasets={place === "glass" ? ["Prison intel"] : null}
+        crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
           toStudio: () => {
             window.__PLACES__!.crossed.push("to-studio");
             setView("ingest");

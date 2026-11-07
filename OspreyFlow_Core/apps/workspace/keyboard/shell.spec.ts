@@ -162,18 +162,19 @@ test("the banner's cross-link goes to the Studio and back to the same case and v
   await page.goto("/keyboard/places-harness.html?rights=investigate,edit_pipelines");
   await page.getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
+  await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
   await page.getByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("region", { name: "You are in the Ingest Studio" })).toContainText("Dataset Prison intel");
+  await expect(page.getByText("ingest, ingest, on case kestrel")).toBeVisible();
+  // Another case, chosen in the Studio: the real `openCase`, which reloads the page.
+  await page.getByRole("button", { name: "Case: Kestrel" }).focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByText("ingest, ingest, on case harrier")).toBeVisible();
   await page.getByRole("button", { name: "← Back to case Harrier in the Glass" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "You are in the Glass" })).toBeVisible();
   await expect(page.getByText("glass, map, on case harrier")).toBeVisible();
-  expect(await page.evaluate(() => window.__PLACES__?.crossed)).toEqual(["to-studio", "to-glass"]);
+  expect(await page.evaluate(() => window.__PLACES__?.crossed)).toEqual(["to-glass"]);
   registerCovered(REGISTRY, "banner-cross-link-by-keyboard");
 });
 

@@ -29,8 +29,9 @@ const HARNESS_ONLY: Record<string, string[]> = {
 };
 
 // States a harness draws only when asked, scanned as well as its default. The start page as an
-// analyst (no Studio or Admin right) draws those two panels gated: the live audit of 1 November 2026
-// found their text at 4.25:1 there, which the default (an administrator, nothing gated) never drew.
+// analyst (no Studio or Admin right): since ADR-145 N6 (ADR-115 Amendment 6) it draws one card, the
+// Glass's, where it once drew the other two gated (the live audit of 1 November 2026 found their text
+// at 4.25:1); the state is kept so Home with a single card is scanned too.
 const EXTRA_STATES: Record<string, string[]> = {
   "start-harness.html": ["rights=investigate"],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
