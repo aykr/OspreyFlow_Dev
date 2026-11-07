@@ -409,9 +409,12 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
-    link to the originating investigation." Two referents, one made unreadable before the jump —
-    the task's own question ("what happens when a referent became unreadable between the alert
-    firing and the jump") answered as a partial success, not a silent drop nor a hard failure."""
+    link to the originating investigation." The task's own question ("what happens when a referent
+    became unreadable between the alert firing and the jump") was answered as a partial success
+    (ADR-124 decision 1) until L2.8: an alert whose evidence the jumper cannot wholly read is now
+    refused exactly as a missing alert, making no case (ADR-146 decision 10's address test, the
+    orchestrator's Q1), since the readable referents are the entities the hidden one ties
+    together. An alert whose every referent is readable branches and seeds them all."""
     private_key, _ = keypair
     headers = _bearer(private_key)
 
@@ -441,9 +444,21 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
             created_at=datetime.now(UTC),
         )
         asyncio.run(_write_alert(alert))
+        readable_only = alert.model_copy(update={"id": new_id(), "referent_node_ids": [readable_node_id]})
+        asyncio.run(_write_alert(readable_only))
+
+        refused = client.post(
+            f"/v1/investigations/{origin_investigation_id}/alerts/{alert.id}/jump", headers=headers
+        )
+        missing = client.post(
+            f"/v1/investigations/{origin_investigation_id}/alerts/{new_id()}/jump", headers=headers
+        )
+        assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+        assert refused.status_code == 404
 
         jumped = client.post(
-            f"/v1/investigations/{origin_investigation_id}/alerts/{alert.id}/jump", headers=headers
+            f"/v1/investigations/{origin_investigation_id}/alerts/{readable_only.id}/jump",
+            headers=headers,
         )
         assert jumped.status_code == 201, jumped.text
         result = jumped.json()
