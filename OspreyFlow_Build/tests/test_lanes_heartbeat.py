@@ -259,3 +259,14 @@ def test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners(hb
     assert _needs(show) == ["studio is blocked: a real block: the fixture repository is gone"]
     mine = show.stdout.split("FOR THE ORCHESTRATOR")[1]
     assert "glass is waiting for the lease: L2.8: waiting for the glass lease" in mine
+
+
+def test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats(hb) -> None:
+    """Found 7 November 2026, 23:40: glass beat waiting-for-owner while it waited only for the lease,
+    which the orchestrator passes; the owner was shown it under Needs you."""
+    _all_beat(hb)
+    assert hb("beat", "glass", "waiting-for-owner", "round 1 fixes in; waiting for the glass lease for the live reds").returncode == 0
+    assert hb("beat", "case", "waiting-for-owner", "Q1: which of a, b or c?").returncode == 0
+    show = hb("show")
+    assert _needs(show) == ["case is waiting for you: Q1: which of a, b or c?"]
+    assert "glass is waiting for the lease: round 1 fixes in" in show.stdout.split("FOR THE ORCHESTRATOR")[1]

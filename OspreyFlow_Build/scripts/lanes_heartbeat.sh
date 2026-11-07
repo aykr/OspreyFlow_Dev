@@ -110,7 +110,11 @@ show() {
           if [ "$(mins "$a")" -ge "$QUIET_MIN" ]; then
             echo "$lane has been quiet since $at while $state" >> "$needs"
           fi ;;
-        waiting-for-owner) echo "$lane is waiting for you: $note" >> "$needs" ;;
+        waiting-for-owner)
+          case "$note" in
+            *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
+            *) echo "$lane is waiting for you: $note" >> "$needs" ;;
+          esac ;;
         blocked)
           case "$note" in
             *"lease"*) echo "$lane is waiting for the lease: $note" >> "$mine" ;;   # the orchestrator passes it
