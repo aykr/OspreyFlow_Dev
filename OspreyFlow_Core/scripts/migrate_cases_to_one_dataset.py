@@ -224,10 +224,13 @@ async def migrate(
                 report.kept_their_own_layer.append(label)
     if report.kept_their_own_layer:
         count = len(report.kept_their_own_layer)
+        one = count == 1
         say(
-            f"  {count:,} existing {'case' if count == 1 else 'cases'} made from another case "
-            "keep an empty layer of their own, because a branch can't be told from an alert jump; "
-            "L3.2 retires them: " + ", ".join(report.kept_their_own_layer)
+            f"  {count:,} existing {'case' if one else 'cases'} made from another case "
+            + ("keeps an empty layer of its own" if one else "keep an empty layer of their own")
+            + ", because a branch can't be told from an alert jump; L3.2 retires "
+            + ("it: " if one else "them: ")
+            + ", ".join(report.kept_their_own_layer)
         )
     for line in report.unplaced:
         say(f"  not placed: {line}")

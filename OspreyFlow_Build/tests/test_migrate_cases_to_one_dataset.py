@@ -222,8 +222,8 @@ async def test_a_case_made_from_another_before_l3_1_keeps_an_empty_layer_of_its_
     assert await store.ids_of_case("branch") == ["enron", branch]
     assert await store.read_only_layer_of("branch") is None
     (said,) = [line for line in lines if "made from another case" in line]
-    assert said.strip().startswith("1 existing case made from another case keep")
-    assert "Branch of Enron (branch)" in said and "L3.2 retires them" in said
+    assert said.strip().startswith("1 existing case made from another case keeps an empty layer")
+    assert "Branch of Enron (branch)" in said and "L3.2 retires it" in said
 
 
 async def test_the_migrated_case_check_fails_with_a_branchs_link_swapped_in(
