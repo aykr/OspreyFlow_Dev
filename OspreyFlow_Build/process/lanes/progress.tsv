@@ -21,6 +21,7 @@ glass	L2.5	L	todo	People and roles; custom roles; Disable; Rule author, teams, l
 glass	L2.6	M	todo	Operations' promotions and ageing; Audit
 glass	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	building	Alerts: G2, G3 and G9 fixed (access first)
+glass	L2.8b	S	todo	The rule audit's words withheld by links and transactions too
 glass	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
 glass	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
 glass	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
