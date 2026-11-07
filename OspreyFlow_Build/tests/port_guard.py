@@ -87,6 +87,33 @@ PINNED = (
 )
 
 
+#: The leased throwaway test stack's ports (ADR-142 decision 4; SESSIONS_RUNBOOK.md §4). A test reaches
+#: them only from the lane named in the lease, given as OSPREY_LANE: three rule-14 breaches on
+#: 7 November 2026 came from tests a lane believed were stack-free.
+LEASED_PORTS: dict[int, str] = {
+    2491: "ArcadeDB (the leased test stack)",
+    55433: "Postgres (the leased test stack)",
+    6379: "Valkey (the leased test stack)",
+}
+
+
+class LeaseNotHeld(ConnectionRefusedError):
+    """A connection to the leased test stack from a lane that doesn't hold the lease. A connection
+    error on purpose: a test then sees the stack as absent and skips, as when the stack is down."""
+
+
+def lease_holder(environ: Mapping[str, str]) -> str | None:
+    lease = os.path.join(environ.get("OSPREY_LEASE_DIR", os.path.expanduser("~/.ospreyflow")), "stack.lease", "info")
+    try:
+        with open(lease, encoding="utf-8") as info:
+            for line in info:
+                if line.startswith("holder="):
+                    return line.strip().split("=", 1)[1] or None
+    except OSError:
+        return None
+    return None
+
+
 class LivePortRefused(RuntimeError):
     """A connection to a live port on this machine, refused before it was made. Not an `OSError`,
     so no client treats it as an unavailable store and skips quietly."""
@@ -161,6 +188,19 @@ def guard_socket(sock_cls: type[socket.socket] = socket.socket) -> Callable[[], 
     original_connect_ex = sock_cls.connect_ex
 
     def check(address: Any) -> None:
+        if isinstance(address, tuple) and len(address) >= 2 and address[1] in LEASED_PORTS:
+            host = address[0]
+            if isinstance(host, str) and _is_this_machine(host) and not in_ci(os.environ):
+                lane = os.environ.get("OSPREY_LANE") or None
+                holder = lease_holder(os.environ)
+                if lane is None or holder != lane:
+                    raise LeaseNotHeld(
+                        f"Refused before connecting: {host}:{address[1]} is "
+                        f"{LEASED_PORTS[address[1]]}, and the lease is held by {holder or 'nobody'}, "
+                        f"not {lane or 'this run (OSPREY_LANE is not set)'}. Take the lease first "
+                        "(OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> \"<purpose>\") and "
+                        "run with OSPREY_LANE=<lane>."
+                    )
         port = _address_is_live(address)
         if port is not None:
             raise LivePortRefused(

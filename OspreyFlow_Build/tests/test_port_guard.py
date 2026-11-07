@@ -171,3 +171,57 @@ def test_every_live_port_set_in_the_environment_is_named() -> None:
 def test_a_remote_host_on_the_same_port_is_not_this_machine() -> None:
     remote = {"ARCADEDB_HTTP_PORT": "2480", "ARCADEDB_HOST": "arcadedb.ci.internal"}
     assert live_settings(remote) == []
+
+
+import pytest  # noqa: E402  (the file above is a planted test text, not this module's imports)
+
+
+class _RecordingSocket:
+    """Stands in for `socket.socket`: records what it was asked to connect to and never connects."""
+
+    asked: list[object] = []
+
+    def connect(self, address: object) -> None:
+        type(self).asked.append(address)
+
+    def connect_ex(self, address: object) -> int:
+        type(self).asked.append(address)
+        return 0
+
+
+def _hold_lease(lease_dir: Path, holder: str) -> None:
+    (lease_dir / "stack.lease").mkdir(parents=True)
+    (lease_dir / "stack.lease" / "info").write_text(f"holder={holder}\npurpose=x\nsince=x\nworktree=x\n")
+
+
+@pytest.mark.parametrize(
+    ("holder", "lane", "allowed"),
+    [(None, "case", False), ("studio", "case", False), ("studio", None, False), ("case", "case", True)],
+)
+def test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, holder: str | None, lane: str | None, allowed: bool
+) -> None:
+    """ADR-142 decision 4 and rule 14, made mechanical: a connection to the throwaway stack's ports on
+    this machine goes ahead only for the lane named in the lease. Refused, it is a connection error,
+    so a test sees the stack as absent and skips, exactly as when the stack is down."""
+    from tests import port_guard
+
+    monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    if lane is None:
+        monkeypatch.delenv("OSPREY_LANE", raising=False)
+    else:
+        monkeypatch.setenv("OSPREY_LANE", lane)
+    if holder is not None:
+        _hold_lease(tmp_path, holder)
+    _RecordingSocket.asked = []
+    restore = port_guard.guard_socket(_RecordingSocket)  # type: ignore[arg-type]
+    try:
+        for port in (2491, 55433, 6379):
+            if allowed:
+                _RecordingSocket().connect(("127.0.0.1", port))
+            else:
+                with pytest.raises(ConnectionRefusedError, match="lease"):
+                    _RecordingSocket().connect(("127.0.0.1", port))
+    finally:
+        restore()
+    assert len(_RecordingSocket.asked) == (3 if allowed else 0)

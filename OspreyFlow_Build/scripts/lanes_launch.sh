@@ -68,6 +68,7 @@ open_tab() {
 cd "$dir"
 printf '\\033]0;OspreyFlow · %s\\007' "$lane"
 export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
+export OSPREY_LANE="$lane"
 $CLAUDE_CMD --model "$model" "\$(cat "$pf")"
 EOF
   osascript -e "tell application \"Terminal\" to do script \"source '$start'\"" -e 'tell application "Terminal" to activate' >/dev/null

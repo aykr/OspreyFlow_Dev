@@ -101,6 +101,11 @@ fifth for the heartbeat monitor (§5).
 
 ## 4. The dev stack: one at a time
 
+**The lease is enforced (7 November 2026, after three breaches):** `tests/port_guard.py` refuses a connection to the
+leased stack's ports (2491, 55433, 6379) unless `OSPREY_LANE` names the lease's holder. The refusal is a connection
+error, so a test without the lease sees the stack as absent. The launcher sets `OSPREY_LANE` for each lane; set it
+yourself in any other shell (`export OSPREY_LANE=studio`).
+
 **The leased stack is the throwaway test stack** (the orchestrator's judgement of 7 November 2026, under
 the owner's delegation; it supersedes the ruling to move dev-up's ports). `make dev-up` publishes ArcadeDB on
 2480, which the owner's deployment holds, and the demo guide and several scripts (`seed_paysim`,
