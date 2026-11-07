@@ -167,3 +167,75 @@ async def test_extracting_the_same_email_again_adds_nothing() -> None:
         reader = await scope_to_case(ANALYST, CASE, store)
         assert await adapter.type_counts(reader) == counted
         set_case_datasets(None)
+
+
+# --- a correction of a member's link is refused in a composite case (Amendment 15) -------------
+
+
+async def test_a_members_picture_is_neither_replaced_nor_removed_in_a_composite_case() -> None:
+    """The owner's ruling (7 November 2026): replacing or removing a picture whose link a member
+    holds is refused in the composite case, in words, before any file is stored, so the member's
+    picture is exactly as it was. Set first in a case reading the member."""
+    import pytest
+    from services.api.dataset_scope import CorrectionInCompositeError
+    from services.api.entity_pictures import EntityPictureService
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+    from schemas.domain import Handling, NodeWrite, Provenance, ProvenanceState, SourceRef
+
+    store = await _composite_case()
+    store.cases["member-case"] = [MEMBER]
+    handling = Handling(
+        classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
+    )
+    car = NodeWrite(
+        id="car-1",
+        type="Vehicle",
+        properties={},
+        provenance=Provenance(
+            state=ProvenanceState.ASSERTED,
+            sources=[SourceRef(document_id="d", locator="l", excerpt_hash="")],
+            first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+        handling=handling,
+        created_by="seed",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        datasets=[MEMBER],
+    )
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
+        tx = await adapter.begin_transaction()
+        await adapter.upsert_nodes([car], tx)
+        await adapter.commit_transaction(tx)
+        graph = stamping(adapter, scheme=load_uk_le_scheme())
+        working = FakeWorkingSetStore()
+        held_car = (await adapter.get_node("car-1", MEMBER_ONLY)).model_copy()  # type: ignore[union-attr]
+        for case in ("member-case", CASE):
+            await working.add_nodes(case, [held_car])
+        media = InMemoryMediaStore()
+        service = EntityPictureService(
+            WorkingSetService(graph, working, SCHEME),
+            graph,
+            media,
+            load_default_ontology(),
+            scheme=load_uk_le_scheme(),
+        )
+        png = b"\x89PNG\r\n\x1a\n" + b"synthetic car"
+        in_member = await scope_to_case(ANALYST, "member-case", store)
+        await service.set(
+            "member-case", "car-1", in_member, name="car.png", data=png, handling=handling
+        )
+        set_case_datasets(None)
+        stored = len(media.files)
+        before = await service.pictures("member-case", ["car-1"], MEMBER_ONLY)
+
+        in_composite = await scope_to_case(ANALYST, CASE, store)
+        with pytest.raises(CorrectionInCompositeError, match="correct this in a case that reads"):
+            await service.set(
+                CASE, "car-1", in_composite, name="car-side.png", data=png + b"2", handling=handling
+            )
+        with pytest.raises(CorrectionInCompositeError):
+            await service.remove(CASE, "car-1", in_composite)
+        set_case_datasets(None)
+
+        assert await service.pictures("member-case", ["car-1"], MEMBER_ONLY) == before
+        assert len(media.files) == stored  # no file stored for the refused one

@@ -76,6 +76,17 @@ def composite_copy_id(composite: str, member_node: str) -> str:
     return f"{member_node}@{composite}"
 
 
+class CorrectionInCompositeError(Exception):
+    """ADR-099 Amendment 15 (the owner, 7 November 2026): a correction of a member's element made
+    in a case reading a composite. Refused, so no member changes."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This belongs to a dataset the composite reads; correct this in a case that reads "
+            "that dataset."
+        )
+
+
 class NoAnalystLayerError(Exception):
     """An analyst's own write with no case's layer to write into: outside a case, or in a case
     that reads nothing. Refused, never written into a source (ADR-143 Amendment 1 item 3)."""
@@ -138,6 +149,22 @@ def with_the_layer(principal: Principal) -> Principal:
     if held is None or principal.datasets is None or list(held) == list(principal.datasets):
         return principal
     return principal.model_copy(update={"datasets": list(held)})
+
+
+async def refuse_correcting_a_member(datasets: Sequence[str]) -> None:
+    """ADR-099 Amendment 15 (the owner, 7 November 2026): in a case reading a composite, an element
+    of one of its members (and not of the composite itself) is not corrected, so no member
+    changes. Called by a correcting writer as soon as it holds the element, before it stores
+    anything, and by the stamping graph's `supersede_edge` as the last word."""
+    scope = _CASE_SCOPE.get()
+    if scope is None:
+        return
+    investigation_id, store, _principal = scope
+    chosen = await store.chosen_of_case(investigation_id)
+    if len(chosen) != 1 or chosen[0].kind != COMPOSITE or chosen[0].id in datasets:
+        return
+    if set(datasets) & set(chosen[0].members):
+        raise CorrectionInCompositeError
 
 
 async def scope_to_case(
@@ -398,6 +425,10 @@ class DatasetStampingGraph:
         return new_id
 
     async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any) -> str:
+        scope = _CASE_SCOPE.get()
+        if scope is not None and self._dataset is None:
+            for old in await self._inner.get_edges([edge_id], scope[2]):
+                await refuse_correcting_a_member(old.datasets)
         new_id = await self._inner.supersede_edge(edge_id, replacement, tx)
         await self._written()
         return new_id
@@ -466,6 +497,8 @@ __all__: Sequence[str] = (
     "scope_to_case",
     "analyst_layer",
     "analyst_writes_into",
+    "CorrectionInCompositeError",
+    "refuse_correcting_a_member",
     "with_the_layer",
     "composite_copy_id",
     "redirected",

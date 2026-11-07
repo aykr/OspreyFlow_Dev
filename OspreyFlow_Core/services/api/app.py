@@ -380,6 +380,7 @@ from .compute_routes import (
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .dataset_scope import (
+    CorrectionInCompositeError,
     NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
@@ -2351,6 +2352,17 @@ async def _unknown_dataset_handler(request: Request, exc: UnknownDatasetError) -
             "detail": f"No dataset {', '.join(exc.dataset_ids)} is registered; "
             "nothing was written.",
         },
+    )
+
+
+@app.exception_handler(CorrectionInCompositeError)
+async def _correction_in_composite_handler(
+    request: Request, exc: CorrectionInCompositeError
+) -> JSONResponse:
+    """ADR-099 Amendment 15 (the owner, 7 November 2026): a member's link is not corrected in a case
+    reading a composite; nothing was written."""
+    return JSONResponse(
+        status_code=409, content={"error": "correct_in_member_case", "detail": str(exc)}
     )
 
 
