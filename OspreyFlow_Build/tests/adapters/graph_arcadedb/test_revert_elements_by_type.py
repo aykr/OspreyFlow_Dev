@@ -30,7 +30,12 @@ from ports.graph import AmbiguousElementId, StoredLink, StoredNode
 
 _IDS = re.compile(r"SELECT id FROM `(\w+)` WHERE id IN :ids")
 _RID = re.compile(r"SELECT @rid AS rid FROM `(\w+)` WHERE id IN :ids")
-_UPDATE = re.compile(r"UPDATE `(\w+)` SET reverted = true WHERE id IN :ids")
+_UPDATE = re.compile(
+    # ADR-110 Amendment 6 point 3: reverting the load that made an element also clears
+    # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
+    # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
+    r"UPDATE `(\w+)` SET reverted = true, withdrawn_by_load = null WHERE id IN :ids"
+)
 _LOADS = re.compile(
     r"SELECT id, audit\.load_id AS load_id, reverted, superseded_by FROM `(\w+)` WHERE id IN :ids"
 )

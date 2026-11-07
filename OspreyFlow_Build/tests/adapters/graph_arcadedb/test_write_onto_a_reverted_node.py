@@ -31,7 +31,12 @@ _IDS = re.compile(
     r"SELECT id FROM `(\w+)` WHERE id IN :ids"
     r"( AND \(reverted = false OR reverted IS NULL OR superseded_by IS NOT NULL\))?"
 )
-_REVERT = re.compile(r"UPDATE `(\w+)` SET reverted = true WHERE id IN :ids")
+_REVERT = re.compile(
+    # ADR-110 Amendment 6 point 3: reverting the load that made an element also clears
+    # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
+    # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
+    r"UPDATE `(\w+)` SET reverted = true, withdrawn_by_load = null WHERE id IN :ids"
+)
 
 
 class NodeStore:
