@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **18:00, first push.** `make ci` fully green; `main` pushed to `origin` at `03a3dae`, and `git ls-remote` matches (PUSH_LOG.md). Merged since the last note: glass L2.3 (variant B, `d4fe5e5`) and the CI wiring (`03a3dae`, your diffs, applied by me on your word). **My calls while you were away:** glass's three L2.4 questions (placeholders' rights; Proposed types under Data; Approval rights a placeholder), all as recommended. Case's records that aren't dataset content keep working in a composite case. Studio adds event ids (A), with the schema as a shared commit first. I ended studio's exhausted session and opened a fresh one.
+
 - **Stopped at the orchestrator's usage limit (about 13:20).** Merged to local main since the last note: studio's Part 0 (`f00afec`) and glass's L2.2 (`fd38da4`). make ci is red only on `test-file-coverage-check`, which waits for your diff, studio's `L1.2a_ci_makefile.diff`. It supersedes L1.1's; apply one, not both. Open:
   - **Case L3.1:** your ruling "Composites read-only for now" has been sent. Case rewrites L3.1 to refuse every non-layer write in a composite case, then needs a review and yours.
   - **Studio Part A (`b875c5d`):** not merged. The review found that a link's withdrawal still depends on other cases' rows (`edges_created` differs when a row comes back; the live links and their events differ). That needs your ruling: withdraw only the dropped rows' events and leave every graph element (recommended), or record the residue. Also the case half of `only_this_pipeline` was never shown red, the live test's plants aren't real, and the reds aren't on record. Part B is to start in a fresh studio session.
