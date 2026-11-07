@@ -383,33 +383,39 @@ This replaces "there is no application switch" (ADR-097 step 1), which this sect
 
 **The places.** *The Glass* (analysis: Case · Boards · Monitoring; *Boards* arrives with Lane 3's
 board screens), *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. One
-table, `apps/workspace/src/shell/places.json`, names them and the rights that open each; a place is
-offered to whoever holds any one of its rights, and nobody else. Every signed-in person reaches the
-same sign-in; Home is no place, and lists the same places as cards (*Home*, under §3.3).
+table, `apps/workspace/src/shell/places.json`, names them and the single rights that open each; a place
+is offered to whoever holds any one of them, and nobody else. While the rights are not yet known, or
+cannot be read, no place is offered, and Home says the rights could not be read. Every signed-in
+person reaches the same sign-in; Home is no place, and lists the same places as cards (*Home*, under
+§3.3). A hand-off from the launcher (`?view=ingest|admin`, §2.2) is only a wish: it opens that place
+only if the rights open it, else Home or the Glass's landing view; Admin, a place of its own, opens
+outside the case even with one open.
 
-**Hiding is never the control (rule 3).** A place's rights are exactly the rights its own routes need,
-so a place hidden from a person is one whose every route refuses them. The test is the Conduit's
-place-routes test (`test_place_routes.py`, in the build tree): it assigns every Conduit route to the place
-whose screens call it (a route two places call, such as the schedule preview used by the Studio and by
-Admin › Operations, is named with both; `/v1/admin/screening-lists` is the Glass's, called by Monitoring
-› Lists), checks `places.json` against the routes' rights, and calls every route of each hidden place
-as each built-in role and the *Super user* preset, expecting `403 right_required`. It was shown red with
-one Admin route's and one Studio route's `require_right` removed.
+**Hiding is never the control (rule 3).** A place is offered to whoever one of its own routes answers,
+reading **every check a route makes**: the right its decorator names (`require_right`), the Studio role
+its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a Studio role is a
+right), and the administrator role (`require_admin_role`). So a place hidden from a person is one whose
+every route refuses them. The Conduit's place-routes test (`test_place_routes.py`, in the build tree)
+assigns every route to the place whose screens call it (`/v1/admin/screening-lists` is the Glass's,
+called by Monitoring › Lists); records what the routes answer each role, legacy role and right granted
+singly (`shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
+names exactly the single rights that open each place and that a screen of that place uses each; checks
+every call site the workspace's source names against its route's places; and calls every route of each
+hidden place, which must not answer. Exempt, with their reasons there: the reference catalogues, which
+any signed-in person may read (as `test_route_rights.py`, the route-rights test, records them), the
+schedule preview, which computes run times from the text sent and reads no store, and the export
+ledger's route, which no screen calls.
 
-What each role is offered (the owner's ruling of 7 November 2026, "Re-home the routes": no role
-loses a right, ADR-145 Amendment 1): an **Analyst** the Glass; a **Data Engineer** the Glass, the Studio
-and Admin (Admin › Operations, its `operate_schedules` and `schedule_pipelines`); an **Administrator**
-Admin and the Glass (the case list, for an orphaned case's sharing and removal, the rule audit,
-link-strength influencers and the export ledger); a **Reports Viewer** the Glass; the **Super user**
-all three. The routes that crossed were re-homed, not the roles: the analyst's upload
-(`…/ingest/source-files`, ADR-067) answers as a Glass route; the schedule preview, a pipeline's
-schedule with its pause and resume, and a source's refresh pause and resume answer as Admin routes as
-well as the Studio's; the Studio's other routes need a Studio right — its dataset sources, connections
-and folder listing `edit_pipelines` (no longer `add_ingest_files`), its run history `run_pipelines` (no
-longer `read_data_feeds`; the Glass's *Data feeds* keeps its own route). The test also signs in as each
-legacy role and each right granted singly, and checks every call site the workspace's source names
-against its route's places. While the rights are not yet known, or cannot be read, no place is
-offered.
+What each role is offered (the owner's ruling of 7 November 2026; ADR-145 Amendment 1): an
+**Analyst** the Glass; a **Data Engineer** the Glass, the Studio and Admin (Admin › Operations, its
+`operate_schedules`); an **Administrator** Admin and the Glass (the case list, for an orphaned case's
+sharing and removal, the rule audit, link-strength influencers); a **Reports Viewer** the Glass; the
+**Super user** all three. No route moved place and no role lost a right. One route's right changed:
+the Studio's pipeline-run history (`GET …/ingest/recipes/{id}/runs`) needs `run_pipelines` where it
+needed `read_data_feeds`, so Analysts and Reports Viewers are no longer answered on a Studio route no
+screen of theirs calls (the Glass's *Data feeds* keeps its own route). The Studio's dataset, upload,
+schedule and refresh routes already asked for a Studio role besides their right, so they never
+answered an Analyst or an Administrator.
 
 **The switcher.** In the top bar after the mark, one button per place in the table's order, the current
 one `aria-current="page"`. Choosing Admin leaves the case for the Admin place (it needs none); choosing
@@ -425,26 +431,30 @@ under the OspreyFlow brand, its controls 32), a region named by its first words:
 - in the Glass: "You are in the Glass · Case · Boards · Monitoring · ‹case menu› · reads ‹the case's
   datasets›", the sections a navigation named *In the Glass* (*Case* the case's views, *Monitoring* the
   Monitoring place, *Boards* drawn as "Boards (coming)", `aria-disabled`, until Lane 3 builds it);
-- in the Studio: "You are in the Ingest Studio · Dataset ‹the case's dataset› · for ‹case menu›";
+- in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Admin: "You are in Admin".
 
-The datasets are the case's, as `GET /v1/investigations/{id}/datasets` answers this reader. Not drawn:
-decision 2's "Dataset ‹name› ▾" choice in the Studio (the Studio's screens hold no dataset of their own
-yet; the banner names the case's), and its "feeds n cases". No route gives a dataset's cases as the reader may see
-them, and a count over cases they cannot see would break rule 7; it waits for that route. A person
+The datasets are the case's, as `GET /v1/investigations/{id}/datasets` answers this reader. Not drawn
+in the Studio: decision 2's "Dataset ‹name› ▾" — the Studio chooses its dataset itself, in its own
+*Dataset* select, and naming it in the banner needs a hook in the Studio's screens (Lane 1's) — and that
+dataset's "feeds n cases": no route gives a dataset's cases as the reader may see them, and a count
+over cases they cannot see would break rule 7. A person
 holding both the Glass and the Studio gets the **cross-link**: *Open ‹dataset› in the Ingest Studio ↗*
-in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the same case
-and the view last open (this replaces the Studio rail's *Back to the investigation*). Under the GOV.UK
+in the Glass, and *← Back to case ‹name› in the Glass* in the Studio, which returns to the open case
+and the Glass's view last open (this replaces the Studio rail's *Back to the investigation*). Choosing
+another case in the Studio reloads the page; the view to return to is kept in the tab's session
+storage, so *Back* still returns to it (`shell/placeMemory.ts`). Under the GOV.UK
 brand the banner is a GOV.UK notification banner, its title the place: 91 pixels tall at 1440 wide,
 title and one line, taken from the workspace's height.
 
 **Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). Its tabs are as
 before, each behind its right, with **Proposed types** (`manage_ontology`) among them: it left the
-Glass's rail, and is decided here until the Studio's Model tab holds it (ADR-145 A2).
+Glass's rail, and is decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090
+Amendment 5). Its routes ask for the administrator role as well as `manage_ontology`.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
-banner's cross-link and Home's cards end to end, each shown red with its handler removed (rule 13);
-the banner's sections are proved too; `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
+banner's cross-link (through the real case module and a reload), its sections and Home's cards end to
+end, each shown red with its handler or the kept view removed (rule 13); `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
 in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec

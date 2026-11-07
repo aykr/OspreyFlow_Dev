@@ -394,8 +394,10 @@ PYTHONPATH=.:packages .venv/bin/python3 -m tools.mint_dev_token \
   --roles analyst,source_author,source_approver,loader
 ```
 
-A rendered deployment's own `--demo-analyst` subject already holds all four (`harness/realm.py`),
-so this step is only for the hand-run stack.
+A rendered deployment's demo analyst, `osprey-demo-analyst`, holds the Analyst role alone
+(`harness/realm.py`; ADR-113 decision 8 took its Data Engineer role away), so it is not offered the
+Studio (ADR-145): on a rendered deployment sign in as `osprey-demo-engineer` for this, and on the
+hand-run stack mint the token above.
 
 Then, from the Glass: **Ingest Studio** in the place switcher (in the top bar, after the mark; inside
 the GOV.UK header under that brand — since 7 November 2026 it is no longer on the rail, ADR-145)
@@ -751,9 +753,11 @@ types* left the rail too: it is a tab of Admin. The Studio has no rail; a line u
 where you are ("You are in the Glass · Case … · reads …"), and for an account holding both the Glass
 and the Studio it carries the way across, *Open … in the Ingest Studio ↗* and *← Back to case … in the
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
-*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. No role lost a right: the
-routes were re-homed instead (ADR-145 Amendment 1), so each account is offered exactly the places in the
-table below, and a place it is not offered refuses it.
+*Case · Boards · Monitoring*; *Boards* says "(coming)" and does nothing yet. Each account is offered
+exactly the places its rights open (table below; ADR-145 Amendment 1), read from every check the
+places' routes make, and a place it is not offered refuses it. No role lost a right; the Studio's
+pipeline-run history now needs a pipeline right, so the analyst and the report viewer, who had no
+screen for it, are no longer answered there.
 
 | Account | Role | What it shows | Password variable |
 | --- | --- | --- | --- |
