@@ -117,12 +117,15 @@ class Stores:
     def __init__(self) -> None:
         self.saved: list[Any] = []
         self.said: list[str] = []
+        self.withheld_because: list[str] = []
 
     async def save(self, alert: Any, *, handlings: Any = None) -> None:
         self.saved.append(alert)
 
     async def record(self, **kwargs: Any) -> None:
         self.said.append(str(kwargs.get("action")))
+        if kwargs.get("action") == "alert_node_withheld":
+            self.withheld_because.append(str(kwargs["resolved_query"]["reason"]))
 
     async def sismember(self, *_: Any) -> bool:
         return False
@@ -171,3 +174,45 @@ async def test_after_a_commit_an_unreadable_referent_node_still_raises_as_today(
     with pytest.raises(RuntimeError):
         await gate.raise_committed(_sweep_finding(gate, [], ["cust-gone"]))
     assert stores.saved == []
+
+
+# ---- why a node was withheld, said in the audit as it is -----------------------------------------
+#
+# `_raise_row` said "its referents' restricted markings belong to different units" for every alert
+# raised without its node, true only of the first of these three. Red with that fixed string: the
+# unseen referent and the unreadable link were each said to be a units conflict.
+
+
+async def test_a_units_conflict_is_said_as_one() -> None:
+    restricted = {u: Handling(classification="OFFICIAL", handling_code="R", originator=u, owning_unit=u)
+                  for u in ("unit-1", "unit-2")}  # fmt: skip
+    graph, stores = TxGraph({"cust-1": restricted["unit-1"], "cust-2": restricted["unit-2"]}, {}), Stores()
+    gate = _sweep_gate(graph, stores)
+    alert = await gate.raise_committed(_sweep_finding(gate, [], ["cust-1", "cust-2"]))
+    assert alert.alert_node_id is None
+    assert stores.withheld_because == ["its referents' restricted markings belong to different units"]
+
+
+async def test_an_unreadable_cited_link_is_said_as_one() -> None:
+    graph, stores = TxGraph({"cust-1": _handling()}, {}), Stores()
+    gate = _sweep_gate(graph, stores)
+    await gate.raise_committed(_sweep_finding(gate, ["e-reverted"], ["cust-1"]))
+    (said,) = stores.withheld_because
+    assert said.startswith("a link it cites could not be read") and "different units" not in said
+
+
+async def test_a_referent_unseen_in_the_load_is_said_as_one() -> None:
+    """The load path: a referent whose marking cannot be read in the load's transaction, and no
+    highest marking given to stand in (`unseen`), is withheld as unseen, and said so when raised."""
+    from services.api.rule_evaluation import PreCommitVerdict, RuleWrites
+
+    graph, stores = TxGraph({}, {}), Stores()
+    gate = _sweep_gate(graph, stores)
+    finding = _sweep_finding(gate, [], ["cust-not-yet-readable"])
+    node_id, why = await gate._alert_node_in_load(
+        finding, "tx", unseen=None, load_id="load-1", known={}, writes=RuleWrites()
+    )
+    assert (node_id, why) == (None, "unseen_referent")
+    await gate.after_commit(PreCommitVerdict(findings=[(finding, None)], withheld={0: why}))
+    (said,) = stores.withheld_because
+    assert said.startswith("the marking of something it names could not be read") and "different units" not in said

@@ -33,6 +33,7 @@ import hashlib
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from services.ingest.typologies import (
     MoneyFlow,
@@ -441,6 +442,19 @@ async def judge(
     ]
 
 
+#: Why an alert was raised without its `Alert` node, one per path that withholds it (ADR-146
+#: decision 10): its referents restricted for different units (no single safe marking); a referent
+#: whose marking could not be read in the load; a cited link that could not be read.
+NodeWithheld = Literal["units", "unseen_referent", "unreadable_link"]
+WITHHELD_WORDS: dict[str, str] = {
+    "units": "its referents' restricted markings belong to different units",
+    "unseen_referent": "the marking of something it names could not be read, so no node was "
+    "written rather than one marked by a guess",
+    "unreadable_link": "a link it cites could not be read (taken back or replaced since it was "
+    "found), so no node was written rather than one marked by a guess",
+}
+
+
 class UnreadableAlertLink(RuntimeError):
     """A link an alert cites whose marking cannot be read (reverted or superseded since the
     finding was judged): its node is withheld rather than marked by a guess, wherever the alert is
@@ -616,6 +630,8 @@ class PreCommitVerdict:
     """What the case's pre-commit rules decided about one load, before its commit."""
 
     findings: list[tuple[Finding, str | None]] = field(default_factory=list)
+    #: Why each finding raised with no node was withheld, by its place in `findings`.
+    withheld: dict[int, NodeWithheld] = field(default_factory=dict)
     #: Rows a failing rule could not judge, by original row number, with the failing rule and why.
     hold: dict[int, tuple[TypologyRule, str]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
@@ -894,28 +910,45 @@ class RuleGate:
                     )
                 continue
             for finding in fresh:
-                try:
-                    node_id = await write_alert_node(
-                        self.graph,
-                        self.scheme,
-                        finding,
-                        tx,
-                        unseen=unseen,
-                        load_id=load_id,
-                        known=known,
-                        writes=verdict.writes,
-                    )
-                except RuntimeError:
-                    # A referent's marking cannot be known: no node rather than a guessed one.
-                    node_id = None
+                node_id, why = await self._alert_node_in_load(
+                    finding, tx, unseen=unseen, load_id=load_id, known=known, writes=verdict.writes
+                )
+                if why is not None:
+                    verdict.withheld[len(verdict.findings)] = why
                 verdict.findings.append((finding, node_id))
             if fresh:
                 verdict.notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
         return verdict
 
+    async def _alert_node_in_load(
+        self,
+        finding: Finding,
+        tx: TxId,
+        *,
+        unseen: Handling | None,
+        load_id: str | None,
+        known: Mapping[str, Handling],
+        writes: RuleWrites,
+    ) -> tuple[str | None, NodeWithheld | None]:
+        """The finding's `Alert` node in the load's transaction, or why there is none."""
+        try:
+            node_id = await write_alert_node(
+                self.graph, self.scheme, finding, tx, unseen=unseen, load_id=load_id, known=known,
+                writes=writes,
+            )  # fmt: skip
+        except UnreadableAlertLink:
+            return None, "unreadable_link"
+        except RuntimeError:
+            # A referent's marking cannot be known: no node rather than a guessed one.
+            return None, "unseen_referent"
+        return node_id, ("units" if node_id is None else None)
+
     async def after_commit(self, verdict: PreCommitVerdict) -> list[Alert]:
         """The queue rows for what `pre_commit` wrote into the committed graph."""
-        return [await self._raise_row(f, node_id) for f, node_id in verdict.findings]
+        return [
+            await self._raise_row(f, node_id, withheld=verdict.withheld.get(i))
+            for i, (f, node_id) in enumerate(verdict.findings)
+        ]
 
     async def _rests_on(self, finding: Finding, node_id: str | None) -> list[Handling] | None:
         """Every handling the alert rests on — its entities, its own node, the links and the
@@ -933,7 +966,9 @@ class RuleGate:
             *(e.handling for e in finding.events),
         ]
 
-    async def _raise_row(self, finding: Finding, node_id: str | None) -> Alert:
+    async def _raise_row(
+        self, finding: Finding, node_id: str | None, *, withheld: NodeWithheld | None = None
+    ) -> Alert:
         alert = alert_row(finding, node_id, self.investigation_id)
         await self.alert_store.save(alert, handlings=await self._rests_on(finding, node_id))
         await self._remember(finding)
@@ -951,7 +986,7 @@ class RuleGate:
             await self._audit(
                 "alert_node_withheld",
                 {"rule_id": finding.rule.id, "alert_id": alert.id, "node_ids": finding.node_ids,
-                 "reason": "its referents' restricted markings belong to different units"},
+                 "reason": WITHHELD_WORDS[withheld] if withheld else "no reason was recorded"},
             )
         return alert
 
@@ -975,12 +1010,14 @@ class RuleGate:
             # row still raised (the queue's full check withholds it from anyone who may not see its
             # evidence), so one reverted link never stops a sweep. A node still stops the raise.
             await self.graph.rollback_transaction(tx)
-            return await self._raise_row(finding, None)
+            return await self._raise_row(finding, None, withheld="unreadable_link")
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise
         await self.graph.commit_transaction(tx)
-        return await self._raise_row(finding, node_id)
+        return await self._raise_row(
+            finding, node_id, withheld="units" if node_id is None else None
+        )
 
     async def seen(self, finding: Finding) -> bool:
         return await self._seen(finding)
