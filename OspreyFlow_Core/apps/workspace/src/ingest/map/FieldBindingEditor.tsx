@@ -9,6 +9,7 @@ import { Button } from "../../design/primitives/Button";
 import { Checkbox } from "../../design/primitives/Checkbox";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
+import { useChosenColumn } from "./chosenColumn";
 import { arityForTransform } from "./rowTemplate";
 
 export interface FieldBindingEditorProps {
@@ -20,6 +21,8 @@ export interface FieldBindingEditorProps {
   /** ADR-127 Amendment 15: offer "optional" (leave the property out when its cell is empty). Only
    * a property's binding has a property to leave out: a time binding does not. */
   allowOptional?: boolean;
+  /** What this binding binds, for the keyboard bind's button name ("Bind caller here: name"). */
+  target?: string;
 }
 
 type Kind = "field" | "literal" | "map";
@@ -37,7 +40,9 @@ export function FieldBindingEditor({
   onChange,
   onRemove,
   allowOptional = false,
+  target,
 }: FieldBindingEditorProps) {
+  const chosen = useChosenColumn();
   const kind = kindOf(binding);
   const arity = arityForTransform(transforms, binding.transform);
   const fields = binding.fields ?? (binding.field ? [binding.field] : []);
@@ -74,6 +79,14 @@ export function FieldBindingEditor({
     }
   }
 
+  // Spec 09 §4's "select both, Enter": the column chosen in the Source fields pane, bound here.
+  const bindable = chosen.column !== null && sourceFieldNames.includes(chosen.column) && kind !== "literal";
+  function bindChosen() {
+    if (!bindable || chosen.column === null) return;
+    setFieldAt(0, chosen.column);
+    chosen.clear();
+  }
+
   function handleDrop(e: DragEvent) {
     const dropped = e.dataTransfer.getData("text/x-osprey-field");
     if (!dropped || !sourceFieldNames.includes(dropped)) return;
@@ -93,6 +106,15 @@ export function FieldBindingEditor({
           <option value="literal">Literal</option>
           <option value="map">Value map</option>
         </Select>
+        {bindable && (
+          <Button
+            variant="primary"
+            onClick={bindChosen}
+            aria-label={target ? `Bind ${chosen.column} here: ${target}` : `Bind ${chosen.column} here`}
+          >
+            {`Bind ${chosen.column} here`}
+          </Button>
+        )}
         {onRemove && (
           <Button onClick={onRemove} aria-label="Remove property">
             ✕

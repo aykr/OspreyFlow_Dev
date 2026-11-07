@@ -22,6 +22,9 @@ export interface SourceFieldsPanelProps {
   /** Which registered source the pipeline reads, in words (ADR-140 Amendment 6); the fields are
    * still the pipeline's own profile. `null`: nothing to say (no dataset, or still reading). */
   readsFrom?: string | null;
+  /** Spec 09 §4's keyboard bind: the column chosen to bind, and choosing or letting one go. */
+  chosenColumn?: string | null;
+  onChooseColumn?: (column: string | null) => void;
 }
 
 export function SourceFieldsPanel({
@@ -34,6 +37,8 @@ export function SourceFieldsPanel({
   onIgnoreField,
   onUnignoreField,
   readsFrom = null,
+  chosenColumn = null,
+  onChooseColumn,
 }: SourceFieldsPanelProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16, 16px)", height: "100%", overflow: "auto" }}>
@@ -44,28 +49,43 @@ export function SourceFieldsPanel({
               {readsFrom}
             </p>
           )}
+          {chosenColumn && (
+            <p role="status" style={{ margin: 0 }}>
+              {`${chosenColumn} is chosen: press “Bind ${chosenColumn} here” on a binding in the inspector.`}
+            </p>
+          )}
           {columns.map((column) => {
             const bound = boundFieldNames.has(column.name);
             const ignored = ignoredNotes.has(column.name);
+            const isChosen = chosenColumn === column.name;
             return (
               <div
                 key={column.name}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/x-osprey-field", column.name)}
                 style={{
-                  border: "1px solid var(--border-subtle)",
+                  border: isChosen ? "2px solid var(--border-strong)" : "1px solid var(--border-subtle)",
                   borderRadius: "var(--r-panel)",
                   padding: "var(--sp-8)",
-                  opacity: bound || ignored ? 0.6 : 1,
+                  opacity: (bound || ignored) && !isChosen ? 0.6 : 1,
                   cursor: "grab",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
                   <strong>{column.name}</strong>
                   <span style={{ color: "var(--text-tertiary)" }}>
                     {column.inferred_type} ({percent(column.type_confidence)})
                   </span>
                 </div>
+                {onChooseColumn && (
+                  <Button
+                    aria-pressed={isChosen}
+                    aria-label={isChosen ? `Let go column ${column.name}` : `Choose column ${column.name}`}
+                    onClick={() => onChooseColumn(isChosen ? null : column.name)}
+                  >
+                    {isChosen ? "Let go" : "Choose"}
+                  </Button>
+                )}
                 <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em", color: "var(--text-secondary)" }}>
                   {sampleRow?.values[column.name] ?? column.sample_values?.[0] ?? ""}
                 </div>
