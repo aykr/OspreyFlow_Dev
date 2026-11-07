@@ -106,6 +106,10 @@ Also asked by the lanes:
 
 ## Notes
 
+- **For you to rule when back (studio):** under "Only the rows' events", a dropped row that comes back merges into its own old link, so three loads can't be reverted (ADR-127 decision 6). For now this is recorded as a known limit (my call). The options: **A** (recommended), count a returning row's merge into its own withdrawn key's link as the row's own, so its load reverts (step L1.2c); **B**, keep it as a limit; **C**, a returning row writes a new link (the pair shows twice until a revert).
+- **A possible rule-3 leak on main, found by studio:** a Studio load stamps no dataset, and two cases' rows on the same pair merge into one link, whose occurrence count then includes the other case's. Studio proves it after Part A, and fixes it as Part A2 if it's real.
+- **The monitor's NEEDS YOU** now holds only what needs you (`f594705`/`237898f`); merge-ready and behind-main items are listed for me and never notified.
+
 - **18:10, case L3.1's final review: not merged** (your go-ahead was conditional on it passing). Eight fixes sent, all my calls within your read-only ruling: a composite case's leftover canvas items are reported as unplaced, never written into a member; monitors keep working, with a composite case's alert nodes going into its layer; schedules and runs on a composite are refused before anything is written; the corrections' last word closed; a red companion per check; the Postgres composite check tested on Postgres; a migration rehearsal on a seeded throwaway stack.
 - **A risk for you:** running `scripts.migrate_cases_to_one_dataset` makes every case that names several datasets a read-only composite case, your own deployment's included (no loading, extraction or confirming there until composite writing is designed). Case's rehearsal will list which seeded cases that hits.
 - **Studio's shared schema commit** (RowElements.event_ids) is on main, with make ci green.

@@ -4,6 +4,7 @@
 studio	L1.1	S	done	Phase 4's remainder: make ci green
 studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	building	Pipelines seen only by cases that load into the dataset (after L3.1); main's four red tests
+studio	L1.2c	S	todo	Revert a load whose returning row merged into its own link (pending the owner)
 studio	L1.2b	M	todo	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
 studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine
 studio	L1.4	M	todo	Phase 7b: the drawers for each step
