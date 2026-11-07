@@ -26625,10 +26625,15 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    (`dataset_scope.analyst_layer`); the two writers in item 1 name it on what they write. Every other
    write names no dataset and is stamped with the case's first, exactly as before (ADR-099 Amendment
    14 for a composite). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
-   reached) is given one when a request is scoped to it, and item 1's data goes there: it never
-   falls back to the source (the owner's ruling of 7 November 2026 on the L3.1 review's finding 7).
-   A branch reads and writes its parent case's layer and has none of its own (the owner's ruling on
-   finding 8), so what the analyst drew and branched with is still read in the branch.
+   reached) is given one by the writer of item 1's data, inside the route and so only after its
+   level check (never when a request is merely scoped, which comes first and writes nothing), and
+   the data goes there: it never falls back to the source (the owner's ruling of 7 November 2026 on
+   the L3.1 review's finding 7). With no case's layer to go into (outside a case, or a case reading
+   nothing) the write is refused and nothing is written (`dataset_scope.NoAnalystLayerError`, 409
+   `no_analyst_layer`). Every branch, and every case opened from an alert, has an empty layer of
+   its own and never reads its parent's, which its maker may hold no level on (the owner, 09:25,
+   7 November 2026, withdrawing the earlier ruling on finding 8). Branches are removed altogether
+   in the next builds, so no further branch design is made here.
 4. **What is not moved:** marks and links written before this amendment stay in the dataset they were
    written in. Moving them would be a load-shaped change to a dataset other cases read, and is not
    done silently; it waits for its own decision if one is wanted.
@@ -26641,7 +26646,8 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    `NOT_SAME_AS` under its service principal; a split only in a layer is its case's own decision,
    kept by that case's projection, and does not stop a `SAME_AS` in the source that every other
    case reads (`services/resolve/trigger.honoured_splits`; the layers come from the dataset store,
-   a required argument of the run).
+   a required argument of the run). The conflict is still recorded, on that split and so in that
+   layer, for that case's review alone (ADR-025 Amendment 1).
 
 Proved by `tests/services/api/test_case_writes.py` (each writer and each accept path at its real call
 site, under a principal scoped by `scope_to_case`; the branch through the branch route),
@@ -26652,8 +26658,9 @@ the same unit) and `tests/resolve/test_trigger_layers.py` (item 6, ArcadeDB).
 
 Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026). Decision 6 reads: "Data
 added to a case joins its dataset; for a case reading a composite, the composite's own id." A
-composite's members are never written by a case reading the composite, so no case reading only a
-member sees what the composite case added. The read set (`DatasetStore.ids_of_case`) lists a
+composite's members are never written by a case reading the composite: a write naming a node already
+in a member becomes a new node of the composite (Amendment 15), so no case reading only a member sees
+what the composite case added. The read set (`DatasetStore.ids_of_case`) lists a
 composite's own id **first**, then its members, then the case's layer; the first is what every writer
 naming no dataset is stamped with (the stamping graph, `dataset_scope.made_in` for records made in the
 case, and `scripts.stamp_datasets` for records placed afterwards), and what the Studio's dataset reach
@@ -26661,12 +26668,33 @@ case, and `scripts.stamp_datasets` for records placed afterwards), and what the 
 Amendment 1). Amendment 12 item 4 (entity resolution across members writing into the composite) is
 unchanged and still to be built. Proved by `test_a_composite_cases_write_lands_under_the_composite_id`.
 
-**Open, for the owner (the L3.1 review's finding 5).** A write under the composite's id to an element
-already in a member is merged into that element: its `datasets` gain the composite's id, and its
-properties become the latest write's, so a case reading only the member sees the changed properties.
-A new link between member nodes is not seen there. Measured on ArcadeDB by
-`tests/conformance/graph_port/test_composite_write_to_member_node.py`, whose first case is
-`xfail(strict=True)` until the owner rules.
+### ADR-099, Amendment 15 (7 November 2026) — a composite case's write to a node already in a member becomes a new node in the composite, linked by SAME_AS; no member changes
+
+Status: accepted; the owner's ruling on the L3.1 review's finding 5 (7 November 2026). The review
+measured that a write under the composite's id naming an element already in a member was merged into
+that element (its properties become the latest write's), so a case reading only the member saw the
+change. Now such a write is written as a **new** node of the composite, with a `SAME_AS` (score 1.0,
+asserted, in the composite) from it to the member's node; the member's node is not written (rule 6:
+entities are never merged in storage). It is decided in the Conduit's write path, the stamping graph
+(`DatasetStampingGraph._kept_from_members`), asked as the request's own principal (the composite and
+its members, under its handling), so the answer tells the caller nothing it cannot already read. A
+new link between member nodes was already the composite's alone. Not covered: a write naming a
+member's node the caller cannot read at all (only reachable by a content-derived id, and a composite
+has no pipelines) merges as before. Proved on ArcadeDB by
+`tests/conformance/graph_port/test_composite_write_to_member_node.py`, shown red with the check
+planted out.
+
+### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
+
+Status: accepted; the owner's ruling (7 November 2026). ADR-143 Amendment 1 puts an analyst's manual
+`NOT_SAME_AS` in their case's analyst layer. The corpus-wide run (this ADR) honours only a split in a
+dataset other than a layer: one only in case A's layer does not stop the `SAME_AS` in the source that
+every other case reads. The conflict is still recorded, by superseding that split with its conflict
+properties (`resolve.same_as_writer.record_conflicts`), which keeps the split's datasets, so the
+record is in case A's layer and reviewed there alone. Case A's projection still honours its split and
+keeps the pair apart; case B's merges them. `03_CONDUIT_MIDDLEWARE.md` §5's "never overridden"
+reads as per case. Proved on ArcadeDB by `tests/resolve/test_trigger_layers.py`, shown red with
+`honoured_splits` planted to honour every split.
 
 ### ADR-136, Amendment 1 (7 November 2026) — a case's analyst layer takes the strictest egress of the case's sources
 

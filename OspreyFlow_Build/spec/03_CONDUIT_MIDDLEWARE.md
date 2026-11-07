@@ -1207,9 +1207,13 @@ version and the full comparison vector. Nothing is merged in storage — see
 Deterministic identifiers bypass the probabilistic path. Two endpoints with the same normalised
 E.164 are the same endpoint; do not spend a Fellegi–Sunter model on it.
 
-Analyst decisions are permanent and beat the model: a `NOT_SAME_AS` edge is never overridden by
-a later resolution run, and a later run that would have merged the pair records the conflict for
-review rather than acting on it.
+Analyst decisions are permanent and beat the model, in the case that made them: a `NOT_SAME_AS`
+edge is never overridden by a later resolution run for that case, and a later run that would have
+merged the pair records the conflict for review. A split written before ADR-143 Amendment 1, in the
+source, stops the run's merge for every case, as before. One held only in a case's analyst layer
+does not: the source `SAME_AS` goes ahead for every other case, the conflict is recorded on the
+split (so in that layer, for that case's review alone), and that case's projection still keeps the
+pair apart (ADR-025 Amendment 1).
 
 ## 6. Access control and audit
 
