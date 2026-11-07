@@ -1,0 +1,38 @@
+/* The place switcher and the context banner (ADR-145 decisions 1–3). Colours are tokens only. */
+
+.place-switcher__list,
+.govuk-places__list { display: flex; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
+
+.place-switcher__item {
+  font: inherit; font-size: var(--fs-12); line-height: var(--lh-12); min-height: 28px; padding: var(--sp-4) var(--sp-8);
+  background: transparent; border: 0; border-radius: var(--r-control); color: var(--text-secondary); cursor: pointer;
+}
+.place-switcher__item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.place-switcher__item[aria-current="page"] { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
+
+/* Under GOV.UK, inside the header (the local extension of GOV.UK Frontend 6.6.0's `header`): the
+   header's own blue ground and white text, as its links had before 6.0. */
+.govuk-header__container:has(.govuk-header__places) { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-16); }
+.govuk-header__places { margin-left: auto; }
+.govuk-places__item {
+  font: inherit; font-family: var(--ui); font-size: 16px; line-height: 25px; font-weight: 700; min-height: 32px;
+  padding: var(--sp-4) var(--sp-8); background: transparent; border: 0; color: var(--brass-ink); cursor: pointer;
+}
+.govuk-places__item:hover { text-decoration: underline; text-decoration-thickness: 3px; }
+.govuk-places__item[aria-current="page"] { box-shadow: inset 0 -4px 0 var(--brass-ink); }
+.govuk-places__item:focus-visible { outline: var(--focus-width) solid transparent; background: var(--focus); color: var(--focus-ink); box-shadow: inset 0 -4px 0 var(--focus-ink); }
+
+/* The banner: one line under the top bar. */
+.context-banner {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8); min-height: 32px; box-sizing: border-box;
+  padding: var(--sp-4) var(--sp-12); border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel);
+  font-size: var(--fs-12); line-height: var(--lh-12); color: var(--text-secondary);
+}
+.context-banner__place { margin: 0; font: inherit; font-weight: 600; color: var(--text-primary); }
+.context-banner__sep { color: var(--text-secondary); }
+.context-banner__cross { margin-left: auto; }
+
+/* Under GOV.UK it is a GOV.UK notification banner; kept to its title and one line of content. */
+.govuk-notification-banner.context-banner--govuk { margin: 0; }
+.context-banner--govuk .govuk-notification-banner__content { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8); padding-top: var(--sp-8); padding-bottom: var(--sp-8); }
+.context-banner--govuk .context-banner__cross { margin-left: auto; }

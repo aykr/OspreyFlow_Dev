@@ -2,9 +2,20 @@
 // only under the `govuk` brand. No service-name band (GOV.UK's `service-navigation`) under it: the
 // owner's ruling of 4 November 2026 removed it everywhere to give the workspace its height back, and
 // the service is named in the page title (ADR-132 Amendment 5).
+//
+// ADR-145 decision 3 and ADR-132 Amendment 6: the switch between the three places stands inside this
+// header. 6.6.0's `header` has no navigation (its parameters are the product name and the homepage
+// link only), so the header is a small local extension of it: one slot, after the logo, that
+// `shell/PlaceSwitcher.tsx` draws the places into. Its styling is `shell/places.css`, on the header's
+// own colours.
 import { currentBrand } from "../brand";
 
-export function GovukHeader() {
+/** The local extension's slot (see above). */
+export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";
+
+/** `withPlaces`: the slot for the place switcher, in the Glass's frame; the identity provider's
+ * sign-in page draws the header without it (`harness/govuk_chrome.js`, ADR-132 Amendment 2). */
+export function GovukHeader({ withPlaces = false }: { withPlaces?: boolean } = {}) {
   if (currentBrand() !== "govuk") return null;
   return (
     <div className="govuk-header">
@@ -39,6 +50,7 @@ export function GovukHeader() {
             </svg>
           </a>
         </div>
+        {withPlaces && <div id={GOVUK_HEADER_PLACES_ID} className="govuk-header__places" />}
       </div>
     </div>
   );
