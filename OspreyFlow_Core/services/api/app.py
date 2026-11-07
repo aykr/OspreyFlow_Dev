@@ -9386,9 +9386,10 @@ async def read_alert_queue(
 ) -> list[QueuedAlert]:
     """The one alert queue (ADR-133 decision 5 and stage (a)): the case's typology alerts (the case
     team's, ADR-109 ruling 3) and the hotlist and monitor alerts the reader owns or that are shared
-    with their team, each with its kind, severity and audience. `active` is open and claimed; `kind`
-    and `severity` may each be given more than once. Who sees which alert is decided in the query;
-    an alert any of whose entities the reader cannot see is then left out, and not counted (rule 3).
+    with their team, each with its kind, severity and audience. `active` is open, claimed and
+    closing; `kind` and `severity` may each be given more than once. Who sees which alert is decided
+    in the query; an alert any of whose nodes, links or transactions the reader cannot see is then
+    left out, and not counted (rule 3; ADR-146 decision 10).
     """
     statuses = {
         "active": ["open", "claimed", "closing"],
