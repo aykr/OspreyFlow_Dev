@@ -23,6 +23,7 @@ What a mistake would do, and the case that catches it (rule 12):
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -225,3 +226,70 @@ def test_the_leased_stack_is_reached_only_by_the_lane_holding_the_lease(
     finally:
         restore()
     assert len(_RecordingSocket.asked) == (3 if allowed else 0)
+
+
+# --- The guard reaches the Python processes a test starts (found 7 November 2026, 21:39Z) ------------
+#
+# A stopped full-suite run of the case lane left `test_statelessness.py`'s second Conduit (a
+# `python -m uvicorn` child, its parent gone) holding 35 connections to the leased stack during the
+# studio lane's lease: the guard wrapped this process's sockets only, so a child process, and uvloop's
+# own connections (libuv, not `socket.socket.connect`), went round it.
+
+
+def _listener() -> tuple[socket.socket, int]:
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(8)
+    srv.settimeout(0.5)
+    return srv, srv.getsockname()[1]
+
+
+def _accepted(srv: socket.socket) -> bool:
+    try:
+        conn, _ = srv.accept()
+    except TimeoutError:
+        return False
+    conn.close()
+    return True
+
+
+_CHILD_PLAIN = (
+    "import socket, sys\n"
+    "s = socket.socket()\n"
+    "try:\n"
+    "    s.connect(('127.0.0.1', int(sys.argv[1])))\n"
+    "    print('CONNECTED')\n"
+    "except ConnectionRefusedError as e:\n"
+    "    print('REFUSED', type(e).__name__)\n"
+)
+_CHILD_UVLOOP = (
+    "import asyncio, sys, uvloop\n"
+    "async def main():\n"
+    "    try:\n"
+    "        r, w = await asyncio.open_connection('127.0.0.1', int(sys.argv[1]))\n"
+    "        print('CONNECTED'); w.close()\n"
+    "    except ConnectionRefusedError as e:\n"
+    "        print('REFUSED', type(e).__name__)\n"
+    "uvloop.run(main())\n"
+)
+
+
+@pytest.mark.skipif(os.environ.get("CI", "").lower() == "true", reason="CI=true: the guard stands aside")
+@pytest.mark.parametrize("child", [_CHILD_PLAIN, _CHILD_UVLOOP], ids=["plain-socket", "uvloop"])
+def test_a_process_a_test_starts_is_refused_the_leased_stack_too(tmp_path: Path, child: str) -> None:
+    """The child is started as a test starts one, with this run's own environment (`{**os.environ}`);
+    the leased port is a real listener here, named leased through the guard's test seam, so a
+    connection that got through would be seen arriving."""
+    pytest.importorskip("uvloop") if "uvloop" in child else None
+    srv, port = _listener()
+    _hold_lease(tmp_path, "studio")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path), "OSPREY_LANE": "case",
+           "OSPREY_GUARD_TEST_PORTS": str(port)}
+    try:
+        out = subprocess.run([sys.executable, "-c", child, str(port)], env=env,
+                             capture_output=True, text=True, timeout=30)
+        arrived = _accepted(srv)
+    finally:
+        srv.close()
+    assert "REFUSED LeaseNotHeld" in out.stdout, out.stdout + out.stderr
+    assert not arrived

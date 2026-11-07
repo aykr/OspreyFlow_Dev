@@ -37,7 +37,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import socket
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -94,7 +94,46 @@ LEASED_PORTS: dict[int, str] = {
     2491: "ArcadeDB (the leased test stack)",
     55433: "Postgres (the leased test stack)",
     6379: "Valkey (the leased test stack)",
+    18123: "ClickHouse (the leased test stack's throwaway, as statelessness-clickhouse starts it)",
 }
+
+
+def _leased_ports() -> dict[int, str]:
+    """LEASED_PORTS, plus any port the guard's own tests name in OSPREY_GUARD_TEST_PORTS (a real
+    listener of theirs, so a connection that got through is seen arriving). Nothing else sets it."""
+    ports = dict(LEASED_PORTS)
+    for raw in os.environ.get("OSPREY_GUARD_TEST_PORTS", "").split(","):
+        if raw.strip().isdigit():
+            ports[int(raw)] = "a port the port guard's own test planted as leased"
+    return ports
+
+
+_SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "port_guard_site")
+_BUILD = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def propagate(environ: MutableMapping[str, str]) -> None:
+    """Hands the guard to every Python process this run starts: `sitecustomize` in
+    `tests/port_guard_site` installs it there (with `OspreyFlow_Build` on the path for its import)."""
+    environ["OSPREY_PORT_GUARD"] = "1"
+    parts = [p for p in environ.get("PYTHONPATH", "").split(os.pathsep) if p and p not in (_SITE, _BUILD)]
+    environ["PYTHONPATH"] = os.pathsep.join([_SITE, _BUILD, *parts])
+
+
+def neutralise_uvloop() -> None:
+    """uvloop connects through libuv, not `socket.socket.connect`, so the guard cannot see it; under
+    the guard every uvloop entry point gives asyncio's own loop instead (uvicorn's `auto` loop
+    included, which asks uvloop for its loop)."""
+    try:
+        import uvloop
+    except ImportError:
+        return
+    import asyncio
+
+    uvloop.new_event_loop = asyncio.new_event_loop  # type: ignore[assignment]
+    uvloop.EventLoopPolicy = asyncio.DefaultEventLoopPolicy  # type: ignore[assignment,misc]
+    uvloop.install = lambda: None  # type: ignore[assignment]
+    uvloop.run = asyncio.run  # type: ignore[assignment]
 
 
 class LeaseNotHeld(ConnectionRefusedError):
@@ -188,7 +227,8 @@ def guard_socket(sock_cls: type[socket.socket] = socket.socket) -> Callable[[], 
     original_connect_ex = sock_cls.connect_ex
 
     def check(address: Any) -> None:
-        if isinstance(address, tuple) and len(address) >= 2 and address[1] in LEASED_PORTS:
+        leased = _leased_ports()
+        if isinstance(address, tuple) and len(address) >= 2 and address[1] in leased:
             host = address[0]
             if isinstance(host, str) and _is_this_machine(host) and not in_ci(os.environ):
                 lane = os.environ.get("OSPREY_LANE") or None
@@ -196,7 +236,7 @@ def guard_socket(sock_cls: type[socket.socket] = socket.socket) -> Callable[[], 
                 if lane is None or holder != lane:
                     raise LeaseNotHeld(
                         f"Refused before connecting: {host}:{address[1]} is "
-                        f"{LEASED_PORTS[address[1]]}, and the lease is held by {holder or 'nobody'}, "
+                        f"{leased[address[1]]}, and the lease is held by {holder or 'nobody'}, "
                         f"not {lane or 'this run (OSPREY_LANE is not set)'}. Take the lease first "
                         "(OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> \"<purpose>\") and "
                         "run with OSPREY_LANE=<lane>."
@@ -234,6 +274,8 @@ def pytest_configure(config: pytest.Config) -> None:
         raise pytest.UsageError(refusal(found))
     restore = guard_socket()
     config.add_cleanup(restore)
+    neutralise_uvloop()
+    propagate(os.environ)
 
 
 def pytest_report_header(config: pytest.Config) -> str:
