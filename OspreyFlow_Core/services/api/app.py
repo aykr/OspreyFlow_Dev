@@ -6278,6 +6278,7 @@ async def list_alerts_route(
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
+    analytics: AnalyticsDep,
 ) -> AlertList:
     """The reader's own alerts — those raised to them, by their hotlists, monitors and rules
     (`owner_id`, in the store's query) — within the case's datasets (ADR-099 Amendment 3, the reach
@@ -6286,7 +6287,7 @@ async def list_alerts_route(
     said "the alerts of the case's datasets", which the store never read."""
     rows = await alerts_store.list_authorized(principal)
     return AlertList(
-        alerts=[await alert_to_view(a, principal, graph, hotlists_store) for a in rows]
+        alerts=[await alert_to_view(a, principal, graph, analytics, hotlists_store) for a in rows]
     )
 
 
@@ -6301,9 +6302,10 @@ async def get_alert_route(
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
+    analytics: AnalyticsDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal)
-    return await alert_to_view(alert, principal, graph, hotlists_store)
+    return await alert_to_view(alert, principal, graph, analytics, hotlists_store)
 
 
 @app.post(
@@ -9176,6 +9178,7 @@ async def neighbourhood_risk_route(
     compute: ComputeDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> NeighbourhoodRisk:
     """*Neighbourhood risk* (ADR-109 phase E): the case's alerts within two hops, halved per hop,
     counted for ninety days — read as the reader, never stored."""
@@ -9183,6 +9186,7 @@ async def neighbourhood_risk_route(
         graph,
         compute,
         alerts_store,
+        analytics,
         investigation.id,
         node_id,
         principal,
@@ -9239,11 +9243,13 @@ async def _case_report(
     explore: ExploreService,
     ontology: OntologySchema,
     period_weeks: int,
+    analytics: AnalyticsPort,
 ) -> ReportFigures:
     level = await investigations.effective_level(investigation.id, principal)
     return await reports_module.case_report(
         alerts=alerts_store,
         graph=graph,
+        analytics=analytics,
         held=held_rows,
         compute=compute,
         explore=explore,
@@ -9272,6 +9278,7 @@ async def read_case_report(
     explore: ExploreDep,
     ontology: OntologyDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
 ) -> ReportFigures:
     """The Reports view (ADR-111): the case's figures, every one counted as the reader (rule 3);
@@ -9279,7 +9286,7 @@ async def read_case_report(
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
-        ontology=ontology, period_weeks=weeks,
+        ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -9308,6 +9315,7 @@ async def read_report_feed(
     ontology: OntologyDep,
     audit: AuditDep,
     export_ledger: ExportLedgerDep,
+    analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
     feed_format: Annotated[Literal["json", "csv"], Query(alias="format")] = "json",
 ) -> ReportFigures | Response:
@@ -9317,7 +9325,7 @@ async def read_report_feed(
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
-        ontology=ontology, period_weeks=weeks,
+        ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     rows = reports_module.feed_rows(figures)
     await export_ledger.record(
@@ -9365,6 +9373,7 @@ async def read_alert_queue(
     alerts_store: AlertsStoreDep,
     principal_names: PrincipalNamesDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
     status_filter: Annotated[
         Literal["open", "claimed", "closing", "closed", "active", "all"], Query(alias="status")
     ] = "active",
@@ -9382,7 +9391,7 @@ async def read_alert_queue(
         "all": None,
     }.get(status_filter, [status_filter])
     rows = await alert_queue.monitoring_queue(
-        alerts_store, graph, investigation.id, principal, statuses=statuses, kinds=kind,
+        alerts_store, graph, analytics, investigation.id, principal, statuses=statuses, kinds=kind,
         severities=severity,
     )  # fmt: skip
     await audit.record(

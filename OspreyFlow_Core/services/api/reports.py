@@ -22,6 +22,7 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 
+from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from schemas.domain import (
@@ -173,6 +174,7 @@ def _monitoring_figures(
 async def alert_report(
     alerts: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     investigation_id: str,
     reader: Principal,
     *,
@@ -185,7 +187,7 @@ async def alert_report(
     counted, so they cannot disagree about which alerts the reader may see."""
     now = datetime.now(UTC)
     start = today - timedelta(weeks=period_weeks)
-    every_kind = await monitoring_queue(alerts, graph, investigation_id, reader)
+    every_kind = await monitoring_queue(alerts, graph, analytics, investigation_id, reader)
     typology = [q.alert for q in every_kind if q.kind == "typology"]
     by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
     return ReportFigures(
@@ -293,6 +295,7 @@ async def case_report(
     *,
     alerts: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     held: HeldRowStore,
     compute: ComputePort,
     explore: ExploreService,
@@ -305,7 +308,7 @@ async def case_report(
     show_held: bool = False,
 ) -> ReportFigures:
     figures = await alert_report(
-        alerts, graph, investigation_id, reader, today=today, period_weeks=period_weeks
+        alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
     )
     held_figures = None
     if show_held:

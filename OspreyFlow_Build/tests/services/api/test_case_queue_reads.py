@@ -17,6 +17,7 @@ from typing import Any
 from services.api import alert_queue
 
 from conduit_common.identity import new_id
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.services.api.test_monitoring_queue import (  # noqa: F401 — `stores`, `_fresh_units` are fixtures
     NOW,
     _alert,
@@ -42,8 +43,8 @@ async def test_the_case_queue_reveals_no_hidden_alert_through_count_order_or_rea
                                  referent_node_ids=["n-a", "n-secret"], words="Hidden",
                                  created_at=NOW.replace(minute=1)))  # fmt: skip
     with_graph, without_graph = _Graph(names, hidden={"n-secret"}), _Graph(names)
-    shown_with = await alert_queue.queue(alerts, with_graph, case_with, member)
-    shown_without = await alert_queue.queue(alerts, without_graph, case_without, member)
+    shown_with = await alert_queue.queue(alerts, with_graph, NO_TRANSACTIONS, case_with, member)
+    shown_without = await alert_queue.queue(alerts, without_graph, NO_TRANSACTIONS, case_without, member)
     assert [q.summary for q in shown_with] == [q.summary for q in shown_without] == ["Seen Alpha Ltd", "Seen Bravo Ltd"]
     assert with_graph.reads == without_graph.reads, (
         "the work done must not grow with the alerts the reader may not see")
@@ -60,7 +61,7 @@ async def test_the_case_queue_holds_typology_alerts_only_and_filters_by_status(s
     mine = _alert("monitor:m1", deployer, referent_node_ids=["n-a"])
     for alert in (opened, closed, mine):
         await alerts.save(alert)
-    everything = await alert_queue.queue(alerts, _Graph(names), case, deployer)
+    everything = await alert_queue.queue(alerts, _Graph(names), NO_TRANSACTIONS, case, deployer)
     assert {q.alert.id for q in everything} == {opened.id, closed.id}, "the Reports figures count typology alerts"
-    only_open = await alert_queue.queue(alerts, _Graph(names), case, deployer, statuses=["open"])
+    only_open = await alert_queue.queue(alerts, _Graph(names), NO_TRANSACTIONS, case, deployer, statuses=["open"])
     assert [q.alert.id for q in only_open] == [opened.id]

@@ -217,7 +217,9 @@ async def week(scene: Scene, rules: list[TypologyRule] | None = None, **kw: Any)
 
 
 async def queue(scene: Scene, reader: Principal) -> list[Any]:
-    rows = await alert_queue.monitoring_queue(scene.stores.alerts, scene.world.graph, scene.case, reader)
+    rows = await alert_queue.monitoring_queue(
+        scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, reader
+    )
     return sorted(rows, key=lambda q: q.alert.created_at)
 
 
@@ -582,7 +584,8 @@ async def test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_
 
 async def _figures(scene: Scene, reader: Principal) -> Any:
     return await reports.alert_report(
-        scene.stores.alerts, scene.world.graph, scene.case, reader, today=datetime.now(UTC).date()
+        scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, reader,
+        today=datetime.now(UTC).date(),
     )
 
 

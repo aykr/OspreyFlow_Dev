@@ -41,8 +41,15 @@ from typing import Literal
 import asyncpg
 
 from conduit_common.identity import new_id
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
-from schemas.analytics import HOTLISTS_RULE, MONITORS_RULE, AlertFact
+from schemas.analytics import (
+    HOTLISTS_RULE,
+    MONITORS_RULE,
+    AlertFact,
+    EventFilter,
+    EventListRequest,
+)
 from schemas.domain import (
     CLOSING_REASONS,
     Alert,
@@ -52,6 +59,7 @@ from schemas.domain import (
     AlertSeverity,
     Handling,
     Interval,
+    Node,
     Principal,
 )
 
@@ -625,10 +633,11 @@ class AlertStore:
     ) -> int:
         """Closes every alert not already closed that is one of a reverted load's own (its `Alert`
         node is in `node_ids`) or that cites a node in `node_ids` or a link in `edge_ids`, so the
-        queue names nothing that rests on a reverted element (ADR-127 Amendment 6). The queue's own
-        read leaves out an alert whose cited node is hidden but checks no link, so one citing only a
-        reverted link would stay listed. No disposition: it was neither confirmed nor dismissed by a
-        member, it was taken back, and the reason says so. Not scoped to a reader or a case, as the
+        queue names nothing that rests on a reverted element (ADR-127 Amendment 6). The queue's
+        own read already leaves out an alert any of whose nodes, links or transactions is hidden or
+        gone (ADR-146 decision 10, G2); closing it says so in the record as well. No disposition:
+        it was neither confirmed nor dismissed by a member, it was taken back, and the reason says
+        so. Not scoped to a reader or a case, as the
         revert removes its own elements. Idempotent: a closed alert is not touched again, so a
         second call returns 0. An alert citing a transaction the load wrote is not found by this,
         since an alert names events by id and the load's event ids are not in its record."""
@@ -687,20 +696,96 @@ class AlertTriageConflict(Exception):
     """The alert was not in a state that allows this (someone else claimed or closed it)."""
 
 
-async def evidence_available(alert: Alert, principal: Principal, graph: GraphPort) -> bool:
-    """The read-time referent recheck `06_DECISIONS.md` ADR-039 requires — never trusted from
-    write time. `NOTIFY_STUB` alerts have nothing to recheck (`Alert.mode`'s own docstring: no
-    referent is ever stored for one) and are always "available" in this narrow sense, since there
-    is no evidence to become unavailable. A `FULL` alert's evidence is available only if *every*
-    referenced node is still visible to `principal` right now — one hidden referent is enough to
-    withdraw the whole alert's evidence, the same all-or-nothing shape `_project`
-    (`working_set/service.py`) already gives an edge whose endpoint is hidden."""
+def evidence_node_ids(alert: Alert) -> list[str]:
+    """The nodes an alert rests on: the entities it concerns and its own `Alert` node."""
+    return [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
+
+
+#: How many transactions one request asks for: `EventListRequest.limit`'s ceiling, so each request
+#: is answered in one page.
+EVENT_CHUNK = 200
+
+
+class ReadableEvidence:
+    """What of a batch of alerts' evidence the reader may read, each kind the adapter's own answer
+    (rule 3): the nodes as read, and the ids of the links and transactions that came back."""
+
+    __slots__ = ("edge_ids", "event_ids", "nodes")
+
+    def __init__(
+        self, nodes: dict[str, Node], edge_ids: frozenset[str], event_ids: frozenset[str]
+    ) -> None:
+        self.nodes, self.edge_ids, self.event_ids = nodes, edge_ids, event_ids
+
+    def whole(self, alert: Alert) -> bool:
+        """ADR-039's all-or-nothing: every node, link and transaction the alert cites is
+        readable."""
+        return (
+            all(i in self.nodes for i in evidence_node_ids(alert))
+            and set(alert.edge_ids) <= self.edge_ids
+            and set(alert.event_ids) <= self.event_ids
+        )
+
+
+async def read_evidence(
+    alerts: Sequence[Alert],
+    reader: Principal,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    *,
+    scope: Callable[[Alert], str | None],
+) -> ReadableEvidence:
+    """Every node, link and transaction the alerts cite, read **once per kind, in one batch**, as
+    the reader, through each adapter's own access step (`get_nodes`, `get_edges`, `list_events`;
+    ADR-146 decision 10, gap map G2). The reads are fixed by the ids cited, never by what comes
+    back: transactions are asked in chunks of `EVENT_CHUNK` cut from the ids, in each alert's
+    `scope` (an alert with none has its transactions read as hidden), so neither the number nor the
+    size of the reads can follow what the reader may not see (rule 7)."""
+    node_ids = sorted({i for a in alerts for i in evidence_node_ids(a)})
+    edge_ids = sorted({i for a in alerts for i in a.edge_ids})
+    by_scope: dict[str, set[str]] = {}
+    for a in alerts:
+        where = scope(a)
+        if a.event_ids and where is not None:
+            by_scope.setdefault(where, set()).update(a.event_ids)
+    nodes = {n.id: n for n in await graph.get_nodes(node_ids, reader)} if node_ids else {}
+    edges = (
+        frozenset(e.id for e in await graph.get_edges(edge_ids, reader))
+        if edge_ids
+        else frozenset()
+    )
+    events: set[str] = set()
+    for where in sorted(by_scope):
+        ids = sorted(by_scope[where])
+        for start in range(0, len(ids), EVENT_CHUNK):
+            chunk = ids[start : start + EVENT_CHUNK]
+            page = await analytics.list_events(
+                EventListRequest(
+                    filter=EventFilter(investigation_scope=where, event_ids=chunk),
+                    limit=EVENT_CHUNK,
+                ),
+                reader,
+            )
+            events.update(e.event_id for e in page.events if e.event_id in chunk)
+    return ReadableEvidence(nodes, edges, frozenset(events))
+
+
+async def evidence_available(
+    alert: Alert, principal: Principal, graph: GraphPort, analytics: AnalyticsPort
+) -> bool:
+    """The read-time recheck `06_DECISIONS.md` ADR-039 requires — never trusted from write time.
+    `NOTIFY_STUB` alerts have nothing to recheck (`Alert.mode`'s own docstring: no referent is ever
+    stored for one) and are always "available" in this narrow sense. A `FULL` alert's evidence is
+    available only if *every* node, link and transaction it cites (and its own `Alert` node) is
+    visible to `principal` right now — one hidden piece withdraws the whole alert's evidence, and
+    with it its words (ADR-146 decision 10, gap map G3). Its transactions are read in the case it
+    was raised in; one with none has nowhere to read them, so they count as hidden."""
     if alert.mode is AlertMode.NOTIFY_STUB:
         return True
-    for node_id in alert.referent_node_ids:
-        if await graph.get_node(node_id, principal) is None:
-            return False
-    return True
+    readable = await read_evidence(
+        [alert], principal, graph, analytics, scope=lambda a: a.investigation_id
+    )
+    return readable.whole(alert)
 
 
 async def record_match(

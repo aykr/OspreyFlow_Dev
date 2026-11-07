@@ -44,6 +44,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 NOW = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
 
@@ -170,7 +171,7 @@ GRAPH_NAMES = {"n-1": "Acme Ltd", "n-2": "07700 900310", "n-3": "OKAFOR, Callum"
 async def _queued_ids(
     alerts: AlertStore, case: str, reader: Principal, **filters: Any
 ) -> list[str]:
-    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), case, reader, **filters)
+    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, reader, **filters)
     return [row.alert.id for row in rows]
 
 
@@ -185,7 +186,7 @@ async def test_the_queue_shows_a_typology_a_hotlist_and_a_monitor_alert_to_a_tea
     case = new_id()
     made = await _three_kinds(hotlists, alerts, owner, case)
 
-    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), case, member)
+    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, member)
 
     by_kind = {row.kind: row for row in rows}
     assert set(by_kind) == {"typology", "hotlist", "monitor"}
@@ -223,7 +224,7 @@ async def test_a_shared_alert_reaches_the_owners_unit_and_no_other(stores: Any) 
 
     # Another unit's member of the same case sees the case's typology alert, and nothing shared
     # with a team that is not theirs.
-    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), case, elsewhere)
+    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, elsewhere)
     assert [row.kind for row in rows] == ["typology"]
 
 
@@ -246,7 +247,7 @@ async def test_a_notify_stub_reaches_its_owner_alone_on_a_team_hotlist(stores: A
     stub = _alert(f"hotlist:{hotlist_id}", owner, mode=AlertMode.NOTIFY_STUB, team=owner.org_unit)
     await alerts.save(stub)
 
-    rows = await alert_queue.monitoring_queue(alerts, _Graph({}), "c", owner)
+    rows = await alert_queue.monitoring_queue(alerts, _Graph({}), NO_TRANSACTIONS, "c", owner)
     assert [r.alert.id for r in rows] == [stub.id] and rows[0].audience == "owner"
     assert "cannot see" in rows[0].summary
     assert await _queued_ids(alerts, "c", member) == []
@@ -316,7 +317,7 @@ async def test_severity_defaults_by_kind_and_the_filters_are_applied_in_the_quer
                     severity="low", referent_node_ids=["n-1"])  # fmt: skip
     await alerts.save(stated)
 
-    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), case, owner)
+    rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, owner)
     severity = {row.alert.id: row.severity for row in rows}
     assert severity == {
         made["typology"].id: "medium", made["hotlist"].id: "high",
@@ -359,8 +360,8 @@ async def test_a_hidden_alert_reveals_nothing_through_count_order_or_reads(store
 
     names = {**GRAPH_NAMES, "n-secret": "Hidden person"}
     with_graph, without_graph = _Graph(names, hidden={"n-secret"}), _Graph(names)
-    shown_with = await alert_queue.monitoring_queue(alerts, with_graph, case_with, member)
-    shown_without = await alert_queue.monitoring_queue(alerts, without_graph, case_without, member)
+    shown_with = await alert_queue.monitoring_queue(alerts, with_graph, NO_TRANSACTIONS, case_with, member)
+    shown_without = await alert_queue.monitoring_queue(alerts, without_graph, NO_TRANSACTIONS, case_without, member)
 
     def shape(rows: list[Any]) -> list[tuple[str, str, str]]:
         return [(r.kind, r.severity, r.summary) for r in rows]

@@ -28,6 +28,7 @@ from services.api import reports
 
 from conduit_common.identity import new_id
 from schemas.domain import ReportFigures
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.services.api.test_monitoring_queue import (  # noqa: F401 — `stores`, `_fresh_units` are fixtures
     _alert,
     _fresh_units,
@@ -48,7 +49,7 @@ def _monday(moment: datetime) -> str:
 
 
 async def _figures(alerts: Any, graph: _Graph, case: str, reader: Any) -> ReportFigures:
-    return await reports.alert_report(alerts, graph, case, reader, today=TODAY, period_weeks=12)
+    return await reports.alert_report(alerts, graph, NO_TRANSACTIONS, case, reader, today=TODAY, period_weeks=12)
 
 
 def _monitoring(figures: ReportFigures) -> dict[str, Any]:

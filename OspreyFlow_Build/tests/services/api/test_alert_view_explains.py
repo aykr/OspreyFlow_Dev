@@ -27,6 +27,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 WHEN = datetime(2026, 10, 1, tzinfo=UTC)
 #: ADR-099: a request reads the datasets of its case (`get_principal`), as these principals do.
@@ -77,6 +78,11 @@ class _Graph:
         if principal.datasets is not None and not set(node.datasets) & set(principal.datasets):
             return None
         return node
+
+    async def get_nodes(self, node_ids: list[str], principal: Principal) -> list[Node]:
+        """The real port's batched read: each id as `get_node` answers it, the hidden ones absent."""
+        found = [await self.get_node(i, principal) for i in sorted(set(node_ids))]
+        return [n for n in found if n is not None]
 
 
 class _Hotlists:
@@ -129,7 +135,7 @@ def _alert(node_ids: list[str], *, rule_id: str = "hotlist:hl-1") -> Alert:
 
 
 async def _view(alert: Alert, principal: Principal, graph: Any, hotlists: Any = None) -> Any:
-    return await alert_to_view(alert, principal, graph, hotlists_store=hotlists)
+    return await alert_to_view(alert, principal, graph, NO_TRANSACTIONS, hotlists_store=hotlists)
 
 
 async def test_the_owner_sees_the_hotlist_as_typed_and_its_review_date() -> None:

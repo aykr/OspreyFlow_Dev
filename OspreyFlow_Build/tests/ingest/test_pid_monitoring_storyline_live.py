@@ -34,6 +34,7 @@ from conduit_common.identity import new_id
 from demo_fixtures import pid_files, pid_monitoring
 from schemas.domain import Principal, TypologyRule
 from schemas.sentences import RuleSentence, SentenceRuleParams
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
 from tests.ingest.test_row_keys import KeyStore
 from tests.scenarios import pid_monitoring_support as support
@@ -97,7 +98,7 @@ async def test_chapter_nine_raises_exactly_these_alerts_on_the_real_store(dsn: s
             )  # fmt: skip
 
             async def queue(reader: Principal) -> list[Any]:
-                rows = await alert_queue.monitoring_queue(alerts, graph, case, reader)
+                rows = await alert_queue.monitoring_queue(alerts, graph, NO_TRANSACTIONS, case, reader)
                 return sorted(rows, key=lambda q: q.alert.created_at)
 
             async def number_of(queued: Any) -> str:

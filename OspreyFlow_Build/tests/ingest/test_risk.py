@@ -40,6 +40,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 ONTOLOGY = load_deployment_ontology()
 SCHEME = load_uk_le_scheme()
@@ -88,7 +89,7 @@ async def _alert(store: AlertStore, case: str, on: NodeWrite, *, age_days: int =
 
 
 async def _risk(graph, alerts: AlertStore, case: str, target: NodeWrite, reader: Principal):  # type: ignore[no-untyped-def]
-    return await neighbourhood_risk(graph, ComputeRustworkxAdapter(), alerts, case, target.id, reader, today=NOW.date())
+    return await neighbourhood_risk(graph, ComputeRustworkxAdapter(), alerts, NO_TRANSACTIONS, case, target.id, reader, today=NOW.date())
 
 
 async def test_a_hidden_alerted_neighbour_leaves_the_score_as_if_it_were_absent(alerts: AlertStore) -> None:

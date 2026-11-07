@@ -536,7 +536,7 @@ async def test_a_rule_alert_is_in_the_whole_case_teams_queue(
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "Q")
-        queued = await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE)
+        queued = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
         assert len(queued) == 1
         assert await stores["alerts"].list_authorized(TEAMMATE) == [] or all(
             a.investigation_id != case for a in await stores["alerts"].list_authorized(TEAMMATE)
@@ -544,7 +544,7 @@ async def test_a_rule_alert_is_in_the_whole_case_teams_queue(
         # The finding names the accounts as the reader sees them, never by id.
         assert "GBQMULE" in queued[0].summary and "GBQHUB" in queued[0].summary
         assert not any(n in queued[0].summary for n in queued[0].alert.referent_node_ids)
-        assert await alert_queue.queue(stores["alerts"], graph, "another-case", TEAMMATE) == []
+        assert await alert_queue.queue(stores["alerts"], graph, analytics, "another-case", TEAMMATE) == []
 
 
 async def test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened(
@@ -554,8 +554,8 @@ async def test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opene
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "S", deployer=SECRET_LOADER,
                       recipe=_marked(RECIPE, "SECRET"))  # fmt: skip
-        (secret,) = await alert_queue.queue(stores["alerts"], graph, case, SECRET_LOADER)
-        assert await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE) == []
+        (secret,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)
+        assert await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE) == []
         with pytest.raises(AlertNotFoundError):
             await alert_queue.explain(stores["alerts"], graph, analytics, case,
                                       secret.alert.id, TEAMMATE)  # fmt: skip
@@ -569,7 +569,7 @@ async def test_an_alert_explains_itself_with_its_transactions_links_and_node(
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "X")
-        (queued,) = await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE)
+        (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
         why = await alert_queue.explain(stores["alerts"], graph, analytics, case,
                                         queued.alert.id, TEAMMATE)  # fmt: skip
         assert [t.amount for t in why.transactions] == [9_500.0] * 4
@@ -586,7 +586,7 @@ async def test_triage_claims_once_and_a_true_positive_confirms_the_alert_node(
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "T")
-        (queued,) = await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE)
+        (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
         alert_id = queued.alert.id
         claimed = await alert_queue.claim(stores["alerts"], graph, case, alert_id, TEAMMATE)
         assert (claimed.status, claimed.assignee) == ("claimed", TEAMMATE.id)
@@ -607,9 +607,9 @@ async def test_triage_claims_once_and_a_true_positive_confirms_the_alert_node(
         with pytest.raises(AlertTriageConflict):
             await alert_queue.dispose(stores["alerts"], graph, case, alert_id, THIRD,
                                       disposition="false_positive", reason="again")  # fmt: skip
-        assert await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE,
+        assert await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE,
                                        statuses=["open", "claimed"]) == []  # fmt: skip
-        assert len(await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE,
+        assert len(await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE,
                                            statuses=["closed"])) == 1  # fmt: skip
 
 
@@ -619,7 +619,7 @@ async def test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred(
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         await _raised(stores, graph, analytics, case, "U")
-        (queued,) = await alert_queue.queue(stores["alerts"], graph, case, TEAMMATE)
+        (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
         closed = await alert_queue.dispose(stores["alerts"], graph, case, queued.alert.id,
                                            TEAMMATE, disposition="false_positive",
                                            reason="payroll")  # fmt: skip

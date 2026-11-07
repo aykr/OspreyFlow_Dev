@@ -25,6 +25,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from ontology.handling import sources_within_case
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Hotlist, HotlistAudience, Monitor, Node, Principal
 
@@ -208,9 +209,12 @@ async def alert_to_view(
     alert: Alert,
     principal: Principal,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     hotlists_store: HotlistReader | None = None,
 ) -> AlertView:
-    available = await evidence_available(alert, principal, graph)
+    # ADR-146 decision 10 (gap map G3): an alert's words name what it concerns, so they are withheld
+    # with its evidence, as its referents are; a hotlist's own identifier is the reader's to see.
+    available = await evidence_available(alert, principal, graph, analytics)
     fired_on: list[FiredOn] | None = None
     if available and alert.mode is AlertMode.FULL and alert.referent_node_ids:
         nodes = [await graph.get_node(node_id, principal) for node_id in alert.referent_node_ids]
@@ -226,7 +230,7 @@ async def alert_to_view(
         evidence_available=available,
         investigation_id=alert.investigation_id,
         created_at=alert.created_at,
-        words=alert.words,
+        words=alert.words if available else None,
         hotlist=await _alert_hotlist(alert, principal, hotlists_store),
         fired_on=fired_on,
     )

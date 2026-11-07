@@ -59,6 +59,7 @@ from schemas.domain import (
     ReportFigures,
     SourceRef,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.conftest import default_claims, sign_token
 from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
@@ -117,7 +118,8 @@ async def _write(graph: object, nodes: list[NodeWrite], edges: list[EdgeWrite] =
 async def _report(stores: dict[str, object], graph: object, case: str, **kw: object) -> ReportFigures:
     # ADR-126: a case's packs choose its figures; a case of none (POLE) unless the test says so.
     kw.setdefault("domains", [])
-    return await case_report(alerts=stores["alerts"], graph=graph, held=stores["held"],  # type: ignore[arg-type]
+    return await case_report(alerts=stores["alerts"], graph=graph, analytics=NO_TRANSACTIONS,
+                             held=stores["held"],  # type: ignore[arg-type]
                              compute=ComputeRustworkxAdapter(), investigation_id=case,
                              reader=READER, today=TODAY, ontology=ONTOLOGY,
                              explore=ExploreService(graph, None),  # type: ignore[arg-type]

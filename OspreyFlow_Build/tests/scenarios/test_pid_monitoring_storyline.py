@@ -202,7 +202,7 @@ async def hotlist_coordinator(scene: Scene, owner: Principal | None = None) -> A
 
 async def queue(scene: Scene, reader: Principal) -> list[Any]:
     rows = await alert_queue.monitoring_queue(
-        scene.stores.alerts, scene.world.graph, scene.case, reader
+        scene.stores.alerts, scene.world.graph, scene.analytics, scene.case, reader
     )
     return sorted(rows, key=lambda q: q.alert.created_at)
 
@@ -440,7 +440,8 @@ async def test_the_alert_item_is_withheld_from_a_reader_who_may_not_see_the_numb
 
 async def _figures(scene: Scene, reader: Principal) -> Any:
     return await reports.alert_report(
-        scene.stores.alerts, scene.world.graph, scene.case, reader, today=datetime.now(UTC).date()
+        scene.stores.alerts, scene.world.graph, scene.analytics, scene.case, reader,
+        today=datetime.now(UTC).date(),
     )
 
 

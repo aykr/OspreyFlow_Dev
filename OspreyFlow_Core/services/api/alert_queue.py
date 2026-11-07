@@ -12,7 +12,8 @@ case; the rule still evaluated as its deployer (ADR-036), only readership widens
 cannot see, they are not shown (rule 3, ADR-039's all-or-nothing):** an alert any of whose entities,
 links or transactions the reader cannot read is left out of the queue and its count, and opening
 it answers as if it did not exist — its words name what it concerns, so a partial alert would
-disclose the hidden part. Visibility is always the adapters' own answer, read as the reader.
+disclose the hidden part. Visibility is always the adapters' own answer, read as the reader
+(`alerts.read_evidence`; until ADR-146 decision 10, gap map G2, the list checked nodes alone).
 
 **Triage.** An open alert is claimed by one member (or released again), and closed with a
 disposition and its reason. A *true positive* is the human confirmation rule 5 waits for: the
@@ -42,7 +43,14 @@ from schemas.domain import (
     QueuedAlert,
 )
 
-from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict, QueueRow
+from .alerts import (
+    AlertNotFoundError,
+    AlertStore,
+    AlertTriageConflict,
+    QueueRow,
+    evidence_node_ids,
+    read_evidence,
+)
 
 #: The properties that name an entity, most telling first.
 _NAME_PROPERTIES = (
@@ -82,10 +90,6 @@ def summary_of(alert: Alert, nodes: dict[str, Node]) -> str:
     return words
 
 
-def _wanted(alert: Alert) -> list[str]:
-    return [*alert.referent_node_ids, *([alert.alert_node_id] if alert.alert_node_id else [])]
-
-
 def _queued(row: QueueRow, summary: str) -> QueuedAlert:
     return QueuedAlert(
         alert=row.alert,
@@ -100,6 +104,7 @@ def _queued(row: QueueRow, summary: str) -> QueuedAlert:
 async def monitoring_queue(
     store: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     investigation_id: str,
     reader: Principal,
     *,
@@ -108,22 +113,26 @@ async def monitoring_queue(
     statuses: Sequence[str] | None = None,
 ) -> list[QueuedAlert]:
     """ADR-133 decision 5: the one queue, as `reader` may see it. Which rows is the query's answer
-    (`AlertStore.list_queue`, rule 3); what each names is then read **once, in one batch**, as the
-    reader, through the adapter's own access step (`GraphPort.get_nodes`). An alert any of whose
-    entities is missing from that answer is left out whole (ADR-039's all-or-nothing): it is neither
-    listed nor counted, the order of the rest is unchanged, and the work done is the same one read
-    whether it exists or not — so no count, order or timing says a hidden alert is there."""
+    (`AlertStore.list_queue`, rule 3); everything they cite (nodes, links and transactions, ADR-146
+    decision 10) is then read **once per kind, in one batch**, as the reader, through each
+    adapter's own access step (`alerts.read_evidence`). An alert any of whose evidence is missing
+    from those answers is left out whole (ADR-039's all-or-nothing): it is neither listed nor
+    counted, the order of the rest is unchanged, and the reads are the same calls with the same ids
+    whether it is hidden or not — so no count, order or timing says a hidden alert is there. Its
+    explanation refuses it the same way (`explain_with_evidence`), so the list and the explanation
+    agree."""
     rows = await store.list_queue(
         investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses
     )
-    wanted = sorted({node_id for row in rows for node_id in _wanted(row.alert)})
-    readable = {n.id: n for n in await graph.get_nodes(wanted, reader)} if wanted else {}
+    readable = await read_evidence(
+        [row.alert for row in rows], reader, graph, analytics, scope=lambda _: investigation_id
+    )
     shown: list[QueuedAlert] = []
     for row in rows:
-        ids = _wanted(row.alert)
-        if any(node_id not in readable for node_id in ids):
+        if not readable.whole(row.alert):
             continue
-        shown.append(_queued(row, summary_of(row.alert, {i: readable[i] for i in ids})))
+        ids = evidence_node_ids(row.alert)
+        shown.append(_queued(row, summary_of(row.alert, {i: readable.nodes[i] for i in ids})))
     return shown
 
 
@@ -145,6 +154,7 @@ async def _visible_nodes(
 async def queue(
     store: AlertStore,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     investigation_id: str,
     reader: Principal,
     *,
@@ -156,7 +166,7 @@ async def queue(
     alert's nodes in turn, stopping at a hidden one, so its work grew with the alerts the reader
     may not see; `test_case_queue_reads.py`)."""
     shown = await monitoring_queue(
-        store, graph, investigation_id, reader, kinds=["typology"], statuses=statuses
+        store, graph, analytics, investigation_id, reader, kinds=["typology"], statuses=statuses
     )
     return sorted(shown, key=lambda q: (q.alert.created_at, q.alert.id), reverse=True)
 
