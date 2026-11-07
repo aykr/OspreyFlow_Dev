@@ -93,6 +93,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- A change to `lanes_heartbeat.sh` reaches a running `watch` only after it is restarted (Ctrl-C, then run it again). The merged-lane false alarm was fixed at `cc2e443`, and the monitor was restarted at 07:20.
+
 - A beat the orchestrator sends on a lane's behalf records the orchestrator's head, not the lane's (glass, 05:53). Send it from the lane's worktree. Minor; not fixed tonight.
 
 - `origin` is public and stands, as you ruled. Pushing waits for a green `make ci`.
