@@ -27,6 +27,9 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-132 Amendment 6 | The place switch in the GOV.UK header | orchestrator | 2026-11-06 | written |
 | ADR-110 Amendment 14 | The Admin area becomes a place of its own, in sections | orchestrator | 2026-11-06 | written |
 | ADR-112 Amendment 4 | Roles an administrator defines, and five new rights | orchestrator | 2026-11-06 | written |
+| ADR-143 Amendment 1 | Where today's analyst writes go: hand-marking and manual links into the layer, accepted proposals and extractions into the source (the owner's ruling "Split", 7 November) | case | 2026-11-07 | reserved |
+| ADR-099 Amendment 14 | Data added to a case reading a composite is written under the composite's own id (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
+| ADR-136 Amendment 1 | A case's analyst layer takes the strictest egress of the case's sources (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
 
 ## Baseline
 

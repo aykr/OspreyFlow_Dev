@@ -97,6 +97,7 @@ The riskiest lane: every step starts with its access and existence-leak tests (r
 | Step | Work | Size | Exit |
 | --- | --- | --- | --- |
 | L3.1 | Phase 5 as amended (ADR-140 Amendment, ADR-143 decision 1): target model per dataset, reference lists, ADR-126 derived, one dataset per case, composites, **each case's analyst layer and its read set**; `scripts.migrate_cases_to_one_dataset` (dry run first) also creates the layers | L | Phase 5's exit; ADR-143's "unchanged under case B" conformance case green; every seeded case reads one dataset plus its layer |
+| L3.1b | Phase 5's target-model half: `TargetModel`, reference lists, ADR-126 derived, the domain-model node; a `packages/schemas` commit first; Lane 1's files agreed (the owner's ruling "New L3.1b", 7 November, case Q4) | L | Phase 5's exit in full |
 | L3.2 | Case views replace branches (ADR-144), `scripts.migrate_branches_to_views` (dry run first) | L | ADR-144's tests; the selection bar's view actions by keyboard |
 | L3.3 | Drawing boards (ADR-143 decisions 4–7): declare, link by handle, Alt-drag, right-click and keyboard; marking, grading, source; matching; pictures | L | `keyboard/boards.spec.ts`; one field analyst's check of moving versus linking (open question 4) |
 | L3.4 | Promotion (decisions 8 and 10): the sheet, one load, the dataset's policy and highest marking, review; the Studio's *Analyst promotions* list in `ingest/runs/` by agreement with Lane 1 | L | ADR-143's promotion and policy tests; the owner's ruling on online revert (open question 2) |
