@@ -931,6 +931,19 @@ them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The
 draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
 reports and 67 naming people rather than 229 and 68.
 
+**Chapter 4 in the phase 6 Studio** (ADR-140 Amendment 8, 7 November 2026; built on the studio lane, **not
+yet walked live**): the pipeline opens in **guided mode**, every person's default, as a numbered list of
+its steps beside a picture of the pipeline; **Expert** (the header's mode switch, kept for the person
+in their browser) shows the canvas instead, and either opens the same **drawer** beside the pipeline.
+Each click above that opened a screen now opens it in the drawer, with the pipeline still in view:
+the source step's *The draft's own settings* (then **Choose file…**, **Save**, and the drawer's
+**Close**), the profile step's *Open profile*, and the header's **Test** (**Run the test**) and
+**Deploy** (**Deploy as vN**, **Deploy and run now**). A step's drawer also has **Preview**, which shows
+the rows a source reads, or the graph Map or Load would make, and **does not count as Test**: Deploy
+still refuses a draft until Test has run since its last edit. *Open map editor* collapses the pipeline
+to a strip across the top (a step on it goes back to the pipeline). In the map editor a column is bound
+by dragging it, or by keyboard: **Choose** on the column, then **Bind ‹column› here** on the binding.
+
 ## 9. Related documents
 
 | Document | What it covers |
