@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SidePanelStack } from "./SidePanelStack";
@@ -11,6 +11,9 @@ import { forgetSidePanelOrderForTest, getSidePanelOrder, moveSidePanel } from ".
 
 beforeEach(() => {
   localStorage.clear();
+  // These cases size and fold every panel, so they start with none folded; the default (the
+  // Inspector alone open, ADR-145 Amendment 2) has its own case below.
+  localStorage.setItem("ospreyflow.side-panels-folded", "[]");
   forgetSidePanelOrderForTest();
   forgetLayoutSizesForTest();
 });
@@ -182,5 +185,25 @@ describe("SidePanelStack folding a whole panel", () => {
     const { container, getByRole } = render(<SidePanelStack panels={panels} />);
     fireEvent.click(getByRole("button", { name: "Query builder" }));
     expect(slot(container, "metrics").style.flex).toBe("1 1 0px");
+  });
+});
+
+// ADR-145 decision 4 (Amendment 2): with nothing stored, the column opens with the Inspector only.
+describe("the column's default", () => {
+  it("opens with the Inspector only, every other panel folded beneath it in its order", () => {
+    localStorage.removeItem("ospreyflow.side-panels-folded");
+    render(
+      <SidePanelStack
+        panels={[
+          { id: "inspector", name: "Inspector", content: <p>i</p> },
+          { id: "metrics", name: "Metrics", content: <p>m</p> },
+          { id: "query-builder", name: "Query builder", content: <p>q</p> },
+        ]}
+      />,
+    );
+    const header = (name: string) => screen.getAllByRole("button", { name: new RegExp(`^${name}$`) })[0]!;
+    expect(header("Inspector").getAttribute("aria-expanded")).toBe("true");
+    expect(header("Metrics").getAttribute("aria-expanded")).toBe("false");
+    expect(header("Query builder").getAttribute("aria-expanded")).toBe("false");
   });
 });

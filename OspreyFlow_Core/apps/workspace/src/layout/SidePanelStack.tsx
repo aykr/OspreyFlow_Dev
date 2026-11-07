@@ -6,6 +6,8 @@
 //
 // A panel folds whole from its name in the header (owner, 6 October 2026): its contents stay
 // mounted, its height goes to the panels still open, and what is folded is kept in this browser.
+// ADR-145 decision 4 (Amendment 2, variant B): until an analyst has folded or opened one, the column
+// opens with the Inspector only; the others are folded beneath it, one click away, in their order.
 //
 // A button that cannot act (the top panel's Move up, the bottom panel's Move down) is marked
 // `aria-disabled` rather than `disabled`, so it keeps focus: the button an analyst has just pressed
@@ -13,7 +15,7 @@
 import { useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 
 import { MIN_PANEL_HEIGHT, resetPanelHeight, setPanelHeight, useLayoutSizes } from "./layoutSizes";
-import { moveSidePanel, moveSidePanelTo, useSidePanelOrder, type SidePanelId } from "./panelOrder";
+import { moveSidePanel, moveSidePanelTo, SIDE_PANEL_IDS, useSidePanelOrder, type SidePanelId } from "./panelOrder";
 import { Sash } from "./Sash";
 
 export interface SidePanelSlot {
@@ -26,12 +28,17 @@ export interface SidePanelSlot {
 
 const FOLDED_KEY = "ospreyflow.side-panels-folded";
 
+/** Folded until the analyst says otherwise: every panel but the Inspector. */
+export const DEFAULT_FOLDED: readonly SidePanelId[] = SIDE_PANEL_IDS.filter((id) => id !== "inspector");
+
 function loadFolded(): Set<SidePanelId> {
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]");
+    const stored = localStorage.getItem(FOLDED_KEY);
+    if (stored === null) return new Set(DEFAULT_FOLDED);
+    const raw: unknown = JSON.parse(stored);
     return new Set(Array.isArray(raw) ? (raw.filter((v) => typeof v === "string") as SidePanelId[]) : []);
   } catch {
-    return new Set();
+    return new Set(DEFAULT_FOLDED);
   }
 }
 

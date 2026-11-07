@@ -39,6 +39,7 @@
 .context-banner__section:hover { color: var(--text-primary); background: var(--surface-hover); }
 .context-banner__section[aria-current="page"] { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
 .context-banner__section[aria-disabled="true"] { cursor: default; }
+.context-banner__badge { margin-left: var(--sp-4); padding: 0 var(--sp-4); border-radius: var(--r-chip); background: var(--surface-raised); color: var(--text-primary); }
 .context-banner__section[aria-disabled="true"]:hover { background: transparent; color: var(--text-secondary); }
 
 /* Under GOV.UK it is a GOV.UK notification banner; kept to its title and one line of content. */

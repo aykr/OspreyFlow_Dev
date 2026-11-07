@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // The workspace shell (ADR-097 step 1, design review items 1 and 16, Amendment 1).
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ClassificationStrip, highestMarking, screenMarking } from "./ClassificationStrip";
 import { LeftRail } from "./LeftRail";
+import { TopBar } from "./TopBar";
 
 afterEach(cleanup);
 
@@ -89,5 +90,48 @@ describe("the left rail's badge and Help", () => {
     render(<LeftRail items={[]} onHelp={help} />);
     fireEvent.click(screen.getByRole("button", { name: "Help" }));
     expect(help).toHaveBeenCalled();
+  });
+});
+
+// ADR-145 Amendment 2 (variant B): the rail's ⋯ More, and the top bar's More views.
+describe("the rail's More and the top bar's More views", () => {
+  it("lists the rail's other destinations under ⋯ More, chosen from it and closed by the choice", () => {
+    const chose = vi.fn();
+    render(
+      <LeftRail
+        items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]}
+        more={[
+          { id: "ownership", label: "Ownership", icon: "ownership", onSelect: () => chose("ownership") },
+          { id: "history", label: "History", icon: "history", onSelect: () => chose("history"), pressed: true },
+        ]}
+      />,
+    );
+    const more = screen.getByRole("button", { name: "More, History open" });
+    expect(more.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(more);
+    const menu = within(screen.getByRole("group", { name: "More" }));
+    expect(menu.getAllByRole("button").map((b) => b.textContent)).toEqual(["Ownership", "History"]);
+    fireEvent.click(menu.getByRole("button", { name: "Ownership" }));
+    expect(chose).toHaveBeenCalledWith("ownership");
+    expect(screen.queryByRole("group", { name: "More" })).toBeNull();
+  });
+
+  it("draws no More for a rail with nothing beyond it", () => {
+    render(<LeftRail items={[{ id: "cases", label: "Cases", icon: "cases", onSelect: () => undefined }]} />);
+    expect(screen.queryByRole("button", { name: /^More/ })).toBeNull();
+  });
+
+  it("puts the views used less under More views, naming the one open", () => {
+    const chose = vi.fn();
+    const view = (id: string, pressed = false) => ({ id, label: id[0]!.toUpperCase() + id.slice(1), pressed, onSelect: () => chose(id) });
+    const { rerender } = render(
+      <TopBar app="glass" views={[view("graph", true), view("map")]} moreViews={[view("matrix"), view("reports")]} account={null} />,
+    );
+    expect(within(screen.getByRole("group", { name: "View" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["Graph", "Map"]);
+    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Reports" }));
+    expect(chose).toHaveBeenCalledWith("reports");
+    rerender(<TopBar app="glass" views={[view("graph"), view("map")]} moreViews={[view("matrix"), view("reports", true)]} account={null} />);
+    expect(screen.getByRole("button", { name: /^Reports/ }).className).toContain("menu-button--pressed");
   });
 });

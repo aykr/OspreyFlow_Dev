@@ -89,24 +89,68 @@ test("the marking strip and the top bar take 20 and 44 pixels, and the rail 48 w
 
 test("each rail entry is reached and pressed by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  for (const name of ["Cases", "Monitoring", "Ownership", "History", "Explore", "Questions", "Dashboards"]) {
+  // ADR-145 Amendment 2 (variant B): the rail keeps Cases and Explore; Monitoring is the banner's.
+  for (const name of ["Cases", "Explore"]) {
     await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "alerts", "ownership", "history", "explore", "questions", "dashboards"]);
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["cases", "explore"]);
   // The owner's answer of 1 November 2026: watches are in Monitoring's Watches tab, not the rail.
   await expect(page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Watches" })).toHaveCount(0);
   registerCovered(REGISTRY, "rail-entries-by-keyboard");
 });
 
-test("each view is chosen by keyboard, Reports among them", async ({ page }) => {
+// ADR-145 Amendment 2 (rule 13): each destination under the rail's ⋯ More, opened and chosen by
+// keyboard, and Escape closes the menu back onto ⋯.
+test("each destination under the rail's More is reached and chosen by keyboard", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
-  for (const name of ["Map", "Reports", "Graph"]) {
-    await page.getByRole("button", { name, exact: true }).focus();
+  const rail = page.getByRole("navigation", { name: "Workspace" });
+  for (const name of ["Ownership", "History", "Questions", "Dashboards"]) {
+    await rail.getByRole("button", { name: "More" }).focus();
+    await page.keyboard.press("Enter");
+    await rail.getByRole("group", { name: "More" }).getByRole("button", { name }).focus();
+    await page.keyboard.press("Enter");
+    await expect(rail.getByRole("group", { name: "More" })).toHaveCount(0);
+  }
+  expect(await page.evaluate(() => window.__TOPBAR__?.rail)).toEqual(["ownership", "history", "questions", "dashboards"]);
+  await rail.getByRole("button", { name: "More" }).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  await expect(rail.getByRole("group", { name: "More" })).toHaveCount(0);
+  await expect(rail.getByRole("button", { name: "More" })).toBeFocused();
+  registerCovered(REGISTRY, "rail-more-by-keyboard");
+});
+
+test("each view is chosen by keyboard, Matrix and Reports under More views", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("button", { name: "Map", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  for (const name of ["Reports", "Matrix"]) {
+    await page.getByRole("button", { name: "More views" }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("group", { name: "More views" }).getByRole("button", { name }).focus();
     await page.keyboard.press("Enter");
   }
-  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["map", "reports", "graph"]);
+  await page.getByRole("button", { name: "Graph", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  expect(await page.evaluate(() => window.__TOPBAR__?.views)).toEqual(["map", "reports", "matrix", "graph"]);
   registerCovered(REGISTRY, "views-chosen-by-keyboard");
+  registerCovered(REGISTRY, "more-views-by-keyboard");
+});
+
+// ADR-145 decision 4 (Amendment 2): the column opens with the Inspector only, the other panels folded
+// beneath it in their order, each opened by one keypress on its name.
+test("the column opens with the Inspector only, and each folded panel opens with one keypress", async ({ page }) => {
+  await page.goto("/keyboard/panel-frames-harness.html?defaults=1");
+  const header = (name: string) => page.getByRole("button", { name, exact: true });
+  await expect(header("Inspector")).toHaveAttribute("aria-expanded", "true");
+  for (const name of ["Metrics", "Query builder"]) await expect(header(name)).toHaveAttribute("aria-expanded", "false");
+  for (const name of ["Metrics", "Query builder"]) {
+    await header(name).focus();
+    await page.keyboard.press("Enter");
+    await expect(header(name)).toHaveAttribute("aria-expanded", "true");
+  }
+  registerCovered(REGISTRY, "open-a-folded-panel-by-keyboard");
 });
 
 test("the rail shows its names, and hides them again, by keyboard", async ({ page }) => {
@@ -114,10 +158,10 @@ test("the rail shows its names, and hides them again, by keyboard", async ({ pag
   const rail = page.getByRole("navigation", { name: "Workspace" });
   await rail.getByRole("button", { name: "Show names" }).focus();
   await page.keyboard.press("Enter");
-  await expect(rail.getByText("History")).toBeVisible();
+  await expect(rail.getByText("Explore")).toBeVisible();
   await expect(rail.getByRole("button", { name: "Hide names" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(rail.getByText("History")).toHaveCount(0);
+  await expect(rail.getByText("Explore")).toHaveCount(0);
   registerCovered(REGISTRY, "rail-shows-and-hides-names-by-keyboard");
 });
 

@@ -1,0 +1,7 @@
+/* The shell's chrome beyond `primitives.css` (ADR-145 Amendment 2). The rail's ⋯ More (ADR-145 Amendment 2): its menu opens beside the rail, over the canvas. */
+.left-rail__more { position: relative; display: flex; flex-direction: column; }
+.left-rail__more-panel { top: 0; left: 100%; margin-top: 0; margin-left: var(--sp-6); min-width: 200px; }
+
+/* The top bar's More views, when the view open is one of its own: marked as the view switch marks
+   its pressed view (ADR-097: primary text with an underline, not brass). */
+.menu-button--pressed { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--text-primary); }
