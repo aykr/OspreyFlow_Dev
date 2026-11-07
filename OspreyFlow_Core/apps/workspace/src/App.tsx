@@ -49,6 +49,8 @@ import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip"
 import { LeftRail } from "./shell/LeftRail";
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
+import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
+import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { Toast } from "./design/primitives/Toast";
@@ -79,7 +81,6 @@ import {
   type OntologyRegistry,
 } from "./ontology/schema";
 import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
-import { ProposedTypes } from "./linktypes/ProposedTypes";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
@@ -123,6 +124,7 @@ import {
   showsInspector,
   viewsFor,
   type StartPlace,
+  startPlaces,
 } from "./rights/visibility";
 import { startScreen } from "./shell/startScreen";
 import { loadHome, openInQueue, summariseHome, type HomeSummary } from "./home/homeData";
@@ -667,7 +669,6 @@ export function App() {
   const [classificationOrder, setClassificationOrder] = useState<readonly string[]>([]);
   // ADR-102: the scheme, so a link's handling can be changed on purpose.
   const [handlingScheme, setHandlingScheme] = useState<HandlingScheme | undefined>(undefined);
-  const [proposedTypesOpen, setProposedTypesOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   // B16's own cross-case overlay — the second investigation's own scope,
   // analyst-entered (this build has no cross-investigation picker anywhere
@@ -783,6 +784,8 @@ export function App() {
     return () => cancelAnimationFrame(frame);
   }, [view]);
   if (view !== "ingest") lastGlassView.current = view;
+  // ADR-145 decision 2: the banner's case and the datasets it reads, as this person may see them.
+  const caseContext = useCaseContext(API_BASE_URL, bearerToken, investigationId);
   // ADR-112: someone who may not investigate (a Reports Viewer) lands where they may look.
   useEffect(() => {
     const views: string[] = viewsFor(rights);
@@ -1326,14 +1329,17 @@ export function App() {
       <TopBar
         app={app}
         onStart={() => setStartChoice("start")}
-        caseSwitcher={
-          <CaseSwitcher
-            apiBaseUrl={API_BASE_URL}
-            bearerToken={bearerToken}
-            currentId={investigationId}
-            onBrowse={() => setBrowsingCases(true)}
-            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
-            onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
+        // ADR-145 decision 1: the places this person's rights open (inside the GOV.UK header under
+        // that brand). Admin is a place of its own, outside the case.
+        places={
+          <PlaceSwitcher
+            places={startPlaces(rights)}
+            current={app}
+            onChoose={(place) => {
+              if (place === "admin") setStartChoice("admin");
+              else if (place === "ingest") setView("ingest");
+              else if (app !== "glass") setView(lastGlassView.current);
+            }}
           />
         }
         search={
@@ -1396,12 +1402,32 @@ export function App() {
           </>
         }
       />
+      {/* ADR-145 decision 2: one line naming the place, the case and what it reads, with the
+          cross-link between the Glass and the Studio for a person who holds both. */}
+      <ContextBanner
+        place={app}
+        caseSwitcher={
+          <CaseSwitcher
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            currentId={investigationId}
+            onBrowse={() => setBrowsingCases(true)}
+            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
+            onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
+          />
+        }
+        datasets={caseContext.datasets}
+        crossLink={crossLinkFor(app, startPlaces(rights), caseContext.name, caseContext.datasets, {
+          toStudio: () => setView("ingest"),
+          toGlass: () => setView(lastGlassView.current),
+        })}
+      />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-      {/* ADR-097 step 1: the places the analyst goes to, on the left rail. */}
+      {/* ADR-097 step 1: the places the analyst goes to, on the left rail. ADR-145 decision 1: the
+          Glass's alone; the Studio has none. */}
+      {app === "glass" && (
       <LeftRail
         items={[
-          ...(app === "glass"
-            ? [
                 { id: "cases", label: "Cases", icon: "cases" as const, onSelect: () => setCasesOpen(true), pressed: casesOpen },
                 // ADR-133 decision 5 (ADR-109 ruling 5 before it, as Alerts): the Monitoring place —
                 // the one alert queue for every kind, rules and templates, watches, held rows, audit.
@@ -1413,21 +1439,13 @@ export function App() {
                 { id: "history", label: "History", icon: "history" as const, onSelect: () => setHistoryOpen(true), pressed: historyOpen },
                 { id: "explore", label: "Explore", icon: "explore" as const, onSelect: () => setExploreOpen(true), pressed: exploreOpen },
                 { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
-                // ADR-090 C3: the relationship types analysts of the administrator's unit proposed.
-                { id: "types", label: "Proposed types", icon: "types" as const, onSelect: () => setProposedTypesOpen(true), pressed: proposedTypesOpen },
-                { id: "ingest", label: "Ingest Studio", icon: "ingest" as const, onSelect: () => setView("ingest") },
                 // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
                 { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
-                // ADR-110 Amendment 1: the deployment's administration, inside the running system.
-                { id: "admin", label: "Admin", icon: "admin" as const, onSelect: () => setView("admin"), pressed: view === "admin" },
-              ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id))
-            : [
-                { id: "investigation", label: "Back to the investigation", icon: "glass" as const, onSelect: () => setView(lastGlassView.current) },
-              ]),
-        ]}
+        ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id))}
         // ADR-115 E6: Help reopens the welcome panel, as `?` does.
-        onHelp={app === "glass" ? () => setWelcomeOpen(true) : undefined}
+        onHelp={() => setWelcomeOpen(true)}
       />
+      )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
       {(view === "graph" || view === "map") && (
         // ADR-097 step 1: what belongs to this view alone, docked above it.
@@ -2030,13 +2048,6 @@ export function App() {
           onBranchOpened={(id) => openCase(id)}
         />
       )}
-      <ProposedTypes
-        apiBaseUrl={API_BASE_URL}
-        bearerToken={bearerToken}
-        open={proposedTypesOpen}
-        onClose={() => setProposedTypesOpen(false)}
-        onDecided={() => setLinkTypesRead((n) => n + 1)}
-      />
       <Drawer open={exploreOpen} onClose={() => setExploreOpen(false)} title="Explore">
         {investigationId && (
           <ExplorePanel

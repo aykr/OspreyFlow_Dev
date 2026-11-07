@@ -3,10 +3,11 @@
 import type { ReactElement, ReactNode } from "react";
 
 import { CasePicker } from "../investigation/CasePicker";
-import { startFor, type Rights, type StartPlace } from "../rights/visibility";
+import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
 import { HomePage, type HomePerson } from "../home/HomePage";
 import type { HomeSummary } from "../home/homeData";
+import { PlaceSwitcher } from "./PlaceSwitcher";
 import { StartBar } from "./StartPage";
 
 export type StartChoice = StartPlace | "start" | null;
@@ -45,6 +46,18 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
     return <div style={{ padding: "var(--sp-24)", color: "var(--text-secondary)" }}>Loading…</div>;
   }
   const where = investigationId ? startChoice : startFor(startChoice);
+  // ADR-145 decision 1: Home's cards and the switcher go to a place the same way. With a case open
+  // behind, the Glass offers the cases with a way back to it, and the Studio opens on it; Admin needs
+  // no case either way.
+  const choose = (place: StartPlace) => {
+    if (!investigationId) return setStartChoice(place);
+    setStartChoice(place === "admin" ? "admin" : null);
+    if (place === "glass") input.browseCases();
+    if (place === "ingest") input.openStudio();
+  };
+  const switcher = (current: StartPlace | null) => (
+    <PlaceSwitcher places={startPlaces(rights)} current={current} onChoose={choose} />
+  );
   if (where === "start") {
     return (
       <HomePage
@@ -54,14 +67,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         account={input.account}
         marking={input.marking}
         onOpenCase={(id, place) => input.openCase(id, place === "ingest" ? "ingest" : undefined)}
-        onChoose={(place) => {
-          if (!investigationId) return setStartChoice(place);
-          // A case is open behind Start: the Glass offers the cases with a way back to it, and the
-          // Studio opens on it; the Admin area needs no case either way.
-          setStartChoice(place === "admin" ? "admin" : null);
-          if (place === "glass") input.browseCases();
-          if (place === "ingest") input.openStudio();
-        }}
+        onChoose={choose}
       />
     );
   }
@@ -74,6 +80,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         account={input.account}
         marking={input.marking}
         onStart={() => setStartChoice("start")}
+        places={switcher("admin")}
       />
     );
   }
@@ -82,7 +89,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
   const backToStart = () => setStartChoice("start");
   return (
     <>
-    <StartBar account={input.account} marking={input.marking} onStart={backToStart} />
+    <StartBar account={input.account} marking={input.marking} onStart={backToStart} places={switcher(where)} />
     <CasePicker
       apiBaseUrl={input.apiBaseUrl}
       bearerToken={input.bearerToken}

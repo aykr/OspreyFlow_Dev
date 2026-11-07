@@ -261,7 +261,10 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const url = String(input);
       const body = url.endsWith("/v1/ontology")
         ? { entity_types: [], edge_types: [] }
-        : url.endsWith("/v1/handling-scheme")
+        : // ADR-145 decision 2: someone holding the Glass and the Studio, so the cross-link is offered.
+          url.endsWith("/v1/me/rights")
+          ? { rights: ["investigate", "edit_pipelines"] }
+          : url.endsWith("/v1/handling-scheme")
           ? { name: "test", classification: ["OFFICIAL"], handling_codes: {} }
           : url.endsWith("/v1/hotlists")
             ? { hotlists: [] }
@@ -291,7 +294,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "Back to the investigation" })).toBeTruthy();
+    // ADR-145 decision 2: the banner's cross-link back to the case, in place of the Studio's rail.
+    expect(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ })).toBeTruthy();
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
   });
 
@@ -334,12 +338,16 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     vi.mocked(globalThis.fetch).mockImplementation(() => new Promise<Response>(() => undefined));
   };
 
-  test("the rail is at the far left and offers the Ingest Studio; the bar begins with the mark", async () => {
+  test("the rail is at the far left and the places are in the bar, not the rail; the bar begins with the mark", async () => {
     holdAllRequests();
     render(<App />);
 
     await screen.findByRole("navigation", { name: "Workspace" });
-    expect(within(rail()).getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
+    // ADR-145 decision 1: the Ingest Studio, Admin and Proposed types left the rail for the switcher.
+    for (const gone of ["Ingest Studio", "Admin", "Proposed types"]) expect(within(rail()).queryByRole("button", { name: gone })).toBeNull();
+    const places = within(screen.getByRole("navigation", { name: "Places" }));
+    expect(places.getByRole("button", { name: "The Glass" }).getAttribute("aria-current")).toBe("page");
+    expect(places.getByRole("button", { name: "Ingest Studio" })).toBeTruthy();
     const header = document.querySelector("header.app-header")!;
     // ADR-114 Amendment 5 point 9: the mark is the way back to Start.
     expect(header.firstElementChild?.getAttribute("aria-label")).toBe("Osprey, go to Home");
@@ -363,24 +371,26 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     render(<App />);
 
-    await screen.findByRole("button", { name: "Back to the investigation" });
+    await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ });
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("ingest");
     for (const gone of ["Graph", "Map", "Watches", "Export", "History"]) {
       expect(screen.queryByRole("button", { name: gone })).toBeNull();
     }
     expect(screen.queryByRole("combobox", { name: /search entities/i })).toBeNull();
-    // The case menu stays (the Studio's own "goes into" row carries a second one).
-    expect(within(document.querySelector("header.app-header") as HTMLElement).getByRole("button", { name: /^Case:/ })).toBeTruthy();
+    // ADR-145 decision 1: the Studio has no rail.
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    // The case menu stays, in the banner (ADR-145 decision 2; the Studio's own "goes into" row carries a second one).
+    expect(within(screen.getByRole("region", { name: "You are in the Ingest Studio" })).getByRole("button", { name: /^Case:/ })).toBeTruthy();
   });
 
-  test("the rail moves between the apps, and coming back returns to the view that was open", async () => {
+  test("the switcher and the cross-link move between the places, and coming back returns to the view that was open", async () => {
     holdAllRequests();
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Monitoring" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ingest Studio" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: "Ingest Studio" }));
     expect(screen.queryByRole("button", { name: "Monitoring" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Back to the investigation" }));
+    fireEvent.click(screen.getByRole("button", { name: /^← Back to .* in the Glass$/ }));
     expect(screen.getByRole("button", { name: "Monitoring" }).getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });

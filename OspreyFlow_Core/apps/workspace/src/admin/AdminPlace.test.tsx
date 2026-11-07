@@ -109,6 +109,20 @@ describe("the Admin area", () => {
   });
 });
 
+// ADR-145 decision 1: Proposed types left the Glass's rail and is an Admin tab, behind its right.
+describe("Proposed types in the Admin area", () => {
+  it("is a tab only for a holder of manage_ontology, and opens the proposals there", async () => {
+    serve((path) => (path === "link-types" ? json(200, []) : null));
+    place(["administer_system"]);
+    expect(screen.queryByRole("tab", { name: "Proposed types" })).toBeNull();
+    cleanup();
+    place(["manage_ontology"]);
+    fireEvent.click(screen.getByRole("tab", { name: "Proposed types" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review proposed types" }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+  });
+});
+
 describe("how fresh a dashboard's figures are", () => {
   const base = { client_id: "osprey-dashboard-board", account_id: "sa-1" };
 
