@@ -745,6 +745,11 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "banner-cross-link-by-keyboard",
   "banner-sections-by-keyboard",
   "home-place-cards-by-keyboard",
+  // ADR-145 Amendment 2 (variant B): the rail's More and each destination under it, More views, and a
+  // folded panel of the column opened with one keypress.
+  "rail-more-by-keyboard",
+  "more-views-by-keyboard",
+  "open-a-folded-panel-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
