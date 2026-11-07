@@ -1,0 +1,10 @@
+lease glass; 2026-11-07T23:43:54Z; red, round 1 points 1 and 2: the tests at d8f2cdd over alerts.py and alert_queue.py as at 16629dc (the stale write-back; the closing row locked first, the rest after, unordered)
+>       assert refused == [], f"{len(refused)} of {len(done)} closes refused: {refused[:2]}"
+E       AssertionError: 11 of 40 closes refused: [DeadlockDetectedError('deadlock detected'), DeadlockDetectedError('deadlock detected')]
+E       assert [DeadlockDete...tected'), ...] == []
+E         Left contains 11 more items, first extra item: DeadlockDetectedError('deadlock detected')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_two_closes_confirming_one_match_both_complete
+1 failed, 1 passed, 7 deselected in 16.62s
+
+Note: the lost-update test passed here because its two matches joined the same pair and the adapter merged them into one link (measured: l == m), so it could not show the stale write-back. Re-planted with each match on its own pair: live-red-round1-lost-update.txt (red for the reason it claims) and live-green-round1-lost-update.txt.
