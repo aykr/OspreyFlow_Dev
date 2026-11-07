@@ -282,15 +282,17 @@ async def test_the_admin_area_neither_runs_retimes_nor_resumes_a_composites_sche
     assert done == []
 
 
+@pytest.mark.parametrize("target", ["case", "dataset"])
 @pytest.mark.parametrize(("method", "path", "body", "done_word"), ADMIN_ROUTES)
 async def test_the_admin_check_fails_with_it_alone_removed(
-    method: str, path: str, body: Any, done_word: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+    method: str, path: str, body: Any, done_word: str, target: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:  # fmt: skip
     async def allowed(*args: Any) -> None:
         return None
 
     monkeypatch.setattr(app_module, "_refuse_a_composite_schedule", allowed)
-    _answer, done = await _admin(method, path, body)
+    _answer, done = await _admin(method, path, body, target=target)
     assert done_word in done
 
 

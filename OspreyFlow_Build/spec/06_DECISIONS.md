@@ -26708,8 +26708,13 @@ composite case's write to a member's node made a copy of it in the composite; no
    what it would change, so a node, link, finding or picture the reader cannot see still answers as
    not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
    `refuse_writing_a_node_in_a_composite_case`). The case's loading routes refuse by a dependency
-   that comes after the case's level check, and the Studio's routes of a dataset after the dataset's
-   own gate, so a caller the case or dataset is not for is answered 404. `DatasetStampingGraph`
+   that comes after the case's Viewer check, and the Studio's routes of a dataset after the
+   dataset's own gate, so a caller the case or dataset is not for is answered 404; a Viewer of the
+   case is told it is read-only before the route asks for its own, higher level, which says nothing
+   the Viewer cannot already see. The node routes refuse even a node wholly in the layer: a
+   correction repoints every link incident to the node (`GraphPort.supersede_node`), which the case
+   may not all read; the close of an alert raised in the case, whose node's links are its own, is
+   the one correction allowed. `DatasetStampingGraph`
    refuses as the last word: in a composite case, any write, correction, revert, withdrawal or
    restore whose datasets are not the case's layer alone, and a correction of an element the case
    cannot see (in the same words, which say nothing, since every other correction there is refused

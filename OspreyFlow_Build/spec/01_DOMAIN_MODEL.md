@@ -584,10 +584,14 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
 - **A composite is read-only for now** (Amendments 14 and 15; the owner, 7 November 2026). A case
   reading a composite reads its members and keeps its own analyst layer, and writes nothing else:
   extraction and its accept and reject, a question's accepted proposal, a picture, confirming or
-  retracting a node, changing a link, a close that confirms, and the Studio's loads, runs and
-  schedules are refused in words (409 `composite_read_only`, "do this in a case that reads that
-  dataset"), before anything is written; so is any write into a composite's id. What the reader
-  cannot see answers as not found first. Writing into a composite is its own later step.
+  retracting a node, changing a link, a close that would confirm anything outside the layer, a
+  site's grid, held rows' release and rejection, and the Studio's loads, runs and schedules
+  (scheduled runs refused at each slot, and in the Admin area) are refused in words (409
+  `composite_read_only`, "do this in a case that reads that dataset"), before anything is
+  written; so is any write into a composite's id. What the reader cannot see answers as not found
+  first. Its own records that are not dataset content keep working: saved patterns, watches, and
+  monitors, whose alerts are raised into the layer and may be closed as true positives there.
+  Writing into a composite is its own later step.
 - **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity
   marked by hand in the reader (the node and its `MENTIONED_IN` link) and a manual `SAME_AS` or
   `NOT_SAME_AS` (§4) name the layer, which the request holds beside its read set

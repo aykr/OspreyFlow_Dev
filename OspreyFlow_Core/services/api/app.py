@@ -7537,14 +7537,19 @@ StudioDatasetDep = Annotated[str, Depends(require_studio_dataset)]
 SourceAuthorDep = Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))]
 
 
+async def _first_name(datasets: DatasetStore, dataset_ids: Sequence[str]) -> str | None:
+    """The first of these datasets' names, for a refusal that names a composite to an asker who
+    may be told names (ADR-099 Amendment 11); `None` for an id the store does not hold."""
+    held = {d.id: d for d in (await datasets.egress_of(dataset_ids)).values()}
+    return next((held[d].name for d in dataset_ids if d in held), None)
+
+
 async def refuse_loading_a_composite(dataset_id: StudioDatasetDep, datasets: DatasetsDep) -> None:
     """The same for the Studio's own routes of a dataset (ADR-140 Amendment 4): a composite is
     read, never loaded. After the dataset's own gate, which answers 404 to anyone it is not for."""
     if await datasets.composites_among([dataset_id]):
         # Named: past the dataset's gate, which only someone it is for reaches.
-        held = await datasets.egress_of([dataset_id])
-        name = held[dataset_id].name if dataset_id in held else None
-        raise CompositeReadOnlyError(name, in_a_case=False)
+        raise CompositeReadOnlyError(await _first_name(datasets, [dataset_id]), in_a_case=False)
 
 
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
@@ -11161,9 +11166,7 @@ async def _refuse_a_composite_schedule(recipe: StudioRecipeDraft, datasets: Data
         ids.extend(d.id for d in await datasets.chosen_of_case(recipe.schedule_case))
     if ids and (found := await datasets.composites_among(ids)):
         # Named: an operator of schedules holds a right, so may be told dataset names (A11).
-        held = await datasets.egress_of(sorted(found))
-        names = [held[d].name for d in sorted(found) if d in held]
-        raise CompositeReadOnlyError(names[0] if names else None, in_a_case=False)
+        raise CompositeReadOnlyError(await _first_name(datasets, sorted(found)), in_a_case=False)
 
 
 @app.get(
