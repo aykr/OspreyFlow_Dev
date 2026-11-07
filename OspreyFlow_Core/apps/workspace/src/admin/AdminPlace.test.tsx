@@ -39,15 +39,17 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
   return sent;
 }
 
-function place(rights: string[]) {
+/** The Admin place for these rights, and (ADR-145 decision 5) the section opened from its side list. */
+function place(rights: string[], section?: string) {
   render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(rights)} />);
+  if (section) fireEvent.click(within(screen.getByRole("navigation", { name: "Admin sections" })).getByRole("button", { name: section }));
 }
 
 describe("the Admin area", () => {
-  it("shows only the tabs the account holds a right for", async () => {
+  it("shows only the sections the account holds a right for", async () => {
     serve();
-    place(["administer_system"]);
-    expect(screen.queryByRole("tab", { name: "People and roles" })).toBeNull();
+    place(["administer_system"], "System");
+    expect(screen.queryByRole("button", { name: "People and roles" })).toBeNull();
     expect(await screen.findByText("not answering: unreachable")).toBeTruthy();
   });
 
@@ -65,7 +67,7 @@ describe("the Admin area", () => {
           })
         : null,
     );
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     const line = await screen.findByText("The Conduit cannot act for people: run `ospreyflow repair-sign-in`");
     expect(line).toBeTruthy();
     expect(screen.queryByText(/not answering/)).toBeNull();
@@ -114,10 +116,10 @@ describe("Proposed types in the Admin area", () => {
   it("is a tab only for a holder of manage_ontology, and opens the proposals there", async () => {
     serve((path) => (path === "link-types" ? json(200, []) : null));
     place(["administer_system"]);
-    expect(screen.queryByRole("tab", { name: "Proposed types" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Proposed types" })).toBeNull();
     cleanup();
     place(["manage_ontology"]);
-    fireEvent.click(screen.getByRole("tab", { name: "Proposed types" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proposed types" }));
     fireEvent.click(screen.getByRole("button", { name: "Review proposed types" }));
     expect(await screen.findByRole("dialog")).toBeTruthy();
   });
@@ -262,7 +264,7 @@ describe("the Demo packs tab", () => {
   it("shows each pack, its licence and credit, whether it is loaded, and the command that adds it", async () => {
     serve((path) => (path === "demo-packs" ? json(200, PACKS) : null));
     place(["administer_system"]);
-    fireEvent.click(await screen.findByRole("tab", { name: "Demo packs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Demo packs" }));
     expect(await screen.findByText("PaySim — mobile-money fraud (simulated)")).toBeTruthy();
     expect(screen.getByText(/CC-BY-SA-4.0/)).toBeTruthy();
     expect(screen.getByText(/Lopez-Rojas, Elmir and Axelsson/)).toBeTruthy();
@@ -278,7 +280,7 @@ describe("the Demo packs tab", () => {
   it("says which pack is real people's data, and only that one (ADR-114 Amendment 23 point 4)", async () => {
     serve((path) => (path === "demo-packs" ? json(200, PACKS) : null));
     place(["administer_system"]);
-    fireEvent.click(await screen.findByRole("tab", { name: "Demo packs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Demo packs" }));
     const enron = await screen.findByRole("article", { name: "Enron — a real company's email" });
     expect(within(enron).getByRole("note").textContent).toMatch(/^Real personal data\./);
     expect(screen.getAllByRole("note")).toHaveLength(1);
@@ -289,7 +291,7 @@ describe("the Demo packs tab", () => {
     const writeText = vi.fn(async () => undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     place(["administer_system"]);
-    fireEvent.click(await screen.findByRole("tab", { name: "Demo packs" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Demo packs" }));
     fireEvent.click(await screen.findByRole("button", { name: "Copy the command for operation-ledger" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("ospreyflow demo add operation-ledger"));
     expect(await screen.findByText("Copied. Run it in a terminal on the machine OspreyFlow runs on.")).toBeTruthy();
@@ -311,7 +313,7 @@ describe("the System tab's models", () => {
           })
         : null,
     );  // prettier-ignore
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     const table = await screen.findByRole("table", { name: "Models" });
     expect(table.textContent).toContain("openai/gpt-4o-mini");
     expect(table.textContent).toContain("this deployment");
@@ -324,7 +326,7 @@ describe("the System tab's models", () => {
         ? json(200, { components: [], models: [{ role: "extraction", model: "qwen", runs_at: "this deployment", local_model: "qwen" }], model_notice: null })
         : null,
     );  // prettier-ignore
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     await screen.findByRole("table", { name: "Models" });
     expect(screen.queryByRole("note")).toBeNull();
   });
@@ -347,7 +349,7 @@ describe("the System tab's engines", () => {
           })
         : null,
     );  // prettier-ignore
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     const table = await screen.findByRole("table", { name: "Engines" });
     const rows = within(table).getAllByRole("row").slice(1).map((row) =>
       within(row).getAllByRole("cell").map((cell) => cell.textContent),
@@ -372,7 +374,7 @@ describe("the System tab's engines", () => {
           })
         : null,
     );  // prettier-ignore
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     await screen.findByRole("table", { name: "Engines" });
     expect(document.body.textContent).not.toContain("AIza-not-a-real-key");
   });
@@ -390,7 +392,7 @@ describe("the System tab's version", () => {
           })
         : null,
     );  // prettier-ignore
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     const version = await screen.findByRole("region", { name: "Version" });
     expect(version.textContent).toContain("OspreyFlow v0.4.1");
     expect(version.textContent).toContain("v0.5.0 is available.");
@@ -403,7 +405,7 @@ describe("the System tab's version", () => {
 
   it("says when there has been no check", async () => {
     serve((path) => (path === "system" ? json(200, { version: "v0.4.1", components: [], models: [], model_notice: null, update: null }) : null));
-    place(["administer_system"]);
+    place(["administer_system"], "System");
     const version = await screen.findByRole("region", { name: "Version" });
     expect(version.textContent).toContain("Not checked for updates yet.");
     expect(version.textContent).toContain("ospreyflow update --check");
@@ -421,11 +423,11 @@ describe("the Datasets tab", () => {
   it("is the system administrator's, and says what each setting means and that none is the default", async () => {
     serve((path) => (path === "datasets" ? json(200, DATASETS) : null));
     place(["manage_people"]);
-    expect(screen.queryByRole("tab", { name: "Datasets" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Datasets" })).toBeNull();
     cleanup();
     serve((path) => (path === "datasets" ? json(200, DATASETS) : null));
     place(["administer_system"]);
-    fireEvent.click(screen.getByRole("tab", { name: "Datasets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Datasets" }));
     const table = await screen.findByRole("table", { name: "Datasets" });
     const egress = within(table).getByLabelText("Egress for Enron corpus") as HTMLSelectElement;
     expect(egress.value).toBe("none");
@@ -442,7 +444,7 @@ describe("the Datasets tab", () => {
           : null,
     );
     place(["administer_system"]);
-    fireEvent.click(screen.getByRole("tab", { name: "Datasets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Datasets" }));
     fireEvent.change(await screen.findByLabelText("Egress for Enron corpus"), { target: { value: "any" } });
     fireEvent.click(screen.getByRole("button", { name: "Save egress for Enron corpus" }));
     await waitFor(() => expect(sent.some((s) => s.path === "PUT datasets/enron/egress")).toBe(true));
@@ -459,7 +461,7 @@ describe("the Datasets tab", () => {
           : null,
     );
     place(["administer_system"]);
-    fireEvent.click(screen.getByRole("tab", { name: "Datasets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Datasets" }));
     fireEvent.change(await screen.findByLabelText("Egress for Enron corpus"), { target: { value: "any" } });
     fireEvent.click(screen.getByRole("button", { name: "Save egress for Enron corpus" }));
     expect(await screen.findByText("Your account does not hold the right for this.")).toBeTruthy();

@@ -4,7 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AdminPlace } from "./AdminPlace";
+import { AdminPlace } from "../AdminPlace";
 
 afterEach(() => {
   cleanup();
@@ -29,10 +29,10 @@ describe("Connections", () => {
       }),
     );
     render(<AdminPlace apiBaseUrl="http://api" bearerToken="t" rights={new Set(["operate_schedules"])} />);
-    expect(screen.queryByRole("tab", { name: "Connections" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connections" })).toBeNull();
     cleanup();
     render(<AdminPlace apiBaseUrl="http://api" bearerToken="t" rights={new Set(["administer_system"])} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Connections" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connections" }));
     expect(await screen.findByText("Files: the ingest root")).toBeTruthy();
     expect(screen.getByText("built in")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "New Files connection" }), { target: { value: "Second folder" } });

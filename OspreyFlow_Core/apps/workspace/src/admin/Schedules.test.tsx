@@ -70,7 +70,7 @@ describe("Schedules and runs", () => {
   it("is a tab only for an account holding operate_schedules", async () => {
     serve();
     place(["administer_system"]);
-    expect(screen.queryByRole("tab", { name: "Operations" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Operations" })).toBeNull();
     cleanup();
     serve();
     place(["operate_schedules"]);

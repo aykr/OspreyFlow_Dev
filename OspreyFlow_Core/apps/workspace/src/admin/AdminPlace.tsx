@@ -1,1159 +1,154 @@
-// The Admin area (`06_DECISIONS.md` ADR-110 Amendment 1, ADR-112): the deployment's administration,
-// inside the running system and behind the same sign-in — no separate console to start. People and
-// their roles, dashboard identities, and the system's health; each tab shown only to an account
-// holding its right, and the Conduit refusing anything a stale view still offers. ADR-136: the
-// Datasets tab, where an administrator sets where each dataset's material may go.
-import { useEffect, useState } from "react";
+// The Admin place (`06_DECISIONS.md` ADR-110 Amendments 1 and 14, ADR-112, ADR-145 decisions 5 and
+// 13): the deployment's administration inside the running system, behind the same sign-in. A side
+// list of sections in their groups (`sections.json`), each shown only to an account holding its
+// right, the Conduit refusing anything a stale view still offers (rule 3,
+// `test_admin_sections.py`). A section not built yet is a "coming" placeholder, shown only to holders
+// of its right; nothing behind it calls the Conduit. Each built section's screen is its own file under
+// `sections/`, which is how the section test finds the routes it calls. Under the GOV.UK brand the
+// list is a GOV.UK side navigation (decision 13).
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import type {
-  AdminDataset,
-  DashboardIdentity,
-  DemoPackStatus,
-  EngineStatus,
-  OrganisationArrival,
-  PersonAccount,
-  SignInDelivery,
-  SystemStatus,
-  UpdateNotice,
-} from "../../../../packages/schemas/generated";
-import { Button, Input, Select, Tabs } from "../design/primitives";
-import { ProposedTypes } from "../linktypes/ProposedTypes";
+import { currentBrand } from "../brand/brand";
+import type { AdminApi } from "./api";
+import SECTIONS from "./sections.json";
+import { Connections } from "./sections/Connections";
+import { Dashboards } from "./sections/Dashboards";
+import { Datasets } from "./sections/Datasets";
+import { DemoPacks } from "./sections/DemoPacks";
+import { People } from "./sections/People";
+import { ProposedTypesSection } from "./sections/ProposedTypes";
 import { Schedules } from "./Schedules";
-import { Connections } from "./Connections";
-import { updateWords } from "./updateNotice";
-import {
-  disablePerson,
-  enablePerson,
-  invitePerson,
-  linkOrganisation,
-  listArrivals,
-  listDashboards,
-  listDatasets,
-  listDemoPacks,
-  listPeople,
-  registerDashboard,
-  removeDashboard,
-  removePerson,
-  resetSignIn,
-  setAccess,
-  setDatasetEgress,
-  setRoles,
-  systemStatus,
-  type AdminApi,
-} from "./api";
+import { System } from "./sections/System";
+import "./admin.css";
 
-const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
-
-/** How fresh a dashboard's figures are, from the reporting mart (ADR-111 Amendment 2): a standing
- * failure first, in the sync service's own words; then the last good pull; else never pulled. */
-export function feedFreshness(d: DashboardIdentity): { text: string; failing: boolean } {
-  const cases = d.cases_pulled ?? 0;
-  if (d.last_failure && d.failed_at) {
-    const last = d.last_pulled ? `; last good pull ${utc(d.last_pulled)}` : "; never pulled";
-    return { text: `Failing since ${utc(d.failed_at)}: ${d.last_failure}${last}`, failing: true };
-  }
-  if (d.last_pulled) {
-    return { text: `Pulled ${utc(d.last_pulled)} · ${cases} ${cases === 1 ? "case" : "cases"}`, failing: false };
-  }
-  return { text: "Never pulled: no case has given it Viewer yet", failing: false };
-}
+export { feedFreshness } from "./sections/Dashboards";
+export { joinWords, removalWords, ROLES } from "./sections/People";
 
 export interface AdminPlaceProps extends AdminApi {
   rights: ReadonlySet<string>;
 }
 
-/** ADR-112's four roles, by the name the identity provider gives them. */
-export const ROLES: { id: string; label: string }[] = [
-  { id: "analyst", label: "Analyst" },
-  { id: "data_engineer", label: "Data Engineer" },
-  { id: "osprey-admin", label: "Admin" },
-  { id: "reports_viewer", label: "Reports Viewer" },
-];
-const ROLE_IDS = new Set(ROLES.map((r) => r.id));
-
-/** The deployment's classifications and handling codes, for the access a person is given. */
-interface Scheme {
-  levels: string[];
-  codes: string[];
+export interface AdminSection {
+  id: string;
+  label: string;
+  right: string;
+  /** The file drawing it, from `src/`, for a built section. */
+  screen?: string;
+  /** What it will hold, for a section not built yet. */
+  coming?: string;
+}
+export interface AdminGroup {
+  label: string;
+  sections: AdminSection[];
 }
 
-function useScheme(api: AdminApi): Scheme {
-  const [scheme, setScheme] = useState<Scheme>({ levels: [], codes: [] });
-  useEffect(() => {
-    fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((body: { classification?: string[]; handling_codes?: Record<string, unknown> }) =>
-        setScheme({ levels: body.classification ?? [], codes: Object.keys(body.handling_codes ?? {}) }),
-      )
-      .catch(() => setScheme({ levels: [], codes: [] }));
-  }, [api.apiBaseUrl, api.bearerToken]);
-  return scheme;
-}
+export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
 
-/** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
- * one-time code shown here once — never stored, changed by the person at first sign-in. */
-function Delivered({ delivery }: { delivery: SignInDelivery }) {
-  const who = delivery.person.name || delivery.person.username;
-  if (delivery.delivery === "email") {
-    return (
-      <p role="status" style={{ margin: 0 }}>
-        {`An email with a link to set a password went to ${delivery.person.email ?? who}. They choose their own password there.`}
-      </p>
-    );
-  }
-  return (
-    <div role="status" style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}>
-      <p style={{ margin: 0 }}>
-        {`Give this one-time code to ${who} in person. It is shown once, here; at first sign-in they choose their own password.`}
-      </p>
-      <code style={{ fontSize: "var(--fs-16)" }}>{delivery.one_time_code}</code>
-    </div>
+/** Each built section's screen, by its id in `sections.json` (`AdminPlace.test.tsx` holds the two
+ * to each other). */
+export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
+  people: (api) => <People api={api} />,
+  dashboards: (api) => <Dashboards api={api} />,
+  datasets: (api) => <Datasets api={api} />,
+  connections: (api) => <Connections api={api} />,
+  "proposed-types": (api) => <ProposedTypesSection api={api} />,
+  operations: (api) => <Schedules api={api} />,
+  system: (api) => <System api={api} />,
+  "demo-packs": (api) => <DemoPacks api={api} />,
+};
+
+/** The groups and sections this person's rights show, in their order; a group with none is left out. */
+export function sectionsFor(rights: ReadonlySet<string>): AdminGroup[] {
+  return ADMIN_GROUPS.map((g) => ({ ...g, sections: g.sections.filter((s) => rights.has(s.right)) })).filter(
+    (g) => g.sections.length > 0,
   );
 }
 
-function CodeChoices({
-  codes,
-  chosen,
-  onChange,
-  label,
+function Coming({ section }: { section: AdminSection }) {
+  return (
+    <p className="label" style={{ margin: 0 }}>
+      {`Coming: ${section.coming}`}
+    </p>
+  );
+}
+
+function SideNavigation({
+  groups,
+  current,
+  onChoose,
+  govuk,
 }: {
-  codes: string[];
-  chosen: Set<string>;
-  onChange: (next: Set<string>) => void;
-  label: (code: string) => string;
+  groups: AdminGroup[];
+  current: string;
+  onChoose: (id: string) => void;
+  govuk: boolean;
 }) {
   return (
-    <span style={{ display: "inline-flex", gap: "var(--sp-8)" }}>
-      {codes.map((code) => (
-        <label key={code} className="label" style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
-          <input
-            type="checkbox"
-            aria-label={label(code)}
-            checked={chosen.has(code)}
-            onChange={(e) => {
-              const next = new Set(chosen);
-              if (e.target.checked) next.add(code);
-              else next.delete(code);
-              onChange(next);
-            }}
-          />
-          {code}
-        </label>
-      ))}
-    </span>
-  );
-}
-
-function AccessEditor({
-  api,
-  person,
-  scheme,
-  onSaved,
-}: {
-  api: AdminApi;
-  person: PersonAccount;
-  scheme: Scheme;
-  onSaved: (p: PersonAccount) => void;
-}) {
-  const [clearance, setClearance] = useState(person.clearance ?? scheme.levels[0] ?? "");
-  const [unit, setUnit] = useState(person.org_unit ?? "");
-  const [codes, setCodes] = useState(new Set(person.receivable_handling_codes ?? []));
-  const [said, setSaid] = useState<string | null>(null);
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-12)", alignItems: "center" }}>
-      <Select aria-label={`Clearance for ${person.username}`} value={clearance} onChange={(e) => setClearance(e.target.value)}>
-        {scheme.levels.map((l) => (
-          <option key={l} value={l}>{l}</option>
-        ))}
-      </Select>
-      <Input aria-label={`Unit for ${person.username}`} value={unit} onChange={(e) => setUnit(e.target.value)} />
-      <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Handling code ${c} for ${person.username}`} />
-      <Button
-        aria-label={`Save access for ${person.username}`}
-        disabled={!clearance || !unit.trim()}
-        onClick={() =>
-          void setAccess(api, person.id, { clearance, org_unit: unit.trim(), receivable_handling_codes: [...codes] })
-            .then((saved) => {
-              setSaid("Saved.");
-              onSaved(saved);
-            })
-            .catch((e: Error) => setSaid(e.message))
-        }
-      >
-        Save access
-      </Button>
-      {said && <span role="status" className="label">{said}</span>}
-    </div>
-  );
-}
-
-/** ADR-112 Amendment 3: what removing a person does, said before it is done. */
-export function removalWords(person: PersonAccount): string {
-  const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
-  return (
-    `Remove ${who}? Their account is deleted: they can no longer sign in, and their sign-in name and email address ` +
-    "become free to use again. Cases, alerts and recipes they made stay as they are and show their id in place of " +
-    "their name. This cannot be undone. To keep the account but stop them signing in, disable it instead."
-  );
-}
-
-function RemoveConfirmation({
-  api,
-  person,
-  onRemoved,
-  onCancel,
-}: {
-  api: AdminApi;
-  person: PersonAccount;
-  onRemoved: (p: PersonAccount) => void;
-  onCancel: () => void;
-}) {
-  const [problem, setProblem] = useState<string | null>(null);
-  return (
-    <div
-      role="group"
-      aria-label={`Remove ${person.username}`}
-      style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}
-    >
-      <p style={{ margin: 0 }}>{removalWords(person)}</p>
-      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
-      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
-        <Button
-          aria-label={`Confirm removing ${person.username}`}
-          onClick={() =>
-            void removePerson(api, person.id)
-              .then(onRemoved)
-              .catch((e: Error) => setProblem(e.message))
-          }
-        >
-          Remove the account
-        </Button>
-        <Button aria-label={`Keep ${person.username}`} onClick={onCancel}>
-          Keep it
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PersonRow({
-  api,
-  person,
-  scheme,
-  onSaved,
-  onDelivered,
-  onRemoved,
-}: {
-  api: AdminApi;
-  person: PersonAccount;
-  scheme: Scheme;
-  onSaved: (p: PersonAccount) => void;
-  onDelivered: (d: SignInDelivery) => void;
-  onRemoved: (p: PersonAccount) => void;
-}) {
-  const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
-  const [said, setSaid] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
-  const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
-  const status = !person.enabled ? "Disabled" : person.must_set_password ? "Invited — must set a password" : null;
-  const joined = person.organisation_linked ? "Signs in through the organisation" : null;
-  const act = (done: Promise<PersonAccount>) =>
-    void done
-      .then((saved) => {
-        setSaid(null);
-        onSaved(saved);
-      })
-      .catch((e: Error) => setSaid(e.message));
-  return (
-    <>
-      <tr>
-        <td>
-          <span className="value">{person.name}</span>
-          <br />
-          <span className="label">{`${person.username} · ${person.clearance ?? "no clearance"} · ${person.org_unit ?? "no unit"}`}</span>
-          {status && (
-            <>
-              <br />
-              <span className="label" style={!person.enabled ? { color: "var(--warning)" } : undefined}>{status}</span>
-            </>
-          )}
-          {joined && (
-            <>
-              <br />
-              <span className="label">{joined}</span>
-            </>
-          )}
-        </td>
-        {ROLES.map((role) => (
-          <td key={role.id} style={{ textAlign: "center" }}>
-            <input
-              type="checkbox"
-              aria-label={`${role.label} for ${person.username}`}
-              checked={chosen.has(role.id)}
-              onChange={(e) => {
-                const next = new Set(chosen);
-                if (e.target.checked) next.add(role.id);
-                else next.delete(role.id);
-                setChosen(next);
-              }}
-            />
-          </td>
-        ))}
-        <td className="label">{others.length ? others.join(", ") : "—"}</td>
-        <td>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)" }}>
-            <Button
-              disabled={!changed}
-              aria-label={`Save roles for ${person.username}`}
-              onClick={() =>
-                void setRoles(api, person.id, [...ROLES.map((r) => r.id).filter((id) => chosen.has(id)), ...others])
-                  .then((saved) => {
-                    setSaid("Saved.");
-                    onSaved(saved);
-                  })
-                  .catch((e: Error) => setSaid(e.message))
-              }
-            >
-              Save
-            </Button>
-            <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
-              Access
-            </Button>
-            {person.enabled ? (
-              confirming ? (
-                <>
-                  <Button
-                    aria-label={`Confirm disabling ${person.username}`}
-                    onClick={() => {
-                      setConfirming(false);
-                      act(disablePerson(api, person.id));
-                    }}
+    <nav aria-label="Admin sections" className={govuk ? "admin-nav admin-nav--govuk" : "admin-nav"}>
+      {groups.map((group) => {
+        // A group of one section of its own name (Audit, Demo packs) is that section alone, unheaded.
+        const alone = group.sections.length === 1 && group.sections[0]!.label === group.label;
+        return (
+          <div key={group.label} className="admin-nav__group">
+            {!alone && <h3 className={govuk ? "govuk-heading-s admin-nav__heading" : "label admin-nav__heading"}>{group.label}</h3>}
+            <ul className="admin-nav__list">
+              {group.sections.map((section) => (
+                <li key={section.id} className={section.id === current ? "admin-nav__item admin-nav__item--current" : "admin-nav__item"}>
+                  <button
+                    type="button"
+                    className={govuk ? "govuk-link admin-nav__link" : "admin-nav__link"}
+                    aria-current={section.id === current ? "page" : undefined}
+                    onClick={() => onChoose(section.id)}
                   >
-                    Confirm disable
-                  </Button>
-                  <Button aria-label={`Keep ${person.username} enabled`} onClick={() => setConfirming(false)}>
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button aria-label={`Disable ${person.username}`} onClick={() => setConfirming(true)}>
-                  Disable
-                </Button>
-              )
-            ) : (
-              <Button aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
-                Enable
-              </Button>
-            )}
-            <Button
-              aria-label={`Reset sign-in for ${person.username}`}
-              onClick={() =>
-                void resetSignIn(api, person.id)
-                  .then((delivery) => {
-                    onSaved(delivery.person);
-                    onDelivered(delivery);
-                  })
-                  .catch((e: Error) => setSaid(e.message))
-              }
-            >
-              Reset sign-in
-            </Button>
-            {!person.system_account && (
-              <Button aria-label={`Remove ${person.username}`} aria-expanded={removing} onClick={() => setRemoving(!removing)}>
-                Remove
-              </Button>
-            )}
-          </div>
-          {said && <span role="status" className="label">{` ${said}`}</span>}
-        </td>
-      </tr>
-      {editing && (
-        <tr>
-          <td colSpan={ROLES.length + 3}>
-            <AccessEditor api={api} person={person} scheme={scheme} onSaved={onSaved} />
-          </td>
-        </tr>
-      )}
-      {removing && (
-        <tr>
-          <td colSpan={ROLES.length + 3}>
-            <RemoveConfirmation api={api} person={person} onRemoved={onRemoved} onCancel={() => setRemoving(false)} />
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-/** ADR-112 Amendment 3 (b): what joining does, said before it is done. */
-export function joinWords(arrival: OrganisationArrival, person: PersonAccount): string {
-  const them = arrival.provider_username || "this organisation account";
-  const who = person.name && person.name !== person.username ? `${person.name} (${person.username})` : person.username;
-  return (
-    `Join ${them} to ${who}? From their next sign-in through the organisation they land in ${person.username}'s ` +
-    "account, with its roles, clearance and cases. Do this only if you are sure they are the same person: the " +
-    "organisation said only that its account carries the same email address."
-  );
-}
-
-function ArrivalRow({
-  api,
-  arrival,
-  people,
-  onJoined,
-}: {
-  api: AdminApi;
-  arrival: OrganisationArrival;
-  people: PersonAccount[];
-  onJoined: (arrival: OrganisationArrival, person: PersonAccount) => void;
-}) {
-  const them = arrival.provider_username || "(no name given)";
-  const eligible = people.filter((p) => !p.system_account && !p.organisation_linked);
-  const [target, setTarget] = useState(eligible[0]?.id ?? "");
-  const [confirming, setConfirming] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const chosen = eligible.find((p) => p.id === target);
-  return (
-    <tr>
-      <td>
-        <span className="value">{them}</span>
-        <br />
-        <span className="label">
-          {`Refused ${arrival.attempts} ${arrival.attempts === 1 ? "time" : "times"}, last at ${utc(arrival.last_refused)}`}
-        </span>
-      </td>
-      <td>
-        <div style={{ display: "grid", gap: "var(--sp-8)" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
-            <Select aria-label={`Account to join ${them} to`} value={target} onChange={(e) => setTarget(e.target.value)}>
-              {eligible.map((p) => (
-                <option key={p.id} value={p.id}>{`${p.name} (${p.username})`}</option>
+                    {/* One text, as the banner's coming Boards is: its name is what it reads. */}
+                    {section.coming ? `${section.label} (coming)` : section.label}
+                  </button>
+                </li>
               ))}
-            </Select>
-            <Button
-              aria-label={`Join ${them}`}
-              aria-expanded={confirming}
-              disabled={!chosen}
-              onClick={() => setConfirming(!confirming)}
-            >
-              Join
-            </Button>
+            </ul>
           </div>
-          {confirming && chosen && (
-            <div
-              role="group"
-              aria-label={`Join ${them}`}
-              style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}
-            >
-              <p style={{ margin: 0 }}>{joinWords(arrival, chosen)}</p>
-              {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
-              <div style={{ display: "flex", gap: "var(--sp-8)" }}>
-                <Button
-                  aria-label={`Confirm joining ${them}`}
-                  onClick={() =>
-                    void linkOrganisation(api, chosen.id, arrival.subject)
-                      .then((person) => onJoined(arrival, person))
-                      .catch((e: Error) => setProblem(e.message))
-                  }
-                >
-                  Join the accounts
-                </Button>
-                <Button aria-label={`Do not join ${them}`} onClick={() => setConfirming(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-/** ADR-112 Amendment 3 (b): people the organisation's sign-in refused because an OspreyFlow
- * account holds their email address, each offered for joining to an account. */
-function Arrivals({
-  api,
-  arrivals,
-  people,
-  onJoined,
-}: {
-  api: AdminApi;
-  arrivals: OrganisationArrival[];
-  people: PersonAccount[];
-  onJoined: (arrival: OrganisationArrival, person: PersonAccount) => void;
-}) {
-  if (!arrivals.length) return null;
-  return (
-    <section aria-label="Refused organisation sign-ins" style={{ display: "grid", gap: "var(--sp-8)" }}>
-      <h3 className="value" style={{ margin: 0 }}>Refused organisation sign-ins</h3>
-      <p className="label" style={{ margin: 0 }}>
-        These people signed in through the organisation and were refused, because an OspreyFlow account already holds
-        their email address. Join one to the account that is theirs, or remove that account so they arrive afresh.
-        The identity provider keeps this list for seven days.
-      </p>
-      <table className="table" aria-label="Refused organisation sign-ins">
-        <thead>
-          <tr>
-            <th>Organisation account</th>
-            <th>Join to</th>
-          </tr>
-        </thead>
-        <tbody>
-          {arrivals.map((a) => (
-            <ArrivalRow key={a.subject} api={api} arrival={a} people={people} onJoined={onJoined} />
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-function InviteForm({
-  api,
-  scheme,
-  onInvited,
-}: {
-  api: AdminApi;
-  scheme: Scheme;
-  onInvited: (d: SignInDelivery) => void;
-}) {
-  const [username, setUsername] = useState("");
-  const [first, setFirst] = useState("");
-  const [last, setLast] = useState("");
-  const [email, setEmail] = useState("");
-  const [clearance, setClearance] = useState("");
-  const [unit, setUnit] = useState("");
-  const [codes, setCodes] = useState(new Set<string>());
-  const [roles, setRolesChosen] = useState(new Set<string>());
-  const [problem, setProblem] = useState<string | null>(null);
-  useEffect(() => {
-    if (!clearance && scheme.levels[0]) setClearance(scheme.levels[0]);
-  }, [scheme.levels, clearance]);
-  const field = { display: "grid", gap: "var(--sp-4)" } as const;
-  return (
-    <form
-      aria-label="Invite a person"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setProblem(null);
-        void invitePerson(api, {
-          username: username.trim(),
-          first_name: first.trim(),
-          last_name: last.trim(),
-          email: email.trim() || null,
-          clearance,
-          org_unit: unit.trim(),
-          receivable_handling_codes: [...codes],
-          roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
-        })
-          .then((delivery) => {
-            onInvited(delivery);
-            setUsername("");
-            setFirst("");
-            setLast("");
-            setEmail("");
-          })
-          .catch((err: Error) => setProblem(err.message));
-      }}
-      style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
-    >
-      <h3 className="value" style={{ margin: 0 }}>Invite a person</h3>
-      <p className="label" style={{ margin: 0 }}>
-        They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
-        are shown a one-time code to give them in person. Nobody can be given more than you hold.
-      </p>
-      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
-      <label className="label" style={field}>
-        Sign-in name
-        <Input aria-label="Sign-in name" value={username} onChange={(e) => setUsername(e.target.value)} />
-      </label>
-      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
-        <label className="label" style={{ ...field, flex: 1 }}>
-          First name
-          <Input aria-label="First name" value={first} onChange={(e) => setFirst(e.target.value)} />
-        </label>
-        <label className="label" style={{ ...field, flex: 1 }}>
-          Last name
-          <Input aria-label="Last name" value={last} onChange={(e) => setLast(e.target.value)} />
-        </label>
-      </div>
-      <label className="label" style={field}>
-        Email (optional)
-        <Input aria-label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      </label>
-      <div style={{ display: "flex", gap: "var(--sp-8)" }}>
-        <label className="label" style={{ ...field, flex: 1 }}>
-          Clearance
-          <Select aria-label="Invite clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
-            {scheme.levels.map((l) => (
-              <option key={l} value={l}>{l}</option>
-            ))}
-          </Select>
-        </label>
-        <label className="label" style={{ ...field, flex: 1 }}>
-          Unit
-          <Input aria-label="Invite unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
-        </label>
-      </div>
-      <div className="label" style={field}>
-        Handling codes they may receive
-        <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
-      </div>
-      <div className="label" style={field}>
-        Roles
-        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
-          {ROLES.map((role) => (
-            <label key={role.id} style={{ display: "inline-flex", gap: "var(--sp-4)", alignItems: "center" }}>
-              <input
-                type="checkbox"
-                aria-label={`Invite as ${role.label}`}
-                checked={roles.has(role.id)}
-                onChange={(e) => {
-                  const next = new Set(roles);
-                  if (e.target.checked) next.add(role.id);
-                  else next.delete(role.id);
-                  setRolesChosen(next);
-                }}
-              />
-              {role.label}
-            </label>
-          ))}
-        </span>
-      </div>
-      <Button type="submit" variant="primary" disabled={!username.trim() || !clearance || !unit.trim()}>
-        Invite
-      </Button>
-    </form>
-  );
-}
-
-function People({ api }: { api: AdminApi }) {
-  const [people, setPeople] = useState<PersonAccount[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
-  const [removed, setRemoved] = useState<PersonAccount | null>(null);
-  const [arrivals, setArrivals] = useState<OrganisationArrival[]>([]);
-  const [arrivalsProblem, setArrivalsProblem] = useState<string | null>(null);
-  const [joined, setJoined] = useState<string | null>(null);
-  const scheme = useScheme(api);
-  useEffect(() => {
-    listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
-    listArrivals(api).then(setArrivals).catch((e: Error) => setArrivalsProblem(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api.apiBaseUrl, api.bearerToken]);
-  if (problem) return <p role="alert">{problem}</p>;
-  if (!people) return <p className="label">Reading the people…</p>;
-  const saved = (p: PersonAccount) => setPeople((current) => (current ?? []).map((x) => (x.id === p.id ? p : x)));
-  return (
-    <>
-      <p className="label" style={{ margin: 0 }}>
-        A role grants what a person may do, never what they may see: that stays their clearance and the cases they are given.
-        Other grants (single rights, older roles) are kept as they are.
-      </p>
-      {delivered && <Delivered delivery={delivered} />}
-      {joined && (
-        <p role="status" style={{ margin: 0 }}>
-          {joined}
-        </p>
-      )}
-      {arrivalsProblem && <p role="alert" style={{ margin: 0 }}>{`Refused organisation sign-ins could not be read: ${arrivalsProblem}`}</p>}
-      <Arrivals
-        api={api}
-        arrivals={arrivals}
-        people={people}
-        onJoined={(arrival, person) => {
-          saved(person);
-          setArrivals((current) => current.filter((a) => a.subject !== arrival.subject));
-          setJoined(
-            `${arrival.provider_username || "The organisation account"} is joined to ${person.username}. Their next sign-in ` +
-              "through the organisation lands in that account, with its roles.",
-          );
-        }}
-      />
-      {removed && (
-        <p role="status" style={{ margin: 0 }}>
-          {`${removed.name || removed.username} (${removed.username}) was removed. What they made now shows their id in place of their name.`}
-        </p>
-      )}
-      <table className="table" aria-label="People and their roles">
-        <thead>
-          <tr>
-            <th>Person</th>
-            {ROLES.map((r) => (
-              <th key={r.id} style={{ textAlign: "center" }}>{r.label}</th>
-            ))}
-            <th>Other grants</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {people.map((p) => (
-            <PersonRow
-              key={p.id}
-              api={api}
-              person={p}
-              scheme={scheme}
-              onSaved={saved}
-              onDelivered={setDelivered}
-              onRemoved={(gone) => {
-                setRemoved(gone);
-                setPeople((current) => (current ?? []).filter((x) => x.id !== gone.id));
-              }}
-            />
-          ))}
-        </tbody>
-      </table>
-      <InviteForm
-        api={api}
-        scheme={scheme}
-        onInvited={(delivery) => {
-          setDelivered(delivery);
-          setPeople((current) => [...(current ?? []), delivery.person]);
-        }}
-      />
-    </>
-  );
-}
-
-function Dashboards({ api }: { api: AdminApi }) {
-  const [dashboards, setDashboards] = useState<DashboardIdentity[] | null>(null);
-  const [levels, setLevels] = useState<string[]>([]);
-  const [name, setName] = useState("");
-  const [clearance, setClearance] = useState("");
-  const [unit, setUnit] = useState("");
-  const [secret, setSecret] = useState<{ clientId: string; value: string } | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  useEffect(() => {
-    listDashboards(api).then(setDashboards).catch((e: Error) => setProblem(e.message));
-    fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
-      .then((r) => (r.ok ? r.json() : { classification: [] }))
-      .then((scheme: { classification?: string[] }) => {
-        setLevels(scheme.classification ?? []);
-        setClearance((scheme.classification ?? [])[0] ?? "");
-      })
-      .catch(() => setLevels([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api.apiBaseUrl, api.bearerToken]);
-
-  return (
-    <>
-      <p className="label" style={{ margin: 0 }}>
-        A dashboard reads the reporting feed as an identity of its own. Register it here; a case's Author then gives its account
-        Viewer on that case, as for a person. It cannot read above your own clearance.
-      </p>
-      {problem && <p role="alert">{problem}</p>}
-      {secret && (
-        <div role="status" style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)" }}>
-          <p style={{ margin: 0 }}>{`${secret.clientId} is registered. Its secret is shown once — copy it into the dashboard's settings now:`}</p>
-          <code>{secret.value}</code>
-        </div>
-      )}
-      <table className="table" aria-label="Dashboard identities">
-        <thead>
-          <tr>
-            <th>Dashboard</th>
-            <th>Account (give this to a case's Author)</th>
-            <th>Reads at</th>
-            <th>Figures</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {(dashboards ?? []).map((d) => (
-            <tr key={d.client_id}>
-              <td>{d.client_id}</td>
-              <td><code>{d.account_id}</code></td>
-              <td>{`${d.clearance ?? "—"} · ${d.org_unit ?? "—"}`}</td>
-              <td style={feedFreshness(d).failing ? { color: "var(--error)" } : undefined}>{feedFreshness(d).text}</td>
-              <td>
-                <Button
-                  aria-label={`Remove ${d.client_id}`}
-                  onClick={() =>
-                    void removeDashboard(api, d.client_id)
-                      .then(() => setDashboards((dashboards ?? []).filter((x) => x.client_id !== d.client_id)))
-                      .catch((e: Error) => setProblem(e.message))
-                  }
-                >
-                  Remove
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {dashboards?.length === 0 && <p className="label" style={{ margin: 0 }}>No dashboard is registered.</p>}
-      <form
-        aria-label="Register a dashboard"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setProblem(null);
-          void registerDashboard(api, name.trim(), clearance, unit.trim())
-            .then((made) => {
-              setSecret({ clientId: made.dashboard.client_id, value: made.secret });
-              setDashboards([...(dashboards ?? []), made.dashboard]);
-              setName("");
-            })
-            .catch((err: Error) => setProblem(err.message));
-        }}
-        style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 420, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}
-      >
-        <h3 className="value" style={{ margin: 0 }}>Register a dashboard</h3>
-        <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
-          Name
-          <Input aria-label="Dashboard name" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
-          Reads at clearance
-          <Select aria-label="Dashboard reads at clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
-            {levels.map((l) => (
-              <option key={l} value={l}>{l}</option>
-            ))}
-          </Select>
-        </label>
-        <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
-          Unit
-          <Input aria-label="Dashboard unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
-        </label>
-        <Button type="submit" variant="primary" disabled={!name.trim() || !clearance || !unit.trim()}>
-          Register
-        </Button>
-      </form>
-    </>
-  );
-}
-
-function System({ api }: { api: AdminApi }) {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const ask = () => {
-    setProblem(null);
-    systemStatus(api).then(setStatus).catch((e: Error) => setProblem(e.message));
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(ask, [api.apiBaseUrl, api.bearerToken]);
-  return (
-    <>
-      {problem && <p role="alert">{problem}</p>}
-      {status && (
-        <ul aria-label="Components" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-8)" }}>
-          {(status.components ?? []).map((c) => (
-            <li key={c.name} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
-              <span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: `var(${c.ok ? "--success" : "--error"})` }} />
-              <span className="value">{c.name}</span>
-              {/* ADR-114 Amendment 36: a part that answered and is wrong says what to do, not "not answering". */}
-              <span className="label">
-                {c.ok ? `answered in ${c.millis} ms` : (c.notice ?? `not answering: ${c.detail ?? "no reason given"}`)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {status?.model_notice && (
-        <p role="note" style={{ margin: 0, border: "1px solid var(--warning)", padding: "var(--sp-8)" }}>
-          {status.model_notice}
-        </p>
-      )}
-      {status?.models && status.models.length > 0 && (
-        <table className="table" aria-label="Models">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Model</th>
-              <th>Runs at</th>
-            </tr>
-          </thead>
-          <tbody>
-            {status.models.map((m) => (
-              <tr key={m.role}>
-                <td>{m.role}</td>
-                <td>
-                  <code>{m.model}</code>
-                  {m.runs_at !== "this deployment" && m.local_model && (
-                    <div className="label">{`Anything that may not be sent runs on ${m.local_model}.`}</div>
-                  )}
-                </td>
-                <td>{m.runs_at}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
-      {status && <VersionSection version={status.version} update={status.update} />}
-      <Button onClick={ask}>Ask again</Button>
-    </>
-  );
-}
-
-/** Each model engine (ADR-135 decision 5): its models per role, the roles it is the default for,
- * whether its key is present — Yes or No — and (ADR-136 decision 1) whether it is under a privacy
- * contract, with the agreement's reference. Only the named fields are read, so nothing else the
- * response might carry, a key least of all, reaches the page. Keys are set on the host with
- * `ospreyflow models key`, and the mark in `osprey.yaml`, never here. */
-function EnginesTable({ engines }: { engines: EngineStatus[] }) {
-  return (
-    <table className="table" aria-label="Engines">
-      <thead>
-        <tr>
-          <th>Engine</th>
-          <th>Models</th>
-          <th>Default for</th>
-          <th>Key present</th>
-          <th>Privacy contract</th>
-        </tr>
-      </thead>
-      <tbody>
-        {engines.map((engine) => (
-          <tr key={engine.name}>
-            <td>{engine.label}</td>
-            <td>
-              {Object.entries(engine.models)
-                .map(([role, model]) => `${role}: ${model}`)
-                .join("; ")}
-            </td>
-            <td>{engine.default_for.length > 0 ? engine.default_for.join(", ") : "None"}</td>
-            <td>{engine.key_present ? "Yes" : "No"}</td>
-            <td>{contractWords(engine)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function contractWords(engine: EngineStatus): string {
-  if (engine.name === "local") return "Not needed: nothing leaves";
-  if (!engine.privacy_contract) return "No contract";
-  return engine.contract_reference ? `Under contract (${engine.contract_reference})` : "Under contract";
-}
-
-const EGRESS: { value: AdminDataset["egress"]; label: string }[] = [
-  { value: "none", label: "none — never sent to a hosted engine" },
-  { value: "contracted", label: "contracted — only to a provider under a privacy contract" },
-  { value: "any", label: "any — to any enabled provider" },
-];
-
-/** ADR-136 decision 2: every dataset and where its material may go when a model is asked. A change
- * is one dataset at a time, saved by its own button, and the Conduit audits it. */
-function Datasets({ api }: { api: AdminApi }) {
-  const [datasets, setDatasets] = useState<AdminDataset[] | null>(null);
-  const [chosen, setChosen] = useState<Record<string, AdminDataset["egress"]>>({});
-  const [said, setSaid] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  useEffect(() => {
-    listDatasets(api).then(setDatasets).catch((e: Error) => setProblem(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api.apiBaseUrl, api.bearerToken]);
-  const save = (dataset: AdminDataset) => {
-    const egress = chosen[dataset.id] ?? dataset.egress;
-    setProblem(null);
-    setSaid(null);
-    void setDatasetEgress(api, dataset.id, egress)
-      .then((changed) => {
-        setDatasets((current) => (current ?? []).map((d) => (d.id === changed.id ? changed : d)));
-        setSaid(`${changed.name}: egress is now ${changed.egress}.`);
-      })
-      .catch((e: Error) => setProblem(e.message));
-  };
-  return (
-    <>
-      <p className="label" style={{ margin: 0 }}>
-        Where each dataset&apos;s material may go when a model is asked. <strong>none</strong>: never to a hosted engine.{" "}
-        <strong>contracted</strong>: only to a provider marked as under a privacy contract. <strong>any</strong>: to any
-        enabled provider. Every dataset is none until you change it. Its handling code must still be one the deployment
-        sends, and each change is recorded in the audit log.
-      </p>
-      {problem && <p role="alert">{problem}</p>}
-      {said && <p role="status">{said}</p>}
-      {!datasets && !problem && <p className="label">Reading the datasets…</p>}
-      {datasets && (
-        <table className="table" aria-label="Datasets">
-          <thead>
-            <tr>
-              <th>Dataset</th>
-              <th>Unit</th>
-              <th>Egress</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {datasets.map((dataset) => (
-              <tr key={dataset.id}>
-                <td>{dataset.name}</td>
-                <td>{dataset.owning_unit}</td>
-                <td>
-                  <Select
-                    aria-label={`Egress for ${dataset.name}`}
-                    value={chosen[dataset.id] ?? dataset.egress}
-                    onChange={(e) => setChosen({ ...chosen, [dataset.id]: e.target.value as AdminDataset["egress"] })}
-                  >
-                    {EGRESS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </td>
-                <td>
-                  <Button aria-label={`Save egress for ${dataset.name}`} onClick={() => save(dataset)}>
-                    Save
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {datasets?.length === 0 && <p className="label" style={{ margin: 0 }}>There is no dataset yet.</p>}
-    </>
-  );
-}
-
-/** The version and the last update check (ADR-114 decision 13, Amendment 8 point 2). */
-function VersionSection({ version, update }: { version?: string | null; update?: UpdateNotice | null }) {
-  const words = updateWords(version, update);
-  return (
-    <section aria-label="Version" style={{ display: "grid", gap: "var(--sp-6)" }}>
-      {version && <p className="value" style={{ margin: 0 }}>{`OspreyFlow ${version}`}</p>}
-      <p
-        role={words.tone === "problem" ? "alert" : "status"}
-        style={{
-          margin: 0,
-          ...(words.tone === "available" ? { border: "1px solid var(--border-strong)", padding: "var(--sp-8)" } : {}),
-        }}
-      >
-        {words.headline}
-      </p>
-      <p className="label" style={{ margin: 0 }}>
-        {words.detail}
-      </p>
-      {update?.update_available && update.url && (
-        <p style={{ margin: 0 }}>
-          <a href={update.url} target="_blank" rel="noreferrer">{`The ${update.latest} release`}</a>
-        </p>
-      )}
-      {update?.update_available && update.notes && (
-        <details>
-          <summary>{`What is new in ${update.latest}`}</summary>
-          <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{update.notes}</pre>
-        </details>
-      )}
-    </section>
-  );
-}
-
-/** The demo packs (ADR-114 Amendment 5, "Show and explain"): what each shows, its licence and
- * credit, whether it is loaded, and the command that adds it on the host. The Glass runs nothing. */
-function DemoPacks({ api }: { api: AdminApi }) {
-  const [packs, setPacks] = useState<DemoPackStatus[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [copied, setCopied] = useState<{ id: string; said: string } | null>(null);
-  useEffect(() => {
-    listDemoPacks(api).then(setPacks).catch((e: Error) => setProblem(e.message));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api.apiBaseUrl, api.bearerToken]);
-  if (problem) return <p role="alert">{problem}</p>;
-  if (!packs) return <p className="label">Reading the demo packs…</p>;
-  const copy = (pack: DemoPackStatus) =>
-    void Promise.resolve()
-      .then(() => navigator.clipboard.writeText(pack.command))
-      .then(() => setCopied({ id: pack.id, said: "Copied. Run it in a terminal on the machine OspreyFlow runs on." }))
-      .catch(() => setCopied({ id: pack.id, said: "Your browser would not let the page copy; select the command and copy it." }));
-  return (
-    <>
-      <p className="label" style={{ margin: 0 }}>
-        A demo pack is added on the machine OspreyFlow runs on, with the command shown — this page never runs it. Each loads
-        into a case of its own, with whoever adds it as its Author.
-      </p>
-      {packs.map((pack) => (
-        <article
-          key={pack.id}
-          aria-label={pack.title}
-          style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-6)" }}
-        >
-          <h3 className="value" style={{ margin: 0 }}>{pack.title}</h3>
-          {pack.real_data && (
-            <p role="note" style={{ margin: 0 }}>
-              <strong>Real personal data.</strong> Real people&apos;s email, not made up. The command shows
-              what it is and asks you to accept it before anything is loaded.
-            </p>
-          )}
-          <p style={{ margin: 0 }}>{pack.shows}</p>
-          <p className="label" style={{ margin: 0 }}>
-            {`Licence: ${pack.licence}`}
-            {pack.attribution ? ` · Credit: ${pack.attribution}` : ""}
-          </p>
-          <p className="label" style={{ margin: 0 }}>
-            {pack.loaded_case_id ? `Loaded, in “${pack.case_name}”.` : "Not in any case you can open."}
-          </p>
-          {pack.source_page && (
-            <p className="label" style={{ margin: 0 }}>
-              <a href={pack.source_page} target="_blank" rel="noreferrer">{`Download ${pack.title.split(" ")[0]}'s file`}</a>
-              {pack.size_bytes ? ` (${Math.round(pack.size_bytes / 1e6)} MB), then give its path in the command.` : ""}
-            </p>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
-            <code>{pack.command}</code>
-            <Button aria-label={`Copy the command for ${pack.id}`} onClick={() => copy(pack)}>
-              Copy
-            </Button>
-            {copied?.id === pack.id && <span role="status" className="label">{copied.said}</span>}
-          </div>
-        </article>
-      ))}
-    </>
-  );
-}
-
-type Tab = "people" | "dashboards" | "schedules" | "system" | "datasets" | "connections" | "demo-packs" | "types";
-
-/** ADR-145 decision 1: *Proposed types* left the Glass's rail. Until the Studio's Model tab decides
- * them (A2, ADR-143) they are decided here, behind the same right (`manage_ontology`). */
-function ProposedTypesTab({ api }: { api: AdminApi }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <p className="label">The relationship types analysts of your unit proposed, each to promote, reject or retire.</p>
-      <div>
-        <Button aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-          Review proposed types
-        </Button>
-      </div>
-      <ProposedTypes apiBaseUrl={api.apiBaseUrl} bearerToken={api.bearerToken} open={open} onClose={() => setOpen(false)} />
-    </>
+        );
+      })}
+    </nav>
   );
 }
 
 export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
-  const tabs = [
-    ...(rights.has("manage_people") ? [{ id: "people", label: "People and roles" }] : []),
-    ...(rights.has("manage_dashboards") ? [{ id: "dashboards", label: "Dashboards" }] : []),
-    ...(rights.has("operate_schedules") ? [{ id: "schedules", label: "Operations" }] : []),
-    ...(rights.has("administer_system") ? [{ id: "system", label: "System" }] : []),
-    ...(rights.has("administer_system") ? [{ id: "datasets", label: "Datasets" }] : []),
-    ...(rights.has("administer_system") ? [{ id: "connections", label: "Connections" }] : []),
-    ...(rights.has("administer_system") ? [{ id: "demo-packs", label: "Demo packs" }] : []),
-    ...(rights.has("manage_ontology") ? [{ id: "types", label: "Proposed types" }] : []),
-  ];
-  const [tab, setTab] = useState<Tab>((tabs[0]?.id as Tab) ?? "system");
+  const groups = sectionsFor(rights);
+  const shown = groups.flatMap((g) => g.sections);
+  const [chosen, setChosen] = useState<string | null>(null);
+  // The first built section the person holds opens first; a placeholder only when nothing else shows.
+  const section = shown.find((s) => s.id === chosen) ?? shown.find((s) => s.screen) ?? shown[0];
+  const heading = useRef<HTMLHeadingElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    // Choosing a section moves focus to its heading, as a page change would; the first draw does not.
+    if (moved.current) heading.current?.focus();
+  }, [chosen]);
+  const govuk = currentBrand() === "govuk";
   return (
-    <section aria-label="Admin" className="admin-place" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
-      <h2 className="value" style={{ margin: 0 }}>Admin</h2>
-      {tabs.length === 0 && <p className="label">Your account holds no administration right.</p>}
-      {tabs.length > 0 && <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} />}
-      {tab === "people" && rights.has("manage_people") && <People api={api} />}
-      {tab === "dashboards" && rights.has("manage_dashboards") && <Dashboards api={api} />}
-      {tab === "schedules" && rights.has("operate_schedules") && <Schedules api={api} />}
-      {tab === "system" && rights.has("administer_system") && <System api={api} />}
-      {tab === "datasets" && rights.has("administer_system") && <Datasets api={api} />}
-      {tab === "connections" && rights.has("administer_system") && <Connections api={api} />}
-      {tab === "demo-packs" && rights.has("administer_system") && <DemoPacks api={api} />}
-      {tab === "types" && rights.has("manage_ontology") && <ProposedTypesTab api={api} />}
+    <section aria-label="Admin" className="admin-place">
+      <h2 className={govuk ? "govuk-heading-l admin-place__title" : "value admin-place__title"}>Admin</h2>
+      {!section && <p className="label">Your account holds no administration right.</p>}
+      {section && (
+        <div className="admin-place__body">
+          <SideNavigation
+            groups={groups}
+            current={section.id}
+            govuk={govuk}
+            onChoose={(id) => {
+              moved.current = true;
+              setChosen(id);
+            }}
+          />
+          <div className="admin-place__section" role="region" aria-labelledby="admin-section-title">
+            <h3 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-m" : "value"} style={{ margin: 0 }}>
+              {section.label}
+            </h3>
+            {section.coming ? <Coming section={section} /> : SCREENS[section.id]?.(api)}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
