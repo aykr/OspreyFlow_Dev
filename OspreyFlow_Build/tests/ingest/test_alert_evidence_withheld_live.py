@@ -400,8 +400,10 @@ async def test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_t
 
 
 def _people_and_matches(n_matches: int) -> tuple[list[Any], list[Any], Any]:
-    """Two OFFICIAL people and `n_matches` inferred `SAME_AS` links between them, as the screening
-    rule writes a match (a score, `basis="probabilistic"`, inferred, sourced to the list entry)."""
+    """`n_matches + 1` OFFICIAL people and `n_matches` inferred `SAME_AS` links, the i-th from the
+    first person to person i + 1, as the screening rule writes a match (a score,
+    `basis="probabilistic"`, inferred, sourced to the list entry). Each joins its own pair: the
+    adapter merges same-pair links of one audience into one, which would make two matches one."""
     from conduit_common.identity import new_edge_id, new_node_id
     from schemas.domain import (
         EdgeWrite,
@@ -416,10 +418,11 @@ def _people_and_matches(n_matches: int) -> tuple[list[Any], list[Any], Any]:
                         owning_unit="verify")  # fmt: skip
     asserted = Provenance(state=ProvenanceState.ASSERTED, first_seen=T0,
                           sources=[SourceRef(document_id="t", locator="r", excerpt_hash="")])  # fmt: skip
+    names = ["Petrov", *(f"PETROVA {i}" for i in range(max(n_matches, 1)))]
     people = [NodeWrite(id=new_node_id(), type="Person", properties={"family_name": n}, provenance=asserted,
-                        handling=official, created_by="t", created_at=T0) for n in ("Petrov", "PETROVA")]  # fmt: skip
+                        handling=official, created_by="t", created_at=T0) for n in names]  # fmt: skip
     matches = [
-        EdgeWrite(id=new_edge_id(), type="SAME_AS", source=people[0].id, target=people[1].id,
+        EdgeWrite(id=new_edge_id(), type="SAME_AS", source=people[0].id, target=people[i + 1].id,
                   properties={"score": 0.9 + i / 100, "model_version": f"screening:list-{i}"},
                   basis="probabilistic", handling=official, created_by="t", created_at=T0,
                   provenance=Provenance(state=ProvenanceState.INFERRED, first_seen=T0, extracted_by="screening:t",
@@ -452,8 +455,9 @@ async def test_a_close_never_writes_back_a_list_another_close_has_repointed_sinc
         await graph.upsert_nodes(people, tx)
         l_id, m_id = await graph.upsert_edges([l_match, m_match], tx)
         await graph.commit_transaction(tx)
-        a = _screening_alert(case, people, [l_id, m_id], "A: Petrov matches PETROVA twice")
-        b = _screening_alert(case, people, [l_id], "B: Petrov matches PETROVA")
+        assert l_id != m_id, "two matches, two links"
+        a = _screening_alert(case, people, [l_id, m_id], "A: Petrov matches two entries")
+        b = _screening_alert(case, people[:2], [l_id], "B: Petrov matches PETROVA 0")
         for alert in (a, b):
             await stores["alerts"].save(alert, handlings=[official])
         read_before = a  # A as its close read it, before B's close
