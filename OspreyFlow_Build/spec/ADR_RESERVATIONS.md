@@ -32,6 +32,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-136 Amendment 1 | A case's analyst layer takes the strictest egress of the case's sources (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
 | ADR-025 Amendment 1 | A split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
 | ADR-099 Amendment 15 | A composite case's write to a node already in a member becomes a new node in the composite, linked by SAME_AS; no member changes (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
+| ADR-140 Amendment 8 | Phase 6 as built: the drawer beside the pipeline, Preview, guided and expert mode, the Map editor's strip and keyboard bind (the owner's rulings of 7 November: Q1 a, Q2 a, Q3 a) | studio | 2026-11-07 | reserved |
 
 ## Baseline
 
