@@ -125,6 +125,11 @@ Follows merges, never runs ahead of them for the guides:
 A lane changes only what it owns. Anything else is a request to the orchestrator, who either makes a
 small shared commit and merges it first or moves the work to the owning lane.
 
+**Merge order, as practised from 7 November 2026 (the orchestrator's judgement).** `make ci` is run on the
+merge result **before** the merge is kept: the orchestrator merges with `--no-commit`, or on a scratch
+branch, runs `make ci`, and keeps the merge only if it is no redder than `main`. Found when L1.2's merge
+(`25b1084`) turned two green gates red because `make ci` was run after the merge rather than before.
+
 **Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
 map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
 no conflict with another lane's work, and is recorded in the merge's friction row. Shared files
