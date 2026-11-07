@@ -1,14 +1,14 @@
 # Morning, 7 November 2026
 
-Written by the orchestrator at 00:05 and updated at 05:45. Nothing has been pushed. Local `main` holds one merge, studio's L1.1 (`32c0f36`); the friction rows are assembled at `4124466`.
+Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been pushed. Local `main` holds two merges: studio's L1.1 (`32c0f36`) and glass's L2.1 (`6e178b2`). Their friction rows are assembled.
 
 ## Lanes
 
 | Lane · step | State | Commits on `lane/<x>` | What proves it | Left |
 | --- | --- | --- | --- | --- |
 | studio · L1.1 | **merged locally** as `32c0f36`; session closed by you | `dbc3956` `4f958f5` `e9b8b31` (after the rebase) | ruff and mypy clean; reviewed; `make ci` on the merge is red on 3 gates, down from 5 (below) | your diff; r1/r14 PID tests red since `2f24d85`; the two trivy findings |
-| glass · L2.1 | fixes made and rebased (05:41); **second review: 2 more must-fix**, in a nudge it has not read (idle) | `21d31c0` `3d5f471` `e35fa11` `94ff128` `7491114` | the map; the 3 first-review fixes confirmed | the "fifteen places" list (2 wrong, 5 missing; split into queue kind and typology); the hand check's clean-up cannot undo the week-2 load on your deployment (add `--revert-load`). Then merge, with no third review. Type `read your nudge` in its window. |
-| case · L3.1 | waiting for you; **not to be merged tonight** (your rule 4) | `774388a` `3f1bc01` `2bb69c9` `b3906c1` `8708ddd` | `test_analyst_layer.py` (conformance: case B unchanged, under the case lease) and the read-set and store tests, each shown red first. 477 of 478 pass; the one failure was already failing at `83ff99e`. | Phase 5's target-model half (Q4 below); out-of-map files to ratify; 5 minor open items. |
+| glass · L2.1 | **merged locally** as `6e178b2`, after two reviews | `7df24ec` to `6f1fa89` (rebased) | the map, `spec/glass_redesign/ALERTS_GAP_MAP.md`; citation-check green; second-review fixes spot-checked | ADR-146 (the alerts journey) after your answers to its §6; widening `APACHE_DOC_PATHS` (O2) |
+| case · L3.1 | your Q1–Q4 answered at 06:55 (all as recommended); nudged, waiting to be woken; **not to be merged tonight** (your rule 4) | `774388a` `3f1bc01` `2bb69c9` `b3906c1` `8708ddd` | `test_analyst_layer.py` (conformance: case B unchanged, under the case lease) and the read-set and store tests, each shown red first. 477 of 478 pass; the one failure was already failing at `83ff99e`. | Phase 5's target-model half (Q4 below); out-of-map files to ratify; 5 minor open items. |
 | docs | not opened (P7: after the first merge) | none | none | none |
 
 **Since 05:30:** you closed glass and I reopened it on Prompt R. Its first open swallowed the nudge (an `open`/`resume` defect, fixed red first at `f93e1df`), so I sent it again, and glass is now making the three review fixes before it rebases. Studio rebased once you woke it, and was merged.
@@ -17,7 +17,7 @@ Written by the orchestrator at 00:05 and updated at 05:45. Nothing has been push
 
 ## make ci
 
-**On the merge `32c0f36`** (full run, 05:38–05:42): red on `trivy-image-harness`, `trivy-image-superset` and `test-file-coverage-check` only. ruff and mypy are green. That is three of the baseline's five, and nothing new.
+**On the merges `32c0f36` and `6e178b2`** (full run, 05:38–05:42): red on `trivy-image-harness`, `trivy-image-superset` and `test-file-coverage-check` only. ruff and mypy are green. That is three of the baseline's five, and nothing new.
 
 The full run is at `54fbd3d`, with downloads. It has five failures, which are the baseline:
 1. Core `lint` (ruff I001)
@@ -30,7 +30,7 @@ Studio fixes 1 and 2 on its branch. 3 needs your diff. 4 and 5 need a decision (
 
 ## Questions for you (recommendation first)
 
-**Case, L3.1** (the full text is in `lanes/case/REPORT.md`):
+**Case, L3.1: answered 06:55, all (a).** ADR-143 Amendment 1, ADR-099 Amendment 14 and ADR-136 Amendment 1 are reserved (`81bd510`), and L3.1b is in the plan. Type `read your nudge` in case's window to start it. For reference:
 - **Q1.** Where do today's analyst writes go?
   - (a) Hand-marking and `manual_link` into the layer; questions and extractions into the source.
   - (b) All four into the layer.
