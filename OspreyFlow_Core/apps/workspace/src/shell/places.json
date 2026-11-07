@@ -1,0 +1,39 @@
+{
+  "//": "ADR-145 decisions 1 and N6: the three places and the rights that open each. A place is offered to whoever holds one of its rights, and its rights are exactly the rights its own routes need, so a place hidden from a person is one whose every route refuses them (rule 3). OspreyFlow_Build/tests/services/api/test_place_routes.py reads this file and fails when it and the routes disagree.",
+  "places": [
+    {
+      "id": "glass",
+      "name": "The Glass",
+      "key": "g",
+      "sections": ["Case", "Boards", "Monitoring"],
+      "rights": [
+        "ask_model", "branch_case", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
+        "edit_graph", "export", "extract_files", "investigate", "keep_watches", "load_screening_lists",
+        "manage_strength_influencers", "propose_link_type", "read_alert_queue", "read_data_feeds",
+        "read_export_ledger", "read_held_rows", "read_report_feed", "read_reports", "read_rule_audit",
+        "record_assessment", "remove_case", "resolve_entities", "run_analysis", "share_case",
+        "trace_ownership", "triage_alerts"
+      ]
+    },
+    {
+      "id": "ingest",
+      "name": "Ingest Studio",
+      "key": "i",
+      "sections": ["1 Model", "2 Sources", "3 Pipelines", "4 Runs"],
+      "rights": [
+        "add_ingest_files", "edit_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines",
+        "verify_pipelines"
+      ]
+    },
+    {
+      "id": "admin",
+      "name": "Admin",
+      "key": "a",
+      "sections": [],
+      "rights": [
+        "administer_system", "manage_dashboards", "manage_geospatial", "manage_ontology", "manage_people",
+        "operate_schedules"
+      ]
+    }
+  ]
+}
