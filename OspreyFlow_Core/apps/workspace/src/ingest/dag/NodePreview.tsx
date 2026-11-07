@@ -20,7 +20,8 @@ import { GlassCanvas } from "../../canvas/GlassCanvas";
 import { Button } from "../../design/primitives/Button";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
-import { createWorkingSet, type WorkingSet } from "../../workingset/store";
+import type { WorkingSet } from "../../workingset/store";
+import { workingSetOfDryRun } from "../verify/VerifyScreen";
 import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
 
 /** The most rows a table Preview reads. The one place this number is written:
@@ -82,9 +83,7 @@ export function NodePreview({ apiBaseUrl, bearerToken, investigationId, recipeId
       previewGraph(apiBaseUrl, bearerToken, investigationId, recipeId),
       fetchOntologySchema(apiBaseUrl, bearerToken),
     ]);
-    const ws = createWorkingSet();
-    for (const n of result.nodes ?? []) ws.graph.addNode(n.id, { data: n });
-    for (const e of result.edges ?? []) ws.graph.addEdgeWithKey(e.id, e.source, e.target, { data: e });
+    const ws = workingSetOfDryRun(result);
     setReport(result);
     setGraph({ ws, registry: new OntologyRegistry(schema), edgeTypes: schema.edge_types });
   }

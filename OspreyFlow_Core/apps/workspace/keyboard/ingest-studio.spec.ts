@@ -464,6 +464,21 @@ test("an expert step cannot be removed in guided mode: Remove is refused once it
   registerCovered(REGISTRY, "an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard");
 });
 
+test("the step feeding an expert step cannot be removed in guided mode, so its input edge stays", async ({ page }) => {
+  await openVisits(page, "?expert=1");
+  const remove = page.getByRole("button", { name: "Remove selected" });
+  await press(page, "Load: Load");
+  await expect(remove).toBeEnabled();
+  // Profile feeds the SQL transform in the harness's pipeline.
+  await press(page, "Profile: Profile");
+  await expect(remove).toBeDisabled();
+  await press(page, "Expert");
+  await page.getByRole("group", { name: "Pipeline" }).getByRole("button", { name: "Profile: Profile" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(remove).toBeEnabled();
+  registerCovered(REGISTRY, "the-step-feeding-an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard");
+});
+
 test("a step is edited in expert mode from the canvas by keyboard, and the save carries it", async ({ page }) => {
   await openVisits(page);
   await press(page, "Expert");
@@ -548,6 +563,24 @@ test("a graph Preview is refused in words to a person without the right to test"
   await press(page, "Preview");
   await press(page, "Run preview");
   await expect(drawer(page).getByRole("alert")).toContainText("needs the right to test pipelines");
+});
+
+// The harness refuses as the routes do (rule 15): the save gate's words, and Deploy without the
+// approver's role, each shown to the person.
+test("removing the Load step is refused by the save gate in its own words", async ({ page }) => {
+  await openVisits(page);
+  await press(page, "Load: Load");
+  await press(page, "Remove selected");
+  await expect(page.getByRole("alert")).toContainText("source 'Call log' reaches no load; its rows would go nowhere");
+});
+
+test("Deploy is refused in words to a person without the source approver's role", async ({ page }) => {
+  await openVisits(page, "?rights=no-approve");
+  await press(page, "Deploy");
+  await press(page, "Deploy as v3");
+  await expect(page.getByText(/source_approver|studio role/)).toBeVisible();
+  expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-visits/publish"))).toBe(true);
+  await expect(page.getByText("Deployed", { exact: true })).toHaveCount(0);
 });
 
 test("every registered Ingest Studio action has its own proving test case above", () => {

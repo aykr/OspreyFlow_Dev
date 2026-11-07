@@ -19,6 +19,15 @@ export function isExpertStep(node: Pick<PipelineNode, "kind">): boolean {
   return !GUIDED_KINDS.has(node.kind);
 }
 
+/** Guided mode may not remove `node`: it is an expert step, or it feeds one, so removing it would
+ * cut the expert step's input edge, an edit of the expert step guided mode shows read-only (ADR-140
+ * decision 3; the second review of L1.2, 7 November 2026). */
+export function guidedMayNotRemove(pipeline: PipelineGraph, node: PipelineNode): boolean {
+  if (isExpertStep(node)) return true;
+  const expert = new Set((pipeline.nodes ?? []).filter(isExpertStep).map((n) => n.id));
+  return (pipeline.edges ?? []).some((e) => e.source === node.id && expert.has(e.target));
+}
+
 /** The steps in the order they run: by column (longest path from a root), then row. */
 export function stepsInOrder(pipeline: PipelineGraph): PipelineNode[] {
   const placed = new Map(pipelineLayout(pipeline).map((p) => [p.id, p]));

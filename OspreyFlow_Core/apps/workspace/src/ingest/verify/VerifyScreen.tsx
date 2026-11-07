@@ -69,6 +69,15 @@ interface EdgeCountRow {
   created: number;
 }
 
+/** The graph a dry run would make, as a throwaway working set the ordinary canvas draws: the one
+ * builder Test and the drawer's graph Preview (`dag/NodePreview.tsx`) share. */
+export function workingSetOfDryRun(report: VerifyReport): WorkingSet {
+  const ws = createWorkingSet();
+  for (const node of report.nodes ?? []) ws.graph.addNode(node.id, { data: node });
+  for (const edge of report.edges ?? []) ws.graph.addEdgeWithKey(edge.id, edge.source, edge.target, { data: edge });
+  return ws;
+}
+
 export function VerifyScreen({ apiBaseUrl,
   investigationId, bearerToken, recipeId, onBack }: VerifyScreenProps) {
   const [draft, setDraft] = useState<StudioRecipeDraft | null>(null);
@@ -99,15 +108,8 @@ export function VerifyScreen({ apiBaseUrl,
     setError(null);
     try {
       const result = await runVerify(apiBaseUrl, bearerToken, investigationId, recipeId);
-      const ws = createWorkingSet();
-      for (const node of result.nodes ?? []) {
-        ws.graph.addNode(node.id, { data: node });
-      }
-      for (const edge of result.edges ?? []) {
-        ws.graph.addEdgeWithKey(edge.id, edge.source, edge.target, { data: edge });
-      }
       setReport(result);
-      setWorkingSet(ws);
+      setWorkingSet(workingSetOfDryRun(result));
     } catch (err) {
       setError(friendlyError(err));
       setReport(null);

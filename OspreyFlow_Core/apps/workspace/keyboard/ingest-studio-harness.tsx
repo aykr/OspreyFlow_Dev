@@ -133,8 +133,31 @@ let created: Record<string, unknown> | null = null;
 // need the right `verify_pipelines` and editor level; `publish` needs `publish_pipelines` and a draft
 // verified since its last edit; any edit of a draft (its pipeline, its settings, its map) clears that
 // mark, `verify` sets it, and `preview-graph` leaves it alone. `?rights=no-test` drops the right.
+// Publish also needs the source approver's studio role (`require_studio_role(SOURCE_APPROVER)`, a 403
+// in words; `?rights=no-approve` drops it). A pipeline save refuses what `pipeline_rule_violations`
+// refuses (a source reaching no load, an extract not fed by a map: 422 `pipeline_invalid`), and a kind
+// the schema does not know (a 422 from validation). The sample rows refuse a draft whose source is not
+// ready (409 `recipe_not_ready_for_profile`) and a row past the sample (404).
 const RIGHTS = new Set(["edit_pipelines", "verify_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines"]);
 if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
+const STUDIO_ROLES = new Set(["source_author", "source_approver", "loader"]);
+if (startParams.get("rights") === "no-approve") STUDIO_ROLES.delete("source_approver");
+const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load"]);
+/** The save gate's refusals, in its own words (`services/ingest/pipeline.py`). */
+const pipelineRefusal = (body: string | undefined): Response | null => {
+  const graph = JSON.parse(String(body)) as { nodes: { id: string; kind: string; label: string }[]; edges: { source: string; target: string }[] };
+  if (graph.nodes.some((n) => !KNOWN_KINDS.has(n.kind)))
+    return new Response(JSON.stringify({ detail: [{ type: "literal_error", loc: ["body", "nodes", "kind"] }] }), { status: 422 });
+  const next = (id: string) => graph.edges.filter((e) => e.source === id).map((e) => e.target);
+  const reaches = (id: string, kind: string, seen = new Set<string>()): boolean =>
+    next(id).some((t) => !seen.has(t) && (seen.add(t), graph.nodes.find((n) => n.id === t)?.kind === kind || reaches(t, kind, seen)));
+  const problems = [
+    ...graph.nodes.filter((n) => n.kind === "source" && !reaches(n.id, "load")).map((n) => `source '${n.label}' reaches no load; its rows would go nowhere`),
+    ...graph.nodes.filter((n) => n.kind === "extract" && !graph.edges.some((e) => e.target === n.id && graph.nodes.find((m) => m.id === e.source)?.kind === "map"))
+      .map((n) => `extract '${n.label}' is not fed by a map; an extract works on what a map bound, never on raw bytes`),
+  ];
+  return problems.length ? new Response(JSON.stringify({ error: "pipeline_invalid", problems }), { status: 422 }) : null;
+};
 const LEVELS: Record<string, string> = { "inv-1": "author", "inv-2": "editor" };
 const refusal = (path: string, right: string, level: "viewer" | "editor"): Response | null => {
   if (!RIGHTS.has(right))
@@ -187,6 +210,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const recipe = path.match(/\/ingest\/recipes\/(r-visits|r-new)\//)?.[1];
   if (recipe) {
     const sample = path.match(/\/map\/sample-rows\/(\d+)$/);
+    if (sample && !(recipe === "r-new" ? created?.ready_for_profile : draft.ready_for_profile))
+      return reply({ error: "recipe_not_ready_for_profile" }, 409);
     if (sample) {
       const rows = SAMPLE_ROWS[recipe]!;
       const index = Number(sample[1]);
@@ -216,12 +241,18 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path.endsWith("/publish") && method === "POST") {
     const refused = refusal(path, "publish_pipelines", "editor");
     if (refused) return refused;
+    if (!STUDIO_ROLES.has("source_approver"))
+      return new Response(JSON.stringify({ detail: "principal lacks required studio role: source_approver" }), { status: 403 });
     const target = path.endsWith("/r-new/publish") ? created : draft;
     if (!target?.verified_at) return reply({ error: "studio_recipe_not_verified" }, 409);
   }
   if (created && path.endsWith("/ingest/recipes/r-new/publish") && method === "POST") {
     created = { ...created, status: "published", git_path: "recipes/r-new.yaml" };
     return reply(created);
+  }
+  if (path.endsWith("/pipeline") && method === "PUT") {
+    const refused = pipelineRefusal(init?.body as string | undefined);
+    if (refused) return refused;
   }
   if (path.endsWith("/ingest/recipes/r-visits/pipeline") && method === "PUT") {
     draft = { ...draft, pipeline: JSON.parse(String(init?.body)), verified_at: null };

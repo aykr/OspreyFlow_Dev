@@ -15,7 +15,7 @@ import { createDraft, fetchDraft, fetchRecipeRegistry, savePipeline } from "../a
 import { MapEditor } from "../map/MapEditor";
 import { PublishScreen } from "../publish/PublishScreen";
 import { statusWords } from "../studio/vocabulary";
-import { GuidedSteps, isExpertStep } from "./GuidedSteps";
+import { GuidedSteps, guidedMayNotRemove } from "./GuidedSteps";
 import { NodeDrawer, type DrawerPane } from "./NodeDrawer";
 import { PipelineCanvas } from "./PipelineCanvas";
 import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
@@ -313,9 +313,12 @@ function PipelineEditor({
             + Enrich
           </Button>
           <Button
-            // ADR-140 decision 3: guided mode shows an expert step read-only, and removing it is an
-            // edit; the review of L1.2 found Remove enabled for one (7 November 2026).
-            disabled={busy || !selected || selected.kind === "domain_model" || (mode === "guided" && isExpertStep(selected))}
+            // ADR-140 decision 3: guided mode shows an expert step read-only, and removing it, or the
+            // step that feeds it, is an edit of it; the reviews of L1.2 found Remove enabled for both
+            // (7 November 2026).
+            disabled={
+              busy || !selected || selected.kind === "domain_model" || (mode === "guided" && guidedMayNotRemove(pipeline, selected))
+            }
             onClick={() => {
               if (!selected) return;
               setSelectedId(null);
