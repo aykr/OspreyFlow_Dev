@@ -106,6 +106,8 @@ Also asked by the lanes:
 
 ## Notes
 
+- **Your ruling, 11:40:** only a case that loads into a dataset lists or opens its pipelines, in the store's query. **My sequencing:** it lands as L1.2a after L3.1 (the build plan's merge order), and L1.2 merges on main's current rule first. L1.2b closes phase 6's exit. **Settled from the code, not put to you:** glass's two questions (the seven routes already refuse Analysts on main; schedule preview is exempt from place assignment because it reads no store).
+
 - **Corrected, 11:20:** the 'Re-home the routes' question rested on wrong facts. The first glass review missed that each Studio route also checks a Studio role, and I passed its reading on unverified. So Analysts never could upload or read sources, and Administrators only previewed schedules. Your corrected ruling: no route moves place; places follow the routes' full checks; only the run history narrows, to `run_pipelines`. ADR-145 Amendment 1 is to be rewritten to the true facts before merge. The lesson: I check a reviewer's access claims against the code before they become a question for you.
 
 - **My judgement, 11:05, under your delegation:** dev-up's ports stay as they are. Moving ArcadeDB off 2480 would have pointed the demo guide's reset (`drop database`), the hand-run Conduit and `seed_paysim` at your deployment, because they default to `localhost:2480`. The leased stack is now the throwaway test stack the lanes already used, and the lease checks it.
