@@ -410,6 +410,7 @@ GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/sample-rows/{row_i
 PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/row-template            Map: save the row template
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/map/handling-preview    Map: preview an element's handling/provenance override
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/verify                  Verify: the dry run — no write of any kind
+POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/preview-graph           Preview of a Map or Load step (verify_pipelines, Editor; ADR-140 Amendment 8): Verify's dry run, writing nothing but its own audit row (`preview_studio_recipe_graph`), never marking the draft verified
 GET    /v1/investigations/{id}/ingest/recipe-registry                             the pipelines home and Publish: every recipe the principal's own unit owns, any status (the home hides superseded)
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/publish                 Publish: draft → published; the sign-off itself
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/versions                Publish: reopen a published recipe as a new draft version
