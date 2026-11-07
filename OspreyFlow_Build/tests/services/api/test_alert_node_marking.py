@@ -67,3 +67,107 @@ async def test_a_cited_link_whose_marking_cannot_be_read_is_never_guessed() -> N
     assert alert_handling(SCHEME, handlings).classification == "SECRET"  # type: ignore[union-attr]
     with pytest.raises(RuntimeError):
         await _referent_handlings(graph, SCHEME, _finding(["e-gone"]), None, {})  # type: ignore[arg-type]
+
+
+# ---- after a commit: a cited link gone between the judgement and the raise -----------------------
+
+from datetime import UTC, datetime  # noqa: E402
+
+from services.api.rule_evaluation import RuleGate  # noqa: E402
+
+from schemas.domain import DocumentVerificationParams, TypologyRule  # noqa: E402
+
+NOW = datetime(2026, 11, 7, 9, tzinfo=UTC)
+SWEEPER = Principal(id="kyc-sweeper", clearance="SECRET", org_unit="unit-1")
+
+
+class TxGraph(Graph):
+    """`Graph`, with the transaction and the writes `write_alert_node` makes, each recorded."""
+
+    def __init__(self, nodes: dict[str, Handling], edges: dict[str, Handling]) -> None:
+        super().__init__(nodes, edges)
+        self.log: list[str] = []
+
+    async def get_nodes(self, node_ids: Any, principal: Principal) -> list[Any]:
+        found = [await self.get_node(i, principal) for i in sorted(set(node_ids))]
+        return [n for n in found if n is not None]
+
+    async def begin_transaction(self) -> str:
+        self.log.append("begin")
+        return "tx"
+
+    async def commit_transaction(self, tx: str) -> None:
+        self.log.append("commit")
+
+    async def rollback_transaction(self, tx: str) -> None:
+        self.log.append("rollback")
+
+    async def upsert_nodes(self, nodes: Any, tx: str) -> list[str]:
+        self.log.extend(f"node {n.type}" for n in nodes)
+        return [n.id for n in nodes]
+
+    async def upsert_edges(self, edges: Any, tx: str) -> list[str]:
+        self.log.extend(f"edge {e.type}" for e in edges)
+        return [e.id for e in edges]
+
+
+class Stores:
+    """The queue, the audit and the signature set: what is saved and said is kept."""
+
+    def __init__(self) -> None:
+        self.saved: list[Any] = []
+        self.said: list[str] = []
+
+    async def save(self, alert: Any, *, handlings: Any = None) -> None:
+        self.saved.append(alert)
+
+    async def record(self, **kwargs: Any) -> None:
+        self.said.append(str(kwargs.get("action")))
+
+    async def sismember(self, *_: Any) -> bool:
+        return False
+
+    async def sadd(self, *_: Any) -> int:
+        return 1
+
+
+def _sweep_gate(graph: TxGraph, stores: Stores) -> RuleGate:
+    rule = TypologyRule(id="rule-kyc", investigation_id="case-1", owner_id="deployer", name="Documents",
+                        params=DocumentVerificationParams(), trigger="post_commit", created_at=NOW)  # fmt: skip
+
+    async def owner(_: str) -> Principal:
+        return SWEEPER
+
+    return RuleGate(rules=[rule], investigation_id="case-1", graph=graph, analytics=None, scheme=SCHEME,  # type: ignore[arg-type]
+                    alert_store=stores, audit=stores, valkey=stores, principal_for_owner=owner,  # type: ignore[arg-type]
+                    loader=SWEEPER)  # fmt: skip
+
+
+def _sweep_finding(gate: RuleGate, edge_ids: list[str], node_ids: list[str]) -> Finding:
+    return Finding(rule=gate.rules[0], deployer=SWEEPER, typology="document_verification",
+                   subject=node_ids[0], refs=(), words="No valid verifying document",
+                   node_ids=node_ids, edge_ids=edge_ids)  # fmt: skip
+
+
+async def test_after_a_commit_an_unreadable_cited_link_raises_the_row_with_no_node() -> None:
+    """As the load path already does for an unseen referent (rule_evaluation.py's `pre_commit`:
+    no node rather than a guessed one, the row still raised): a link reverted between the judgement
+    and the raise leaves the alert without its node, and the sweep goes on. The row is safe: the
+    queue's full check withholds it from anyone who may not see its evidence (G2). Red with
+    ed8b0aa's behaviour, which raised, and stopped the whole day's KYC sweep (`kyc_sweep.sweep`)."""
+    graph, stores = TxGraph({"cust-1": _handling()}, {}), Stores()
+    gate = _sweep_gate(graph, stores)
+    alert = await gate.raise_committed(_sweep_finding(gate, ["e-reverted"], ["cust-1"]))
+    assert alert.alert_node_id is None
+    assert [a.id for a in stores.saved] == [alert.id]
+    assert "node Alert" not in graph.log and "commit" not in graph.log
+    assert "rule_fired" in stores.said
+
+
+async def test_after_a_commit_an_unreadable_referent_node_still_raises_as_today() -> None:
+    """Nodes behave as they did before L2.8: an unreadable referent node stops the raise."""
+    graph, stores = TxGraph({}, {}), Stores()
+    gate = _sweep_gate(graph, stores)
+    with pytest.raises(RuntimeError):
+        await gate.raise_committed(_sweep_finding(gate, [], ["cust-gone"]))
+    assert stores.saved == []

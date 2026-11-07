@@ -441,6 +441,12 @@ async def judge(
     ]
 
 
+class UnreadableAlertLink(RuntimeError):
+    """A link an alert cites whose marking cannot be read (reverted or superseded since the
+    finding was judged): its node is withheld rather than marked by a guess, wherever the alert is
+    raised (ADR-146 decision 10)."""
+
+
 async def _referent_handlings(
     graph: GraphPort,
     scheme: HandlingScheme,
@@ -467,7 +473,7 @@ async def _referent_handlings(
         elif unseen is not None:
             handlings.append(unseen)
         else:
-            raise RuntimeError(f"alert link {edge_id} could not be read for its marking")
+            raise UnreadableAlertLink(f"alert link {edge_id} could not be read for its marking")
     for node_id in finding.node_ids:
         if node_id in pending:
             continue
@@ -964,6 +970,12 @@ class RuleGate:
             node_id = await write_alert_node(
                 self.graph, self.scheme, finding, tx, load_id=load_id, writes=writes
             )
+        except UnreadableAlertLink:
+            # As the load path does for an unseen referent: no node rather than a guessed one, the
+            # row still raised (the queue's full check withholds it from anyone who may not see its
+            # evidence), so one reverted link never stops a sweep. A node still stops the raise.
+            await self.graph.rollback_transaction(tx)
+            return await self._raise_row(finding, None)
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise
