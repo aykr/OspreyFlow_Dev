@@ -81,7 +81,9 @@ class NodeStore:
         if _REVERT.fullmatch(command) is not None:
             for i in params["ids"]:
                 if i in self.rows:
+                    # What the statement sets, both of it: the flag and the withdrawal cleared.
                     self.rows[i]["reverted"] = True
+                    self.rows[i]["withdrawn_by_load"] = None
             return []
         if command.startswith("INSERT INTO "):
             if params["id"] in self.rows:
