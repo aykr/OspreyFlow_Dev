@@ -32,12 +32,14 @@ this code: a fake queue would prove only that the fake hands each entry out once
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
 import signal
 import socket
+from collections.abc import Awaitable, Callable, Collection
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # the import is deferred at runtime — see `main()`'s own comment.
     from .worker import JobWorker
@@ -69,6 +71,35 @@ def registered_job_types() -> dict[str, str]:
     }
 
 
+def register_all(
+    worker: JobWorker,
+    *,
+    ontology: Any,
+    scheme: Any,
+    valkey: Any,
+    analyst_layers: Callable[[], Awaitable[Collection[str]]],
+) -> None:
+    """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
+    Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,
+    Valkey client and the case layers it must not honour a split from (ADR-025 Amendment 1, ADR-143
+    Amendment 1). `main` calls this; `test_worker_registration.py` proves it."""
+    from importlib import import_module
+
+    bound: dict[str, dict[str, Any]] = {
+        "resolve_entity_type": {
+            "ontology": ontology,
+            "scheme": scheme,
+            "valkey": valkey,
+            "analyst_layers": analyst_layers,
+        },
+    }
+    for job_type, dotted in registered_job_types().items():
+        module_name, _, attribute = dotted.partition(":")
+        handler = getattr(import_module(module_name), attribute)
+        kwargs = bound.get(job_type)
+        worker.register(job_type, functools.partial(handler, **kwargs) if kwargs else handler)
+
+
 async def run_forever(worker: JobWorker, job_types: list[str], *, stop: asyncio.Event) -> None:
     """One `run_once` per job type, round-robin, until asked to stop.
 
@@ -96,8 +127,6 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     # Imported here, not at module scope: this module is imported by tests that assert on
     # `consumer_name()` and the job-type registry without wanting a Valkey connection or an
     # ArcadeDB round trip.
-    from importlib import import_module
-
     from valkey.asyncio import Valkey
 
     from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -105,7 +134,8 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     from ontology.handling import load_uk_le_scheme
     from ontology.loader import load_default_ontology
 
-    from .config import ApiConfig
+    from .config import ApiConfig, PostgresConfig
+    from .datasets import PostgresDatasetStore
     from .jobs import JobQueue
     from .worker import JobWorker
 
@@ -120,10 +150,15 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
 
     client = Valkey(**config.valkey.client_kwargs())
     worker = JobWorker(client, JobQueue(client), graph, consumer_name=consumer_name())
-
-    for job_type, dotted in registered_job_types().items():
-        module_name, _, attribute = dotted.partition(":")
-        worker.register(job_type, getattr(import_module(module_name), attribute))
+    # The case layers come from the dataset store, read at each run (a layer made since counts).
+    datasets = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+    register_all(
+        worker,
+        ontology=load_default_ontology(),
+        scheme=load_uk_le_scheme(),
+        valkey=client,
+        analyst_layers=datasets.layer_ids,
+    )
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
