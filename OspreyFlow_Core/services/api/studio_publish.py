@@ -365,6 +365,12 @@ class LoadSink(Protocol):
         """The events of the rows `load_id` withdrew, by each key's record (Amendment 15)."""
         ...
 
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        """Which of these keys an earlier full snapshot withdrew: rows back (Amendment 15)."""
+        ...
+
     # ADR-110 Amendment 6 point 1: asked only by an incremental refresh.
     async def watermark(
         self, recipe_id: str, case: str, source_id: str
@@ -636,6 +642,8 @@ async def load_with_rules(
             if withdraw_dropped:
                 assert sink is not None
                 await _withdraw_dropped_rows(recipe, rows, report, sink, investigation_scope)
+            if sink is not None and recipe.deduplicate is not None:
+                await _note_rows_back_unrevertable(recipe, report, sink, investigation_scope)
             if past is not None:
                 # Before the commit, so the record the commit writes keeps the watermark reached.
                 report.watermark = past.reached
@@ -709,6 +717,34 @@ async def withdraw_dropped_rows_events(
         return 0
     ids = await sink.withdrawn_event_ids(report.load_id)
     return await analytics.withdraw_events_by_id(ids, report.load_id)
+
+
+async def _note_rows_back_unrevertable(
+    recipe: Recipe, report: LoadReport, sink: LoadSink, case: str
+) -> None:
+    """ADR-110 Amendment 15's known limit, said in words: a row an earlier full snapshot withdrew
+    comes back and merges into its own link, which the withdrawal left in place. A load that merged
+    into a link that already existed is not reverted (ADR-127 decision 6), and the refresh that
+    withdrew the row is refused while it is kept again, so the run says so. Asked of this
+    pipeline's own keys in this case alone."""
+    merged = set(report.merged_edge_ids)
+    if not merged:
+        return
+    back = await sink.withdrawn_row_keys_among(recipe.id, case, report.kept_row_keys)
+    count = sum(
+        1
+        for key in back
+        if (e := report.kept_row_elements.get(key)) is not None and merged & set(e.edge_ids)
+    )
+    if count:
+        one = count == 1
+        report.refresh_notes = [
+            *report.refresh_notes,
+            f"{count} row{'' if one else 's'} withdrawn by an earlier refresh came back and "
+            f"merged into {'its' if one else 'their'} link, which the withdrawal left in place: "
+            "this load cannot be reverted, nor the refresh that withdrew "
+            f"{'it' if one else 'them'}, until the owner rules (ADR-110 Amendment 15)",
+        ]
 
 
 async def _withdraw_dropped_rows(

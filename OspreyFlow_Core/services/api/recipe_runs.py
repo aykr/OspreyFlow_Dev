@@ -426,6 +426,24 @@ class RecipeRunStore:
             )
         return [r["x"] for r in rows]
 
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        """Which of these keys of the recipe and case an earlier full snapshot withdrew and has not
+        given back (Amendment 15): a row that comes back, whose link never left. Per recipe and
+        case, so nothing of another case is asked."""
+        if not keys:
+            return set()
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "
+                "AND investigation_id = $2 AND row_key = ANY($3::text[])",
+                recipe_id,
+                case,
+                list(dict.fromkeys(keys)),
+            )
+        return {r["row_key"] for r in rows}
+
     async def withdrawn_keys_kept_again(self, load_id: str) -> int:
         """How many of the keys `load_id` withdrew are kept again by a later load: its revert is
         refused while any is (ADR-110 Amendment 8 point 5)."""

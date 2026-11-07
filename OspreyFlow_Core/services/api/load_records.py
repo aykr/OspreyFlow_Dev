@@ -88,6 +88,10 @@ class _RunLedger(Protocol):
 
     async def withdrawn_event_ids(self, load_id: str) -> list[str]: ...
 
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]: ...
+
 
 class LedgerSink:
     """A load's way of writing to its run's ledger row: `committed` appends the load's record,
@@ -153,6 +157,11 @@ class LedgerSink:
 
     async def withdrawn_event_ids(self, load_id: str) -> list[str]:
         return await self._ledger.withdrawn_event_ids(load_id)
+
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        return await self._ledger.withdrawn_row_keys_among(recipe_id, case, keys)
 
     async def watermark(
         self, recipe_id: str, case: str, source_id: str

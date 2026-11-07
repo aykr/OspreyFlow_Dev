@@ -158,6 +158,11 @@ class Sink:
     async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
         return await self.store.kept(recipe_id, case, keys)
 
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        return set()  # no full snapshot withdraws here
+
     async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
         return await self.store.fingerprints(recipe_id, case)
 

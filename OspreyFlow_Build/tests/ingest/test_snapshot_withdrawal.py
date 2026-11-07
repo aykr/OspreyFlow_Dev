@@ -114,6 +114,15 @@ class WithdrawalLedger:
             if k[:2] == (recipe_id, case) and k[2] not in present
         ]
 
+    async def withdrawn_row_keys_among(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> set[str]:
+        return {
+            k[2]
+            for k in self.withdrawn
+            if k[:2] == (recipe_id, case) and k[2] in set(keys)
+        }
+
     async def withdrawn_event_ids(self, load_id: str) -> list[str]:
         return sorted(
             {e for v in self.withdrawn.values() if v[4] == load_id for e in v[3] or ()}
@@ -300,6 +309,11 @@ async def test_keep_withdraws_nothing() -> None:
         second.withdrawn_row_keys == [] and graph.withdrawn == {} and events.aside == {}
     )
     assert _live_values(graph) == {"SYN-1", "SYN-2", "SYN-3", "SYN-4"}
+    # A merge with no row coming back says nothing.
+    again = await _snapshot(
+        graph, ledger, [_row("SYN-3", "SYN-4", 8)], "load-3", withdraw=False
+    )
+    assert again.merged_edge_ids and again.refresh_notes == []
 
 
 async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None:
@@ -316,6 +330,13 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     assert (back.nodes_created, back.edges_created, back.created_edge_ids) == (0, 0, [])
     assert _live_links(graph) == links and graph.withdrawn == {}
     assert len(events.live) == 2, "B's, and A's new one; A's first stays set aside"
+    # Amendment 15's known limit, in words: this load merged into A's link, so it is not reverted.
+    unrevertable = (
+        "1 row withdrawn by an earlier refresh came back and merged into its link, which the "
+        "withdrawal left in place: this load cannot be reverted, nor the refresh that withdrew "
+        "it, until the owner rules (ADR-110 Amendment 15)"
+    )
+    assert back.refresh_notes == [unrevertable]
 
 
 # --- the refresh's revert (ADR-110 Amendment 8 point 5) ---------------------------------------

@@ -27150,7 +27150,11 @@ the same link, of any case, went with them.
 - A load that merged into a link that already existed is not reverted (ADR-127 decision 6). A row
   that comes back merges into its own link, so its load is not reverted, and the refresh that
   withdrew it is refused while it is kept again (Amendment 8 point 5): neither is reverted until the
-  owner rules (the studio lane's report).
+  owner rules (the orchestrator queued it as L1.2c). The run says so in words when it happens: "1 row
+  withdrawn by an earlier refresh came back and merged into its link, which the withdrawal left in
+  place: this load cannot be reverted, nor the refresh that withdrew it, until the owner rules"
+  (asked of this pipeline's own keys in the case alone, `RecipeRunStore.withdrawn_row_keys_among`;
+  `tests/ingest/test_snapshot_withdrawal.py`).
 - A Studio load stamps no dataset on what it writes until the load-into rule (ADR-143, L3.1), so the
   test's principals are not confined to a dataset. And two cases' rows on the same pair merge into
   one link with the same audience, so one case's occurrences count the other's. Neither is the
