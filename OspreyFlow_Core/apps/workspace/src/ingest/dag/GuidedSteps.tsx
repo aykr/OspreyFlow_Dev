@@ -5,6 +5,7 @@
 // same name as its node on the canvas ("Source: Call log"); the number is the list's own marker, so
 // one keyboard path serves both modes.
 import type { PipelineGraph, PipelineNode } from "../../../../../packages/schemas/generated";
+import { Button } from "../../design/primitives/Button";
 import { KIND_NAMES } from "./PipelineCanvas";
 import { pipelineLayout } from "./pipelineLayout";
 
@@ -43,25 +44,13 @@ export function GuidedSteps({ pipeline, selectedId, onSelect }: GuidedStepsProps
         return (
           <li key={node.id} style={{ paddingLeft: "var(--sp-4)" }}>
             <span style={{ display: "inline-flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="guided-step"
+              <Button
                 aria-pressed={selectedId === node.id}
                 onClick={() => onSelect(node)}
-                style={{
-                  font: "inherit",
-                  textAlign: "left",
-                  padding: "var(--sp-4) var(--sp-8)",
-                  minHeight: 32,
-                  background: "var(--surface-raised)",
-                  color: "var(--text-primary)",
-                  border: selectedId === node.id ? "2px solid var(--border-strong)" : "1px solid var(--border-subtle)",
-                  borderRadius: "var(--r-control)",
-                  cursor: "pointer",
-                }}
+                style={{ textAlign: "left", ...(selectedId === node.id ? { borderWidth: 2, borderColor: "var(--border-strong)" } : {}) }}
               >
                 {`${kind}: ${node.label}`}
-              </button>
+              </Button>
               {expert && <span className="label">Expert step, read-only here</span>}
             </span>
           </li>

@@ -311,7 +311,9 @@ test("Map is previewed as the graph it would make by keyboard", async ({ page })
   await press(page, "Preview");
   await press(page, "Run preview");
   await expect(drawer(page).getByText("From a sample of 3 rows: 3 would be created, 0 referenced, 0 links; 0 rows rejected.")).toBeVisible();
-  expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-visits/verify"))).toBe(true);
+  // The dry run that marks nothing, never Test's own route (the review of L1.2).
+  expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-visits/preview-graph"))).toBe(true);
+  expect((await asked(page)).some((a) => a.path.endsWith("/r-visits/verify"))).toBe(false);
   registerCovered(REGISTRY, "preview-maps-graph-by-keyboard");
 });
 
@@ -429,6 +431,14 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   expect(template.entities).toMatchObject([{ type: "Document", properties: { title: { field: "title" } } }]);
   await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
   await page.keyboard.press("Enter");
+  // The harness refuses as the routes do: the map's save cleared Test's mark, so Deploy is refused
+  // until Test runs, and a Preview of Load does not count.
+  await press(page, "Preview");
+  await press(page, "Run preview");
+  await expect(drawer(page).getByText(/^From a sample of/)).toBeVisible();
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText(/hasn't passed Test since its last edit/)).toBeVisible();
   await press(page, "Test");
   await press(page, "Run the test");
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-new/verify"))).toBe(true);
@@ -437,6 +447,107 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
   expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-new/publish"))).toBe(true);
   registerCovered(REGISTRY, "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard");
+});
+
+// --- The review of L1.2 (7 November 2026): what the first pass left unproved -------------------
+
+test("an expert step cannot be removed in guided mode: Remove is refused once it is chosen", async ({ page }) => {
+  await openVisits(page, "?expert=1");
+  const remove = page.getByRole("button", { name: "Remove selected" });
+  await press(page, "Load: Load");
+  await expect(remove).toBeEnabled();
+  await press(page, "SQL transform: Visits per week");
+  await expect(remove).toBeDisabled();
+  await remove.focus().catch(() => undefined);
+  await page.keyboard.press("Enter");
+  expect((await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-visits/pipeline"))).toHaveLength(0);
+  registerCovered(REGISTRY, "an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard");
+});
+
+test("a step is edited in expert mode from the canvas by keyboard, and the save carries it", async ({ page }) => {
+  await openVisits(page);
+  await press(page, "Expert");
+  await press(page, "+ Extract");
+  const canvas = page.getByRole("group", { name: "Pipeline" });
+  await expect(canvas.getByRole("button", { name: "Extract: Extract" })).toBeVisible();
+  await canvas.getByRole("button", { name: "Extract: Extract" }).focus();
+  await page.keyboard.press("Enter");
+  const library = page.getByLabel("Extraction library");
+  await library.focus();
+  await library.selectOption("spacy");
+  const apply = page.getByRole("button", { name: "Apply extract settings" });
+  await expect(apply).toBeEnabled();
+  await apply.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-visits/pipeline")).length).toBe(2);
+  const puts = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-visits/pipeline"));
+  const nodes = (JSON.parse(puts[1]!.body!) as { nodes: { kind: string; config?: { library?: string } }[] }).nodes;
+  expect(nodes.find((n) => n.kind === "extract")!.config!.library).toBe("spacy");
+  registerCovered(REGISTRY, "edit-a-step-in-expert-mode-by-keyboard");
+});
+
+test("the load rules open from the Load step's drawer by keyboard", async ({ page }) => {
+  await openVisits(page);
+  await press(page, "Load: Load");
+  await press(page, "Open load rules");
+  await expect(drawer(page).getByRole("heading", { name: /^Load rules/ })).toBeVisible();
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "GET" && a.path.endsWith("/r-visits/checks"))).toBe(true);
+  await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+  registerCovered(REGISTRY, "open-load-rules-from-the-load-step-by-keyboard");
+});
+
+test("a chosen column is let go in the Map editor by keyboard, and no binding then offers it", async ({ page }) => {
+  await openVisits(page);
+  await openTheMapEditor(page);
+  await press(page, "Choose column called");
+  await press(page, "Entity 1: visitor (Person)");
+  await expect(page.getByRole("button", { name: "Bind called here: name" })).toBeVisible();
+  await press(page, "Let go column called");
+  await expect(page.getByRole("button", { name: "Choose column called" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: /^Bind called here/ })).toHaveCount(0);
+  registerCovered(REGISTRY, "let-go-a-chosen-column-by-keyboard");
+});
+
+test("a step's drawer goes back from Preview to its Settings by keyboard", async ({ page }) => {
+  await openVisits(page);
+  await press(page, "Load: Load");
+  await press(page, "Preview");
+  await expect(drawer(page).getByRole("button", { name: "Run preview" })).toBeVisible();
+  await press(page, "Settings");
+  await expect(drawer(page).getByRole("button", { name: "Settings" })).toHaveAttribute("aria-pressed", "true");
+  await expect(drawer(page).getByRole("button", { name: "Open load rules" })).toBeVisible();
+  await expect(drawer(page).getByRole("button", { name: "Run preview" })).toHaveCount(0);
+  registerCovered(REGISTRY, "go-back-to-a-steps-settings-from-preview-by-keyboard");
+});
+
+// The review's first must-fix: a Map Preview must not count as Test. Edit the draft (the edit clears
+// Test's mark, as the real store does), preview Map, and Deploy is refused until Test itself runs.
+test("a Map Preview does not count as Test: Deploy is refused until Test runs", async ({ page }) => {
+  await openVisits(page);
+  await press(page, "+ Extract");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "PUT" && a.path.endsWith("/r-visits/pipeline"))).toBe(true);
+  await press(page, "Map: Map");
+  await press(page, "Preview");
+  await press(page, "Run preview");
+  await expect(drawer(page).getByText(/^From a sample of 3 rows/)).toBeVisible();
+  expect((await asked(page)).some((a) => a.path.endsWith("/r-visits/verify"))).toBe(false);
+  await press(page, "Deploy");
+  await press(page, "Deploy as v3");
+  await expect(page.getByText("This draft hasn't passed Test since its last edit — run Test again before deploying.")).toBeVisible();
+  await press(page, "Test");
+  await press(page, "Run the test");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-visits/verify"))).toBe(true);
+  await press(page, "Deploy");
+  await press(page, "Deploy as v3");
+  await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
+});
+
+test("a graph Preview is refused in words to a person without the right to test", async ({ page }) => {
+  await openVisits(page, "?rights=no-test");
+  await press(page, "Map: Map");
+  await press(page, "Preview");
+  await press(page, "Run preview");
+  await expect(drawer(page).getByRole("alert")).toContainText("needs the right to test pipelines");
 });
 
 test("every registered Ingest Studio action has its own proving test case above", () => {

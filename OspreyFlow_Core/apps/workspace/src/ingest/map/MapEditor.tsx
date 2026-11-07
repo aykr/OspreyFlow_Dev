@@ -4,6 +4,7 @@
 // always shown), the template canvas (today's `MapScreen` canvas, kept) and the inspector. A step on
 // the strip goes back to the canvas with that step chosen in the drawer.
 import type { PipelineGraph, PipelineNode } from "../../../../../packages/schemas/generated";
+import { Button } from "../../design/primitives/Button";
 import { KIND_NAMES } from "../dag/PipelineCanvas";
 import { stepsInOrder } from "../dag/GuidedSteps";
 import { MapScreen } from "./MapScreen";
@@ -30,24 +31,17 @@ export function MapEditor({ apiBaseUrl, bearerToken, investigationId, recipeId, 
             return (
               <li key={node.id} style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
                 {i > 0 && <span aria-hidden="true" style={{ color: "var(--text-tertiary)" }}>→</span>}
-                <button
-                  type="button"
-                  aria-current={here ? "step" : undefined}
-                  onClick={() => (here ? undefined : onStep(node))}
-                  style={{
-                    font: "inherit",
-                    fontSize: "var(--fs-12)",
-                    padding: "var(--sp-2) var(--sp-8)",
-                    minHeight: 24,
-                    background: "var(--surface-raised)",
-                    color: "var(--text-primary)",
-                    border: here ? "2px solid var(--border-strong)" : "1px solid var(--border-subtle)",
-                    borderRadius: "var(--r-control)",
-                    cursor: here ? "default" : "pointer",
-                  }}
-                >
-                  {`${KIND_NAMES[node.kind] ?? node.kind}: ${node.label}`}
-                </button>
+                {here ? (
+                  // Where the person is: said, not offered as a button that would do nothing.
+                  <span
+                    aria-current="step"
+                    style={{ fontSize: "var(--fs-12)", padding: "var(--sp-2) var(--sp-8)", border: "2px solid var(--border-strong)", borderRadius: "var(--r-control)" }}
+                  >
+                    {`${KIND_NAMES[node.kind] ?? node.kind}: ${node.label}`}
+                  </span>
+                ) : (
+                  <Button onClick={() => onStep(node)}>{`${KIND_NAMES[node.kind] ?? node.kind}: ${node.label}`}</Button>
+                )}
               </li>
             );
           })}

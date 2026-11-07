@@ -366,7 +366,9 @@ test("the map editor opens from its node by keyboard", async ({ page }) => {
   // The map editor is the existing MapScreen, proven by its own specs; reaching it is this test's.
   // Phase 6 (brief §6.5): the pipeline collapses to the strip across the top, never lost.
   await expect(page.getByRole("group", { name: "Pipeline" })).toBeHidden();
-  await expect(page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Map: Map" })).toHaveAttribute("aria-current", "step");
+  const strip = page.getByRole("navigation", { name: "Pipeline strip" });
+  await expect(strip.getByText("Map: Map")).toHaveAttribute("aria-current", "step");
+  await expect(strip.getByRole("button", { name: "Map: Map" })).toHaveCount(0);
   registerCovered(REGISTRY, "open-the-map-editor-by-keyboard");
 });
 
