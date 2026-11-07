@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 //
+// Migrated in phase 6 from `MapScreen.*.test.tsx`: the same assertions, against the Map editor as the Studio hosts it.
 // ADR-140 Amendment 6 (the owner's ruling, "Name source, mask as pipeline"): Map's left pane says which
 // registered source the pipeline reads, and its version, but its fields are still the pipeline's own
 // profile — the same file under the source's governance, masked also by any marking the pipeline sets
@@ -10,7 +11,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchProfile } from "../api";
 import { listSources, sourceProfile } from "../sources/api";
-import { MapScreen } from "./MapScreen";
+import { MapEditor } from "./MapEditor";
+import { STRIP } from "./mapEditorTestSupport";
 
 const DRAFT = {
   recipe_id: "r1", label: "Cell stays", row_template: null, unmapped_fields: [], dataset_id: "ds-a",
@@ -62,7 +64,7 @@ afterEach(() => {
 });
 
 async function mount(): Promise<HTMLElement> {
-  render(<MapScreen apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" onBack={() => undefined} />);
+  render(<MapEditor apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" pipeline={STRIP} mapNodeId="map" onStep={() => undefined} />);
   await screen.findByText("+ entity");
   return screen.getByRole("heading", { name: "Source fields" }).closest("section")!;
 }

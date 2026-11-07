@@ -3,7 +3,7 @@
 // ADR-127 Amendment 13's recorded gap (rule 13): the Map canvas is mouse-only, so no link control in
 // Map was reachable by keyboard. The links of the row template are listed beside the canvas, each a
 // button, and a link is made by choosing its two ends and its type with selects. The mouse path is
-// the canvas's own and is unchanged (`MapScreen.rename.test.tsx`).
+// the canvas's own and is unchanged (`MapEditor.rename.test.tsx`).
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 //
+// Migrated in phase 6 from `MapScreen.*.test.tsx`: the same assertions, against the Map editor as the Studio hosts it.
 // Build order step 30 (the owner, 4 November 2026; CLAUDE.md rule 7): the Studio's Map names a link
 // type as a person reads it ("Held at"), never by its ontology key ("HELD_AT"): in the list of the
 // template's links, in the form that makes one, in the inspector of a chosen link, and on the canvas.
@@ -11,7 +12,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { paletteFor } from "../../color/palette";
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
-import { MapScreen } from "./MapScreen";
+import { MapEditor } from "./MapEditor";
+import { STRIP } from "./mapEditorTestSupport";
 import { syncTemplateGraph } from "./mapGraphSync";
 
 // As the NIEM pack declares them: no label, so the name is read in sentence case (ADR-091 decision 2),
@@ -66,7 +68,7 @@ vi.mock("./MapCanvas", () => ({ MapCanvas: () => <div>canvas</div> }));
 afterEach(cleanup);
 
 async function mount() {
-  render(<MapScreen apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" onBack={() => undefined} />);
+  render(<MapEditor apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" pipeline={STRIP} mapNodeId="map" onStep={() => undefined} />);
   await screen.findByText("+ entity");
 }
 

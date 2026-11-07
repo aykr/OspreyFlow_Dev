@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 //
+// Migrated in phase 6 from `MapScreen.*.test.tsx`: the same assertions, against the Map editor as the Studio hosts it.
 // ADR-127 Amendment 13's recorded gap (rule 13), through the whole screen: a link in the row template
 // is listed beside the canvas and opens in the inspector when chosen; a link is made from the two
 // ends and the type chosen in the list's own form and arrives selected; and the saved row template
@@ -9,7 +10,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RowTemplate } from "../../../../../packages/schemas/generated";
-import { MapScreen } from "./MapScreen";
+import { MapEditor } from "./MapEditor";
+import { STRIP } from "./mapEditorTestSupport";
 
 const ONTOLOGY = {
   version: 1,
@@ -70,7 +72,7 @@ afterEach(() => {
 });
 
 async function mount() {
-  render(<MapScreen apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" onBack={() => undefined} />);
+  render(<MapEditor apiBaseUrl="" investigationId="inv-1" bearerToken="tok" recipeId="r1" pipeline={STRIP} mapNodeId="map" onStep={() => undefined} />);
   await screen.findByText("+ entity");
 }
 
