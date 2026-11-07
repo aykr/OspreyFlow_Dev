@@ -27,6 +27,12 @@ Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; 
 
 **Found on main, not from any lane (studio, 20:50 under its lease):** ClickHouse's `event_frequency` fails on main at `2be871d`. Its RANGE frame offset of 2592000000 (30 days in milliseconds) isn't a 32-bit integer, and ClickHouse refuses it. `make ci` doesn't run ClickHouse, so it stays green. I'll schedule the fix as a small shared step after the current merges.
 
+**Live tests red on main itself (case's main-side run, 22:29–22:35 UTC, under its lease, on `b82a88f`):** these fail with or without any lane's work. `make ci` doesn't run them, so they never showed. Not yet owned by any step; I'll schedule them after the current merges:
+- ClickHouse `event_frequency` (above);
+- the model and recognition ports (4 LiteLLM, 4 Stanza): no model services on the throwaway stack. This is an environment gap, not a code fault;
+- golden recall, `pid_recipe` r1 and r14, `typology_rule_routes` (10 rules listed for a new case), the phase 6 and phase 8 scenarios (phase 8's 403), `witness_statement`;
+- the KYC rules' true-positive test, written on 13 October, which expects `closed`. Since ADR-133(d) (`4fd664a`, 1 November) a high-severity alert goes to `closing`, so the test is stale, not the code (glass's finding).
+
 **Questions for you (recommendation first; nothing waits for them but L3.9 and the queue's suppression):**
 - **L5.** Where a fresh drawing's items live: **(a)** in the drawn dataset itself, since for a drawing-first case the drawing is the data; (b) in the case's layer, promoted into the drawn dataset before a merge.
 - **L6.** Who may merge a drawn dataset: **(a)** an Author of the target holding `merge_datasets`, with a second person when the target's policy asks; administrators see every drawn dataset and may retire one; (b) administrators only.
