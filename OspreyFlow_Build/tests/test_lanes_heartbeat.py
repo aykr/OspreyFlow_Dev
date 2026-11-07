@@ -189,10 +189,11 @@ def test_progress_shows_each_lanes_steps_done_against_all(hb, tmp_path) -> None:
     table.write_text(
         "# comment\n"
         "studio\tL1.1\tS\tdone\tFirst\nstudio\tL1.2\tL\treview\tSecond\nstudio\tL1.3\tL\ttodo\tThird\n"
+        "studio\tL1.4\tM\ttodo\tFourth\n"
         "case\tL3.1\tL\tbuilding\tOnly\n"
     )
     out = hb("show", OSPREY_PROGRESS_FILE=str(table)).stdout
     progress = out.split("PROGRESS")[1].split("\n\n")[0]
     rows = {line.split()[0]: " ".join(line.split()) for line in progress.splitlines()[1:] if line.strip()}
-    assert rows["studio"].startswith("studio 1/3 done") and "L1.2 in review" in rows["studio"]
+    assert rows["studio"].startswith("studio 1/4 done") and "L1.2 in review" in rows["studio"]
     assert rows["case"].startswith("case 0/1 done") and "L3.1 building" in rows["case"]
