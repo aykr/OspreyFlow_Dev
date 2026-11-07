@@ -377,8 +377,13 @@ class RecipeRunStore:
             withdrawn = list(dict.fromkeys(withdrawn_row_keys))
             for start in range(0, len(withdrawn), _KEY_CHUNK):
                 await conn.execute(
-                    "WITH moved AS (DELETE FROM loaded_row_keys WHERE recipe_id = $1 "
-                    "AND investigation_id = $2 AND row_key = ANY($3::text[]) RETURNING *) "
+                    # A key already withdrawn and kept again is never moved a second time (its
+                    # first entry stands, Amendment 15): it stays kept, as the planner leaves it.
+                    "WITH moved AS (DELETE FROM loaded_row_keys k WHERE recipe_id = $1 "
+                    "AND investigation_id = $2 AND row_key = ANY($3::text[]) "
+                    "AND NOT EXISTS (SELECT 1 FROM withdrawn_row_keys w WHERE "
+                    "w.recipe_id = k.recipe_id AND w.investigation_id = k.investigation_id "
+                    "AND w.row_key = k.row_key) RETURNING *) "
                     "INSERT INTO withdrawn_row_keys (recipe_id, investigation_id, row_key, "
                     "load_id, fingerprint, node_ids, edge_ids, event_ids, withdrawn_by_load) "
                     "SELECT recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
@@ -425,13 +430,17 @@ class RecipeRunStore:
         """The events of the rows `load_id` withdrew, by the ids each row's key records (ADR-110
         Amendment 15): what the run sets aside in the analytics store once its record is in. A key
         has its own row's events and no other's, so nothing here depends on another row or case."""
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
+        ids: list[str] = []
+        # Read by a cursor, a bounded batch at a time: the answer grows with the rows withdrawn.
+        async with self._pool.acquire() as conn, conn.transaction():
+            async for r in conn.cursor(
                 "SELECT DISTINCT x FROM withdrawn_row_keys, unnest(event_ids) AS x "
                 "WHERE withdrawn_by_load = $1 ORDER BY x",
                 load_id,
-            )
-        return [r["x"] for r in rows]
+                prefetch=_KEY_CHUNK,
+            ):
+                ids.append(r["x"])
+        return ids
 
     async def withdrawn_row_keys_among(
         self, recipe_id: str, case: str, keys: Sequence[str]

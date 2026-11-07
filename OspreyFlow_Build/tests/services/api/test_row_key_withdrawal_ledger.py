@@ -161,6 +161,31 @@ async def test_reverting_the_load_that_kept_a_withdrawn_key_leaves_nothing_to_re
     assert await runs.kept_row_keys(recipe, case, [k1, k2]) == set()
 
 
+async def test_another_cases_withdrawal_of_the_same_key_is_never_ours(
+    runs: RecipeRunStore,
+) -> None:
+    """Rules 3 and 4: a row key does not depend on the case, so another case of the same pipeline
+    can hold the very key withdrawn. Neither question about a withdrawn key may see it: ours is not
+    `withdrawn_before`, and not among `withdrawn_row_keys_among`, while theirs is. Red with either
+    query's `investigation_id` condition removed (`L1.2a_RED_RECORD.md`)."""
+    recipe, ours, theirs = new_id(), new_id(), new_id()
+    our_load, their_load, their_refresh = new_id(), new_id(), new_id()
+    k1 = new_id()
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(our_load, recipe, ours), row_keys=[k1],
+                          row_elements={k1: _elements(["n1"], ["e1"], ["v1"])})  # fmt: skip
+    await runs.add_record(run_id, _keyed(their_load, recipe, theirs), row_keys=[k1],
+                          row_elements={k1: _elements(["n1"], ["e1"], ["v9"])})  # fmt: skip
+    await runs.add_record(
+        run_id, _keyed(their_refresh, recipe, theirs), withdrawn_row_keys=[k1]
+    )
+
+    (dropped,) = await runs.dropped_row_keys(recipe, ours, present=set())
+    assert dropped.withdrawn_before is False
+    assert await runs.withdrawn_row_keys_among(recipe, ours, [k1]) == set()
+    assert await runs.withdrawn_row_keys_among(recipe, theirs, [k1]) == {k1}
+
+
 async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(
     runs: RecipeRunStore,
 ) -> None:
@@ -187,6 +212,12 @@ async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(
 
     assert (dropped[k1].withdrawn_before, dropped[k2].withdrawn_before) == (True, False)
     assert dropped[k1].event_ids == ("v2",)
+    # The ledger's own guard: a record that names it withdrawn anyway leaves it kept, no violation.
+    await runs.add_record(
+        run_id, _keyed(new_id(), recipe, case), withdrawn_row_keys=[k1]
+    )
+    assert await runs.kept_row_keys(recipe, case, [k1]) == {k1}
+    assert await runs.withdrawn_event_ids(refresh) == ["v1"]
 
 
 async def test_a_key_recorded_before_its_events_reads_as_none(
