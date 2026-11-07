@@ -399,7 +399,7 @@ This replaces "there is no application switch" (ADR-097 step 1), which this sect
 board screens), *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. One
 table, `apps/workspace/src/shell/places.json`, names them and the single rights that open each; a place
 is offered to whoever holds any one of them, and nobody else: the Studio for the right its first read
-needs (`edit_pipelines`, the recipe registry), Admin for the right of one of its tabs, the Glass for any
+needs (`edit_pipelines`, the recipe registry), Admin for the right of one of its built sections' first reads, the Glass for any
 right a case's routes need. While the rights are not yet known, or
 cannot be read, no place is offered, and Home says the rights could not be read. Every signed-in
 person reaches the same sign-in; Home is no place, and lists the same places as cards (*Home*, under
@@ -467,10 +467,11 @@ one node, which a reload does not keep, so *Back* returns to the view open befor
 brand the banner is a GOV.UK notification banner, its title the place: 91 pixels tall at 1440 wide,
 title and one line, taken from the workspace's height.
 
-**Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). Its tabs are as
-before, each behind its right, with **Proposed types** (`manage_ontology`) among them: it left the
-Glass's rail, and is decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090
-Amendment 5). Its routes ask for the administrator role as well as `manage_ontology`.
+**Admin** is reached from the switcher and Home, not the rail (ADR-110 Amendment 14). It is a side
+list of sections in their groups (ADR-145 decision 5; §3.3's *Admin area* has them), each behind its
+right, with **Proposed types** (`manage_ontology`) under *Data*: it left the Glass's rail, and is
+decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090 Amendment 5). Its routes
+ask for the administrator role as well as `manage_ontology`.
 
 **The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the three places,
@@ -880,8 +881,8 @@ type fits; the ends are the link's own. Proposed, it is chosen at once in the fo
 probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
 are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
 when a case opens and again after a proposal or a decision. A refused name is said in the server's
-words. **A holder of `manage_ontology`** (an administrator) has **Proposed types** as a tab of the Admin
-place (ADR-090 Amendment 5: it left the rail, and stays in Admin until the Studio's Model tab shows it,
+words. **A holder of `manage_ontology`** (an administrator) has **Proposed types** as a section of the Admin
+place, under *Data* (ADR-090 Amendment 5: it left the rail, and stays in Admin until the Studio's Model tab shows it,
 L3.5): their own unit's
 proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
 Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
@@ -1235,14 +1236,38 @@ fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose t
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* in the place switcher or Home's *Admin* card, a place
-of its own with no case (ADR-145 decision 1, ADR-110 Amendment 14) — with a tab per right: *People and
+of its own with no case (ADR-145 decision 1, ADR-110 Amendment 14). **Its sections (ADR-145 decision
+5, Amendment 3)** are a side list in groups, read from `admin/sections.json`, each shown only to a holder of its
+right; the first built section the person holds opens first:
+
+| Group | Section | Right |
+| --- | --- | --- |
+| People | People and roles; Roles *(coming)* | `manage_people` |
+| People | Dashboard identities | `manage_dashboards` |
+| Data | Datasets; Connections | `administer_system` |
+| Data | Proposed types | `manage_ontology` (and the administrator role, at its routes) |
+| Running | Operations | `operate_schedules` |
+| Running | System | `administer_system` |
+| Policies | Grading scheme, Approval rights, Uploads *(each coming)* | `administer_system` |
+| Audit | Audit *(coming)* | `read_audit` |
+| Demo packs | Demo packs | `administer_system` |
+
+The rights of the five sections not yet built, and Proposed types under *Data*, are ADR-145
+Amendment 3's. A **coming** section says what it will hold and calls nothing; a
+holder of `read_audit` alone is offered no Admin place until Audit is built (§2.0a: a place is offered
+for its entry screen's first read). Hiding is never the control (rule 3): each built section's screen
+is its own file under `admin/sections/`, and `test_admin_sections.py` derives the routes it calls
+from the code and holds each to the section's right, over HTTP too. Choosing a section moves focus to
+its heading and marks it `aria-current="page"` in the list. Under the GOV.UK brand the list is a
+GOV.UK side navigation (decision 13): group headings, underlined links, the open one bold with a 4px
+rule. The sections' contents are as follows. *People and
 roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
 Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
 (clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or
 *Enable*, and *Reset sign-in*; and *Invite a person*, whose answer is either "an email went to …" or a
-one-time code shown once with what to do with it), *Dashboards*
+one-time code shown once with what to do with it), *Dashboard identities*
 (register a dashboard identity — its secret shown once — and remove one; its account id is what a
-case's Author grants Viewer to), *System* (each component asked as the tab opens, with *Ask again*;
+case's Author grants Viewer to), *System* (each component asked as the section opens, with *Ask again*;
 each model engine with its privacy-contract mark, ADR-136), *Datasets* (ADR-136 decision 2: every
 dataset, its unit and its egress — none, contracted or any — each changed and saved on its own row,
 audited by the Conduit), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
