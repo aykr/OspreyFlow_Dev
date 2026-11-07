@@ -16,9 +16,9 @@ makes it. The route's own scoping is `test_studio_run_now_stamps_its_case_datase
   never holds over nothing), and neither case reads the other's.
 - **Two cases on one dataset:** by design under ADR-102 Amendment 3: a link write merges "only
   when both are visible to exactly the same principals, judged by … the same set of datasets
-  (ADR-099)". (ADR-099 decision 2's "stays one node" and ADR-143's "joins the source dataset" are
-  not cited: the first is before the owner, and the stamp is the case's first dataset until Part C;
-  Amendment 15's known limits.) Both rows merge
+  (ADR-099)". On two datasets, a confined load matches within its reach alone, so each case writes its own
+  nodes and link (ADR-099 Amendment 16). (ADR-143's "joins the source dataset" is not cited: the
+  stamp is the case's first dataset until Part C, Amendment 15's known limits.) Both rows merge
   into one link, and both cases read the same link, count and occurrences. A third case on another
   dataset reads none of it.
 

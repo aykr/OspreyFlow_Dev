@@ -27840,7 +27840,8 @@ the same link, of any case, went with them.
     every due recipe before any runs. Red with Run now's stamp kept but its confinement dropped.
   - A source refresh through `case_for_dataset` is not driven: the fixture's pipeline names no
     dataset, which a watch refuses. Its run takes the same `_owner`, then `run`.
-  - Two cases loading into one dataset do merge, by design under ADR-102 Amendment 3: a link write
+  - Two cases on two datasets write two nodes and two links, by ADR-099 Amendment 16. Two cases
+    loading into one dataset do merge, by design under ADR-102 Amendment 3: a link write
     merges "only when both are visible to exactly the same principals, judged by … the same set of
     datasets". Both cases read the same link, count and occurrences, and a case on another dataset
     reads none of it (the first file). The test of the whole compares each run's change for that
@@ -27852,10 +27853,9 @@ the same link, of any case, went with them.
   ruling ("only a case that loads into a dataset lists or opens its pipelines"): a load writes into
   the pipeline's `dataset_id`, refused unless that is the case's loading dataset, built in Part C.
   L3.1 makes a case read one dataset or one composite.
-- **For the owner (ADR-099 decision 2): one node across datasets.** A loader confined to one dataset
-  cannot see the same person's node in another, so its load makes a second node. That is rule 3's
-  answer, and resolution's scored `SAME_AS` (rule 6) joins them, but decision 2 says such a person
-  "stays one node". Proposed: amend it to say a confined load matches within its reach alone.
+- **One node across datasets: ruled (ADR-099 Amendment 16).** A confined load matches only within
+  its reach, so the same person in two datasets is two nodes, joined by resolution's scored
+  `SAME_AS` (rule 6). Nothing of one dataset is detectable from the other (rule 3).
 - A failure to set the events aside, after the record is in, fails the run in words. The keys are
   already aside, so a rerun does not find those rows dropped again; the revert of the refresh
   reconciles them. Not tested.
