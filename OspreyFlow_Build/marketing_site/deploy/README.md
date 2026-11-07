@@ -1,6 +1,6 @@
 # OspreyFlow website: going live
 
-The site is five files and a folder:
+The site is seven files and a folder:
 
 | File | What it is |
 | --- | --- |
@@ -8,6 +8,8 @@ The site is five files and a folder:
 | `intro-video.html` | The animated overview, shown in the home page's video carousel. Keep it next to `index.html`. |
 | `public-sector.html` | The UK public sector option: the GOV.UK theme for gov.uk services, designed to meet the GDS Service Standard, for every UK department (build order step 12). Hand-written, no external requests. |
 | `monitoring.html` | Monitoring and alerting (build order step 12). Hand-written, no external requests. |
+| `drawing-boards.html` | Drawing boards (7 November 2026): ADR-143's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
+| `three-places.html` | Three places (7 November 2026): ADR-145's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
 | `assets/` | The two new pages' screenshots (about 1.2 MB, ten JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
@@ -55,6 +57,16 @@ Found in the browser check (step 12), and already in the export before it: the h
 server for three addresses that are its own unrendered placeholders (`{{ videoUrl }}`,
 `{{ overviewUrl }}`, `{{ f.src }}`), which give "not found" in the console; and the *Get started*
 commands run together on one line. Both are for the design source.
+
+## Pages that describe what is not built
+
+`drawing-boards.html` and `three-places.html` describe accepted design (ADR-143 to ADR-145), not a release.
+Each section carries a **Coming** mark, the home page's `#coming` section and navigation links say
+"(coming)", and neither page has a screenshot. When a part is merged and checked, change its mark and
+sentence to the built form and add a capture; never mark a section built before its merge. The home page's
+`#coming` section and the two navigation links were added to the template the same way as step 12's edit
+(decode, edit, re-encode with the export's own encoding), so the design source needs them too before its
+next export.
 
 ## The wording rule
 
