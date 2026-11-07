@@ -25682,7 +25682,7 @@ says so. Spec 09 §1.0 has the screens.
 
 **Tests:** `src/ingest/sources/sources.test.tsx` (the wizard's steps, Back, the body sent, a
 registered file not offered; the source page's edit naming the pipelines that need attention; the
-chooser writing the source's marking, shown red with the marking dropped), `src/admin/Connections.test.tsx`,
+chooser writing the source's marking, shown red with the marking dropped), `src/admin/sections/Connections.test.tsx`,
 `IngestStudio.test.tsx` (Sources); keyboard `ingest-studio.spec.ts` (+4) and `admin.spec.ts` (+1); the
 axe scan of the wizard's governance step, a source's page and its edit, the chooser, and Connections,
 in both themes and GOV.UK.
@@ -27110,18 +27110,27 @@ decisions 5 and 13 as built, and what they left open.
    `admin/sections/`, listed in `admin/sections.json`. `test_admin_sections.py`:
    - derives from the code the routes each screen calls, following the files it imports;
    - holds each route to the section's right, by the route's own declared checks and over HTTP, for a
-     principal holding every other right;
+     principal holding every other right; the only reads passed over are named per section with their
+     reason (the open handling scheme, for People and Dashboard identities; the schedule preview, for
+     Operations, which asks `schedule_pipelines`, so a holder of `operate_schedules` alone is refused
+     *Change schedule*'s preview);
+   - holds the component `AdminPlace.tsx` draws for each section to the file `sections.json` names;
    - finds every `/v1/admin` route some section's, or records why it is not (Monitoring › Lists; the
      geospatial wizard).
 
-   It was shown red twice on the real Datasets egress route: once with the route's check removed, and
-   once with the check naming another right.
+   It was shown red by hand twice on the real Datasets egress route, its check removed and then naming
+   another right (both the declared-checks test and the HTTP test failed), and by planted routes and
+   screens committed with it. Connections' screen and test moved to `admin/sections/`; Schedules stays
+   at `admin/Schedules.tsx`, since the Studio, Monitoring and Reports import it.
 5. **The side list.** Groups carry a heading; a group of one section of its own name (Audit, Demo
-   packs) is that section alone. The first built section the person holds opens first. Choosing a
+   packs) is that section alone. The first built section the person holds, in decision 5's order,
+   opens first: for `administer_system` alone that is now Datasets, where the tabs opened System (the
+   built-in roles land where they did). Admin's entry read for that right is the datasets list. Choosing a
    section moves focus to its heading and marks it `aria-current="page"`. Under the GOV.UK brand
    (decision 13) the list is a GOV.UK side navigation, drawn with the workspace's own classes:
    - group headings;
-   - underlined links;
+   - underlined, link-styled buttons (no section has an address of its own, so Back does not step
+     between sections);
    - the open section bold, with a 4px rule in the accent.
 
    `keyboard/admin.spec.ts` proves moving between sections and opening a coming one, each red with the

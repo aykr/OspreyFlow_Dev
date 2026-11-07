@@ -1238,7 +1238,7 @@ fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose t
 running system, behind the same sign-in — *Admin* in the place switcher or Home's *Admin* card, a place
 of its own with no case (ADR-145 decision 1, ADR-110 Amendment 14). **Its sections (ADR-145 decision
 5, Amendment 3)** are a side list in groups, read from `admin/sections.json`, each shown only to a holder of its
-right; the first built section the person holds opens first:
+right; the first built section the person holds, in this order, opens first:
 
 | Group | Section | Right |
 | --- | --- | --- |
@@ -1256,11 +1256,12 @@ The rights of the five sections not yet built, and Proposed types under *Data*, 
 Amendment 3's. A **coming** section says what it will hold and calls nothing; a
 holder of `read_audit` alone is offered no Admin place until Audit is built (§2.0a: a place is offered
 for its entry screen's first read). Hiding is never the control (rule 3): each built section's screen
-is its own file under `admin/sections/`, and `test_admin_sections.py` derives the routes it calls
-from the code and holds each to the section's right, over HTTP too. Choosing a section moves focus to
+is its own file under `admin/sections/` (Operations' stays `admin/Schedules.tsx`), and
+`test_admin_sections.py` derives the routes it calls from the code and holds each to the section's
+right, over HTTP too, passing over only the reads it names per section. Choosing a section moves focus to
 its heading and marks it `aria-current="page"` in the list. Under the GOV.UK brand the list is a
-GOV.UK side navigation (decision 13): group headings, underlined links, the open one bold with a 4px
-rule. The sections' contents are as follows. *People and
+GOV.UK side navigation (decision 13): group headings, underlined link-styled buttons (a section has
+no address of its own), the open one bold with a 4px rule. The sections' contents are as follows. *People and
 roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
 Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
 (clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or
