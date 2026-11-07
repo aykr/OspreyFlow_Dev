@@ -28,6 +28,8 @@ const CASES = [
     datasets: ["Carrier records (synthetic)"], dataset_ids: ["carrier-records"] },
 ];  // prettier-ignore
 
+const startParams = new URLSearchParams(window.location.search);
+
 const CHAIN = {
   nodes: [
     { id: "domain", kind: "domain_model", label: "Domain model", config: { pack: "niem" } },
@@ -52,9 +54,20 @@ let deployed: Record<string, unknown> = {
   schedule_owner: "engineer-1", schedule_paused: true,
   schedule_paused_reason: "waiting for its chapter 9 step: resume it on the Studio's Runs tab",
 };  // prettier-ignore
+// Phase 6 (ADR-140 decision 3): `?expert=1` gives the draft an expert step, which guided mode reads
+// read-only. The step's kind is phase 8's; the harness only needs guided mode to meet one.
+const WITH_EXPERT_STEP = {
+  nodes: [...CHAIN.nodes, { id: "sql", kind: "sql_transform", label: "Visits per week",
+    config: { sql: "SELECT visitor, count(*) AS visits FROM source GROUP BY visitor", summary: "Visits per visitor" } }],
+  edges: [...CHAIN.edges, { source: "profile", target: "sql" }],
+};  // prettier-ignore
+// The draft's map, for the keyboard bind: a Person whose name the caller column fills.
+const VISITS_TEMPLATE = { entities: [{ ref: "visitor", pole_class: "person", type: "Person", on_match: "create",
+  properties: { name: { field: "caller" } } }], edges: [] };  // prettier-ignore
 let draft: Record<string, unknown> = {
   ...base, recipe_id: "r-visits", version: 3, status: "draft", label: "Visit bookings", source_location: "harbour-extract/visits.csv",
-  handling: { classification: "OFFICIAL" }, verified_at: day(0, 8), pipeline: CHAIN,
+  handling: { classification: "OFFICIAL" }, verified_at: day(0, 8), row_template: VISITS_TEMPLATE,
+  pipeline: startParams.get("expert") ? WITH_EXPERT_STEP : CHAIN,
 };  // prettier-ignore
 
 const RUNS = [
@@ -80,11 +93,32 @@ let SOURCES: Record<string, unknown>[] = [
     legal_basis: "Synthetic demonstration", refresh: { trigger: "watch", pattern: "calls-*.csv", mode: "snapshot",
       dropped_rows: "keep", owner: "engineer-1", paused: false }, version: 1,
     created_by: "engineer-1", created_at: day(9) },
+  { id: "src-reports", dataset_id: "harbour-extract", connection_id: "files", name: "Intelligence reports file",
+    location: "harbour-extract/intel_reports.csv", connector_profile: "generic-csv", handling: HANDLING,
+    legal_basis: "Synthetic demonstration", refresh: { trigger: "manual", mode: "snapshot", dropped_rows: "keep",
+      owner: "engineer-1", paused: false }, version: 1, created_by: "engineer-1", created_at: day(8) },
 ];  // prettier-ignore
 const PROFILE = { rows_sampled: 3, sample_is_whole_source: true, values_masked: false, columns: [
   { name: "caller", sample_size: 3, null_count: 0, distinct_count: 3, inferred_type: "string", type_confidence: 1 },
   { name: "called", sample_size: 3, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
 ] };  // prettier-ignore
+// Chapter 4's reports, synthetic (rule 9): the source the from-scratch walk registers nothing for,
+// since it is already registered, and maps.
+const REPORTS_PROFILE = { rows_sampled: 2, sample_is_whole_source: true, values_masked: false, columns: [
+  { name: "report_id", sample_size: 2, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
+  { name: "title", sample_size: 2, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
+] };  // prettier-ignore
+const SAMPLE_ROWS: Record<string, Record<string, string>[]> = {
+  "r-visits": [{ caller: "SYN-0441", called: "SYN-0912" }, { caller: "SYN-0442", called: "SYN-0912" }, { caller: "SYN-0443", called: "SYN-0913" }],
+  "r-new": [{ report_id: "SYN-IR-1", title: "Report one" }, { report_id: "SYN-IR-2", title: "Report two" }],
+};  // prettier-ignore
+const ONTOLOGY = { version: 1, entity_types: [
+  { name: "Document", pole_class: "object", channel: "violet", shape: "page", properties: [{ name: "title", type: "string" }, { name: "report_id", type: "string" }] },
+  { name: "Person", pole_class: "person", channel: "cyan", shape: "circle", properties: [{ name: "name", type: "string" }] },
+], edge_types: [] };  // prettier-ignore
+const VERIFY = { rows_read: 3, sample_is_whole_source: true, values_masked: false, rows_deduplicated: 0,
+  entities_by_type: { Person: { created: 3, referenced: 0 } }, edges_by_type: {}, rejections: [], nodes: [], edges: [] };  // prettier-ignore
+
 const SCHEME = { name: "uk-le", classification: ["OFFICIAL", "SECRET"],
   handling_codes: { P: { label: "Permitted", dissemination: "permitted" } } };  // prettier-ignore
 
@@ -130,6 +164,31 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const edited = { ...SOURCES[0], ...body, version: 2 };
     SOURCES = [edited, ...SOURCES.slice(1)];
     return reply({ source: edited, needs_attention: ["Wing phone calls"] });
+  }
+  // Phase 6: what the drawer's Preview, Test and the Map editor read, for either draft.
+  const recipe = path.match(/\/ingest\/recipes\/(r-visits|r-new)\//)?.[1];
+  if (recipe) {
+    const sample = path.match(/\/map\/sample-rows\/(\d+)$/);
+    if (sample) {
+      const rows = SAMPLE_ROWS[recipe]!;
+      const index = Number(sample[1]);
+      if (index >= rows.length) return reply({ error: "row_out_of_range" }, 404);
+      return reply({ row_index: index, values: rows[index], values_masked: false, is_last_row: index === rows.length - 1 });
+    }
+    if (path.endsWith("/profile")) return reply(recipe === "r-new" ? REPORTS_PROFILE : PROFILE);
+    if (path.endsWith("/verify") && method === "POST") return reply(VERIFY);
+    if (path.endsWith("/row-template") && method === "PUT") {
+      const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      if (recipe === "r-new" && created) created = { ...created, ...sent };
+      else draft = { ...draft, ...sent };
+      return reply(recipe === "r-new" ? created : draft);
+    }
+  }
+  if (path === "/v1/ontology") return reply(ONTOLOGY);
+  if (path === "/v1/ingest/transforms") return reply([]);
+  if (created && path.endsWith("/ingest/recipes/r-new/publish") && method === "POST") {
+    created = { ...created, status: "published", git_path: "recipes/r-new.yaml" };
+    return reply(created);
   }
   if (path.endsWith("/ingest/recipes/r-visits/pipeline") && method === "PUT") {
     draft = { ...draft, pipeline: JSON.parse(String(init?.body)) };
@@ -197,6 +256,9 @@ function Host() {
   );
 }
 
+// Phase 6: `?mode=expert` starts engineer-1 in expert mode (the preference is per person, ADR-140
+// decision 3); without it every person starts guided.
+if (startParams.get("mode") === "expert") window.localStorage.setItem("ospreyflow.studio.mode.engineer-1", "expert");
 createRoot(document.getElementById("root")!).render(<Host />);
 
 // Optional states for the axe scan: a place, a day's report, its held rows.
@@ -256,3 +318,35 @@ if (params.get("pipeline") === "source") {
   await pressNamed("Open Visit bookings");
   await pressNamed("Source: Call log");
 }
+// Phase 6's states (ADR-108 Amendment 6, ADR-140 decision 3): the pipeline in guided or expert mode
+// with a step's drawer open, a source's and Map's Preview, Test and Deploy in the drawer, an expert
+// step read in guided mode, and the Map editor under its strip with a column chosen to bind.
+const pipelineState = params.get("pipeline");
+if (pipelineState && pipelineState !== "source") {
+  await pressNamed("Open Visit bookings");
+  if (pipelineState === "guided" || pipelineState === "expert") await pressNamed("Source: Call log");
+  if (pipelineState === "preview") {
+    await pressNamed("Source: Call log");
+    await pressNamed("Preview");
+    await pressNamed("Run preview");
+  }
+  if (pipelineState === "map-preview") {
+    await pressNamed("Map: Map");
+    await pressNamed("Preview");
+    await pressNamed("Run preview");
+  }
+  if (pipelineState === "test") {
+    await pressNamed("Test");
+    await pressNamed("Run the test");
+  }
+  if (pipelineState === "deploy") await pressNamed("Deploy");
+  if (pipelineState === "expert-step") await pressNamed("SQL transform: Visits per week");
+  if (pipelineState === "map") {
+    await pressNamed("Map: Map");
+    await pressNamed("Open map editor");
+    await pressNamed("Choose column called");
+    await pressNamed("Entity 1: visitor (Person)");
+  }
+  for (let i = 0; i < 20; i++) await settle();
+}
+
