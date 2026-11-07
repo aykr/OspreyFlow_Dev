@@ -24,6 +24,10 @@ describe("the words an alert item is said in", () => {
     expect(alertStatusSentence({ ...CLOSED_ALERT_ITEM.alert!, outcome: "duplicate" })).toBe("Closed as Duplicate: Confirmed with the bank.");
     expect(alertMatchSentence(CLOSED_ALERT_ITEM.alert!)).toBe("Confirmed by a person.");
     expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "claimed" })).toBe("Open, being worked on, when this was added.");
+    // ADR-146 decision 6 (G9): a proposed close is still open, waiting for a second person.
+    expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "closing", outcome: "false_positive", reason: "No link found" })).toBe(
+      "Proposed for closing, waiting for a second person, when this was added.",
+    );
     expect(alertStatusSentence({ ...ALERT_ITEM.alert!, status: "closed", outcome: null, reason: "Taken back with its load" })).toBe(
       "Closed without an outcome: Taken back with its load.",
     );

@@ -120,6 +120,8 @@ export function alertLine(alert: AlertSnapshot): string {
 export function alertStatusSentence(alert: AlertSnapshot): string {
   if (alert.status === "open") return "Open: not yet decided when this was added.";
   if (alert.status === "claimed") return "Open, being worked on, when this was added.";
+  // ADR-146 decision 6 (G9): a proposed close is still open; the outcome proposed is not yet one.
+  if (alert.status === "closing") return "Proposed for closing, waiting for a second person, when this was added.";
   // The reason as it was typed, ended once: a reason that already ends a sentence ("…through
   // Crescent.") is not given a second full stop (build order step 15).
   const typed = (alert.reason ?? "").trim();

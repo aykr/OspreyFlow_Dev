@@ -86,9 +86,15 @@ function readable<T>(value: T | Unreadable | undefined): value is T {
   return value !== undefined && value !== "unreadable";
 }
 
-/** The alerts in a case's team queue: open or claimed, not decided (ADR-109; Home and the rail's badge). */
+/** Whether an alert is still in the queue: open, claimed, or proposed for closing and waiting for a
+ * second person (ADR-146 decision 6, G9: a proposed close counts as open everywhere). */
+export function isOpenInQueue(status: string): boolean {
+  return status === "open" || status === "claimed" || status === "closing";
+}
+
+/** The alerts in a case's team queue still open (ADR-109; Home and the banner's Monitoring count). */
 export function openInQueue(queue: readonly { alert: { status: string } }[]): number {
-  return queue.filter(({ alert }) => alert.status === "open" || alert.status === "claimed").length;
+  return queue.filter(({ alert }) => isOpenInQueue(alert.status)).length;
 }
 
 export function summariseHome(input: HomeInputs): HomeSummary {
@@ -111,7 +117,7 @@ export function summariseHome(input: HomeInputs): HomeSummary {
       for (const { alert, summary } of f.alerts) {
         const open = alert.status === "open";
         const claimed = alert.status === "claimed";
-        if (open || claimed) inQueue += 1;
+        if (isOpenInQueue(alert.status)) inQueue += 1;
         const own = claimed && alert.assignee === input.me;
         if (own) mine += 1;
         if (open || own) {
