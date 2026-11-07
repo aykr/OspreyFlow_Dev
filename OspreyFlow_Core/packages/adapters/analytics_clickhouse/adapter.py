@@ -937,11 +937,12 @@ class AnalyticsClickHouseAdapter:
             found = int(row[0])
             if found:
                 await self._ch.command(
+                    # The ids bound once (`WITH`): the parameters ride in the request's URL.
                     f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
-                    f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, event_id) "
+                    f"WITH ? AS ids SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(ids, event_id) "
                     "AND event_id NOT IN "
-                    "(SELECT event_id FROM withdrawn_events WHERE has(?, event_id))",
-                    [load_id, ids, ids],
+                    "(SELECT event_id FROM withdrawn_events WHERE has(ids, event_id))",
+                    [ids, load_id],
                 )
                 await self._ch.command(
                     "ALTER TABLE events DELETE WHERE has(?, event_id)" + _SYNC, [ids]
@@ -966,10 +967,10 @@ class AnalyticsClickHouseAdapter:
                 break
             await self._ch.command(
                 f"INSERT INTO events ({EVENT_COLUMNS}) "
-                f"SELECT {EVENT_COLUMNS} FROM withdrawn_events "
-                "WHERE withdrawn_by_load = ? AND has(?, event_id) "
-                "AND event_id NOT IN (SELECT event_id FROM events WHERE has(?, event_id))",
-                [load_id, ids, ids],
+                f"WITH ? AS ids SELECT {EVENT_COLUMNS} FROM withdrawn_events "
+                "WHERE withdrawn_by_load = ? AND has(ids, event_id) "
+                "AND event_id NOT IN (SELECT event_id FROM events WHERE has(ids, event_id))",
+                [ids, load_id],
             )
             moved += len(ids)
             after = ids[-1]
