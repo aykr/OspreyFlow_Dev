@@ -192,6 +192,9 @@ _WEEKDAY_SQL = "toInt32(toDayOfWeek(occurred_at)) - 1"
 _HOUR_SQL = "toInt32(toHour(occurred_at))"
 
 
+#: Event ids per statement when a refresh sets events aside (`withdraw_events_by_id`).
+_WITHDRAW_CHUNK = 1_000
+
 class AnalyticsClickHouseAdapter:
     def __init__(self, client: ClickHouseClient, handling_scheme: HandlingScheme) -> None:
         self._ch = client
@@ -915,21 +918,24 @@ class AnalyticsClickHouseAdapter:
         marked with `load_id`, then deleted from `events` (the mutation waited for). ClickHouse has
         no transaction across the two, so each step is safe to repeat: an event already copied is
         not copied again, and a rerun after a failure between them finishes the move."""
-        ids = list(dict.fromkeys(event_ids))
-        if not ids:
-            return 0
-        (row,) = await self._ch.rows("SELECT count() FROM events WHERE has(?, event_id)", [ids])
-        moved = int(row[0])
-        if moved:
-            await self._ch.command(
-                f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
-                f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, event_id) "
-                "AND event_id NOT IN (SELECT event_id FROM withdrawn_events)",
-                [load_id, ids],
-            )
-            await self._ch.command(
-                "ALTER TABLE events DELETE WHERE has(?, event_id)" + _SYNC, [ids]
-            )
+        unique = list(dict.fromkeys(event_ids))
+        moved = 0
+        # In bounded chunks: no statement grows with the rows withdrawn.
+        for start in range(0, len(unique), _WITHDRAW_CHUNK):
+            ids = unique[start : start + _WITHDRAW_CHUNK]
+            (row,) = await self._ch.rows("SELECT count() FROM events WHERE has(?, event_id)", [ids])
+            found = int(row[0])
+            if found:
+                await self._ch.command(
+                    f"INSERT INTO withdrawn_events ({EVENT_COLUMNS}, withdrawn_by_load) "
+                    f"SELECT {EVENT_COLUMNS}, ? FROM events WHERE has(?, event_id) "
+                    "AND event_id NOT IN (SELECT event_id FROM withdrawn_events)",
+                    [load_id, ids],
+                )
+                await self._ch.command(
+                    "ALTER TABLE events DELETE WHERE has(?, event_id)" + _SYNC, [ids]
+                )
+            moved += found
         return moved
 
     async def restore_withdrawn_events(self, load_id: str) -> int:

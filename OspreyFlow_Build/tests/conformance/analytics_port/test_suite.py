@@ -2079,6 +2079,19 @@ async def test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link(
     assert after == await _reads_of(factory, events[1:])
 
 
+async def test_withdraw_events_by_id_takes_more_ids_than_one_statement_holds(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A refresh dropping many rows names many events: every one is set aside, in bounded
+    statements (2,500 ids, over the adapters' chunk of 1,000), and the one left out stays."""
+    events = [_event(occurred_at=_week(i % 7), edge_id=f"e{i}", load_id=LOAD_A) for i in range(2_501)]
+    async with factory.context(events) as adapter:
+        assert await adapter.withdraw_events_by_id([e.event_id for e in events[:-1]], REFRESH) == 2_500
+        page = await adapter.list_events(EventListRequest(filter=_filter(), limit=10), CLEARED)
+        assert [e.event_id for e in page.events] == [events[-1].event_id]
+        assert await adapter.restore_withdrawn_events(REFRESH) == 2_500
+
+
 async def test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew(
     factory: AnalyticsAdapterFactory,
 ) -> None:
