@@ -26678,11 +26678,31 @@ asserted, in the composite) from it to the member's node; the member's node is n
 entities are never merged in storage). It is decided in the Conduit's write path, the stamping graph
 (`DatasetStampingGraph._kept_from_members`), asked as the request's own principal (the composite and
 its members, under its handling), so the answer tells the caller nothing it cannot already read. A
-new link between member nodes was already the composite's alone. Not covered: a write naming a
-member's node the caller cannot read at all (only reachable by a content-derived id, and a composite
-has no pipelines) merges as before. Proved on ArcadeDB by
-`tests/conformance/graph_port/test_composite_write_to_member_node.py`, shown red with the check
-planted out.
+new link between member nodes was already the composite's alone.
+
+- **One copy per member node, so a writer may write it again.** The copy's id is the member node's
+  and the composite's (`dataset_scope.composite_copy_id`), and so is its `SAME_AS`'s: writing the
+  same node again in the case (an email extracted twice; the email Document's id is fixed, and the
+  seeded Enron and Fixture Corp composite meets exactly this) writes the same copy and adds nothing.
+- **What is written beside it names the copy.** For the rest of the request, a link written to or
+  from the member's node (`upsert_edges`, `bulk_load_edges`) and the canvas's copy of what was
+  written (`WorkingSetService.add_written`) name the composite's copy; a writer reads back the id
+  the write returns, as `EmailExtractionService` does for the candidates it files under it.
+- **Its marking and its standing.** The `SAME_AS` takes the stricter marking of its two ends, as
+  `same_as_writer._handling_for` marks one. It is `asserted`: it records that the copy was made from
+  that node, not a judgement that two records match. The copy keeps the write's own provenance, so
+  an `inferred` write (an accepted extraction, rule 5) makes an `inferred` copy.
+- **Not covered.** A write naming a member's node the caller cannot read at all (only reachable by a
+  content-derived id; a composite has no pipelines) merges as before. A **correction** of a member's
+  element made in a composite case (`supersede_edge`: a link's change, a picture replaced) still
+  changes the member: a correction hides the old element from every reader, and a composite has no
+  way to hide a member's element from its own readers alone. The owner decides (the case lane's
+  report, 7 November 2026).
+
+Proved on ArcadeDB by `tests/conformance/graph_port/test_composite_write_to_member_node.py` (shown
+red with the check planted out; the marking) and, at the email extraction's real call site, by
+`tests/services/api/test_composite_writes_live.py` (the links and canvas name the copy; a second
+extraction adds nothing; both red before).
 
 ### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
 

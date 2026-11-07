@@ -585,8 +585,10 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
 - **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity
   marked by hand in the reader (the node and its `MENTIONED_IN` link) and a manual `SAME_AS` or
   `NOT_SAME_AS` (§4) name the layer, which the request holds beside its read set
-  (`dataset_scope.analyst_layer`). A case with no layer yet writes them with everything else; what
-  was written before the amendment stays where it is. `tests/services/api/test_case_writes.py`
+  (`dataset_scope.analyst_layer`). A case with no layer yet is given one by the writer, inside the
+  route after its level check, and they go there; with no case's layer to go into, the write is
+  refused (409 `no_analyst_layer`) and nothing is written, never into the source (ADR-143
+  Amendment 1 item 3). What was written before the amendment stays where it is. `tests/services/api/test_case_writes.py`
   drives each writer at its real call site.
 - **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
   gives each case that names several datasets a composite of them (one composite per distinct set),

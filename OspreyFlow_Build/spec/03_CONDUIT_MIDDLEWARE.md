@@ -264,7 +264,7 @@ GET    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        the 
 POST   /v1/investigations/{investigation_id}/pictures                       which of these entities have a picture of their own the caller may see, Viewer (ADR-105)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   entities from a held Document by kind: text, an image described and read, a video transcribed; `using`: `recogniser` (the default, ADR-098) or `model`, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
-POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, both written in the case's analyst layer (ADR-143 Amendment 1), Editor (ADR-098)
+POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, both written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing, and nothing is written), Editor (ADR-098)
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098); with `degree` 2–6 and 2–8 named nodes, also the routes between them within it (Amendment 4)
 GET    /v1/investigations/{investigation_id}/datasets   the dataset the case chose (a source or a composite; never its analyst layer), Viewer (ADR-099, ADR-143)
 PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [one]}`, a source or composite of the Author's unit; else 422 `dataset_refused`, one answer for two ids, another unit's, a missing one and an analyst layer), audited before and after, Author (ADR-099 Amendment 12)
@@ -506,8 +506,8 @@ span (§3.6) until a candidate has actually been accepted.
 ```
 GET    /v1/resolution/threshold          current session τ
 PUT    /v1/resolution/threshold          set τ; triggers a reproject delta
-POST   /v1/resolution/link               analyst-asserted SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1)
-POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1)
+POST   /v1/resolution/link               analyst-asserted SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing)
+POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing)
 GET    /v1/resolution/explain/{cluster}  the comparison vector and score that produced a cluster
 ```
 
