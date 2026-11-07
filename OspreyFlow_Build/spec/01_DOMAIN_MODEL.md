@@ -579,7 +579,11 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
 - **What a case writes joins the first of its read set** unless the write names another (decision
   6): the source, or a composite's own id (Amendment 14). A composite case's write naming a node
   already in a member becomes a new node of the composite, linked to the member's by `SAME_AS`, so
-  no member is written by a case reading the composite (Amendment 15). Accepted question proposals, accepted extractions and loads are written so. The
+  no member is written by a case reading the composite (Amendment 15). A **correction** of a
+  member's element in such a case (confirming or retracting a node, changing a link, replacing or
+  removing a picture, closing an alert as a true positive) is refused, in words (409
+  `correct_in_member_case`, "correct this in a case that reads that dataset"), before anything is
+  written. Accepted question proposals, accepted extractions and loads are written as above. The
   Conduit's own writes for a case are stamped by `DatasetStampingGraph` (Amendment 1 decision 2), and
   an element's properties are the latest write's (decision 2).
 - **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity

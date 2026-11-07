@@ -26686,20 +26686,36 @@ new link between member nodes was already the composite's alone.
   seeded Enron and Fixture Corp composite meets exactly this) writes the same copy and adds nothing.
 - **What is written beside it names the copy.** For the rest of the request, a link written to or
   from the member's node (`upsert_edges`, `bulk_load_edges`) and the canvas's copy of what was
-  written (`WorkingSetService.add_written`) name the composite's copy; a writer reads back the id
-  the write returns, as `EmailExtractionService` does for the candidates it files under it.
+  written (`WorkingSetService.add_written`) name the composite's copy, by one rewrite
+  (`dataset_scope.to_copies`); a writer reads back the id the write returns, as
+  `EmailExtractionService` does for the candidates it files under it, and counts the working set's
+  room by the copy's id (`will_be_written_as`). A later request finds the copy again by its id
+  (`as_written_in_this_case`): accepting or rejecting an email's findings in the composite case
+  finds them under the copy, and the accepted entity's `MENTIONED_IN` names the copy.
+- **Made once, even at once.** The copy and its `SAME_AS` are made in a transaction of their own
+  before the caller's write; two requests making the same copy at the same moment both end well
+  with the one copy, the second taking the first's (the store's unique id refuses the second, as
+  `ensure_layer` takes a layer made at once). Its `SAME_AS` is written only when the copy is made,
+  so writing the node again adds no occurrence: the link records where the copy came from, not a
+  sighting. A copy left when the caller's own write then fails is the one its next write reaches.
 - **Its marking and its standing.** The `SAME_AS` takes the stricter marking of its two ends, as
   `same_as_writer._handling_for` marks one. It is `asserted`: it records that the copy was made from
   that node, not a judgement that two records match. The copy keeps the write's own provenance, so
   an `inferred` write (an accepted extraction, rule 5) makes an `inferred` copy.
-- **A correction of a member's link is refused** (the owner's ruling, 7 November 2026). A
+- **A correction of a member's element is refused** (the owner's ruling, 7 November 2026). A
   correction hides the old element from every reader, and a composite cannot hide a member's
   element from its own readers alone, so in a composite case changing a member's link
-  (`links/{edge}/change`) and replacing or removing a picture a member holds are refused, in words
-  ("correct this in a case that reads that dataset"; 409 `correct_in_member_case`), before anything
-  is stored, so no member ever changes. The composite's own links may still be corrected. Each
-  correcting service refuses as soon as it holds the link (`dataset_scope.refuse_correcting_a_member`),
-  and the stamping graph's `supersede_edge` refuses as the last word.
+  (`links/{edge}/change`), replacing or removing a picture a member holds, confirming or retracting
+  a member's node (`nodes/{node}/confirm`, `/retract`), and closing an alert as a true positive
+  that would confirm a member's node or link are refused, in words ("correct this in a case that
+  reads that dataset"; 409 `correct_in_member_case`), before anything is stored, so no member ever
+  changes and no close is left half done. The composite's own elements may still be corrected:
+  replacing a picture when a member's newer one is shown supersedes the case's own picture (which,
+  newest, is then shown), and the member's is left as it was; only with no picture of its own is
+  the replace a correction of the member's, and refused.
+  Each correcting route or service refuses as soon as it holds the element
+  (`dataset_scope.refuse_correcting_a_member`), and the stamping graph's `supersede_node` and
+  `supersede_edge` refuse as the last word.
 - **Not covered.** A write naming a member's node the caller cannot read at all (only reachable by a
   content-derived id; a composite has no pipelines) merges as before.
 

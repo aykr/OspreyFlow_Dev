@@ -659,7 +659,7 @@ POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its propo
 POST   /v1/investigations/{id}/rules/{rule_id}/change   a new version of a sentence rule: applied at once, or waiting for approval for a whole-deployment rule, deploy_rules and keep_watches
 GET    /v1/investigations/{id}/rules/{rule_id}/versions   every version of a rule, with who proposed and who decided each, Viewer
 GET    /v1/investigations/{id}/rules/{rule_id}/runs   a scheduled rule's schedule in words, its next run or why it will not run, its latest runs, Viewer
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor; the same 409 `correct_in_member_case` as the disposition
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/send-back   send a proposed close back to its proposer, with a reason, Editor
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   the pipeline's "Checks on load" step: the rules it may attach and what was chosen, edit_pipelines, Editor
 PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   choose the pipeline's checks and what a hit does there; names rules, never writes one, edit_pipelines, Editor
@@ -786,7 +786,7 @@ POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed �
 GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/claim   open → claimed by the caller, Editor
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/release   claimed (by the caller) → open, Editor
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor. A true positive that would confirm a member's node or link in a case reading a composite is 409 `correct_in_member_case`, refused before any write, the alert left as it was (ADR-099 Amendment 15)
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entities and cited links into the working set, Editor
 ```
 
@@ -1021,8 +1021,8 @@ POST   /v1/investigations/{id}/packs/{pack}/export     the newest live publicati
 GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
 POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
-POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099)
-POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099)
+POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099); In a case reading a composite, a member's node is 409 `correct_in_member_case` ("correct this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15).
+POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099); In a case reading a composite, a member's node is 409 `correct_in_member_case` ("correct this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15).
 POST   /v1/investigations/{id}/nodes/{node_id}/suppression-mark   propose a suppression (R7 step one); `DELETE` withdraws it; Editor (ADR-099 moved both under the case)
 DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark   withdraw that proposal; Editor (ADR-099)
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file; a recipe with a pipeline runs through the pipeline runner (services/api/pipeline_run.py over services/ingest/pipeline.py) and answers a PipelineRunReport, every branch, extract and enrich stage its own account; the case's rule gate judges each branch (§3.8a)
