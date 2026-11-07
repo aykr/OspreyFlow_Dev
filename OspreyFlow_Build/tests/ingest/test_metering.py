@@ -44,8 +44,8 @@ def test_a_loads_graph_writes_are_every_element_it_wrote_once() -> None:
         referenced_node_ids=["ref1"],
     )  # fmt: skip
     # created and merged edges are within touched: counted once; a referenced node is not written;
-    # a full snapshot's withdrawal is not counted (ADR-110 Amendment 15: which links go depends on
-    # rows and loads the reader may not read).
+    # a full snapshot's withdrawal is not counted (ADR-110 Amendment 15: it writes no element; a
+    # record from before it may still list withdrawn ids, and they count for nothing).
     assert graph_writes(report) == 2 + 1 + 2 + 1 + 2
 
 

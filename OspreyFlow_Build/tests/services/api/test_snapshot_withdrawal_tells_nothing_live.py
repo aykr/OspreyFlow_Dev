@@ -29,6 +29,9 @@ the states differ by that row whatever the withdrawal does.
 It also says, in the first world, what the ruling says: the second run leaves every node and link,
 and takes B's event alone. Only the ids and times that differ between any two runs are left out.
 
+In the second world it also reads the other case's timeline, as its own loader, before and after
+the withdrawal: it must not move.
+
 What a mistake would do, and what catches it (`L1.2a_RED_RECORD.md` has each shown red):
 - a dropped row's link withdrawn (the graph changes in either world);
 - a link withdrawn unless another row of any case holds it (`elements_kept_by_other_rows`): the
@@ -205,9 +208,16 @@ async def _told(
         if beside:
             await world.run(other, theirs, THEIRS)
         before_drop = await world.what_they_read(loader, ours)
+        theirs_before = await world.what_they_read(other, theirs)
         second, second_run, second_said = await world.run(loader, ours, [A])
         assert second.rows_withdrawn == 1, "B was dropped"
         after_drop = await world.what_they_read(loader, ours)
+        # The other side: their timeline and their reads around B's link are as they were, so
+        # nothing of theirs went with B's withdrawal (a withdrawal by link would take their event).
+        if beside:
+            theirs_after = await world.what_they_read(other, theirs)
+            assert theirs_after["events"] == theirs_before["events"], "their timeline"
+            assert len(theirs_after["events"]) == 2
         _, third_run, third_said = await world.run(loader, ours, [A, B])
         after_back = await world.what_they_read(loader, ours)
     return {
