@@ -340,7 +340,9 @@ function PipelineEditor({
         {mode === "guided" ? (
           <>
             <GuidedSteps pipeline={pipeline} selectedId={selectedId} onSelect={choose} />
-            <div style={{ overflow: "auto" }}>
+            {/* The picture holds nothing to press, so its scroll box takes focus itself (WCAG 2.1.1,
+                axe's scrollable-region-focusable) for a keyboard to scroll a wide pipeline. */}
+            <div style={{ overflow: "auto" }} tabIndex={0} role="region" aria-label="Pipeline picture">
               <PipelineCanvas pipeline={pipeline} selectedId={selectedId} onSelect={choose} readOnly />
             </div>
           </>

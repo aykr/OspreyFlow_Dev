@@ -756,7 +756,9 @@ export function ConnectScreen({
               {activeRecipeId ? "Save" : "Create draft"}
             </Button>
             {recipeId ? (
-              <Button onClick={() => onBack?.()}>Back to the pipeline</Button>
+              // Hosted in the pipeline's drawer there is no back (ADR-108 Amendment 6.1): the
+              // drawer's own Close goes back to the source node.
+              onBack && <Button onClick={onBack}>Back to the pipeline</Button>
             ) : (
               <Button
                 disabled={!lastSaved?.ready_for_profile}

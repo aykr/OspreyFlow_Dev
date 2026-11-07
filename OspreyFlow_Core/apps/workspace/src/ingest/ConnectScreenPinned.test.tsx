@@ -93,4 +93,11 @@ describe("ConnectScreen pinned to a pipeline's draft", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Back to the pipeline" }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  it("offers no Back when hosted in the pipeline's drawer (no onBack)", async () => {
+    stub();
+    render(<ConnectScreen investigationId="inv-1" apiBaseUrl="http://api" bearerToken="tok" recipeId="r1" />);
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Back to the pipeline" })).toBeNull();
+  });
 });

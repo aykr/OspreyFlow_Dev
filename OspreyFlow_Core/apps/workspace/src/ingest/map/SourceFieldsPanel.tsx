@@ -64,16 +64,23 @@ export function SourceFieldsPanel({
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/x-osprey-field", column.name)}
                 style={{
-                  border: isChosen ? "2px solid var(--border-strong)" : "1px solid var(--border-subtle)",
+                  // Bound columns are outlined and say so (brief §6.5), never faded: an `opacity` of
+                  // 0.6 put every word on a bound column below 4.5:1, found by phase 6's first axe
+                  // scan of Map with a column bound (7 November 2026).
+                  border: isChosen
+                    ? "2px solid var(--border-strong)"
+                    : bound
+                      ? "1px solid var(--border-strong)"
+                      : "1px dashed var(--border-subtle)",
                   borderRadius: "var(--r-panel)",
                   padding: "var(--sp-8)",
-                  opacity: (bound || ignored) && !isChosen ? 0.6 : 1,
                   cursor: "grab",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
                   <strong>{column.name}</strong>
-                  <span style={{ color: "var(--text-tertiary)" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>
+                    {bound ? "bound · " : ignored ? "ignored · " : ""}
                     {column.inferred_type} ({percent(column.type_confidence)})
                   </span>
                 </div>

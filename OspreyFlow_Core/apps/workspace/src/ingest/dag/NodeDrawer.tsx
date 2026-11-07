@@ -82,7 +82,12 @@ export function NodeDrawer(props: NodeDrawerProps) {
         <p className="label">Choose a step to set it up, preview it, or Test the whole pipeline.</p>
       ) : (
         <header style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
-          <h3 style={{ margin: 0, fontSize: "var(--fs-14)", flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{title}</h3>
+          {/* A hosted screen names itself in its own heading; the drawer does not say it twice. */}
+          {pane.at === "node" ? (
+            <h3 style={{ margin: 0, fontSize: "var(--fs-14)", flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{title}</h3>
+          ) : (
+            <span style={{ flex: 1 }} />
+          )}
           <Button aria-label="Close the drawer" onClick={onClose}>
             Close
           </Button>
