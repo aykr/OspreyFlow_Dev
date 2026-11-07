@@ -30,7 +30,7 @@ BACK = '''                _back = sorted(await sink.withdrawn_row_keys_among(rec
 '''
 Y = NOTE + BACK + "                if _n:\n                    report.refresh_notes = [*report.refresh_notes, f'{_n} other']\n"
 Z = NOTE + BACK + ('''                _links = sorted({e for k in _back if (el := report.kept_row_elements.get(k)) for e in el.edge_ids})
-                if _n % 2 and _links:  # plant: on the parity of other cases' kept rows
+                if _n and _links:  # plant: whenever another case keeps the key
                     await graph.withdraw_elements([], _links, report.load_id, tx)
 ''')
 PLANTS = {
