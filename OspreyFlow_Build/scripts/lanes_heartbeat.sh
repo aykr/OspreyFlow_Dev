@@ -93,6 +93,7 @@ overall() {
 # Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
 show() {
   local needs="$DIR/.needs.tmp"; : > "$needs"
+  local mine="$DIR/.orchestrator.tmp"; : > "$mine"
   overall
   for lane in $LANES; do
     local f="$DIR/$lane.beat" state="-" note="" at="" ago="never" ab="-" lc="-"
@@ -106,7 +107,7 @@ show() {
           fi ;;
         waiting-for-owner) echo "$lane is waiting for you: $note" >> "$needs" ;;
         blocked) echo "$lane is blocked: $note" >> "$needs" ;;
-        ready-to-merge) echo "$lane is ready to merge (since $at): tell the orchestrator" >> "$needs" ;;
+        ready-to-merge) echo "$lane is ready to merge (since $at)" >> "$mine" ;;
       esac
     else
       echo "$lane has never sent a heartbeat" >> "$needs"
@@ -119,7 +120,7 @@ show() {
       behind=$(echo "$cnt" | awk '{print $1}'); ahead=$(echo "$cnt" | awk '{print $2}')
       # A merged lane (nothing ahead of main) has nothing to rebase, however far main has moved.
       if [ "$behind" != "?" ] && [ "$ahead" != "0" ] && [ "$behind" -ge "$BEHIND_MAX" ]; then
-        echo "$lane is $BEHIND_MAX or more commits behind main: ask it to rebase" >> "$needs"
+        echo "$lane is $BEHIND_MAX or more commits behind main: to rebase" >> "$mine"
       fi
     fi
     if [ -s "$DIR/$lane.nudge" ]; then note="(unread nudge) $note"; fi
@@ -153,6 +154,9 @@ show() {
   echo "Claude sessions running: $(sessions)"
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi
+  # The orchestrator's own queue: shown for information, never notified.
+  if [ -s "$mine" ]; then echo; echo "FOR THE ORCHESTRATOR (it acts on these; nothing for you):"; sed 's/^/  - /' "$mine"; fi
+  rm -f "$mine"
   mv "$needs" "$DIR/.needs"
 }
 

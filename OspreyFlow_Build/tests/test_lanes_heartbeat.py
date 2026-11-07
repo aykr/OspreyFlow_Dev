@@ -131,7 +131,7 @@ def test_a_needs_line_reads_the_same_ten_minutes_later(hb) -> None:
     now = int(datetime.now(UTC).timestamp())
     first = _needs(hb("show", OSPREY_NOW=str(now)))
     later = _needs(hb("show", OSPREY_NOW=str(now + 600)))
-    assert len(first) == 3
+    assert len(first) == 2  # the ready-to-merge line is the orchestrator's, not under NEEDS YOU
     assert later == first
 
 
@@ -179,8 +179,10 @@ def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
     """A merged lane (nothing ahead of main) is not asked to rebase however far main has moved."""
     worktrees = _repo_with_lane(tmp_path, ahead=ahead, behind=6)
     _all_beat(hb)
-    lines = _needs(hb("show", OSPREY_WORKTREES=str(worktrees)))
-    assert ("glass is 5 or more commits behind main: ask it to rebase" in lines) is flagged
+    out = hb("show", OSPREY_WORKTREES=str(worktrees)).stdout
+    orchestrator = out.split("FOR THE ORCHESTRATOR")[1] if "FOR THE ORCHESTRATOR" in out else ""
+    assert ("glass is 5 or more commits behind main: to rebase" in orchestrator) is flagged
+    assert "behind main" not in out.split("FOR THE ORCHESTRATOR")[0]
 
 
 def test_each_lane_reads_as_a_checklist_of_every_step_in_words(hb, tmp_path) -> None:
@@ -205,3 +207,19 @@ def test_each_lane_reads_as_a_checklist_of_every_step_in_words(hb, tmp_path) -> 
     assert steps[2] == "to do L1.3 Third" and steps[3] == "to do L1.4 Fourth"
     assert any(line.startswith("CASE: 0 of 1 done") for line in flat)
     assert any(line.startswith("being built L3.1 Only step") for line in flat)
+
+
+def test_only_what_needs_the_owner_is_under_needs_you(hb) -> None:
+    """A lane ready to merge, or behind main, is the orchestrator's to act on, not the owner's: it is
+    listed under FOR THE ORCHESTRATOR and is never notified. A lane waiting for the owner stays under
+    NEEDS YOU and is notified."""
+    _all_beat(hb)
+    hb("beat", "glass", "ready-to-merge", "done")
+    hb("beat", "case", "waiting-for-owner", "a question")
+    out = hb("show").stdout
+    needs = out.split("NEEDS YOU:")[1].split("FOR THE ORCHESTRATOR")[0]
+    assert "case is waiting for you" in needs and "glass is ready to merge" not in needs
+    assert "glass is ready to merge" in out.split("FOR THE ORCHESTRATOR")[1]
+    hb("watch", "1", OSPREY_WATCH_PASSES="1")
+    notes = hb.notified.read_text().splitlines()
+    assert len(notes) == 1 and "case is waiting for you: a question" in notes[0]
