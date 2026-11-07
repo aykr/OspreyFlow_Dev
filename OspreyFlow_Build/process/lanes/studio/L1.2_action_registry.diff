@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 7705f23..5e4145b 100644
+index 7705f23..106a770 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -802,6 +802,18 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
+@@ -802,6 +802,25 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
    // paused with why and resumed.
    "set-a-sources-refresh-mode-by-keyboard",
    "pause-and-resume-a-sources-refresh-by-keyboard",
@@ -18,6 +18,13 @@ index 7705f23..5e4145b 100644
 +  "go-back-to-a-step-from-the-map-strip-by-keyboard",
 +  "bind-a-column-by-choosing-both-and-enter",
 +  "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard",
++  // The review of L1.2: guided mode's read-only expert step, an edit in expert mode, the load rules
++  // from the Load step, letting a chosen column go, and the drawer's Settings after Preview.
++  "an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",
++  "edit-a-step-in-expert-mode-by-keyboard",
++  "open-load-rules-from-the-load-step-by-keyboard",
++  "let-go-a-chosen-column-by-keyboard",
++  "go-back-to-a-steps-settings-from-preview-by-keyboard",
  ] as const);
  
  // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
