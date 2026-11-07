@@ -36,6 +36,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-145 Amendment 1 | Three places as built: each place follows the full checks its routes make; no route moves place; only the Studio's run history narrows (to run_pipelines); schedule preview exempt from place assignment; the GOV.UK header's local extension (the owner's corrected ruling, 7 November) | glass | 2026-11-07 | reserved |
 | ADR-090 Amendment 5 | Proposed types stay in Admin until the Studio's Model tab shows them (L3.5) (the owner's ruling, 7 November) | glass | 2026-11-07 | reserved |
 | ADR-115 Amendment 6 | Places a person cannot open are hidden, not dimmed (ADR-145 N6; the owner's ruling, 7 November) | glass | 2026-11-07 | reserved |
+| ADR-110 Amendment 15 | A snapshot's withdrawal takes back a dropped row's links and events only, never its nodes, so nothing a reader sees varies with what they cannot read (rule 3; the owner's ruling "Never withdraw nodes", 7 November) | studio | 2026-11-07 | reserved |
 
 ## Baseline
 
