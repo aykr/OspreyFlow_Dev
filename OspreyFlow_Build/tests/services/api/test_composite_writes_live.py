@@ -85,7 +85,14 @@ async def _service(adapter: Any) -> tuple[EmailExtractionService, Any]:
         graph,
         load_default_ontology(),
         InMemoryCandidates(),  # type: ignore[arg-type]
-        FixedModel({"Person": []}),  # type: ignore[arg-type]
+        FixedModel(
+            {
+                "Person": [
+                    {"family_name": "MERCER", "given_names": "Dana", "confidence": 0.9},
+                    {"family_name": "PRICE", "given_names": "Callum", "confidence": 0.8},
+                ]
+            }
+        ),  # type: ignore[arg-type]
         "local-model",
         recogniser=FakeRecogniser(),
     )
@@ -239,3 +246,135 @@ async def test_a_members_picture_is_neither_replaced_nor_removed_in_a_composite_
 
         assert await service.pictures("member-case", ["car-1"], MEMBER_ONLY) == before
         assert len(media.files) == stored  # no file stored for the refused one
+
+
+# --- accepting and rejecting what was found, in the composite case (the fourth review) -------
+
+
+async def test_a_finding_from_an_email_in_a_composite_case_is_accepted_and_rejected() -> None:
+    """Extraction files its findings under the composite's copy of the email's Document; accepting
+    and rejecting them in the same case (each its own request) must find them there, and the
+    accepted entity's `MENTIONED_IN` names the copy, never the member's Document. Before this fix
+    both answered "not found"."""
+    store = await _composite_case()
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
+        service, _ = await _service(adapter)
+        principal = await scope_to_case(ANALYST, CASE, store)
+        extracted = await service.extract(CASE, "e1", "ev-1", principal, using="model")
+        set_case_datasets(None)
+        copy = extracted.document_id
+        assert copy != DOCUMENT and len(extracted.candidates) == 2
+        keep, drop = extracted.candidates
+
+        principal = await scope_to_case(ANALYST, CASE, store)  # a new request
+        accepted = await service.accept(CASE, "e1", "ev-1", keep.id, principal)
+        set_case_datasets(None)
+        principal = await scope_to_case(ANALYST, CASE, store)
+        await service.reject(CASE, "e1", "ev-1", drop.id, principal)
+        reader = await scope_to_case(ANALYST, CASE, store)
+        set_case_datasets(None)
+
+        among = await adapter.edges_among([accepted.node_id, copy, DOCUMENT], reader)
+        assert [(e.type, e.source, e.target) for e in among if e.type == "MENTIONED_IN"] == [
+            ("MENTIONED_IN", accepted.node_id, copy)
+        ]
+        before = await adapter.neighbourhood_stats(DOCUMENT, MEMBER_ONLY)
+        assert before.degree == 0  # the member's Document gained nothing
+
+
+async def _pictures(adapter: Any, store: InMemoryDatasetStore) -> tuple[Any, Any]:
+    """A member's car, and the picture service over the stamping graph, as both cases see it."""
+    from services.api.entity_pictures import EntityPictureService
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+    from schemas.domain import Handling, NodeWrite, Provenance, ProvenanceState, SourceRef
+
+    store.cases["member-case"] = [MEMBER]
+    handling = Handling(
+        classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
+    )
+    car = NodeWrite(
+        id="car-2",
+        type="Vehicle",
+        properties={},
+        provenance=Provenance(
+            state=ProvenanceState.ASSERTED,
+            sources=[SourceRef(document_id="d", locator="l", excerpt_hash="")],
+            first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+        handling=handling,
+        created_by="seed",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        datasets=[MEMBER],
+    )
+    tx = await adapter.begin_transaction()
+    await adapter.upsert_nodes([car], tx)
+    await adapter.commit_transaction(tx)
+    working = FakeWorkingSetStore()
+    held = await adapter.get_node("car-2", MEMBER_ONLY)
+    for case in ("member-case", CASE):
+        await working.add_nodes(case, [held])
+    graph = stamping(adapter, scheme=load_uk_le_scheme())
+    service = EntityPictureService(
+        WorkingSetService(graph, working, SCHEME),
+        graph,
+        InMemoryMediaStore(),
+        load_default_ontology(),
+        scheme=load_uk_le_scheme(),
+    )
+    return service, handling
+
+
+async def _set_picture(
+    service: Any, store: InMemoryDatasetStore, case: str, data: bytes, handling: Any
+) -> str:
+    principal = await scope_to_case(ANALYST, case, store)
+    try:
+        result = await service.set(
+            case, "car-2", principal, name="car.png", data=data, handling=handling
+        )
+        return str(result.document_id)
+    finally:
+        set_case_datasets(None)
+
+
+async def test_the_composite_case_replaces_its_own_picture_when_a_members_is_newer() -> None:
+    """The case set its own picture; the member's case later set a newer one, which is the one
+    shown. Replacing it in the composite case supersedes the case's own picture (now the newest,
+    so shown) and leaves the member's exactly as it was, instead of refusing."""
+    store = await _composite_case()
+    png = b"\x89PNG\r\n\x1a\n"
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
+        service, handling = await _pictures(adapter, store)
+        await _set_picture(service, store, CASE, png + b"case's own", handling)
+        members = await _set_picture(service, store, "member-case", png + b"member's", handling)
+        replaced = await _set_picture(service, store, CASE, png + b"case's own, again", handling)
+
+        in_member = await service.pictures("member-case", ["car-2"], MEMBER_ONLY)
+        assert [p.document_id for p in in_member] == [members]
+        reader = await scope_to_case(ANALYST, CASE, store)
+        set_case_datasets(None)
+        assert [p.document_id for p in await service.pictures(CASE, ["car-2"], reader)] == [
+            replaced
+        ]
+
+
+# --- two first extractions at once (the fourth review's must-fix 4) ---------------------------
+
+
+async def test_two_first_extractions_at_once_end_in_one_copy() -> None:
+    """Two requests in the composite case extract the same email at the same moment: both end
+    well, with the one copy and one `SAME_AS`, not a duplicate-key failure."""
+    import asyncio
+
+    store = await _composite_case()
+    async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as adapter:
+        service, _ = await _service(adapter)
+        first, second = await asyncio.gather(_extract(service, store), _extract(service, store))
+        assert first.document_id == second.document_id != DOCUMENT
+        reader = await scope_to_case(ANALYST, CASE, store)
+        set_case_datasets(None)
+        among = await adapter.edges_among([first.document_id, DOCUMENT], reader)
+        assert [e.type for e in among] == ["SAME_AS"]
+        (link,) = among
+        assert link.occurrences == 1

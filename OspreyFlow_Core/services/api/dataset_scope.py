@@ -29,6 +29,7 @@ source as before.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
+from contextlib import suppress
 from contextvars import ContextVar
 from typing import Any, Protocol
 
@@ -36,8 +37,10 @@ from conduit_common.identity import now_utc
 from ontology.handling import HandlingScheme
 from ports.graph import BulkGraphLoader, GraphPort
 from schemas.domain import (
+    Edge,
     EdgeWrite,
     Handling,
+    Node,
     NodeId,
     NodeWrite,
     Principal,
@@ -138,7 +141,9 @@ async def analyst_writes_into() -> list[str]:
     layer = await store.ensure_layer(
         investigation_id, unit=chosen[0].owning_unit, created_by=asker.id
     )
-    set_case_datasets([*held, layer], layer=layer, scope=scope)
+    # Not `set_case_datasets`, which starts a request afresh: this request's redirects stand.
+    _CASE_DATASETS.set((*held, layer))
+    _CASE_LAYER.set(layer)
     return [layer]
 
 
@@ -165,6 +170,59 @@ async def refuse_correcting_a_member(datasets: Sequence[str]) -> None:
         return
     if set(datasets) & set(chosen[0].members):
         raise CorrectionInCompositeError
+
+
+async def as_written_in_this_case(graph: GraphPort, node_id: str, principal: Principal) -> str:
+    """ADR-099 Amendment 15: the id under which this case holds `node_id`. In a case reading a
+    composite whose write of a member's node made the composite's copy, that copy (one per member
+    node, so it is found again in a later request); otherwise `node_id` itself."""
+    scope = _CASE_SCOPE.get()
+    if scope is None:
+        return node_id
+    chosen = await scope[1].chosen_of_case(scope[0])
+    if len(chosen) != 1 or chosen[0].kind != COMPOSITE:
+        return node_id
+    copy = composite_copy_id(chosen[0].id, node_id)
+    return copy if await graph.get_nodes([copy], principal) else node_id
+
+
+async def will_be_written_as(graph: GraphPort, node_id: str, principal: Principal) -> str:
+    """The id a write of `node_id` in this request's case will be stored under (ADR-099 Amendment
+    15): the composite's copy when the case reads a composite and the node is a member's, by the
+    rule the stamping graph applies (`DatasetStampingGraph._kept_from_members`); else `node_id`.
+    For a check made before the write, such as the working set's room (`ensure_room`)."""
+    scope = _CASE_SCOPE.get()
+    if scope is None:
+        return node_id
+    chosen = await scope[1].chosen_of_case(scope[0])
+    if len(chosen) != 1 or chosen[0].kind != COMPOSITE:
+        return node_id
+    members = set(chosen[0].members)
+    for node in await graph.get_nodes([node_id], principal):
+        if set(node.datasets) & members:
+            return composite_copy_id(chosen[0].id, node_id)
+    return node_id
+
+
+async def composite_members() -> frozenset[str]:
+    """The members of the composite the request's case reads; empty for any other case, or
+    outside one (ADR-099 Amendment 15)."""
+    scope = _CASE_SCOPE.get()
+    if scope is None:
+        return frozenset()
+    chosen = await scope[1].chosen_of_case(scope[0])
+    if len(chosen) != 1 or chosen[0].kind != COMPOSITE:
+        return frozenset()
+    return frozenset(chosen[0].members)
+
+
+async def refuse_correcting_a_members_node(
+    graph: GraphPort, node_id: NodeId, principal: Principal
+) -> None:
+    """`refuse_correcting_a_member` for a node known by id, read as `principal` (a node it cannot
+    read is left to the writer, which answers it as not found)."""
+    for node in await graph.get_nodes([node_id], principal):
+        await refuse_correcting_a_member(node.datasets)
 
 
 async def scope_to_case(
@@ -229,9 +287,10 @@ def _stamp_nodes(nodes: Sequence[NodeWrite], into: str | None) -> list[NodeWrite
     return [n if n.datasets else n.model_copy(update={"datasets": [into]}) for n in nodes]
 
 
-def _to_copies(edges: Sequence[EdgeWrite]) -> list[EdgeWrite]:
+def to_copies[E: (EdgeWrite, Edge)](edges: Sequence[E]) -> list[E]:
     """Each link's ends, the composite's copies where this request's write made one (Amendment
-    15), so a link written beside a redirected node names the node the case wrote."""
+    15), so a link written beside a redirected node names the node the case wrote. The one rewrite:
+    the stamping graph's writes and the canvas's copies (`WorkingSetService.add_written`) both."""
     if not _REDIRECTED.get():
         return list(edges)
     return [
@@ -239,6 +298,16 @@ def _to_copies(edges: Sequence[EdgeWrite]) -> list[EdgeWrite]:
         if redirected(e.source) == e.source and redirected(e.target) == e.target
         else e.model_copy(update={"source": redirected(e.source), "target": redirected(e.target)})
         for e in edges
+    ]
+
+
+def nodes_to_copies[N: (NodeWrite, Node)](nodes: Sequence[N]) -> list[N]:
+    """Each node by the id this request's write gave it (Amendment 15)."""
+    if not _REDIRECTED.get():
+        return list(nodes)
+    return [
+        n if redirected(n.id) == n.id else n.model_copy(update={"id": redirected(n.id)})
+        for n in nodes
     ]
 
 
@@ -368,6 +437,14 @@ class DatasetStampingGraph:
         links: list[EdgeWrite] = []
         moved = _REDIRECTED.get()
         held_by_id = {n.id: n for n in held}
+        # A copy made by an earlier write is written again; its `SAME_AS` is not, so a re-run adds
+        # nothing (not even an occurrence: the link says where the copy came from, not a sighting).
+        made = {
+            n.id
+            for n in await self._inner.get_nodes(
+                [composite_copy_id(composite, i) for i in in_a_member], principal
+            )
+        }
         for write in writes:
             if write.id not in in_a_member:
                 out.append(write)
@@ -377,7 +454,10 @@ class DatasetStampingGraph:
             if moved is not None:
                 moved[write.id] = copy
             out.append(write.model_copy(update={"id": copy, "datasets": [composite]}))
-            links.append(
+            if copy in made:
+                continue
+            await self._make_copy(
+                out[-1],
                 EdgeWrite(
                     id=composite_copy_id(composite, f"same-as:{write.id}"),
                     type="SAME_AS",
@@ -395,24 +475,48 @@ class DatasetStampingGraph:
                         ],
                         first_seen=now_utc(),
                     ),
-                    handling=self._stricter(write.handling, member_node.handling),
+                    handling=self._stricter(copy, write.handling, member_node),
                     created_by=write.created_by,
                     created_at=write.created_at,
                     datasets=[composite],
-                )
+                ),
             )
         return out, links
 
-    def _stricter(self, a: Handling, b: Handling) -> Handling:
-        """The stricter of two markings by classification, as `same_as_writer._handling_for`
-        chooses for a `SAME_AS`; with no scheme known, the write's own."""
+    async def _make_copy(self, copy: NodeWrite, same_as: EdgeWrite) -> None:
+        """The composite's copy and its `SAME_AS`, made in a transaction of their own before the
+        caller's write, so two requests making the same copy at once both end with the one: the
+        second is refused by the store's unique id and takes the first's, as `ensure_layer` does
+        for a layer (the fourth review's must-fix 4). The caller's write then merges into it. A
+        copy left when the caller's write then fails is the one its next write reaches."""
+        tx = await self._inner.begin_transaction()
+        try:
+            await self._inner.upsert_nodes([copy], tx)
+            await self._inner.upsert_edges([same_as], tx)
+            await self._inner.commit_transaction(tx)
+        except Exception as error:
+            with suppress(Exception):
+                await self._inner.rollback_transaction(tx)
+            if "DuplicatedKeyException" not in str(error):
+                raise
+
+    def _stricter(self, copy: str, written: Handling, member_node: Node) -> Handling:
+        """The `SAME_AS`'s marking: the stricter of its two ends', by `same_as_writer`'s own rule
+        (`_handling_for`); with no scheme known, the write's own."""
         if self._scheme is None:
-            return a
-        rank = {c: i for i, c in enumerate(self._scheme.classification)}
-        return b if rank.get(b.classification, -1) > rank.get(a.classification, -1) else a
+            return written
+        from services.resolve.resolver import SameAsCandidate
+        from services.resolve.same_as_writer import _handling_for
+
+        ends = {
+            copy: member_node.model_copy(update={"handling": written}),
+            member_node.id: member_node,
+        }
+        pair = SameAsCandidate(node_a=copy, node_b=member_node.id, score=1.0, comparison_vector={})
+        return _handling_for(pair, ends, self._scheme)
 
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
-        stamped = _stamp_edges(_to_copies(edges), self._into())
+        stamped = _stamp_edges(to_copies(edges), self._into())
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
@@ -420,6 +524,10 @@ class DatasetStampingGraph:
 
     # A correction or a revert changes what is counted too; each clears what was kept after it.
     async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: Any) -> NodeId:
+        scope = _CASE_SCOPE.get()
+        if scope is not None and self._dataset is None:
+            for old in await self._inner.get_nodes([node_id], scope[2]):
+                await refuse_correcting_a_member(old.datasets)
         new_id = await self._inner.supersede_node(node_id, replacement, tx)
         await self._written()
         return new_id
@@ -464,7 +572,7 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
 
     async def bulk_load_edges(self, edges: Sequence[EdgeWrite], **kwargs: Any) -> Any:
         inner: Any = self.inner
-        stamped = _stamp_edges(_to_copies(edges), self._into())
+        stamped = _stamp_edges(to_copies(edges), self._into())
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
@@ -499,6 +607,10 @@ __all__: Sequence[str] = (
     "analyst_writes_into",
     "CorrectionInCompositeError",
     "refuse_correcting_a_member",
+    "refuse_correcting_a_members_node",
+    "as_written_in_this_case",
+    "will_be_written_as",
+    "composite_members",
     "with_the_layer",
     "composite_copy_id",
     "redirected",

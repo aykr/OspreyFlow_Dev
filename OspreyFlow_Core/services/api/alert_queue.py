@@ -52,6 +52,7 @@ from .alerts import (
     evidence_node_ids,
     read_evidence,
 )
+from .dataset_scope import refuse_correcting_a_member
 
 #: The properties that name an entity, most telling first.
 _NAME_PROPERTIES = (
@@ -459,6 +460,12 @@ async def _close(
             and e.provenance.state is not ProvenanceState.ASSERTED
         ]  # fmt: skip
         if (node is not None and node.provenance.state is not ProvenanceState.ASSERTED) or matches:
+            # ADR-099 Amendment 15: in a case reading a composite, a member's node or link is not
+            # confirmed; refused here, before any write, so the close is never left half done.
+            if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
+                await refuse_correcting_a_member(node.datasets)
+            for edge in matches:
+                await refuse_correcting_a_member(edge.datasets)
             tx = await graph.begin_transaction()
             try:
                 if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:

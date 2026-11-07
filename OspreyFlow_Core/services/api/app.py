@@ -385,6 +385,7 @@ from .dataset_scope import (
     UnknownDatasetError,
     made_in,
     outside_any_case,
+    refuse_correcting_a_members_node,
     scope_to_case,
     scope_to_dataset,
 )
@@ -4047,6 +4048,8 @@ async def confirm_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
+    # ADR-099 Amendment 15: a member's node is not corrected in a case reading a composite.
+    await refuse_correcting_a_members_node(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await confirm_node(graph, node_id, principal, tx=tx)
@@ -4154,6 +4157,8 @@ async def retract_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
+    # ADR-099 Amendment 15: a member's node is not corrected in a case reading a composite.
+    await refuse_correcting_a_members_node(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await retract_node(graph, node_id, principal, tx=tx)
