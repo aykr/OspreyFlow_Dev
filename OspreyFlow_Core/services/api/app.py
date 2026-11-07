@@ -1767,16 +1767,30 @@ async def _audit_denied(
 InvestigationViewerDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.VIEWER))]
 
 
-async def refuse_loading_in_a_composite_case(investigation: InvestigationViewerDep) -> None:
+_AT_EDITOR = _authorized_at(AccessLevel.EDITOR)
+_AT_AUTHOR = _authorized_at(AccessLevel.AUTHOR)
+InvestigationEditorDep = Annotated[Investigation, Depends(_AT_EDITOR)]
+InvestigationAuthorDep = Annotated[Investigation, Depends(_AT_AUTHOR)]
+
+
+async def refuse_loading_in_a_composite_case(investigation: InvestigationEditorDep) -> None:
     """ADR-099 Amendment 15: a case reading a composite loads, runs, schedules, publishes and
     uploads nothing (a composite is read-only for now). After the case's own level check, so a
-    caller who may not open the case is still answered as for a missing one."""
+    caller who may not open the case is still answered as for a missing one. It depends on the
+    very check the route's own `InvestigationEditorDep` does, so FastAPI runs it once and the
+    route declares one level (`test_investigation_levels.py`)."""
+    await refuse_in_a_composite_case()
+
+
+async def refuse_deciding_held_rows_in_a_composite_case(
+    investigation: InvestigationAuthorDep,
+) -> None:
+    """The same refusal for the held-rows routes, which need an author."""
     await refuse_in_a_composite_case()
 
 
 NoLoadingInACompositeCase = Depends(refuse_loading_in_a_composite_case)
-InvestigationEditorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.EDITOR))]
-InvestigationAuthorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))]
+NoHeldRowsInACompositeCase = Depends(refuse_deciding_held_rows_in_a_composite_case)
 #: Access management: an Author, or the administrator's safety net (ADR-052 §4).
 InvestigationAccessManagerDep = Annotated[
     Investigation, Depends(_authorized_at(AccessLevel.AUTHOR, admin_safety_net=True))
@@ -10614,7 +10628,7 @@ async def list_held_rows(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoLoadingInACompositeCase],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
 )
 async def release_held_rows_route(
     investigation: InvestigationAuthorDep,
@@ -10750,7 +10764,7 @@ async def release_held_rows_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/held-rows/reject",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoLoadingInACompositeCase],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
 )
 async def reject_held_rows(
     investigation: InvestigationAuthorDep,

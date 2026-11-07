@@ -431,7 +431,11 @@ def _without_the_loading_dependency() -> None:
     async def allowed() -> None:
         return None
 
-    app_module.app.dependency_overrides[app_module.refuse_loading_in_a_composite_case] = allowed
+    for refusal in (
+        app_module.refuse_loading_in_a_composite_case,
+        app_module.refuse_deciding_held_rows_in_a_composite_case,
+    ):
+        app_module.app.dependency_overrides[refusal] = allowed
 
 
 @pytest.mark.parametrize(("path", "body", "kind"), DEPENDENCY_ROUTES)
@@ -490,7 +494,11 @@ _WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def _refusals(route: Any) -> list[Any]:
-    calls = {app_module.refuse_loading_in_a_composite_case, app_module.refuse_loading_a_composite}
+    calls = {
+        app_module.refuse_loading_in_a_composite_case,
+        app_module.refuse_deciding_held_rows_in_a_composite_case,
+        app_module.refuse_loading_a_composite,
+    }
     return [d.dependency for d in getattr(route, "dependencies", []) if d.dependency in calls]
 
 
