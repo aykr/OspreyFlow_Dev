@@ -106,14 +106,18 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
                 className={govuk ? "govuk-link context-banner__section" : "context-banner__section"}
                 aria-current={section.current ? "page" : undefined}
                 aria-disabled={section.onSelect ? undefined : "true"}
-                aria-label={section.badge ? `${section.label}, ${section.badge.toLocaleString("en-GB")} open` : undefined}
                 onClick={section.onSelect}
               >
                 {section.onSelect ? section.label : `${section.label} (coming)`}
+                {/* The count's name is its visible text and "open", so the visible label stays in the
+                    accessible name (WCAG 2.5.3): "Monitoring 3 open". */}
                 {section.badge ? (
-                  <span className="value context-banner__badge" aria-hidden="true">
-                    {section.badge > 99 ? "99+" : section.badge}
-                  </span>
+                  <>
+                    {" "}
+                    <span className="value context-banner__badge">{section.badge > 99 ? "99+" : section.badge.toLocaleString("en-GB")}</span>
+                    {" "}
+                    <span className="visually-hidden">open</span>
+                  </>
                 ) : null}
               </button>
             ))}

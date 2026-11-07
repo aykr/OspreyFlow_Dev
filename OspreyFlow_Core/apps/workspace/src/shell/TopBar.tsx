@@ -1,8 +1,9 @@
 // The top bar (ADR-097 step 1, design review item 1): 40px, one row. The mark, the place switcher
-// (ADR-145 decision 1; inside the GOV.UK header under that brand), search, the view switch, then what
-// acts on the whole case, and the account at the right. The case is named in the context banner under
-// the bar (ADR-145 decision 2); the places the analyst goes to inside the Glass (cases, Monitoring,
-// history) are on the left rail, and what belongs to one view is on that view's own toolbar.
+// (ADR-145 decision 1; inside the GOV.UK header under that brand), search, the view switch (Graph and
+// Map, with Matrix and Reports under More views, ADR-145 Amendment 2), then what acts on the whole
+// case, and the account at the right. The case and Monitoring are in the context banner under the bar
+// (ADR-145 decision 2); Cases and Explore are on the left rail, the rest under its ⋯ More; what belongs
+// to one view is on that view's own toolbar.
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import type { ReactNode } from "react";

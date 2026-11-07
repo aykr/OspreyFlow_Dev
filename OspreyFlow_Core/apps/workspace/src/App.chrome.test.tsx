@@ -85,6 +85,8 @@ beforeEach(() => {
     [/\/v1\/handling-scheme$/, { name: "test", classification: ["OFFICIAL"], handling_codes: {} }],
     [/\/v1\/investigations$/, [{ id: "inv-1", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" }]],
     [/\/inv-1\/resolution\/threshold$/, { threshold: 0.8 }],
+    // The case's queue as the reader may see it: one open, one claimed, one closed.
+    [/\/inv-1\/alert-queue$/, [{ alert: { status: "open" } }, { alert: { status: "claimed" } }, { alert: { status: "closed" } }]],
     [/\/inv-1\/datasets$/, [{ id: "ds-1", name: "Prison intel", owning_unit: "unit-1", created_at: "2026-11-01T09:00:00Z", created_by: "a" }]],
   ]; // prettier-ignore
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
@@ -110,11 +112,18 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Case", "Boards (coming)", "Monitoring", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
+      "Case", "Boards (coming)", "Monitoring 2 open", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
       "Cases", "Explore", "More", "Help", "Show names",
       "Match strictness",
     ]); // prettier-ignore
+  });
+
+  test("the banner's Monitoring carries the open count, open and claimed but not closed (rule 3: as the reader's queue says), its count in its name", async () => {
+    render(<App />);
+    const sections = await screen.findByRole("navigation", { name: "In the Glass" });
+    const monitoring = await within(sections).findByRole("button", { name: "Monitoring 2 open" });
+    expect(monitoring.querySelector(".context-banner__badge")?.textContent).toBe("2");
   });
 
   test("the column opens with the Inspector only, the other panels folded in their order", async () => {

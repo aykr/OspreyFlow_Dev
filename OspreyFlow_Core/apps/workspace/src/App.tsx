@@ -722,7 +722,8 @@ export function App() {
       cancelled = true;
     };
   }, [investigationId, bearerToken, counts.nodes, counts.edges]);
-  // ADR-115 E6: the rail's Alerts badge, the case's queue counted as the reader (rule 3).
+  // ADR-115 E6: the open-alert count, the case's queue counted as the reader (rule 3), drawn on the
+  // banner's Monitoring section since ADR-145 Amendment 2 (it left the rail).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!investigationId || !bearerToken || !rights?.has("read_alert_queue")) {

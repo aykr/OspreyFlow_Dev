@@ -202,7 +202,7 @@ banner's section (§2.0a), not the rail's. It is the Glass's alone:
 the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
 switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible name is its label;
 *Show names* widens the rail to show the labels and *Hide names* narrows it again. The banner's
-*Monitoring* carries the case's open and claimed alerts as a count (said in its name, "Monitoring, 3
+*Monitoring* carries the case's open and claimed alerts as a count (said in its name, "Monitoring 3
 open"), and *Help*, above *Show names*,
 reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
 hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
@@ -264,8 +264,10 @@ set of widgets:
 
 **What the column opens with (ADR-145 decision 4, Amendment 2).** Until the analyst folds or opens a
 panel, the right-hand column opens with the Inspector only; Metrics and the Query builder are folded
-beneath it, in their order, each opened by one press on its name. What the analyst folds or opens is
-kept in this browser, as before.
+beneath it, in their order, each opened by one press on its name (and on the Graph, *Find
+connections*). What the analyst folds or opens is kept in this browser, as before. The column then
+shows the Inspector's parts alone: at most 7 for a node, 6 for a link, where with every panel open it
+showed up to 13 (`keyboard/case-screen-parts.spec.ts`).
 
 **Hiding panels (ADR-082).** The right-hand column (the Inspector with the metrics and the query
 builder) and the timeline can each be hidden with a *Hide* button and brought back with *Show*. The

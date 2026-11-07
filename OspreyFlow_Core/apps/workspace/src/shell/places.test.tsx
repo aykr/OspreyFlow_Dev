@@ -102,7 +102,7 @@ describe("the context banner", () => {
 
   it("carries Monitoring's open count on its section, said in its name", () => {
     render(<ContextBanner place="glass" sections={[{ id: "monitoring", label: "Monitoring", current: false, onSelect: () => {}, badge: 3 }]} />);
-    expect(screen.getByRole("button", { name: "Monitoring, 3 open" }).querySelector(".context-banner__badge")?.textContent).toBe("3");
+    expect(screen.getByRole("button", { name: "Monitoring 3 open" }).querySelector(".context-banner__badge")?.textContent).toBe("3");
   });
 
   it("is a GOV.UK notification banner under that brand", () => {

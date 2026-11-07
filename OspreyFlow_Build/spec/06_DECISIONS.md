@@ -27078,6 +27078,10 @@ smallest step beyond it the owner chose (N4).
    the banner's title.
 5. **The count.** A keyboard user passes 24 controls before the canvas (25 with the skip link the brand
    frame adds), from 29 (30). The prototype round counted one fewer for every variant: its harness drew
-   the mark without its *Home* button. The column shows the Inspector's 8 parts, from 15 across three
-   panels. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts` proves
-   each moved action by keyboard.
+   the mark without its *Home* button. The column shows the Inspector's parts alone — at most 7 for a
+   node (Properties, Picture, Relationships, Shares contacts, Neighbourhood risk, Provenance, Source; 6
+   for a link) — where with every panel open it showed up to 13 (the Inspector's 7, Metrics' 3, the Query
+   builder's 3), counted on the real panels (`keyboard/case-screen-parts.spec.ts`); the prototype's 8
+   and 15 were its stand-in's. On the Graph a fourth panel, *Find connections*, has no parts and is
+   folded too. `App.chrome.test.tsx` counts the controls on the real `App`; `keyboard/shell.spec.ts`
+   proves each moved action by keyboard.
