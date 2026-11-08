@@ -4,7 +4,7 @@ and dashboard identities. Generated into TypeScript for the Glass's Admin area."
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -603,6 +603,103 @@ class AdminPeopleRows(BaseModel):
     without_author: list[CaseWithoutAuthor]
 
 
+#: ADR-145 decision 10 (O2): which record an Audit entry is held in. `case_and_admin` is the audit
+#: stream every route writes (`audit_log`: the case audit, the people, roles and dataset audits, and
+#: loads); `rules` the case's rule audit (ADR-109 ruling 1, read as its own read withholds it);
+#: `models` the engines' history (ADR-112 Amendment 7 decision 7).
+AuditRecord = Literal["case_and_admin", "rules", "models"]
+#: Decision 10's kinds, with the rule audit's and the engines' history as kinds of their own, and
+#: every other action (reads, refusals) as `reads_and_other`.
+AuditKind = Literal[
+    "assertions", "loads_and_promotions", "types", "people_and_roles", "datasets", "rules",
+    "models", "reads_and_other",
+]  # fmt: skip
+
+
+class AuditSectionEntry(BaseModel):
+    """One entry of Admin › Audit, read under the reader's own principal (rule 3). `detail` holds
+    the entry's words only where the reader's own read of that record would show them; otherwise it
+    is null and `words_withheld` says so, and the entry's count is withheld with them."""
+
+    recorded_at: datetime
+    principal_id: str
+    principal_name: str | None = None
+    action: str
+    kind: AuditKind
+    held_in: AuditRecord
+    investigation_id: str | None = None
+    case_name: str | None = None
+    detail: dict[str, Any] | None = None
+    words_withheld: bool = False
+    result_cardinality: int | None = None
+
+
+class AuditSectionPage(BaseModel):
+    """`GET /v1/admin/audit`: a page, newest first, with the total of what this reader may see under
+    these filters. An entry withheld from them is neither on the page nor in the total."""
+
+    entries: list[AuditSectionEntry] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    #: What this record leaves out and why, said rather than left silent (rule 2).
+    note: str | None = None
+
+
+class PromotionAlertSetting(BaseModel):
+    """Admin › Operations' *Alert the reviewers and administrators after N days* (ADR-145
+    decision 9; default 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alert_after_days: int = Field(default=3, ge=1, le=90)
+
+
+class AgeingRule(BaseModel):
+    """One thing that ages in Operations (O3), and what happens when it does, in words."""
+
+    what: str
+    after_days: int
+    then: str
+
+
+class WaitingPromotion(BaseModel):
+    """A promotion waiting for review (ADR-143 decision 10), as Operations lists it: named by its
+    load and dataset, never by what it adds (rule 7)."""
+
+    promotion_id: str
+    load_id: str
+    dataset_id: str
+    dataset_name: str
+    proposed_by: str
+    proposed_at: datetime
+    age_days: int = Field(ge=0)
+    overdue: bool
+
+
+class OperationsAgeing(BaseModel):
+    """`GET /v1/admin/operations/ageing`: what ages and when, and the promotions waiting."""
+
+    alert_after_days: int
+    rules: list[AgeingRule]
+    waiting: list[WaitingPromotion] = Field(default_factory=list)
+    #: False until promotions are recorded (case's L3.4): none can wait, and the screen says so.
+    promotions_recorded: bool = False
+
+
+class PromotionOverdueAlert(BaseModel):
+    """*Promotions overdue* (ADR-145 Amendment 4 decision 11, R7), raised once per promotion at N
+    days to the dataset's Authors holding `review_promotions` and to administrators. Its words name
+    the load and the dataset, never the promotion's contents (rule 7)."""
+
+    promotion_id: str
+    load_id: str
+    dataset_id: str
+    raised_at: datetime
+    recipients: list[str]
+    words: str
+
+
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
@@ -614,4 +711,6 @@ ALL_MODELS: list[type[BaseModel]] = [
     BuiltInRole, TeamInput, TeamMember, Team, CustomRoleInput, CustomRoleVersion, CustomRole,
     RolesCatalogue, TeamLeadInput, TeamCoverInput, OwnedItem, DisablePlan, OwnedTransfer,
     DisableInput, PersonCaseLevel, AdminPersonRow, CaseWithoutAuthor, AdminPeopleRows,
+    AuditSectionEntry, AuditSectionPage, PromotionAlertSetting, AgeingRule, WaitingPromotion,
+    OperationsAgeing, PromotionOverdueAlert,
 ]  # fmt: skip
