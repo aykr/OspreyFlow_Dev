@@ -127,8 +127,9 @@ class KeptRow:
     withdrawn_before: bool = False
 
 
-#: The record's own id lists: what `unreverted_loads` leaves out, since it answers a question about
-#: a load, not about its elements.
+#: The record's own element lists: what `unreverted_loads` leaves out, since it answers a question
+#: about a load, not about its elements. `own_key_merges` (ADR-110 Amendment 16) is the heaviest of
+#: them, one stored link per returning row, and only the revert reads it (`load_record`).
 _ID_LISTS = (
     "created_node_ids",
     "rule_node_ids",
@@ -139,6 +140,7 @@ _ID_LISTS = (
     "created_geometry_refs",
     "withdrawn_node_ids",
     "withdrawn_edge_ids",
+    "own_key_merges",
 )
 
 #: How long a second run of one recipe into one case waits for the first before it is refused, and
