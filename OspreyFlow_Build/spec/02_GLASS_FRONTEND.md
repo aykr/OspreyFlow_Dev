@@ -961,16 +961,21 @@ the model of a dataset the case reads once that version is live, and those propo
 type…** asks for a name in sentence case ("Known to"), from which its ID is made (`KNOWN_TO`, which may
 be edited), whether it goes either way round, a colour and a thickness (both optional), and why no
 type fits; the ends are the link's own. Proposed, it is chosen at once in the form and, being
-probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
+probabilistic until a data engineer of its dataset accepts it (choosing Direct or Probabilistic), its
+basis is stated, not asked; on the canvas its links
 are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
 when a case opens and again after a proposal or a decision. A refused name is said in the server's
 words. **The Studio's *1 Model* tab decides a dataset's proposals** (ADR-143 decision 9, ADR-090 Amendment 4;
 L3.5; `linktypes/ModelProposals.tsx`): below the model, *Proposed link types (N to decide)* lists, to a
 holder of `accept_types` of that dataset, each proposal's label and ID, a *Proposed*, *In the draft
-model*, *Declined*, *Withdrawn* or *Merged* tag, what it means, its ends and direction, who proposed it
-and when, never the case (rule 3), with **Add <type> to the draft model…** and **Decline <type>…**, each
-asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button; the
-outcome takes focus). A refusal is said in the Conduit's words; to a person the routes refuse the block
+model*, *In the live model*, *Accepted, not in the model* (lost from a discarded draft: **Add <type> to
+the draft model again…**), *Declined*, *Withdrawn* or *Merged* tag, what it means, its ends and
+direction, who proposed it and when, never the case (rule 3), with **Add <type> to the draft model…**
+(asking *What stands behind its links?*, Direct or Probabilistic, no default) and **Decline <type>…**,
+each asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button;
+the outcome takes focus). Admin's *Proposed types* offers no decision on a proposal that names a
+dataset, saying it is decided on that dataset's Model tab. The tab's count, the reminder above the
+Studio's other tabs and the *Needs you* entry (ADR-090 Amendment 4) are Admin's L2.7. A refusal is said in the Conduit's words; to a person the routes refuse the block
 is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an
 error summary. Keyboard: `keyboard/model-proposals.spec.ts` (`MODEL_PROPOSALS_ACTIONS`); axe in dark,
 light and GOV.UK with the form open and its error shown. **A holder of `manage_ontology`** (an

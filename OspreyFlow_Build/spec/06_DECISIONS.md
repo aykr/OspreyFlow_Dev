@@ -30280,3 +30280,49 @@ base URL — was already closed in `tile_proxy.py`).
 
 **Cost.** A second settings file and volume beside the models file; a 100 MB Java runtime in the Conduit's
 image; one asyncio task per replica for the schedule.
+
+### ADR-143, Amendment 4 (8 November 2026) — analyst-defined link types as built (L3.5)
+
+Status: accepted; the decisions the case-b lane took at L3.5 under Prompt L, each accepted by the orchestrator
+the same day, and lane review round 1's findings. Decision 9 and ADR-090 Amendment 4 stand except where this
+says so.
+
+1. **A proposal is its own case's alone until decided.** It names its case's source dataset (never the case's
+   analyst layer) and is offered, withdrawn and answered for in that case alone: another case reading the same
+   dataset is not offered it, cannot withdraw it, and is told of it neither by a refused name nor by the
+   promotion check (rule 3). This replaces ADR-099 Amendment 3 decision 2's "every case reading that dataset"
+   for proposals that name a dataset.
+2. **The same name may be proposed in another case.** Decision 9's "a name already … proposed is refused" holds
+   within the case; across cases it would tell the second case of the first's proposal (rule 3). The data
+   engineer sees both on the Model tab: accepting one merges each pending same-name proposal of the dataset whose
+   links fit it; one that does not fit is declined, saying which type to use. A name in the dataset's **live**
+   model is refused at proposal; a name only in the draft is not (the draft is `edit_target_model`'s), and is
+   refused at acceptance instead.
+3. **Accepted means added to the draft; promotable means live.** *Add it to the draft model* writes a
+   `link_type` extension into the dataset's draft under the dataset's model lock, and the data engineer chooses
+   Direct or Probabilistic with no default (ADR-090 decision 6, standing for them; Direct only from then). The
+   links of the type can be promoted into the dataset only once the version holding it is live
+   (`LinkTypeService.promotion_refusals`, which L3.4's promotion sheet calls). An accepted type lost from the
+   draft (a discarded draft) is shown as such and may be added again, never left stuck.
+4. **Who decides.** A holder of `accept_types` past the dataset's own gate, never the proposer (ADR-145 decision
+   7). The propose and withdraw routes need `propose_types` (ADR-112 Amendment 4) where they needed
+   `propose_link_type`, which guards no route now; its removal from the rights and the role screens is
+   Admin's. Each decision is written only from the status it was read with, so of two at once one wins and
+   the other is told.
+5. **No dataset, no proposal.** A case that reads no dataset cannot propose (there is no data engineer to
+   decide), and a case reading a composite is refused as every other composite write is (ADR-099 Amendment
+   15). ADR-090's deployment-wide promotion by an administrator remains only for proposals made before
+   ADR-099 Amendment 3, which name no dataset; it never merges a proposal that names one.
+6. **Notifications.** The Model tab's count, the reminder above the Studio's other tabs and the *Needs you*
+   entry (ADR-090 Amendment 4) are Admin's L2.7; the Model tab's block shows "(N to decide)" meanwhile.
+
+**Open, for the owner.** The Model tab shows a proposal's label, meaning, proposer and decision reason (text
+written in a case) to any `accept_types` holder of the dataset, who may hold no level on the case. Whether the
+case's marking should limit that is not decided by any record; the recommendation is that it should not,
+since a proposal's text is about the model, not the case's data, and the data engineer must read it to decide.
+
+**Tests.** `tests/services/api/test_analyst_link_types.py`; `test_link_type_store.py`'s
+`test_a_table_made_before_accepted_takes_it_after_connect`; `test_target_models_store.py`'s
+`test_two_link_types_added_at_once_both_land_in_the_draft`; `ModelProposals.test.tsx`;
+`keyboard/model-proposals.spec.ts`; axe in dark, light and GOV.UK. Each red by a plant at its call site
+(`process/lanes/case-b/L3.5_RED_RECORD.md`).

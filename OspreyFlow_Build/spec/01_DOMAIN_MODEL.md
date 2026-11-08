@@ -321,8 +321,9 @@ other case reading the same dataset is offered it, can withdraw it, or is told o
 or by the promotion check, rule 3; `test_analyst_link_types.py`'s
 `test_a_proposed_type_is_visible_only_in_its_own_case`). A holder of `accept_types` past the dataset's
 own gate decides it on the Ingest Studio's *1 Model* tab, never its proposer: **accepted**, it is a
-`link_type` extension of the dataset's draft domain model (`TargetModel`, §2.2b), and once that version
-is live it is offered in every case reading the dataset; **declined** (`rejected`), it is offered no
+`link_type` extension of the dataset's draft domain model (`TargetModel`, §2.2b), with the basis the
+data engineer chooses (Direct only from then, `direct_since`), and once that version is live it is
+offered in every case reading the dataset; **declined** (`rejected`), it is offered no
 more. **Its links can be promoted into the dataset only once it is accepted and its version live**
 (`LinkTypeService.promotion_refusals`, which L3.4's promotion sheet calls; until then they stay in the
 case's layer, and a declined type's stay there for good;
