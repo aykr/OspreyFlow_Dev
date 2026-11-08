@@ -29666,6 +29666,56 @@ route, red with its check removed); the store cases under the lease
 case, a rule's recipient, a watch's, a cover, a rollback). Each is in
 `process/lanes/admin/L2.5_RED_RECORD.md`.
 
+### ADR-145, Amendment 6 (8 November 2026) — Audit and Operations' ageing as built (L2.6)
+
+Status: built in Lane 2's L2.6 (admin), recorded for review; the lane's decisions are logged in
+`process/lanes/admin/REPORT.md` for the owner to overrule. Records decisions 9 and 10 and Amendment 4
+decision 11 as built, and what they left open. Amendment 3 decision 3 is now met: Audit is built, so
+`read_audit` alone opens the Admin place.
+
+1. **Three records, read one at a time** (`GET /v1/admin/audit`, `read_audit`; `services/api/audit_section.py`):
+   - **The audit stream** (`audit_log`): the case audit, the people, roles and dataset audits, and the
+     loads. An entry is a unit's when the case it names is that unit's, or, naming no case, when its
+     writer was of that unit: `AuditWriter.record` now writes the acting principal's `org_unit`. **The
+     unit filter is in the `WHERE` clause** (rule 3): another unit's entry is neither on the page nor in
+     the total, and every filter (person, kind, case, dataset, from, to) is ANDed after it. An entry
+     naming a case that does not exist, or written before the column and naming no case, is no unit's
+     and is never shown; the page says so (rule 2).
+   - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
+     stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
+     route's own gate (an Author, or the unit's administrator by ADR-052 §4's safety net) and
+     `read_rule_audit`; a filter narrows only after the read has withheld what it withholds.
+   - **The engines' history** (`model_admin_audit`, ADR-112 Amendment 7 decision 7) is read whole by
+     every holder of `read_audit`: engines are the deployment's, not a unit's, and it holds no key.
+     Paged with its true total, where *Models*' own history reads the latest 200.
+2. **An entry's words.** No read of the stream existed to decide what an entry's `resolved_query` may
+   tell, and it can name nodes, documents and queries. Its words and count are withheld
+   (`words_withheld`) except for the two kinds whose words the reader's own section already shows: *People
+   and roles* to `manage_people`, *Datasets* to `administer_system`. Its existence (who, when, the
+   action, its case of the reader's unit) is shown.
+3. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
+   roles*, *Datasets*), by the actions the stream records under each (`KIND_ACTIONS`), and *Reads and
+   refusals* for every other action. The run ledger's loads appear as their audit entries; the Studio's
+   run history keeps its own narrowed read (Amendment 1), and is not merged here.
+4. **Operations' ageing** (decision 9; `services/api/promotion_ageing.py`): *What ages, and when* above the
+   schedules, the promotions waiting for review with their age, and *Alert the reviewers and
+   administrators after N days* (1 to 90, default 3, audited), all behind `operate_schedules`.
+5. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
+   database (`ON CONFLICT DO NOTHING` on its id), to the dataset's Authors holding `review_promotions` and
+   the administrators (`administer_system`) of the dataset's unit — enabled people only, never a service
+   account, never the proposer. Its words name the load and the dataset, never what it adds (rule 7).
+   **Promotions are case's L3.4:** everything reads them through one seam, `WaitingPromotions` (its
+   record `PendingPromotion`), which the Conduit fills with `NoPromotionsYet` until then. L3.4 provides
+   `waiting_for_review(reader)` filtered in its own store as the reader, `all_waiting()` for the sweep,
+   and the call to `sweep`; L2.7's *Needs you* reads `alerts_for(person)`. A team's Author grant does not
+   yet make its members recipients.
+
+Tests: `test_audit_section_store.py` (real Postgres: by unit, filters never widen, the rule audit never
+from the stream, the engines' true total, once by the database); `test_audit_section_routes.py` (each
+route's right; words withheld; the rule audit as its own read serves it and behind its gate; filters
+after withholding); `test_promotion_ageing.py` (at N days and not before, once, the load not its
+contents, the recipients). Each red at its call site (`process/lanes/admin/L2.6_RED_RECORD.md`).
+
 ### ADR-144, Amendment 2 (8 November 2026) — case views as built: the refusal's name, no origin link on an alert's case (B14's link withdrawn), who applies a view's window and threshold, and an opened view is a read-only lens
 
 Status: accepted from the owner's rulings recorded in L3.2 (Q1) and L3.2b (8 November 2026, the open view)
