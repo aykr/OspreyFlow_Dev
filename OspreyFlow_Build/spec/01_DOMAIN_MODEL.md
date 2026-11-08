@@ -573,9 +573,10 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     through its home case alone, so its Author shares it by sharing that case: no other case may
     choose it (it is in no case's list of datasets to choose, and the store refuses it), no case
     is made reading it by a branch, a filtered branch or an alert's jump (409 `drawn_not_copied`,
-    refused before the case is made, and by `copy_case` itself), no pipeline loads into it (409 `drawn_not_loaded`), and no rule is made, changed or made live in
-    its case until it is merged (409 `drawn_not_judged`). It is listed in the Studio and in Admin ›
-    Datasets with a *Drawn* badge;
+    refused before the case is made, and by `copy_case` itself), no pipeline loads into it (409
+    `drawn_not_loaded`), and no rule or monitor is made, changed or made live in its case until
+    it is merged (409 `drawn_not_judged`). It is listed in the Studio and in Admin › Datasets
+    with a *Drawn* badge;
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing

@@ -6519,7 +6519,12 @@ async def list_exports_route(
 @app.post(
     "/v1/investigations/{investigation_id}/monitors",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    # A monitor runs a saved pattern on the case's data, as a rule does: none in a drawing's case
+    # until it is merged (ADR-143 Amendment 2 decision 5).
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(refuse_rules_in_a_drawn_case_as_editor),
+    ],
 )
 async def create_monitor_route(
     investigation: InvestigationEditorDep,

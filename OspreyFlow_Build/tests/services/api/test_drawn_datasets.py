@@ -52,6 +52,7 @@ def _a_junior(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Any:  
     world.rules = _Rules()
     monkeypatch.setattr(app_module.app.state, "typology_rules", world.rules, raising=False)
     monkeypatch.setattr(app_module.app.state, "patterns_store", _Rules(), raising=False)
+    monkeypatch.setattr(app_module.app.state, "monitors_store", world.rules, raising=False)
     yield
     PEOPLE.pop("junior", None)
 
@@ -196,7 +197,7 @@ def test_the_loading_refusal_fails_planted_out(
 
 def test_no_rule_is_made_in_its_case(world: SimpleNamespace) -> None:  # noqa: F811
     home = _draw(world).json()["investigation_id"]
-    for path in ("rules", "rules/sentence"):
+    for path in ("rules", "rules/sentence", "monitors"):
         answer = world.client.post(
             f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst")
         )
@@ -221,10 +222,11 @@ def test_the_rule_refusal_fails_planted_out(world: SimpleNamespace) -> None:  # 
     ):
         app_module.app.dependency_overrides[dependency] = allowed
     try:
-        answer = world.client.post(
-            f"/v1/investigations/{home}/rules", json={}, headers=_as("analyst")
-        )
-        assert answer.status_code == 422, answer.text  # past the refusal, to the body's check
+        for path in ("rules", "monitors"):
+            answer = world.client.post(
+                f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst")
+            )
+            assert answer.status_code == 422, answer.text  # past the refusal, to the body's check
     finally:
         app_module.app.dependency_overrides.clear()
 
