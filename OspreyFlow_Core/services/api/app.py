@@ -12486,6 +12486,8 @@ async def export_pack_route(
     config: ConfigDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PackExport:
     """The newest live publication through the export gate (ADR-113 decision 6, ADR-045/047): the
     approved manifest, from which the Glass renders the PDF. Editor and `export`, as every
@@ -12505,6 +12507,8 @@ async def export_pack_route(
         graph=graph,
         ledger=export_ledger,
         policy=config.export_manifest_policy,
+        alerts=alerts_store,
+        analytics=analytics,
     )
     await audit.record(
         principal=principal,

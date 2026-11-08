@@ -31,6 +31,7 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.packs import EntitySnapshot, PackExportRequest, ReportPack
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 SCHEME = load_uk_le_scheme()
 NOW = datetime(2026, 3, 1, tzinfo=UTC)
@@ -122,8 +123,19 @@ async def _export(
         graph=graph,  # type: ignore[arg-type]
         ledger=ledger,  # type: ignore[arg-type]
         policy=policy,  # type: ignore[arg-type]
+        alerts=_NoAlerts(),  # type: ignore[arg-type]
+        analytics=NO_TRANSACTIONS,  # type: ignore[arg-type]
     )
     return result, ledger
+
+
+class _NoAlerts:
+    """The alert store's read for a pack's alert items (`AlertStore.cited_by_ids`): these packs hold
+    none, so it is never asked for any."""
+
+    async def cited_by_ids(self, alert_ids: Any) -> dict[str, Any]:
+        assert not alert_ids, "these packs hold no alert item"
+        return {}
 
 
 async def test_pack_material_hidden_by_handling_is_true_and_a_cleared_exporter_gets_false() -> None:

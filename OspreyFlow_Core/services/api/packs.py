@@ -269,6 +269,8 @@ async def export_pack(
     graph: GraphPort,
     ledger: ExportLedgerStore,
     policy: ExportManifestPolicy,
+    alerts: AlertStore,
+    analytics: AnalyticsPort,
     withheld_in_store: bool = False,
 ) -> PackExport:
     """The gate for a pack. The exporter's access is checked again now, item by item, as every
@@ -283,6 +285,8 @@ async def export_pack(
         scheme,
         graph,
         pack.investigation_id,
+        alerts=alerts,
+        analytics=analytics,
         withheld_in_store=withheld_in_store,
     )
     if not shown:
