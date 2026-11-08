@@ -77,7 +77,7 @@ from schemas.domain import (
 from .board_store import BoardItem, BoardItemStore, new_item, new_watch
 from .case_views import CaseViewStore, StoredCaseView, ViewNotFound
 from .dataset_scope import analyst_writes_into
-from .datasets import DRAWN, DatasetStore
+from .datasets import COMPOSITE, DRAWN, Dataset, DatasetStore
 from .document_content import DOCUMENT_TYPE
 from .entity_pictures import DEPICTS, PICTURE_TYPES  # ADR-105's own names and formats
 from .evidence_brief import display_name
@@ -164,15 +164,25 @@ class Boards:
     async def ceiling(self, case_id: str) -> str:
         """Amendment 2 decision 3: nothing in a case's layer above its dataset's highest allowed
         marking (the strictest of those it reads; the deployment's highest where none is set)."""
-        chosen = await self.datasets.chosen_of_case(case_id)
-        return self._strictest([d.highest_marking for d in chosen if d.highest_marking])
+        return await self._ceiling_of(await self.datasets.chosen_of_case(case_id))
+
+    async def _ceiling_of(self, chosen: Sequence[Dataset]) -> str:
+        """The strictest highest marking of what the case reads: a composite's own, if it has one,
+        and each of its members' (a composite holds no data of its own, so its members' ceilings
+        are its own; the orchestrator's review of L3.3, finding 2)."""
+        markings = [d.highest_marking for d in chosen if d.highest_marking]
+        members = [m for d in chosen if d.kind == COMPOSITE for m in d.members]
+        if members:
+            held = await self.datasets.egress_of(members)
+            markings += [d.highest_marking for d in held.values() if d.highest_marking]
+        return self._strictest(markings)
 
     async def into(self, case_id: str) -> Into:
         """The case's drawn dataset when it began as a drawing (Amendment 3 decision 1); otherwise
         its analyst layer, made by the writer if the case has none yet (ADR-143 Amendment 1). Only
         ever called inside a route, after its level check."""
         chosen = await self.datasets.chosen_of_case(case_id)
-        ceiling = self._strictest([d.highest_marking for d in chosen if d.highest_marking])
+        ceiling = await self._ceiling_of(chosen)
         if chosen and chosen[0].kind == DRAWN:
             return Into(chosen[0].id, ceiling, chosen[0].id, drawn_dataset=True)
         layer = (await analyst_writes_into())[0]
@@ -268,6 +278,8 @@ class Boards:
         ]
         drawn_nodes = [i.element_id for i in live if i.kind == "node"]
         seen = await self.graph.get_nodes(drawn_nodes, principal) if drawn_nodes else []
+        # Its start as this reader may see it: references they may not see make no `selection`.
+        refs = await self.graph.get_nodes(list(board.node_ids), principal) if board.node_ids else []
         return Board(
             id=board.id,
             case_id=board.case_id,
@@ -276,7 +288,7 @@ class Boards:
             created_at=board.created_at,
             shared=board.shared,
             drawn=len(seen),
-            start="blank" if not board.node_ids else "selection",
+            start="selection" if refs else "blank",
         )
 
     async def make(
@@ -311,13 +323,22 @@ class Boards:
             i for i in await self.items.on_board(board.case_id, board.id) if i.withdrawn_at is None
         ]
         drawn_nodes = [i.element_id for i in live if i.kind == "node"]
-        drawn_links = {i.element_id for i in live if i.kind == "link"}
         wanted = list(dict.fromkeys([*(board.node_ids or []), *drawn_nodes]))
         nodes = await self.graph.get_nodes(wanted, principal) if wanted else []
         shown = [n.id for n in nodes]
         edges = await self.graph.edges_among(shown, principal) if len(shown) > 1 else []
         edges = [e for e in edges if e.type not in (DEPICTS,)]
-        missing = len(wanted) - len(nodes) + len(drawn_links - {e.id for e in edges})
+        # Rule 3 (the orchestrator's ruling on L3.3, the strict default): `missing` counts only
+        # what was lost, never what the reader was never allowed to see. That is the board's own
+        # references whose drawn item has since been withdrawn, told to the board's creator, who
+        # placed each of them seeing it. Anything hidden by its marking is counted nowhere.
+        missing = 0
+        if board.created_by == principal.id and board.node_ids:
+            placed = set(board.node_ids)
+            missing = len({
+                i.element_id for i in await self.items.in_case(board.case_id)
+                if i.element_id in placed and i.withdrawn_at is not None
+            })  # fmt: skip
         if self.cap_breach is not None:
             breach = self.cap_breach(len(nodes), len(edges))
             if breach is not None:
@@ -333,6 +354,7 @@ class Boards:
             if held.id not in items and held.provenance.drawn is not None:
                 items[held.id] = held.provenance.drawn.item_id
         ceiling = await self.ceiling(board.case_id)
+        nodes, edges = await self.redacted(board.case_id, principal, nodes, edges)
         return BoardOpened(
             board=await self.wire(board, principal),
             nodes=nodes,
@@ -347,6 +369,25 @@ class Boards:
             ceiling=ceiling,
             may_draw=board.created_by == principal.id,
         )
+
+    async def redacted(
+        self, case_id: str, principal: Principal, nodes: list[Node], edges: list[Edge]
+    ) -> tuple[list[Node], list[Edge]]:
+        """Each drawn element as the reader may know it: the id of a board they may not open (a
+        private board of another member) left out of its provenance, as that board is answered as
+        none (finding 7)."""
+        mine = {b.id for b in await self.views.boards_in(case_id, principal.id)}
+
+        def hide(element: Any) -> Any:
+            drawn = element.provenance.drawn
+            if drawn is None or drawn.board_id in mine:
+                return element
+            provenance = element.provenance.model_copy(
+                update={"drawn": drawn.model_copy(update={"board_id": ""})}
+            )
+            return element.model_copy(update={"provenance": provenance})
+
+        return [hide(n) for n in nodes], [hide(e) for e in edges]
 
     # --- drawing --------------------------------------------------------------------------
 
@@ -369,7 +410,10 @@ class Boards:
             sources=[
                 SourceRef(
                     document_id=given.source_document or f"drawn:{item_id}",
-                    locator=f"board {board.id}",
+                    # No board id: a private board's is not told to the case (finding 7); the
+                    # board is `drawn.board_id`, which a reader is shown only for a board they
+                    # may open (`Boards.redacted`).
+                    locator="a drawing board of the case",
                     excerpt_hash="",
                 )
             ],
@@ -668,7 +712,7 @@ class Boards:
         if item.kind == "node":
             nodes.append(item.element_id)
             for other in case_items:
-                if other.kind in ("link", "picture") and item.element_id in (
+                if other.kind in ("link", "picture", "match") and item.element_id in (
                     other.source,
                     other.target,
                 ):
@@ -680,14 +724,29 @@ class Boards:
         # named to them. Read before the withdrawal, which takes every one out of every read.
         seen_links = await self.graph.get_edges(links, principal) if links else []
         seen = {e.id for e in seen_links}
+        # A promoted link the withdrawer may not see stays where it is, and nothing here tells
+        # them of it: the registry, never the element, says it was promoted (the orchestrator's
+        # ruling (a)). One they may see refuses the withdrawal, below.
+        kept = {
+            i.element_id for i in case_items
+            if i.promoted_at is not None and i.element_id in links and i.element_id not in seen
+        }  # fmt: skip
+        links = [link for link in links if link not in kept]
+        withdrawn_items = [
+            i for i in withdrawn_items
+            if i == item.item_id or next(
+                (o.element_id for o in case_items if o.item_id == i), None
+            ) not in kept
+        ]  # fmt: skip
         pictures = {i.element_id for i in case_items if i.kind == "picture"}
         # Each link going with the node is wholly drawn data still: one promoted into a dataset
         # (L3.4) is changed only by reverting its promotion, so the withdrawal is refused.
         held_in = {i.element_id: i.dataset_id for i in case_items}
-        # One the reader may not see is not read here (an unfiltered read is confined away from
-        # routes), and refusing over it would tell them it exists (rule 3): how L3.4 treats it is
-        # for L3.4 to settle with the orchestrator. Until L3.4 nothing drawn is promoted.
-        if any(set(e.datasets) != {held_in.get(e.id, item.dataset_id)} for e in seen_links):
+        promoted = {i.element_id for i in case_items if i.promoted_at is not None}
+        if any(
+            e.id in promoted or set(e.datasets) != {held_in.get(e.id, item.dataset_id)}
+            for e in seen_links
+        ):
             raise DrawingRefused(
                 "promoted",
                 "a link drawn to this item has been promoted into a dataset: revert that "
@@ -812,6 +871,16 @@ class Boards:
             stricter=stricter,
         )  # fmt: skip
         _, ids = await self._write(nodes, edges)
+        # Registered as the board's own, so withdrawing the drawn node takes the decision with it,
+        # as it takes a drawn link (the orchestrator's review of L3.3, finding 3).
+        await self.items.add(
+            new_item(
+                board_id=board.id, case_id=board.case_id, kind="match", element_id=ids[0],
+                author=principal.id, dataset_id=into.dataset_id, source=drawn.id,
+                target=loaded.id,
+            ),
+            None,
+        )  # fmt: skip
         return ids[0]
 
     # --- pictures (C17; ADR-105 Amendment 3) ----------------------------------------------

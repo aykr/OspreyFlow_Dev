@@ -94,6 +94,20 @@ async def test_withdrawing_ends_the_watch_and_only_in_its_case(
     assert held is not None and held.withdrawn_by == "alice"
 
 
+async def test_a_match_and_a_promotion_are_kept(items: PostgresBoardItemStore) -> None:
+    """The orchestrator's review of L3.3: a decision is registered (`match`), and the registry holds
+    when an element was promoted, which a withdrawal reads instead of the element."""
+    from dataclasses import replace
+
+    match = _drawn(kind="match", source="n-1", target="n-2")
+    promoted = replace(_drawn(kind="link", source="n-1", target="n-3"),
+                       promoted_at=datetime(2026, 11, 8, tzinfo=UTC))  # fmt: skip
+    await items.add(match, None)
+    await items.add(promoted, None)
+    assert await items.get(K, match.item_id) == match
+    assert await items.get(K, promoted.item_id) == promoted
+
+
 async def test_a_links_ends_are_kept(items: PostgresBoardItemStore) -> None:
     link = _drawn(kind="link", source="n-1", target="n-2")
     await items.add(link, None)

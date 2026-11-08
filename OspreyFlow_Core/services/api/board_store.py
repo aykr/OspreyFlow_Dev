@@ -27,7 +27,9 @@ import asyncpg
 from conduit_common.identity import new_id
 from schemas.boards import DrawnWatch
 
-ItemKind = Literal["node", "link", "picture"]
+#: `match`: a *Same* or *Not the same* link a decision wrote, registered so that withdrawing its
+#: drawn node finds it as it finds a drawn link (the orchestrator's review of L3.3).
+ItemKind = Literal["node", "link", "picture", "match"]
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,10 @@ class BoardItem:
     #: finds every drawn link resting on a node from the registry, by id, with no graph read.
     source: str | None = None
     target: str | None = None
+    #: When the element was promoted into a dataset (L3.4 sets it). A withdrawal reads this, never
+    #: the element, so a promoted link the withdrawer may not see is left in place and tells them
+    #: nothing (the orchestrator's ruling (a), 8 November 2026).
+    promoted_at: datetime | None = None
 
 
 class BoardItemStore(Protocol):
@@ -156,7 +162,7 @@ CREATE TABLE IF NOT EXISTS board_items (
     item_id TEXT PRIMARY KEY,
     board_id TEXT NOT NULL,
     case_id TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('node', 'link', 'picture')),
+    kind TEXT NOT NULL CHECK (kind IN ('node', 'link', 'picture', 'match')),
     element_id TEXT NOT NULL,
     author TEXT NOT NULL,
     dataset_id TEXT NOT NULL,
@@ -164,7 +170,8 @@ CREATE TABLE IF NOT EXISTS board_items (
     withdrawn_at TIMESTAMPTZ,
     withdrawn_by TEXT,
     source TEXT,
-    target TEXT
+    target TEXT,
+    promoted_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS board_items_by_board ON board_items (case_id, board_id);
 CREATE INDEX IF NOT EXISTS board_items_by_element ON board_items (case_id, element_id);
@@ -183,7 +190,7 @@ CREATE INDEX IF NOT EXISTS drawn_watches_by_case ON drawn_watches (case_id) WHER
 
 _ITEM_COLUMNS = (
     "item_id, board_id, case_id, kind, element_id, author, dataset_id, created_at, withdrawn_at, "
-    "withdrawn_by, source, target"
+    "withdrawn_by, source, target, promoted_at"
 )
 _WATCH_COLUMNS = "id, item_id, element_id, case_id, dataset_id, owner, created_at, ended_at"
 
@@ -214,10 +221,10 @@ class PostgresBoardItemStore:
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 f"INSERT INTO board_items ({_ITEM_COLUMNS}) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
                 item.item_id, item.board_id, item.case_id, item.kind, item.element_id,
                 item.author, item.dataset_id, item.created_at, item.withdrawn_at,
-                item.withdrawn_by, item.source, item.target,
+                item.withdrawn_by, item.source, item.target, item.promoted_at,
             )  # fmt: skip
             if watch is not None:
                 await conn.execute(

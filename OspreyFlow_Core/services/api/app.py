@@ -3845,7 +3845,9 @@ async def delete_case_view(
 # reader's principal, scoped to the case's read set and filtered in the adapter (rule 3). Reading a
 # board needs the case's level and `investigate`; drawing needs Editor and `draw_on_boards`.
 
-_DRAWS = [Depends(require_right(Right.DRAW_ON_BOARDS))]
+#: Drawing needs reading too: a role holding `draw_on_boards` without `investigate` would make a
+#: board it could not open (the orchestrator's review of L3.3, finding 6).
+_DRAWS = [Depends(require_right(Right.DRAW_ON_BOARDS)), Depends(require_right(Right.INVESTIGATE))]
 _READS_BOARDS = [Depends(require_right(Right.INVESTIGATE))]
 
 

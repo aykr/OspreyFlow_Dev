@@ -88,6 +88,10 @@ PEOPLE = {
     "rita": Principal(
         id="rita", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"]
     ),
+    # A custom role holding `draw_on_boards` alone, without `investigate` (finding 6).
+    "dora": Principal(
+        id="dora", clearance="SECRET", org_unit=UNIT, roles=["right:draw_on_boards"]
+    ),
 }
 K, B = "case-k", "case-b"
 GRADE = {"source": "B", "intelligence": "2", "handling": "1"}
@@ -171,7 +175,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     datasets.cases[B] = ["src"]
     cases = _Cases()
     cases.seed(K, {"alice": AccessLevel.AUTHOR, "bob": AccessLevel.EDITOR,
-                   "rita": AccessLevel.VIEWER})  # fmt: skip
+                   "rita": AccessLevel.VIEWER, "dora": AccessLevel.EDITOR})  # fmt: skip
     cases.seed(B, {"carol": AccessLevel.AUTHOR})
     image = _loaded("img-1").model_copy(
         update={"type": "Document",
@@ -1284,7 +1288,8 @@ def test_a_reader_below_an_items_marking_sees_nothing_of_it_on_the_board(
     world: SimpleNamespace,
 ) -> None:
     """Rule 3 within the case: Bob (OFFICIAL) opens Alice's shared board and lists the boards; the
-    OFFICIAL-SENSITIVE item and its suggestion are in none of it, only a count naming none."""
+    OFFICIAL-SENSITIVE item and its suggestion are in none of it, not even counted as missing (the
+    orchestrator's ruling: `missing` is what was lost, never what was never allowed)."""
     board = _board(start="selection", node_ids=["p-loaded"])
     _item(board)
     hidden = _item(board, label="Mercer", marking="OFFICIAL-SENSITIVE",
@@ -1294,7 +1299,7 @@ def test_a_reader_below_an_items_marking_sees_nothing_of_it_on_the_board(
     assert hidden in str(alices)  # the suggestion is there for one who may see it
     opened = _as("bob").get(f"/v1/investigations/{K}/boards/{board}")
     assert opened.status_code == 200 and hidden not in opened.text
-    assert opened.json()["missing"] == 1
+    assert opened.json()["missing"] == 0
     (listed,) = _as("bob").get(f"/v1/investigations/{K}/boards").json()
     assert listed["drawn"] == 1
     matches = _as("bob").get(f"/v1/investigations/{K}/boards/{board}/matches")
@@ -1348,3 +1353,107 @@ def test_a_picture_is_given_only_to_a_node_on_the_board_it_is_given_through(
         json={"document_id": "img-1", "marking": "OFFICIAL"},
     )
     assert held.status_code == 201, held.text
+
+
+# --- the orchestrator's independent review ------------------------------------------------------
+
+
+def test_missing_counts_what_was_lost_and_never_what_was_never_allowed(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 3, the orchestrator's ruling: Bob opens Alice's shared board, which holds an item and a
+    link he may not see; `missing` is 0. Alice's own board, whose reference was withdrawn since
+    she placed it, says 1."""
+    board = _board(start="selection", node_ids=["p-loaded"])
+    mine = _item(board)["element_id"]
+    hidden = _item(board, label="Hidden", marking="OFFICIAL-SENSITIVE",
+                   properties={"family_name": "Hidden"})["element_id"]  # fmt: skip
+    assert _link(board, mine, "p-loaded", marking="OFFICIAL-SENSITIVE").status_code == 201
+    assert _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share").status_code == 200
+    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}").json()["missing"] == 0
+    placed = _board(start="selection", node_ids=[mine, hidden])
+    (item,) = [i.item_id for i in world.items.items.values() if i.element_id == mine]
+    assert _as("alice").post(f"/v1/investigations/{K}/board-items/{item}/withdraw").status_code == 200
+    assert _as("alice").get(f"/v1/investigations/{K}/boards/{placed}").json()["missing"] == 1
+
+
+def test_the_ceiling_of_a_case_reading_a_composite_is_its_members(
+    world: SimpleNamespace,
+) -> None:
+    """Finding 2: a composite sets no highest marking of its own; its members' strictest is the
+    case's ceiling, never the deployment's highest."""
+    world.datasets.add(
+        Dataset(id="comp", name="Both", owning_unit=UNIT, created_by="eng", kind=COMPOSITE,
+                members=["src"], created_at=datetime(2026, 11, 1, tzinfo=UTC))
+    )  # fmt: skip
+    world.datasets.cases[K] = ["comp"]
+    board = _board()
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "SECRET", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "above_the_ceiling"
+    assert "OFFICIAL-SENSITIVE" in answer.json()["detail"]
+
+
+def test_a_match_goes_with_its_withdrawn_drawn_node(world: SimpleNamespace) -> None:
+    """Finding 3: *Same* is registered on the board, so withdrawing the drawn node withdraws it."""
+    board = _board(start="selection", node_ids=["p-loaded"])
+    made = _item(board, label="Mercer", properties={"family_name": "Mercer"})
+    decided = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/matches",
+        json={"drawn": made["element_id"], "loaded": "p-loaded", "same": True},
+    )
+    assert decided.status_code == 201, decided.text
+    edge = decided.json()["edge_id"]
+    answer = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+    assert edge in answer.json()["links"]
+    assert _edge(world, edge).audit.reverted
+    assert not world.graph.node("p-loaded").audit.reverted
+
+
+def test_an_unseen_promoted_link_stays_and_tells_the_withdrawer_nothing(
+    world: SimpleNamespace,
+) -> None:
+    """The orchestrator's ruling (a), for L3.4: Alice's link to Bob's node, promoted and hidden
+    from Bob, stays when Bob withdraws his node; his answer is the one he gets with no such link."""
+    from dataclasses import replace
+
+    item, node_id, hidden = _bobs_node_with_alices_hidden_link(world)
+    (link_item,) = [i for i in world.items.items.values() if i.element_id == hidden]
+    world.items.items[link_item.item_id] = replace(link_item, promoted_at=datetime.now(UTC))
+    answer = _as("bob").post(f"/v1/investigations/{K}/board-items/{item}/withdraw")
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"nodes": [node_id], "links": [], "pictures": [], "watches_ended": 1}
+    assert not _edge(world, hidden).audit.reverted
+    assert world.items.items[link_item.item_id].withdrawn_at is None
+
+
+def test_drawing_needs_investigate_too(world: SimpleNamespace) -> None:
+    """Finding 6: a role with `draw_on_boards` alone would make a board it could not open."""
+    answer = _as("dora").post(f"/v1/investigations/{K}/boards", json={"name": "x"})
+    assert answer.status_code == 403, answer.text
+    assert not world.views.views
+
+
+def test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them(
+    world: SimpleNamespace,
+) -> None:
+    """Finding 7: a board started from what Bob may not see reads as blank to him; and the id of
+    Alice's private board is in nothing Bob reads of the item she drew on it."""
+    secret = _board(start="selection", node_ids=["p-secret"])
+    assert _as("alice").post(f"/v1/investigations/{K}/boards/{secret}/share").status_code == 200
+    (listed,) = [b for b in _as("bob").get(f"/v1/investigations/{K}/boards").json()
+                 if b["id"] == secret]  # fmt: skip
+    assert listed["start"] == "blank"
+    private = _board()
+    drawn = _item(private)["element_id"]
+    bobs = _board("bob", start="selection", node_ids=[drawn])
+    opened = _as("bob").get(f"/v1/investigations/{K}/boards/{bobs}")
+    assert drawn in [n["id"] for n in opened.json()["nodes"]]
+    assert private not in opened.text
+    alices = _as("alice").get(f"/v1/investigations/{K}/boards/{private}").json()
+    (node_seen,) = [n for n in alices["nodes"] if n["id"] == drawn]
+    assert node_seen["provenance"]["drawn"]["board_id"] == private
