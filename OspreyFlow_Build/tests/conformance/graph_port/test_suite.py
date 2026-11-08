@@ -6565,10 +6565,13 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
         call = _call_on(a, b, day=1, load_id="load-1")
         other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
         _, (link,) = await _write(adapter, [], [call])
-        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
-        assert also == link, "two types hold the one id"
+        # The state is read, and the load merges, while one type holds the id (Amendment 18: a read
+        # of an id two types hold is refused); the other type's link comes after, and the restore
+        # finds its own type's link by type.
         prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
         assert "COMMUNICATED_WITH" in prior.edge_type
+        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+        assert also == link, "two types hold the one id"
         before = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
         assert before, "the other type's link is there"
 
@@ -6576,8 +6579,9 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
 
         after = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
         assert after == before, "the other type is left as it was"
-        restored = await adapter.read_link_state(link)
-        assert restored is not None and restored.load_id == "load-1"
+        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        restored = [e.audit.load_id for e in edges if e.type == "COMMUNICATED_WITH"]
+        assert restored == ["load-1"], "its own type put back"
 
 
 async def test_a_merge_writes_its_own_type_and_never_another_holding_the_same_id(
