@@ -15,8 +15,10 @@ export interface ModelsApi {
   bearerToken: string;
 }
 
-async function call<T>(api: ModelsApi, path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${api.apiBaseUrl}/v1/admin/models${path}`, {
+/** One call to the Conduit; `path` is written out whole at each call site (`/v1/admin/models…`), so
+ * the place and section scans read every route this screen uses. */
+async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${api.apiBaseUrl}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${api.bearerToken}`, "Content-Type": "application/json" },
   });
@@ -30,22 +32,25 @@ async function call<T>(api: ModelsApi, path: string, init: RequestInit = {}): Pr
   return (await response.json()) as T;
 }
 
-const engine = (name: string) => `/engines/${encodeURIComponent(name)}`;
+const n = encodeURIComponent;
 
-export const readModels = (api: ModelsApi) => call<ModelsAdminView>(api, "");
-export const readHistory = (api: ModelsApi) => call<ModelAdminHistory>(api, "/history");
+export const readModels = (api: ModelsApi) => ask<ModelsAdminView>(api, "/v1/admin/models");
+export const readHistory = (api: ModelsApi) => ask<ModelAdminHistory>(api, "/v1/admin/models/history");
 export const addEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
-  call<ModelsAdminView>(api, "/engines", { method: "POST", body: JSON.stringify({ provider }) });
+  ask<ModelsAdminView>(api, "/v1/admin/models/engines", { method: "POST", body: JSON.stringify({ provider }) });
 export const editEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
-  call<ModelsAdminView>(api, engine(provider.name), { method: "PUT", body: JSON.stringify({ provider }) });
+  ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(provider.name)}`, {
+    method: "PUT",
+    body: JSON.stringify({ provider }),
+  });
 export const removeEngine = (api: ModelsApi, name: string) =>
-  call<ModelsAdminView>(api, engine(name), { method: "DELETE" });
+  ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}`, { method: "DELETE" });
 export const setDefaults = (api: ModelsApi, defaults: Record<string, string>) =>
-  call<ModelsAdminView>(api, "/defaults", { method: "PUT", body: JSON.stringify({ defaults }) });
+  ask<ModelsAdminView>(api, "/v1/admin/models/defaults", { method: "PUT", body: JSON.stringify({ defaults }) });
 /** Write-only: the key is in this request's body and nowhere else; the answer is the view. */
 export const setKey = (api: ModelsApi, name: string, key: string) =>
-  call<ModelsAdminView>(api, `${engine(name)}/key`, { method: "PUT", body: JSON.stringify({ key }) });
+  ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}/key`, { method: "PUT", body: JSON.stringify({ key }) });
 export const removeKey = (api: ModelsApi, name: string) =>
-  call<ModelsAdminView>(api, `${engine(name)}/key`, { method: "DELETE" });
+  ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}/key`, { method: "DELETE" });
 export const testConnection = (api: ModelsApi, name: string) =>
-  call<ConnectionTestResult>(api, `${engine(name)}/test`, { method: "POST" });
+  ask<ConnectionTestResult>(api, `/v1/admin/models/engines/${n(name)}/test`, { method: "POST" });
