@@ -182,12 +182,14 @@ from schemas.boards import (
     BoardInput,
     BoardMove,
     BoardOpened,
+    BoardPictures,
     DrawingInput,
     DrawnItemEdit,
     DrawnItemInput,
     DrawnItemMade,
     DrawnLinkInput,
     DrawnWatch,
+    MatchDecided,
     MatchDecision,
     MatchSuggestions,
     NewDrawing,
@@ -485,11 +487,13 @@ from .custom_roles import (
 )
 from .dataset_scope import (
     CompositeReadOnlyError,
+    DrawnOnItsBoard,
     NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
     outside_any_case,
     read_in_view,
+    refuse_correcting_a_drawn_node,
     refuse_in_a_composite_case,
     refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
@@ -2335,6 +2339,18 @@ async def _not_the_boards_creator_handler(
     )
 
 
+@app.exception_handler(DrawnOnItsBoard)
+async def _drawn_on_its_board_handler(request: Request, exc: DrawnOnItsBoard) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "drawn_on_its_board",
+            "detail": "This was drawn on a board: only the person who drew it changes or "
+            "withdraws it, there (Edit on board).",
+        },
+    )
+
+
 @app.exception_handler(DrawingRefused)
 async def _drawing_refused_handler(request: Request, exc: DrawingRefused) -> JSONResponse:
     """A drawing refused in words, before anything was written (ADR-143 Amendment 2 decision 3)."""
@@ -4072,14 +4088,14 @@ async def decide_board_match(
     principal: PrincipalDep,
     boards: BoardsDep,
     audit: AuditDep,
-) -> dict[str, str]:
+) -> MatchDecided:
     """*Same* or *Not the same*: one link in the layer; neither item changed (rule 6)."""
     board = await boards.own_board(investigation.id, board_id, principal.id)
     edge_id = await boards.decide(board, body, principal)
     await _audit_board(audit, principal, "decide_board_match", investigation.id,
                        board_id=board_id, drawn=body.drawn, loaded=body.loaded,
                        same=body.same, edge_id=edge_id)  # fmt: skip
-    return {"edge_id": edge_id}
+    return MatchDecided(edge_id=edge_id)
 
 
 @app.put(
@@ -4097,8 +4113,11 @@ async def upload_drawn_picture(
     audit: AuditDep,
     name: str = Query(min_length=1),
     marking: str = Query(min_length=1),
+    source_note: str = Query(min_length=1, max_length=2000),
 ) -> DrawnItemMade:
-    """C17 (a): an uploaded picture of a drawn node, held in the layer with its own marking."""
+    """C17 (a): an uploaded picture of a drawn node, held in the layer with its own marking and
+    source note; a new one supersedes the one before. Audited after every refusal, before the
+    file or the graph is written."""
     limit = max_upload_bytes()
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
@@ -4117,13 +4136,16 @@ async def upload_drawn_picture(
             raise HTTPException(
                 status_code=413, detail="That file is larger than the upload limit."
             )
-    made = await boards.upload_picture(
-        board, node_id, principal, name=filename, data=bytes(data), marking=marking
-    )
-    await _audit_board(audit, principal, "set_drawn_picture", investigation.id,
-                       board_id=board_id, node_id=node_id, name=filename, size=len(data),
-                       classification=marking)  # fmt: skip
-    return made
+
+    async def audited() -> None:
+        await _audit_board(audit, principal, "set_drawn_picture", investigation.id,
+                           board_id=board_id, node_id=node_id, name=filename, size=len(data),
+                           classification=marking)  # fmt: skip
+
+    return await boards.upload_picture(
+        board, node_id, principal, name=filename, data=bytes(data), marking=marking,
+        source_note=source_note, before_write=audited,
+    )  # fmt: skip
 
 
 @app.post(
@@ -4159,10 +4181,10 @@ async def board_pictures(
     board_id: str,
     principal: PrincipalDep,
     boards: BoardsDep,
-) -> dict[str, str]:
+) -> BoardPictures:
     """Each drawn node's picture on the board that this reader may see."""
     board = await boards.board(investigation.id, board_id, principal.id)
-    return await boards.pictures(board, principal)
+    return BoardPictures(pictures=await boards.pictures(board, principal))
 
 
 @app.get(
@@ -4973,6 +4995,8 @@ async def retract_node_route(
 ) -> NodeIdResponse:
     # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
     await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
+    # ADR-143 decision 5 (C15): a drawn node is withdrawn on its board, by whoever drew it.
+    await refuse_correcting_a_drawn_node(graph, node_id, principal)
     # ADR-109 Amendment 11: each link the retract clones goes through the alerts' repoint journal,
     # so an alert citing one follows it to its clone.
     new_node_id = await supersede_journalled(

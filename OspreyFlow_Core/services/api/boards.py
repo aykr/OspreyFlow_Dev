@@ -29,15 +29,15 @@ from __future__ import annotations
 
 import difflib
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Protocol
 
-from adapters.media_objectstore import reference_for
+from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id, new_id
-from ontology.handling import HandlingScheme
+from ontology.handling import HandlingScheme, merge_handling
 from ontology.validation import validate_properties
 from ports.graph import GraphPort, SuggestOptions
 from ports.media import MediaStore
@@ -78,14 +78,11 @@ from .board_store import BoardItem, BoardItemStore, new_item, new_watch
 from .case_views import CaseViewStore, StoredCaseView, ViewNotFound
 from .dataset_scope import analyst_writes_into
 from .datasets import DRAWN, DatasetStore
+from .document_content import DOCUMENT_TYPE
+from .entity_pictures import DEPICTS, PICTURE_TYPES  # ADR-105's own names and formats
 from .evidence_brief import display_name
 from .working_set.models import LimitExceededError
 
-DEPICTS = "DEPICTS"
-DOCUMENT_TYPE = "Document"
-#: Picture formats a board takes (ADR-105's own list); the size limit is the route's.
-PICTURE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-                 "webp": "image/webp", "gif": "image/gif"}  # fmt: skip
 #: Never drawn on a board: what the platform itself raises or holds as evidence.
 _NOT_DRAWN_NODE_TYPES = frozenset({"Alert", DOCUMENT_TYPE})
 _NOT_DRAWN_LINK_TYPES = frozenset({SAME_AS, NOT_SAME_AS, DEPICTS, "ALERTED_ON", "MENTIONED_IN"})
@@ -304,7 +301,8 @@ class Boards:
         elif given.start == "selection":
             wanted = list(given.node_ids or [])
         seen = await self.graph.get_nodes(wanted, principal) if wanted else []
-        kept = [n.id for n in seen if n.provenance.drawn is None]
+        # Drawn items selected come too, as references: a deleted board's items stay reachable.
+        kept = [n.id for n in seen]
         return await self.views.save_board(case_id, given.name, principal.id, node_ids=kept)
 
     async def open(self, board: StoredCaseView, principal: Principal) -> BoardOpened:
@@ -419,9 +417,10 @@ class Boards:
             validate_properties(entity, given.properties)
         except Exception as invalid:
             raise DrawingRefused("not_a_property", str(invalid), status=422) from invalid
-        into = await self.into(board.case_id)
-        self.check_marking(given.marking, into.ceiling, principal)
+        # The ceiling first: a refused drawing makes nothing, not even the case's layer.
+        self.check_marking(given.marking, await self.ceiling(board.case_id), principal)
         await self._source_document_check(given.source_document, principal)
+        into = await self.into(board.case_id)
         item_id = new_id()
         now = datetime.now(UTC)
         write = NodeWrite(
@@ -483,8 +482,7 @@ class Boards:
                 f"{', '.join(edge_type.to_types)}, not from {source_type} to {target_type}",
                 status=422,
             )
-        into = await self.into(board.case_id)
-        self.check_marking(given.marking, into.ceiling, principal)
+        self.check_marking(given.marking, await self.ceiling(board.case_id), principal)
         await self._source_document_check(given.source_document, principal)
         already = await self.graph.edges_among(
             [given.source, given.target], principal, edge_types=[given.type]
@@ -496,6 +494,7 @@ class Boards:
             raise DrawingRefused(
                 "already_drawn", f"a {given.type} link is already drawn between these two items"
             )
+        into = await self.into(board.case_id)
         item_id = new_id()
         write = EdgeWrite(
             id=new_edge_id(),
@@ -572,6 +571,18 @@ class Boards:
         assert drawn is not None
         marking = given.marking or element.handling.classification
         order = self.scheme.classification
+        if marking not in order:
+            raise DrawingRefused(
+                "not_a_marking", f"{marking} is not a marking of this deployment", status=422
+            )
+        if not isinstance(element, Node) and marking != element.handling.classification:
+            # A link's marking is part of who may see it (ADR-102): written again at another
+            # marking it would be a second link, the first left live. Refused, not half done.
+            raise DrawingRefused(
+                "link_marking_kept",
+                "a drawn link's marking is not changed: withdraw it and draw it again at the "
+                "marking it needs",
+            )
         if order.index(marking) < order.index(element.handling.classification):
             raise DrawingRefused(
                 "marking_never_lowered",
@@ -594,7 +605,14 @@ class Boards:
                 if v is not None
             }
         )
-        DrawnAssertion.model_validate(new_drawn.model_dump())  # a source is still given
+        try:
+            DrawnAssertion.model_validate(new_drawn.model_dump())  # a source is still given
+        except ValueError as invalid:
+            raise DrawingRefused(
+                "no_source",
+                "a drawn item needs a source note, a document of the case, or both",
+                status=422,
+            ) from invalid
         provenance = element.provenance.model_copy(update={"drawn": new_drawn})
         handling = element.handling.model_copy(update={"classification": marking})
         now = datetime.now(UTC)
@@ -649,15 +667,32 @@ class Boards:
             links.append(item.element_id)
         # Rule 3 over rule 2: a link the reader may not see is withdrawn with its node, but is not
         # named to them. Read before the withdrawal, which takes every one out of every read.
-        seen = {e.id for e in await self.graph.get_edges(links, principal)} if links else set()
-        inner = getattr(self.graph, "inner", self.graph)
-        tx = await inner.begin_transaction()
+        seen_links = await self.graph.get_edges(links, principal) if links else []
+        seen = {e.id for e in seen_links}
+        # Each link going with the node is wholly drawn data still: one promoted into a dataset
+        # (L3.4) is changed only by reverting its promotion, so the withdrawal is refused.
+        held_in = {i.element_id: i.dataset_id for i in case_items}
+        if any(set(e.datasets) != {held_in.get(e.id, item.dataset_id)} for e in seen_links):
+            raise DrawingRefused(
+                "promoted",
+                "a link drawn to this item has been promoted into a dataset: revert that "
+                "promotion before withdrawing the item",
+            )
+        # Through the graph's own path for a drawn element (`withdraw_drawn`): it refuses in a case
+        # not yet converted, and clears what was kept from reads after it, as every write does.
+        withdraw_drawn = getattr(self.graph, "withdraw_drawn", None)
+        tx = await self.graph.begin_transaction()
         try:
-            await inner.withdraw_elements(nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx)
+            if withdraw_drawn is not None:
+                await withdraw_drawn(nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx)
+            else:
+                await self.graph.withdraw_elements(
+                    nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx
+                )
         except Exception:
-            await inner.rollback_transaction(tx)
+            await self.graph.rollback_transaction(tx)
             raise
-        await inner.commit_transaction(tx)
+        await self.graph.commit_transaction(tx)
         ended = await self.items.withdraw(case_id, withdrawn_items, principal.id, datetime.now(UTC))
         return Withdrawn(
             nodes=nodes,
@@ -684,7 +719,9 @@ class Boards:
             for key in entity.identifiers if entity is not None else []:
                 value = drawn.properties.get(key)
                 if isinstance(value, str) and value.strip():
-                    for hit in await self.graph.search_nodes(value, principal, limit=MATCH_LIMIT):
+                    hits_by_key = await self.graph.search_nodes(value, principal, limit=MATCH_LIMIT)
+                    more = more or len(hits_by_key) >= MATCH_LIMIT
+                    for hit in hits_by_key:
                         if hit.type == drawn.type:
                             candidates[hit.id] = (hit, 1.0, f"the same {key}")
             label = drawn.provenance.drawn.label
@@ -731,7 +768,13 @@ class Boards:
     ) -> str:
         """*Same* or *Not the same*: one link into the layer, neither node changed (rule 6)."""
         item = await self.items.by_element(board.case_id, given.drawn)
-        if item is None or item.withdrawn_at is not None or item.kind != "node":
+        # A drawn item of this board only: another member's private board is not reached from here.
+        if (
+            item is None
+            or item.withdrawn_at is not None
+            or item.kind != "node"
+            or item.board_id != board.id
+        ):
             raise ItemNotFound(given.drawn)
         found = {
             n.id: n for n in await self.graph.get_nodes([given.drawn, given.loaded], principal)
@@ -739,17 +782,17 @@ class Boards:
         drawn, loaded = found.get(given.drawn), found.get(given.loaded)
         if drawn is None or loaded is None or loaded.provenance.drawn is not None:
             raise ItemNotFound(given.loaded)
+        # Marked as both ends together (`merge_handling`: the higher marking, the stricter code),
+        # and within the case's ceiling, like any drawing (Amendment 2 decision 3).
+        stricter = merge_handling(drawn.handling, loaded.handling, self.scheme)
+        self.check_marking(stricter.classification, await self.ceiling(board.case_id), principal)
         into = await self.into(board.case_id)
         nodes, edges = match_writes(
             drawn, loaded, same=given.same, into=into.dataset_id, principal=principal,
-            stricter=self._strictest_handling(drawn.handling, loaded.handling),
+            stricter=stricter,
         )  # fmt: skip
         _, ids = await self._write(nodes, edges)
         return ids[0]
-
-    def _strictest_handling(self, a: Handling, b: Handling) -> Handling:
-        order = self.scheme.classification
-        return a if order.index(a.classification) >= order.index(b.classification) else b
 
     # --- pictures (C17; ADR-105 Amendment 3) ----------------------------------------------
 
@@ -763,6 +806,15 @@ class Boards:
             raise DrawingRefused(
                 "not_your_item", "only the person who drew an item gives it a picture",
                 status=403,
+            )  # fmt: skip
+        # As ADR-105 refuses it, and as the store would after the file was kept: a picture only of
+        # a type that may have one.
+        (node,) = await self.graph.get_nodes([node_id], principal)
+        depicts = self.ontology.edge_type(DEPICTS)
+        if depicts is None or node.type not in depicts.to_types:
+            raise DrawingRefused(
+                "no_picture_for_this_type", f"a {node.type} cannot have a picture of its own",
+                status=422,
             )  # fmt: skip
         return item
 
@@ -794,7 +846,20 @@ class Boards:
             created_at=now,
             datasets=[into.dataset_id],
         )
-        _, (edge_id,) = await self._write([document] if document is not None else [], [link])
+        current = await self._current_picture(board.case_id, subject.element_id, principal)
+        if current is None:
+            _, (edge_id,) = await self._write([document] if document is not None else [], [link])
+        else:
+            # ADR-105: a new picture supersedes the one before, which is kept, no longer shown.
+            tx = await self.graph.begin_transaction()
+            try:
+                if document is not None:
+                    await self.graph.upsert_nodes([document], tx)
+                edge_id = await self.graph.supersede_edge(current, link, tx, old_type=DEPICTS)
+            except Exception:
+                await self.graph.rollback_transaction(tx)
+                raise
+            await self.graph.commit_transaction(tx)
         item = new_item(
             board_id=board.id, case_id=board.case_id, kind="picture", element_id=edge_id,
             author=principal.id, dataset_id=into.dataset_id, source=document_id,
@@ -802,6 +867,20 @@ class Boards:
         )  # fmt: skip
         await self.items.add(item, None)
         return DrawnItemMade(element_id=edge_id, item_id=item.item_id)
+
+    async def _current_picture(
+        self, case_id: str, subject: str, principal: Principal
+    ) -> str | None:
+        """The drawn node's picture link as `principal` may see it, the newest; `None` for none."""
+        held = [
+            i.element_id
+            for i in await self.items.in_case(case_id)
+            if i.kind == "picture" and i.target == subject and i.withdrawn_at is None
+        ]
+        links = await self.graph.get_edges(held, principal) if held else []
+        if not links:
+            return None
+        return max(links, key=lambda e: e.audit.created_at).id
 
     async def upload_picture(
         self,
@@ -812,10 +891,17 @@ class Boards:
         name: str,
         data: bytes,
         marking: str,
+        source_note: str,
+        before_write: Callable[[], Awaitable[None]] | None = None,
     ) -> DrawnItemMade:
         """C17 (a): an uploaded image becomes an image `Document` in the layer, with a `DEPICTS`
         link to the drawn node, both carrying the picture's own marking: a reader not cleared for
-        the picture sees no picture."""
+        the picture sees no picture. Its source note is the Document's own source (decision 7).
+        Every refusal comes before the file is kept."""
+        if not source_note.strip():
+            raise DrawingRefused(
+                "no_source", "say where the picture comes from: a source note", status=422
+            )
         if self.media is None:
             raise DrawingRefused("no_media_store", "pictures cannot be stored here", status=503)
         extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
@@ -826,12 +912,16 @@ class Boards:
                 status=422,
             )  # fmt: skip
         subject = await self._picture_subject(board.case_id, node_id, principal)
+        self.check_marking(marking, await self.ceiling(board.case_id), principal)
         into = await self.into(board.case_id)
-        self.check_marking(marking, into.ceiling, principal)
         ref = reference_for(data, content_type)
         # The Document's id is the layer's own, so it is never the same element as a copy of
         # the same file uploaded into a source or another case's layer (rule 3).
         document_id = "content:" + sha256(f"{into.dataset_id}:{ref}".encode()).hexdigest()[:32]
+        # The audit entry is written after every refusal and before anything is kept (ADR-127
+        # Amendment 23): a row without a picture records an attempt; never the reverse.
+        if before_write is not None:
+            await before_write()
         await self.media.put(data, content_type)
         now = datetime.now(UTC)
         document = NodeWrite(
@@ -846,7 +936,9 @@ class Boards:
             provenance=Provenance(
                 state=ProvenanceState.ASSERTED,
                 sources=[
-                    SourceRef(document_id=f"upload:{name}", locator="whole file", excerpt_hash="")
+                    SourceRef(
+                        document_id=f"upload:{name}", locator=source_note.strip(), excerpt_hash=""
+                    )
                 ],
                 first_seen=now,
             ),  # fmt: skip
@@ -874,11 +966,15 @@ class Boards:
             raise DrawingRefused(
                 "not_a_picture", "that is not a picture this case holds", status=422
             )
-        into = await self.into(board.case_id)
-        marking = self._strictest_handling(
-            self._handling(given.marking, principal), found[0].handling
+        if given.marking not in self.scheme.classification:
+            raise DrawingRefused(
+                "not_a_marking", f"{given.marking} is not a marking of this deployment", status=422
+            )
+        marking = merge_handling(
+            self._handling(given.marking, principal), found[0].handling, self.scheme
         ).classification
-        self.check_marking(marking, into.ceiling, principal)
+        self.check_marking(marking, await self.ceiling(board.case_id), principal)
+        into = await self.into(board.case_id)
         return await self._depict(board, subject, given.document_id, marking, principal, into)
 
     async def pictures(self, board: StoredCaseView, principal: Principal) -> dict[str, str]:
@@ -915,8 +1011,6 @@ class Boards:
             raise ItemNotFound(node_id)
         (document,) = await self.graph.get_nodes([document_id], principal)
         ref = str(document.properties["object_ref"])
-        from adapters.media_objectstore import content_type_of
-
         return await self.media.get(ref), content_type_of(ref)
 
     # --- watches --------------------------------------------------------------------------

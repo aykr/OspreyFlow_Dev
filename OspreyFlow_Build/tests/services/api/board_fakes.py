@@ -25,9 +25,10 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
-from ontology.validation import validate_properties
+from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import NodeSuggestions, SuggestOptions
 from schemas.domain import (
     AuditStub,
@@ -53,13 +54,9 @@ class BoardGraph(FakeGraphPort):
         nodes: Sequence[Node] = (),
         edges: Sequence[Edge] = (),
     ) -> None:
-        super().__init__(
-            Subgraph(nodes=[], edges=[]), graph_nodes=nodes, graph_edges=edges
-        )
+        super().__init__(Subgraph(nodes=[], edges=[]), graph_nodes=nodes, graph_edges=edges)
         self.ontology = ontology
-        self._pending: dict[
-            str, tuple[list[NodeWrite], list[EdgeWrite], list[Any]]
-        ] = {}
+        self._pending: dict[str, tuple[list[NodeWrite], list[Any], list[Any], list[Any]]] = {}
         self.node_writes: list[NodeWrite] = []
         self.edge_writes: list[EdgeWrite] = []
 
@@ -78,9 +75,9 @@ class BoardGraph(FakeGraphPort):
         for node in self._graph_nodes.values():
             entity = self.ontology.entity_type(node.type)
             keys = entity.identifiers if entity is not None else []
-            if any(
-                node.properties.get(k) == query for k in keys
-            ) and self._node_readable(principal, node):
+            if any(node.properties.get(k) == query for k in keys) and self._node_readable(
+                principal, node
+            ):
                 found.append(node)
         return sorted(found, key=lambda n: n.id)[:limit]
 
@@ -114,16 +111,24 @@ class BoardGraph(FakeGraphPort):
 
     async def begin_transaction(self) -> str:
         tx = await super().begin_transaction()
-        self._pending[tx] = ([], [], [])
+        self._pending[tx] = ([], [], [], [])
         return tx
 
     async def commit_transaction(self, tx: str) -> None:
         await super().commit_transaction(tx)
-        nodes, edges, withdrawals = self._pending.pop(tx)
+        nodes, edges, withdrawals, supersessions = self._pending.pop(tx)
         for write in nodes:
             self._land_node(write)
-        for write in edges:
-            self._land_edge(write)
+        for write, edge_id in edges:
+            self._land_edge(write, edge_id)
+        for old_id, replacement, new_id in supersessions:
+            self._graph_edges = [
+                e.model_copy(update={"audit": e.audit.model_copy(update={"superseded_by": new_id})})
+                if e.id == old_id
+                else e
+                for e in self._graph_edges
+            ]
+            self._land_edge(replacement, new_id)
         for node_ids, edge_ids, load_id in withdrawals:
             self._land_withdrawal(node_ids, edge_ids, load_id)
 
@@ -135,9 +140,7 @@ class BoardGraph(FakeGraphPort):
         for write in nodes:
             entity = self.ontology.entity_type(write.type)
             if entity is None:
-                raise OntologyError(
-                    f"{write.type!r} is not a type in the active ontology"
-                )
+                raise OntologyError(f"{write.type!r} is not a type in the active ontology")
             validate_properties(entity, write.properties)
             if write.provenance.sources_withheld:
                 raise ValueError("a withheld provenance is never written")
@@ -149,13 +152,40 @@ class BoardGraph(FakeGraphPort):
         ids = []
         for write in edges:
             if self.ontology.edge_type(write.type) is None:
-                raise OntologyError(
-                    f"{write.type!r} is not a link type in the active ontology"
-                )
+                raise OntologyError(f"{write.type!r} is not a link type in the active ontology")
+            edge_type = self.ontology.edge_type(write.type)
+            assert edge_type is not None
+            source_type = self._ends_type(write.source, tx)
+            target_type = self._ends_type(write.target, tx)
+            if source_type is None or target_type is None:
+                raise OntologyError("an edge end does not exist")
+            validate_edge_endpoints(edge_type, source_type=source_type, target_type=target_type)
             held = self._merge_target(write)
-            ids.append(held.id if held is not None else write.id)
-        self._pending[tx][1].extend(edges)
+            if held is not None:
+                edge_id = held.id
+            elif any(e.id == write.id for e in self._graph_edges):
+                # As the adapter: edge `id` is unique, so a write of a taken id at another
+                # audience is a link of its own under a new id (ADR-102 Amendment 3).
+                edge_id = new_edge_id()
+            else:
+                edge_id = write.id
+            ids.append(edge_id)
+            self._pending[tx][1].append((write, edge_id))
         return ids
+
+    def _ends_type(self, node_id: str, tx: str) -> str | None:
+        held = self._graph_nodes.get(node_id)
+        if held is not None:
+            return held.type
+        pending = [w for w in self._pending[tx][0] if w.id == node_id]
+        return pending[0].type if pending else None
+
+    async def supersede_edge(
+        self, edge_id: str, replacement: EdgeWrite, tx: str, *, old_type: str
+    ) -> str:
+        new_id = new_edge_id()
+        self._pending[tx][3].append((edge_id, replacement, new_id))
+        return new_id
 
     async def withdraw_elements(
         self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: str
@@ -199,28 +229,24 @@ class BoardGraph(FakeGraphPort):
                 "provenance": merge_provenance(held.provenance, write.provenance),
                 "handling": merge_handling(held.handling, write.handling, SCHEME),
                 "datasets": merge_datasets(held.datasets, write.datasets),
-                "audit": held.audit.model_copy(
-                    update={"revision": held.audit.revision + 1}
-                ),
+                "audit": held.audit.model_copy(update={"revision": held.audit.revision + 1}),
             }
         )
 
-    def _land_edge(self, write: EdgeWrite) -> None:
+    def _land_edge(self, write: EdgeWrite, edge_id: str) -> None:
         self.edge_writes.append(write)
         held = self._merge_target(write)
-        if held is None:
+        if held is None or held.id != edge_id:
             self._graph_edges.append(
                 Edge(
-                    id=write.id,
+                    id=edge_id,
                     type=write.type,
                     source=write.source,
                     target=write.target,
                     properties=write.properties,
                     provenance=write.provenance,
                     handling=write.handling,
-                    audit=AuditStub(
-                        created_at=write.created_at, created_by=write.created_by
-                    ),
+                    audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
                     datasets=sorted(set(write.datasets)),
                 )
             )
@@ -239,19 +265,13 @@ class BoardGraph(FakeGraphPort):
                 "occurrences": held.occurrences + 1,
             }
         )
-        self._graph_edges = [
-            merged if e.id == held.id else e for e in self._graph_edges
-        ]
+        self._graph_edges = [merged if e.id == held.id else e for e in self._graph_edges]
 
-    def _land_withdrawal(
-        self, node_ids: list[str], edge_ids: list[str], load_id: str
-    ) -> None:
+    def _land_withdrawal(self, node_ids: list[str], edge_ids: list[str], load_id: str) -> None:
         def withdrawn(audit: AuditStub) -> AuditStub:
             if audit.reverted:
                 return audit
-            return audit.model_copy(
-                update={"reverted": True, "withdrawn_by_load": load_id}
-            )
+            return audit.model_copy(update={"reverted": True, "withdrawn_by_load": load_id})
 
         for node_id in node_ids:
             held = self._graph_nodes.get(node_id)

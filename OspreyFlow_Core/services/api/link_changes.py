@@ -79,7 +79,7 @@ from schemas.domain import (
 
 from .alerts import AlertStore, purge_copies, repointing_alerts
 from .change_provenance import CHANGE_MARKER, without_link_ids
-from .dataset_scope import refuse_in_a_composite_case
+from .dataset_scope import DrawnOnItsBoard, refuse_in_a_composite_case
 from .link_notes import LinkNotFoundError
 from .link_types import LinkTypeService
 from .working_set.models import DeltaReplaceEdge, DeltaReplaceEdgeSent
@@ -371,6 +371,9 @@ class LinkChangeService:
         is_author: bool = False,
     ) -> LinkChangeResult:
         old = await self._in_full(investigation_id, edge_id, principal)
+        if old.provenance.drawn is not None:
+            # ADR-143 decision 5 (C15): a drawn link is changed on its board, by whoever drew it.
+            raise DrawnOnItsBoard
         await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the link is read
         reason = request.reason.strip()
         if not reason:

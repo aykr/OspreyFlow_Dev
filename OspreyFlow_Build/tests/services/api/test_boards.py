@@ -59,7 +59,8 @@ from services.api.app import app
 from services.api.board_store import InMemoryBoardItemStore
 from services.api.boards import Boards
 from services.api.case_views import InMemoryCaseViewStore
-from services.api.datasets import DRAWN, Dataset, InMemoryDatasetStore
+from services.api.dataset_scope import DrawnOnItsBoard, stamping
+from services.api.datasets import COMPOSITE, DRAWN, Dataset, InMemoryDatasetStore
 from services.api.investigations import (
     AccessLevel,
     InsufficientAccessError,
@@ -77,10 +78,16 @@ UNIT = "unit-1"
 SCHEME = load_uk_le_scheme()
 ONTOLOGY = load_deployment_ontology()
 PEOPLE = {
-    "alice": Principal(id="alice", clearance="SECRET", org_unit=UNIT, roles=["analyst"]),
+    "alice": Principal(
+        id="alice", clearance="SECRET", org_unit=UNIT, roles=["analyst"]
+    ),
     "bob": Principal(id="bob", clearance="OFFICIAL", org_unit=UNIT, roles=["analyst"]),
-    "carol": Principal(id="carol", clearance="SECRET", org_unit=UNIT, roles=["analyst"]),
-    "rita": Principal(id="rita", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"]),
+    "carol": Principal(
+        id="carol", clearance="SECRET", org_unit=UNIT, roles=["analyst"]
+    ),
+    "rita": Principal(
+        id="rita", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"]
+    ),
 }
 K, B = "case-k", "case-b"
 GRADE = {"source": "B", "intelligence": "2", "handling": "1"}
@@ -105,7 +112,9 @@ class _Cases:
         )  # fmt: skip
         self.grants[case_id] = dict(grants)
 
-    async def create(self, principal: Principal, *, name: str, **_: Any) -> Investigation:
+    async def create(
+        self, principal: Principal, *, name: str, **_: Any
+    ) -> Investigation:
         case_id = f"home-{len(self.made)}"
         self.seed(case_id, {principal.id: AccessLevel.AUTHOR})
         return self.made[case_id]
@@ -120,9 +129,13 @@ class _Cases:
             raise InsufficientAccessError(case_id)
         return self.made[case_id]
 
-    async def list_for(self, principal: Principal) -> list[tuple[Investigation, AccessLevel]]:
+    async def list_for(
+        self, principal: Principal
+    ) -> list[tuple[Investigation, AccessLevel]]:
         return [
-            (self.made[c], g[principal.id]) for c, g in self.grants.items() if principal.id in g
+            (self.made[c], g[principal.id])
+            for c, g in self.grants.items()
+            if principal.id in g
         ]
 
     async def hidden_tab_ids(self, principal: Principal) -> set[str]:
@@ -138,7 +151,9 @@ class _Audit:
 
 
 def _loaded(node_id: str, marking: str = "OFFICIAL", **properties: Any) -> Node:
-    return node(node_id, marking).model_copy(update={"properties": properties, "datasets": ["src"]})
+    return node(node_id, marking).model_copy(
+        update={"properties": properties, "datasets": ["src"]}
+    )
 
 
 IMAGE_REF = reference_for(b"\x89PNG loaded", "image/png")
@@ -180,7 +195,10 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     )  # fmt: skip
     state = {
         "principal_resolver": _Resolver(), "investigations": cases, "datasets": datasets,
-        "audit": held.audit, "graph": graph, "case_views": held.views,
+        # The Conduit's own graph: the stamping wrapper (its last-word refusals, `withdraw_drawn`)
+        # over the fake that holds what is written.
+        "audit": held.audit, "graph": stamping(graph, registry=datasets),
+        "case_views": held.views,
         "board_items": held.items, "media": media, "target_models": held.models,
         "handling_scheme": SCHEME, "ontology": ONTOLOGY,
         "working_set": WorkingSetService(graph, FakeWorkingSetStore(), SCHEME),
@@ -195,7 +213,9 @@ def _as(who: str) -> TestClient:
 
 
 def _board(who: str = "alice", case: str = K, **body: Any) -> str:
-    answer = _as(who).post(f"/v1/investigations/{case}/boards", json={"name": "Wing B", **body})
+    answer = _as(who).post(
+        f"/v1/investigations/{case}/boards", json={"name": "Wing B", **body}
+    )
     assert answer.status_code == 201, answer.text
     return str(answer.json()["id"])
 
@@ -251,10 +271,14 @@ def _carol_sees_it_from_b(drawn: str) -> bool:
     assert saved.status_code == 201, saved.text
     opened = _as("carol").get(f"/v1/investigations/{B}/views/{saved.json()['id']}")
     assert opened.status_code == 200, opened.text
-    return drawn in {n["id"] for n in opened.json()["nodes"]}
+    shown = {n["id"] for n in opened.json()["nodes"]}
+    drawn_links = [e for e in opened.json()["edges"] if e["provenance"].get("drawn")]
+    return drawn in shown or bool(drawn_links)
 
 
-def test_a_drawn_item_is_never_readable_outside_its_case(world: SimpleNamespace) -> None:
+def test_a_drawn_item_is_never_readable_outside_its_case(
+    world: SimpleNamespace,
+) -> None:
     board, drawn, link = _drawn_in_k(world)
     assert not _carol_sees_it_from_b(drawn)
     # Nor its link from the loaded node it rests on: B's view of Mercer and the drawn id shows
@@ -320,17 +344,24 @@ def test_every_board_route_refuses_a_non_member_as_a_missing_case(
 
     def ask(case: str) -> Any:
         kwargs = {"json": body} if body is not None else {}
-        return getattr(_as("carol"), method)(f"/v1/investigations/{case}/{filled}", **kwargs)
+        return getattr(_as("carol"), method)(
+            f"/v1/investigations/{case}/{filled}", **kwargs
+        )
 
     stranger, missing = ask(K), ask("no-such-case")
-    assert stranger.status_code == missing.status_code == 404, (stranger.text, missing.text)
+    assert stranger.status_code == missing.status_code == 404, (
+        stranger.text,
+        missing.text,
+    )
     assert stranger.json() == missing.json()
 
 
 # --- decision 4: attributed, graded, sourced, in the layer ------------------------------------
 
 
-def test_a_drawn_item_is_attributed_graded_and_in_the_layer(world: SimpleNamespace) -> None:
+def test_a_drawn_item_is_attributed_graded_and_in_the_layer(
+    world: SimpleNamespace,
+) -> None:
     board = _board()
     made = _item(board)
     drawn = world.graph.node(made["element_id"])
@@ -339,11 +370,20 @@ def test_a_drawn_item_is_attributed_graded_and_in_the_layer(world: SimpleNamespa
     assertion = drawn.provenance.drawn
     assert assertion is not None
     assert assertion.provenance_class == "analyst_drawn"
-    assert (assertion.asserted_by, assertion.board_id, assertion.case_id) == ("alice", board, K)
+    assert (assertion.asserted_by, assertion.board_id, assertion.case_id) == (
+        "alice",
+        board,
+        K,
+    )
     assert assertion.item_id == made["item_id"]
-    assert assertion.grading.source == "B" and assertion.source_note == "Wing officer report, 4 Nov"
+    assert (
+        assertion.grading.source == "B"
+        and assertion.source_note == "Wing officer report, 4 Nov"
+    )
     assert drawn.handling.classification == "OFFICIAL"
-    assert drawn.provenance.state == "asserted"  # asserted by its author, not inferred (rule 5)
+    assert (
+        drawn.provenance.state == "asserted"
+    )  # asserted by its author, not inferred (rule 5)
     audit = [r for r in world.audit.records if r["action"] == "draw_item"]
     assert audit and audit[0]["resolved_query"]["item_id"] == made["item_id"]
 
@@ -356,7 +396,9 @@ def test_the_layer_check_fails_with_the_writer_aimed_at_the_source(
 
     async def into_the_source(self: Boards, case_id: str) -> Any:
         held = await real(self, case_id)
-        return boards_module.Into("src", held.ceiling, held.watched, drawn_dataset=False)
+        return boards_module.Into(
+            "src", held.ceiling, held.watched, drawn_dataset=False
+        )
 
     monkeypatch.setattr(Boards, "into", into_the_source)
     made = _item(_board())
@@ -370,6 +412,10 @@ def _nothing_written(world: SimpleNamespace, before: int) -> None:
     assert len(world.graph.node_writes) + len(world.graph.edge_writes) == before
     assert not [i for i in world.items.items.values()]
     assert not world.items.watches
+    # Not even the case's layer: the ceiling is judged before the layer could be made.
+    assert not [
+        d for d in world.datasets.datasets.values() if d.kind == "analyst_layer"
+    ]
 
 
 def test_an_item_above_the_ceiling_is_refused_in_words(world: SimpleNamespace) -> None:
@@ -386,27 +432,30 @@ def test_an_item_above_the_ceiling_is_refused_in_words(world: SimpleNamespace) -
     _nothing_written(world, before)
 
 
-def test_an_item_above_the_drawers_clearance_is_refused_too(world: SimpleNamespace) -> None:
+def test_an_item_above_the_drawers_clearance_is_refused_too(
+    world: SimpleNamespace,
+) -> None:
     board = _board("bob")
     answer = _as("bob").post(
         f"/v1/investigations/{K}/boards/{board}/items",
         json={"type": "Person", "label": "x", "marking": "OFFICIAL-SENSITIVE", "grading": GRADE,
               "source_note": "n", "properties": {"family_name": "x"}},
     )  # fmt: skip
-    assert answer.status_code == 409 and answer.json()["error"] == "above_your_clearance"
+    assert (
+        answer.status_code == 409 and answer.json()["error"] == "above_your_clearance"
+    )
 
 
 def test_the_ceiling_check_fails_with_the_ceiling_bypassed(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rule 15: the plant is the ceiling `Boards.into` reads, set to the deployment's highest."""
-    real = Boards.into
+    """Rule 15: the plant is `Boards.ceiling`, the case's ceiling as every drawing reads it, set to
+    the deployment's highest."""
 
-    async def no_ceiling(self: Boards, case_id: str) -> Any:
-        held = await real(self, case_id)
-        return boards_module.Into(held.dataset_id, "SECRET", held.watched, held.drawn_dataset)
+    async def no_ceiling(self: Boards, case_id: str) -> str:
+        return "SECRET"
 
-    monkeypatch.setattr(Boards, "into", no_ceiling)
+    monkeypatch.setattr(Boards, "ceiling", no_ceiling)
     board = _board()
     answer = _as("alice").post(
         f"/v1/investigations/{K}/boards/{board}/items",
@@ -421,13 +470,16 @@ def test_the_ceiling_check_fails_with_the_ceiling_bypassed(
 
 def _start_drawing() -> dict[str, Any]:
     answer = _as("alice").post(
-        "/v1/drawings", json={"name": "Night visits", "highest_marking": "OFFICIAL-SENSITIVE"}
+        "/v1/drawings",
+        json={"name": "Night visits", "highest_marking": "OFFICIAL-SENSITIVE"},
     )
     assert answer.status_code == 201, answer.text
     return dict(answer.json())
 
 
-def test_a_drawing_with_no_case_makes_its_dataset_case_and_board(world: SimpleNamespace) -> None:
+def test_a_drawing_with_no_case_makes_its_dataset_case_and_board(
+    world: SimpleNamespace,
+) -> None:
     made = _start_drawing()
     dataset = world.datasets.datasets[made["dataset_id"]]
     assert dataset.kind == DRAWN and dataset.name == "Night visits"
@@ -481,7 +533,9 @@ def test_drawing_sets_a_watch_and_withdrawing_ends_it(world: SimpleNamespace) ->
         "drawn_watch",
     )
     assert watch["dataset_id"] == "src"  # on the case's dataset
-    withdrawn = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+    withdrawn = _as("alice").post(
+        f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw"
+    )
     assert withdrawn.status_code == 200 and withdrawn.json()["watches_ended"] == 1
     assert _watches("alice") == []
 
@@ -522,9 +576,15 @@ def _drawn_mercer(world: SimpleNamespace) -> tuple[str, str]:
 def test_same_writes_one_link_and_merges_nothing(world: SimpleNamespace) -> None:
     board, drawn = _drawn_mercer(world)
     before = world.graph.node("p-loaded")
-    suggested = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/matches").json()
+    suggested = (
+        _as("alice").get(f"/v1/investigations/{K}/boards/{board}/matches").json()
+    )
     (pair,) = suggested["suggestions"]
-    assert (pair["drawn"], pair["loaded"]["id"], pair["state"]) == (drawn, "p-loaded", "inferred")
+    assert (pair["drawn"], pair["loaded"]["id"], pair["state"]) == (
+        drawn,
+        "p-loaded",
+        "inferred",
+    )
     # A suggestion acts on nothing by itself (rule 5).
     assert not [e for e in world.graph.edges() if e.type == SAME_AS]
     decided = _as("alice").post(
@@ -533,7 +593,11 @@ def test_same_writes_one_link_and_merges_nothing(world: SimpleNamespace) -> None
     )
     assert decided.status_code == 201, decided.text
     (same,) = [e for e in world.graph.edges() if e.type == SAME_AS]
-    assert (same.source, same.target, same.properties["score"]) == (drawn, "p-loaded", 1.0)
+    assert (same.source, same.target, same.properties["score"]) == (
+        drawn,
+        "p-loaded",
+        1.0,
+    )
     assert same.datasets == [await_layer(world)]
     # Two nodes still, the loaded one exactly as it was.
     assert world.graph.node("p-loaded") == before
@@ -586,7 +650,11 @@ def test_a_pictures_document_and_link_are_in_the_layer_with_its_marking(
     drawn = _item(board)["element_id"]
     uploaded = _as("alice").put(
         f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture",
-        params={"name": "tall.png", "marking": "OFFICIAL-SENSITIVE"},
+        params={
+            "name": "tall.png",
+            "marking": "OFFICIAL-SENSITIVE",
+            "source_note": "Gate camera",
+        },
         content=b"\x89PNG drawn",
     )
     assert uploaded.status_code == 201, uploaded.text
@@ -595,13 +663,21 @@ def test_a_pictures_document_and_link_are_in_the_layer_with_its_marking(
     document = world.graph.node(depicts.source)
     assert depicts.datasets == [layer] and document.datasets == [layer]
     assert depicts.handling.classification == "OFFICIAL-SENSITIVE"
-    pictures = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/pictures").json()
-    assert pictures == {drawn: document.id}
-    file = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture")
+    pictures = (
+        _as("alice").get(f"/v1/investigations/{K}/boards/{board}/pictures").json()
+    )
+    assert pictures == {"pictures": {drawn: document.id}}
+    file = _as("alice").get(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture"
+    )
     assert file.status_code == 200 and file.content == b"\x89PNG drawn"
     # Bob, at OFFICIAL, sees the drawn item and no picture.
-    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}/pictures").json() == {}
-    hidden = _as("bob").get(f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture")
+    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}/pictures").json() == {
+        "pictures": {}
+    }
+    hidden = _as("bob").get(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture"
+    )
     assert hidden.status_code == 404
 
 
@@ -634,18 +710,25 @@ def test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking(
     assert _as("bob").patch(f"/v1/investigations/{K}/board-items/{item}",
                             json={"label": "y"}).status_code == 404  # fmt: skip
     mine = _item(_board("bob"), "bob")
-    refused = _as("alice").post(f"/v1/investigations/{K}/board-items/{mine['item_id']}/withdraw")
+    refused = _as("alice").post(
+        f"/v1/investigations/{K}/board-items/{mine['item_id']}/withdraw"
+    )
     assert refused.status_code == 403 and refused.json()["error"] == "not_your_item"
     lowered = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
                                  json={"marking": "OFFICIAL"})  # fmt: skip
-    assert lowered.status_code == 409 and lowered.json()["error"] == "marking_never_lowered"
+    assert (
+        lowered.status_code == 409
+        and lowered.json()["error"] == "marking_never_lowered"
+    )
     edited = _as("alice").patch(
         f"/v1/investigations/{K}/board-items/{item}",
         json={"label": "Tall man", "grading": {**GRADE, "source": "A"}},
     )
     assert edited.status_code == 200, edited.text
     drawn = world.graph.node(made["element_id"]).provenance.drawn
-    assert drawn is not None and drawn.label == "Tall man" and drawn.grading.source == "A"
+    assert (
+        drawn is not None and drawn.label == "Tall man" and drawn.grading.source == "A"
+    )
 
 
 def test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store(
@@ -667,7 +750,9 @@ def test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store(
 def test_deleting_a_board_leaves_what_was_drawn(world: SimpleNamespace) -> None:
     board = _board()
     drawn = _item(board)["element_id"]
-    assert _as("alice").delete(f"/v1/investigations/{K}/boards/{board}").status_code == 204
+    assert (
+        _as("alice").delete(f"/v1/investigations/{K}/boards/{board}").status_code == 204
+    )
     assert not world.graph.node(drawn).audit.reverted
     assert len(_watches("alice")) == 1
 
@@ -685,7 +770,9 @@ def test_only_the_boards_creator_draws(world: SimpleNamespace) -> None:
         json={"type": "Person", "label": "x", "marking": "OFFICIAL", "grading": GRADE,
               "source_note": "n", "properties": {"family_name": "x"}},
     )  # fmt: skip
-    assert answer.status_code == 403 and answer.json()["error"] == "not_the_boards_creator"
+    assert (
+        answer.status_code == 403 and answer.json()["error"] == "not_the_boards_creator"
+    )
 
 
 def test_a_private_board_is_invisible_to_another_member(world: SimpleNamespace) -> None:
@@ -696,7 +783,9 @@ def test_a_private_board_is_invisible_to_another_member(world: SimpleNamespace) 
     assert _as("alice").get(f"/v1/investigations/{K}/views").json() == []
 
 
-def test_drawing_needs_the_right_and_reading_needs_investigate(world: SimpleNamespace) -> None:
+def test_drawing_needs_the_right_and_reading_needs_investigate(
+    world: SimpleNamespace,
+) -> None:
     board = _board()
     _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share")
     answer = _as("rita").post(f"/v1/investigations/{K}/boards", json={"name": "x"})
@@ -730,3 +819,264 @@ def test_moving_keeps_the_boards_layout_for_items_on_it(world: SimpleNamespace) 
     assert moved.status_code == 204, moved.text
     layout = _as("alice").get(f"/v1/investigations/{K}/boards/{board}").json()["layout"]
     assert layout[drawn] == {"x": 0.7, "y": 0.1} and "not-on-it" not in layout
+
+
+# --- the lane review's round 1 ------------------------------------------------------------------
+
+
+def _drawn_link(world: SimpleNamespace) -> tuple[str, str, str]:
+    board = _board(start="selection", node_ids=["p-loaded"])
+    drawn = _item(board)["element_id"]
+    made = _link(board, drawn, "p-loaded").json()
+    return board, made["item_id"], made["element_id"]
+
+
+def test_a_drawn_links_marking_is_kept_and_no_second_link_is_left(
+    world: SimpleNamespace,
+) -> None:
+    """Review finding 3: a link written again at another marking is another audience, so the store
+    would make a second link and leave the first live. The edit is refused in words; a label or
+    grading edit lands on the same link."""
+    _, item, link = _drawn_link(world)
+    raised = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
+                                json={"marking": "OFFICIAL-SENSITIVE"})  # fmt: skip
+    assert raised.status_code == 409 and raised.json()["error"] == "link_marking_kept"
+    relabelled = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
+                                    json={"label": "seen at the gate"})  # fmt: skip
+    assert relabelled.status_code == 200, relabelled.text
+    live = [
+        e
+        for e in world.graph.edges()
+        if e.type == "ASSOCIATE_OF" and not e.audit.reverted
+    ]
+    assert [e.id for e in live] == [link]
+    assert live[0].provenance.drawn is not None
+    assert live[0].provenance.drawn.label == "seen at the gate"
+
+
+def test_the_fake_makes_a_second_link_for_another_audience_as_the_store_does(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 15: the stand-in refuses what ArcadeDB refuses. A write of a taken link id at a new
+    marking is a second link under a new id, the first left live: what the refusal above prevents."""
+    _, _, link = _drawn_link(world)
+    (held,) = [e for e in world.graph.edges() if e.id == link]
+    import asyncio
+
+    from schemas.domain import EdgeWrite
+    from services.api.dataset_scope import case_datasets  # noqa: F401 (a request is not needed)
+
+    async def rewrite() -> list[str]:
+        tx = await world.graph.begin_transaction()
+        ids = await world.graph.upsert_edges(
+            [EdgeWrite(id=held.id, type=held.type, source=held.source, target=held.target,
+                       provenance=held.provenance,
+                       handling=held.handling.model_copy(update={"classification": "OFFICIAL-SENSITIVE"}),
+                       created_by="alice", created_at=datetime.now(UTC), datasets=held.datasets)],
+            tx,
+        )  # fmt: skip
+        await world.graph.commit_transaction(tx)
+        return ids
+
+    (written,) = asyncio.run(rewrite())
+    assert written != link
+    assert {e.id for e in world.graph.edges() if e.type == "ASSOCIATE_OF"} == {
+        link,
+        written,
+    }
+
+
+def test_an_edit_with_no_marking_of_the_scheme_or_no_source_is_refused_in_words(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    item = _item(board)["item_id"]
+    for body, code in (
+        ({"marking": "TOP-SECRET"}, "not_a_marking"),
+        ({"source_note": ""}, "no_source"),
+    ):
+        answer = _as("alice").patch(
+            f"/v1/investigations/{K}/board-items/{item}", json=body
+        )
+        assert answer.status_code == 422 and answer.json()["error"] == code, answer.text
+
+
+def test_a_match_above_the_ceiling_is_refused(world: SimpleNamespace) -> None:
+    """Review finding 5: a decision's link is marked as both ends together, within the ceiling."""
+    board = _board(start="selection", node_ids=["p-secret"])
+    drawn = _item(board)["element_id"]
+    answer = _as("alice").post(f"/v1/investigations/{K}/boards/{board}/matches",
+                               json={"drawn": drawn, "loaded": "p-secret", "same": True})  # fmt: skip
+    assert answer.status_code == 409 and answer.json()["error"] == "above_the_ceiling"
+    assert not [e for e in world.graph.edges() if e.type == SAME_AS]
+
+
+def test_a_decision_reaches_only_this_boards_drawn_items(
+    world: SimpleNamespace,
+) -> None:
+    mine = _board(start="selection", node_ids=["p-loaded"])
+    other = _board()
+    drawn_elsewhere = _item(
+        other, label="Mercer", properties={"family_name": "Mercer"}
+    )["element_id"]
+    answer = _as("alice").post(f"/v1/investigations/{K}/boards/{mine}/matches",
+                               json={"drawn": drawn_elsewhere, "loaded": "p-loaded", "same": True})  # fmt: skip
+    assert answer.status_code == 404
+
+
+def test_a_picture_for_a_type_with_none_is_refused_before_the_file_is_kept(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    event = _item(board, type="Event", properties={})["element_id"]
+    before = dict(world.media.files)
+    answer = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{event}/picture",
+        params={"name": "x.png", "marking": "OFFICIAL", "source_note": "n"}, content=b"png",
+    )  # fmt: skip
+    assert (
+        answer.status_code == 422
+        and answer.json()["error"] == "no_picture_for_this_type"
+    )
+    assert world.media.files == before
+    assert not [r for r in world.audit.records if r["action"] == "set_drawn_picture"]
+
+
+def test_a_second_picture_supersedes_the_first_and_both_are_audited_first(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    drawn = _item(board)["element_id"]
+    for data in (b"first", b"second"):
+        answer = _as("alice").put(
+            f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture",
+            params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+            content=data,
+        )  # fmt: skip
+        assert answer.status_code == 201, answer.text
+    live = [
+        e
+        for e in world.graph.edges()
+        if e.type == "DEPICTS" and e.audit.superseded_by is None
+    ]
+    assert len(live) == 1
+    file = _as("alice").get(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture"
+    )
+    assert file.content == b"second"
+    document = world.graph.node(live[0].source)
+    assert document.provenance.sources[0].locator == "Gate camera"
+    assert (
+        len([r for r in world.audit.records if r["action"] == "set_drawn_picture"]) == 2
+    )
+
+
+def test_a_drawn_nodes_picture_is_refused_on_the_canvas_route(
+    world: SimpleNamespace,
+) -> None:
+    """Review finding 2: ADR-105's own path would stamp the Document and its link into the source;
+    for a drawn node it refuses, before any file is kept."""
+    import asyncio
+
+    from schemas.domain import Handling
+    from services.api.entity_pictures import EntityPictureService
+
+    drawn_id = _item(_board())["element_id"]
+    drawn = world.graph.node(drawn_id)
+    service = EntityPictureService(
+        app.state.working_set, app.state.graph, world.media, ONTOLOGY, scheme=SCHEME
+    )
+
+    async def entity() -> Node:
+        return drawn
+
+    before = dict(world.media.files)
+    with pytest.raises(DrawnOnItsBoard):
+        asyncio.run(
+            service._attach(
+                K,
+                entity,
+                PEOPLE["alice"],
+                name="tall.png",
+                data=b"png",
+                handling=Handling(
+                    classification="OFFICIAL",
+                    handling_code="P",
+                    originator=UNIT,
+                    owning_unit=UNIT,
+                ),
+                legal_basis=None,
+            )  # fmt: skip
+        )
+    assert world.media.files == before
+    assert not [e for e in world.graph.edges() if e.type == "DEPICTS"]
+
+
+def test_a_drawn_link_is_not_changed_from_the_canvas(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding 8 (C15): ADR-113's link change refuses a drawn link, so only its author
+    changes it, on its board."""
+    import asyncio
+
+    from services.api.link_changes import LinkChangeRequest, LinkChangeService
+
+    _, _, link = _drawn_link(world)
+    (edge,) = [e for e in world.graph.edges() if e.id == link]
+
+    async def in_full(self: object, *args: object, **kwargs: object) -> object:
+        return edge
+
+    monkeypatch.setattr(LinkChangeService, "_in_full", in_full)
+    for store in (
+        "judgements_store",
+        "alerts_store",
+    ):  # the retract route's own, unused here
+        monkeypatch.setattr(app.state, store, object(), raising=False)
+    service = LinkChangeService.__new__(LinkChangeService)
+    with pytest.raises(DrawnOnItsBoard):
+        asyncio.run(
+            service.change(K, link, PEOPLE["alice"], LinkChangeRequest(reason="wrong"))
+        )
+    retracted = _as("alice").post(f"/v1/investigations/{K}/nodes/{edge.source}/retract")
+    assert (
+        retracted.status_code == 409
+        and retracted.json()["error"] == "drawn_on_its_board"
+    )
+
+
+def test_withdrawing_with_a_promoted_link_resting_on_it_is_refused(
+    world: SimpleNamespace,
+) -> None:
+    board, item_link, link = _drawn_link(world)
+    (node_item,) = [i.item_id for i in world.items.items.values() if i.kind == "node"]
+    # As L3.4's promotion would leave it: the link's datasets gain the source.
+    world.graph._graph_edges = [
+        e.model_copy(update={"datasets": [*e.datasets, "src"]}) if e.id == link else e
+        for e in world.graph._graph_edges
+    ]
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/board-items/{node_item}/withdraw"
+    )
+    assert answer.status_code == 409 and answer.json()["error"] == "promoted"
+    assert not [e for e in world.graph.edges() if e.audit.reverted]
+
+
+def test_a_drawing_is_withdrawn_in_a_case_reading_a_composite(
+    world: SimpleNamespace,
+) -> None:
+    """Review finding 4: a withdrawal is a write into the layer, which a case reading a composite
+    may make (ADR-099 Amendment 15 item 2): through the graph's own `withdraw_drawn`, not a load's
+    withdrawal, which a composite case refuses."""
+    world.datasets.add(
+        Dataset(id="comp", name="Both", owning_unit=UNIT, created_by="eng", kind=COMPOSITE,
+                members=["src"], created_at=datetime(2026, 11, 1, tzinfo=UTC))
+    )  # fmt: skip
+    world.datasets.cases[K] = ["comp"]
+    board = _board()
+    made = _item(board)
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw"
+    )
+    assert answer.status_code == 200, answer.text
+    assert world.graph.node(made["element_id"]).audit.reverted

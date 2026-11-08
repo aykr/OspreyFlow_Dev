@@ -450,6 +450,8 @@ export type { Withdrawn } from "./Withdrawn";
 export type { MatchSuggestion } from "./MatchSuggestion";
 export type { MatchSuggestions } from "./MatchSuggestions";
 export type { MatchDecision } from "./MatchDecision";
+export type { MatchDecided } from "./MatchDecided";
+export type { BoardPictures } from "./BoardPictures";
 export type { PictureChoice } from "./PictureChoice";
 export type { DrawnWatch } from "./DrawnWatch";
 export type { AdminEngine } from "./AdminEngine";

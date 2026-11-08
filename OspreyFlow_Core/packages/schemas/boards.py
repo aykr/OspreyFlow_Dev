@@ -226,6 +226,18 @@ class MatchDecision(BaseModel):
     same: bool
 
 
+class MatchDecided(BaseModel):
+    """The link a match decision wrote."""
+
+    edge_id: str
+
+
+class BoardPictures(BaseModel):
+    """Each drawn node's picture on a board that the reader may see: node id to Document id."""
+
+    pictures: dict[NodeId, str] = Field(default_factory=dict)
+
+
 class PictureChoice(BaseModel):
     """C17 (b): a picture the case already holds, linked to the drawn node by a `DEPICTS` in the
     layer; the image stays in its dataset."""
@@ -266,6 +278,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     MatchSuggestion,
     MatchSuggestions,
     MatchDecision,
+    MatchDecided,
+    BoardPictures,
     PictureChoice,
     DrawnWatch,
 )
