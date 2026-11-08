@@ -29237,3 +29237,121 @@ for the first install, now landing in the gateway by the same path once it start
   (`apps/workspace/keyboard/admin-models.spec.ts`); **axe** in the dark, light and GOV.UK themes.
 - **The egress warning** (`spec/05` §2.1) reads `providers` (`tests/harness/test_egress_consequence.py`,
   red with the legacy read).
+
+
+### ADR-109, Amendment 12 (8 November 2026) — a corrected node an alert names is renamed in its referents through the repoint journal; L2.8c's carries
+
+Status: accepted 8 November 2026, the orchestrator's settlement of Amendment 11 point 8's referent
+gap as its own step (L2.8d), and its and the owner's answers of the same day to the rules lane's
+four questions (Q1: each caller records the node, no port change; Q2: the L2.8c review's items 11
+and 13 built here; Q3: this number, reserved in `ADR_RESERVATIONS.md`; Q4: the start-up DDL under an
+advisory lock, the connection ceilings recorded). Built by the rules lane in L2.8d. Amendments 10
+and 11 are unchanged except where this says so; this closes Amendment 11 point 8's second gap.
+
+**Why.** The journal renamed only an alert's own `Alert` node (`alert_nodes`). A node among an
+alert's `referent_node_ids` kept naming the superseded revision, which no read returns, so a
+correction of any node an alert names (a confirm, a retract, `supersede.py`, an enrich stage's
+point) withheld that alert from every reader for good, as a cited link's correction did before
+Amendment 11. It withheld too much rather than too little: nothing leaked meanwhile.
+
+1. **Each writer records the node it corrects (Q1).** `GraphPort.supersede_node` is unchanged: it
+   already returns the new revision's id inside the transaction, before the commit. Each journalled
+   caller records `(old, new)` from that id before its commit, through `superseded` on its journal
+   (`alerts.SupersedeJournal`: `LinkRepoint` and `OutsideCommitJournal` both, each still callable as
+   `on_link_cloned`): the confirm and retract routes by `supersede_journalled(..., superseding=)`,
+   `supersede.py`'s synchronous path and its job, and the enrich stage's online point
+   (`_persist_online_point`). The close's confirm already records the confirmed node as its alert's
+   own (`record_node`); every node an `alert_nodes` pair renames is now renamed among referents too,
+   so an alert naming another alert's confirmed node follows it. `remark_alerts`' supersede of an
+   `Alert` node records nothing new: no alert names an `Alert` node among its referents (a finding
+   names what it concerns). The record keeps referent pairs in their own column (`referents`),
+   apart from `alert_nodes`, because a corrected entity is no alert's own node: its working-set
+   copies are not purged. A node with no links is followed too, which is why the writer records the
+   node itself rather than the settle deriving it from the cloned links.
+2. **The settle renames referents.** A referent pair is applied as an alert node's is: once the
+   graph's stored state shows the old node superseded, followed by its own `superseded_by` to the
+   newest revision; a pair whose node is not yet superseded keeps the record waiting, and the stale
+   check counts referent pairs as it counts the rest. The rename (`rename_alert_nodes(...,
+   referents=)`) takes the alerts naming any old node, as their own node or a referent, in id order
+   under one lock (D9), then renames each id in place in SQL as the row stands. The alerts whose
+   referents were renamed are re-marked to their evidence (`_remark_citing`'s `referents`), since a
+   correction can raise a referent above the alert's own node (a correction to SECRET), as Amendment
+   11 point 4 re-marks over a cited link's ends. Nothing a reader is answered changes beyond which
+   revision an alert names and its node's marking: the queue still checks every referent as the
+   reader, so a reader who may not read the new revision is still refused (rule 3).
+3. **A record opens at its first pair** (L2.8c's carry (f)). `repointing` and `supersede_journalled`
+   open no record until the write records its first pair, still before its commit, and start the
+   record's keep-alive then. A write that replaces nothing (an enrich stage whose geocoder finds no
+   point) leaves no record for a read to pay for. A writer that leaves by an exception having
+   recorded nothing has no record to settle or close.
+4. **The start-up DDL takes turns** (carry (e), Q4). Every Conduit replica and every worker replica
+   (`worker_main` connects the alert store since Amendment 11) runs `AlertStore`'s start-up DDL as
+   it connects. Postgres's `CREATE ... IF NOT EXISTS` is not safe against itself: eight stores
+   connecting at once to an empty schema failed on the catalogue's unique index
+   (`pg_type_typname_nsp_index`). The DDL now runs in one transaction under a transaction-scoped
+   advisory lock (two-key space, `REPOINT_LOCK_SPACE` and 0); a record whose `hashtext` is 0 shares
+   the key and only waits for, or is skipped past, a store starting up. **Connection ceilings,
+   recorded:** each store opens a pool of at most four connections and a lock pool of at most two,
+   six per replica (Conduit or worker). Against Postgres's default `max_connections` of 100, which
+   every other store's pool on the same server also draws on, ten replicas of the Conduit and the
+   worker together hold up to sixty for this store alone. Nothing is changed for it here; a
+   deployment scaling that far raises `max_connections` or puts a pooler in front, an operator's
+   matter for the deployment guide.
+5. **One removal for a revert and an alert's purge** (carry (c)). `WorkingSetReverter.remove` and
+   `alerts.purge_copies` both remove through `working_set_revert.remove_and_publish`: every store
+   cleared, then each case's removal published on its own channel. The purge does not scrub the
+   named-step history as the revert does, because history serves no copy: its list is metadata only
+   (`HistoryStepSummary`, ADR-124 decision 8) and a restore re-reads the Vault, which returns no
+   superseded node (`WorkingSetService.restore`); the superseded revision itself stays in the Vault,
+   so a body stored in a step is no copy beyond it.
+6. **An `Alert` node carries only its `ALERTED_ON` links** (carry (b), Amendment 11 point 3's
+   exemption). The ontology does not guarantee it: `MENTIONED_IN` runs from any type, `Alert`
+   included. The rule's writer (`write_alert_node`) does, and a live case proves it of an alert
+   raised through the real rule gate. A writer that ever linked an `Alert` node by another type would
+   make `remark_alerts`' clones of that link unjournalled; the case is the guard.
+7. **One registration for the journalled jobs** (the L2.8c review's item 13). The Conduit's lifespan
+   (`app.py`) registered the supersede and resolution jobs by a second copy of the worker's
+   bindings, which no test ran. It now registers them through `worker_main.register_all`, given its
+   alert store and its judgement store (`register_all` gains `judgement_store`, bound to the
+   supersede job), so the bindings the worker tests prove are the Conduit's too.
+8. **The stand-in journal's refusal is exercised** (the review's item 11). `repoint_journal_fakes`'
+   refusal of a pair recorded after its write left (`RepointRecordGone`, as `_add_to_record` refuses
+   one in a record already applied) had no test; it has one, and the stages test of the close's
+   confirm uses the shared stand-in rather than its own (carry (d)).
+9. **Another type holding a cloned link's id is never marked** (carry (a)): a graph-port
+   conformance case of Amendment 11 point 1's sentence.
+
+**Contention, recorded (rule 14).** While the rules lane held stack a (lease from 15:54:19Z), another
+lane reached its Postgres without a lease for about a minute between 15:54 and 16:00Z (a database
+`litellm_probe` made and dropped, the container attached to and detached from a network; nothing of
+this lane's touched). One red run in that window failed on a refused connection rather than its
+assertion and was re-run; every live red and green taken in the window was re-taken after it
+(`process/lanes/rules/l2.8d/`).
+
+**Tests.** `tests/ingest/test_repoint_journal_callers_live.py`, the L2.8d section: for each caller
+(the confirm and retract routes, the close's confirm, `supersede.py`'s synchronous path and job, the
+enrich stage's online point), `test_an_alert_naming_..._stays_listed`: an alert naming the node the
+caller corrects stays listed for its reader, naming the newest revision, and is refused to the case's
+OFFICIAL reader of the SECRET revision and to the cleared reader of another case; each red with that
+caller's record of the node removed at its call site, all red with the settle's referent rename
+removed, the OFFICIAL reader's refusal red with the revision written at OFFICIAL, the other case's
+with the queue's case scope made true.
+`test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node` (red with the
+referents left out of the re-mark); `test_an_enrich_stage_that_writes_no_point_opens_no_record` (red
+with the record opened before the write);
+`test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites` (red with the writer also
+linking the node to a document by `MENTIONED_IN`);
+`test_stores_starting_together_create_the_alert_tables_without_failing` (red without the lock:
+`UniqueViolationError`). The graph-port case
+`test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id` (red with the marking
+made by the id alone). Offline: `tests/services/api/test_repoint_journal_stand_in.py` (the stand-in's
+refusal, red without it; a route's correction recorded, red without `superseding`; a refused
+correction recording nothing, red without `never_committed`), `test_remove_and_publish.py` (each
+case's removal on its own channel, red on one channel; both callers through the helper, red with the
+purge's own copy), `test_worker_registration.py`'s
+`test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store` (red with
+`app.py`'s `alerts=` removed, and with the supersede job registered by hand again) and
+`test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with` (red without the
+binding), and `test_written_back_reads_in_full_stages.py`'s close recording its link in the shared
+stand-in (red with the close's record removed). Each red under the rules lease on stack a, or
+offline (`process/lanes/rules/l2.8d/`).
