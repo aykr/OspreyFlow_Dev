@@ -1,0 +1,23 @@
+lease glass (clean re-run); 2026-11-07T21:44:54Z; red 4: raise_committed without b21f316's UnreadableAlertLink fallback (ed8b0aa's raise)
+diff --git a/OspreyFlow_Core/services/api/rule_evaluation.py b/OspreyFlow_Core/services/api/rule_evaluation.py
+index 856fc78..e03a574 100644
+--- a/OspreyFlow_Core/services/api/rule_evaluation.py
++++ b/OspreyFlow_Core/services/api/rule_evaluation.py
+@@ -1005,12 +1005,6 @@ class RuleGate:
+             node_id = await write_alert_node(
+                 self.graph, self.scheme, finding, tx, load_id=load_id, writes=writes
+             )
+-        except UnreadableAlertLink:
+-            # As the load path does for an unseen referent: no node rather than a guessed one, the
+-            # row still raised (the queue's full check withholds it from anyone who may not see its
+-            # evidence), so one reverted link never stops a sweep. A node still stops the raise.
+-            await self.graph.rollback_transaction(tx)
+-            return await self._raise_row(finding, None, withheld="unreadable_link")
+         except Exception:
+             await self.graph.rollback_transaction(tx)
+             raise
+>               report = await _swept(stores, graph, expiries, lapses + timedelta(days=1))
+>               raise UnreadableAlertLink(f"alert link {edge_id} could not be read for its marking")
+E               services.api.rule_evaluation.UnreadableAlertLink: alert link 01M6VZHVV8SKPC34WPF8BCQV85 could not be read for its marking
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on
+1 failed, 12 deselected in 13.31s

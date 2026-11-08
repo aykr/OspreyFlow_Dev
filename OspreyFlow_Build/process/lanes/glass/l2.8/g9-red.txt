@@ -1,0 +1,17 @@
+     × counts a proposed close as open 3ms
+     × counts a proposed close as open on Home 1ms
+     × says a closed alert's outcome and reason, and a confirmed match 4ms
+     × 24 controls stand before the canvas, in this order 171ms
+     × the banner's Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 1038ms
+AssertionError: expected [ 'Osprey, go to Home', …(23) ] to deeply equal [ 'Osprey, go to Home', …(23) ]
+- Expected
++ Received
+AssertionError: expected 1 to be 2 // Object.is equality
+- Expected
++ Received
+AssertionError: expected '0 alerts in your team\'s queue, 0 cla…' to be '1 alert in your team\'s queue, 0 clai…' // Object.is equality
+Expected: "1 alert in your team's queue, 0 claimed by you"
+Received: "0 alerts in your team's queue, 0 claimed by you"
+AssertionError: expected 'Closed as False positive: No link fou…' to be 'Proposed for closing, waiting for a s…' // Object.is equality
+Expected: "Proposed for closing, waiting for a second person, when this was added."
+Received: "Closed as False positive: No link found."

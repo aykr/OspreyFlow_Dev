@@ -1,0 +1,5 @@
+lease glass (clean re-run); 2026-11-07T21:45:34Z; green: the live tests, the sweep and the inherited readers at HEAD
+5 passed in 41.32s
+1 passed, 12 deselected in 8.78s
+3 passed, 14 deselected, 1 warning in 28.04s
+end 2026-11-07T21:46:54Z

@@ -148,4 +148,19 @@ describe("the team queue's count", () => {
     const at = (status: string) => ({ alert: { status } });
     expect(openInQueue([at("open"), at("claimed"), at("closed"), at("open")])).toBe(3);
   });
+
+  // ADR-146 decision 6 (G9): a close proposed for a second person is still open, for the banner's
+  // Monitoring count (which reads this) as for Home.
+  it("counts a proposed close as open", () => {
+    const at = (status: string) => ({ alert: { status } });
+    expect(openInQueue([at("closing"), at("open"), at("closed")])).toBe(2);
+  });
+
+  it("counts a proposed close as open on Home", () => {
+    const withClosing: HomeInputs = {
+      ...BASE,
+      perCase: { ...BASE.perCase, c1: { ...BASE.perCase.c1!, alerts: [alert("a5", "closing", "u-other", "2026-10-13T08:00:00Z")] } },
+    };
+    expect(summariseHome(withClosing).glass[0]!.text).toBe("1 alert in your team's queue, 0 claimed by you");
+  });
 });

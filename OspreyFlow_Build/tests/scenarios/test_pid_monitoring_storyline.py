@@ -202,7 +202,7 @@ async def hotlist_coordinator(scene: Scene, owner: Principal | None = None) -> A
 
 async def queue(scene: Scene, reader: Principal) -> list[Any]:
     rows = await alert_queue.monitoring_queue(
-        scene.stores.alerts, scene.world.graph, scene.case, reader
+        scene.stores.alerts, scene.world.graph, scene.analytics, scene.case, reader
     )
     return sorted(rows, key=lambda q: q.alert.created_at)
 
@@ -218,15 +218,15 @@ async def story(scene: Scene, *, close: bool = True) -> Scene:
         h2, s1 = (await queue(scene, scene.analyst))[1:3]
         store, graph = scene.stores.alerts, scene.world.graph
         await alert_queue.dispose(
-            store, graph, scene.case, h2.alert.id, scene.analyst, disposition="referred",
+            store, graph, scene.analytics, scene.case, h2.alert.id, scene.analyst, disposition="referred",
             reason="To the visits team: the visit goes ahead under closed conditions.",
         )  # fmt: skip
         proposed = await alert_queue.dispose(
-            store, graph, scene.case, s1.alert.id, scene.analyst, disposition="referred",
+            store, graph, scene.analytics, scene.case, s1.alert.id, scene.analyst, disposition="referred",
             reason="To the regional intelligence unit for a subscriber check on 07700 900718.",
         )  # fmt: skip
         assert proposed.status == "closing", "a high-severity case alert waits for a second person"
-        await alert_queue.approve_close(store, graph, scene.case, s1.alert.id, scene.colleague)
+        await alert_queue.approve_close(store, graph, scene.analytics, scene.case, s1.alert.id, scene.colleague)
     return scene
 
 
@@ -440,7 +440,8 @@ async def test_the_alert_item_is_withheld_from_a_reader_who_may_not_see_the_numb
 
 async def _figures(scene: Scene, reader: Principal) -> Any:
     return await reports.alert_report(
-        scene.stores.alerts, scene.world.graph, scene.case, reader, today=datetime.now(UTC).date()
+        scene.stores.alerts, scene.world.graph, scene.analytics, scene.case, reader,
+        today=datetime.now(UTC).date(),
     )
 
 
@@ -470,10 +471,10 @@ async def test_the_proposer_cannot_approve_their_own_close(scene: Scene) -> None
     await story(scene, close=False)
     s1 = (await queue(scene, scene.analyst))[2]
     store, graph = scene.stores.alerts, scene.world.graph
-    await alert_queue.dispose(store, graph, scene.case, s1.alert.id, scene.analyst,
+    await alert_queue.dispose(store, graph, scene.analytics, scene.case, s1.alert.id, scene.analyst,
                               disposition="referred", reason="Subscriber check.")  # fmt: skip
     with pytest.raises(alert_queue.CloseRefused):
-        await alert_queue.approve_close(store, graph, scene.case, s1.alert.id, scene.analyst)
+        await alert_queue.approve_close(store, graph, scene.analytics, scene.case, s1.alert.id, scene.analyst)
     (still,) = [q for q in await queue(scene, scene.analyst) if q.alert.id == s1.alert.id]
     assert still.alert.status == "closing"
 

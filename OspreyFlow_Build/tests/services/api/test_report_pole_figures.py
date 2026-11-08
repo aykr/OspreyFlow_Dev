@@ -173,6 +173,7 @@ async def _report(
     return await case_report(
         alerts=None,  # type: ignore[arg-type]
         graph=None,  # type: ignore[arg-type]
+        analytics=None,  # type: ignore[arg-type]
         held=None,  # type: ignore[arg-type]
         compute=None,  # type: ignore[arg-type]
         investigation_id="case-1",
@@ -547,6 +548,7 @@ def client(spy: _Spy):  # type: ignore[no-untyped-def]
     from services.api.app import (
         app,
         get_alerts_store,
+        get_analytics,
         get_audit,
         get_compute,
         get_explore,
@@ -563,6 +565,7 @@ def client(spy: _Spy):  # type: ignore[no-untyped-def]
         app.dependency_overrides[get_investigations] = lambda: _Cases(domains)
         app.dependency_overrides[get_principal] = lambda: VIEWER
         app.dependency_overrides[get_alerts_store] = lambda: object()
+        app.dependency_overrides[get_analytics] = lambda: object()
         app.dependency_overrides[get_audit] = lambda: _Sink()
         app.dependency_overrides[get_export_ledger] = lambda: _Sink()
         app.dependency_overrides[get_graph] = lambda: object()

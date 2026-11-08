@@ -1,0 +1,4 @@
+   1 18 failed, 13 deselected, 1 warning in 1.70s
+   2 E       AssertionError: assert (200, {'id': ...ert_claimed']) == (404, {'error...ert_claimed'])
+   2 E       AssertionError: assert ['answered', 'not found'] == ['not found', 'not found']
+  14 E       Failed: DID NOT RAISE AlertNotFoundError

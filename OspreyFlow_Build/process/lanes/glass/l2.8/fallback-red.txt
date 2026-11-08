@@ -1,0 +1,3 @@
+E               RuntimeError: alert link e-reverted could not be read for its marking
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py::test_after_a_commit_an_unreadable_cited_link_raises_the_row_with_no_node
+1 failed, 3 passed in 1.52s

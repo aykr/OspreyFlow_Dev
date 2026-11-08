@@ -1,0 +1,5 @@
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_closing_is_open.py::test_a_proposed_close_is_open_in_trends[None]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_closing_is_open.py::test_a_proposed_close_is_open_in_trends[false_positive]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_closing_is_open.py::test_a_proposed_close_is_open_in_trends[true_positive]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_closing_is_open.py::test_a_proposed_close_is_open_in_trends[referred]
+4 failed, 1 passed in 0.28s

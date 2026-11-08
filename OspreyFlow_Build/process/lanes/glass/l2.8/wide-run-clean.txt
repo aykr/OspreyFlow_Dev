@@ -1,0 +1,7 @@
+lease glass (clean re-run, 'L2.8 wide re-run, clean'); start 2026-11-07T21:47:03Z
+lease glass (clean re-run, 'L2.8 wide re-run, clean'); start 2026-11-07T21:47:03Z
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+3 failed, 1617 passed, 27 skipped, 2 warnings in 721.30s (0:12:01)
+end 2026-11-07T21:59:05Z

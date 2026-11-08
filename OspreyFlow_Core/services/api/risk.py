@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, timedelta
 
+from ports.analytics import AnalyticsPort
 from ports.compute import ComputePort
 from ports.graph import GraphPort
 from schemas.compute import PropagationRequest, StructureEdge, StructureNode
@@ -44,6 +45,7 @@ async def neighbourhood_risk(
     graph: GraphPort,
     compute: ComputePort,
     alert_store: AlertStore,
+    analytics: AnalyticsPort,
     investigation_id: str,
     node_id: str,
     reader: Principal,
@@ -70,7 +72,7 @@ async def neighbourhood_risk(
     since = today - timedelta(days=WINDOW_DAYS)
     seeds: dict[str, float] = defaultdict(float)
     cited: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for queued in await alert_queue.queue(alert_store, graph, investigation_id, reader):
+    for queued in await alert_queue.queue(alert_store, graph, analytics, investigation_id, reader):
         alert = queued.alert
         if alert.created_at.date() < since:
             continue

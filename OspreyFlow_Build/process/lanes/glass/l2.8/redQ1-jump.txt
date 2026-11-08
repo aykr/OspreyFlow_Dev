@@ -1,0 +1,14 @@
+2026-11-07T22:12:01Z; red Q1: the jump to an alert over hidden evidence, at HEAD cef55c4 (hermetic, route level)
+>       assert answers[0] == answers[1], answers
+E       AssertionError: [(500, 'Internal Server Error', ['create']), (404, '{"error":"alert_not_found"}', ['create'])]
+E       assert (500, 'Intern...', ['create']) == (404, '{"erro...', ['create'])
+E         At index 0 diff: 500 != 404
+E         Use -v to get more diff
+>       assert answers[0] == answers[1], answers
+E       AssertionError: [(500, 'Internal Server Error', ['create']), (404, '{"error":"alert_not_found"}', ['create'])]
+E       assert (500, 'Intern...', ['create']) == (404, '{"erro...', ['create'])
+E         At index 0 diff: 500 != 404
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one[e-secret]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one[t-secret]
+2 failed, 33 deselected, 1 warning in 1.78s

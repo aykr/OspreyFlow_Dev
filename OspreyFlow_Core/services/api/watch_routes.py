@@ -25,10 +25,11 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from ontology.handling import sources_within_case
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.domain import Alert, AlertMode, Hotlist, HotlistAudience, Monitor, Node, Principal
 
-from .alerts import evidence_available
+from .alerts import AlertNotFoundError, AlertStore, evidence_available
 from .evidence_brief import display_name
 from .hotlists import HotlistNotFoundError
 from .investigations import Investigation
@@ -140,8 +141,9 @@ class AlertJumpResult(BaseModel):
     """`POST /v1/alerts/{alert_id}/jump`'s response — `08_ACCEPTANCE_SCENARIOS.md` B14: "The new
     working set contains the alert's entities and a link to the originating investigation."
     `seeded_count` is how many referents the jumper could read and so seeded. There is no count
-    of the rest (ADR-124 decision 1): a referent that became unreadable between the alert firing
-    and the jump is left out of the new case, and how many were left out is a figure that points at
+    of the rest (ADR-124 decision 1). An alert whose evidence the jumper cannot wholly read is
+    refused before any case is made (ADR-124 Amendment 17), so a referent is left out only if it
+    went between that check and the seed, and how many were left out is a figure that points at
     what the jumper may not read."""
 
     investigation: Investigation
@@ -208,9 +210,12 @@ async def alert_to_view(
     alert: Alert,
     principal: Principal,
     graph: GraphPort,
+    analytics: AnalyticsPort,
     hotlists_store: HotlistReader | None = None,
 ) -> AlertView:
-    available = await evidence_available(alert, principal, graph)
+    # ADR-146 decision 10 (gap map G3): an alert's words name what it concerns, so they are withheld
+    # with its evidence, as its referents are; a hotlist's own identifier is the reader's to see.
+    available = await evidence_available(alert, principal, graph, analytics)
     fired_on: list[FiredOn] | None = None
     if available and alert.mode is AlertMode.FULL and alert.referent_node_ids:
         nodes = [await graph.get_node(node_id, principal) for node_id in alert.referent_node_ids]
@@ -226,10 +231,29 @@ async def alert_to_view(
         evidence_available=available,
         investigation_id=alert.investigation_id,
         created_at=alert.created_at,
-        words=alert.words,
+        words=alert.words if available else None,
         hotlist=await _alert_hotlist(alert, principal, hotlists_store),
         fired_on=fired_on,
     )
+
+
+async def jumpable_alert(
+    alerts: AlertStore,
+    alert_id: str,
+    *,
+    principal: Principal,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+) -> Alert:
+    """The alert a jump branches from: the principal's own, and every node, link and transaction it
+    cites readable to them now, or refused exactly as a missing alert, before anything is created
+    (ADR-124 Amendment 17; rule 3, and ADR-146's tests: "`/alerts/<id>` for a reader who may not
+    see the alert is refused exactly as a missing alert"). Seeding the readable referents of such an
+    alert would give the jumper the entities the hidden link or transactions tie together."""
+    alert = await alerts.get_authorized(alert_id, principal)
+    if not await evidence_available(alert, principal, graph, analytics):
+        raise AlertNotFoundError(alert_id)
+    return alert
 
 
 async def fetch_jumpable_referents(
@@ -242,9 +266,10 @@ async def fetch_jumpable_referents(
     the part specific to an alert: re-fetching each referent fresh, as `principal` — the viewer at
     jump time, never trusted from whatever `evidence_available` found true when the alert was
     listed moments earlier, the same "re-verify from the authoritative source" discipline every
-    other read in this codebase already follows. A referent that no longer resolves is not an
-    error: the jump proceeds with whatever is readable, and says nothing of how many were not
-    (ADR-124 decision 1)."""
+    other read in this codebase already follows. The route first refuses an alert whose evidence is
+    not whole (`jumpable_alert`, ADR-124 Amendment 17); a referent gone between that check and this
+    read is not an error: the jump proceeds with whatever is readable, and says nothing of how many
+    were not (ADR-124 decision 1)."""
     readable: list[Node] = []
     for node_id in alert.referent_node_ids:
         node = await graph.get_node(node_id, principal)
@@ -266,4 +291,5 @@ __all__ = [
     "MonitorList",
     "alert_to_view",
     "fetch_jumpable_referents",
+    "jumpable_alert",
 ]

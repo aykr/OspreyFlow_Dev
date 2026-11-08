@@ -1,0 +1,18 @@
+lease glass; 2026-11-07T23:44:11Z; green at d8f2cdd: the live file, and the files the repoint and the close reach
+9 passed in 53.20s
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...irst_seen=datetime.datetime(2026, 11, 7, 23, 46, 42, 436952, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...irst_seen=datetime.datetime(2026, 11, 7, 23, 46, 42, 436952, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6W6GG4D1TQF4Z0FA0AE4D7P', type='SAME_AS', source='01M6W6GDCHY97B3AMP5VSDDBQ7', target='01M6W6GG44C1TRPNYC6...seded_by=Non
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+>           assert alert.referent_node_ids == [node_id]
+E           AssertionError: assert ['01M6W20A2WZXMAPD66FDWGNAM7'] == ['01M6W6TX8ESVGPD143SSE0TMSW']
+E             At index 0 diff: '01M6W20A2WZXMAPD66FDWGNAM7' != '01M6W6TX8ESVGPD143SSE0TMSW'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+2 failed, 82 passed, 1 warning in 456.61s (0:07:36)
+end 2026-11-07T23:52:42Z
+lease glass; 2026-11-07T23:54:52Z; the watch-route test alone
+1 passed, 1 warning in 8.84s
+end 2026-11-07T23:55:01Z

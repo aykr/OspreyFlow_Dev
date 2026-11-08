@@ -1,32 +1,10 @@
-# glass lane · report · L2.4 part 1, Admin regrouped into sections (7 November 2026)
+# glass lane · report · L2.8, alerts withheld whole (7 November 2026; round 1 done)
 
-1. **Sections: met.** Admin is a side list from `admin/sections.json`: People, Data, Running, Policies, Audit, Demo packs. Each section shows only to a holder of its right. Roles, Grading scheme, Approval rights, Uploads and Audit are "(coming)" placeholders that call nothing. Under GOV.UK the list is a GOV.UK side navigation. Each screen is its own file in `admin/sections/` (Schedules stays put: other lanes import it).
-2. **Routes refuse: met (rule 3).** `test_admin_sections.py` (25 tests):
-   - derives each section's routes from its screen and that screen's imports;
-   - holds each route to the section's right, by declared checks and over HTTP;
-   - holds the component `SCREENS` draws to the file the JSON names;
-   - finds every `/v1/admin` route some section's.
-
-   It went red with the real egress route's check removed, then naming another right, and with `SCREENS` drawing the wrong file.
-3. **Keyboard: met.** `keyboard/admin.spec.ts` (19) adds moving between sections and opening a coming one, each red with the side list's handler removed. **Ids for the registry** (please land them): `move-between-admin-sections-by-keyboard` and `open-a-coming-admin-section-by-keyboard` in `ADMIN_ACTIONS`.
-4. **Axe: met.** Dark, light and GOV.UK: the harness now applies `?brand=`, and every section is listed with a placeholder open. Full scan: 384 pass.
-5. **Other checks:**
-   - Vitest: 2640 pass, 1 fail (the Matrix budget, not ours).
-   - Keyboard, full suite: 562 pass, 1 skipped (the L2.3 screenshot case, which needs `OSPREY_L23_SHOTS`).
-   - Python: place, section, route-rights and stand-alone tests all pass.
-   - lanes-check and the citation checks are green.
-6. **Docs: met.** ADR-145 Amendment 3, `spec/02`'s Admin area, the DEMO_GUIDE and a friction row.
-7. **Questions to the owner** (settled by the orchestrator): Q1 the placeholders' rights, (a); Q2 Proposed types under Data, (a); Q3 Approval rights as a placeholder, (a).
-8. **Lane-reviewer findings and what was done:**
-   - (1) `SCREENS` was held to nothing: fixed, with a new test shown red.
-   - (2) The place test's exemptions were skipped for every section: now each skip is named per section, with its reason.
-   - (3) DEMO_GUIDE is outside the map: **please ratify.**
-   - (4) This report: written.
-   - (5) Administer_system alone now lands on Datasets, not System: recorded in Amendment 3; the place test's `ENTRY` was updated.
-   - (6) The scanner's blind spots: stated in its docstring.
-   - (7–9) A wrong count, overstated red claims and a stale citation: corrected.
-   - (11) Sub-headings: now h4.
-   - (12) Wording: "link-styled buttons".
-   - (10) Duplicated `utc` and handling-scheme reads: left; the move kept them as they were.
-9. **For the owner:** a holder of `operate_schedules` alone sees Operations, but the schedule preview (`schedule_pipelines`) refuses them. This predates the lane, is recorded in Amendment 3, and nothing was changed.
-10. **Still running:** nothing. No dev stack and no lease.
+1. **G2: met.** `alerts.read_evidence` (`alerts.py:772`), `ReadableEvidence.whole` (`:751`), `evidence_available` (`:815`): every cited node, link and transaction, one batch per kind as the reader, transactions in chunks cut from the cited ids (no leak by count, order or work). Used by `alert_queue.monitoring_queue`/`queue` (`:105`, `:140`), `_visible_row` (`:160`) for claim to assign and the canvas (`:299`–`:491`), and `explain_with_evidence` (`:209`) reads what it reads. `analytics` passed: app.py's read routes (6276, 6299, 9177, 9238, 9274, 9310, 9373), triage routes (9521–9691) and jump (6317); `reports.py:174, :294`; `risk.py:44`.
+2. **G3: met.** `alert_to_view` (`watch_routes.py:209`) withholds words with evidence. Words leave by: queue summary, explanation, packs, inbox (checked); trend facts (none); the `Alert` node (fixed); the rule audit (L2.8b). **G9: met** (`closing` is open; the pack sentence).
+3. **(ii) and the raise.** `_referent_handlings` (`rule_evaluation.py:464`) counts cited links; in a load the load's own links stand in as written (`:857`); after a commit an unreadable cited link raises the row with no node (`:458`, `:995`), where it stopped the day's KYC sweep; `_raise_row` (`:971`) gives the true reason of three. raise_committed's other callers (post-commit, schedule, screening refresh) are carried to L2.10. Measured: the loader writes a link above its ends, never above its own transactions.
+4. **Rulings built.** Q1, a jump not wholly readable is refused as missing before anything is made (`jumpable_alert`, `watch_routes.py:240`; ADR-124 Amendment 17; B14 changed). Q2, a confirmed link repoints every alert citing it in the close (ADR-109 Amendment 9), all rows locked in one id-ordered statement and renamed in SQL as they stand (round 1, points 1 and 2). Q4, the queue route's docstring.
+5. **Tests.** Every fix red first; records in `l2.8/`, each with its lease. Clean wide set (lease `glass`, 21:47–21:59Z): 1,617 passed, 3 failed, main's. Q2 live (lease `glass` 22:50–22:59Z): red with no repoint and with the check skipped for repointed rows. Round 1 live (lease `glass` 23:43–23:55Z, on main d7349e3): the deadlock red, 11 of 40 closes refused with `DeadlockDetectedError` under the old locking; the lost update red once its two matches were on two pairs (they first merged into one link, so the first red run could not show it: recorded); green 9/9, and 82 of the 84 files' tests it reaches (main's KYC test, and a watch-route test that then passed alone). make ci: green, with the ports pinned (its first run, unpinned, was refused at chart-check by the port guard).
+6. **Main's failures:** `test_kyc_rules`' true-positive test (13 October, expects `closed`; `closing` since 4fd664a); phase 8's 403; the rule list (10 rules for a new case); the screening tests' leftover "Synthetic list", which fails a later KYC run. Two that failed in a wider run and passed alone: `test_phase7_stage6c_watch_routes.py`'s `test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not` and `test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth` (each matched an earlier run's alert).
+7. **To L2.8b:** the rule audit's words; Q3 the re-marking script, dry run first; Q5 held rows' words; Q6 G3 through a second case; pack items rechecked by nodes alone; a close refused after its graph commit (`AlertTriageConflict`) leaving the match superseded and nothing repointed; the other `supersede_edge` callers (`link_changes.py:467`, `entity_pictures.py:358`, `:519`), a test each; the plants re-made in the real paths' shapes (Q2's hand-written SAME_AS, Q2b's skip set, G2's units rows); the `get_edges` fake returning a link the real port drops; the queue and the inbox reading transactions in different scopes; the canvas's `edges_among`; record only: the timing difference on id paths and the unscoped repoint's cost. At the L3.1 rebase: the composite transaction scope.
+8. **Lane-reviewer** findings 2, 6, 8, 12, 14 fixed; 1, 3, 5, 9 ruled (above). **Ratified at merge:** app.py (with the jump's moved line), reports.py, risk.py, rule_evaluation.py, App.chrome.test.tsx, the ~20 existing test files, the B14 expectation. **Still running:** nothing; stack down, lease released.

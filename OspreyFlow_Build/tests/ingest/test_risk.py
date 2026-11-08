@@ -40,6 +40,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 ONTOLOGY = load_deployment_ontology()
 SCHEME = load_uk_le_scheme()
@@ -87,8 +88,9 @@ async def _alert(store: AlertStore, case: str, on: NodeWrite, *, age_days: int =
     ))  # fmt: skip
 
 
-async def _risk(graph, alerts: AlertStore, case: str, target: NodeWrite, reader: Principal):  # type: ignore[no-untyped-def]
-    return await neighbourhood_risk(graph, ComputeRustworkxAdapter(), alerts, case, target.id, reader, today=NOW.date())
+async def _risk(graph, alerts: AlertStore, case: str, target: NodeWrite, reader: Principal,  # type: ignore[no-untyped-def]
+                analytics=NO_TRANSACTIONS):  # type: ignore[no-untyped-def]
+    return await neighbourhood_risk(graph, ComputeRustworkxAdapter(), alerts, analytics, case, target.id, reader, today=NOW.date())
 
 
 async def test_a_hidden_alerted_neighbour_leaves_the_score_as_if_it_were_absent(alerts: AlertStore) -> None:
@@ -112,6 +114,42 @@ async def test_a_hidden_alerted_neighbour_leaves_the_score_as_if_it_were_absent(
         (c.hops, c.contribution) for c in without.contributions
     ]
     assert cleared.score == 1.0, "a reader who sees both is told of both"
+
+
+async def test_an_alert_over_a_transaction_the_reader_cannot_read_leaves_the_score_as_if_it_were_absent(
+    alerts: AlertStore,
+) -> None:
+    """ADR-146 decision 10 (G2), inherited by the score: a second alert on the readable neighbour
+    cites a transaction the reader cannot read (the real DuckDB adapter's refusal). The reader's
+    score is the score without it; a reader cleared for it is told of both. Red with the queue's
+    check on nodes alone: the OFFICIAL score was 1.0."""
+    import duckdb
+
+    from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
+    from adapters.analytics_duckdb.schema import create_events_table
+    from schemas.analytics import EventRecord
+
+    con = duckdb.connect(":memory:")
+    create_events_table(con)
+    analytics = AnalyticsDuckDBAdapter(con, SCHEME)
+    case = f"case-{new_id()}"
+    target, seen = _person("Target"), _person("Seen")
+    secret = EventRecord(event_id=new_id(), edge_id=new_edge_id(), edge_type="TRANSACTED", source_id=seen.id,
+                         target_id=target.id, occurred_at=NOW, investigation_scope=case,
+                         handling=_handling("SECRET"))  # fmt: skip
+    await analytics.load_events([secret])
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await _write(graph, [target, seen], [_knows(target, seen)])
+        await _alert(alerts, case, seen)
+        await alerts.save(Alert(
+            id=new_id(), rule_id="typology:r", owner_id="deployer", mode=AlertMode.FULL,
+            referent_node_ids=[seen.id], investigation_id=case, created_at=NOW - timedelta(days=1),
+            typology="structuring", words="over a SECRET transaction", event_ids=[secret.event_id],
+        ))  # fmt: skip
+        official = await _risk(graph, alerts, case, target, OFFICIAL, analytics)
+        cleared = await _risk(graph, alerts, case, target, SECRET, analytics)
+    assert official.score == 0.5, "as test_a_hidden_alerted_neighbour_... finds for one alert"
+    assert cleared.score == 1.0, "a reader who may read the transaction is told of both"
 
 
 async def test_risk_never_travels_through_a_node_the_reader_cannot_see(alerts: AlertStore) -> None:

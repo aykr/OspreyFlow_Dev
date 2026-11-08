@@ -1,0 +1,13 @@
+lease glass (clean re-run), rebased on b232abf, HEAD f3f8988; start 2026-11-07T21:59:24Z
+lease glass (clean re-run), rebased on b232abf, HEAD f3f8988; start 2026-11-07T21:59:24Z
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+6 failed, 1510 passed, 27 skipped, 2 warnings in 439.54s (0:07:19)
+end 2026-11-07T22:06:45Z
+lease glass (clean re-run); 2026-11-07T22:07:04Z; kyc and watch routes alone, after removing the screening test's leftover list
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 22 passed, 1 warning in 154.53s (0:02:34)

@@ -617,7 +617,12 @@ and is listed only in cases reading that dataset. A match in another dataset wri
 even a `notify` stub, and an alert's entities are read as its case reads them. `POST .../jump` branches a fresh
 investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
 identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
-second implementation of it. `Alert.investigation_id` (the triggering event's own investigation,
+second implementation of it. An alert any of whose cited nodes, links or transactions the jumper
+cannot read now is refused exactly as a missing alert, before any case is made (ADR-124
+Amendment 17, under rule 3 and ADR-146's test that `/alerts/<id>` for a reader who may not see the
+alert is refused exactly as a missing alert): seeding whatever referents are readable would give
+the jumper the entities the hidden link or transactions tie together.
+`Alert.investigation_id` (the triggering event's own investigation,
 where the underlying ingest or resolution that raised the alert happened) may be absent — a
 resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
 unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation). The
@@ -740,9 +745,19 @@ signature, per rule, in Valkey).
 
 **An alert a rule raised** is a §3.8 alert row carrying `typology`, `words`, `edge_ids`,
 `event_ids`, `window`, `trigger` and `alert_node_id`, plus the `Alert` node, marked no lower than
-anything it references; where referents with a restricted code belong to different units no single
-marking is safe, the node is withheld and the withholding audited. They are also the deployer's
-§3.8 alerts, and the case team's queue below.
+anything it references: its entities, the transactions and the links it cites, and what it writes
+alongside (ADR-146 decision 10: a link marked above its ends counts). In a load's transaction,
+what the load itself wrote stands in at its marking as written, anything else the load cannot read
+back at the highest marking the recipe could give it; a marking is never guessed. No node is
+written, the row still raised and the withholding audited with its reason in words, where
+referents with a restricted code belong to different units (no single marking is safe), where a
+referent's marking cannot be read in the load, or where a cited link cannot be read when the alert
+is raised after the commit (taken back or replaced since it was found; one such link never stops a
+sweep). They are also the deployer's §3.8 alerts, and the case team's queue below. A close that
+confirms a link (a true positive's `SAME_AS`) writes the link's new revision, and repoints every
+alert citing the old one to it in the same transaction, the closing alert and the rest locked
+together in id order and renamed as they stand; the queue then checks the new revision for every
+reader, as it checks any link (ADR-109 Amendment 9).
 
 **The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
 `rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and
@@ -759,7 +774,7 @@ team or owner). The Reports view's typology figures count the typology alerts al
 monitoring figures (below) count every kind.
 
 ```
-GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default), open, claimed, closed or all; ?kind= and ?severity=, each repeatable, Viewer
+GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default: open, claimed and closing), open, claimed, closing, closed or all; ?kind= and ?severity=, each repeatable, Viewer
 GET    /v1/investigations/{id}/alert-assignees   the case's Editors and Authors by grant, with names: whom an alert may be given to, Editor (ADR-133 stage (a))
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed → claimed by the member named; a typology alert only (one shared with a team is claimed), 422 assignment_refused in words otherwise, Editor (ADR-133 stage (a))
 GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
@@ -771,8 +786,16 @@ POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entitie
 
 Every member of the case reads every rule-raised alert of it, whoever deployed the rule; an alert
 any of whose entities, cited links or transactions the reader cannot read is left out of the list
-and its count, and opening or acting on it answers 404 (ADR-039's all-or-nothing). The summary names
-entities as the reader sees them, never by id. A move between statuses is one conditional update,
+and its count, and opening or acting on it answers 404 (ADR-039's all-or-nothing). Every node, link
+and transaction the listed alerts cite is read once per kind, in one batch, as the reader, through each
+adapter's own access step (`alerts.read_evidence`; transactions in requests cut from the ids cited), so
+the reads are the same whatever is hidden, and an alert is dropped before anything is counted, ordered
+or returned (ADR-146 decision 10, gap map G2: until 7 November 2026 the list read nodes alone). Claim,
+release, disposition, approve-close, send-back, assign and the canvas make the same check, so each
+refuses exactly what the list withholds, writing and auditing nothing. The reader's own alerts
+(`GET .../alerts`, the inbox until ADR-146 removes it) make it too: an alert whose evidence is not all
+readable comes with no words and no referents (G3). The summary names entities as the reader sees them,
+never by id. A move between statuses is one conditional update,
 so two members acting at once cannot both win: the loser gets 409 `alert_moved_on`. A true positive
 confirms the `Alert` node (asserted, `confirmed_by` the member, rule 5); a false positive leaves it
 `inferred`. The canvas route seeds all or, past the cap, nothing (`limit_exceeded`, rule 2).

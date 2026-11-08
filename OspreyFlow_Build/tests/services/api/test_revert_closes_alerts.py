@@ -28,6 +28,7 @@ from services.api.alerts import QueueRow, default_severity
 from services.ingest.load_revert import RevertDeps, revert
 
 from schemas.domain import Alert, AlertMode, Principal
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.ingest.test_revert_load import (
     Analytics,
     Audit,
@@ -59,6 +60,10 @@ class Graph:
         """The real port's batched read (ADR-134's one-read queue): only the live nodes come back."""
         found = [await self.get_node(n, principal) for n in node_ids]
         return [n for n in found if n is not None]
+
+    async def get_edges(self, edge_ids: Any, principal: Principal) -> list[Any]:
+        """The real port's batched read of links: a reverted link does not come back."""
+        return [SimpleNamespace(id=e) for e in sorted(set(edge_ids)) if e in self.links and e not in self.reverted]
 
     async def begin_transaction(self) -> str:
         return "tx"
@@ -159,7 +164,7 @@ def _alert(alert_id: str, **fields: Any) -> Alert:
 
 
 async def _queue(store: Store, graph: Graph, reader: Principal, **kwargs: Any) -> list[str]:
-    shown = await alert_queue.queue(store, graph, CASE, reader, **kwargs)  # type: ignore[arg-type]
+    shown = await alert_queue.queue(store, graph, NO_TRANSACTIONS, CASE, reader, **kwargs)  # type: ignore[arg-type]
     return sorted(q.alert.id for q in shown)
 
 
@@ -201,12 +206,11 @@ async def test_an_alert_citing_something_a_revert_took_back_is_gone_from_the_que
 
     for reader in (OFFICIAL, CLEARED):
         # Open work: only D. Listed with every status, A and B are hidden by the read (a node they
-        # rest on is hidden), and C is there as a *closed* alert, because the read cannot tell that
-        # a link it cites was taken back; it is not open work and opens as not found.
+        # rest on is hidden), and so is C (a link it cites was taken back: ADR-146 decision 10, G2;
+        # before it, the read checked no link and listed C as a closed alert).
         assert await _queue(store, graph, reader, **open_only) == ["D"], reader.id
-        assert await _queue(store, graph, reader) == ["C", "D"], reader.id
-    # B is left out by the read itself, with no help from the store (a cited node is hidden);
-    # C is left out because the revert closed it. Nothing else was touched.
+        assert await _queue(store, graph, reader) == ["D"], reader.id
+    # The store's record: the revert closed A, B and C, C by its link. Nothing else was touched.
     assert {a.id: a.status for a in store.alerts.values()} == {
         "A": "closed",
         "B": "closed",
@@ -215,12 +219,16 @@ async def test_an_alert_citing_something_a_revert_took_back_is_gone_from_the_que
     }
 
 
-async def test_without_the_close_an_alert_citing_only_a_reverted_link_stays_listed() -> None:
-    """Why the revert closes by links (rule 15 for the test above): the queue's own read leaves C in,
-    since every node it names is live. The test above fails if the close drops the links."""
+async def test_the_queue_leaves_out_an_alert_citing_only_a_reverted_link_even_without_the_close() -> (
+    None
+):
+    """ADR-146 decision 10 (G2): the queue's own read checks the links an alert cites, so C, every
+    node of which is live, is left out once its link is taken back, close or no close. (Before G2 the
+    read checked nodes alone and listed C here; the close by links, asserted in the store's record
+    above, was all that took it out of open work.)"""
     graph = Graph(nodes={"alert-node-c", "p1"}, links={"link-gone"})
     graph.reverted.add("link-gone")
     store = Store(_alert("C", alert_node_id="alert-node-c", referent_node_ids=["p1"],
                          edge_ids=["link-gone"]))  # fmt: skip
     for reader in (OFFICIAL, CLEARED):
-        assert await _queue(store, graph, reader) == ["C"]
+        assert await _queue(store, graph, reader) == []

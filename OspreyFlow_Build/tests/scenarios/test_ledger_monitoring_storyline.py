@@ -217,7 +217,9 @@ async def week(scene: Scene, rules: list[TypologyRule] | None = None, **kw: Any)
 
 
 async def queue(scene: Scene, reader: Principal) -> list[Any]:
-    rows = await alert_queue.monitoring_queue(scene.stores.alerts, scene.world.graph, scene.case, reader)
+    rows = await alert_queue.monitoring_queue(
+        scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, reader
+    )
     return sorted(rows, key=lambda q: q.alert.created_at)
 
 
@@ -286,7 +288,7 @@ async def story(scene: Scene, *, close: bool = True) -> Scene:
         r1 = (await queue(scene, scene.analyst))[0]
         assert r1.alert.typology == ledger_monitoring.CLOSED_KIND
         closed = await alert_queue.dispose(
-            scene.stores.alerts, scene.world.graph, scene.case, r1.alert.id, scene.analyst,
+            scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, r1.alert.id, scene.analyst,
             disposition=ledger_monitoring.CLOSING_REASON, reason=ledger_monitoring.CLOSING_WORDS,
         )  # fmt: skip
         assert closed.status == "closed", "a medium-severity alert closes without a second person"
@@ -582,7 +584,8 @@ async def test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_
 
 async def _figures(scene: Scene, reader: Principal) -> Any:
     return await reports.alert_report(
-        scene.stores.alerts, scene.world.graph, scene.case, reader, today=datetime.now(UTC).date()
+        scene.stores.alerts, scene.world.graph, scene.stores.analytics, scene.case, reader,
+        today=datetime.now(UTC).date(),
     )
 
 

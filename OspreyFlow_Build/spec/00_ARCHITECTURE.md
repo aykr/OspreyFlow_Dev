@@ -648,8 +648,10 @@ exists, the same reasoning as `find_node`.
 moved — confirmed empirically that ArcadeDB does not support relinking an edge's endpoints after
 creation), so a correction cannot silently disconnect a node from its own network. `supersede_edge`
 is the same operation for an edge: `01_DOMAIN_MODEL.md` §5's `Judgement.supporting`/`contradicting`
-can cite an `EdgeId` directly, so an edge needs the same "corrected, not vanished" guarantee — it
-has nothing to repoint, since nothing else in the domain model references an edge by id.
+can cite an `EdgeId` directly, so an edge needs the same "corrected, not vanished" guarantee. The
+graph has nothing to repoint for it: no node or link names a link by id. An alert does
+(`Alert.edge_ids`), so a caller that supersedes a link it cites repoints the alerts in its own
+store; the close that confirms a match does, in the same transaction (ADR-109 Amendment 9).
 Later reads, each with the access step on the element and on both ends of every link: `edges_among`
 (the links among a set of nodes, ADR-098 decision 1), and `type_counts` and `most_connected` (the
 Explore panel's counts and degree ranking, ADR-100 Amendment 1), and `get_nodes` and `get_edges`

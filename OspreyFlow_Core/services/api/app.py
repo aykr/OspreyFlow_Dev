@@ -775,6 +775,7 @@ from .watch_routes import (
     MonitorList,
     alert_to_view,
     fetch_jumpable_referents,
+    jumpable_alert,
 )
 from .worker import JobWorker
 from .working_set.models import (
@@ -6278,6 +6279,7 @@ async def list_alerts_route(
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
+    analytics: AnalyticsDep,
 ) -> AlertList:
     """The reader's own alerts — those raised to them, by their hotlists, monitors and rules
     (`owner_id`, in the store's query) — within the case's datasets (ADR-099 Amendment 3, the reach
@@ -6286,7 +6288,7 @@ async def list_alerts_route(
     said "the alerts of the case's datasets", which the store never read."""
     rows = await alerts_store.list_authorized(principal)
     return AlertList(
-        alerts=[await alert_to_view(a, principal, graph, hotlists_store) for a in rows]
+        alerts=[await alert_to_view(a, principal, graph, analytics, hotlists_store) for a in rows]
     )
 
 
@@ -6301,9 +6303,10 @@ async def get_alert_route(
     alerts_store: AlertsStoreDep,
     graph: GraphDep,
     hotlists_store: HotlistsStoreDep,
+    analytics: AnalyticsDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal)
-    return await alert_to_view(alert, principal, graph, hotlists_store)
+    return await alert_to_view(alert, principal, graph, analytics, hotlists_store)
 
 
 @app.post(
@@ -6323,6 +6326,7 @@ async def jump_alert_route(
     audit: AuditDep,
     valkey: ValkeyDep,
     datasets: DatasetsDep,
+    analytics: AnalyticsDep,
 ) -> AlertJumpResult:
     """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
     link to the originating investigation." The link is `branch.branched_from` — the identical
@@ -6331,7 +6335,9 @@ async def jump_alert_route(
     may be `None` (the resolution trigger's own producer carries no single investigation) — the
     branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
     `None` rather than silently pointed at a wrong investigation."""
-    alert = await alerts_store.get_authorized(alert_id, principal)
+    alert = await jumpable_alert(
+        alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics
+    )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
     branch = await investigations.create(
@@ -9176,6 +9182,7 @@ async def neighbourhood_risk_route(
     compute: ComputeDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> NeighbourhoodRisk:
     """*Neighbourhood risk* (ADR-109 phase E): the case's alerts within two hops, halved per hop,
     counted for ninety days — read as the reader, never stored."""
@@ -9183,6 +9190,7 @@ async def neighbourhood_risk_route(
         graph,
         compute,
         alerts_store,
+        analytics,
         investigation.id,
         node_id,
         principal,
@@ -9239,11 +9247,13 @@ async def _case_report(
     explore: ExploreService,
     ontology: OntologySchema,
     period_weeks: int,
+    analytics: AnalyticsPort,
 ) -> ReportFigures:
     level = await investigations.effective_level(investigation.id, principal)
     return await reports_module.case_report(
         alerts=alerts_store,
         graph=graph,
+        analytics=analytics,
         held=held_rows,
         compute=compute,
         explore=explore,
@@ -9272,6 +9282,7 @@ async def read_case_report(
     explore: ExploreDep,
     ontology: OntologyDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
 ) -> ReportFigures:
     """The Reports view (ADR-111): the case's figures, every one counted as the reader (rule 3);
@@ -9279,7 +9290,7 @@ async def read_case_report(
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
-        ontology=ontology, period_weeks=weeks,
+        ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -9308,6 +9319,7 @@ async def read_report_feed(
     ontology: OntologyDep,
     audit: AuditDep,
     export_ledger: ExportLedgerDep,
+    analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
     feed_format: Annotated[Literal["json", "csv"], Query(alias="format")] = "json",
 ) -> ReportFigures | Response:
@@ -9317,7 +9329,7 @@ async def read_report_feed(
     figures = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
-        ontology=ontology, period_weeks=weeks,
+        ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     rows = reports_module.feed_rows(figures)
     await export_ledger.record(
@@ -9365,6 +9377,7 @@ async def read_alert_queue(
     alerts_store: AlertsStoreDep,
     principal_names: PrincipalNamesDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
     status_filter: Annotated[
         Literal["open", "claimed", "closing", "closed", "active", "all"], Query(alias="status")
     ] = "active",
@@ -9373,16 +9386,17 @@ async def read_alert_queue(
 ) -> list[QueuedAlert]:
     """The one alert queue (ADR-133 decision 5 and stage (a)): the case's typology alerts (the case
     team's, ADR-109 ruling 3) and the hotlist and monitor alerts the reader owns or that are shared
-    with their team, each with its kind, severity and audience. `active` is open and claimed; `kind`
-    and `severity` may each be given more than once. Who sees which alert is decided in the query;
-    an alert any of whose entities the reader cannot see is then left out, and not counted (rule 3).
+    with their team, each with its kind, severity and audience. `active` is open, claimed and
+    closing; `kind` and `severity` may each be given more than once. Who sees which alert is decided
+    in the query; an alert any of whose nodes, links or transactions the reader cannot see is then
+    left out, and not counted (rule 3; ADR-146 decision 10).
     """
     statuses = {
         "active": ["open", "claimed", "closing"],
         "all": None,
     }.get(status_filter, [status_filter])
     rows = await alert_queue.monitoring_queue(
-        alerts_store, graph, investigation.id, principal, statuses=statuses, kinds=kind,
+        alerts_store, graph, analytics, investigation.id, principal, statuses=statuses, kinds=kind,
         severities=severity,
     )  # fmt: skip
     await audit.record(
@@ -9511,8 +9525,11 @@ async def claim_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
-    alert = await alert_queue.claim(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.claim(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await _triage_audit(audit, principal, investigation.id, "alert_claimed", alert)
     return alert
 
@@ -9528,8 +9545,11 @@ async def release_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
-    alert = await alert_queue.release(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.release(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await _triage_audit(audit, principal, investigation.id, "alert_released", alert)
     return alert
 
@@ -9546,12 +9566,14 @@ async def dispose_alert(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """Closes the alert with its disposition and reason. A true positive confirms its node
     (rule 5's human confirmation); a false positive leaves it `inferred`."""
     alert = await alert_queue.dispose(
         alerts_store,
         graph,
+        analytics,
         investigation.id,
         alert_id,
         principal,
@@ -9574,12 +9596,13 @@ async def approve_alert_close(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
     alert — never the member who proposed it."""
     try:
         alert = await alert_queue.approve_close(
-            alerts_store, graph, investigation.id, alert_id, principal
+            alerts_store, graph, analytics, investigation.id, alert_id, principal
         )
     except alert_queue.CloseRefused as refused:
         raise HTTPException(
@@ -9602,9 +9625,12 @@ async def send_back_alert_close(
     graph: GraphDep,
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """A proposed close sent back to its proposer with the reason, or withdrawn by them."""
-    alert = await alert_queue.send_back(alerts_store, graph, investigation.id, alert_id, principal)
+    alert = await alert_queue.send_back(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
+    )
     await audit.record(
         principal=principal,
         action="alert_close_sent_back",
@@ -9633,6 +9659,7 @@ async def assign_alert(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    analytics: AnalyticsDep,
 ) -> Alert:
     """ADR-133 stage (a): give an open or claimed alert to an Editor or Author of the case who is a
     person (never a service account). Only a case (typology) alert is given to someone else; one
@@ -9641,8 +9668,8 @@ async def assign_alert(
         investigations, investigation.id, principal, principal_names
     )
     alert = await alert_queue.assign(
-        alerts_store, graph, investigation.id, alert_id, principal, assignee=body.assignee,
-        allowed=allowed,
+        alerts_store, graph, analytics, investigation.id, alert_id, principal,
+        assignee=body.assignee, allowed=allowed,
     )  # fmt: skip
     await _triage_audit(audit, principal, investigation.id, "alert_assigned", alert)
     return alert
@@ -9671,11 +9698,12 @@ async def alert_canvas(
     history: HistoryDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    analytics: AnalyticsDep,
 ) -> StarterRunOutcome:
     """The alert's node, its entities and the links it cites onto the canvas — all, or past the
     working set's cap, none (`limit_exceeded`, rule 2). Editor, as it adds to the working set."""
     alert, nodes, edges = await alert_queue.canvas_elements(
-        alerts_store, graph, investigation.id, alert_id, principal
+        alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
     outcome = await working_set.seed(investigation.id, nodes, edges, principal)
     await publish_delta(valkey, investigation.id, outcome.delta)

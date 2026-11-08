@@ -1,0 +1,31 @@
+lease glass (clean re-run); 2026-11-07T21:45:08Z; red 5: inherited readers with ReadableEvidence.whole on nodes alone
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 1864d6a..3d424c4 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -722,8 +722,6 @@ class ReadableEvidence:
+         readable."""
+         return (
+             all(i in self.nodes for i in evidence_node_ids(alert))
+-            and set(alert.edge_ids) <= self.edge_ids
+-            and set(alert.event_ids) <= self.event_ids
+         )
+ 
+ 
+>           assert _without_time(shown) == _without_time(
+E           AssertionError: assert {'period_week...nt': 1}], ...} == {'period_week...nt': 1}], ...}
+E             Omitting 5 identical items, use -vv to show
+E             Differing items:
+E             {'alerts_by_week': [{'week_start': datetime.date(2026, 11, 2), 'typology': 'structuring', 'count': 1}]} != {'alerts_by_week': [{'week_start': datetime.date(2026, 11, 2), 'typology': 'circular_flow', 'count': 1}, {'week_start': datetime.date(2026, 11, 2), 'typology': 'structuring', 'count': 1}]}
+E             {'open_by_age': [{'label': 'under a day', 'value': 1}, {'label': '1 to 7 days', 'value': 0}, {'label': '7 to 30 days', 'value': 0}, {'label': 'over 30 days', 'value': 0}]} != {'open_by_age': [{'label': 'under a day', 'valu...
+E             ...Full output truncated (5 lines hidden), use '-vv' to show
+>           assert feed.json()["alerts_total"] == 1
+E           assert 2 == 1
+>       assert official.score == 0.5, "as test_a_hidden_alerted_neighbour_... finds for one alert"
+E       AssertionError: as test_a_hidden_alerted_neighbour_... finds for one alert
+E       assert 1.0 == 0.5
+E        +  where 1.0 = NeighbourhoodRisk(node_id='01M6VZJB1S9JXVJ89JJ7TW4YXM', score=1.0, max_hops=2, decay=0.5, window_days=90, as_of=dateti...MZBJPG', '01M6VZJJ403G5CY68D084D20KR'], summaries=['over a SECRET transaction', 'finding on Seen'], contribution=1.0)]).score
+FAILED ../OspreyFlow_Build/tests/services/api/test_reports.py::test_an_alert_over_a_transaction_the_reader_cannot_read_changes_no_figure
+FAILED ../OspreyFlow_Build/tests/services/api/test_reports.py::test_the_feed_counts_no_alert_over_a_link_the_reader_cannot_read
+FAILED ../OspreyFlow_Build/tests/ingest/test_risk.py::test_an_alert_over_a_transaction_the_reader_cannot_read_leaves_the_score_as_if_it_were_absent
+3 failed, 14 deselected, 1 warning in 24.79s

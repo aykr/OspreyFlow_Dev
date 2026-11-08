@@ -1,0 +1,11 @@
+2026-11-07T21:50:48Z; red 7: explain_with_evidence's own check, at HEAD (hermetic)
+>       assert sorted(t.event_id for t in why.transactions) == many
+E       AssertionError: assert ['t-000', 't-... 't-005', ...] == ['t-000', 't-... 't-005', ...]
+E         Right contains 250 more items, first extra item: 't-200'
+E         Use -v to get more diff
+>       why = await alert_queue.explain(TriageStore([alert]), graph, analytics, CASE, "one-end", READER)  # type: ignore[arg-type]
+>           raise AlertNotFoundError(alert_id)
+E           services.api.alerts.AlertNotFoundError: one-end
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_an_alert_listed_is_explained_with_every_transaction_it_cites
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_an_alert_listed_over_a_link_with_an_end_it_does_not_name_is_explained
+2 failed, 31 passed, 1 warning in 2.45s

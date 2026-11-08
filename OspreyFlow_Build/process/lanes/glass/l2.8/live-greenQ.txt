@@ -1,0 +1,27 @@
+lease glass; 2026-11-07T22:51:38Z; green at 2e5176a: the live file, and the live tests the jump and the repoint reach
+7 passed in 48.82s
+>           assert jumped.status_code == 201, jumped.text
+E           AssertionError: {"error":"alert_not_found"}
+E           assert 404 == 201
+E            +  where 404 = <Response [404 Not Found]>.status_code
+>           assert alert.referent_node_ids == [node_id]
+E           AssertionError: assert ['01M6W0Y98P4X667V9X0D0HTMBC'] == ['01M6W3EWZP71D7F5GA6FVEAW7A']
+E             At index 0 diff: '01M6W0Y98P4X667V9X0D0HTMBC' != '01M6W3EWZP71D7F5GA6FVEAW7A'
+E             Use -v to get more diff
+>       assert alert.referent_node_ids == [preloaded[last]]
+E       AssertionError: assert ['01M6TTZ9RE81SV64TZXTDXCCT3'] == ['01M6W3F3JQA941W7W98DTZ844J']
+E         At index 0 diff: '01M6TTZ9RE81SV64TZXTDXCCT3' != '01M6W3F3JQA941W7W98DTZ844J'
+E         Use -v to get more diff
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 7, 22, 55, 24, 48861, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 7, 22, 55, 24, 48861, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6W3JHWPGWMGZG645QEB4VF9', type='SAME_AS', source='01M6W3JF258EGY37YVDQTQDFBP', target='01M6W3JHWGCE0VPDXKY...seded_by=Non
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+4 failed, 1189 passed, 27 skipped, 2 warnings in 271.48s (0:04:31)
+end 2026-11-07T22:57:00Z
+lease glass; 2026-11-07T22:57:34Z; the jump scenario at the Q1 ruling, and the watch routes file
+10 passed, 1 warning in 76.72s (0:01:16)
