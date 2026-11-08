@@ -9,6 +9,7 @@ names its case, so another case's item is never retrieved.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -16,7 +17,6 @@ import asyncpg
 import pytest
 from conduit_common.identity import new_id
 from schemas.case_views import NodePosition
-from services.api import board_store as board_store_module
 from services.api.board_store import (
     BoardItem,
     ItemKind,
@@ -101,23 +101,60 @@ async def test_a_links_ends_are_kept(items: PostgresBoardItemStore) -> None:
     assert held is not None and (held.source, held.target) == ("n-1", "n-2")
 
 
-async def test_the_postgres_case_check_fails_with_the_case_planted_out(
-    items: PostgresBoardItemStore, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Rule 15: the plant is the store's own `SELECT`, its `case_id` clause made true."""
-    item = _drawn()
-    await items.add(item, None)
-    real_columns = board_store_module._ITEM_COLUMNS
+class _CaseClausePlanted:
+    """The store's own connection, every statement it sends with its `case_id = $1` clause made
+    true: the plant is in the real SQL of every read and of the withdrawal, not a stand-in."""
 
-    async def no_case(self: PostgresBoardItemStore, case_id: str, item_id: str) -> BoardItem | None:
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    @staticmethod
+    def _planted(query: str) -> str:
+        assert "case_id = $1" in query, query
+        return query.replace("case_id = $1", "($1::text IS NOT NULL)")
+
+    async def fetch(self, query: str, *args: object) -> object:
+        return await self._conn.fetch(self._planted(query), *args)
+
+    async def fetchrow(self, query: str, *args: object) -> object:
+        return await self._conn.fetchrow(self._planted(query), *args)
+
+    async def execute(self, query: str, *args: object) -> object:
+        return await self._conn.execute(self._planted(query), *args)
+
+    def transaction(self) -> object:
+        return self._conn.transaction()
+
+
+class _PlantedPool:
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    @contextlib.asynccontextmanager
+    async def acquire(self) -> AsyncIterator[_CaseClausePlanted]:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                f"SELECT {real_columns} FROM board_items WHERE TRUE AND item_id = $1", item_id
-            )
-        return board_store_module._item(row) if row is not None else None
+            yield _CaseClausePlanted(conn)
 
-    monkeypatch.setattr(PostgresBoardItemStore, "get", no_case)
-    assert await items.get(B, item.item_id) is not None
+
+async def test_the_postgres_case_check_fails_with_the_case_planted_out(
+    items: PostgresBoardItemStore,
+) -> None:
+    """Rule 15: each read and the withdrawal, with its own `case_id` clause made true in the SQL
+    it sends, hands case B what is K's; the round-trip test above is what fails then."""
+    item = _drawn()
+    watch = new_watch(item, dataset_id="src")
+    await items.add(item, watch)
+    real = items._pool
+    items._pool = _PlantedPool(real)  # type: ignore[assignment]
+    try:
+        assert await items.get(B, item.item_id) is not None
+        assert await items.on_board(B, "b-1") != []
+        assert await items.in_case(B) != []
+        assert await items.by_element(B, item.element_id) is not None
+        assert await items.active_watches(B) != []
+        assert await items.withdraw(B, [item.item_id], "carol", datetime.now(UTC)) == 1
+    finally:
+        items._pool = real
 
 
 async def test_a_board_is_kept_apart_from_views_and_changed_only_by_its_creator(
