@@ -180,7 +180,12 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
       more: false,
     });
   }
-  if (tail === "pictures") return json(200, { pictures: {} });
+  // `?pictured=1`: Tall has a picture, drawn from a one-pixel png.
+  if (tail === "pictures") return json(200, { pictures: params.get("pictured") ? { "d-tall": "doc-photo" } : {} });
+  if (/^nodes\/[^/]+\/picture$/.test(tail) && method === "GET") {
+    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
+    return new Response(png, { status: 200, headers: { "Content-Type": "image/png" } });
+  }
   if (b.created_by !== reader) return json(403, { error: "not_the_boards_creator", detail: "Only the person who made this board draws on it." });
   if (tail === "share") {
     b.shared = true;
@@ -263,8 +268,8 @@ createRoot(container).render(
     <BoardsPlace
       apiBaseUrl="http://keyboard-test.invalid"
       bearerToken="unused"
-      caseId="c1"
-      caseName="Kestrel"
+      caseId={params.get("nocase") ? null : "c1"}
+      caseName={params.get("nocase") ? null : "Kestrel"}
       selection={params.get("selection") === "none" ? [] : ["p-mercer", "p-ward"]}
       entityTypes={[{ name: "Person", properties: [{ name: "family_name", type: "string", required: true }, { name: "given_names", type: "string" }] }]}
       markings={MARKINGS}

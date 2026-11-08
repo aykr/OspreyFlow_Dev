@@ -145,13 +145,18 @@ board and the case, the analyst's label, a grading in the deployment's scheme, a
 document of the case, or both). The board's registry (`board_items`) holds ids and a link's ends
 only; every element is read through the caller's principal, scoped to the case's read set and
 filtered in the adapter (rule 3). Every route stands behind the case's level check first. Reading
-needs `investigate`; drawing needs Editor and `draw_on_boards`, and only a board's creator draws on
-it, moves its items or adds to it (403 `not_the_boards_creator` for a member who can see it).
+needs `investigate`; drawing needs Editor, `draw_on_boards` and `investigate` too (a role with
+`draw_on_boards` alone would make a board it could not open), and only a board's creator draws on
+it, moves its items or adds to it (403 `not_the_boards_creator` for a member who can see it). The
+id of a board the caller may not open (another member's private board) is in nothing they read: a
+drawn element's source locator names no board, and its `provenance.drawn.board_id` is given empty
+(`test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them`). A *Same* or *Not
+the same* is registered on its board (`board_items` kind `match`), so it goes with its drawn node.
 
 ```
-GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `blank` or, for one made from a view or a selection, `selection`, since the store keeps only the nodes)
+GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `selection` when the caller may see one of the nodes it started from, `blank` otherwise, a view's start reading as `selection` since the store keeps only the nodes)
 POST   /v1/investigations/{id}/boards                         a board (`BoardInput`: blank, from a view, or from a selection; only the loaded nodes the caller may see are kept, as live references)
-GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` a count naming none, the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_draw`
+GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_draw`
 POST   /v1/investigations/{id}/boards/{board}/share           share it with the case (its creator only)
 DELETE /v1/investigations/{id}/boards/{board}                 delete it; what was drawn on it stays in the layer, with its watches
 POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`DrawnItemInput`), with its watch; audited as draw_item
@@ -173,7 +178,8 @@ Someone else's private board, another case's board and no board at all answer al
 `board_not_found`; an item of another case, one the caller may not see and none answer 404
 `item_not_found`. Each refusal of a drawing is said in words before anything is written:
 `above_the_ceiling` (409, naming the case's highest allowed marking: the strictest its datasets
-set, the deployment's highest where none is set; Amendment 2 decision 3), `above_your_clearance`
+set, a composite's members' among them, the deployment's highest where none is set; Amendment 2
+decision 3; `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`), `above_your_clearance`
 (409), `not_in_the_model` (422: a node type of the case's model only, C14, never `Alert` or
 `Document`; a link type of the model only, never a resolution, picture or alert link),
 `not_a_property` (422: a type's required property missing, or one it does not declare),
@@ -181,10 +187,10 @@ set, the deployment's highest where none is set; Amendment 2 decision 3), `above
 drawn between the two), `not_your_item` (403), `promoted` (409: changed only by reverting its
 promotion, L3.4; a withdrawal is refused the same way while a promoted link rests on the item),
 `not_a_marking` (422), `no_source` (422: an edit, or a picture, with no source left). A promoted
-link the withdrawer may not see is not read to check it (an unfiltered read is confined away from
-routes), and refusing would tell them the link exists (rule 3). How a withdrawal treats one is for
-L3.4 to settle with the orchestrator (a promotion recorded in `board_items` lets the check read the
-registry, not the element); until L3.4 nothing drawn is promoted. Further refusals:
+link the withdrawer may not see is left in place and tells them nothing: their answer is the one
+they get with no such link (the orchestrator's ruling, 8 November 2026). The registry's
+`promoted_at`, which L3.4 sets, says it was promoted, so the element is never read for it
+(`test_an_unseen_promoted_link_stays_and_tells_the_withdrawer_nothing`). Further refusals:
 `marking_never_lowered` (409), `link_marking_kept` (409: a drawn link's marking is not changed by
 an edit, since the store would leave a second link for the other audience), `no_such_document`
 (422), `not_a_picture` (422), `no_picture_for_this_type` (422, before the file is kept). Edits,

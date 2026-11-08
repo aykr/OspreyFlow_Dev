@@ -858,12 +858,24 @@ The invariants, each with the test that fails if it is broken (rule 12):
     `test_a_withdrawal_names_its_picture_apart_from_its_links`;
 - **A withdrawal tells nothing of what the withdrawer may not see** (rule 3): a link they may not
   see goes with the node, named in the audit, but is neither named nor counted to them, not even
-  among the watches ended.
-  - `test_a_withdrawal_tells_nothing_of_a_link_the_withdrawer_may_not_see`.
+  among the watches ended; one promoted into a dataset (the registry's `promoted_at`, set by L3.4)
+  stays where it is.
+  - `test_a_withdrawal_tells_nothing_of_a_link_the_withdrawer_may_not_see`;
+    `test_an_unseen_promoted_link_stays_and_tells_the_withdrawer_nothing`.
+- **An opened board counts only what was lost**: `missing` is the board's own references whose
+  drawn item was withdrawn since, to its creator; never an item the reader was never allowed to
+  see.
+  - `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`.
+- **A match goes with its drawn node**: *Same* and *Not the same* are registered on the board.
+  - `test_a_match_goes_with_its_withdrawn_drawn_node`.
+- **A private board's id is told to no one else**, in a locator or in `drawn.board_id`.
+  - `test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them`.
 - **Audited before written**: every picture, chosen or uploaded, and every withdrawal.
   - `test_every_picture_and_withdrawal_is_audited_before_anything_is_written`.
-- **One ceiling for every path**: a declaration, a link, an edit, an upload, a choice and a match.
-  - `test_an_edit_an_upload_and_a_choice_above_the_ceiling_are_refused_in_words`.
+- **One ceiling for every path**: a declaration, a link, an edit, an upload, a choice and a match;
+  in a case reading a composite, its members' highest markings set it.
+  - `test_an_edit_an_upload_and_a_choice_above_the_ceiling_are_refused_in_words`;
+    `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`.
 - **A board from a view** holds only what its maker may see of a view they may open.
   - `test_a_board_from_a_view_keeps_only_what_its_maker_may_see_of_a_view_they_may_open`.
     `test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking`.
