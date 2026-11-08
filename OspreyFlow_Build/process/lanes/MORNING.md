@@ -39,6 +39,20 @@ studio, case and glass sessions are retired (each replied "retired"); their work
 - (C) No build in the product: building stays a documented manual step on a machine with Java.
 Built meanwhile: Java is out of the image and *Admin › Maps*' Build says so in words; the rest of P3 goes on.
 
+**Two more questions for you:**
+1. *(studio-b's L1.6; it would retire part of an accepted ADR)* Two deployment-wide screening-list stores now
+   exist: ADR-133's (the Lists tab, which KYC rules screen against) and L1.6's (Studio › Sources, versioned as
+   reference lists, per ADR-140 Amendment 9). Which is the store of record?
+   - **(a) Recommended:** L1.6's; the rules lane moves its list picker and re-screening to it, and ADR-133's
+     Lists tab becomes read-only, then retired.
+   - (b) Both: a Studio import also writes ADR-133's store, so the rules keep working unchanged.
+   - (c) ADR-133's: the Studio connector becomes a front end to it.
+   Built meanwhile: (a)'s store, with ADR-133's store and Lists tab left fully working.
+2. *(rules' L2.9; access, so yours)* An alert's address refuses every unreadable or missing alert after the
+   same 250 ms, so its timing tells nothing, except for an alert whose evidence takes longer than 250 ms to
+   read. **(a)** accept that residual (rules' recommendation); **(b)** cap the evidence an alert may cite;
+   **(c)** a larger wait. Merged meanwhile with the 250 ms wait.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
