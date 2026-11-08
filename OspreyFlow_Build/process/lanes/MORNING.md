@@ -4,6 +4,8 @@ Written by the orchestrator at 00:05 and updated at 07:05. Nothing has been push
 
 **State at 04:55 UTC, 8 November (the orchestrator's usage limit reached).** Glass is paused at its own usage limit, with L2.8b's last fix round not started (tree clean at 04e98f8, no lease held; the work left is listed in its last message: D1–D3, D6, D7, text, one leased run). Studio is starting Part B (L1.2b); ADR-140 Amendment 10 is reserved for it. Case is fixing L3.1b's review findings (blocker: drawn datasets copied by branches and alert jumps). Main is pushed and green.
 
+**Paused (your instruction, about 06:35 UTC, 8 November):** every lane stops at the end of its current step: glass after L2.8b, studio after L1.2b (Part B), case after L3.1b, which is being merged now. No new step is briefed until your new instructions. Nothing has been pushed since `05d2d84`; local `main` holds the merges since then.
+
 **Pushing (your instruction, about 06:20 UTC):** CI runs locally on every merge, and `main` goes to `origin` in one push at the very end, not after each merge.
 
 ## For your review tomorrow: decisions I took on my recommendation
