@@ -169,6 +169,75 @@ class HomeCase(BaseModel):
     made_by: PrincipalId
 
 
+class DatasetModelView(BaseModel):
+    """`GET /v1/datasets/{dataset_id}/model`: the live version and the open draft, each `None` when
+    there is none (a dataset with neither has no model yet)."""
+
+    live: TargetModel | None = None
+    draft: TargetModel | None = None
+
+
+class RevertModelInput(BaseModel):
+    """`POST /v1/datasets/{dataset_id}/model/revert`: the earlier version to copy into a new draft
+    (N+2, never a rewrite of it)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=1)
+
+
+class ImpactedPipeline(BaseModel):
+    """A deployed pipeline of the dataset that writes a type the draft changes or retires: *Make
+    live* marks it as needing attention and pauses its schedule, with the reason."""
+
+    recipe_id: str
+    label: str
+    #: The changed or retired types it writes, sorted.
+    writes: list[str]
+
+
+class ImpactedCase(BaseModel):
+    """A case reading the dataset (directly or through a composite) that the reader may open.
+    Cases they may not open are not listed and not counted (rule 7)."""
+
+    investigation_id: str
+    name: str | None = None
+
+
+class ModelImpact(BaseModel):
+    """`GET /v1/datasets/{dataset_id}/model/impact` (R12, ADR-140 decision 5): what making the
+    draft live would change, read before anything does. Loaded data is never rewritten."""
+
+    dataset_id: str
+    #: The live version it is measured against; `None` for a dataset's first model.
+    live_version: int | None
+    draft_version: int
+    packs_added: list[DomainPack] = Field(default_factory=list)
+    packs_removed: list[DomainPack] = Field(default_factory=list)
+    #: A pack kept at another pinned version.
+    packs_repinned: list[DomainPack] = Field(default_factory=list)
+    extensions_added: list[str] = Field(default_factory=list)
+    extensions_retired: list[str] = Field(default_factory=list)
+    #: An extension the draft has in force again (a revert to a version that had it).
+    extensions_restored: list[str] = Field(default_factory=list)
+    #: Every entity and link type whose definition changes: the types of each pack added, removed
+    #: or repinned, and each extension added, retired or restored; sorted.
+    changed_types: list[str] = Field(default_factory=list)
+    pipelines: list[ImpactedPipeline] = Field(default_factory=list)
+    cases: list[ImpactedCase] = Field(default_factory=list)
+    #: The composites of the dataset's unit that have it as a member, by name.
+    composites: list[str] = Field(default_factory=list)
+
+
+class MadeLive(BaseModel):
+    """`POST /v1/datasets/{dataset_id}/model/make-live`'s answer: the version now live, the one it
+    replaced, and each pipeline marked as needing attention, its schedule paused with the reason."""
+
+    live: TargetModel
+    previous: TargetModel | None = None
+    flagged: list[ImpactedPipeline] = Field(default_factory=list)
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     ModelExtension,
     TargetModel,
@@ -178,4 +247,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     DatasetOwners,
     MakeLiveInput,
     HomeCase,
+    DatasetModelView,
+    RevertModelInput,
+    ImpactedPipeline,
+    ImpactedCase,
+    ModelImpact,
+    MadeLive,
 )

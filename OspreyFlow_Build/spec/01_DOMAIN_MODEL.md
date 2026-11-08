@@ -649,6 +649,19 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   Amendment 3 `ListSchedule`, which it absorbs. A `screening` list is imported once for the
   deployment and subscribed to per dataset (ADR-140 Amendment 9 decision 3). A licensed list's rows
   never travel in a release.
+- **What the model's routes answer** (`/v1/datasets/{dataset_id}/model`, behind the dataset's gate and
+  `edit_target_model`, ADR-112 Amendment 6):
+  - **`DatasetModelView`**: the `live` version and the open `draft`, each `None` when there is
+    none;
+  - **`RevertModelInput`**: the earlier `version` a revert copies into a new draft;
+  - **`ModelImpact`**: what making the draft live would change, read before anything does. It
+    lists the packs added, removed and repinned; the extensions added, retired and restored; the
+    `changed_types` they amount to; each **`ImpactedPipeline`** (a deployed pipeline of the
+    dataset that writes a changed type, with the types it writes); each **`ImpactedCase`** reading
+    the dataset that the reader may open, never one they may not, and never a count of those; and
+    the composites that have the dataset as a member;
+  - **`MadeLive`**: the version now `live`, the one it replaced, and the pipelines marked as
+    needing attention, each with its schedule paused and the reason.
 - **The owners named at *Make live*** (ADR-145 Amendment 4 decision 4):
   - **`MakeLiveInput`** names the draft `version` being made live and, at the dataset's first
     *Make live* in the deployment, its `owners`;
