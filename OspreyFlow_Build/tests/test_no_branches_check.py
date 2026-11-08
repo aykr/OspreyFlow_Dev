@@ -7,8 +7,9 @@
 - a folder-wide exception would have hidden a case's branch:
   `test_a_folder_wide_exception_would_have_hidden_a_cases_branch`;
 - the Conduit holds none: `test_the_conduit_names_no_branch`;
-- the real tree holds none: `test_the_tree_names_no_branch`, expected to fail until L3.2b removes
-  them from the Glass (strict, so it fails the run once the tree is clean and the mark is stale).
+- the real tree holds none: `test_the_tree_names_no_branch` (L3.2b removed the Glass's), and one
+  branch word planted in a real Glass file of the real tree turns the gate red and names that line:
+  `test_one_branch_word_planted_in_the_glass_fails_the_gate`.
 """
 
 from __future__ import annotations
@@ -80,11 +81,24 @@ def test_the_conduit_names_no_branch() -> None:
     assert found == [], "\n".join(f"{p}:{n}: {line}" for p, n, line in found[:40])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="L3.2b removes branches from the Glass (apps/workspace/src); until then only its "
-    "files are found, which test_the_conduit_names_no_branch and the report show",
-)
 def test_the_tree_names_no_branch() -> None:
     found = findings(tree_files())
     assert found == [], "\n".join(f"{p}:{n}: {line}" for p, n, line in found[:40])
+
+
+def test_one_branch_word_planted_in_the_glass_fails_the_gate(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Rule 15, at the gate's real call site: `main()` over the real tree as `tree_files` reads it,
+    with one line of the real selection bar given back its old button. The gate exits 1 and names
+    that line, and only it."""
+    real = tree_files()
+    path = "apps/workspace/src/canvas/SelectionBar.tsx"
+    assert path in real
+    planted = {**real, path: real[path] + "          Branch to a new case\n"}
+    monkeypatch.setattr(check, "tree_files", lambda: planted)
+    assert check.main() == 1
+    out = capsys.readouterr().out
+    line = len(planted[path].splitlines())
+    assert f"{path}:{line}: Branch to a new case" in out
+    assert "1 line(s) name a branch" in out
