@@ -47,6 +47,8 @@ Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; 
 
 **Found on main, not from any lane (studio, 20:50 under its lease):** ClickHouse's `event_frequency` fails on main at `2be871d`. Its RANGE frame offset of 2592000000 (30 days in milliseconds) isn't a 32-bit integer, and ClickHouse refuses it. `make ci` doesn't run ClickHouse, so it stays green. I'll schedule the fix as a small shared step after the current merges.
 
+**Shared test database leftovers (found 00:35, 8 November):** live tests that create deployment-wide rules (`test_load_checks`, `test_rule_sentence_routes`, `test_rule_maker_checker_routes`, `test_rule_schedule`, `test_rule_sentences`, `test_sentence_rules`) leave them in the throwaway Postgres's `osprey` database. Every later case then lists them, so a test assuming it is alone fails. Some of the "red on main itself" figures below may be this rather than code. A test-hygiene step is to come: each live file cleans up after itself, or works in its own database. Until then, figures blamed on main are checked on a fresh database before they're believed.
+
 **Live tests red on main itself (case's main-side run, 22:29–22:35 UTC, under its lease, on `b82a88f`):** these fail with or without any lane's work. `make ci` doesn't run them, so they never showed. Not yet owned by any step; I'll schedule them after the current merges:
 - ClickHouse `event_frequency` (above);
 - the model and recognition ports (4 LiteLLM, 4 Stanza): no model services on the throwaway stack. This is an environment gap, not a code fault;
