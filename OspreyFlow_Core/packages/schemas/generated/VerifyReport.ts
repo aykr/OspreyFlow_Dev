@@ -80,6 +80,7 @@ export type RuleName1 = string;
 export type Why = string;
 export type ChecksNotJudged = CheckNotJudged[];
 export type ChecksJudged = number;
+export type ModelVersion = number | null;
 
 /**
  * The dry run's three outputs (§5) in one response: counts,
@@ -101,6 +102,7 @@ export interface VerifyReport {
   would_raise?: WouldRaise;
   checks_not_judged?: ChecksNotJudged;
   checks_judged?: ChecksJudged;
+  model_version?: ModelVersion;
   [k: string]: unknown;
 }
 export interface EntitiesByType {

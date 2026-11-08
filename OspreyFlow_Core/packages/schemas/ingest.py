@@ -365,6 +365,9 @@ class StudioRecipeDraft(BaseModel):
     full `Recipe`, which does not exist until Map supplies a
     `row_template` and Publish supplies a `git_path`."""
 
+    #: `model_version` is a field, not pydantic's own `model_` namespace.
+    model_config = {"protected_namespaces": ()}
+
     recipe_id: str
     version: int
     status: StudioRecipeStatus
@@ -418,6 +421,9 @@ class StudioRecipeDraft(BaseModel):
     #: ADR-120 D10, Amendment 1: the pack versions it was published against. `None` = not pinned;
     #: `{}` = pinned, names and writes no pack.
     pack_versions: dict[str, int] | None = None
+    #: ADR-140 decisions 5 and 14: the dataset's live domain-model version it was published against.
+    #: `None` = not pinned (published before L3.1b, or the dataset had no live model).
+    model_version: int | None = None
     git_path: str | None = None
     published_by: PrincipalId | None = None
     #: Resolved at read time, never stored (ADR-106).
@@ -846,7 +852,23 @@ class RunRecipeInput(BaseModel):
     source_location: str | None = None
 
 
+class VerifyRecipeInput(BaseModel):
+    """Optional body of `POST …/ingest/recipes/{id}/verify` (ADR-140 decision 5): the domain-model
+    version the Test runs against. Omitted, it is the dataset's live version. It may name the open
+    draft only for a reader with `edit_target_model` on the dataset; for anyone else the draft's
+    version is answered exactly as a version that does not exist (422, the same words), so a tester
+    learns nothing of an unpublished draft (rule 3)."""
+
+    #: `model_version` is a field, not pydantic's own `model_` namespace.
+    model_config = {"protected_namespaces": ()}
+
+    model_version: int | None = Field(default=None, ge=1)
+
+
 class Recipe(BaseModel):
+    #: `model_version` is a field, not pydantic's own `model_` namespace.
+    model_config = {"protected_namespaces": ()}
+
     id: str
     version: int
     label: str
@@ -854,6 +876,10 @@ class Recipe(BaseModel):
     ontology_version: int
     #: ADR-120 D10, Amendment 1: `None` = not pinned; `{}` = pinned, names and writes no pack.
     pack_versions: dict[str, int] | None = None
+    #: ADR-140 decision 14: the pinned domain-model version, committed with the YAML. `None` = not
+    #: pinned, and left out of the YAML (`exclude_none`), so a recipe published before stays
+    #: byte-for-byte what it was.
+    model_version: int | None = None
     defaults: RecipeDefaults = Field(default_factory=RecipeDefaults)
     deduplicate: DeduplicateConfig | None = None
     row_template: RowTemplate
@@ -1257,6 +1283,9 @@ class VerifyReport(BaseModel):
     `schemas.domain.Node`/`Edge` shapes `GlassCanvas` already renders, not
     a second preview-only shape invented for this screen."""
 
+    #: `model_version` is a field, not pydantic's own `model_` namespace.
+    model_config = {"protected_namespaces": ()}
+
     rows_read: int
     rows_deduplicated: int
     #: ADR-127 decision 5: of the sample, the rows a run would skip because the case already kept
@@ -1286,6 +1315,9 @@ class VerifyReport(BaseModel):
     checks_not_judged: list[CheckNotJudged] = Field(default_factory=list)
     #: How many of the pipeline's checks the sample was judged against.
     checks_judged: int = 0
+    #: ADR-140 decision 5: the domain-model version the Test ran against; `None` when the dataset
+    #: has no live model.
+    model_version: int | None = None
 
 
 # --- The load ledger (01_DOMAIN_MODEL.md §2.4, ADR-018) -------------------
@@ -1397,6 +1429,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SchedulePreviewInput,
     SchedulePreview,
     RunRecipeInput,
+    VerifyRecipeInput,
     Recipe,
     RejectionRecord,
     LoadReport,

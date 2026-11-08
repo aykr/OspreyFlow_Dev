@@ -148,6 +148,7 @@ export type { ScheduleUpdateInput } from "./ScheduleUpdateInput";
 export type { SchedulePreviewInput } from "./SchedulePreviewInput";
 export type { SchedulePreview } from "./SchedulePreview";
 export type { RunRecipeInput } from "./RunRecipeInput";
+export type { VerifyRecipeInput } from "./VerifyRecipeInput";
 export type { Recipe } from "./Recipe";
 export type { RejectionRecord } from "./RejectionRecord";
 export type { LoadReport } from "./LoadReport";

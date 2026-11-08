@@ -58,6 +58,7 @@ export type OntologyVersion = number | null;
 export type PackVersions = {
   [k: string]: number;
 } | null;
+export type ModelVersion = number | null;
 export type GitPath = string | null;
 export type PublishedByName = string | null;
 export type PublishedAt = string | null;
@@ -108,6 +109,7 @@ export interface StudioRecipeDraft {
   verified_at?: VerifiedAt;
   ontology_version?: OntologyVersion;
   pack_versions?: PackVersions;
+  model_version?: ModelVersion;
   git_path?: GitPath;
   published_by?: PrincipalId | null;
   published_by_name?: PublishedByName;

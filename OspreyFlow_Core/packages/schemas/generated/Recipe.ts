@@ -13,6 +13,7 @@ export type OntologyVersion = number;
 export type PackVersions = {
   [k: string]: number;
 } | null;
+export type ModelVersion = number | null;
 export type LegalBasis = string | null;
 export type Units = string[];
 export type Field = string | null;
@@ -75,6 +76,7 @@ export interface Recipe {
   connector: RecipeConnector;
   ontology_version: OntologyVersion;
   pack_versions?: PackVersions;
+  model_version?: ModelVersion;
   defaults?: RecipeDefaults;
   deduplicate?: DeduplicateConfig | null;
   row_template: RowTemplate;
