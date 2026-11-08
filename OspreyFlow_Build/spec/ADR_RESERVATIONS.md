@@ -67,6 +67,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 11 | Phase 7a as built: the staging catalogue's engine, its YAML keys, staged rows' source references in each element's provenance (L1.3) | studio | 2026-11-08 | reserved |
 | ADR-109 Amendment 12 | A corrected node an alert names is renamed in referent_node_ids through the repoint journal; L2.8c's carries (L2.8d) | rules | 2026-11-08 | reserved |
 | ADR-145 Amendment 5 | Custom roles, the Super user preset, teams and leads as built, and the guard rails (no edit leaves no enabled holder of manage_people; no unknown right, both halves of a decision 7 pair, or a right the giver lacks) (L2.5, the owner's rulings of 8 November) | admin | 2026-11-08 | reserved |
+| ADR-144 Amendment 2 | Case views as built: the refusal renamed original_layer_read_only, no origin link on an alert jump's case (B14 withdrawn), a view's window and threshold (L3.2 and L3.2b) | case | 2026-11-08 | reserved |
 
 ## Baseline
 

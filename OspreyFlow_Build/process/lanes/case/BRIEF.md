@@ -1,40 +1,36 @@
-# Case lane · brief L3.2 · case views replace branches, and no branches anywhere
+# Case lane · brief L3.2b · no branches in the Glass, and the check in make ci
 
-Written by the orchestrator, 8 November 2026, for a **fresh case session** on account `sol` (ADR-142
-Amendment 3). The previous session's last step, L3.1b, is merged (`d198174`); read its report
-(`process/lanes/case/REPORT_L3.1b.md`) for what it left. Rebase onto `main` first. Opus, medium. Size L.
-The riskiest lane: every piece starts with its access and existence-leak tests, and the `lane-reviewer`
-reads the step before you report ready to merge.
+Written by the orchestrator, 8 November 2026, after L3.2's merge (`c3fc52f`), for a **fresh case session**
+on account `sol`. Read `process/lanes/case/HANDOFF.md` and `REPORT.md` first: they are what this step starts
+from and what it must not redo. Rebase onto `main`. Opus, medium. Size M. **First exit: L3.2b merges before
+the run's single push**, because until then main's Glass calls the branch routes L3.2 removed.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 6, 12 and 15 above all); ADR-144 and its Amendment 1;
-ADR-143 decision 1 and Amendment 2 (the analyst layer); ADR-099 Amendments 13–15; `spec/01`, `spec/02`,
-`spec/03` and `spec/04` wherever they name a branch.
+**The lane, the stacks, the merge rule.** Case's ownership map; a test stack by `stack_lease.sh acquire case
+"<purpose>" && …`, pinning the ports it prints; questions, requests and ready-to-merge to the orchestrator
+by message (Prompt L); before ready-to-merge, your own lane-reviewer, then make -k ci and make test at a
+commit rebased onto main, saved under `process/lanes/case/gates/`, with the commit and its tree.
 
-**Build** (the plan's row L3.2):
-1. **Case views** (ADR-144), and `scripts.migrate_branches_to_views`, dry run first (the dry run writes
-   nothing).
-2. **No branches anywhere** (ADR-144 Amendment 1): gone from every route, screen, keyboard spec and spec;
-   `tools/no_branches_check.py` wired into `make ci` (as a diff for the orchestrator: the Makefile and
-   `ci.yml` are the owner's), shown red first with a planted branch word.
-3. **A branch's unnamed writes** (proposals, extractions, `ALERTED_ON`) touching an original-layer node
-   never reach the original case through the source (from L3.1's final review; test first).
-4. **What a branch held:** branch-only items to the original case's layer, and anything in a legacy
-   branch's or alert-jump case's own layer (cases made before L3.1) moved into the original case's
-   layer, tagged `from_branch`.
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 11, 12, 13 and 15 above all); ADR-144 and Amendment 1;
+ADR-143 decision 1 and Amendment 2; the owner's Q2 and Q4 and the orchestrator's Q1 and Q3 (REPORT.md).
 
-5. **Carried from GitHub's CI on `e89d44a`** (recorded, not fixed, at the owner's word): axe's
-   `target-size` (WCAG 2.2 AA) fails on `case-screen-options-harness.html` variant c, dark and light, on
-   the ghost button *Add many from a list*. Fix it, with the harness's axe case red first.
+**Build** (HANDOFF.md's list):
+1. **The Glass without branches:** the Cases list with views; *Save as a view* on the selection bar and in
+   the over-cap dialog (`save_as_view`); the *Views in this case* panel (share, delete); *Ask the model
+   about these* saving a private view and asking with `view_id` (`ask_in_a_view`); the GOV.UK list and
+   form; `canvas/branchNodes.ts` and `workingset/branchByFilter.ts` gone.
+2. **A view opens collapsed at its own threshold** (`test_a_view_opens_collapsed_at_its_threshold`, spec 03
+   §3.1b).
+3. **G:** "branch" out of `spec/00`–`09`, with B14 in spec 08 (no origin link, as Q1 ruled).
+4. **H:** axe's `target-size` on `case-screen-options-harness.html` variant c (the CI carry).
+5. **`tools/no_branches_check.py` in make ci:** drop the tree test's xfail; send the Makefile and `ci.yml`
+   wiring as a diff for the orchestrator.
+6. **ADR-144 Amendment 2** (reserved for you): the refusal renamed `original_layer_read_only`, B14 withdrawn,
+   and who applies a view's window and threshold.
 
-**Ask the owner first** (through the orchestrator, as multiple choice, recommendation first) only if the
-migration meets a case it cannot place: report it, never guess (as L3.1's migration did).
+**Tests first, each red by a plant at the real call site:** `keyboard/views.spec.ts` for every view action
+(rule 13), registry ids as a diff; axe in dark, light and GOV.UK; a private view's panel shows nothing to
+another member; the over-cap dialog's *Save as a view* by keyboard; the gate red with one branch word
+planted in the Glass.
 
-**Tests first, named, each red by a plant of the real call site's shape:** ADR-144's and Amendment 1's
-tests; the migration's dry run writes nothing and the real run leaves every seeded case with its views
-and no branch; an unnamed branch write never reaches the original case (red with the layer check
-removed); the selection bar's view actions by keyboard (rule 13), with their registry ids sent to the
-orchestrator as a diff.
-
-**Exit.** The row's exit; every screen in the dark, light and GOV.UK themes with axe; the live cases
-under a named lease and stack (`stack_lease.sh acquire case "<purpose>"` gives a or b; pin the ports it
-prints); a friction fragment. Report in Prompt L's format, then stop.
+**Exit.** No branch word anywhere the gate scans; make ci (with the gate) and make test green offline; the
+live view routes under a named lease and stack; a friction fragment. Report in Prompt L's format, then stop.
