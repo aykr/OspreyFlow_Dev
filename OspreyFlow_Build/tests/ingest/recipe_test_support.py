@@ -28,6 +28,8 @@ from typing import Any
 
 import pyarrow.fs as pa_fs
 import pytest
+from services.ingest import staging
+
 from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
@@ -36,20 +38,27 @@ from ports.graph import StoredLink, StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
 from schemas.ingest import LinkPriorState, stored_digest
 from schemas.merge import aggregate_edge_writes
-from services.ingest import staging
 
 
 class LocalStore:
     """The slice of the object store's file system the staging module uses, over a directory. An
-    object store has no directories to make before a write; a disk does, so a write makes them."""
+    object store has no directories to make before a write; a disk does, so a write makes them. A
+    bucket, though, must be made first, there as here."""
 
     def __init__(self, root: Path) -> None:
         self._fs = pa_fs.SubTreeFileSystem(str(root), pa_fs.LocalFileSystem())
+        self._buckets: set[str] = set()
 
     def create_dir(self, path: str) -> None:
+        self._buckets.add(path.split("/", 1)[0])
         self._fs.create_dir(path, recursive=True)
 
     def open_output_stream(self, path: str) -> Any:
+        # Rule 15: the object store refuses a write into a bucket that was never created (MinIO's
+        # NoSuchBucket); a writer that forgets `create_dir(bucket)` fails here as it would there.
+        bucket = path.split("/", 1)[0]
+        if bucket not in self._buckets:
+            raise FileNotFoundError(f"NoSuchBucket: {bucket!r} was never created")
         self._fs.create_dir(path.rsplit("/", 1)[0], recursive=True)
         return self._fs.open_output_stream(path)
 

@@ -773,6 +773,23 @@ def _provenance(
     )
 
 
+def _refuse_staging_without_its_refs(
+    recipe: Recipe, row_refs: Mapping[int, Sequence[SourceRef]] | None
+) -> None:
+    """ADR-140 Amendment 11 (lane review round 1, item 4): a recipe with staging steps maps the last
+    step's table, never the raw rows of one source. Run without those rows' refs it would map the
+    wrong rows and record the wrong sources, so it is refused in words; it runs through
+    `staged_run.run_staged_recipe` (Test: `dry_run_staged_recipe`)."""
+    if recipe.staging and row_refs is None:
+        raise RecipeRuleError(
+            [
+                f"Recipe {recipe.id!r} declares staging steps, so it runs through its staging "
+                "(each source table, then each step, then Map); it cannot be run over one "
+                "source's rows."
+            ]
+        )
+
+
 def _row_sources(
     source: str, row_index: int, row_refs: Mapping[int, Sequence[SourceRef]] | None
 ) -> list[SourceRef]:
@@ -2252,6 +2269,7 @@ async def dry_run_recipe(
     threads it onto `StagedRow`s that this function itself consumes and
     discards."""
     _require_scheme_to_judge_bound_handling(recipe, scheme)
+    _refuse_staging_without_its_refs(recipe, row_refs)
     sample = list(rows)
     # Judged as the run judges (ADR-127 decision 5), by asking the store and writing nothing.
     already = await kept_among(recipe, sample, row_keys, investigation_scope)
@@ -2359,6 +2377,7 @@ async def run_recipe(
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
     row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
+    stage_raw: bool = True,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
     a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
@@ -2376,6 +2395,7 @@ async def run_recipe(
         )
     # ADR-120 D10, Amendment 1: the packs it names or writes, at the versions it was published at.
     check_recipe_pins(recipe, ontology)
+    _refuse_staging_without_its_refs(recipe, row_refs)
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
     check_recipe_rules(
@@ -2412,9 +2432,12 @@ async def run_recipe(
     # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
     already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
     storage = storage or ObjectStorageConfig.from_env()
-    await asyncio.to_thread(
-        _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
-    )
+    # A staged run (`staged_run.run_staged_recipe`) has written its sources' rows as the raw rows
+    # already; the rows here are the table Map reads, never raw (`stage_raw=False`).
+    if stage_raw:
+        await asyncio.to_thread(
+            _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
+        )
 
     resolved = await asyncio.to_thread(
         functools.partial(

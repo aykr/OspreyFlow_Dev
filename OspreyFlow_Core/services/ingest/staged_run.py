@@ -35,7 +35,8 @@ from .staging_catalogue import (
     map_input,
     read_staged_table,
     run_staging,
-    stage_table,
+    stage_raw_sources,
+    stage_table_counted,
 )
 
 
@@ -46,6 +47,10 @@ class StagedLoad:
     staging: StagingResult
     #: Each step's staged Parquet, by step id.
     staged_paths: dict[str, str]
+    #: The run's metering for staging (ADR-110 Amendment 12; `RunMetering.rows_staged` and
+    #: `parquet_bytes`): the rows every step's table holds, and the bytes their Parquet took.
+    rows_staged: int = 0
+    parquet_bytes: int = 0
 
 
 @dataclass
@@ -55,12 +60,19 @@ class StagedTest:
 
 
 def staging_rejection_record(rejection: StagingRejection) -> RejectionRecord:
-    """A row a step refused, as the load report lists rejections. The reason names the step and the
-    cause, never a value; nothing of the row is in `sample`, so it carries no marking (ADR-127
-    Amendment 26)."""
+    """A row a step refused, as the load report lists rejections. `row_index` is the refused row's
+    own position in its own source, and the reason names that source (and, for a Join, the side),
+    the step and the cause, never a value: a Join's right-side row is named as a row of the right
+    table, never mistaken for a row of the left. Nothing of the row is in `sample`, so it carries
+    no marking (ADR-127 Amendment 26)."""
+    first = rejection.refs[0]
+    side = f"{rejection.side} side, " if rejection.side else ""
     return RejectionRecord(
-        row_index=rejection.refs[0].row_index,
-        reason=f"staging step {rejection.step}: {rejection.reason}",
+        row_index=first.row_index,
+        reason=(
+            f"staging step {rejection.step} ({side}{first.source} row {first.row_index}): "
+            f"{rejection.reason}"
+        ),
         sample="",
     )
 
@@ -71,11 +83,17 @@ def _stage(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str],
+    deployment_lists: Collection[str],
 ) -> StagingResult:
     if not recipe.staging:
         raise StagingError([f"recipe {recipe.id!r} has no staging steps"])
     return run_staging(
-        recipe.staging, sources=sources, lists=lists, dataset_id=dataset_id, subscribed=subscribed
+        recipe.staging,
+        sources=sources,
+        lists=lists,
+        dataset_id=dataset_id,
+        subscribed=subscribed,
+        deployment_lists=deployment_lists,
     )
 
 
@@ -86,6 +104,7 @@ async def run_staged_recipe(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str] = (),
+    deployment_lists: Collection[str] = (),
     graph: GraphPort,
     ontology: OntologySchema,
     tx: TxId,
@@ -99,12 +118,20 @@ async def run_staged_recipe(
     **engine: Any,
 ) -> StagedLoad:
     storage = storage or ObjectStorageConfig.from_env()
-    staging = await asyncio.to_thread(_stage, recipe, sources, lists, dataset_id, subscribed)
+    staging = await asyncio.to_thread(
+        _stage, recipe, sources, lists, dataset_id, subscribed, deployment_lists
+    )
+    # The source rows, as each source gave them, are the load's raw rows (`raw.parquet`), not the
+    # table Map reads; `run_recipe` is told not to write its own over them.
+    await asyncio.to_thread(stage_raw_sources, sources, storage=storage, load_id=load_id)
     paths: dict[str, str] = {}
+    rows_staged = parquet_bytes = 0
     for step in recipe.staging or []:
-        paths[step.id] = await asyncio.to_thread(
-            stage_table, staging.tables[step.id], storage=storage, load_id=load_id
+        paths[step.id], size = await asyncio.to_thread(
+            stage_table_counted, staging.tables[step.id], storage=storage, load_id=load_id
         )
+        rows_staged += len(staging.tables[step.id].rows)
+        parquet_bytes += size
     table = await asyncio.to_thread(read_staged_table, paths[staging.output.name], storage=storage)
     rows, refs = map_input(table)
     report, events = await run_recipe(
@@ -122,13 +149,17 @@ async def run_staged_recipe(
         row_keys=row_keys,
         written=written,
         row_refs=refs,
+        stage_raw=False,
         **engine,
     )
     report.rejections = [
         *(staging_rejection_record(r) for r in staging.rejections),
         *report.rejections,
     ]
-    return StagedLoad(report, events, staging, paths)
+    # "The rows it read" (ADR-110 Amendment 12) are the rows the sources gave, not the rows of the
+    # table Map read, which staging may have joined, filtered or folded.
+    report.rows_read = sum(len(table.rows) for table in sources.values())
+    return StagedLoad(report, events, staging, paths, rows_staged, parquet_bytes)
 
 
 async def dry_run_staged_recipe(
@@ -138,6 +169,7 @@ async def dry_run_staged_recipe(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str] = (),
+    deployment_lists: Collection[str] = (),
     graph: GraphPort,
     ontology: OntologySchema,
     principal: Principal,
@@ -145,7 +177,7 @@ async def dry_run_staged_recipe(
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
 ) -> StagedTest:
-    staging = _stage(recipe, sources, lists, dataset_id, subscribed)
+    staging = _stage(recipe, sources, lists, dataset_id, subscribed, deployment_lists)
     rows, refs = map_input(staging.output)
     result = await dry_run_recipe(
         recipe,
@@ -163,4 +195,5 @@ async def dry_run_staged_recipe(
         *(staging_rejection_record(r) for r in staging.rejections),
         *result.rejections,
     ]
+    result.rows_read = sum(len(table.rows) for table in sources.values())
     return StagedTest(result, staging)

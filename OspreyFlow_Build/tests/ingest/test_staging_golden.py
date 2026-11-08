@@ -12,7 +12,7 @@ What a mistake would do, and the case that catches it:
 - a row lost without a word: each case's `reports` and `rejections` account for every input row
   (`test_every_input_row_is_accounted_for`);
 - a staged row's refs not naming the rows it came from (each case's `expected.rows[].refs`; the
-  Join's provenance has its own test, `test_staging_provenance.py`)."""
+  Join's provenance has its own test, `test_staged_run.py`)."""
 
 from __future__ import annotations
 
@@ -67,7 +67,8 @@ def outcome(result: StagingResult) -> dict[str, Any]:
         "rows": [{"cells": row.cells, "refs": refs(row.refs)} for row in result.output.rows],
         "reports": [asdict(r) for r in result.reports],
         "rejections": [
-            {"step": r.step, "refs": refs(r.refs), "reason": r.reason} for r in result.rejections
+            {"step": r.step, "side": r.side, "refs": refs(r.refs), "reason": r.reason}
+            for r in result.rejections
         ],
     }
 
@@ -94,24 +95,35 @@ def test_every_step_kind_has_a_golden_file() -> None:
 
 @pytest.mark.parametrize("name", _cases())
 def test_every_input_row_is_accounted_for(name: str) -> None:
-    """Rule 2 per step: rows in = rows out − extra matches + not passed on, each counted."""
+    """Rule 2 per step, from what the step itself gave (`run_case`), not from the golden file: every
+    row in is passed on, counted (unmatched, filtered out, a repeat folded) or rejected. For a
+    Join each side is checked: a row of either table that met nothing is counted."""
     case = _load(name)
-    for report in case["expected"]["reports"]:
-        kind = report["kind"]
-        lost = report["filtered_out"] + report["repeats_folded"] + report["rejected"]
-        if kind == "join":
-            # A left row rejected, unmatched (inner: not passed on) or matched once or more.
-            step = next(s for s in case["steps"] if s["id"] == report["step"])
-            left_rejected = sum(
-                1
-                for r in case["expected"]["rejections"]
-                if r["step"] == report["step"] and r["refs"][0][0] == step["left"]
-            )
-            passed = (
-                report["rows_in"]
-                - left_rejected
-                - (report["unmatched"] if step.get("how", "inner") == "inner" else 0)
-            )
-            assert report["rows_out"] >= passed
-        else:
-            assert report["rows_out"] == report["rows_in"] - lost, report
+    result = run_case(case)
+    steps = {s.id: s for s in STEPS.validate_python(case["steps"])}
+    for report in result.reports:
+        step = steps[report.step]
+        if report.kind != "join":
+            lost = report.filtered_out + report.repeats_folded + report.rejected
+            assert report.rows_out == report.rows_in - lost, report
+            continue
+        out = result.tables[report.step].rows
+        mine = [r for r in result.rejections if r.step == report.step]
+        for side, table, rows_in, unmatched in (
+            ("left", step.left, report.rows_in, report.unmatched),
+            ("right", step.right, report.right_rows_in, report.right_unmatched),
+        ):
+            first = {(ref.source, ref.row_index) for ref in result.tables[table].rows[0].refs}
+            source = next(iter(first))[0]
+            met = {
+                (ref.source, ref.row_index)
+                for row in out
+                for ref in row.refs
+                if ref.source == source
+            }
+            if side == "left" and step.how == "left":
+                met_count = len(met) - unmatched  # a kept unmatched left row is in the output
+            else:
+                met_count = len(met)
+            rejected = sum(1 for r in mine if r.side == side)
+            assert rows_in == met_count + unmatched + rejected, (name, side, report)

@@ -284,6 +284,18 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     instance's own checkout would never see this commit. Pushing to a
     shared remote (or routing every instance through one writable
     git-backed service) is real, undesigned work this phase does not do."""
+    if recipe.staging:
+        # ADR-140 Amendment 11: a recipe's staging steps are judged by the save gate
+        # (`staging_catalogue.staging_rule_violations`) against its dataset's sources and lists,
+        # which the Studio's save and publish give it with the step drawers (phase 7b). Until
+        # then, publishing one is refused in words, never committed unjudged.
+        raise RecipeRuleError(
+            [
+                f"Recipe {recipe.id!r} declares staging steps, which the Studio cannot judge "
+                "against its dataset's sources and lists before publishing yet; it is not "
+                "published."
+            ]
+        )
     return await commit_recipe_file(
         recipe.id, serialise_recipe(recipe).encode("utf-8"), version=recipe.version,
         repo_root=repo_root,

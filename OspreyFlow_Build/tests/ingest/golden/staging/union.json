@@ -133,7 +133,9 @@
     "unmatched": 0,
     "filtered_out": 0,
     "repeats_folded": 0,
-    "rejected": 0
+    "rejected": 0,
+    "right_rows_in": 0,
+    "right_unmatched": 0
    }
   ],
   "rejections": []

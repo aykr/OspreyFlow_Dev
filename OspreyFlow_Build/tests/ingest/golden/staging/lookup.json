@@ -106,7 +106,7 @@
      [
       "reference_list:establishments@v3",
       0,
-      "FMR",
+      "1d554b5d655c493a9f238e80dc7de7322bceba2db9629201936a77138d1d3e08",
       null
      ]
     ]
@@ -175,7 +175,9 @@
     "unmatched": 3,
     "filtered_out": 0,
     "repeats_folded": 0,
-    "rejected": 0
+    "rejected": 0,
+    "right_rows_in": 0,
+    "right_unmatched": 0
    }
   ],
   "rejections": []

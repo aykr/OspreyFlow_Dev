@@ -1,6 +1,6 @@
 {
  "dataset_id": "pid",
- "about": "Dedupe folds repeats on declared columns (trimmed); the first row stands for them and carries every repeat's ref.",
+ "about": "Dedupe folds repeats on declared columns (trimmed); the first row stands for them and carries every repeat's ref. A row with an empty key part has no key, as the engine's deduplicate reads it: it stands alone, never folded into another keyless row.",
  "steps": [
   {
    "id": "one_per_owner",
@@ -30,6 +30,14 @@
     {
      "number": "07700 900722",
      "owner_name": "Shona Whitlow"
+    },
+    {
+     "number": "07700 900723",
+     "owner_name": ""
+    },
+    {
+     "number": "07700 900724",
+     "owner_name": "  "
     }
    ]
   }
@@ -80,18 +88,48 @@
       "ld-no-9"
      ]
     ]
+   },
+   {
+    "cells": {
+     "number": "07700 900723",
+     "owner_name": null
+    },
+    "refs": [
+     [
+      "number_owners",
+      4,
+      "32def706c6e031597057799b46d0eb7f4efdb656f2eaccbccc788f01af057644",
+      "ld-no-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "07700 900724",
+     "owner_name": null
+    },
+    "refs": [
+     [
+      "number_owners",
+      5,
+      "54ae3c43c53076e45c5f04e5a0ac89ab8caba2651c8c42e2b6cb14e5a1dabeb6",
+      "ld-no-9"
+     ]
+    ]
    }
   ],
   "reports": [
    {
     "step": "one_per_owner",
     "kind": "dedupe",
-    "rows_in": 4,
-    "rows_out": 2,
+    "rows_in": 6,
+    "rows_out": 4,
     "unmatched": 0,
     "filtered_out": 0,
     "repeats_folded": 2,
-    "rejected": 0
+    "rejected": 0,
+    "right_rows_in": 0,
+    "right_unmatched": 0
    }
   ],
   "rejections": []

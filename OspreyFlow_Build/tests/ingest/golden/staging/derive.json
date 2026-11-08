@@ -121,12 +121,15 @@
     "unmatched": 0,
     "filtered_out": 0,
     "repeats_folded": 0,
-    "rejected": 1
+    "rejected": 1,
+    "right_rows_in": 0,
+    "right_unmatched": 0
    }
   ],
   "rejections": [
    {
     "step": "e164",
+    "side": null,
     "refs": [
      [
       "visit_bookings",

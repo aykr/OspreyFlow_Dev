@@ -23,10 +23,17 @@ What a mistake would do, and the case that catches it:
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from services.api.studio_publish import write_and_commit_recipe
+from services.ingest import staging
+from services.ingest.engine import dry_run_recipe, run_recipe
 from services.ingest.recipe_loader import load_recipe
+from services.ingest.recipe_rules import RecipeRuleError
 from services.ingest.staged_run import dry_run_staged_recipe, run_staged_recipe
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import StagedTable, reference_table, source_table
@@ -98,8 +105,8 @@ async def load() -> tuple[Any, ValidatingGraph]:
     return done, graph
 
 
-def _refs(element: Any) -> list[tuple[str, str, str | None, str | None]]:
-    return [(s.document_id, s.locator, s.row_key, s.load_id) for s in element.provenance.sources]
+def _refs(element: Any) -> list[tuple[str, str, str | None]]:
+    return [(s.document_id, s.locator, s.load_id) for s in element.provenance.sources]
 
 
 def _node(graph: ValidatingGraph, type_: str, field: str, value: str) -> Any:
@@ -119,16 +126,17 @@ async def test_a_join_s_provenance_survives_to_the_link_it_makes() -> None:
         (whitlow.id, number.id)
     ]
     link = next(e for e in uses if e.source == whitlow.id)
-    sources = {(d, loc, load) for d, loc, _key, load in _refs(link)}
+    sources = set(_refs(link))
     # The booking that gave the number, the owner row that said whose it is, the list row that
     # named the establishment: each with its own load.
     assert ("visit_bookings", "row 0", "ld-vb-1") in sources
     assert ("number_owners", "row 0", "ld-no-1") in sources
     assert ("reference_list:establishments@v3", "row 0", None) in sources
+    # Booking 005 gave the same number, so its row merged into the same link, and the link names
+    # it and its own owner row as well (review round 1, item 11).
+    assert ("visit_bookings", "row 4", "ld-vb-1") in sources
     # And to the node: the owner was made from the joined row, so it names the owner row too.
-    assert ("number_owners", "row 0", "ld-no-1") in {
-        (d, loc, ld) for d, loc, _k, ld in _refs(whitlow)
-    }
+    assert ("number_owners", "row 0", "ld-no-1") in set(_refs(whitlow))
 
 
 async def test_every_element_names_the_source_rows_it_came_from() -> None:
@@ -138,9 +146,9 @@ async def test_every_element_names_the_source_rows_it_came_from() -> None:
     for element in elements:
         refs = _refs(element)
         assert refs, element
-        for document, locator, key, load_id in refs:
+        for document, locator, load_id in refs:
             assert document in SOURCES, document
-            assert locator.startswith("row ") and key
+            assert locator.startswith("row ")
             assert (load_id is None) == document.startswith("reference_list:")
     booking = _node(graph, "Document", "message_id", "VB-2605-002")
     assert booking.properties["title"] == "HMP Halbeck · Wed 5 Nov 10:00"
@@ -153,16 +161,126 @@ async def test_every_booking_is_accounted_for() -> None:
     assert reports["with_establishment"].rows_in == 6
     assert reports["with_establishment"].unmatched == 1  # XXX, kept with no establishment
     assert reports["with_owner"].unmatched == 2  # 003's and 006's numbers have no owner
-    assert reports["with_owner"].rejected == 1  # 004: "not given" is no number
+    assert reports["with_owner"].rejected == 2  # 004's "not given"; the owners' "unknown"
+    assert reports["with_owner"].right_rows_in == 4
+    assert reports["with_owner"].right_unmatched == 1  # ODE's number, which no booking gave
     staging_rejections = [r for r in done.report.rejections if r.reason.startswith("staging step")]
+    # Each names its own row in its own source, and a Join's side (review round 1, item 5).
     assert [(r.row_index, r.reason) for r in staging_rejections] == [
-        (3, "staging step with_owner: contact_number: a phone number has no letters in it")
+        (
+            3,
+            "staging step with_owner (right side, number_owners row 3): number: a phone number "
+            "has no letters in it",
+        ),
+        (
+            3,
+            "staging step with_owner (left side, visit_bookings row 3): contact_number: a phone "
+            "number has no letters in it",
+        ),
     ]
-    assert all("not given" not in r.reason for r in done.report.rejections)
-    # Five bookings reach Map; one of them (006, booked "yesterday") Map itself rejects.
-    assert done.report.rows_read == 5
-    assert len(done.report.rejections) == 2
+    assert all(
+        "not given" not in r.reason and "unknown" not in r.reason for r in staging_rejections
+    )
+    # The rows it read are the sources' (6 bookings, 4 owner rows), not the 5 that reach Map, of
+    # which Map itself rejects one (006, booked "yesterday").
+    assert done.report.rows_read == 10
+    assert len(done.report.rejections) == 3
     assert set(done.staged_paths) == {"with_establishment", "with_owner", "titled"}
+    assert done.rows_staged == 6 + 5 + 5
+    assert done.parquet_bytes > 0
+
+
+async def test_the_load_s_raw_rows_are_the_sources_rows() -> None:
+    """Review round 1, item 7: `raw.parquet` holds every source's rows as each source gave them,
+    never the table Map read."""
+    await load()
+    raw = staging.read_raw_rows(
+        "staging/loads/ld-run-1/raw.parquet", storage=ObjectStorageConfig(bucket="staging")
+    )
+    assert [(r.source, r.row_index) for r in raw] == [
+        *(("visit_bookings", i) for i in range(6)),
+        *(("number_owners", i) for i in range(4)),
+    ]
+    assert raw[3].fields["contact_number"] == "not given"
+    assert raw[6 + 3].fields == {
+        "number": "unknown",
+        "owner_family_name": "NOBODY",
+        "since": "2020-01-01",
+    }
+    assert {r.load_id for r in raw} == {"ld-vb-1", "ld-no-1"}
+
+
+async def test_no_row_key_raw_or_hashed_reaches_an_element_or_test() -> None:
+    """Rule 7 (the orchestrator's settlement, review round 1): an element names a source row by its
+    source, row and load, never by its key, raw or hashed, in what the load writes and in what Test
+    shows. Red with `row_key` restored on `SourceRef`."""
+    done, graph = await load()
+    sources, lists = inputs()
+    tested = await dry_run_staged_recipe(
+        RECIPE,
+        sources=sources,
+        lists=lists,
+        dataset_id="pid",
+        graph=ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
+        ontology=ONTOLOGY,
+        principal=LOADER,
+        scheme=SCHEME,
+    )
+    hashed = {ref.row_key for t in done.staging.tables.values() for r in t.rows for ref in r.refs}
+    raw_keys = {row["booking_id"] for row in _rows("visit_bookings.csv")}
+    raw_keys |= {row["number"] for row in _rows("number_owners.csv")}
+    raw_keys |= {row["estab_id"] for row in _rows("establishments.csv")}
+    wire = [
+        *(n.model_dump_json() for n in graph.committed_nodes),
+        *(e.model_dump_json() for e in graph.committed_edges),
+        *(n.model_dump_json() for n in tested.result.nodes),
+        *(e.model_dump_json() for e in tested.result.edges),
+    ]
+    assert hashed and wire
+    for text in wire:
+        assert '"row_key"' not in text
+        assert not any(h in text for h in hashed)
+        sources = json.loads(text)["provenance"]["sources"]
+        assert not any(k in json.dumps(sources) for k in raw_keys), sources
+
+
+async def test_a_recipe_with_staging_is_never_run_over_one_source_s_rows() -> None:
+    """Review round 1, item 4: refused in words, never Map run over the raw rows."""
+    graph = ValidatingGraph(ONTOLOGY)
+    tx = await graph.begin_transaction()
+    with pytest.raises(RecipeRuleError, match="declares staging steps"):
+        await run_recipe(
+            RECIPE,
+            _rows("visit_bookings.csv"),
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx=tx,  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="ld-raw",
+            investigation_scope="case-1",
+            source="visit_bookings",
+            storage=ObjectStorageConfig(bucket="staging"),
+            scheme=SCHEME,
+        )
+    with pytest.raises(RecipeRuleError, match="declares staging steps"):
+        await dry_run_recipe(
+            RECIPE,
+            _rows("visit_bookings.csv"),
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            principal=LOADER,
+            source="visit_bookings",
+            scheme=SCHEME,
+        )
+    assert graph.open_nodes == [] and graph.open_edges == []
+
+
+async def test_a_recipe_with_staging_is_not_published_unjudged(tmp_path: Path) -> None:
+    """Review round 1, item 4: no route gives the save gate a dataset's sources and lists yet
+    (phase 7b), so publishing a recipe with steps is refused in words and commits nothing."""
+    with pytest.raises(RecipeRuleError, match="declares staging steps"):
+        await write_and_commit_recipe(RECIPE, repo_root=tmp_path)
+    assert not (tmp_path / "recipes").exists()
 
 
 async def test_test_and_the_load_reject_the_same_rows() -> None:
@@ -183,7 +301,8 @@ async def test_test_and_the_load_reject_the_same_rows() -> None:
         return [(r.row_index, r.reason) for r in records]
 
     assert rejected(tested.result.rejections) == rejected(done.report.rejections)
-    assert len(tested.result.rejections) == 2
+    assert len(tested.result.rejections) == 3
+    assert tested.result.rows_read == done.report.rows_read == 10
     # And Test shows the provenance the load writes.
     tested_owner = next(
         n

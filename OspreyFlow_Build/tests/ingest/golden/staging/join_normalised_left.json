@@ -182,12 +182,15 @@
     "unmatched": 1,
     "filtered_out": 0,
     "repeats_folded": 0,
-    "rejected": 2
+    "rejected": 2,
+    "right_rows_in": 4,
+    "right_unmatched": 0
    }
   ],
   "rejections": [
    {
     "step": "with_owner",
+    "side": "right",
     "refs": [
      [
       "number_owners",
@@ -200,6 +203,7 @@
    },
    {
     "step": "with_owner",
+    "side": "left",
     "refs": [
      [
       "visit_bookings",

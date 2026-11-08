@@ -45,7 +45,10 @@ from knowledge_adapters import ARITY, REGISTRY
 from knowledge_adapters.screening_lists import ofac_sdn
 from schemas.dataset_model import ReferenceList
 from schemas.staging import StagingStep
-from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
+from tests.ingest.recipe_test_support import (  # noqa: F401 (the autouse fixture)
+    LocalStore,
+    local_staging,
+)
 
 STEPS = TypeAdapter(list[StagingStep])
 TESTS = Path(__file__).resolve().parents[1]
@@ -70,6 +73,17 @@ OFAC = ReferenceList(
     key_column="ref",
     version=1,
 )
+#: The deployment-wide lists (imported once for the deployment), by id.
+DEPLOYMENT = ("rl-3",)
+#: Another dataset's own list, kind screening and named as the deployment's list is.
+LEDGERS_OFAC = ReferenceList(
+    id="rl-9",
+    dataset_id="ledger",
+    name="ofac_sdn",
+    kind="screening",
+    key_column="ref",
+    version=1,
+)
 
 
 def _lookup(list_name: str, **extra: object) -> dict[str, object]:
@@ -84,13 +98,18 @@ def _lookup(list_name: str, **extra: object) -> dict[str, object]:
     }
 
 
-def _violations(steps: list[dict[str, object]], subscribed: tuple[str, ...] = ()) -> list[str]:
+def _violations(
+    steps: list[dict[str, object]],
+    subscribed: tuple[str, ...] = (),
+    lists: tuple[ReferenceList, ...] = (OWN, OTHERS, OFAC),
+) -> list[str]:
     return staging_rule_violations(
         STEPS.validate_python(steps),
         sources=["bookings", "owners"],
-        lists=[OWN, OTHERS, OFAC],
+        lists=list(lists),
         dataset_id="pid",
         subscribed=subscribed,
+        deployment_lists=DEPLOYMENT,
     )
 
 
@@ -154,17 +173,92 @@ def test_a_lookup_reads_only_its_dataset_s_lists_and_subscribed_screening_lists(
         "subscribes to"
     ]
     assert _violations([_lookup("ofac_sdn", on="name")]) != []
-    assert _violations([_lookup("ofac_sdn", on="name")], subscribed=("ofac_sdn",)) == []
-    # A subscription names a screening list; it does not open another dataset's reference list.
-    assert _violations([_lookup("branches")], subscribed=("branches",)) == other_dataset
+    # A subscription is by the list's id, never its name (review round 1, blocker 1).
+    assert _violations([_lookup("ofac_sdn", on="name")], subscribed=("ofac_sdn",)) != []
+    assert _violations([_lookup("ofac_sdn", on="name")], subscribed=("rl-3",)) == []
+    # A subscription opens only a deployment-wide screening list, never another dataset's list.
+    assert _violations([_lookup("branches")], subscribed=("rl-2",)) == other_dataset
 
 
-@pytest.mark.parametrize("name", ["split", "grid_ref", "coordinate_lon", "eval", "msisdn "])
+def test_another_dataset_s_screening_list_of_the_same_name_is_never_read() -> None:
+    """Review round 1, blocker 1: a screening list another dataset owns, named as the deployment's
+    is, is not readable by a subscription to that name or to its own id, and does not stand in for
+    the deployment's list."""
+    only_ledgers = (OWN, LEDGERS_OFAC)
+    for subscribed in [("ofac_sdn",), ("rl-9",), ("rl-3",), ("rl-3", "rl-9")]:
+        assert _violations(
+            [_lookup("ofac_sdn", on="name")], subscribed=subscribed, lists=only_ledgers
+        ) == [
+            "step 'looked_up' looks up 'ofac_sdn', which names no list this dataset holds or "
+            "subscribes to"
+        ], subscribed
+    # Beside the deployment's own, the subscribed deployment list is the one read.
+    assert (
+        _violations(
+            [_lookup("ofac_sdn", on="name")],
+            subscribed=("rl-3", "rl-9"),
+            lists=(OFAC, LEDGERS_OFAC),
+        )
+        == []
+    )
+    golden = TESTS / "knowledge_adapters" / "golden" / "screening_lists"
+    parsed = ofac_sdn((golden / "ofac_sdn.SDN.CSV").read_text(encoding="utf-8"))
+    ledgers = screening_table(LEDGERS_OFAC, parsed.entries[:1])
+    deployments = screening_table(OFAC, parsed.entries)
+    customers = source_table("bookings", [{"name": parsed.entries[1].ref}], load_id="ld-c")
+    step = STEPS.validate_python([_lookup("ofac_sdn", on="name", add=[{"column": "primary_name"}])])
+    with pytest.raises(StagingError, match="names no list this dataset holds or subscribes to"):
+        run_staging(
+            step,
+            sources={"bookings": customers},
+            lists={"ofac_sdn": ledgers},
+            dataset_id="pid",
+            subscribed=["rl-9", "ofac_sdn"],
+            deployment_lists=DEPLOYMENT,
+        )
+    done = run_staging(
+        step,
+        sources={"bookings": customers},
+        lists={"ofac_sdn": deployments},
+        dataset_id="pid",
+        subscribed=["rl-3"],
+        deployment_lists=DEPLOYMENT,
+    )
+    assert done.output.rows[0].cells["primary_name"] == parsed.entries[1].name
+
+
+def test_a_list_given_under_another_name_is_refused() -> None:
+    """Review round 1, blocker 1: `lists` is keyed by each list's own name; a key that is not the
+    list's name never lets a Lookup read a list it did not name."""
+    est = reference_table(OWN, [{"estab_id": "1", "name": "HMP Fenwick Moor"}])
+    bookings = source_table("bookings", [{"estab_id": "1"}], load_id="ld-1")
+    with pytest.raises(
+        StagingError, match="the list given as 'branches' is not the list of that name"
+    ):
+        run_staging(
+            STEPS.validate_python([_lookup("branches")]),
+            sources={"bookings": bookings},
+            lists={"branches": est},
+            dataset_id="pid",
+        )
+    with pytest.raises(StagingError, match="the source table given as 'owners'"):
+        run_staging(
+            STEPS.validate_python([_lookup("establishments")]),
+            sources={"owners": bookings},
+            lists={"establishments": est},
+            dataset_id="pid",
+        )
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["split", "grid_ref", "coordinate_lon", "eval", "msisdn ", "datetime", "card", "person_name"],
+)
 def test_a_key_is_normalised_only_by_a_one_column_adapter(name: str) -> None:
     problems = _violations([_lookup("establishments", normalise=name)])
     assert problems == [
         f"step 'looked_up' normalises its key with {name!r}, which is not a Knowledge Adapter that "
-        "reads one column into one value"
+        "reads one column into one value of text"
     ]
 
 
@@ -222,7 +316,8 @@ def test_a_subscribed_screening_list_serves_a_lookup_after_its_round_trip() -> N
         sources={"customers": customers},
         lists={"ofac_sdn": back},
         dataset_id="pid",
-        subscribed=["ofac_sdn"],
+        subscribed=["rl-3"],
+        deployment_lists=DEPLOYMENT,
     )
     assert [r.cells["listed_name"] for r in result.output.rows] == [first.name, None]
     assert result.output.rows[0].refs[1].source == "reference_list:ofac_sdn@v1"
@@ -288,3 +383,51 @@ def test_a_list_s_key_identifies_one_row() -> None:
         reference_table(OWN, [{"estab_id": "FMR"}, {"estab_id": "FMR"}])
     with pytest.raises(StagingError, match="has no key"):
         reference_table(OWN, [{"estab_id": "FMR"}, {"estab_id": " "}])
+
+
+def test_the_local_store_refuses_a_bucket_never_created(tmp_path: Path) -> None:
+    """Rule 15, review round 1 item 9: the stand-in refuses what MinIO refuses, a write into a
+    bucket nobody created; and `stage_table` creates its bucket before it writes."""
+    store = LocalStore(tmp_path)
+    with pytest.raises(FileNotFoundError, match="NoSuchBucket"):
+        store.open_output_stream("never/loads/x.parquet")
+    table = source_table("bookings", [{"a": "1"}], load_id="ld-1")
+    path = stage_table(table, storage=ObjectStorageConfig(bucket="fresh"), load_id="ld-1")
+    assert read_staged_table(path, storage=ObjectStorageConfig(bucket="fresh")).rows == table.rows
+
+
+def test_a_filter_reads_its_declared_values_trimmed_as_it_reads_cells() -> None:
+    """Review round 1: `equals: " FMR"` meets a cell "FMR", as `in` does."""
+    bookings = source_table("bookings", [{"e": "FMR"}, {"e": " HBK"}, {"e": "XXX"}], load_id="l")
+    for keep in ([{"field": "e", "equals": " FMR "}], [{"field": "e", "in": [" FMR", "HBK "]}]):
+        step = {"id": "kept", "kind": "filter", "input": "bookings", "keep": keep}
+        done = run_staging(
+            STEPS.validate_python([step]),
+            sources={"bookings": bookings},
+            lists={},
+            dataset_id="pid",
+        )
+        assert len(done.output.rows) == (1 if "equals" in keep[0] else 2), keep
+
+
+def test_a_list_s_name_never_writes_outside_its_load_s_staged_folder() -> None:
+    """Review round 1: a list's name is free text; quoted in the path, "/" and ".." stay inside."""
+    odd = ReferenceList(
+        id="rl-x", dataset_id="pid", name="../../x/y", kind="reference", key_column="k", version=1
+    )
+    table = reference_table(odd, [{"k": "1"}])
+    path = stage_table(table, storage=STORE, load_id="ld-1")
+    assert path.startswith("staging/loads/ld-1/staged/") and "/" not in path.split("staged/")[1]
+    assert read_staged_table(path, storage=STORE).reference == odd
+
+
+def test_a_union_of_tables_whose_columns_differ_is_refused() -> None:
+    """Brief §6: Union stacks two tables with the same columns; one with a column the other lacks
+    is refused whole, never stacked with empty cells."""
+    a = source_table("a", [{"number": "1", "owner": "x"}], load_id="la")
+    b = source_table("b", [{"number": "2"}], load_id="lb")
+    step = {"id": "both", "kind": "union", "inputs": ["a", "b"]}
+    with pytest.raises(StagingError, match="stacks 'b' and 'a', whose columns differ"):
+        run_staging(
+            STEPS.validate_python([step]), sources={"a": a, "b": b}, lists={}, dataset_id="pid"
+        )

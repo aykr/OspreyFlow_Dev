@@ -37,12 +37,13 @@ import json
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from urllib.parse import quote
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from knowledge_adapters import ARITY, REGISTRY
-from knowledge_adapters.derive import derive
+from knowledge_adapters import REGISTRY
+from knowledge_adapters.derive import derive, text_adapters
 from knowledge_adapters.errors import NormalisationError
 from knowledge_adapters.screening_lists import ListedParty
 from schemas.dataset_model import ReferenceList
@@ -100,17 +101,20 @@ class StagedRef:
     source: str
     #: The row's position in what the source gave (0 first), as the engine's locator reads it.
     row_index: int
-    #: The SHA-256 of its declared key columns (else of all its cells); a list row's key value.
+    #: The SHA-256 of its declared key columns (else of all its cells); a list row's, of its key.
+    #: Kept in the staged Parquet only, on the server: never in an element's provenance.
     row_key: str
     #: The load that read it; `None` for a list row, which a list's version identifies.
     load_id: str | None
 
     def to_source_ref(self) -> SourceRef:
+        """What the element records: the source, the row and the load, never `row_key` (rule 7;
+        the orchestrator's settlement of 8 November, review round 1). The key stays in the staged
+        Parquet's `_refs`, on the server."""
         return SourceRef(
             document_id=self.source,
             locator=f"row {self.row_index}",
             excerpt_hash="",
-            row_key=self.row_key,
             load_id=self.load_id,
         )
 
@@ -146,6 +150,8 @@ class StagingRejection:
     step: str
     refs: tuple[StagedRef, ...]
     reason: str
+    #: A Join's: which side the refused row is on; `None` for a step with one input.
+    side: Literal["left", "right"] | None = None
 
 
 @dataclass
@@ -159,7 +165,12 @@ class StepReport:
     unmatched: int = 0
     filtered_out: int = 0
     repeats_folded: int = 0
+    #: Every row in, rejected or not, on either side (rule 2).
     rejected: int = 0
+    #: A Join's right table: its rows in, and those that met no left row (a blank key, or a key no
+    #: left row holds). Not passed on, and counted, never dropped silently (rule 2).
+    right_rows_in: int = 0
+    right_unmatched: int = 0
 
 
 @dataclass
@@ -194,7 +205,9 @@ def source_table(
     key: Sequence[str] | None = None,
 ) -> StagedTable:
     """A source's rows as a table: each row's ref names `name`, its position, its identity (the
-    hash of its declared `key` columns, else of all its cells in column order) and `load_id`."""
+    hash of its declared `key` columns, else of all its cells in column order) and `load_id`. A
+    row with an empty key part has no key, as the engine's deduplicate reads it
+    (`engine.encode_key_parts`), so its identity is the hash of its cells."""
     columns: list[str] = []
     for row in rows:
         for column in row:
@@ -203,7 +216,10 @@ def source_table(
     out: list[StagedTableRow] = []
     for index, row in enumerate(rows):
         cells = {c: _text(row.get(c)) for c in columns}
-        identity = _hash([cells[c] for c in key] if key else [cells[c] for c in columns])
+        parts = [cells[c] for c in key] if key else []
+        if not parts or any(p is None for p in parts):
+            parts = [cells[c] for c in columns]
+        identity = _hash(parts)
         out.append(StagedTableRow(cells, (StagedRef(name, index, identity, load_id),)))
     return StagedTable(name=name, columns=columns, rows=out, kind="source")
 
@@ -234,7 +250,9 @@ def reference_table(reference: ReferenceList, rows: Sequence[Mapping[str, object
                 [f"the list {reference.name!r} holds one key on two rows; its key must be unique"]
             )
         seen.add(key)
-        out.append(StagedTableRow(cells, (StagedRef(source, index, key, None),)))
+        # Rule 7 (the orchestrator's ruling, review round 1): a list row's identity is hashed as a
+        # source row's key is, never its raw value, so no list key reaches provenance or the wire.
+        out.append(StagedTableRow(cells, (StagedRef(source, index, _hash([key]), None),)))
     return StagedTable(
         name=reference.name, columns=columns, rows=out, kind=reference.kind, reference=reference
     )
@@ -298,12 +316,39 @@ def screening_parties(table: StagedTable) -> tuple[ListedParty, ...]:
 def _adapter_problem(step: str, name: str | None) -> str | None:
     if name is None:
         return None
-    if name not in REGISTRY or name in ARITY or name == "split":
+    if name not in text_adapters():
         return (
             f"step {step!r} normalises its key with {name!r}, which is not a Knowledge Adapter "
-            "that reads one column into one value"
+            "that reads one column into one value of text"
         )
     return None
+
+
+def readable_lists(
+    lists: Collection[ReferenceList],
+    *,
+    dataset_id: str,
+    subscribed: Collection[str] = (),
+    deployment_lists: Collection[str] = (),
+) -> tuple[dict[str, ReferenceList], list[str]]:
+    """The lists a dataset's Lookup may read, by name, and any name two of them share (ADR-140
+    Amendment 9 decision 3): the dataset's own lists, and a **deployment-wide** screening list
+    (its id in `deployment_lists`, the lists imported once for the deployment) that the dataset
+    subscribes to **by id** (`subscribed`). Another dataset's list is never readable, whatever its
+    kind or name, and a subscription names a list by id, so a list of the same name is not it."""
+    readable: dict[str, ReferenceList] = {}
+    clashes: list[str] = []
+    for ref in lists:
+        own = ref.dataset_id == dataset_id and ref.id not in deployment_lists
+        subscribed_to = (
+            ref.kind == "screening" and ref.id in deployment_lists and ref.id in subscribed
+        )
+        if not (own or subscribed_to):
+            continue
+        if ref.name in readable and readable[ref.name].id != ref.id:
+            clashes.append(ref.name)
+        readable[ref.name] = ref
+    return readable, clashes
 
 
 def staging_rule_violations(
@@ -313,18 +358,17 @@ def staging_rule_violations(
     lists: Collection[ReferenceList],
     dataset_id: str,
     subscribed: Collection[str] = (),
+    deployment_lists: Collection[str] = (),
 ) -> list[str]:
     """What the save gate refuses in a `staging:` list, in words (the redesign's phase 7: "a join
     must name a key; a step must be fed"). `sources`: the pipeline's source tables. `lists`: the
-    lists the caller can see; a Lookup may name only the dataset's own (`dataset_id`) or a
-    screening list in `subscribed`. A join's keys are required by the schema itself."""
+    lists the caller can see; a Lookup reads only what `readable_lists` gives. A join's keys, and
+    a Derive's settings and columns, are refused by the schema itself."""
     problems: list[str] = []
     known: list[str] = list(sources)
-    readable = {
-        ref.name
-        for ref in lists
-        if ref.dataset_id == dataset_id or (ref.kind == "screening" and ref.name in subscribed)
-    }
+    readable, clashes = readable_lists(
+        lists, dataset_id=dataset_id, subscribed=subscribed, deployment_lists=deployment_lists
+    )
     read_by_later: set[str] = set()
     for position, step in enumerate(steps):
         if step.id in known:
@@ -344,7 +388,12 @@ def staging_rule_violations(
                 )
             read_by_later.add(table)
         if isinstance(step, LookupStep):
-            if step.list_ not in readable:
+            if step.list_ in clashes:
+                problems.append(
+                    f"step {step.id!r} looks up {step.list_!r}, which names two lists this dataset "
+                    "can read"
+                )
+            elif step.list_ not in readable:
                 problems.append(
                     f"step {step.id!r} looks up {step.list_!r}, which names no list this dataset "
                     "holds or subscribes to"
@@ -423,7 +472,7 @@ def _lookup(
                 raise StagingError(
                     [
                         f"step {step.id!r}: two keys of the list {reference.name!r} are one once "
-                        f"read as {step.normalise}"
+                        + (f"read as {step.normalise}" if step.normalise else "trimmed")
                     ]
                 )
             index[key] = row
@@ -466,18 +515,23 @@ def _join(
         except NormalisationError as exc:
             # A right row that cannot be read joins nothing, and is said, never silently missed.
             rejections.append(
-                StagingRejection(step.id, row.refs, f"{step.right_key}: {exc.reason}")
+                StagingRejection(step.id, row.refs, f"{step.right_key}: {exc.reason}", "right")
             )
             continue
         if key is not None:
             index.setdefault(key, []).append(row)
-    report = StepReport(step.id, "join", rows_in=len(left.rows), rows_out=0)
+    report = StepReport(
+        step.id, "join", rows_in=len(left.rows), rows_out=0, right_rows_in=len(right.rows)
+    )
+    met: set[int] = set()
     out: list[StagedTableRow] = []
     for row in left.rows:
         try:
             key = _key(row.cells.get(step.left_key), step.normalise)
         except NormalisationError as exc:
-            rejections.append(StagingRejection(step.id, row.refs, f"{step.left_key}: {exc.reason}"))
+            rejections.append(
+                StagingRejection(step.id, row.refs, f"{step.left_key}: {exc.reason}", "left")
+            )
             continue
         matches = index.get(key, []) if key is not None else []
         if not matches:
@@ -487,8 +541,11 @@ def _join(
                 out.append(StagedTableRow(cells, row.refs))
             continue
         for match in matches:
+            met.add(id(match))
             cells = dict(row.cells) | {name: match.cells.get(column) for column, name in pairs}
             out.append(StagedTableRow(cells, row.refs + match.refs))
+    right_rejected = sum(1 for r in rejections if r.side == "right")
+    report.right_unmatched = len(right.rows) - right_rejected - len(met)
     report.rows_out, report.rejected = len(out), len(rejections)
     return StagedTable(step.id, left.columns + [n for _, n in pairs], out), report, rejections
 
@@ -500,10 +557,11 @@ def _holds(condition: FilterCondition, cells: Mapping[str, Cell]) -> bool:
         return text is None
     if condition.is_ == "not_null":
         return text is not None
+    # The declared values are read as the cells are, trimmed, so `equals: " FMR"` meets "FMR".
     if condition.equals is not None:
-        return text == condition.equals
+        return text == condition.equals.strip()
     assert condition.in_ is not None
-    return text in condition.in_
+    return text in {value.strip() for value in condition.in_}
 
 
 def _filter(
@@ -537,7 +595,11 @@ def _derive(
     rejections: list[StagingRejection] = []
     for row in table.rows:
         try:
-            value = derive(step.operation, [row.cells.get(c) for c in step.columns], step.settings)
+            value = derive(
+                step.operation,
+                [row.cells.get(c) for c in step.columns],
+                step.settings.model_dump(mode="json"),
+            )
         except NormalisationError as exc:
             rejections.append(StagingRejection(step.id, row.refs, exc.reason))
             continue
@@ -578,6 +640,11 @@ def _dedupe(
     out: list[StagedTableRow] = []
     for row in table.rows:
         key = tuple((row.cells.get(c) or "").strip() or None for c in step.on)
+        if any(part is None for part in key):
+            # No key, as the engine's deduplicate reads an empty part (`encode_key_parts`): the
+            # row stands alone, never folded into another keyless row.
+            out.append(row)
+            continue
         at = groups.get(key)
         if at is None:
             groups[key] = len(out)
@@ -598,23 +665,44 @@ def run_staging(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str] = (),
+    deployment_lists: Collection[str] = (),
 ) -> StagingResult:
     """Run the steps in order over the source tables and the reference lists (each a
-    `reference_table`), after the save gate's rules (refused whole if any is broken)."""
+    `reference_table`, keyed by its own name), after the save gate's rules (refused whole if any
+    is broken). A Lookup reads the list `readable_lists` names, by its id, never merely the table
+    a key of `lists` points at."""
     if not steps:
         raise StagingError(["a staging list has at least one step"])
+    given: list[str] = []
+    for key, table in sources.items():
+        if table.name != key or table.kind != "source":
+            given.append(f"the source table given as {key!r} is not that source's table")
+    for key, table in lists.items():
+        if table.reference is None or table.reference.name != key:
+            given.append(f"the list given as {key!r} is not the list of that name")
+    if given:
+        raise StagingError(given)
     references = [t.reference for t in lists.values() if t.reference is not None]
     problems = staging_rule_violations(
-        steps, sources=list(sources), lists=references, dataset_id=dataset_id, subscribed=subscribed
+        steps,
+        sources=list(sources),
+        lists=references,
+        dataset_id=dataset_id,
+        subscribed=subscribed,
+        deployment_lists=deployment_lists,
     )
     if problems:
         raise StagingError(problems)
+    readable, _clashes = readable_lists(
+        references, dataset_id=dataset_id, subscribed=subscribed, deployment_lists=deployment_lists
+    )
+    by_id = {t.reference.id: t for t in lists.values() if t.reference is not None}
     tables: dict[str, StagedTable] = dict(sources)
     reports: list[StepReport] = []
     rejections: list[StagingRejection] = []
     for step in steps:
         if isinstance(step, LookupStep):
-            done = _lookup(step, tables[step.input], lists[step.list_])
+            done = _lookup(step, tables[step.input], by_id[readable[step.list_].id])
         elif isinstance(step, JoinStep):
             done = _join(step, tables[step.left], tables[step.right])
         elif isinstance(step, FilterStep):
@@ -665,14 +753,58 @@ def _to_arrow(table: StagedTable) -> pa.Table:
     return pa.table(data, schema=schema.with_metadata({_META: json.dumps(meta).encode()}))
 
 
-def stage_table(table: StagedTable, *, storage: ObjectStorageConfig, load_id: str) -> str:
-    """Write one staged table to `<bucket>/loads/<load_id>/staged/<name>.parquet`; returns the
-    path."""
-    path = f"{storage.bucket}/loads/{load_id}/staged/{table.name}.parquet"
+def stage_table_counted(
+    table: StagedTable, *, storage: ObjectStorageConfig, load_id: str
+) -> tuple[str, int]:
+    """Write one staged table to `<bucket>/loads/<load_id>/staged/<name>.parquet`; returns the path
+    and the bytes written (the run's *bytes to Parquet*, ADR-110 Amendment 12)."""
+    # A list's name is free text: quoted, so "/" or ".." can never leave `staged/`.
+    path = f"{storage.bucket}/loads/{load_id}/staged/{quote(table.name, safe='')}.parquet"
+    buffer = pa.BufferOutputStream()
+    pq.write_table(_to_arrow(table), buffer)
+    data = buffer.getvalue()
     fs = _staging.filesystem(storage)
     fs.create_dir(storage.bucket)
     with fs.open_output_stream(path) as sink:
-        pq.write_table(_to_arrow(table), sink)
+        sink.write(data)
+    return path, data.size
+
+
+def stage_table(table: StagedTable, *, storage: ObjectStorageConfig, load_id: str) -> str:
+    """`stage_table_counted`'s path."""
+    return stage_table_counted(table, storage=storage, load_id=load_id)[0]
+
+
+def stage_raw_sources(
+    sources: Mapping[str, StagedTable], *, storage: ObjectStorageConfig, load_id: str
+) -> str:
+    """A staged load's raw rows: every source's rows, each cell as the source gave it (an empty
+    cell as `""`), in the raw dataset's own shape (`staging.stage_raw_rows`: load, source, the
+    row's position, its fields as JSON), all sources in one
+    `<bucket>/loads/<load_id>/raw.parquet`."""
+    load_ids, names, indices, fields = [], [], [], []
+    for name, table in sources.items():
+        for index, row in enumerate(table.rows):
+            load_ids.append(row.refs[0].load_id or load_id)
+            names.append(name)
+            indices.append(index)
+            fields.append(json.dumps({c: row.cells.get(c) or "" for c in table.columns}))
+    arrow = pa.table(
+        {"load_id": load_ids, "source": names, "row_index": indices, "fields_json": fields},
+        schema=pa.schema(
+            [
+                pa.field("load_id", pa.string()),
+                pa.field("source", pa.string()),
+                pa.field("row_index", pa.int64()),
+                pa.field("fields_json", pa.string()),
+            ]
+        ),
+    )
+    path = f"{storage.bucket}/loads/{load_id}/raw.parquet"
+    fs = _staging.filesystem(storage)
+    fs.create_dir(storage.bucket)
+    with fs.open_output_stream(path) as sink:
+        pq.write_table(arrow, sink)
     return path
 
 
