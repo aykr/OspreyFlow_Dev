@@ -362,3 +362,78 @@ def test_two_first_make_lives_at_once_make_one_home_case(
     assert loser in world.cases.removed
     live = asyncio.run(world.models.live("ds-a"))
     assert live is not None and live.version == 1
+
+
+def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The test the plan names (the round-1 review's must-fix 6), driven through *Make live*
+    itself: every case reading ds-a has no KYC card at v1 (NIEM), and has one once a v2 adding
+    FIBO is made live, its report reading the packs at the case's level check."""
+    from services.api import reports as reports_module
+
+    from schemas.domain import KycFigures, ReportFigures
+
+    now = datetime.now(UTC)
+
+    async def no_alerts(*_args: Any, **_kwargs: Any) -> ReportFigures:
+        return ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
+
+    async def one_customer(*_args: Any, **_kwargs: Any) -> KycFigures:
+        return KycFigures(customers=1, verified=1, unverified=0)
+
+    class _Explore:
+        async def counts(self, *_args: Any, **_kwargs: Any) -> Any:
+            return SimpleNamespace(computed_at=now)
+
+    async def as_author(case_id: str, principal: Any) -> AccessLevel | None:
+        return world.cases.grants.get(case_id, {}).get(principal.id)
+
+    monkeypatch.setattr(reports_module, "alert_report", no_alerts)
+    monkeypatch.setattr(reports_module, "_kyc_figures", one_customer)
+    monkeypatch.setattr(reports_module, "pole_figures", lambda *_a, **_k: None)
+    monkeypatch.setattr(world.cases, "effective_level", as_author, raising=False)
+    class _Held:
+        async def list_authorized(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+            return []
+
+    for name in ("graph", "alerts_store", "compute", "analytics"):
+        monkeypatch.setattr(app.state, name, object(), raising=False)
+    monkeypatch.setattr(app.state, "held_rows", _Held(), raising=False)
+    app.dependency_overrides[app_module.get_explore] = lambda: _Explore()
+    try:
+        world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
+        world.client.put(
+            "/v1/datasets/ds-a/model/draft",
+            json={"packs": {"niem": 3}, "extensions": [], "reference_lists": []},
+            headers=_as("engineer"),
+        )
+        first = world.client.post(
+            "/v1/datasets/ds-a/model/make-live",
+            json={"version": 1, "owners": {"people": ["eng-1"]}}, headers=_as("engineer"),
+        )  # fmt: skip
+        assert first.status_code == 200, first.text
+        readers = [c for c, ids in world.datasets.cases.items() if "ds-a" in ids]
+        assert len(readers) == 2  # the working case and the home case
+
+        def kyc_of(case_id: str) -> Any:
+            answer = world.client.get(
+                f"/v1/investigations/{case_id}/reports", headers=_as("engineer")
+            )
+            assert answer.status_code == 200, answer.text
+            return answer.json()["kyc"]
+
+        assert [kyc_of(c) for c in readers] == [None, None]
+        world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
+        world.client.put(
+            "/v1/datasets/ds-a/model/draft",
+            json={"packs": {"niem": 3, "fibo": 1}, "extensions": [], "reference_lists": []},
+            headers=_as("engineer"),
+        )
+        second = world.client.post(
+            "/v1/datasets/ds-a/model/make-live", json={"version": 2}, headers=_as("engineer")
+        )
+        assert second.status_code == 200, second.text
+        assert [kyc_of(c)["customers"] for c in readers] == [1, 1]
+    finally:
+        app.dependency_overrides.pop(app_module.get_explore, None)
