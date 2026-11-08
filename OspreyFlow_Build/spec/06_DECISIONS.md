@@ -29904,7 +29904,11 @@ replaces one of its "Left" entries.
    the deleted key's next call 401) each key tagged `metadata.osprey_engine` that the current master key
    would not derive for an enabled engine. A key without that tag is not the Conduit's and is left alone;
    more than a hundred pages is refused in words, never cut short. Each engine key is now made with the
-   tag.
+   tag, so **an engine key made before P3 (by P2, merged the same day) stays untagged and is not revoked
+   by a later rotation**: the reconcile updates an existing key with `/key/update`, whose handling of
+   `metadata` was not measured, so it sends none. A deployment that rotates its master key after
+   running P2 removes those keys by hand (`/key/list`, `/key/delete` by hash), until a measured
+   amendment tags them.
 2. **Each engine's key is limited to its own engine's models** (`/key/generate` and `/key/update` with
    `models`, the gateway's entry names of that engine alone). Measured: a key so limited is refused any
    other model, held or not, 403 `key_model_access_denied`, naming the allowed models and never the key;
@@ -30144,21 +30148,47 @@ base URL — was already closed in `tile_proxy.py`).
 2. **The key, under ADR-135 Amendment 2's rule.** `PUT /v1/admin/maps/providers/{id}/key` takes it once
    (`SecretStr`), and no response, log record, audit row, maps file or backup carries it; each route reads
    its own body so a validation refusal never echoes what was sent; a provider's record says only where a
-   key is (`set`, `env` for the installer's reference, `none`). A provider that takes no key refuses one;
-   an edit that changes a provider's address removes its key, which is never sent to an address it was
-   not entered for. The tile proxy uses the Admin key before the `env:` reference; a provider that needs a
-   key and holds neither answers its tiles 503 in words naming Admin › Maps, never its address.
+   key is (`set`, `env` for the installer's reference, `none`). A provider that takes no key, one the
+   browser fetches and one from a profile refuse one. **A key is given only to the address it was entered
+   for**: each key is recorded with its provider's address (`map_admin.address_of`: the source or
+   endpoint, service, layer, variables and key parameter), so an edit, an `osprey.yaml` changed under a
+   surviving key file, or a restored maps file never moves it; such a provider shows "entered for another
+   address". The tile proxy uses the Admin key before the `env:` reference; a provider that needs a key
+   and holds neither (an unset `env:` variable included) answers its tiles 503 in words naming Admin ›
+   Maps, never its address; a provider that refuses a tile answers 502 in fixed words with its status.
+   **No URL's query reaches a log record**: the tile proxy drops it from every record of the `httpx` and
+   `httpcore` loggers (httpx logs each request's URL at INFO), and its fetch raises errors of its own,
+   `from None`, that carry a status and nothing else.
+
+2a. **What Admin may name** (found by the lane's own review, before merge). **An `env:` reference is the
+   installer's alone**: one named in Admin would let a holder of `manage_geospatial` send any of the
+   Conduit's own secrets (its database password, its token-exchange secret) to an address of their
+   choosing, so a provider added there has none and an edit keeps the one `osprey.yaml` gave. **Its
+   addresses stay outside the deployment**: `https` or `http` to a dotted host name that is not
+   `localhost`, nor an IP address that is loopback, link-local (a cloud's metadata service), private,
+   reserved or multicast; no dotless name (a service of the deployment's own: `postgres`, `keycloak`), no
+   user or password in the address, no host filled by a variable; a `file://` only under the tiles folder.
+   A profile is set in `osprey.yaml`. A provider that takes a key is fetched by the Conduit. The tile
+   route answers only an image, so a name that resolves inside reads nothing but tiles back.
 3. **The local basemap is built and verified in the Conduit.** One code (`services/api/map_admin.py`):
    *Admin › Maps* calls `/v1/admin/geospatial/build-basemap` and `/verify`; the set-up console and
    `ospreyflow map build|verify` run `python -m services.api.map_admin` in the Conduit's container
    (`docker compose exec`; the console holds no Conduit token before sign-in, and says so in words before
    Launch). The build takes **a named region only** — no path from the Glass — and writes into the tiles
    folder's **one writable door, `built/`**, laid over the read-only tiles mount as ADR-067's upload door
-   is, so the rest of the folder stays read-only to the Conduit. **Java 21 is in the Conduit's image** (a
-   `jlink` runtime of every module, about 100 MB, from `eclipse-temurin:21-jdk` pinned by digest);
-   **planetiler's jar is not**: `ospreyflow map build <region> --planetiler-jar <path>` copies the owner's
-   jar into `<tiles>/planetiler/planetiler.jar` and makes `built/` before the build, so Docker does not
-   make it as root. The built provider (`osm-local-<region>`, ODbL, open) is registered in the maps file,
+   is, so the rest of the folder stays read-only to the Conduit; it is made and given to the Conduit's
+   user before every `up` (`harness.ingest_uploads.prepare`, the upload door's own step, now over each
+   writable door), so Docker never makes it as root. **No Java in the Conduit's image, while the owner
+   rules on its licence** (the orchestrator's interim, 8 November): the Temurin runtime is GPL-2.0 with the
+   Classpath exception and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL; the options put
+   to the owner are a register entry for it (Java returns to the image, about 100 MB, `jlink`ed from
+   `eclipse-temurin:21-jdk` by digest, built and run offline in P3), planetiler in a container of its own
+   run by the command line, or no build in the product. The build is one function
+   (`map_admin.build_basemap`), so each is a small change; until then it refuses in the builder's own words
+   before fetching anything ("Java is not installed in the Conduit"), and the download and planetiler run
+   in worker threads, off the Conduit's event loop. **Planetiler's jar** is placed by `ospreyflow map build
+   <region> --planetiler-jar <path>` (into `<tiles>/planetiler/planetiler.jar`), which says the build runs
+   in the Conduit. The built provider (`osm-local-<region>`, ODbL, open) is registered in the maps file,
    since `osprey.yaml` is read-only in the Conduit. The section shows each local file's state, the glyph
    fonts' (`scripts/fetch_basemap_glyphs.py`) and whether the builder can run, in words.
 4. **The WMTS `endpoint` conflict, settled.** `MapProvider.credential_param` names the query parameter a
@@ -30170,8 +30200,11 @@ base URL — was already closed in `tile_proxy.py`).
    (`POST /v1/admin/maps/prefetch`, `ospreyflow map prefetch`) or **on a schedule in the Conduit**
    (every 6 hours, a day or a week; `PrefetchScheduler`, checked each minute), each tile fetched once and
    kept; a run's failure is said on its own area in fixed words that carry neither the key nor the
-   address. Two replicas may both run an area; the second's fetches are cache hits. The `geometry_ref`
-   areas `osprey.yaml` may name stay `python -m services.api.prefetch`'s.
+   address. The object store is called in worker threads, off the event loop. Two replicas may both run
+   an area; the second's fetches are cache hits. The `geometry_ref` areas `osprey.yaml` may name stay
+   `python -m services.api.prefetch`'s, which follows the maps file and its keys as the Conduit does
+   (`prefetch.effective_map`). A maps file that does not validate leaves the map on `osprey.yaml`'s, the
+   log saying why; a restore writes it beside the old and renames it over.
 6. **`ospreyflow map list|verify|prefetch|build`** for headless use, each the Conduit's own code in its
    container, recorded in the maps' history as `cli:<user>`.
 7. **Attribution** is shown on every provider's row with its licence and note, as the map shows it.
@@ -30186,12 +30219,19 @@ base URL — was already closed in `tile_proxy.py`).
 1, any other local file 2; anything hosted or from a profile 3.
 
 **Left, and why:**
-- **A real planetiler run in the Conduit was not seen**: this machine has no planetiler jar (a download,
-  the owner's call), and the full Conduit image was not rebuilt (its build fetches packages); the Java
-  stage alone was built and its `java -version` run. The build's own path was run end to end through the
-  real route on a small synthetic region with planetiler's run stood in.
-- **On Linux, `built/` must be writable by the Conduit's user** (uid 10001), as ADR-067 names for the
-  upload door; `ospreyflow map build` makes it, not `chown`s it.
+- **The build piece waits on the owner's licence ruling** (decision 3), and P3 merges without it if it has
+  not come. **A real planetiler run was not seen**: no jar on this machine (a download, the owner's call).
+  The build's own path ran on a small synthetic region: the real gazetteer load into ArcadeDB, committed
+  only when the build finishes (`tests/ingest/test_map_admin_build_end_to_end.py`, live), and through the
+  real route with the load stood in; planetiler's run is stood in throughout.
+- **A host name that resolves inside the deployment** (by a deployment's own DNS) is not caught by
+  decision 2a, which reads the name, not where it resolves; the tile route's image-only answer bounds it.
+- **A refusal's words name a sent value shaped like an id** (lower case, digits and hyphens): a key of that
+  shape pasted into a field a validator quotes would be echoed. No Maps validator quotes a value but the
+  provider's id.
+- **Verify does not check a keyed WMTS service** (it does not use the Admin key), and its capabilities
+  probe's failure is not yet said in words.
+- **No confirmation before Remove** (a provider, a key), as in *Models*.
 - **Registering a tier-4 service by its capabilities from the Glass** (`register_tier4_provider`) is not
   in the section: the form takes the fields the registration discovers. A later amendment.
 - **Drawn or uploaded boundaries** for prefetch (`05_DEPLOYMENT.md` §2.2) are boxes here; a polygon is the

@@ -109,3 +109,34 @@ real lifespan in uvicorn subprocesses: the Maps admin, its Postgres audit and th
 17 passed in 44 s; `map_admin_audit` then present in the stack's `ospreyflow` database. Not run: the restore
 and bundle exit tests (`tests/harness/test_restore_exit_test.py`, `test_bundle_exit_test.py`), which need a
 real deployment, and this lane never starts one (`make dev-up` is the owner's).
+
+## After the lane's own review (lane-reviewer, 8 November 2026)
+
+Two blockers and the must-fix items; each new test red first (written before the fix), then each
+fix's own plant at its real call site (offline, closed ports, unless named live).
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_tile_key_in_no_log.py` (a real loopback provider answering 200, 403 and 500; the real `_http_get`, route and logger) | (before the fix: httpx logged every tile URL, key included, at INFO, and the `HTTPStatusError` named it) | 4 failed |
+| `…` | the `httpx`/`httpcore` filter not installed | 3 failed |
+| `…` | `raise_for_status()` back in the fetch | 2 failed |
+| `test_map_admin_routes.py` (Admin names no `env:` reference, no address inside the deployment, no key on a browser-fetched provider) | (before the check) | 21 failed |
+| `…` | the `env:` check removed; the IP check removed; the dotless-name check removed; the browser check removed | 4, 5, 3 and 1 failed |
+| `test_map_admin.py::test_a_key_is_given_only_to_the_address_it_was_entered_for` | the address comparison removed from `key_for` | 1 failed |
+| `…::test_a_provider_the_conduit_does_not_fetch_refuses_a_key` | the profile/browser check removed | 1 failed |
+| `…::test_a_maps_file_that_cannot_be_read_leaves_the_map_on_osprey_yaml_s` | the fallback removed | 1 failed |
+| `…::test_adding_a_provider_records_each_of_its_fields` | only the tier recorded | 1 failed |
+| `…::test_a_build_with_no_java_or_no_jar_is_refused_before_anything_is_downloaded` | the early refusal removed | 1 failed |
+| `tests/harness/test_ingest_uploads.py::test_the_tiles_folder_s_built_door_is_given_to_the_conduit_before_up` | (before `prepare` covered every door) | 1 failed |
+| `tests/harness/test_map_settings_backup.py::test_a_restore_puts_the_maps_file_back_private` | (written for the atomic write first) | 1 failed |
+| `tests/harness/test_map_settings_backup.py::test_a_backup_takes_the_maps_file_and_never_a_map_key` | the backup reading `map-keys.yaml` | 1 failed |
+| `tests/services/api/test_prefetch_follows_admin.py` | `effective_map` reading `osprey.yaml` alone | 1 failed |
+| `tests/test_conduit_image_java_licence.py` | the Java stage back in the Dockerfile | 1 failed |
+| `tests/cli/test_map_verb.py::test_build_places_the_jar_and_says_where_the_build_runs` | the words not naming the Conduit | 1 failed |
+| `test_map_admin_routes.py::test_a_holder_of_manage_geospatial_alone_manages_the_maps` | the build route's admin-role check removed | 1 failed |
+| `keyboard/admin-maps.spec.ts` › a provider's key is entered | the request sending `{"key": ""}` | 1 failed |
+| `tests/ingest/test_map_admin_build_end_to_end.py` (live: platform lease on stack a, 22:23:22–22:23:59 green, 2 passed; 22:24:11–22:24:45 red) | the failed build's transaction committed | 1 failed |
+
+**A red that was not one, caught at once:** the first plant of the live build case ran through the
+offline runner (closed ports), so its "2 failed" was the store being unreachable, not the plant; it was
+run again under the lease with the leased ports, red for the right reason.

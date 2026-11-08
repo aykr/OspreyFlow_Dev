@@ -34,17 +34,8 @@ container** (`docker compose exec api python -m services.api.map_admin build|ver
 before sign-in, so it goes by the deployment's compose file, as the command line does. The history
 of the earlier position follows.
 
-**Disclosed, not built here (until P3): this image's own Geospatial screen does not call them.**
-Stage 2 §7
-(the post-launch admin console) has no React shell yet — `apps/harness/src` renders the six setup
-screens and nothing else, confirmed directly (`find apps/harness/src -iname "*console*" -o -iname
-"*admin*"` returns nothing). A `mode="console"` branch inside `GeospatialScreen.tsx` with no
-console context anywhere to actually render it in would be dead code no test could genuinely
-exercise — the same "the check must run against the shape the real caller produces" discipline
-`CLAUDE.md` rule 15 already states. Wiring this screen to the two routes above is real work owed
-to whoever builds Stage 2 §7's own console shell, not silently dropped; `build_basemap_step`/
-`verify_step` below are unchanged, and correctly still refuse — the setup-mode Geospatial screen
-still cannot perform either action, which remains true regardless of what the Conduit can now do.
+**Until P3 this image's Geospatial screen did not call them**, and `build_basemap_step` and
+`verify_step` refused with 501s; the history is in `07_BUILD_PLAN.md`'s Stage 2 §6 part B entry.
 """
 
 from __future__ import annotations

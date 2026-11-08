@@ -10,13 +10,13 @@ discipline for `require_studio_role` — exercised directly, no route needed to 
 `test_*_route_refuses_without_the_admin_role` is the route-level case for each of the two routes,
 proven against the real `TestClient`/real middleware stack, not only the bare dependency.
 
-`build_local_basemap` itself needs a real Geofabrik download, a real `planetiler.jar` and Java —
-none of which exist in this tree (`round 03`'s own finding, unchanged: `find . -iname
-"*.pmtiles"` returns nothing). What is tested here is the *route's own wiring* — SSE streaming in
-Launch's own shape, audit recording, error propagation — with `services.api.app.build_local_
-basemap` itself replaced by a fake that calls the same `progress` callback and returns the same
-`BasemapBuildResult` shape, the same "prove the wiring, not the external pipeline" boundary
-`tests/harness/test_webapp_launch.py` already draws for `harness.apply`.
+Since ADR-147 the build route takes a named region only and runs
+`services.api.map_admin.build_basemap`, which needs a Geofabrik download, a planetiler jar and Java,
+none of which a CI runner holds. What is tested here is the route's own wiring (SSE streaming in
+Launch's own shape, the audit, the graph transaction committed or rolled back, no server path taken
+from the caller) with the build or its download and planetiler run replaced, the boundary
+`tests/harness/test_webapp_launch.py` draws for `harness.apply`; the real gazetteer load is
+`tests/ingest/test_map_admin_build_end_to_end.py`'s.
 """
 
 from __future__ import annotations
