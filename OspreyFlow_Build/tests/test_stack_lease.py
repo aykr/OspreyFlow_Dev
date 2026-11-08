@@ -104,3 +104,52 @@ def test_release_with_the_throwaway_test_stack_still_up_is_refused(lease) -> Non
     assert up.returncode == 1
     assert "still up" in up.stderr
     assert lease.lock.is_dir()
+
+
+# --- The lease's own way up and down: the throwaway stack, never `make dev-up` (8 November 2026) ----
+#
+# `acquire` told every lane "Bring the stack up with: make dev-up". dev.yaml publishes ArcadeDB on 2480, the
+# owner's own deployment's port; a lane following the instruction on 8 November started dev.yaml's containers
+# before the bind failed. The leased stack is the throwaway one (SESSIONS_RUNBOOK.md §4).
+
+_THROWAWAY = ("osprey-probe-arcadedb-new", "osprey-test-pg", "osprey-test-valkey-6379", "osprey-test-objectstore")
+
+
+def _recording_docker(tmp_path: Path) -> tuple[str, Path]:
+    log = tmp_path / "docker.log"
+    script = f'#!/bin/sh\necho "$@" >> "{log}"\nexit 0\n'
+    return script, log
+
+
+def test_acquire_names_the_throwaway_stack_and_never_dev_up(lease) -> None:
+    taken = lease("acquire", "case", "conformance")
+    assert taken.returncode == 0
+    assert "dev-up" not in taken.stdout
+    assert "stack_lease.sh up case" in taken.stdout
+
+
+def test_up_and_down_start_and_stop_the_throwaway_containers_alone(lease, tmp_path: Path) -> None:
+    lease("acquire", "case", "conformance")
+    script, log = _recording_docker(tmp_path)
+    _DOCKER["recording"] = script
+    try:
+        assert lease("up", "case", docker="recording").returncode == 0
+        assert lease("down", "case", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = log.read_text().splitlines()
+    assert calls[0].split()[:1] == ["start"] and set(calls[0].split()[1:]) == set(_THROWAWAY)
+    assert calls[1].split()[:1] == ["stop"] and set(calls[1].split()[1:]) == set(_THROWAWAY)
+    assert not any("compose" in c or "dev.yaml" in c for c in calls)
+
+
+def test_up_is_refused_to_a_lane_not_holding_the_lease(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "walk")
+    script, log = _recording_docker(tmp_path)
+    _DOCKER["recording"] = script
+    try:
+        refused = lease("up", "case", docker="recording")
+    finally:
+        del _DOCKER["recording"]
+    assert refused.returncode == 1 and "held by studio" in refused.stderr
+    assert not log.exists()

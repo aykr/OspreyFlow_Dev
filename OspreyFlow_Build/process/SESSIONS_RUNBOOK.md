@@ -143,16 +143,16 @@ whenever no port is set. Moving dev-up would point each of those at the deployme
 lanes run live tests on the throwaway stack in `FDE_HANDOVER.md` (`osprey-probe-arcadedb-new` 2491,
 `osprey-test-pg` 55433, `osprey-test-valkey-6379` 6379, `osprey-test-minio`), whose ports nothing uses by
 default, under the same lease. `stack_lease.sh release` refuses while either stack is up. The commands
-below that name `make dev-up` stand for bringing that stack up and down.
+below bring it up and down with the lease's own `up` and `down` (8 November 2026: `make dev-up`, once advised here and by `acquire` itself, binds 2480, the owner's deployment's port).
 
 There is one stack for the machine. A lane that needs Postgres, ArcadeDB or Valkey:
 
 ```
 OspreyFlow_Build/scripts/stack_lease.sh status
 OspreyFlow_Build/scripts/stack_lease.sh acquire studio "phase 6 route tests"
-(cd OspreyFlow_Core && make dev-up)
-# … run the live tests, with the ports pinned as today (tests/port_guard.py) …
-(cd OspreyFlow_Core && make dev-down)
+OspreyFlow_Build/scripts/stack_lease.sh up studio
+# … run the live tests, with OSPREY_LANE=studio and the leased ports pinned (tests/port_guard.py) …
+OspreyFlow_Build/scripts/stack_lease.sh down studio
 OspreyFlow_Build/scripts/stack_lease.sh release studio
 ```
 
@@ -297,9 +297,10 @@ Before changing code, write me a short plan: the files you will touch, the tests
 (rules 1, 4, 12, 13), and any question as multiple choice (at most four, recommendation first). Wait if
 you asked one; otherwise proceed.
 
-The dev stack is shared: take OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>"
-before make dev-up, make dev-down before release, and name the lease in any timing or reliability
-figure you record. Send a heartbeat with
+The test stack is shared: take OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>",
+start it with stack_lease.sh up <lane> and stop it with stack_lease.sh down <lane> before release (the
+throwaway containers on 2491, 55433 and 6379; never make dev-up, whose 2480 is the owner's own
+deployment), and name the lease in any timing or reliability figure you record. Send a heartbeat with
 OspreyFlow_Build/scripts/lanes_heartbeat.sh beat <lane> <state> "<what you are doing>" when you start
 planning, start work, start tests, ask me something (waiting-for-owner), are blocked, are ready to merge
 (ready-to-merge), finish (idle), and after every commit. If a beat shows a message from the

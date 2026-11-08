@@ -11,9 +11,10 @@ Before changing code, write me a short plan: the files you will touch, the tests
 (rules 1, 4, 12, 13), and any question as multiple choice (at most four, recommendation first). Wait if
 you asked one; otherwise proceed.
 
-The dev stack is shared: take OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>"
-before make dev-up, make dev-down before release, and name the lease in any timing or reliability
-figure you record. Send a heartbeat with
+The test stack is shared: take OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>",
+start it with stack_lease.sh up <lane> and stop it with stack_lease.sh down <lane> before release (the
+throwaway containers on 2491, 55433 and 6379; never make dev-up, whose 2480 is the owner's own
+deployment), and name the lease in any timing or reliability figure you record. Send a heartbeat with
 OspreyFlow_Build/scripts/lanes_heartbeat.sh beat <lane> <state> "<what you are doing>" when you start
 planning, start work, start tests, ask me something (waiting-for-owner), are blocked, are ready to merge
 (ready-to-merge), finish (idle), and after every commit. If a beat shows a message from the
