@@ -86,3 +86,9 @@ line the real caller reaches. **Measured offline:** the Conduit image's Java sta
 none --target java`, the cached `eclipse-temurin:21-jdk`): `jlink` first failed (`/opt/java` already exists
 in the JDK image), then built a runtime of 100 MB whose `java -version` answers 21.0.12.1. The full image
 was not built: its other stages fetch packages.
+
+## Live, `test_route_rights.py` (the orchestrator's request)
+
+Platform lease on stack a, taken about 21:56:40 UTC, released 21:57:48 UTC: `test_route_rights.py` 4 passed
+(P2's `models_admin_limits_route` and `models_admin_usage_route` and the eleven Maps routes in
+`ROUTE_RIGHTS`); with `maps_admin_prefetch_route`'s entry removed, 1 failed ("in the app, not the table").
