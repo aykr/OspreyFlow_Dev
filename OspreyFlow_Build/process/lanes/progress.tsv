@@ -5,7 +5,7 @@ studio	L1.1	S	done	Phase 4's remainder: make ci green
 studio	L1.2	L	done	Phase 6: the canvas as editor, the Map editor, guided mode
 studio	L1.2a	M	done	Events-only withdrawal; the cross-case link merge shown not real (Parts A and A2)
 studio	L1.2c	S	done	Revert a load whose returning row merged into its own link (owner ruled A; ADR-110 Am 16)
-studio	L1.2d	S	todo	A link merge rewrites only its own type (upsert_edges untyped, found in L1.2c)
+studio	L1.2d	S	done	A link merge rewrites only its own type (upsert_edges untyped, found in L1.2c)
 studio	L1.2b	M	todo	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
 studio	L1.3	L	todo	Phase 7a: the staging catalogue's engine; screening lists in it
 studio	L1.4	M	todo	Phase 7b: the drawers for each step
