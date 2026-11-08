@@ -376,3 +376,25 @@ def test_a_run_pinning_stack_b_goes_ahead_only_under_stack_b_s_lease(
         assert "OSPREY_LANE=rules" in said and "stack b" in said
     else:
         assert run.returncode == 0, said
+
+
+
+@pytest.mark.parametrize(("port", "stack"), [(9000, "a"), (9002, "b")])
+def test_each_stack_s_object_store_is_refused_to_anyone_but_its_holder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, port: int, stack: str
+) -> None:
+    """Found 8 November 2026: a studio offline run wrote three synthetic files to stack a's object store
+    on 9000 without the lease, because the table left the object stores unguarded (red with them "no")."""
+    from tests import port_guard
+
+    monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.setenv("OSPREY_LANE", "studio")
+    _hold_lease(tmp_path, "rules", stack)
+    _RecordingSocket.asked = []
+    restore = port_guard.guard_socket(_RecordingSocket)  # type: ignore[arg-type]
+    try:
+        with pytest.raises(ConnectionRefusedError, match="lease"):
+            _RecordingSocket().connect(("127.0.0.1", port))
+    finally:
+        restore()
+    assert _RecordingSocket.asked == []
