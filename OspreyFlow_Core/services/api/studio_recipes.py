@@ -1218,6 +1218,31 @@ class StudioRecipeStore:
             )
         return [row["label"] for row in rows]
 
+    async def flag_for_model(
+        self, dataset_id: str, flagged: Sequence[tuple[str, str]]
+    ) -> list[str]:
+        """ADR-140 decision 5 (R12): *Make live* of the dataset's domain model changed or retired a
+        type each of these deployed recipes writes, so each needs attention, its scheduled and
+        watched runs blocked (ADR-110 decision 4) until it is deployed again under the new model.
+        `flagged` is `(recipe_id, reason)` pairs, each recipe's reason naming its own types. Only a
+        published recipe of this dataset is flagged; one already flagged keeps its first reason.
+        Returns the labels flagged, for the route to say. L3.1b, ratified by the studio lane."""
+        if not flagged:
+            return []
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE studio_recipes r SET status = $1, flagged_reason = f.reason "
+                "FROM unnest($2::text[], $3::text[]) AS f(recipe_id, reason) "
+                "WHERE r.recipe_id = f.recipe_id AND r.status = $4 AND r.dataset_id = $5 "
+                "RETURNING r.label",
+                StudioRecipeStatus.FLAGGED.value,
+                [recipe_id for recipe_id, _ in flagged],
+                [reason for _, reason in flagged],
+                StudioRecipeStatus.PUBLISHED.value,
+                dataset_id,
+            )
+        return sorted(row["label"] for row in rows)
+
     async def current_for_migration(self) -> list[StudioRecipeDraft]:
         """Every recipe at every status but a previous version, across every dataset: for
         `scripts.migrate_sources` alone, an operator's command run with no request and no reader

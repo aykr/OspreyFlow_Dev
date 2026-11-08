@@ -215,6 +215,11 @@ class DatasetStore(Protocol):
     async def read_only_layer_of(self, investigation_id: str) -> str | None: ...
     #: The case a layer is the layer of; `None` for an id that is not a layer.
     async def case_of_layer(self, layer_id: str) -> str | None: ...
+    #: Every case reading the dataset, directly or through a composite of it, by id: for a
+    #: dataset's own screens, filtered there to the cases the reader may open (rule 7).
+    async def cases_reading(self, dataset_id: str) -> list[str]: ...
+    #: The composites that have the dataset as a member.
+    async def composites_of(self, dataset_id: str) -> list[Dataset]: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -483,6 +488,16 @@ class InMemoryDatasetStore:
     async def case_of_layer(self, layer_id: str) -> str | None:
         held = self.datasets.get(layer_id)
         return held.layer_of if held is not None and held.kind == ANALYST_LAYER else None
+
+    async def composites_of(self, dataset_id: str) -> list[Dataset]:
+        return sorted(
+            (d for d in self.datasets.values() if d.kind == COMPOSITE and dataset_id in d.members),
+            key=lambda d: d.name,
+        )
+
+    async def cases_reading(self, dataset_id: str) -> list[str]:
+        through = {dataset_id, *(d.id for d in await self.composites_of(dataset_id))}
+        return sorted(case for case, chosen in self.cases.items() if through & set(chosen))
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -886,6 +901,27 @@ class PostgresDatasetStore:
                 "SELECT layer_of FROM datasets WHERE id = $1 AND kind = 'analyst_layer'", layer_id
             )
         return found
+
+    async def composites_of(self, dataset_id: str) -> list[Dataset]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM datasets d WHERE d.kind = 'composite' AND EXISTS "
+                "(SELECT 1 FROM composite_members m WHERE m.composite_id = d.id "
+                "AND m.member_id = $1) ORDER BY d.name",
+                dataset_id,
+            )
+        return [_row(r) for r in rows]
+
+    async def cases_reading(self, dataset_id: str) -> list[str]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT c.investigation_id FROM investigation_datasets c "
+                "WHERE c.dataset_id = $1 OR c.dataset_id IN "
+                "(SELECT m.composite_id FROM composite_members m WHERE m.member_id = $1) "
+                "ORDER BY c.investigation_id",
+                dataset_id,
+            )
+        return [r["investigation_id"] for r in rows]
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None

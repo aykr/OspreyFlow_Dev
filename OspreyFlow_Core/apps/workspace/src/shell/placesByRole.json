@@ -218,7 +218,15 @@
     "edit_target_model"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "dataset_model_impact",
+    "discard_dataset_model_draft",
+    "make_dataset_model_live",
+    "open_dataset_model_draft",
+    "read_dataset_model",
+    "revert_dataset_model",
+    "save_dataset_model_draft"
+   ]
   },
   "right:export": {
    "rights": [

@@ -118,3 +118,21 @@ async def test_the_composite_check_fails_with_the_kind_left_out_of_the_query(
     members, composite, layer = await _a_composite_and_its_case(store)
     asked = [*sorted(members), composite, layer, f"no-such-{new_id()}"]
     assert await store.composites_among(asked) != {composite}
+
+
+async def test_postgres_answers_the_cases_and_composites_reading_a_dataset(store) -> None:
+    """For a dataset's model impact (L3.1b): each case reading the dataset directly or through a
+    composite of it, and the composites having it as a member; nothing of a dataset it is not."""
+    member = await store.create(ALICE, f"Member {new_id()}")
+    partner = await store.create(ALICE, f"Partner {new_id()}")
+    elsewhere = await store.create(ALICE, f"Elsewhere {new_id()}")
+    composite = await store.create_composite(ALICE, f"Both {new_id()}", [member.id, partner.id])
+    direct, through, other = new_id(), new_id(), new_id()
+    await store.set_for_case(direct, [member.id], ALICE)
+    await store.set_for_case(through, [composite.id], ALICE)
+    await store.set_for_case(other, [elsewhere.id], ALICE)
+    reading = await store.cases_reading(member.id)
+    assert direct in reading and through in reading and other not in reading
+    assert await store.cases_reading(partner.id) == [through]
+    assert [d.id for d in await store.composites_of(member.id)] == [composite.id]
+    assert await store.composites_of(elsewhere.id) == []

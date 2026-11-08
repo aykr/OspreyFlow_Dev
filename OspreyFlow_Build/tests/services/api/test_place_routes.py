@@ -48,7 +48,7 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
      "Monitoring's held rows (alerts/api.ts)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
      "extraction of a case's files, an investigation right (ADR-112 I4)"),
-    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files)",
+    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)",
      frozenset({"ingest"}), "the Ingest Studio"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip

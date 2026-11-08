@@ -31,6 +31,14 @@ ROUTE_RIGHTS = {
     "list_datasets_route": None,
     "create_dataset_route": "create_case",
     "create_composite_route": "create_case",
+    # A dataset's domain model (ADR-112 Amendment 6, L3.1b), behind the dataset's own gate.
+    "read_dataset_model": "edit_target_model",
+    "open_dataset_model_draft": "edit_target_model",
+    "save_dataset_model_draft": "edit_target_model",
+    "discard_dataset_model_draft": "edit_target_model",
+    "dataset_model_impact": "edit_target_model",
+    "make_dataset_model_live": "edit_target_model",
+    "revert_dataset_model": "edit_target_model",
     "case_datasets_route": None,
     "set_case_datasets_route": "share_case",
     "list_investigations": None,
@@ -374,11 +382,9 @@ def test_every_right_guards_at_least_one_route() -> None:
     """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
     two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
     area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
-    lists gained theirs with ADR-133 stage (c). The domain model's editor (`edit_target_model`)
-    lands in L3.1b's schemas commit, before its routes (L3.1b step 1), which take it off this list:
-    the set's equality fails the build if they land and it is left here."""
+    lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b."""
     not_yet = {"revert_loads", "read_audit",
-               "export_override", "edit_target_model"}  # fmt: skip
+               "export_override"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet
 

@@ -225,7 +225,8 @@ class ModelImpact(BaseModel):
     changed_types: list[str] = Field(default_factory=list)
     pipelines: list[ImpactedPipeline] = Field(default_factory=list)
     cases: list[ImpactedCase] = Field(default_factory=list)
-    #: The composites of the dataset's unit that have it as a member, by name.
+    #: The composites that have the dataset as a member and that one of the reader's own cases
+    #: reads, by name; never one they may not read, and no count of the rest (rule 7).
     composites: list[str] = Field(default_factory=list)
 
 

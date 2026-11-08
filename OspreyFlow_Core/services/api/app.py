@@ -155,6 +155,15 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.compute import OwnershipTooComplex, OwnershipView
+from schemas.dataset_model import (
+    DatasetModelView,
+    MadeLive,
+    MakeLiveInput,
+    ModelImpact,
+    RevertModelInput,
+    TargetModel,
+    TargetModelDraftInput,
+)
 from schemas.domain import (
     Alert,
     AlertAssignee,
@@ -549,6 +558,7 @@ from .list_schedule import ListRefreshExecutor, ListScheduleRefused
 from .load_checks import READ_ONLY, ChecksRefused, check_choice, checks_view, would_raise
 from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
+from .model_impact import flag_reason, impact_of, pack_types_of
 from .model_routing import (
     EngineRefused,
     ModelEgressRefused,
@@ -746,6 +756,14 @@ from .superset_embed import (
     may_open,
 )
 from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkStore
+from .target_models import (
+    InMemoryTargetModelStore,
+    NoModelYet,
+    PostgresTargetModelStore,
+    TargetModelRefused,
+    TargetModelStore,
+    core_types_of,
+)
 from .tile_cache import (
     cache_key_for,
     read_cached_tile,
@@ -865,6 +883,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     # ADR-140 Amendment 4: connections and the sources registered on them.
     source_store = await PostgresSourceStore.connect(config.postgres.dsn)
+    target_model_store = await PostgresTargetModelStore.connect(
+        config.postgres.dsn, core_types=_core_types()
+    )
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -1028,6 +1049,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pack_store = pack_store
     app.state.studio_recipes = studio_recipes
     app.state.sources = source_store
+    app.state.target_models = target_model_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = resources.recipe_repo_root
@@ -1129,6 +1151,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await investigations.close()
         await history.close()
         await source_store.close()
+        await target_model_store.close()
         await sites.close()
         await judgements_store.close()
         await link_notes_store.close()
@@ -1250,6 +1273,28 @@ def get_sources(request: Request) -> SourceStore:
 
 
 SourcesDep = Annotated[SourceStore, Depends(get_sources)]
+
+
+def _core_types() -> frozenset[str]:
+    """The POLE core's entity and link types, from the default ontology (which composes no pack):
+    what a dataset's model may not redefine as an extension (ADR-140 decision 4)."""
+    from ontology.loader import load_default_ontology
+
+    core = load_default_ontology()
+    return core_types_of([e.name for e in core.entity_types], [e.name for e in core.edge_types])
+
+
+def get_target_models(request: Request) -> TargetModelStore:
+    """ADR-140 decision 5. The lifespan sets the Postgres store; a test app with no lifespan gets
+    an in-memory one."""
+    store = getattr(request.app.state, "target_models", None)
+    if store is None:
+        store = InMemoryTargetModelStore(core_types=_core_types())
+        request.app.state.target_models = store
+    return store
+
+
+TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -2415,6 +2460,19 @@ async def _composite_read_only_handler(
     return JSONResponse(
         status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
     )
+
+
+@app.exception_handler(NoModelYet)
+async def _no_model_yet_handler(request: Request, exc: NoModelYet) -> JSONResponse:
+    """A dataset with no domain model yet (ADR-126 Amendment 3: seeded with step 3)."""
+    return JSONResponse(status_code=409, content={"error": "no_model_yet", "detail": str(exc)})
+
+
+@app.exception_handler(TargetModelRefused)
+async def _model_refused_handler(request: Request, exc: TargetModelRefused) -> JSONResponse:
+    """A change to a dataset's domain model refused in words, before anything was written (ADR-140
+    decision 5)."""
+    return JSONResponse(status_code=409, content={"error": "model_refused", "detail": str(exc)})
 
 
 @app.exception_handler(BranchLayerError)
@@ -7705,6 +7763,164 @@ async def list_dataset_source_files(
         result_cardinality=len(listing.files),
     )
     return listing
+
+
+# --- ingest studio: a dataset's domain model (ADR-140 decisions 4 and 5, R12; L3.1b) ------------
+
+#: Every model route: the dataset's own gate, then the right (ADR-112 Amendment 6).
+_EDITS_THE_MODEL = [Depends(require_right(Right.EDIT_TARGET_MODEL))]
+#: And every write of one: a composite's own model waits for its superset check over its members'
+#: models (phase 5 item 4), and a composite is read-only for now (ADR-099 Amendment 14), so its
+#: model is read, not changed.
+_CHANGES_THE_MODEL = [*_EDITS_THE_MODEL, NoLoadingAComposite]
+
+
+@app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)
+async def read_dataset_model(
+    dataset_id: StudioDatasetDep, models: TargetModelsDep
+) -> DatasetModelView:
+    """The live version and the open draft; both `None` for a dataset with no model yet."""
+    live, draft = await models.live(dataset_id), await models.draft(dataset_id)
+    return DatasetModelView(live=live, draft=draft)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/draft",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def open_dataset_model_draft(
+    dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
+) -> TargetModel:
+    """Opens the draft (N+1) as a copy of the live version; a second is refused (409)."""
+    draft = await models.open_draft(dataset_id, principal)
+    await _audit_model(audit, principal, "open_model_draft", dataset_id, draft.version)
+    return draft
+
+
+@app.put("/v1/datasets/{dataset_id}/model/draft", dependencies=_CHANGES_THE_MODEL)
+async def save_dataset_model_draft(
+    dataset_id: StudioDatasetDep,
+    body: TargetModelDraftInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    audit: AuditDep,
+) -> TargetModel:
+    """Saves the draft as given; an extension removed rather than retired, or a POLE core type
+    named as one, is refused (409). Nothing that runs changes."""
+    draft = await models.save_draft(dataset_id, body, principal)
+    await _audit_model(audit, principal, "save_model_draft", dataset_id, draft.version)
+    return draft
+
+
+@app.delete(
+    "/v1/datasets/{dataset_id}/model/draft",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def discard_dataset_model_draft(
+    dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
+) -> None:
+    draft = await models.draft(dataset_id)
+    await models.discard_draft(dataset_id)
+    version = draft.version if draft is not None else 0
+    await _audit_model(audit, principal, "discard_model_draft", dataset_id, version)
+
+
+async def _model_impact(
+    request: Request, dataset_id: str, principal: Principal, models: TargetModelStore
+) -> tuple[ModelImpact, TargetModel]:
+    draft = await models.draft(dataset_id)
+    live = await models.live(dataset_id)
+    if draft is None:
+        if live is None:
+            raise NoModelYet
+        raise TargetModelRefused("there is no draft: open one to see what it would change")
+    impact = await impact_of(
+        dataset_id, live, draft,
+        pack_types=pack_types_of(get_ontology(request).type_packs),
+        recipes=get_studio_recipes(request), datasets=get_datasets(request),
+        cases=get_investigations(request), reader=principal,
+    )  # fmt: skip
+    return impact, draft
+
+
+@app.get("/v1/datasets/{dataset_id}/model/impact", dependencies=_EDITS_THE_MODEL)
+async def dataset_model_impact(
+    request: Request, dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep
+) -> ModelImpact:
+    """What making the draft live would change (R12), read before anything does."""
+    impact, _draft = await _model_impact(request, dataset_id, principal, models)
+    return impact
+
+
+@app.post("/v1/datasets/{dataset_id}/model/make-live", dependencies=_CHANGES_THE_MODEL)
+async def make_dataset_model_live(
+    request: Request,
+    dataset_id: StudioDatasetDep,
+    body: MakeLiveInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> MadeLive:
+    """The only step that changes what runs (R12): the draft named becomes live, the old live
+    version previous, and every deployed pipeline writing a changed or retired type is marked as
+    needing attention, its schedule paused with the reason. Loaded data is never rewritten."""
+    impact, draft = await _model_impact(request, dataset_id, principal, models)
+    if draft.version != body.version:
+        raise TargetModelRefused(
+            f"the draft is version {draft.version}, not {body.version}: it changed since it was "
+            "opened, so read it again before making it live"
+        )
+    live, previous = await models.make_live(dataset_id, body.version, principal)
+    reasons = {p.recipe_id: flag_reason(live, p) for p in impact.pipelines}
+    await studio_recipes.flag_for_model(dataset_id, list(reasons.items()))
+    for recipe_id, reason in reasons.items():
+        await studio_recipes.set_paused(recipe_id, paused=True, reason=reason)
+    await _audit_model(
+        audit, principal, "make_model_live", dataset_id, live.version,
+        flagged=sorted(reasons), changed_types=impact.changed_types,
+    )  # fmt: skip
+    return MadeLive(live=live, previous=previous, flagged=impact.pipelines)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/revert",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def revert_dataset_model(
+    dataset_id: StudioDatasetDep,
+    body: RevertModelInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    audit: AuditDep,
+) -> TargetModel:
+    """A new draft copying an earlier version (N+2), never a rewrite of it."""
+    if await models.live(dataset_id) is None:
+        raise NoModelYet
+    draft = await models.revert(dataset_id, body.version, principal)
+    await _audit_model(
+        audit, principal, "revert_model", dataset_id, draft.version, reverted_from=body.version
+    )
+    return draft
+
+
+async def _audit_model(
+    audit: AuditWriter,
+    principal: Principal,
+    action: str,
+    dataset_id: str,
+    version: int,
+    **detail: object,
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        resolved_query={"dataset_id": dataset_id, "version": version, **detail},
+        result_cardinality=1,
+    )
 
 
 @app.get(
