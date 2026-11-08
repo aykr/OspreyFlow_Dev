@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from services.api.studio_publish import write_and_commit_recipe
 from services.ingest import staging
 from services.ingest.engine import dry_run_recipe, run_recipe
@@ -191,23 +190,62 @@ async def test_every_booking_is_accounted_for() -> None:
 
 
 async def test_the_load_s_raw_rows_are_the_sources_rows() -> None:
-    """Review round 1, item 7: `raw.parquet` holds every source's rows as each source gave them,
-    never the table Map read."""
-    await load()
-    raw = staging.read_raw_rows(
-        "staging/loads/ld-run-1/raw.parquet", storage=ObjectStorageConfig(bucket="staging")
-    )
-    assert [(r.source, r.row_index) for r in raw] == [
-        *(("visit_bookings", i) for i in range(6)),
-        *(("number_owners", i) for i in range(4)),
+    """Review round 1 item 7, round 2: each source's rows, as it gave them, are the raw rows of the
+    load that read them, so an element's ref (source, row, load_id) names a row of a file that
+    exists; never the table Map read."""
+    _done, graph = await load()
+    store = ObjectStorageConfig(bucket="staging")
+    raw = {
+        load: staging.read_raw_rows(f"staging/loads/{load}/raw.parquet", storage=store)
+        for load in ("ld-vb-1", "ld-no-1")
+    }
+    assert [(r.source, r.row_index) for r in raw["ld-vb-1"]] == [
+        ("visit_bookings", i) for i in range(6)
     ]
-    assert raw[3].fields["contact_number"] == "not given"
-    assert raw[6 + 3].fields == {
+    assert [(r.source, r.row_index) for r in raw["ld-no-1"]] == [
+        ("number_owners", i) for i in range(4)
+    ]
+    assert raw["ld-vb-1"][3].fields["contact_number"] == "not given"
+    assert raw["ld-no-1"][3].fields == {
         "number": "unknown",
         "owner_family_name": "NOBODY",
         "since": "2020-01-01",
     }
-    assert {r.load_id for r in raw} == {"ld-vb-1", "ld-no-1"}
+    # Every ref of every element resolves to its row, and the row is the one the element came from.
+    rows = {(r.load_id, r.source, r.row_index): r for rs in raw.values() for r in rs}
+    for element in [*graph.committed_nodes, *graph.committed_edges]:
+        for ref in element.provenance.sources:
+            if ref.load_id is None:
+                continue  # a list row, named by its list's version
+            assert (ref.load_id, ref.document_id, int(ref.locator.split()[1])) in rows, ref
+    booking = _node(graph, "Document", "message_id", "VB-2605-002")
+    [own] = [r for r in booking.provenance.sources if r.document_id == "visit_bookings"]
+    assert rows[(own.load_id, "visit_bookings", int(own.locator.split()[1]))].fields[
+        "booking_id"
+    ] == ("VB-2605-002")
+
+
+async def test_only_a_staged_run_may_leave_its_raw_rows_to_the_caller(tmp_path: Path) -> None:
+    """Review round 2: `03` §5.1's raw staging is skipped only by a staged run, which has written
+    its sources' raw rows itself; any other run passing `stage_raw=False` is refused."""
+    plain = RECIPE.model_copy(update={"staging": None})
+    graph = ValidatingGraph(ONTOLOGY)
+    tx = await graph.begin_transaction()
+    with pytest.raises(RecipeRuleError, match="without staging its raw rows"):
+        await run_recipe(
+            plain,
+            _rows("visit_bookings.csv"),
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx=tx,  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="ld-plain",
+            investigation_scope="case-1",
+            source="visit_bookings",
+            storage=ObjectStorageConfig(bucket="staging"),
+            scheme=SCHEME,
+            stage_raw=False,
+        )
 
 
 async def test_no_row_key_raw_or_hashed_reaches_an_element_or_test() -> None:

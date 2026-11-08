@@ -774,12 +774,21 @@ def _provenance(
 
 
 def _refuse_staging_without_its_refs(
-    recipe: Recipe, row_refs: Mapping[int, Sequence[SourceRef]] | None
+    recipe: Recipe, row_refs: Mapping[int, Sequence[SourceRef]] | None, *, stage_raw: bool = True
 ) -> None:
     """ADR-140 Amendment 11 (lane review round 1, item 4): a recipe with staging steps maps the last
     step's table, never the raw rows of one source. Run without those rows' refs it would map the
     wrong rows and record the wrong sources, so it is refused in words; it runs through
     `staged_run.run_staged_recipe` (Test: `dry_run_staged_recipe`)."""
+    if not stage_raw and (not recipe.staging or row_refs is None):
+        # `03_CONDUIT_MIDDLEWARE.md` §5.1: every load stages its raw rows first. Only a staged run,
+        # which has written its sources' raw rows itself, may leave it to that (review round 2).
+        raise RecipeRuleError(
+            [
+                f"Recipe {recipe.id!r} is run without staging its raw rows, which only a staged "
+                "run (one that has staged its sources' rows itself) may do."
+            ]
+        )
     if recipe.staging and row_refs is None:
         raise RecipeRuleError(
             [
@@ -2395,7 +2404,7 @@ async def run_recipe(
         )
     # ADR-120 D10, Amendment 1: the packs it names or writes, at the versions it was published at.
     check_recipe_pins(recipe, ontology)
-    _refuse_staging_without_its_refs(recipe, row_refs)
+    _refuse_staging_without_its_refs(recipe, row_refs, stage_raw=stage_raw)
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
     check_recipe_rules(

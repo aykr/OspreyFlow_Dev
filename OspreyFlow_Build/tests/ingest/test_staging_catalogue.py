@@ -30,8 +30,10 @@ import pytest
 from pydantic import TypeAdapter
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import (
+    DEPLOYMENT_WIDE,
     StagingError,
     read_staged_table,
+    readable_lists,
     reference_table,
     run_staging,
     screening_parties,
@@ -73,8 +75,6 @@ OFAC = ReferenceList(
     key_column="ref",
     version=1,
 )
-#: The deployment-wide lists (imported once for the deployment), by id.
-DEPLOYMENT = ("rl-3",)
 #: Another dataset's own list, kind screening and named as the deployment's list is.
 LEDGERS_OFAC = ReferenceList(
     id="rl-9",
@@ -109,7 +109,6 @@ def _violations(
         lists=list(lists),
         dataset_id="pid",
         subscribed=subscribed,
-        deployment_lists=DEPLOYMENT,
     )
 
 
@@ -214,7 +213,6 @@ def test_another_dataset_s_screening_list_of_the_same_name_is_never_read() -> No
             lists={"ofac_sdn": ledgers},
             dataset_id="pid",
             subscribed=["rl-9", "ofac_sdn"],
-            deployment_lists=DEPLOYMENT,
         )
     done = run_staging(
         step,
@@ -222,7 +220,6 @@ def test_another_dataset_s_screening_list_of_the_same_name_is_never_read() -> No
         lists={"ofac_sdn": deployments},
         dataset_id="pid",
         subscribed=["rl-3"],
-        deployment_lists=DEPLOYMENT,
     )
     assert done.output.rows[0].cells["primary_name"] == parsed.entries[1].name
 
@@ -317,7 +314,6 @@ def test_a_subscribed_screening_list_serves_a_lookup_after_its_round_trip() -> N
         lists={"ofac_sdn": back},
         dataset_id="pid",
         subscribed=["rl-3"],
-        deployment_lists=DEPLOYMENT,
     )
     assert [r.cells["listed_name"] for r in result.output.rows] == [first.name, None]
     assert result.output.rows[0].refs[1].source == "reference_list:ofac_sdn@v1"
@@ -431,3 +427,44 @@ def test_a_union_of_tables_whose_columns_differ_is_refused() -> None:
         run_staging(
             STEPS.validate_python([step]), sources={"a": a, "b": b}, lists={}, dataset_id="pid"
         )
+
+
+@pytest.mark.parametrize("adapter", ["split", "datetime", "card", "grid_ref", "eval"])
+def test_a_derive_normalising_with_anything_but_a_text_adapter_is_refused_at_the_gate(
+    adapter: str,
+) -> None:
+    """Review round 2: the gate checks a Derive's `normalise` as it checks a key's, so a step that
+    would reject every row is refused at save, not found at run."""
+    step = {
+        "id": "n",
+        "kind": "derive",
+        "input": "bookings",
+        "column": "c",
+        "operation": "normalise",
+        "columns": ["contact"],
+        "settings": {"adapter": adapter},
+    }
+    assert _violations([step]) == [
+        f"step 'n' normalises with {adapter!r}, which is not a Knowledge Adapter that reads one "
+        "column into one value of text"
+    ]
+    assert _violations([{**step, "settings": {"adapter": "msisdn"}}]) == []
+
+
+def test_a_list_is_deployment_wide_by_its_own_record_never_by_the_caller() -> None:
+    """Review round 2: only a list whose own `dataset_id` is the deployment's can be subscribed to;
+    another dataset's list stays unreadable whatever the subscription names."""
+    assert DEPLOYMENT_WIDE == OFAC.dataset_id
+    for subscribed in [("rl-9",), ("rl-9", "ofac_sdn", "ledger")]:
+        readable, _ = readable_lists([LEDGERS_OFAC], dataset_id="pid", subscribed=subscribed)
+        assert readable == {}
+    # Nor does a dataset named as the deployment read the deployment's lists as its own.
+    readable, _ = readable_lists([OFAC], dataset_id=DEPLOYMENT_WIDE, subscribed=())
+    assert readable == {}
+
+
+def test_a_bucket_created_by_one_client_is_kept_for_the_next(tmp_path: Path) -> None:
+    """Rule 15, review round 2: a bucket is the store's, as in MinIO, not one client's."""
+    LocalStore(tmp_path).create_dir("shared")
+    with LocalStore(tmp_path).open_output_stream("shared/loads/x.parquet") as sink:
+        sink.write(b"x")

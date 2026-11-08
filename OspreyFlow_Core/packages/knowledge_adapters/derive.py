@@ -15,8 +15,9 @@ wrong, never for an empty cell.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable, Mapping, Sequence
-from decimal import Decimal, DivisionByZero, InvalidOperation
+from decimal import Decimal, Inexact, InvalidOperation, Overflow, localcontext
 from typing import Any
 
 from .datetime_adapter import datetime_adapter
@@ -134,15 +135,27 @@ def _arithmetic(values: Cells, params: Mapping[str, Any]) -> str | None:
     operands = [_number(values, c) for c in cells if c is not None]
     if constant is not None:
         operands.append(_number(values, str(constant)))
-    try:
-        result = _ARITHMETIC[op](operands[0], operands[1])
-    except (DivisionByZero, InvalidOperation) as exc:
-        raise _refuse("arithmetic", values, "division by zero") from exc
-    if result.is_finite() and result != 0 and abs(result.adjusted()) > _LARGEST_EXPONENT:
-        raise _refuse("arithmetic", values, "the result is too large or too small to write")
-    normalised = result.normalize()
-    # `normalize` writes 40 as 4E+1; a number is written plainly.
-    return format(normalised, "f")
+    if op == "divide" and operands[1] == 0:
+        raise _refuse("arithmetic", values, "division by zero")
+    # Add, subtract and multiply are exact or refused: a result the context would have to round is
+    # never written as if it were the sum. A quotient is given to 28 significant figures, as
+    # 09 §4 says, since most quotients have no exact decimal.
+    with localcontext() as context:
+        context.prec = 28 if op == "divide" else 200
+        context.traps[Inexact] = op != "divide"
+        try:
+            result = _ARITHMETIC[op](operands[0], operands[1])
+        except Overflow as exc:
+            raise _refuse(
+                "arithmetic", values, "the result is too large or too small to write"
+            ) from exc
+        except Inexact as exc:
+            raise _refuse("arithmetic", values, "the result cannot be written exactly") from exc
+        if result.is_finite() and result != 0 and abs(result.adjusted()) > _LARGEST_EXPONENT:
+            raise _refuse("arithmetic", values, "the result is too large or too small to write")
+        # `normalize` writes 40 as 4E+1; a number is written plainly. Inside the same context, so
+        # it never rounds what the operation kept.
+        return format(result.normalize(), "f")
 
 
 def _case_when(values: Cells, params: Mapping[str, Any]) -> str | None:
@@ -163,6 +176,7 @@ def _case_when(values: Cells, params: Mapping[str, Any]) -> str | None:
     return None if otherwise is None else str(otherwise)
 
 
+@functools.cache
 def text_adapters() -> frozenset[str]:
     """The Knowledge Adapters that read one column into one value of text: what a Derive's
     `normalise`, and a Lookup's or a Join's key, may name. An adapter whose result is structured

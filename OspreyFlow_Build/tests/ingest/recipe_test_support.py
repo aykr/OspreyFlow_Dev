@@ -46,18 +46,18 @@ class LocalStore:
     bucket, though, must be made first, there as here."""
 
     def __init__(self, root: Path) -> None:
+        self._root = root
         self._fs = pa_fs.SubTreeFileSystem(str(root), pa_fs.LocalFileSystem())
-        self._buckets: set[str] = set()
 
     def create_dir(self, path: str) -> None:
-        self._buckets.add(path.split("/", 1)[0])
         self._fs.create_dir(path, recursive=True)
 
     def open_output_stream(self, path: str) -> Any:
         # Rule 15: the object store refuses a write into a bucket that was never created (MinIO's
-        # NoSuchBucket); a writer that forgets `create_dir(bucket)` fails here as it would there.
+        # NoSuchBucket), and keeps one it was (a bucket is the store's, not one client's): a
+        # bucket is the root's top-level directory, made by `create_dir`.
         bucket = path.split("/", 1)[0]
-        if bucket not in self._buckets:
+        if not (self._root / bucket).is_dir():
             raise FileNotFoundError(f"NoSuchBucket: {bucket!r} was never created")
         self._fs.create_dir(path.rsplit("/", 1)[0], recursive=True)
         return self._fs.open_output_stream(path)

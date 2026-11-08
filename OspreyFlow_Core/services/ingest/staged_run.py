@@ -83,7 +83,6 @@ def _stage(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str],
-    deployment_lists: Collection[str],
 ) -> StagingResult:
     if not recipe.staging:
         raise StagingError([f"recipe {recipe.id!r} has no staging steps"])
@@ -93,7 +92,6 @@ def _stage(
         lists=lists,
         dataset_id=dataset_id,
         subscribed=subscribed,
-        deployment_lists=deployment_lists,
     )
 
 
@@ -104,7 +102,6 @@ async def run_staged_recipe(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str] = (),
-    deployment_lists: Collection[str] = (),
     graph: GraphPort,
     ontology: OntologySchema,
     tx: TxId,
@@ -118,12 +115,11 @@ async def run_staged_recipe(
     **engine: Any,
 ) -> StagedLoad:
     storage = storage or ObjectStorageConfig.from_env()
-    staging = await asyncio.to_thread(
-        _stage, recipe, sources, lists, dataset_id, subscribed, deployment_lists
-    )
-    # The source rows, as each source gave them, are the load's raw rows (`raw.parquet`), not the
-    # table Map reads; `run_recipe` is told not to write its own over them.
-    await asyncio.to_thread(stage_raw_sources, sources, storage=storage, load_id=load_id)
+    staging = await asyncio.to_thread(_stage, recipe, sources, lists, dataset_id, subscribed)
+    # Each source's rows are the raw rows of the load that read them (`loads/<its load_id>/
+    # raw.parquet`), so a ref's (source, row, load_id) names a row in a file that exists; never the
+    # table Map reads, so `run_recipe` is told not to write its own raw rows.
+    await asyncio.to_thread(stage_raw_sources, sources, storage=storage)
     paths: dict[str, str] = {}
     rows_staged = parquet_bytes = 0
     for step in recipe.staging or []:
@@ -169,7 +165,6 @@ async def dry_run_staged_recipe(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str] = (),
-    deployment_lists: Collection[str] = (),
     graph: GraphPort,
     ontology: OntologySchema,
     principal: Principal,
@@ -177,7 +172,7 @@ async def dry_run_staged_recipe(
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
 ) -> StagedTest:
-    staging = _stage(recipe, sources, lists, dataset_id, subscribed, deployment_lists)
+    staging = _stage(recipe, sources, lists, dataset_id, subscribed)
     rows, refs = map_input(staging.output)
     result = await dry_run_recipe(
         recipe,
