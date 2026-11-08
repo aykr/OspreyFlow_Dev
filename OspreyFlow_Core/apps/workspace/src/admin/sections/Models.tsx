@@ -2,7 +2,7 @@
 // engines outside this deployment, each job's default engine and each engine's key. Behind
 // `manage_models`. A key is typed into a write-only field, sent once, and cleared: nothing here
 // ever holds or shows one, and nothing the Conduit answers carries one.
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import type {
   AdminEngine,
@@ -18,6 +18,7 @@ import {
   editEngine,
   readHistory,
   readModels,
+  readUsage,
   removeEngine,
   removeKey,
   setDefaults,
@@ -199,6 +200,12 @@ export function Models({ api }: { api: ModelsApi }) {
   const [said, setSaid] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // One reader for the usage section for as long as the Conduit and token are the same.
+  const readUsageHere = useCallback(
+    (start: string, end: string) => readUsage(api, start, end),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api.apiBaseUrl, api.bearerToken],
+  );
   const refreshHistory = () => {
     readHistory(api)
       .then((h) => setHistory(h.entries))
@@ -467,7 +474,7 @@ export function Models({ api }: { api: ModelsApi }) {
             </Button>
           </section>
 
-          <ModelsUsage api={api} />
+          <ModelsUsage read={readUsageHere} />
 
           <section aria-labelledby="models-history">
             <h3 id="models-history">History</h3>

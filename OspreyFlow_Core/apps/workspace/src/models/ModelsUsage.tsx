@@ -6,7 +6,6 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import type { AdminEngine, EngineLimits, ModelUsageView, UsageFigures } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
-import { readUsage, type ModelsApi } from "../admin/sections/ModelsApi";
 
 const JOB_WORDS: Record<string, string> = {
   extraction: "Extraction and Ask",
@@ -124,8 +123,12 @@ function periodOf(choice: string, from: string, to: string, today: Date): [strin
   return [isoDay(start), end];
 }
 
+/** How the usage is read: `ModelsApi.readUsage`, handed in by *Admin › Models* (whose place the
+ * route is), so this file reaches no route of its own. */
+export type ReadUsage = (start: string, end: string) => Promise<ModelUsageView>;
+
 /** The usage section: a period, then the gateway's counts by engine and job. */
-export function ModelsUsage({ api, today = new Date() }: { api: ModelsApi; today?: Date }) {
+export function ModelsUsage({ read, today = new Date() }: { read: ReadUsage; today?: Date }) {
   const [choice, setChoice] = useState<string>("30");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -137,7 +140,7 @@ export function ModelsUsage({ api, today = new Date() }: { api: ModelsApi; today
     // Only the answer for the period last asked is shown: an earlier, slower one is dropped.
     let current = true;
     setProblem(null);
-    readUsage(api, asked[0], asked[1])
+    read(asked[0], asked[1])
       .then((u) => {
         if (!current) return;
         if (Array.isArray(u?.rows)) setUsage(u);
@@ -150,7 +153,7 @@ export function ModelsUsage({ api, today = new Date() }: { api: ModelsApi; today
       current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api.apiBaseUrl, api.bearerToken, asked[0], asked[1]]);
+  }, [read, asked[0], asked[1]]);
 
   const choose = (next: string) => {
     setChoice(next);

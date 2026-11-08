@@ -5,8 +5,9 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Models } from "../admin/sections/Models";
-import { ModelsUsage, limitsInWords } from "./ModelsUsage";
+import { Models } from "./Models";
+import { readUsage } from "./ModelsApi";
+import { ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 
 afterEach(() => {
   cleanup();
@@ -93,7 +94,7 @@ describe("limits", () => {
 describe("usage", () => {
   it("shows the gateway's counts for the last 30 days, and asks again for a new period", async () => {
     const sent = stub();
-    render(<ModelsUsage api={API} today={new Date("2026-11-08T12:00:00Z")} />);
+    render(<ModelsUsage read={(start, end) => readUsage(API, start, end)} today={new Date("2026-11-08T12:00:00Z")} />);
     const table = await screen.findByRole("table", { name: "Usage by engine and job" });
     expect(within(table).getByText("Extraction and Ask")).toBeTruthy();
     expect(table.textContent).toContain("3,400");
