@@ -60,7 +60,13 @@ export function BoardsPlace({
     if (answer.ok) setBoards(answer.value);
     else setProblem(answer.message);
     // The case's views this reader may see, to start a board from (ADR-144); none offers none.
-    const found = await listViews(apiBaseUrl, bearerToken, caseId).catch(() => []);
+    let found: Awaited<ReturnType<typeof listViews>> = [];
+    try {
+      found = await listViews(apiBaseUrl, bearerToken, caseId);
+    } catch (err) {
+      // Said, not hidden as "none yet".
+      setProblem(err instanceof Error ? err.message : "The views could not be loaded.");
+    }
     setViews(found.map((v) => ({ id: v.id, name: v.name })));
     setViewId((held) => held || found[0]?.id || "");
   }, [apiBaseUrl, bearerToken, caseId]);

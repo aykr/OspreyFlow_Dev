@@ -251,12 +251,14 @@ test("an item is withdrawn by keyboard after asking once, with the links drawn t
   await press(page, "Withdraw Unknown male “Tall”");
   const question = page.getByRole("dialog", { name: "Withdraw Unknown male “Tall”?" });
   await expect(question).toContainText("kept in the audit");
-  await expect(question).toContainText("The link drawn to it, withdrawn with it: associate of (Ward).");
+  await expect(question).toContainText("The link drawn to it on this board, withdrawn with it: associate of (Ward).");
+  await expect(question).toContainText("every link drawn to it (on this board or another of the case) and its picture");
   expect((await sent(page)).some((s) => s.path.endsWith("/withdraw"))).toBe(false);
   await press(page, "Withdraw the item");
   await expect(item(page, /Unknown male “Tall”/)).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "withdrawn" })).toHaveText(
-    "Unknown male “Tall” withdrawn, with 1 link drawn to it (associate of). It is kept in the audit.",
+    // The Conduit's answer named a link on another board too: counted, as it said.
+    "Unknown male “Tall” withdrawn, with 2 links drawn to it (associate of, 1 on another board). It is kept in the audit.",
   );
   const withdrawn = (await sent(page)).filter((s) => s.path.endsWith("/withdraw"));
   expect(withdrawn.map((s) => s.path)).toEqual(["/v1/investigations/c1/board-items/i-tall/withdraw"]);
@@ -304,6 +306,27 @@ test("an item is withdrawn from its menu by keyboard after asking once", async (
   await press(page, "Withdraw the item");
   await expect(item(page, /Unknown male “Tall”/)).toHaveCount(0);
   registerCovered("BOARD_ACTIONS", "withdraw-an-item-from-its-menu-by-keyboard");
+});
+
+test("the menu key opens an item's menu too", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await item(page, /^Person Unknown male “Tall” \(drawn\)/).focus();
+  await page.keyboard.press("ContextMenu");
+  await expect(page.getByRole("menu", { name: "Item actions" }).getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(item(page, /^Person Unknown male “Tall” \(drawn\)/)).toBeFocused();
+});
+
+test("another member's drawn item on one's own board offers no Edit, Withdraw or picture", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await item(page, /^Person Bob’s sketch \(drawn\)/).focus();
+  await page.keyboard.press("Enter");
+  const inspector = page.getByRole("region", { name: "Bob’s sketch" });
+  await expect(inspector).toContainText("Drawn by");
+  await expect(inspector.getByRole("button", { name: /^Edit |^Withdraw / })).toHaveCount(0);
+  await expect(page.getByLabel(/^Picture of /)).toHaveCount(0);
+  await page.keyboard.press("Shift+F10");
+  await expect(page.getByRole("menu", { name: "Item actions" }).getByRole("menuitem")).toHaveText(["Draw a link from here", "Inspect"]);
 });
 
 test("a loaded item's menu offers no Edit or Withdraw", async ({ page }) => {

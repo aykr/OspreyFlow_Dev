@@ -220,16 +220,18 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
       setProblem(answer.message);
       return;
     }
+    // What the Conduit says went with it: the drawn links this person may see (on this board or
+    // another of the case) and its picture; nothing of what they may not see.
     const gone = answer.value.links ?? [];
-    const named = gone.map((edgeId) => {
+    const here = gone.flatMap((edgeId) => {
       const edge = opened?.edges.find((e) => e.id === edgeId);
-      return edge ? linkLabel(edge) : null;
+      return edge ? [linkLabel(edge)] : [];
     });
-    const words = named.filter(Boolean).join(", ");
-    const links = gone.length
-      ? `, with ${gone.length} link${gone.length === 1 ? "" : "s"} drawn to it${words ? ` (${words})` : ""}`
-      : "";
-    setSaid(`${labelOf(id)} withdrawn${links}. It is kept in the audit.`);
+    const elsewhere = gone.length - here.length;
+    const named = [...here, ...(elsewhere ? [`${elsewhere} on another board`] : [])].join(", ");
+    const links = gone.length ? `, with ${gone.length} link${gone.length === 1 ? "" : "s"} drawn to it (${named})` : "";
+    const picture = (answer.value.pictures?.length ?? 0) > 0 ? " and its picture" : "";
+    setSaid(`${labelOf(id)} withdrawn${links}${picture}. It is kept in the audit.`);
     setPanel(null);
     setSelected(null);
     await reload();
@@ -253,7 +255,11 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
   }
 
   const selectedNode = selected ? byId.get(selected) ?? null : null;
-  const selectedMine = selectedNode ? drawnIds.has(selectedNode.id) && mayDraw && Boolean(opened.items?.[selectedNode.id]) : false;
+  // One's own drawn item: on one's own board (may_draw) and drawn by its creator, that is by this
+  // person; another member's item placed here is a live reference to them too (spec 02 §2.0b).
+  const isMine = (node: BoardNode | undefined) =>
+    Boolean(node && drawnIds.has(node.id) && mayDraw && opened.items?.[node.id] && node.provenance.drawn?.asserted_by === opened.board.created_by);
+  const selectedMine = isMine(selectedNode ?? undefined);
 
   return (
     <section className={govuk ? "board board--govuk" : "board"} aria-labelledby="board-title">
@@ -426,7 +432,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
             <ItemMenu
               menu={menu}
               surface={surface.current}
-              drawnAndMine={drawnIds.has(menu.id) && mayDraw && Boolean(opened.items?.[menu.id])}
+              drawnAndMine={isMine(byId.get(menu.id))}
               mayDraw={mayDraw}
               onClose={() => {
                 const id = menu.id;
@@ -488,7 +494,12 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               onSave={async (form) => {
                 const itemId = opened.items?.[panel.id];
                 if (!itemId) return "This item cannot be edited here.";
-                const answer = await editItem(apiBaseUrl, bearerToken, caseId, itemId, { ...form, icon: form.icon || undefined });
+                // A note left empty is not sent: an item sourced by a document alone keeps no "" note.
+                const answer = await editItem(apiBaseUrl, bearerToken, caseId, itemId, {
+                  ...form,
+                  sourceNote: form.sourceNote.trim() ? form.sourceNote : undefined,
+                  icon: form.icon || undefined,
+                });
                 if (!answer.ok) return answer.message;
                 setPanel(null);
                 setSaid(`${form.label} changed.`);
@@ -538,12 +549,15 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               <h3 id="board-withdraw-title" className={govuk ? "govuk-heading-s" : "label"}>
                 Withdraw {itemLabel(byId.get(panel.id)!)}?
               </h3>
-              <p className="caption">It is taken off every board and canvas, with the links drawn to it, and its watch ends. It is never deleted: it is kept in the audit.</p>
+              <p className="caption">
+                It is taken off every board and canvas, with every link drawn to it (on this board or another of the case) and its picture, and its
+                watch ends. It is never deleted: it is kept in the audit.
+              </p>
               {(() => {
                 const going = opened.edges.filter((e) => isDrawn(e) && (e.source === panel.id || e.target === panel.id));
                 return going.length > 0 ? (
                   <p className="caption">
-                    The link{going.length === 1 ? "" : "s"} drawn to it, withdrawn with it:{" "}
+                    The link{going.length === 1 ? "" : "s"} drawn to it on this board, withdrawn with it:{" "}
                     {going.map((e) => `${linkLabel(e)} (${labelOf(e.source === panel.id ? e.target : e.source)})`).join(", ")}.
                   </p>
                 ) : null;

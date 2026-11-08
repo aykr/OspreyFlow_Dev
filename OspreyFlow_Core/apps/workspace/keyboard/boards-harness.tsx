@@ -50,12 +50,12 @@ function documentNode(id: string, title: string): Json {
   return { id, type: "Document", properties: { title, media_kind: "image", object_ref: `media/${id}.png` }, provenance: provenance(null), handling: handling(), audit, datasets: ["src"] };
 }
 
-function drawnNode(id: string, item: string, label: string, board: string): Json {
+function drawnNode(id: string, item: string, label: string, board: string, by = "alice"): Json {
   return {
     id,
     type: "Person",
     properties: { family_name: label },
-    provenance: provenance({ provenance_class: "analyst_drawn", item_id: item, asserted_by: "alice", board_id: board, case_id: "c1", label, grading: GRADE, source_note: "Wing officer report, 4 Nov" }),
+    provenance: provenance({ provenance_class: "analyst_drawn", item_id: item, asserted_by: by, board_id: board, case_id: "c1", label, grading: GRADE, source_note: "Wing officer report, 4 Nov" }),
     handling: handling(),
     audit,
     datasets: ["layer"],
@@ -79,12 +79,12 @@ const boards: HeldBoard[] = [
     name: "Wing B",
     created_by: "alice",
     shared: true,
-    nodes: [loaded("p-mercer", "Mercer"), loaded("p-ward", "Ward"), drawnNode("d-tall", "i-tall", "Unknown male “Tall”", "b-wing"), drawnNode("d-ms", "i-ms", "M. Mercer", "b-wing"), documentNode("doc-photo", "Photo of Mercer, 3 Nov")],
+    nodes: [loaded("p-mercer", "Mercer"), loaded("p-ward", "Ward"), drawnNode("d-tall", "i-tall", "Unknown male “Tall”", "b-wing"), drawnNode("d-ms", "i-ms", "M. Mercer", "b-wing"), documentNode("doc-photo", "Photo of Mercer, 3 Nov"), drawnNode("d-bob", "i-bob", "Bob’s sketch", "b-bob", "bob")],
     edges: [
       { id: "e-loaded", type: "ASSOCIATE_OF", source: "p-mercer", target: "p-ward", provenance: provenance(null), handling: handling(), audit, datasets: ["src"] },
     ],
-    items: { "d-tall": "i-tall", "d-ms": "i-ms" },
-    layout: { "p-mercer": { x: 0.2, y: 0.3 }, "p-ward": { x: 0.5, y: 0.3 }, "d-tall": { x: 0.3, y: 0.7 }, "d-ms": { x: 0.75, y: 0.6 }, "doc-photo": { x: 0.85, y: 0.2 } },
+    items: { "d-tall": "i-tall", "d-ms": "i-ms", "d-bob": "i-bob" },
+    layout: { "p-mercer": { x: 0.2, y: 0.3 }, "p-ward": { x: 0.5, y: 0.3 }, "d-tall": { x: 0.3, y: 0.7 }, "d-ms": { x: 0.75, y: 0.6 }, "doc-photo": { x: 0.85, y: 0.2 }, "d-bob": { x: 0.55, y: 0.85 } },
   },
   { id: "b-night", name: "Night shift", created_by: "alice", shared: false, nodes: [], edges: [], items: {}, layout: {} },
 ];
@@ -155,7 +155,10 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const gone = b.edges.filter((e) => e.source === element || e.target === element).map((e) => e.id as string);
       b.edges = b.edges.filter((e) => !gone.includes(e.id as string));
       delete b.items[element];
-      return json(200, { nodes: [element], links: gone, watches_ended: 1 });
+      // As the Conduit answers: every drawn link the reader may see, on this board or another of
+      // the case (Tall has one on another board), and its picture apart.
+      const elsewhere = element === "d-tall" ? ["e-other-board"] : [];
+      return json(200, { nodes: [element], links: [...gone, ...elsewhere], pictures: [], watches_ended: 1 });
     }
     const node = b.nodes.find((n) => n.id === element)!;
     const drawn = (node.provenance as Json).drawn as Json;
@@ -243,11 +246,13 @@ const presses = (params.get("press") ?? "").split("|").filter(Boolean);
 const pressNext = () => {
   const name = presses[0];
   if (!name) return;
-  // A button by its text, or a radio by its label's text.
-  const button = Array.from(document.querySelectorAll<HTMLElement>("button, label")).find((b) => b.textContent?.trim() === name);
+  // A button by its text, or a radio by its label's text; `menu:<item text>` opens an item's menu.
+  const menu = name.startsWith("menu:") ? name.slice(5) : null;
+  const button = Array.from(document.querySelectorAll<HTMLElement>("button, label")).find((b) => b.textContent?.trim() === (menu ?? name));
   if (button) {
     presses.shift();
-    button.click();
+    if (menu) button.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+    else button.click();
   }
   requestAnimationFrame(pressNext);
 };
