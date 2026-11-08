@@ -1,0 +1,67 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 9174f05..74025d6 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -147,14 +147,14 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
+   // was run against it, which is what these entries and their test cases close.
+   "delete-removes-selected-nodes",
+   "clear-view-by-keyboard",
+-  // 4 October 2026 (ADR-084): the selected nodes can be sent to a new tab. A button in the same
+-  // row as Remove selected and Clear view, so it is reached by Tab like them.
+-  "branch-selected-opens-a-new-tab",
+-  "branch-selected-from-a-selected-nodes-menu",
++  // ADR-144 decision 4 (L3.2b): the selected nodes saved as a private view of the case, from the
++  // selection bar (reached by Tab like Remove from view and Clear) and from a selected node's menu.
++  "save-selected-as-a-view-from-the-selection-bar",
++  "save-selected-as-a-view-from-a-selected-nodes-menu",
+   // 26 October 2026 (ADR-128 decision 2, B3): a window set by Set exact dates lights part of the
+-  // canvas; Select what is lit replaces the selection with it, Branch selected then opens a tab holding
++  // canvas; Select what is lit replaces the selection with it, Save as a view then keeps
+   // only that slice, and one undo gives the earlier selection back.
+-  "select-what-is-lit-then-branch-selected-by-keyboard",
++  "select-what-is-lit-then-save-as-a-view-by-keyboard",
+   "undo-select-what-is-lit-by-keyboard",
+   "layout-menu-chooses-layout",
+   "layout-menu-chooses-force-directed-tree",
+@@ -256,7 +256,7 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
+  * harness/spec pair). Every native `Input`/`Select`'s own Tab-reachability needs no case here, the
+  * same exemption `QUERY_BUILDER_ACTIONS`'s own docstring already establishes — only an action with
+  * real state mutation or a real network call does: creating a hotlist or a monitor, jumping from
+- * an alert into a branched investigation, and opening that investigation once the jump result is
++ * an alert into the case it is opened in, and opening that case once the jump result is
+  * shown (a real callback out of the component, not only a local state flip).
+  */
+ export const WATCH_PANEL_ACTIONS = defineActionRegistry("WATCH_PANEL_ACTIONS", [
+@@ -463,13 +463,16 @@ export const CASE_ACCESS_ACTIONS = defineActionRegistry("CASE_ACCESS_ACTIONS", [
+   "remove-an-accounts-access-by-keyboard",
+ ] as const);
+ 
+-/** One tree of cases and their branches (ADR-084 Amendment 4): a branch opened, renamed and deleted
+- * from its row; deleting the branch on screen returns to its case. `keyboard/case-tree.spec.ts`. */
+-export const CASE_TREE_ACTIONS = defineActionRegistry("CASE_TREE_ACTIONS", [
+-  "open-a-branch-from-the-tree",
+-  "rename-a-branch-from-the-tree",
+-  "delete-a-branch-from-the-tree",
+-  "delete-the-branch-you-are-in-returns-to-its-case",
++/** Case views (ADR-144; the owner's ruling of 8 November 2026, Amendment 2): a view opened, shared and
++ * deleted from *Views in this case*, opened from another case's row, saved from its form, and left for
++ * the case from the banner over an opened view. `keyboard/views.spec.ts`. */
++export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
++  "open-a-view-from-views-in-this-case-by-keyboard",
++  "share-a-view-with-the-case-by-keyboard",
++  "delete-a-view-after-asking-once-by-keyboard",
++  "open-a-view-of-another-case-from-the-cases-list-by-keyboard",
++  "save-a-view-from-its-form-by-keyboard",
++  "go-back-to-the-case-from-an-open-view-by-keyboard",
+ ] as const);
+ 
+ /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
+@@ -868,7 +871,7 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
+ export const VIEW_OVER_CAP_ACTIONS = defineActionRegistry("VIEW_OVER_CAP_ACTIONS", [
+   "see-the-over-cap-dialog-when-the-server-says-the-view-is-too-large",
+   "try-again-from-the-over-cap-dialog-by-keyboard",
+-  "choose-a-type-and-open-a-filtered-branch-by-keyboard",
++  "choose-a-type-and-save-a-view-by-keyboard",
+   "put-the-over-cap-dialog-away-with-escape-by-keyboard",
+ ] as const);
+ 
