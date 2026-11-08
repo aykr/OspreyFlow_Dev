@@ -1034,10 +1034,11 @@ def test_phase8_exit_criterion_end_to_end(
         # this walkthrough's own action produced the most recent one.
         newest_hotlist_alert = hotlist_alerts[0]
 
-        # === B14: open the alert into a pre-populated investigation.
-        jumped = client.post(f"/v1/alerts/{newest_hotlist_alert.id}/jump", headers=headers)
-        assert jumped.status_code == 201, jumped.text
-        assert jumped.json()["seeded_count"] >= 1
+        # === B14: open the alert at its own address, in its case, with its entities (ADR-146
+        # decision 6 and Amendment 2; the jump's case of its own went in L2.9).
+        opened = client.get(f"/v1/alerts/{newest_hotlist_alert.id}", headers=headers)
+        assert opened.status_code == 200, opened.text
+        assert opened.json()["explanation"]["nodes"]
 
         # === B15: pivot on the handset identifier — both SIMs link to one device, one traversal.
         # depth=3: msisdn --SAME_AS--> sim_b (1) --PAIRED_WITH--> handset (2)

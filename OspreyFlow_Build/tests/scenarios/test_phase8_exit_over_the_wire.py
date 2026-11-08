@@ -1906,25 +1906,19 @@ def test_b14_an_alert_opens_into_a_case_holding_its_entities(
     """**B14**: "Open the alert into a pre-populated investigation … The new working set contains
     the alert's entities and a link to the originating investigation."
 
-    The entities half holds as written. The link half is withdrawn (ADR-144 Amendment 1: no case
-    records another it came from; Amendment 2 decision 2 amends B14 in spec 08); the audit row keeps
-    the alert's case.
+    The entities half holds, at the alert's own address in its case (ADR-146 Amendment 2); the link
+    half is withdrawn by ADR-144 Amendment 1, and no case of its own is made since L2.9.
     """
     alert = seizure_alert["alerts"][0]
 
-    jumped = analyst.post(f"/v1/alerts/{alert['id']}/jump")
-    assert jumped.status_code == 201, jumped.text
-    result = jumped.json()
-
-    assert result["seeded_count"] >= 1, f"the new investigation was seeded with nothing: {result}"
-    # ADR-124: no figure for what the jumper may not read.
-    assert "unreadable_count" not in result, (
-        f"the jump still answers with a count of unreadable referents: {result}"
-    )
-    # ADR-144 Amendment 1 and Amendment 2 decision 2 (L3.2's Q1): the case opened records no case it
-    # came from; the audit row names the alert's case. L2.9 opens the alert as a private view
-    # instead (ADR-144 decision 4), which carries no origin link either.
-    assert "branched_from" not in result["investigation"]
+    # ADR-146 decision 6 and Amendment 2 (L2.9): the alert opens at its own address, in the case it
+    # was raised in, with its entities; no case of its own is made.
+    opened = analyst.get(f"/v1/alerts/{alert['id']}")
+    assert opened.status_code == 200, opened.text
+    result = opened.json()
+    assert result["explanation"]["nodes"], f"the alert opened with none of its entities: {result}"
+    # ADR-124: no figure for what the reader may not read.
+    assert "unreadable_count" not in result
 
 
 def _synthetic_site_png(width: int, height: int) -> bytes:
