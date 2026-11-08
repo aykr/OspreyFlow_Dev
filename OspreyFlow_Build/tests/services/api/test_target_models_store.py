@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
 import asyncpg
 import pytest
@@ -101,6 +102,42 @@ async def test_two_drafts_opened_at_once_one_is_refused(store: PostgresTargetMod
     refused = [r for r in results if isinstance(r, TargetModelRefused)]
     assert len(opened) == 1 and len(refused) == 3
     assert [m.state for m in await store.versions(dataset)] == ["draft"]
+
+
+async def test_the_drafts_race_fails_with_the_lock_removed(
+    store: PostgresTargetModelStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red (the round-1 review's must-fix 8): with the advisory lock planted out, four
+    drafts at once are not each refused in words. They race past the store's own check to the
+    indexes, which refuse with a raw unique violation, a 500 at the route."""
+
+    async def unlocked(self: Any, conn: Any, dataset_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(PostgresTargetModelStore, "_locked", unlocked)
+    dataset = new_id()
+    results = await asyncio.gather(
+        *(store.open_draft(dataset, ENGINEER) for _ in range(4)), return_exceptions=True
+    )
+    refused_in_words = [r for r in results if isinstance(r, TargetModelRefused)]
+    raw = [r for r in results if isinstance(r, asyncpg.UniqueViolationError)]
+    assert len(refused_in_words) < 3 and raw, results
+
+
+async def test_two_make_lives_at_once_one_is_refused_in_words(
+    store: PostgresTargetModelStore,
+) -> None:
+    """Two *Make live*s of the same draft at once: one makes it live, the other is refused in
+    words (the draft it names is gone), and there is one live version."""
+    dataset = new_id()
+    await store.open_draft(dataset, ENGINEER)
+    results = await asyncio.gather(
+        *(store.make_live(dataset, 1, ENGINEER) for _ in range(2)), return_exceptions=True
+    )
+    made = [r for r in results if not isinstance(r, BaseException)]
+    refused = [r for r in results if isinstance(r, TargetModelRefused)]
+    assert len(made) == 1 and len(refused) == 1, results
+    assert [m.state for m in await store.versions(dataset)] == ["live"]
 
 
 async def test_the_indexes_refuse_a_second_live_or_draft_written_past_the_store(

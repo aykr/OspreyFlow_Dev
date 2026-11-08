@@ -17,8 +17,10 @@ Authors. A dataset that existed before has none, so each is given one now:
   owner", for Admin › Datasets' *Change owner…*, and nobody is made its Author by default (ADR-112
   Amendment 5: a service account owns nothing);
 - **one per dataset per deployment** (the reading of decision 5): a dataset that already has one is
-  left as it is, so a second run changes nothing. An analyst layer is no dataset of its own and
-  gets none.
+  left as it is, so a second run changes nothing. The claim is held by the store's key on the
+  dataset's id and made before the case reads anything, so two runs at once, or a run and a
+  *Make live*, still give it one: the loser removes the case it made. An analyst layer is no
+  dataset of its own and gets none.
 
 **The dry run writes nothing by construction**, as `scripts.migrate_cases_to_one_dataset` does: it
 reads with plain `SELECT`s, never opening a store whose `connect` makes tables, and records every
@@ -69,11 +71,12 @@ class DryRun:
     def __init__(self, writes: list[str]) -> None:
         self._writes = writes
 
-    async def make(self, dataset: DatasetRow, author: str | None) -> None:
+    async def make(self, dataset: DatasetRow, author: str | None) -> bool:
         self._writes.append(f"make the home case of {dataset.id}")
+        self._writes.append(f"record {dataset.id}'s home case")
         self._writes.append(f"case reads {dataset.id}")
         self._writes.append(f"make {author} its Author" if author else "leave it with no Author")
-        self._writes.append(f"record {dataset.id}'s home case")
+        return True
 
 
 class Real:
@@ -84,23 +87,33 @@ class Real:
         self._datasets = datasets
         self._writes = writes
 
-    async def make(self, dataset: DatasetRow, author: str | None) -> None:
+    async def make(self, dataset: DatasetRow, author: str | None) -> bool:
+        """Whether this run made the home case. The claim is the first write after the case: a
+        dataset another run (or a *Make live*) claimed meanwhile keeps its own, and the case made
+        here is removed, so a dataset never has two (the round-1 review's must-fix 8)."""
+        from services.api.datasets import HomeCaseHeld
         from services.api.investigations import AccessLevel
 
         maker = Principal(id=ACTOR, clearance="OFFICIAL", org_unit=dataset.owning_unit)
         home = await self._investigations.create(maker, name=dataset.name)
         self._writes.append(f"create {home.id}")
+        try:
+            await self._datasets.set_home_case(
+                HomeCase(dataset_id=dataset.id, investigation_id=home.id,
+                         made_at=datetime.now(UTC), made_by=ACTOR)
+            )  # fmt: skip
+        except HomeCaseHeld:
+            await self._investigations.remove(home.id, by=maker)
+            self._writes.append(f"remove {home.id}: {dataset.id} has its home case already")
+            return False
+        self._writes.append(f"set_home_case {dataset.id}")
         await self._datasets.set_for_case(home.id, [dataset.id], maker, case_name=home.name)
         self._writes.append(f"set_for_case {home.id}")
         if author is not None:
             await self._investigations.set_grant(home.id, author, AccessLevel.AUTHOR, by=maker)
         await self._investigations.remove_grant(home.id, ACTOR, by=maker)
         self._writes.append(f"grants of {home.id}")
-        await self._datasets.set_home_case(
-            HomeCase(dataset_id=dataset.id, investigation_id=home.id,
-                     made_at=datetime.now(UTC), made_by=ACTOR)
-        )  # fmt: skip
-        self._writes.append(f"set_home_case {dataset.id}")
+        return True
 
 
 async def make_homes(
@@ -125,7 +138,10 @@ async def make_homes(
         author = (
             dataset.created_by if persons is not None and dataset.created_by in persons else None
         )
-        await through.make(dataset, author)
+        if not await through.make(dataset, author):
+            report.kept.append(label)
+            say(f"  {label}: kept the home case it was given meanwhile")
+            continue
         if author is None:
             report.needs_an_owner.append(label)
             say(f"  {label}: home case made, needs an owner (made by {dataset.created_by})")

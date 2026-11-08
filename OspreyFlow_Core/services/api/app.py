@@ -413,6 +413,7 @@ from .datasets import (
     DatasetRefusedError,
     DatasetStore,
     DrawnNotCopied,
+    HomeCaseHeld,
     InMemoryDatasetStore,
     UnknownDatasetEgressError,
 )
@@ -7969,15 +7970,17 @@ async def make_drawn_dataset(
     drawn = await datasets.create_drawn(
         principal, body.name, highest_marking=body.highest_marking, home_case=home.id
     )
-    await models.open_draft(drawn.id, principal)
-    packs = {body.pack: ontology.packs[body.pack]} if body.pack is not None else {}
-    await models.save_draft(drawn.id, TargetModelDraftInput(packs=packs), principal)
-    await models.make_live(drawn.id, 1, principal)
+    # Its home case is recorded before its model goes live, as at *Make live*: a dataset with a
+    # live model always has its home case.
     made = HomeCase(
         dataset_id=drawn.id, investigation_id=home.id, made_at=home.created_at,
         made_by=principal.id,
     )  # fmt: skip
     await datasets.set_home_case(made)
+    await models.open_draft(drawn.id, principal)
+    packs = {body.pack: ontology.packs[body.pack]} if body.pack is not None else {}
+    await models.save_draft(drawn.id, TargetModelDraftInput(packs=packs), principal)
+    await models.make_live(drawn.id, 1, principal)
     await audit.record(
         principal=principal,
         action="make_drawn_dataset",
@@ -8100,13 +8103,16 @@ async def make_dataset_model_live(
             f"the draft is version {draft.version}, not {body.version}: it changed since it was "
             "opened, so read it again before making it live"
         )
+    # The home case is claimed before the model goes live, so two first *Make live*s at once make
+    # one home case and one live model: the second is refused in words at the claim, before it
+    # changes anything (the round-1 review's must-fix 8).
+    if owners is not None:
+        await _make_the_home_case(request, dataset_id, owners, principal, audit)
     live, previous = await models.make_live(dataset_id, body.version, principal)
     reasons = {p.recipe_id: flag_reason(live, p) for p in impact.pipelines}
     await studio_recipes.flag_for_model(dataset_id, list(reasons.items()))
     for recipe_id, reason in reasons.items():
         await studio_recipes.set_paused(recipe_id, paused=True, reason=reason)
-    if owners is not None:
-        await _make_the_home_case(request, dataset_id, owners, principal, audit)
     await _audit_model(
         audit, principal, "make_model_live", dataset_id, live.version,
         flagged=sorted(reasons), changed_types=impact.changed_types,
@@ -8136,6 +8142,12 @@ async def revert_dataset_model(
     return draft
 
 
+ALREADY_OWNED = (
+    "this dataset already has its owners: change them in Admin › Datasets (Change owner…), not at "
+    "Make live"
+)
+
+
 class OwnerNeeded(Exception):
     """*Make live*'s owner step refused, in words (ADR-145 Amendment 4 decision 4); nothing is made
     live and no home case is made."""
@@ -8154,10 +8166,7 @@ async def _owners_answered(
     never no one. `None` on a later *Make live*, which asks nothing."""
     if not first:
         if body.owners is not None:
-            raise OwnerNeeded(
-                "this dataset already has its owners: change them in Admin › Datasets (Change "
-                "owner…), not at Make live"
-            )
+            raise OwnerNeeded(ALREADY_OWNED)
         return None
     if body.owners is None:
         raise OwnerNeeded(
@@ -8196,20 +8205,26 @@ async def _make_the_home_case(
     request: Request, dataset_id: str, owners: list[str], maker: Principal, audit: AuditWriter
 ) -> None:
     """The dataset's home case (ADR-145 Amendment 4 decision 2): named for it, of its unit, reading
-    it, its Authors exactly the owners named, audited."""
+    it, its Authors exactly the owners named, audited. The claim (`set_home_case`, one per dataset,
+    held by the store's own key) is its first write after the case: a second *Make live* that lost
+    the race removes the case it made and is refused in words, so no dataset has two."""
     datasets = get_datasets(request)
     investigations = get_investigations(request)
     dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
     home = await investigations.create(maker, name=dataset.name)
+    try:
+        await datasets.set_home_case(
+            HomeCase(dataset_id=dataset_id, investigation_id=home.id, made_at=home.created_at,
+                     made_by=maker.id)
+        )  # fmt: skip
+    except HomeCaseHeld:
+        await investigations.remove(home.id, by=maker)
+        raise OwnerNeeded(ALREADY_OWNED) from None
     await datasets.set_for_case(home.id, [dataset_id], maker, case_name=home.name)
     for owner in owners:
         await investigations.set_grant(home.id, owner, AccessLevel.AUTHOR, by=maker)
     if maker.id not in owners:
         await investigations.remove_grant(home.id, maker.id, by=maker)
-    await datasets.set_home_case(
-        HomeCase(dataset_id=dataset_id, investigation_id=home.id, made_at=home.created_at,
-                 made_by=maker.id)
-    )  # fmt: skip
     await audit.record(
         principal=maker,
         action="make_home_case",

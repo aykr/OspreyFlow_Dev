@@ -30,13 +30,18 @@ PERSONS = {"d.engineer"}
 
 
 class _Made:
-    """Records each home case made and who was made its Author."""
+    """Records each home case made and who was made its Author; `claimed` are those another run
+    claimed meanwhile, whose claim this run loses."""
 
-    def __init__(self) -> None:
+    def __init__(self, claimed: Any = ()) -> None:
         self.made: dict[str, str | None] = {}
+        self.claimed = set(claimed)
 
-    async def make(self, dataset: DatasetRow, author: str | None) -> None:
+    async def make(self, dataset: DatasetRow, author: str | None) -> bool:
+        if dataset.id in self.claimed:
+            return False
         self.made[dataset.id] = author
+        return True
 
 
 async def _run(persons: Any = PERSONS, with_a_home: Any = ()) -> tuple[_Made, Report]:
@@ -88,3 +93,14 @@ async def test_the_dry_run_plans_what_the_real_run_makes() -> None:
         "Prison records (ds-prison): home case made, its Author d.engineer" in x for x in lines
     )
     assert any("2 home cases need an owner" in x for x in lines)
+
+
+async def test_a_dataset_claimed_meanwhile_is_kept_not_counted_as_made() -> None:
+    """A run that loses the claim (another run, or a *Make live*, made the home case after this
+    run read the tables) reports it kept, never as made or as needing an owner."""
+    made = _Made(claimed=["ds-prison", "ds-bank"])
+    report = await make_homes(DATASETS, set(), PERSONS, through=made, say=lambda _: None)
+    assert set(made.made) == {"ds-gone", "comp-both"}
+    assert sorted(report.kept) == ["Bank records (ds-bank)", "Prison records (ds-prison)"]
+    assert report.needs_an_owner == ["Old records (ds-gone)"]
+    assert report.owned == [("Bank + Prison (comp-both)", "d.engineer")]

@@ -297,3 +297,68 @@ def test_the_owner_setting_is_an_administrators_and_audited(world: SimpleNamespa
     (entry,) = [e for e in world.audit.entries if e["action"] == "set_dataset_owner_setting"]
     assert entry["resolved_query"] == {"before": "people_and_teams", "after": "people_only"}
     assert app_module.app is app
+
+
+@pytest.mark.parametrize("key_removed", [False, True], ids=["held", "the-claim-planted-out"])
+def test_two_first_make_lives_at_once_make_one_home_case(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, key_removed: bool
+) -> None:
+    """The round-1 review's must-fix 8: two first *Make live*s at once both read "no home case
+    yet". The home case is claimed before the model goes live, so the second is refused at the
+    claim, in words and not a 500, its own case removed, and the dataset has one home case and
+    one live model. Rule 15, red: with the store's one-per-dataset claim planted out, the second
+    makes a second home case."""
+    import asyncio
+
+    import httpx
+
+    world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
+    real_home_case_of = world.datasets.home_case_of
+    both_read = asyncio.Barrier(2)
+
+    async def read_then_yield(dataset_id: str) -> Any:
+        held = await real_home_case_of(dataset_id)
+        await asyncio.wait_for(both_read.wait(), 5)  # both read before either claims
+        return held
+
+    monkeypatch.setattr(world.datasets, "home_case_of", read_then_yield)
+    homes_made: list[str] = []
+    real_set_home_case = world.datasets.set_home_case
+
+    async def claim(home: Any) -> None:
+        if key_removed:
+            world.datasets.homes[home.dataset_id] = home
+        else:
+            await real_set_home_case(home)
+        homes_made.append(home.investigation_id)
+
+    monkeypatch.setattr(world.datasets, "set_home_case", claim)
+
+    async def both() -> list[httpx.Response]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://conduit") as client:
+            body = {"version": 1, "owners": {"people": ["eng-1"]}}
+            return list(
+                await asyncio.gather(
+                    *(
+                        client.post(
+                            "/v1/datasets/ds-a/model/make-live", json=body,
+                            headers=_as("engineer"),
+                        )
+                        for _ in range(2)
+                    )
+                )
+            )  # fmt: skip
+
+    answers = asyncio.run(both())
+    if key_removed:
+        assert len(homes_made) == 2
+        return
+    assert sorted(a.status_code for a in answers) == [200, 409], [a.text for a in answers]
+    (refused,) = [a for a in answers if a.status_code == 409]
+    assert refused.json() == {"error": "owner_needed", "detail": app_module.ALREADY_OWNED}
+    assert len(homes_made) == 1 and len(world.datasets.homes) == 1
+    (loser,) = [c for c in world.cases.made if c.startswith("home-") and c not in homes_made]
+    assert loser in world.cases.removed
+    live = asyncio.run(world.models.live("ds-a"))
+    assert live is not None and live.version == 1
