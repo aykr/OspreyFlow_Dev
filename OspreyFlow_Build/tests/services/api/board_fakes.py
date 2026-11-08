@@ -64,7 +64,9 @@ class BoardGraph(FakeGraphPort):
     def edges(self) -> list[Edge]:
         return list(self._graph_edges)
 
-    async def search_nodes(self, query: str, principal: Principal, *, limit: int = 20) -> list[Node]:
+    async def search_nodes(
+        self, query: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
         found = []
         for node in self._graph_nodes.values():
             entity = self.ontology.entity_type(node.type)
@@ -178,8 +180,10 @@ class BoardGraph(FakeGraphPort):
         self._graph_nodes[write.id] = held.model_copy(
             update={
                 "properties": merge_properties(
-                    held.properties, write.properties,
-                    existing_provenance=held.provenance, incoming_provenance=write.provenance,
+                    held.properties,
+                    write.properties,
+                    existing_provenance=held.provenance,
+                    incoming_provenance=write.provenance,
                 ),
                 "provenance": merge_provenance(held.provenance, write.provenance),
                 "handling": merge_handling(held.handling, write.handling, SCHEME),
@@ -194,8 +198,12 @@ class BoardGraph(FakeGraphPort):
         if held is None:
             self._graph_edges.append(
                 Edge(
-                    id=write.id, type=write.type, source=write.source, target=write.target,
-                    properties=write.properties, provenance=write.provenance,
+                    id=write.id,
+                    type=write.type,
+                    source=write.source,
+                    target=write.target,
+                    properties=write.properties,
+                    provenance=write.provenance,
                     handling=write.handling,
                     audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
                     datasets=sorted(set(write.datasets)),
@@ -205,8 +213,10 @@ class BoardGraph(FakeGraphPort):
         merged = held.model_copy(
             update={
                 "properties": merge_properties(
-                    held.properties, write.properties,
-                    existing_provenance=held.provenance, incoming_provenance=write.provenance,
+                    held.properties,
+                    write.properties,
+                    existing_provenance=held.provenance,
+                    incoming_provenance=write.provenance,
                 ),
                 "provenance": merge_provenance(held.provenance, write.provenance),
                 "handling": merge_handling(held.handling, write.handling, SCHEME),

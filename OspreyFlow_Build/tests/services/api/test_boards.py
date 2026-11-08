@@ -1,6 +1,6 @@
-"""Drawing boards through the real app (ADR-143 decisions 4 to 7; Amendments 2 and 3; L3.3): the real
-`get_principal`, which scopes each reader to the case's read set (its source and its analyst layer),
-the case's own level checks and rights, and a graph that holds what is written and refuses what the
+"""Drawing boards through the real app (ADR-143 decisions 4 to 7; Amendments 2 and 3; L3.3): the
+real `get_principal`, which scopes each reader to the case's read set (its source and its analyst
+layer), the case's own level checks and rights, and a graph that holds what is written and refuses what the
 adapter refuses (`board_fakes.BoardGraph`).
 
 Case K (Alice its Author, Bob an Editor at OFFICIAL, Rita a Viewer) and case B (Carol its Author)
@@ -9,9 +9,9 @@ read the same source dataset, whose highest allowed marking is OFFICIAL-SENSITIV
 What a mistake here would do, and the case that catches it (each shown red in
 `process/lanes/case/L3.3_RED_RECORD.md`):
 
-- a drawn item readable outside its case (rule 3): `test_a_drawn_item_is_never_readable_outside_its_case`,
-  red with case K's layer in case B's read set
-  (`test_the_outside_check_fails_with_case_ks_layer_in_case_bs_read_set`);
+- a drawn item readable outside its case (rule 3):
+  `test_a_drawn_item_is_never_readable_outside_its_case`, red with case K's layer in case B's read
+  set (`test_the_outside_check_fails_with_case_ks_layer_in_case_bs_read_set`);
 - a board route reachable by someone with no level on the case, a member of another case reading
   the same source included, or telling them the case exists (rule 4):
   `test_every_board_route_refuses_a_non_member_as_a_missing_case`;
@@ -122,7 +122,9 @@ class _Cases:
         return self.made[case_id]
 
     async def list_for(self, principal: Principal) -> list[tuple[Investigation, AccessLevel]]:
-        return [(self.made[c], g[principal.id]) for c, g in self.grants.items() if principal.id in g]
+        return [
+            (self.made[c], g[principal.id]) for c, g in self.grants.items() if principal.id in g
+        ]
 
     async def hidden_tab_ids(self, principal: Principal) -> set[str]:
         return set()
@@ -137,9 +139,7 @@ class _Audit:
 
 
 def _loaded(node_id: str, marking: str = "OFFICIAL", **properties: Any) -> Node:
-    return node(node_id, marking).model_copy(
-        update={"properties": properties, "datasets": ["src"]}
-    )
+    return node(node_id, marking).model_copy(update={"properties": properties, "datasets": ["src"]})
 
 
 IMAGE_REF = reference_for(b"\x89PNG loaded", "image/png")
@@ -202,9 +202,16 @@ def _board(who: str = "alice", case: str = K, **body: Any) -> str:
 
 
 def _item(board: str, who: str = "alice", case: str = K, **over: Any) -> dict[str, Any]:
-    body = {"type": "Person", "label": "Unknown male “Tall”", "marking": "OFFICIAL",
-            "grading": GRADE, "source_note": "Wing officer report, 4 Nov", "x": 0.2, "y": 0.3,
-            "properties": {"family_name": "Tall"}}
+    body = {
+        "type": "Person",
+        "label": "Unknown male “Tall”",
+        "marking": "OFFICIAL",
+        "grading": GRADE,
+        "source_note": "Wing officer report, 4 Nov",
+        "x": 0.2,
+        "y": 0.3,
+        "properties": {"family_name": "Tall"},
+    }
     body.update(over)
     answer = _as(who).post(f"/v1/investigations/{case}/boards/{board}/items", json=body)
     assert answer.status_code == 201, answer.text
@@ -212,8 +219,15 @@ def _item(board: str, who: str = "alice", case: str = K, **over: Any) -> dict[st
 
 
 def _link(board: str, source: str, target: str, **over: Any) -> Any:
-    body = {"type": "ASSOCIATE_OF", "label": "seen together", "marking": "OFFICIAL",
-            "grading": GRADE, "source_note": "Visits log", "source": source, "target": target}
+    body = {
+        "type": "ASSOCIATE_OF",
+        "label": "seen together",
+        "marking": "OFFICIAL",
+        "grading": GRADE,
+        "source_note": "Visits log",
+        "source": source,
+        "target": target,
+    }
     body.update(over)
     return _as("alice").post(f"/v1/investigations/{K}/boards/{board}/links", json=body)
 
@@ -463,7 +477,9 @@ def test_drawing_sets_a_watch_and_withdrawing_ends_it(world: SimpleNamespace) ->
     made = _item(board)
     (watch,) = _watches("alice")
     assert (watch["item_id"], watch["owner"], watch["kind"]) == (
-        made["item_id"], "alice", "drawn_watch"
+        made["item_id"],
+        "alice",
+        "drawn_watch",
     )
     assert watch["dataset_id"] == "src"  # on the case's dataset
     withdrawn = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
@@ -624,8 +640,10 @@ def test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking(
     lowered = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
                                  json={"marking": "OFFICIAL"})  # fmt: skip
     assert lowered.status_code == 409 and lowered.json()["error"] == "marking_never_lowered"
-    edited = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
-                                json={"label": "Tall man", "grading": {**GRADE, "source": "A"}})
+    edited = _as("alice").patch(
+        f"/v1/investigations/{K}/board-items/{item}",
+        json={"label": "Tall man", "grading": {**GRADE, "source": "A"}},
+    )
     assert edited.status_code == 200, edited.text
     drawn = world.graph.node(made["element_id"]).provenance.drawn
     assert drawn is not None and drawn.label == "Tall man" and drawn.grading.source == "A"
