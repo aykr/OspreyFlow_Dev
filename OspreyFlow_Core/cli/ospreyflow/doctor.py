@@ -187,6 +187,24 @@ class SystemProbes:
         text = self._run(["docker", "compose", "version"])
         return text.strip() if text else None
 
+    def model_key_states(self) -> dict[str, str] | None:
+        """ADR-135 Amendment 2 decision 9: each model engine's key state, as the running Conduit's
+        key path says (`set`, `none` or `lost`), or None where no deployment answers."""
+        if self._compose is None:
+            return None
+        text = self._run(
+            [*self._compose, "exec", "-T", "api", "python", "-m", "services.api.model_keys",
+             "status"]
+        )  # fmt: skip
+        if text is None:
+            return None
+        found: dict[str, str] = {}
+        for line in text.splitlines():  # `<name> set|none|lost`, as `ospreyflow.models` reads it
+            name, _, state = line.strip().partition(" ")
+            if name and state in ("set", "none", "lost"):
+                found[name] = state
+        return found
+
     def kube_context(self) -> str | None:
         """The context `kubectl` uses, when the cluster behind it answers."""
         context = self._run(["kubectl", "config", "current-context"])
@@ -415,6 +433,27 @@ def _port_check(probes: Probes, port: int) -> Check:
     )
 
 
+def model_key_checks(states: Mapping[str, str] | None) -> list[Check]:
+    """ADR-135 Amendment 2 decision 9: a key the gateway no longer holds (a restore from another
+    deployment, or its encryption key changed) is said by name; the engine is offered to no analyst
+    until the key is entered again. Nothing where no deployment answered."""
+    if not states:
+        return []
+    lost = sorted(name for name, state in states.items() if state == "lost")
+    if not lost:
+        return [Check("model-keys", True, "the model gateway holds every engine's key that is set")]
+    return [
+        Check(
+            "model-keys",
+            False,
+            f"the model gateway no longer holds the key of {', '.join(lost)}; "
+            f"{'that engine is' if len(lost) == 1 else 'those engines are'} offered to no analyst",
+            fix="enter each key again in Admin › Models, or run: ospreyflow models key <name>",
+            warn=True,
+        )
+    ]
+
+
 def run_doctor(
     mode: str,
     probes: Probes,
@@ -425,6 +464,7 @@ def run_doctor(
     server: ServerPlan | None = None,
     gpu: GpuPlan | None = None,
     joins_by_email: bool = False,
+    model_states: Mapping[str, str] | None = None,
 ) -> list[Check]:
     """Every check for `mode`, in the order a person should fix them. `ports` are a deployment's
     own when it is not the checkout's (ADR-138: one installed by name, at an address of its own).
@@ -438,7 +478,7 @@ def run_doctor(
         checks += gpu_checks(probes, gpu)
     if joins_by_email and not any(c.name == "organisation-trust-email" for c in checks):
         checks.append(trust_email_check())
-    return checks
+    return checks + model_key_checks(model_states)
 
 
 def _mode_checks(
@@ -700,7 +740,7 @@ TRUST_EMAIL_SAYS = (
     "arriving through the organisation's provider is joined, automatically, to the OspreyFlow "
     "account holding the same email address, with its roles and clearance. Anyone who can make the "
     "provider give that address, an address a person can set themselves or another tenant can "
-    "claim, takes that account over: the 2023 \"nOAuth\" account takeovers were exactly this."
+    'claim, takes that account over: the 2023 "nOAuth" account takeovers were exactly this.'
 )
 TRUST_EMAIL_FIX = (
     "Keep it on only with the organisation's security officer's written sign-off that every "

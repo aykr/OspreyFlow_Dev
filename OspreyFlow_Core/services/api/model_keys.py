@@ -3,13 +3,15 @@
 keys are still in `deployment.env` run this inside the Conduit's container, so the gateway's admin
 API, the models file and the audit are the same code as *Admin › Models*'.
 
-    python -m services.api.model_keys set <name> --by <who>      # the key on standard input
+    python -m services.api.model_keys set <name> --by <who>      # the key in OSPREY_MODEL_KEY_GIVEN
+                                                                  # or on standard input
     python -m services.api.model_keys remove <name> --by <who>
     python -m services.api.model_keys move --by <who>            # NAME=KEY lines on standard input
     python -m services.api.model_keys status                      # name, set|none|lost per line
 
-A key is read from standard input only, never from an argument (which `ps` would show), and never
-printed. Every answer is in fixed words; the exit status is 0 on success, 1 when refused.
+A key is read from `OSPREY_MODEL_KEY_GIVEN` (passed by name into the container) or standard input,
+never from an argument (which `ps` would show), and never printed. Every answer is in fixed words;
+the exit status is 0 on success, 1 when refused.
 """
 
 from __future__ import annotations
@@ -34,6 +36,9 @@ from .model_admin import (
     ModelSettingsFile,
     PostgresModelAdminAudit,
 )
+
+#: Where `ospreyflow models key` puts the key for this command (ADR-135 Amendment 2 decision 8).
+KEY_VARIABLE = "OSPREY_MODEL_KEY_GIVEN"
 
 
 async def _admin() -> tuple[ModelAdmin, httpx.AsyncClient, PostgresModelAdminAudit]:
@@ -89,7 +94,9 @@ async def _run(argv: Sequence[str]) -> int:
             print("name the engine", file=sys.stderr)
             return 1
         elif args.verb == "set":
-            key = sys.stdin.readline().strip()
+            # From the environment the command line passes by name (`docker compose exec -e`,
+            # never an argument), else standard input.
+            key = os.environ.pop(KEY_VARIABLE, "").strip() or sys.stdin.readline().strip()
             if not key:
                 print("no key was given on standard input; nothing was changed", file=sys.stderr)
                 return 1

@@ -1,23 +1,23 @@
-"""`ospreyflow models` (`06_DECISIONS.md` ADR-135 decision 3): the engines a deployment enables,
-each role's default, and whether each provider's key is present; `models key <name>` sets or
-rotates a key and `models remove-key <name>` removes it.
+"""`ospreyflow models` (`06_DECISIONS.md` ADR-135 decision 3, Amendment 2 decision 8): the engines
+a deployment enables, each role's default, and each key's state; `models key <name>` sets or rotates
+a key and `models remove-key <name>` removes it.
 
-A key is entered in the terminal (`OSPREY_MODEL_KEY_<NAME>`) or at a hidden prompt, and written to
-the deployment's `deployment.env` alone — never printed, never on a command line, never in
-`osprey.yaml` or a generated file. Nothing rendered holds a key or depends on one: the gateway's
-model table names each key by its variable, and the Conduit is told whether each is present by
-Compose, from the same file, when it starts. So a change needs no render — only the services whose
-environment changed are started again: the gateway (`litellm`), which reads the key, and the
-Conduit (`api`), which Compose starts again only when the key's presence changed.
+Since ADR-135 Amendment 2 a key lives in the model gateway's own database, put there by the
+Conduit's key path (`services.api.model_keys`), which *Admin › Models* uses too, so the gateway's
+admin API, the models file and the audit are one code. This command runs that path inside the
+Conduit's container (`docker compose exec`), handing the key over by name in the Docker client's
+environment (`-e OSPREY_MODEL_KEY_GIVEN`), never as an argument, never printed. Nothing is
+restarted.
+It works with the Glass unreachable or sign-in broken, which is what it is kept for.
 
-The command runs outside the checkout's own environment, so it reads `osprey.yaml` as plain data and
-names each key by the harness's rule (`schemas.deployment.ModelsConfig.key_variable`), held to it
-by `tests/cli/test_models_verb.py`.
+The key is read in the terminal (`OSPREY_MODEL_KEY_<NAME>`) or at a hidden prompt. The command runs
+outside the checkout's own environment, so it reads `osprey.yaml` as plain data and names each key
+by the harness's rule (`schemas.deployment.ModelsConfig.key_variable`), held to it by
+`tests/cli/test_models_verb.py`.
 """
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -29,8 +29,21 @@ from .home import CommandRefused
 ROLES = ("extraction", "vision", "transcription", "embedding")
 LOCAL = "local"
 _LABELS = {"openai": "OpenAI", "anthropic": "Anthropic", "gemini": "Gemini"}
-#: The services that read a model key, or whether one is present (`harness/render.py`).
-RESTARTED = ("litellm", "api")
+#: Where the key is handed to the Conduit's key path, by name (ADR-135 Amendment 2 decision 8).
+KEY_GIVEN = "OSPREY_MODEL_KEY_GIVEN"
+#: The Conduit's key path, run inside its container.
+KEY_PATH = ("python", "-m", "services.api.model_keys")
+_STATE_WORDS = {"set": "yes", "none": "no", "lost": "lost: enter it again"}
+
+
+def parse_status(text: str) -> dict[str, str]:
+    """`model_keys status`'s lines (`<name> set|none|lost`), by engine."""
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        name, _, state = line.strip().partition(" ")
+        if name and state in _STATE_WORDS:
+            found[name] = state
+    return found
 
 
 def _models(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -99,19 +112,30 @@ def _contract(provider: Mapping[str, Any]) -> str:
     return f"yes ({reference})" if reference else "yes"
 
 
-def list_engines(models: Mapping[str, Any], env_file: Path) -> list[str]:
-    """What `ospreyflow models` says: each engine, whether each key is present (yes or no, never
-    the key), whether it is under a privacy contract (ADR-136), and each role's default."""
+def list_engines(
+    models: Mapping[str, Any], env_file: Path, states: Mapping[str, str] | None = None
+) -> list[str]:
+    """What `ospreyflow models` says: each engine, whether each key is present (yes, no, or lost
+    after a restore — never the key), whether it is under a privacy contract (ADR-136), and each
+    role's default. `states` is the Conduit's answer (ADR-135 Amendment 2); without it, before the
+    keys have moved into the gateway, presence is read from `deployment.env`."""
     held = _held(env_file)
     lines = ["Engines:", f"  {LOCAL}: this deployment's own models (no key)"]
     for provider in _providers(models):
         name = str(provider.get("name"))
-        present = "yes" if held.get(key_variable(models, name)) else "no"
+        if states is not None and name in states:
+            present = _STATE_WORDS[states[name]]
+        else:
+            present = "yes" if held.get(key_variable(models, name)) else "no"
         roles = ", ".join(f"{r} {m}" for r, m in (provider.get("roles") or {}).items())
         lines.append(
             f"  {name} ({_label(provider)}): key present: {present}; "
             f"privacy contract: {_contract(provider)} — {roles}"
         )
+    named = {str(p.get("name")) for p in _providers(models)}
+    for name, state in sorted((states or {}).items()):
+        if name not in named:
+            lines.append(f"  {name}: added in Admin › Models; key present: {_STATE_WORDS[state]}")
     defaults = _defaults(models)
     lines.append("Defaults:")
     lines += [f"  {role}: {defaults.get(role, LOCAL)}" for role in ROLES]
@@ -152,72 +176,47 @@ def _provider(
     )
 
 
-def _write(env_file: Path, variable: str, value: str | None) -> bool:
-    """`variable`'s line set to `value` (appended where absent), or removed when `value` is None;
-    every other line as it was. The file is left `600` (ADR-137 decision 2). Whether anything
-    changed."""
-    lines = _env_lines(env_file)
-    kept: list[str] = []
-    found = False
-    for line in lines:
-        name, sep, _ = line.partition("=")
-        if sep and not line.startswith("#") and name == variable:
-            if value is not None and not found:
-                kept.append(f"{variable}={value}")
-            found = True
-            continue
-        kept.append(line)
-    if value is not None and not found:
-        kept.append(f"{variable}={value}")
-    if kept == lines:
-        _private(env_file)
-        return False
-    _write_private(env_file, "\n".join(kept) + "\n")
-    return True
-
-
-def _private(env_file: Path) -> None:
-    if env_file.is_file():
-        env_file.chmod(0o600)
-
-
-def _write_private(env_file: Path, text: str) -> None:
-    """The secrets file, readable by its owner alone (ADR-137 decision 2), set before the new key is
-    written into it — as `harness.render.write_private` does; the command cannot import it."""
-    descriptor = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        os.fchmod(handle.fileno(), 0o600)
-        handle.write(text)
-
-
-def set_key(
+def read_key(
     models: Mapping[str, Any],
     name: str,
-    env_file: Path,
     environ: Mapping[str, str],
     ask_secret: Callable[[str], str],
     wanted: Mapping[str, Any] | None = None,
-) -> str:
-    """Writes the provider's key into `env_file`, from `OSPREY_MODEL_KEY_<NAME>` in the terminal
-    (or the single provider's `OSPREY_MODEL_PROVIDER_KEY`), else a hidden prompt. Returns the
-    label."""
-    provider = _provider(models, name, wanted)
+    known: set[str] | None = None,
+) -> tuple[str, str]:
+    """The provider's label and the key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal (or the
+    single provider's `OSPREY_MODEL_PROVIDER_KEY`), else a hidden prompt. Writes nothing."""
+    label = _label_of(models, name, wanted, known)
     variable = key_variable(models, name)
     terminal = f"OSPREY_MODEL_KEY_{name.upper()}"
     key = (environ.get(terminal) or environ.get(variable) or "").strip()
     if not key:
-        key = ask_secret(f"Key for {_label(provider)} ({terminal}; not shown): ").strip()
+        key = ask_secret(f"Key for {label} ({terminal}; not shown): ").strip()
     if not key:
-        raise CommandRefused(f"No key was given for {_label(provider)}; nothing was changed.")
-    if any(ch.isspace() for ch in key) or "\n" in key:
+        raise CommandRefused(f"No key was given for {label}; nothing was changed.")
+    if any(ch.isspace() for ch in key):
         raise CommandRefused("A key has no spaces or line breaks in it; nothing was changed.")
-    _write(env_file, variable, key)
-    return _label(provider)
+    return label, key
 
 
-def remove_key(
-    models: Mapping[str, Any], name: str, env_file: Path, wanted: Mapping[str, Any] | None = None
-) -> tuple[str, bool]:
-    """Removes the provider's key line. Returns the label and whether there was one."""
-    provider = _provider(models, name, wanted)
-    return _label(provider), _write(env_file, key_variable(models, name), None)
+def _label_of(
+    models: Mapping[str, Any],
+    name: str,
+    wanted: Mapping[str, Any] | None,
+    known: set[str] | None,
+) -> str:
+    """The engine's label, from `osprey.yaml`, or its name for one added in *Admin › Models*
+    (`known`, the Conduit's list); any other name is refused in words."""
+    if known and name in known and all(p.get("name") != name for p in _providers(models)):
+        return name
+    return _label(_provider(models, name, wanted))
+
+
+def checked_name(
+    models: Mapping[str, Any],
+    name: str,
+    wanted: Mapping[str, Any] | None = None,
+    known: set[str] | None = None,
+) -> str:
+    """The engine's label, or a refusal in words for a name this deployment does not enable."""
+    return _label_of(models, name, wanted, known)

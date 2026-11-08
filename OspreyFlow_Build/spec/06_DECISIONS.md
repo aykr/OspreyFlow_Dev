@@ -29001,6 +29001,42 @@ provider was called):
     reaches GitHub at start (ADR-114 Amendment 7: nothing reaches outside unless a configured feature
     needs it).
 
+**As built (8 November 2026, platform lane P1).** Read with the decisions above, which these settle
+(rule 11):
+
+- **The models file lives on a named volume, `model-settings`**, mounted into the Conduit alone at
+  `/run/osprey/model-settings`, not in the rendered folder: the Conduit runs as uid 10001, and a
+  folder the host made would not be writable by it on Linux. The image makes the folder (owned by
+  its user, `700`), and a named volume takes that on first mount. `backup` reads the file out through
+  the Conduit (`docker compose exec`) and `restore` writes it back the same way. On a cluster it is a
+  shared subpath, and **every Conduit replica reads it again when it changes** (its modification
+  time), so routing agrees whichever replica an analyst reaches (`RoutedModel.follow`).
+- **The gateway's secrets are `OSPREY_LITELLM_MASTER_SECRET`, `OSPREY_LITELLM_SALT_SECRET` and
+  `OSPREY_LITELLM_DB_PASSWORD`.** Each name ends in `SECRET` or `PASSWORD` because
+  `harness.apply.keep_existing_secrets` keeps only such names across an `apply`; a salt named
+  `…_SALT_KEY` would have been minted again by every `apply` and silently dropped every key
+  (`test_the_gateway_s_secrets_are_minted_once_and_kept_by_every_apply`, shown red with that name).
+- **Found: the gateway's master key was the fixed development value `sk-ospreyflow-dev` in every
+  rendered deployment.** Harmless while the gateway held no secret; with keys in its database, any
+  container on the deployment's network could have rotated or removed them. It is now minted per
+  deployment (above), read by the gateway from its environment (`master_key:
+  os.environ/LITELLM_MASTER_KEY`, measured to work on the pinned image) and given to the Conduit
+  alone besides; the developer stack (`deploy/compose/dev.yaml`) keeps its fixed value.
+- **How a key reaches the Conduit's key path from outside the Glass:** `apply` and `install` hand
+  every `OSPREY_MODEL_KEY_<NAME>` line to `python -m services.api.model_keys move` on standard input
+  (through `harness.apply._run`, so a test's stand-in for Compose answers it), then remove the lines
+  and write `OSPREY_MODEL_KEYS_IN_GATEWAY=yes`; from then on `apply` takes a key only from the
+  terminal and never asks for one. `ospreyflow models key` hands it over by name in the Docker
+  client's environment (`docker compose exec -e OSPREY_MODEL_KEY_GIVEN`), since the command's runner
+  has no standard input; in neither case is a key ever an argument. `ospreyflow models` lists each
+  engine's state as the Conduit says (`set`, `no`, `lost: enter it again`), including engines added
+  in *Admin › Models*, and reads `deployment.env` only before the keys have moved.
+- **The cluster's own workers** (`worker`, which only the chart runs) read the whole Secret too; the
+  chart's post-pass blanks the gateway's secrets for every such workload, as it does model keys
+  (`test_no_workload_but_the_gateway_reads_its_encryption_key_or_database_password`, which found it).
+- **`ospreyflow doctor`** asks an installed deployment's Conduit for each key's state and warns,
+  naming each engine, where the gateway lost one (`model-keys`).
+
 **Cost.** Every deployment gains the gateway's database (86 tables, about 12 MB empty), its
 migrations at each start, and an encryption key that must never change. The gateway's own log can
 carry a fragment of a refused key, as a provider words it (measured); that log is the operator's,

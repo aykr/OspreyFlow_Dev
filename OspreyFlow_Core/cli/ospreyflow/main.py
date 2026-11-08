@@ -383,6 +383,8 @@ def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
             # ADR-114 Amendment 33, "Step 33": the installed deployment's own setting, when the
             # answers are not given (their own setting is checked with the server's).
             joins_by_email=server is None and joins_by_email(base),
+            # ADR-135 Amendment 2 decision 9: an installed deployment's model keys, as it says.
+            model_states=getattr(probes, "model_key_states", lambda: None)(),
         )
     )  # fmt: skip
     return 0 if ok else 1
@@ -1213,33 +1215,43 @@ def _uninstall(args: argparse.Namespace, ctx: _Context) -> int:
 
 
 def _models(args: argparse.Namespace, ctx: _Context) -> int:
-    """ADR-135 decision 3. A key goes to `deployment.env` alone and is never printed; then only the
-    services whose environment it changes are started again (`cli/ospreyflow/models.py`)."""
+    """ADR-135 decision 3, Amendment 2 decision 8: through the Conduit's own key path inside its
+    container, so the gateway, the models file and the audit are *Admin › Models*' own. The key is
+    handed over by name in the Docker client's environment (`-e`), never an argument, never
+    printed; nothing is restarted (`cli/ospreyflow/models.py`)."""
     directory = ctx.deployed()
     env_file = directory / "deployment.env"
     models = engine_keys.read_models(ctx.product, directory)
     wanted = engine_keys.read_wanted(ctx.config_path.parent)
+    in_conduit = [*compose(directory), "exec", "-T"]
+    code, out = ctx.capture([*in_conduit, "api", *engine_keys.KEY_PATH, "status"])
+    states = engine_keys.parse_status(out) if code == 0 else None
     if args.action is None:
-        print("\n".join(engine_keys.list_engines(models, env_file)))
+        print("\n".join(engine_keys.list_engines(models, env_file, states)))
         return 0
+    known = set(states or {})
+    who = f"cli:{getpass.getuser()}"
     if args.action == "key":
-        label = engine_keys.set_key(
-            models, args.name, env_file, ctx.env, ctx.ask_secret, wanted=wanted
+        label, key = engine_keys.read_key(
+            models, args.name, ctx.env, ctx.ask_secret, wanted=wanted, known=known
         )
-        said = f"The key for {label} is set, in {env_file}."
-    else:
-        label, removed = engine_keys.remove_key(models, args.name, env_file, wanted=wanted)
-        if not removed:
-            print(f"{label} has no key here; nothing was changed.")
-            return 0
-        said = (
-            f"The key for {label} is removed; {label} is not offered to analysts until one is set."
-        )
+        ctx.step(
+            f"hand the key for {label} to the model gateway",
+            [*in_conduit, "-e", engine_keys.KEY_GIVEN, "api", *engine_keys.KEY_PATH,
+             "set", args.name, "--by", who],
+            env={engine_keys.KEY_GIVEN: key},
+        )  # fmt: skip
+        print(f"The key for {label} is set, in the model gateway.")
+        return 0
+    label = engine_keys.checked_name(models, args.name, wanted=wanted, known=known)
+    if states is not None and states.get(args.name) == "none":
+        print(f"{label} has no key here; nothing was changed.")
+        return 0
     ctx.step(
-        "start the model gateway and the Conduit again",
-        [*compose(directory), "up", "-d", "--no-deps", "--wait", *engine_keys.RESTARTED],
+        f"remove the key for {label} from the model gateway",
+        [*in_conduit, "api", *engine_keys.KEY_PATH, "remove", args.name, "--by", who],
     )
-    print(said)
+    print(f"The key for {label} is removed; {label} is not offered to analysts until one is set.")
     return 0
 
 

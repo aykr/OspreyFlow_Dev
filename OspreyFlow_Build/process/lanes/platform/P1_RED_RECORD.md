@@ -15,3 +15,6 @@ Each plant at the real call site, run, then restored; 8 November 2026.
 | `test_model_engines.py::test_the_gateway_s_secrets_are_minted_once_and_kept_by_every_apply` | the salt named `OSPREY_LITELLM_SALT_KEY` (a name `keep_existing_secrets` does not keep) | 5 failed, this one among them |
 | `test_gateway_backup.py::test_a_set_sealed_under_another_key_is_refused_naming_each_key_lost` | `run_restore` without `check_gateway_key` | 1 failed |
 | `test_cluster_render.py::test_no_workload_but_the_gateway_reads_its_encryption_key_or_database_password` | none needed: it found the cluster's own `worker` workload unblanked when the blanks lived in the compose render; fixed in `harness/cluster.py`'s post-pass | 1 failed, then green |
+| `tests/cli/test_models_verb.py::test_models_key_hands_the_key_over_by_name_and_restarts_nothing` | the key appended to the `docker compose exec` argv | 2 failed |
+| `tests/cli/test_doctor_model_keys.py::test_the_doctor_names_each_lost_key_as_a_warning` | `_doctor` passing `model_states=None` (not asking the deployment) | 1 failed |
+| `apps/workspace/src/admin/sections/Models.test.tsx` "shows the Conduit's refusal in its words and still never the key" | the key field not cleared after sending | 1 failed |
