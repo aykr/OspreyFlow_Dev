@@ -166,6 +166,7 @@ small shared commit and merges it first or moves the work to the owning lane.
 merge result **before** the merge is kept: the orchestrator merges with `--no-commit`, or on a scratch
 branch, runs `make ci`, and keeps the merge only if it is no redder than `main`. Found when L1.2's merge
 (`25b1084`) turned two green gates red because `make ci` was run after the merge rather than before.
+**And the fast tier too (from 8 November 2026).** `make ci` does not run `make test`, the fast tier GitHub's `test` job runs, so L2.8's and L1.2c's merges, each green on `make ci`, left eight fast-tier tests red on `main` unseen for hours. A merge that changes code also runs `make test` on the merge result (closed ports, no lane; about 14 minutes) before it is kept, and a failure there that is not the machine's own (the local `osprey.yaml`, a root `graphify-out`, pinned ports) blocks it as a `make ci` failure does.
 
 **Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
 map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
