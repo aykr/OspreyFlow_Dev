@@ -28201,3 +28201,30 @@ or transactions tie together, which is what the inbox withholds (rule 3).
 (at the route; red before: the jump created a case) and the B14 scenario,
 `tests/scenarios/test_phase7_stage6c_watch_routes.py::test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities`,
 changed to this amendment (ratified at L2.8's merge).
+
+### ADR-112, Amendment 6 (8 November 2026) — a right to edit a dataset's domain model, edit_target_model (D8), held by the data engineer, behind the dataset's own gate
+
+Status: accepted; the orchestrator's settlement of 8 November 2026 on the case lane's recommendation,
+listed for the owner's review. ADR-112 and its Amendments 1 to 5 are unchanged except where this says
+so. Built in L3.1b.
+
+**Decision.** ADR-140 decision 4 says that editing a dataset's domain model (`TargetModel`, `01_DOMAIN_MODEL.md` §2.2b) needs the
+new right `edit_target_model`, and names no holder. ADR-112's table gains one row:
+
+| # | Right | Level | Analyst | Data engineer | Administrator | Reports viewer |
+| --- | --- | --- | --- | --- | --- | --- |
+| D8 | Edit a dataset's domain model: open, save and discard its draft, read its impact, *Make live*, and revert as a new draft | — | | ✓ | | |
+
+- **Held by the data engineer**, who holds D1 to D7 and so already builds the pipelines the model
+  feeds.
+- **Its level is "—":** the routes are the dataset's (`/v1/datasets/{dataset_id}/model`), behind
+  the dataset's own gate (ADR-140 Amendment 4), not a case's level.
+- **It may be granted singly** (`right:edit_target_model`), like every right.
+- **Who answers for the dataset** (its home case's Authors, ADR-145 Amendment 4) is a separate
+  question. Making a model live needs this right and is audited.
+
+**Tests.**
+- `tests/schemas/test_rights.py`: the table's row, and forty-four rights.
+- `tests/services/api/test_route_rights.py`: listed among the rights no route checks yet. L3.1b's
+  routes take it off that list, and the list's equality fails the build if it is left there.
+- `apps/workspace/src/shell/placesByRole.json`: regenerated from the routes.

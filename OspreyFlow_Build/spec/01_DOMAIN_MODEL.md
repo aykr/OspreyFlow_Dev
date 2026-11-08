@@ -624,6 +624,49 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
   dataset the registry does not hold is refused whole. A unit's dataset names are unique, case and
   spacing aside, and the Glass shows each with its id.
 
+### 2.2b A dataset's domain model, reference lists and home case (ADR-140, ADR-145 Amendment 4)
+
+`packages/schemas/dataset_model.py`. Built in L3.1b; the stores and routes follow the schemas.
+
+- **`TargetModel`**: one version of a dataset's model, called the *domain model* on every screen
+  (ADR-140 Amendment 9 decision 1). Its fields:
+  - `dataset_id` and `version`;
+  - `state`, one of `draft | live | previous`. Exactly one version is `live` and at most one is a
+    `draft` (N+1), enforced in the store. Every earlier version is `previous` and read-only;
+  - `packs`, each starter pack at its pinned version (empty is the POLE core alone, which is always
+    on);
+  - `extensions`, each a **`ModelExtension`**: an entity type, a link type, or a property on a
+    named type, with the version that added it and the one that retired it. An extension is
+    retired, never deleted, and a rename is "add the new, retire the old";
+  - `reference_lists`, by id;
+  - who made it and who made it live, and when;
+  - `reverted_from`: a revert makes a new draft copying an earlier version, never rewriting one.
+
+  **`TargetModelDraftInput`** is what saving the draft sends. POLE core types cannot be removed or
+  renamed, and a pack never collides with the core (ADR-140 decision 4).
+- **`ReferenceList`**: a list the model refers to by key. Its fields are `dataset_id`, `name`,
+  `kind` (`reference` or `screening`), `key_column`, `version` and `schedule`, an ADR-133
+  Amendment 3 `ListSchedule`, which it absorbs. A `screening` list is imported once for the
+  deployment and subscribed to per dataset (ADR-140 Amendment 9 decision 3). A licensed list's rows
+  never travel in a release.
+- **The owners named at *Make live*** (ADR-145 Amendment 4 decision 4):
+  - **`MakeLiveInput`** names the draft `version` being made live and, at the dataset's first
+    *Make live* in the deployment, its `owners`;
+  - **`DatasetOwners`** is people, a team (ADR-112 Amendment 5), or both, and is refused when it
+    names no one;
+  - a service account is refused where the owners are given, as is an owner kind Admin › System
+    forbids: **`DatasetOwnerSetting`**, whose `owners_may_be` is `people_and_teams` (the default),
+    `people_only` or `teams_only` (decision 7).
+- **`HomeCase`**: a dataset's home case (ADR-145 Amendment 4 decision 2), holding its reports, its
+  dataset-wide alerts and its promotion reviews. The owners named at *Make live* are its Authors,
+  and it cannot be removed while its dataset exists.
+  - Every source, composite and drawn dataset has one; an analyst layer never does.
+  - It is **one per dataset per deployment** until releases bring a second environment: the reading
+    of decision 5 settled with the orchestrator, 8 November 2026.
+  - `scripts.make_home_cases` gives existing datasets theirs, the dataset's `created_by` as Author.
+    Where that is a service account, a disabled account or a gone one, it gives none; the case is
+    named "needs an owner" and is not given an Author by default.
+
 ### 2.3 Resolution state
 
 ```python

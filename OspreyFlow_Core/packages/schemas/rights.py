@@ -60,6 +60,8 @@ class Right(StrEnum):
     SCHEDULE_PIPELINES = "schedule_pipelines"  # D5, Editor
     ADD_INGEST_FILES = "add_ingest_files"  # D6, Editor
     REVERT_LOADS = "revert_loads"  # D7, Editor
+    # ADR-140 decision 4: edit a dataset's domain model (its draft, impact, *Make live*, revert).
+    EDIT_TARGET_MODEL = "edit_target_model"  # D8, behind the dataset's own gate
     # Reporting
     READ_REPORTS = "read_reports"  # R1, Viewer
     READ_REPORT_FEED = "read_report_feed"  # R2, Viewer
@@ -89,7 +91,7 @@ DATA_ENGINEER = frozenset({
     R.READ_ALERT_QUEUE, R.DEPLOY_RULES, R.READ_RULE_AUDIT, R.READ_HELD_ROWS, R.DECIDE_HELD_ROWS,
     R.LOAD_SCREENING_LISTS,
     R.EDIT_PIPELINES, R.VERIFY_PIPELINES, R.PUBLISH_PIPELINES, R.RUN_PIPELINES,
-    R.SCHEDULE_PIPELINES, R.ADD_INGEST_FILES, R.REVERT_LOADS,
+    R.SCHEDULE_PIPELINES, R.ADD_INGEST_FILES, R.REVERT_LOADS, R.EDIT_TARGET_MODEL,
     R.READ_REPORTS, R.READ_DATA_FEEDS, R.OPERATE_SCHEDULES,
 })  # fmt: skip
 ADMIN = frozenset({

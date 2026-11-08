@@ -49,6 +49,7 @@
     "decide_held_rows",
     "deploy_rules",
     "edit_pipelines",
+    "edit_target_model",
     "investigate",
     "load_screening_lists",
     "operate_schedules",
@@ -210,6 +211,13 @@
    "places": [
     "ingest"
    ],
+   "answered_hidden": []
+  },
+  "right:edit_target_model": {
+   "rights": [
+    "edit_target_model"
+   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:export": {
@@ -532,6 +540,7 @@
     "deploy_rules",
     "edit_graph",
     "edit_pipelines",
+    "edit_target_model",
     "export",
     "export_override",
     "extract_files",

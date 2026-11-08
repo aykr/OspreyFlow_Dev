@@ -33,6 +33,7 @@ export type Right =
   | "schedule_pipelines"
   | "add_ingest_files"
   | "revert_loads"
+  | "edit_target_model"
   | "read_reports"
   | "read_report_feed"
   | "read_data_feeds"
