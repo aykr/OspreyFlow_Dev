@@ -1,0 +1,35 @@
+[
+  {
+    "ref": "9101",
+    "primary_name": "PETROVA, Elena",
+    "aliases": "PETROVA, Lena",
+    "date_of_birth": "1971-03-03",
+    "nationality": "XA",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "9102",
+    "primary_name": "BOREALIS SHIPPING CORP",
+    "aliases": "BOREALIS MARITIME LTD",
+    "date_of_birth": null,
+    "nationality": "XB",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Organisation"
+  },
+  {
+    "ref": "9104",
+    "primary_name": "ORLANSKY, Dmitri",
+    "aliases": null,
+    "date_of_birth": null,
+    "nationality": null,
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  }
+]

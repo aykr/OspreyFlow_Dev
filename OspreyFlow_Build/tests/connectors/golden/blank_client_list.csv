@@ -1,0 +1,4 @@
+Client ref,Full name,Other names,Born,Country,Passport numbers,Regime,Party type
+CL-001,Orvald Penmarric,"O. Penmarric, Orry Penmarric",1971-03-14,XA,XA1234567,Synthetic regime A,person
+CL-002,Brightwater Holdings Ltd,Brightwater Hldgs,,XB,,Synthetic regime A,Organisation
+CL-003,Ilse Varrowmont,,1983-11-02,XC,"XC7654321, XC0000001",Synthetic regime B,PERSON

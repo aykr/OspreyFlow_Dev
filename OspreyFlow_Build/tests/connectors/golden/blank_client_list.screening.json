@@ -1,0 +1,35 @@
+[
+  {
+    "ref": "CL-001",
+    "primary_name": "Orvald Penmarric",
+    "aliases": "O. Penmarric|Orry Penmarric",
+    "date_of_birth": "1971-03-14",
+    "nationality": "XA",
+    "identifiers": "XA1234567",
+    "programme": "Synthetic regime A",
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "CL-002",
+    "primary_name": "Brightwater Holdings Ltd",
+    "aliases": "Brightwater Hldgs",
+    "date_of_birth": null,
+    "nationality": "XB",
+    "identifiers": null,
+    "programme": "Synthetic regime A",
+    "listing": "sanction",
+    "entity_type": "Organisation"
+  },
+  {
+    "ref": "CL-003",
+    "primary_name": "Ilse Varrowmont",
+    "aliases": null,
+    "date_of_birth": "1983-11-02",
+    "nationality": "XC",
+    "identifiers": "XC7654321|XC0000001",
+    "programme": "Synthetic regime B",
+    "listing": "sanction",
+    "entity_type": "Person"
+  }
+]
