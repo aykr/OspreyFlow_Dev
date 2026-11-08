@@ -54,9 +54,9 @@ def lease(tmp_path: Path):
     return run
 
 
-def test_a_third_acquire_while_both_stacks_are_held_is_refused_and_names_both_holders(lease) -> None:
-    """ADR-142 Amendment 3: two throwaway stacks, one holder each. The first two lanes get a and b; the
-    third is refused and told who holds each (red against the one-stack script, which refused the second)."""
+def test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder(lease) -> None:
+    """ADR-142 Amendments 3 and 4: three throwaway stacks, one holder each. The first three lanes get a, b and
+    c; the fourth is refused and told who holds each (red against the two-stack table, which gave case none)."""
     first = lease("acquire", "studio", "phase 6 route tests")
     assert first.returncode == 0, first.stderr
     assert "stack a" in first.stdout
@@ -64,11 +64,14 @@ def test_a_third_acquire_while_both_stacks_are_held_is_refused_and_names_both_ho
     assert second.returncode == 0, second.stderr
     assert "stack b" in second.stdout
     third = lease("acquire", "case", "conformance")
-    assert third.returncode == 1
-    assert "holder=studio" in third.stderr and "holder=rules" in third.stderr
-    assert "purpose=phase 6 route tests" in third.stderr
+    assert third.returncode == 0, third.stderr
+    assert "stack c" in third.stdout
+    fourth = lease("acquire", "admin", "store cases")
+    assert fourth.returncode == 1
+    assert "holder=studio" in fourth.stderr and "holder=rules" in fourth.stderr and "holder=case" in fourth.stderr
+    assert "purpose=phase 6 route tests" in fourth.stderr
     status = lease("status").stdout
-    assert "holder=studio" in status and "holder=rules" in status
+    assert "holder=studio" in status and "holder=rules" in status and "holder=case" in status
 
 
 def test_a_lane_holds_one_stack_at_a_time(lease) -> None:
@@ -132,7 +135,7 @@ def test_the_holder_releases_once_the_stack_is_down(lease) -> None:
     lease("acquire", "case", "conformance")
     done = lease("release", "case", docker="down")
     assert done.returncode == 0, done.stderr
-    assert lease("status").stdout.strip() == "a: free\nb: free"
+    assert lease("status").stdout.strip() == "a: free\nb: free\nc: free"
     assert lease("acquire", "rules", "axe scans").returncode == 0
 
 

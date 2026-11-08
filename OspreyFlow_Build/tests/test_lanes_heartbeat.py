@@ -296,16 +296,17 @@ def test_the_lanes_shown_by_default_are_the_six_of_amendment_3(hb) -> None:
     """With no OSPREY_LANES, the heartbeat shows the lanes scripts/lanes.conf lists, in its order, and not
     the retired glass lane (red against the four-lane default)."""
     out = hb("show", OSPREY_LANES="").stdout
-    lanes = {"STUDIO", "CASE", "ADMIN", "RULES", "PLATFORM", "DOCS", "GLASS"}
+    lanes = {"STUDIO", "STUDIO-B", "CASE", "CASE-B", "ADMIN", "RULES", "RULES-B", "PLATFORM", "DOCS", "GLASS"}
     order = [line.split(":", 1)[0] for line in out.splitlines() if line.split(":", 1)[0] in lanes]
-    assert order == ["STUDIO", "CASE", "ADMIN", "RULES", "PLATFORM", "DOCS"]
+    # ADR-142 Amendment 4 (the owner, 8 November): each sister lane listed after its parent.
+    assert order == ["STUDIO", "STUDIO-B", "CASE", "CASE-B", "ADMIN", "RULES", "RULES-B", "PLATFORM", "DOCS"]
     assert "GLASS:" not in out
 
 
 def test_each_test_stack_is_shown_with_its_holder(hb) -> None:
     _all_beat(hb)
     out = hb("show").stdout
-    assert "Test stack a: free" in out and "Test stack b: free" in out
+    assert "Test stack a: free" in out and "Test stack b: free" in out and "Test stack c: free" in out
     hb.hold_lease("studio", 10, "a")
     hb.hold_lease("rules", 20, "b")
     out = hb("show").stdout
@@ -336,7 +337,8 @@ def test_the_default_view_fits_one_screen_and_names_each_lanes_current_step(hb, 
         hb("beat", lane, "working", "x" * 300)
     out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
     lines = out.splitlines()
-    assert len(lines) <= 6 * 2 + 10, out
+    # Two lines per lane at most, for every lane the default view lists (nine with Amendment 4's sisters).
+    assert len(lines) <= 9 * 2 + 10, out
     at = next(i for i, line in enumerate(lines) if line.startswith("STUDIO:"))
     studio = lines[at]
     assert "2 of 8 done" in studio and lines[at + 1].strip().startswith("now ST3 Step 3")

@@ -29761,3 +29761,29 @@ network of the lane's own and a stand-in provider (no hosted provider was called
 **Cost.** One gateway key per hosted engine, and a key lookup and update for each at every start
 and change. The gateway's spend figures are tokens, not money, for every hosted entry: its own
 dashboard's "spend" is the tokens used.
+
+
+### ADR-142, Amendment 4 (8 November 2026) — sister lanes and a third test stack
+
+Status: accepted 8 November 2026, on the owner's ruling (put by the orchestrator as multiple choice: "All
+three" sister lanes; "everything heavy on default and sisters on sol"). Amendment 3 stands except where this
+says so.
+
+**Why.** Three lanes held about 55 of the build's remaining hours, in steps that do not all wait on one
+another: case's L3.5 and L3.7 do not need L3.3's boards, studio's L1.6 does not need L1.4 or L1.5, and rules'
+L2.12 needs only L2.9 (merge order 10). A sister lane per parent takes those steps, cutting the critical path
+from about 20 hours to about 13.
+
+1. **Three sister lanes:** **`case-b`** takes L3.5 (analyst-defined link types), L3.7 (the grading scheme) and
+   then L3.8 (the ownership route admin's L2.5b reads); **`studio-b`** takes L1.6 (connectors, the
+   screening-list connector, templates) and then L1.8 (tips and wording); **`rules-b`** takes L2.12 (reporting
+   folded) once L2.9 is on main. Each has its own worktree and branch; `scripts/lanes.conf` lists each after its
+   parent.
+2. **Files:** a sister owns only its steps' files, carved from its parent's map
+   (`process/BUILD_PLAN_PARALLEL_LANES.md`); anything else is a request to the orchestrator, as for any lane.
+3. **Accounts:** the sisters run on `sol`; the parents, platform, admin, docs and the orchestrator on the
+   orchestrator's account.
+4. **A third test stack, c** (`osprey-test-c-*`, 127.0.0.1: 2493, 55435, 6381, 9004), leased like a and b and
+   refused by the port guard to anyone but its holder; the tests are `tests/test_stack_lease.py`'s
+   `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
+   launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.

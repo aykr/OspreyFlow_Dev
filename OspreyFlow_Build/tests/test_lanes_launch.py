@@ -387,7 +387,7 @@ def test_watch_never_switches_a_lane_without_the_owners_fallback_line(launcher) 
 # --- Six lanes and two stacks (ADR-142 Amendment 3, 8 November 2026) -----------------------------------
 
 
-@pytest.mark.parametrize("lane", ["admin", "rules", "platform"])
+@pytest.mark.parametrize("lane", ["admin", "rules", "platform", "case-b", "studio-b", "rules-b"])
 def test_the_new_lanes_are_known(launcher, lane: str) -> None:
     assert launcher("setup", lane).returncode == 0
     assert (launcher.wt / lane).is_dir()

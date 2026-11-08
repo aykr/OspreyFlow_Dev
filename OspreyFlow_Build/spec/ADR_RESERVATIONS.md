@@ -72,6 +72,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-135 Amendment 3 | Model usage and limits: calls and tokens per engine and job from the gateway's own records, limits per engine applied by the gateway on the engine's own key, a budget in tokens, no person in usage | platform | 2026-11-08 | written |
 | ADR-146 Amendment 2 | Rules and Monitoring as built: the place gate and its two shared reads, the alert's address route, the router, the jump replaced, the Rule author question open (L2.9) | rules | 2026-11-08 | reserved |
 | ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
+| ADR-142 Amendment 4 | Sister lanes: case-b, studio-b and rules-b take the steps that do not wait on their parent's current one, on the sol account; a third test stack (the owner's ruling, 8 November) | orchestrator | 2026-11-08 | reserved |
 
 ## Baseline
 
