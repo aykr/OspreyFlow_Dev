@@ -1,5 +1,5 @@
-"""An alert resting on a case's analyst layer goes into that layer (rule 3; the orchestrator's ruling
-of 7 November 2026, the final L3.1 review's first blocker).
+"""An alert resting on a case's analyst layer goes into that layer (rule 3; the orchestrator's
+ruling of 7 November 2026, the final L3.1 review's first blocker).
 
 Two cases, A and B, read the same source. A subject drawn or hand-marked in A lives in A's layer
 alone. Before this, an alert on it named nothing outside a composite case, so the stamping graph
@@ -241,7 +241,8 @@ async def test_an_alert_on_the_source_alone_still_goes_to_the_source(
     await _scheduled(store, graph, monkeypatch)
     (alert,) = [w for w in graph.written_nodes if w.type == "Alert"]
     assert alert.datasets == [SOURCE]
-    assert not [d for d in store.datasets.values() if d.kind == ANALYST_LAYER and d.id in alert.datasets]
+    layers = {d.id for d in store.datasets.values() if d.kind == ANALYST_LAYER}
+    assert not layers & set(alert.datasets)
 
 
 async def test_a_branch_alert_on_its_originals_layer_withholds_its_node(
@@ -263,3 +264,75 @@ async def test_a_branch_alert_on_its_originals_layer_withholds_its_node(
     await gate.raise_committed(_finding(_rule(investigation_id="branch"), deployer))
     assert len(queue.alerts) == 1 and queue.alerts[0].alert_node_id is None
     assert graph.written_nodes == [] and graph.written_edges == []
+
+
+async def _a_branch_gate() -> tuple[RuleGate, _Queue, _Graph, Principal]:
+    store, graph, _layer = await _two_cases()
+    await store.copy_case("case-a", "branch", case_name="Branch")
+    queue = _Queue()
+    deployer = await scope_to_case(OFFICER, "branch", store)
+
+    async def principal_for_owner(owner_id: str) -> Principal | None:
+        return deployer
+
+    rule = _rule(investigation_id="branch", trigger="pre_commit")
+    gate = RuleGate(
+        rules=[rule], investigation_id="branch", graph=stamping(graph, registry=store),  # type: ignore[arg-type]
+        analytics=None, scheme=SCHEME, alert_store=queue, audit=queue, valkey=queue,  # type: ignore[arg-type]
+        principal_for_owner=principal_for_owner, loader=deployer,
+    )  # fmt: skip
+    return gate, queue, graph, deployer
+
+
+async def _raised_in_a_branch(path: str, monkeypatch: pytest.MonkeyPatch) -> _Queue:
+    """The branch's alert on its original's layer, raised on `path`: a load's (`pre_commit`, then
+    `after_commit`, its matching stood in for by the finding it returns) or outside a load
+    (`raise_committed`, as a schedule, a re-screening or the sweep raises)."""
+    gate, queue, graph, deployer = await _a_branch_gate()
+    finding = _finding(gate.rules[0], deployer)
+    if path == "load":
+
+        async def judged(*_args: Any) -> list[Finding]:
+            return [finding]
+
+        monkeypatch.setattr(gate, "_judge_rule", judged)
+        verdict = await gate.pre_commit([], "tx", load_id="load-1", unseen=None)
+        await gate.after_commit(verdict)
+    else:
+        await gate.raise_committed(finding)
+    assert graph.written_nodes == [] and len(queue.alerts) == 1
+    return queue
+
+
+def _withheld_reason(queue: _Queue) -> str:
+    (entry,) = [e for e in queue.audit if e.get("action") == "alert_node_withheld"]
+    return str(entry["resolved_query"]["reason"])
+
+
+@pytest.mark.parametrize("path", ["load", "committed"])
+async def test_a_branch_alert_withheld_for_its_originals_layer_says_so(
+    path: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-146 decision 10's reasons, one more: the audit says the node was withheld because the
+    alert rests on the original case's layer, on a load's path and outside one."""
+    queue = await _raised_in_a_branch(path, monkeypatch)
+    assert _withheld_reason(queue) == rule_evaluation.WITHHELD_WORDS["originals_layer"]
+
+
+@pytest.mark.parametrize("path", ["load", "committed"])
+async def test_the_reason_is_the_units_one_with_the_withholding_swallowed_as_it_was(
+    path: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: the node withheld inside `write_alert_node` with no reason of its own, as it
+    was before the rebase onto L2.8, and the audit gives the units' words, which are false here."""
+    real = rule_evaluation.write_alert_node
+
+    async def swallowed(*args: Any, **kwargs: Any) -> str | None:
+        try:
+            return await real(*args, **kwargs)
+        except rule_evaluation._AlertInAReadOnlyLayer:  # noqa: SLF001
+            return None
+
+    monkeypatch.setattr(rule_evaluation, "write_alert_node", swallowed)
+    queue = await _raised_in_a_branch(path, monkeypatch)
+    assert _withheld_reason(queue) == rule_evaluation.WITHHELD_WORDS["units"]

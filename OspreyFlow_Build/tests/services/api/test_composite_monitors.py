@@ -288,6 +288,11 @@ class _SweepGraph(_Graph):
         super().__init__(nodes)
         self.edges = list(edges)
 
+    async def get_edges(self, edge_ids: Any, principal: Principal) -> list[Any]:
+        """The links held, by id, as the adapter reads them: one the reader may not see is not
+        returned (an alert's cited links are read for their markings since ADR-146 decision 10)."""
+        return [e for e in self.edges if e.id in set(edge_ids) and self._sees(principal, e)]
+
     async def expand(self, req: Any, principal: Principal) -> Any:
         from schemas.domain import Subgraph
 
