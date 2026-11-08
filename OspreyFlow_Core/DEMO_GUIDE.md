@@ -973,6 +973,45 @@ still refuses a draft until Test has run since its last edit. *Open map editor* 
 to a strip across the top (a step on it goes back to the pipeline). In the map editor a column is bound
 by dragging it, or by keyboard: **Choose** on the column, then **Bind ‹column› here** on the binding.
 
+**Building chapter 4's pipeline from scratch** (ADR-140 Amendment 10, 8 November 2026; phase 6's exit).
+The seeded draft above stays the demo's path: building the map takes about eighty bindings, far too
+long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training,
+and it ends exactly where the seeded draft starts. `keyboard/ingest-studio.spec.ts` walks these steps
+by keys alone and checks the saved map equals `pid_intel_reports_recipe.yaml`'s.
+1. On the **3 Pipelines** tab, type *Intelligence reports* in **Pipeline name**, then **New pipeline**.
+   It opens in guided mode.
+2. **Source: New source**: choose the *Intelligence reports* file under **Registered source**, then
+   **Use this source**. Its marking, units, legal basis and six handling columns come with it.
+   **Preview**, then **Run preview**, shows its rows.
+3. **Settings**, then *The draft's own settings*: under *Skip rows this case has already loaded*, type
+   `report_ref` in **Key column name**, press Enter, then **Save** and **Close the drawer**.
+4. **Map: Map**, then **Open map editor**. Add each of the map's eleven entities with **+ entity**, in
+   the committed file's order: the report (`Document`), three areas (`Location`), three prisoners and
+   three outside people (`Person`), and the number (`Endpoint`). For each:
+   - set **Entity ref**, **POLE class**, **Entity type** and **Match on**, then *reference existing*;
+   - add each property under **Add a property** and bind its column (**Choose** the column, then
+     **Bind ‹column› here**). The number's `value_normalised` and `e164` take the `msisdn` **Transform**,
+     its `endpoint_kind` is a **Literal** `msisdn`, and an outside person's `given_names` and
+     `date_of_birth` are **Optional**;
+   - for every entity but the report and the first area, tick **Conditional element** and choose the
+     column it waits on (*is not null*): the second and third areas on `area_ref_2` and `area_ref_3`,
+     each prisoner on `subject_N`, each outside person on `subject_N_nino`, the number on
+     `phone_mentioned`;
+   - on the report, set **Its own text** to *Document text* from `report_text`;
+   - tick **Override handling for this element** and set each of the six parts to *From column ‹part›*.
+     The editor says which part is unbound, and the save refuses a map that leaves one.
+5. Add the ten `MENTIONED_IN` links under **From entity**, **To entity** and **Link type**, then
+   **Add link**: each area, person and the number to the report. Give each the same condition as its
+   first end, and bind its six handling parts the same way.
+6. Under the unmapped columns, give `subject_1_role`, `subject_2_role`, `subject_3_role` and
+   `reviewer_initials` their notes in **Note for ignoring ‹column›**, then **Ignore ‹column›**.
+7. **Save draft**. Then **Test** (**Run the test**) and **Deploy** (**Deploy as v1**): from here it is
+   chapter 4 as above.
+
+An expert-mode edit of it: **Expert**, then **+ Extract** on the canvas (fed by Map). Open
+**Extract: Extract**, choose an **Extraction library**, then **Apply extract settings**. The edit is the
+pipeline's, and the map is not saved again. Test runs again before Deploy.
+
 ## 9. Related documents
 
 | Document | What it covers |
