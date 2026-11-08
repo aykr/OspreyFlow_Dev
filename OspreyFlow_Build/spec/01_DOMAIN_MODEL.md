@@ -716,7 +716,7 @@ A **dataset** holds data and has one domain model. A **case** reads one dataset 
 and holds its analyst layer (ADR-143 decision 1), its views and its boards. A **view** is a saved
 lens on one case. There is nothing between a case and a view, and no case is made from another.
 
-`CaseView` (`packages/schemas/case_views.py`) holds **no data**:
+A view holds **no data**. The Conduit keeps it as `StoredCaseView` (`services/api/case_views.py`):
 - `id`, `case_id`, `name`, `created_by` and `created_at`;
 - `shared`: `false` until its creator chooses *Share with the case*;
 - exactly one of `node_ids` (a chosen set) or `filter` (`ViewFilter`: entity types, a date window,
@@ -727,6 +727,16 @@ lens on one case. There is nothing between a case and a view, and no case is mad
 - `drawing`: a board (L3.3);
 - `converted_from_case`: the retired case the upgrade converted it from (ADR-144 decision 6),
   whose audit stays readable from the view.
+
+**What a reader is sent** is `CaseView` (`packages/schemas/case_views.py`): the same fields, but
+with `chosen` (how many nodes were chosen) in place of `node_ids` and `layout`. A shared view's
+selection is its creator's, so naming an id the reader may not see would tell them it exists
+(rules 3 and 7). Opening a view (`CaseViewOpened`) gives:
+- the items the reader may see now;
+- the saved positions of those items alone;
+- `missing`.
+
+`test_no_listing_names_a_chosen_node` checks that no answer names a chosen node.
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.

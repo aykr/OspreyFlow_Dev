@@ -53,6 +53,12 @@ ROUTE_RIGHTS = {
     "remove_investigation_grant": "share_case",
     "get_investigation_access_history": "share_case",
     "get_investigation": None,
+    # ADR-144: case views, behind the case's level; saving, sharing and deleting work the case.
+    "list_case_views": None,
+    "save_case_view": "investigate",
+    "open_case_view": None,
+    "share_case_view": "investigate",
+    "delete_case_view": "investigate",
     "branch_investigation": "branch_case",
     "branch_investigation_by_filter": "branch_case",
     "seed": "investigate",

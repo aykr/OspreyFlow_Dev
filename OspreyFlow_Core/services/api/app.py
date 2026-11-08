@@ -161,6 +161,7 @@ from schemas.analytics import (
     Sighting,
     SightingRequest,
 )
+from schemas.case_views import CaseView, CaseViewInput, CaseViewOpened
 from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.dataset_model import (
     DatasetModelView,
@@ -396,6 +397,14 @@ from .case_brief import (
     CaseBriefStore,
 )
 from .case_brief_resolvers import title_resolvers
+from .case_views import (
+    CaseViewStore,
+    InMemoryCaseViewStore,
+    NotTheViewsCreator,
+    PostgresCaseViewStore,
+    ViewNotFound,
+    open_view,
+)
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -846,7 +855,7 @@ from .working_set.models import (
     decode_delta,
     lacks_record,
 )
-from .working_set.service import WorkingSetService
+from .working_set.service import WorkingSetService, _cap_breach
 from .working_set.store import DELTA_STREAM_MAXLEN, ValkeyWorkingSetStore
 from .ws_ticket import WsTicketResponse, mint_ws_ticket, redeem_ws_ticket
 
@@ -908,6 +917,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         config.postgres.dsn, core_types=_core_types()
     )
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
+    # ADR-144: the saved views of each case, holding no data.
+    case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
@@ -1078,6 +1089,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.studio_recipes = studio_recipes
     app.state.sources = source_store
     app.state.target_models = target_model_store
+    app.state.case_views = case_view_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = resources.recipe_repo_root
@@ -1185,6 +1197,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await history.close()
         await source_store.close()
         await target_model_store.close()
+        await case_view_store.close()
+        app.state.case_views = None
         # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
         # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
         app.state.target_models = None
@@ -1331,6 +1345,19 @@ def get_target_models(request: Request) -> TargetModelStore:
 
 
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
+
+
+def get_case_views(request: Request) -> CaseViewStore:
+    """ADR-144. The lifespan sets the Postgres store; a test app with no lifespan gets an in-memory
+    one."""
+    store = getattr(request.app.state, "case_views", None)
+    if store is None:
+        store = InMemoryCaseViewStore()
+        request.app.state.case_views = store
+    return store
+
+
+CaseViewsDep = Annotated[CaseViewStore, Depends(get_case_views)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -2072,6 +2099,24 @@ async def _too_many_identifiers_handler(
                 f"{exc.received:,} identifiers were given; one request reads at most "
                 f"{MAX_IDENTIFIERS:,}. Nothing was added. Split the list and add it in parts."
             ),
+        },
+    )
+
+
+@app.exception_handler(ViewNotFound)
+async def _view_not_found_handler(request: Request, exc: ViewNotFound) -> JSONResponse:
+    """ADR-144 decision 3: someone else's private view, another case's, and none at all alike."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "view_not_found"})
+
+
+@app.exception_handler(NotTheViewsCreator)
+async def _not_the_views_creator_handler(request: Request, exc: NotTheViewsCreator) -> JSONResponse:
+    """ADR-144 decision 3: a shared view is shared or deleted only by the person who saved it."""
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "not_the_views_creator",
+            "detail": "Only the person who saved this view can share or delete it.",
         },
     )
 
@@ -3624,6 +3669,110 @@ async def branch_investigation_by_filter(
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
     return new_investigation
+
+
+# --- case views (ADR-144; spec 03 §3.1b) -----------------------------------------------------
+#
+# A view holds no data: every route stands behind the case's own level check first, so a reader
+# with no level on the case is refused each one as for a case that does not exist, and the store
+# answers only with views the reader may see (rule 3). Saving, sharing and deleting need
+# `investigate`, the Viewer's right to work the case; listing and opening need only the level.
+
+
+@app.get("/v1/investigations/{investigation_id}/views")
+async def list_case_views(
+    investigation: InvestigationViewerDep, principal: PrincipalDep, views: CaseViewsDep
+) -> list[CaseView]:
+    """The case's views this reader may see: their own, and those shared with the case."""
+    return [v.wire() for v in await views.visible_in(investigation.id, principal.id)]
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/views",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def save_case_view(
+    investigation: InvestigationViewerDep,
+    body: CaseViewInput,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    audit: AuditDep,
+) -> CaseView:
+    """*Save what I see as a view* (ADR-144 decision 4): private to its creator until shared."""
+    view = await views.save(investigation.id, body, principal.id)
+    await audit.record(
+        principal=principal,
+        action="save_case_view",
+        investigation_id=investigation.id,
+        resolved_query={"view_id": view.id},
+        result_cardinality=1,
+    )
+    return view.wire()
+
+
+@app.get("/v1/investigations/{investigation_id}/views/{view_id}")
+async def open_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    graph: GraphDep,
+    working_set: WorkingSetDep,
+) -> CaseViewOpened:
+    """ADR-144 decision 2: the view re-read now, as this reader may see the case; `missing` counts
+    the chosen items it could not show and names none."""
+    view = await views.get(investigation.id, view_id, principal.id)
+    return await open_view(
+        view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/views/{view_id}/share",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def share_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    audit: AuditDep,
+) -> CaseView:
+    """*Share with the case* (ADR-144 decision 3): every member then sees it at their own level."""
+    view = await views.share(investigation.id, view_id, principal.id)
+    await audit.record(
+        principal=principal,
+        action="share_case_view",
+        investigation_id=investigation.id,
+        resolved_query={"view_id": view_id},
+        result_cardinality=1,
+    )
+    return view.wire()
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/views/{view_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def delete_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    audit: AuditDep,
+) -> None:
+    """Only its creator deletes a view, and deleting it deletes nothing else (ADR-144 decision 3):
+    what was drawn on it stays in the case's layer and on the case's canvas."""
+    await views.delete(investigation.id, view_id, principal.id)
+    await audit.record(
+        principal=principal,
+        action="delete_case_view",
+        investigation_id=investigation.id,
+        resolved_query={"view_id": view_id},
+        result_cardinality=1,
+    )
 
 
 async def _record_history_step(

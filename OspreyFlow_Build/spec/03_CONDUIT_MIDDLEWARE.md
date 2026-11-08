@@ -114,6 +114,26 @@ DELETE /v1/investigations/{id}/access/grants/{account}     withdraw it (Author)
 GET    /v1/investigations/{id}/access/history  who was granted what, and when (Author)
 ```
 
+**Case views (ADR-144; `01_DOMAIN_MODEL.md` §2.2c).** A view holds no data, and every route below
+stands behind the case's own level check first: a reader with no level on the case is refused each
+one exactly as for a case that does not exist. Saving, sharing and deleting need `investigate`;
+listing and opening need only a level. Each answer is a `CaseView`, which counts a view's chosen
+nodes and never names them or their positions (rules 3 and 7).
+
+```
+GET    /v1/investigations/{id}/views                  the case's views the caller may see: their own, and those shared
+POST   /v1/investigations/{id}/views                  save a view, private to the caller (`CaseViewInput`: a name, exactly one of `node_ids` or `filter`, a layout, a window, a threshold)
+GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, a count naming none
+POST   /v1/investigations/{id}/views/{view}/share     share it with the case's members, at their own levels (its creator only; 403 `not_the_views_creator` for a member who can see it)
+DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing else (its creator only, as above)
+```
+
+Someone else's private view, another case's view and no view at all answer alike: 404
+`view_not_found`. A view of chosen nodes reads them by id from the graph under the caller's scoped
+principal, with the links among those it may show. A filtered view narrows the caller's own
+projection of the case's working set. Either way, a result past the working set's cap is the typed
+`limit_exceeded` (§4).
+
 **Authorization.** Every route above an investigation id checks the calling
 `Principal.org_unit` against that investigation's own `owning_unit` — set once at creation (or
 branch) from the acting principal's own unit, the same shape as `Handling.owning_unit`

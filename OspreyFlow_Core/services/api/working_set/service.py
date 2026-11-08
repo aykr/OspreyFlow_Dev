@@ -54,6 +54,7 @@ from ontology.handling import (
     withhold_sources,
 )
 from ports.graph import GraphPort
+from schemas.case_views import ViewFilter
 from schemas.domain import (
     CONNECTIONS_SHOWN,
     NOT_SAME_AS,
@@ -1555,6 +1556,28 @@ class WorkingSetService:
         breach = _cap_breach(len(nodes), len(edges))
         if breach is not None:
             raise LimitExceededError(breach)
+        return nodes, edges
+
+    async def filtered_view(
+        self, investigation_id: str, principal: Principal, keeps: ViewFilter
+    ) -> tuple[list[Node], list[Edge]]:
+        """A filtered case view opened now (ADR-144 decision 2): the reader's own projection of
+        the case's working set, narrowed by `keeps`, and nothing else. Projected first, so a node
+        or link they may not read is never in the result and a type only hidden material holds
+        selects what an absent type selects. Empty is an answer, not an error. Writes nothing."""
+        narrow = BranchFilter.model_validate(keeps.model_dump())
+        stored_nodes = await self._store.source_fidelity_nodes(investigation_id)
+        stored_edges = await self._store.source_fidelity_edges(investigation_id)
+        visible_nodes, visible_edges, _ = self._project(
+            list(stored_nodes.values()), list(stored_edges.values()), principal
+        )
+        nodes = [n for n in visible_nodes if narrow.keeps_node(n)]
+        kept = {n.id for n in nodes}
+        edges = [
+            e
+            for e in visible_edges
+            if e.source in kept and e.target in kept and narrow.keeps_link_in_time(e)
+        ]
         return nodes, edges
 
     async def branch_add(
