@@ -121,12 +121,12 @@ describe("a refusal is said in words, with the figure", () => {
       cap_kind: "nodes",
       cap: 50000,
       would_be: 50002,
-      options: ["branch", "filter", "promote_to_batch"],
+      options: ["save_as_view", "filter", "promote_to_batch"],
     });
     const failure = await addIdentifiers("http://api", "t", "c", "x", false).catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(AddFromListError);
     expect((failure as Error).message).toBe(
-      "Too many for the canvas: 50,002 nodes against a limit of 50,000. Nothing was added. You can branch the case, filter it to part, or promote the list to a batch.",
+      "Too many for the canvas: 50,002 nodes against a limit of 50,000. Nothing was added. You can save a smaller view of the case, filter it to part, or promote the list to a batch.",
     );
   });
 

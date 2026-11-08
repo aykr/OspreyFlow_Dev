@@ -517,7 +517,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
         return json({
           investigation: {
             id: "inv-2", created_at: "2026-10-10T09:00:00Z", created_by: "analyst-1",
-            owning_unit: "unit-1", branched_from: "inv-1",
+            owning_unit: "unit-1",
           },
           seeded_count: 1,
         });

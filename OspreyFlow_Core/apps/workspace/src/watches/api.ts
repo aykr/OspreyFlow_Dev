@@ -75,7 +75,6 @@ export interface InvestigationSummary {
   created_at: string;
   created_by: string;
   owning_unit: string;
-  branched_from: string | null;
 }
 
 /** Mirrors `services/api/watch_routes.py::AlertJumpResult` field-for-field. */

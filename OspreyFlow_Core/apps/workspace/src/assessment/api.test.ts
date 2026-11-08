@@ -64,7 +64,7 @@ describe("saveJudgement", () => {
   });
 
   it("a generic 422 with no citation_ids falls back to a plain Error, not the typed one", async () => {
-    // Proves the branch above is real, not a catch-all: a companion case feeding a *different*
+    // Proves the case above is real, not a catch-all: a companion case feeding a *different*
     // error shape must NOT produce `UnverifiableCitationApiError` — otherwise the type would be
     // meaningless to a caller trying to distinguish "which citation" from "some other failure".
     vi.stubGlobal(

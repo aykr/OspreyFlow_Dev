@@ -1,5 +1,5 @@
 // *Define a new type…* (ADR-090 C2, spec 02 §3.1f): when no type fits a link, an Editor proposes one
-// here, from the change form. It is usable at once in this case, its branches and wherever one of
+// here, from the change form. It is usable at once in this case, its views and wherever one of
 // its links is seen, and it is probabilistic until an administrator of the unit decides. What the
 // analyst types is checked here first (`defineType.ts`) and again by the server, whose sentence is
 // shown when it refuses.

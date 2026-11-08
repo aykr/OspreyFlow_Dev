@@ -112,7 +112,7 @@ function refusal(status: number, body: Record<string, unknown>, what: string): A
     return new AddFromListError(
       `Too many for the canvas: ${NUMBER.format(Number(body.would_be ?? 0))} ${String(body.cap_kind ?? "nodes")} ` +
         `against a limit of ${NUMBER.format(Number(body.cap ?? 0))}. Nothing was added. ` +
-        "You can branch the case, filter it to part, or promote the list to a batch.",
+        "You can save a smaller view of the case, filter it to part, or promote the list to a batch.",
     );
   }
   if (status === 403) return new AddFromListError("Adding to this case needs Editor access.");

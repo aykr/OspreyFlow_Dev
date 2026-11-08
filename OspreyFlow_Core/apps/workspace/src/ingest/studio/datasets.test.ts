@@ -20,7 +20,6 @@ const CASES = [
   listing("case-a", ["ds-1", "ds-2"]),
   listing("case-b", ["ds-2"], { level: "viewer" }),
   listing("case-c", ["ds-2"], { level: "author" }),
-  listing("branch-c", ["ds-2"], { level: "author", branched_from: "case-c" }),
   listing("case-d", ["ds-3"]),
 ];
 
@@ -43,7 +42,7 @@ describe("the Studio's datasets", () => {
     expect(caseForDataset(CASES, "ds-1", "case-a")).toBe("case-a");
   });
 
-  it("chooses a case before a branch, the higher level first, for another dataset", () => {
+  it("chooses the higher level first for another dataset", () => {
     expect(caseForDataset(CASES, "ds-2", "case-a")).toBe("case-c");
   });
 

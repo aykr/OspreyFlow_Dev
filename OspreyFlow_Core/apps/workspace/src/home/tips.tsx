@@ -9,8 +9,8 @@ export const TIPS = [
     says: "A solid link comes from a source record. A dashed one was inferred by the model and carries a confidence score. A dotted one has a single unverified source." },
   { kind: "count", title: "Counted before drawn", app: "Glass",
     says: "Expanding a node shows how many links of each kind it has before anything is added to the canvas. An expansion over the working-set limit is refused with options." },
-  { kind: "branch", title: "Branch, then cut down", app: "Glass",
-    says: "Select a group and branch it into a new workspace to work on it on its own. The original case is unchanged, and both stay linked in the history." },
+  { kind: "view", title: "Save a view, then cut down", app: "Glass",
+    says: "Select a group and save it as a view of the case, to work on it on its own. A view holds no copy: it shows the case's own data, private to you until you share it." },
 ] as const; // prettier-ignore
 
 export function TipPicture({ kind }: { kind: (typeof TIPS)[number]["kind"] }) {

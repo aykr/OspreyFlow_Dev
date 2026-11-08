@@ -134,7 +134,7 @@ describe("the confirm", () => {
   it("past the canvas's limit says so with the figure, adds nothing, and keeps the count to choose again", async () => {
     stub((body) =>
       body.confirm
-        ? { status: 409, body: { error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50002, options: ["branch", "filter", "promote_to_batch"] } }
+        ? { status: 409, body: { error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50002, options: ["save_as_view", "filter", "promote_to_batch"] } }
         : { body: { counts: COUNTS, added: null } },
     );
     const { onApplyDelta } = mount();
@@ -144,7 +144,7 @@ describe("the confirm", () => {
     press("Add");
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Too many for the canvas: 50,002 nodes against a limit of 50,000. Nothing was added.");
-    expect(alert.textContent).toContain("branch the case");
+    expect(alert.textContent).toContain("save a smaller view of the case");
     expect(onApplyDelta).not.toHaveBeenCalled();
   });
 });

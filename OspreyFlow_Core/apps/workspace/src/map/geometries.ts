@@ -21,7 +21,7 @@ function geometryRefOf(node: Node): string | null {
 }
 
 /** The entity types the map places: `Location`, and every type the ontology declares a
- * `geometry_ref` on — a FIBO `Account`, whose branch point was given it "so the money flow itself
+ * `geometry_ref` on — a FIBO `Account`, whose site was given it "so the money flow itself
  * draws on the map" (ADR-108 Amendment 4), which the map never read until ADR-117's
  * demonstration found it plotting no account at all. A type that declares no `geometry_ref` (a
  * `Person`) is never placed, whatever a node of it happens to carry. */

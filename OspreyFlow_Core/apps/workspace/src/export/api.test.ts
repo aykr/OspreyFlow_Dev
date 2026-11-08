@@ -82,7 +82,7 @@ describe("submitExport", () => {
   });
 
   it("a generic 422 with no blocked array falls back to a plain Error, not the typed ones", async () => {
-    // Proves the branches above are real, not a catch-all — a companion case feeding a different
+    // Proves the cases above are real, not a catch-all — a companion case feeding a different
     // error shape must NOT produce either typed error.
     vi.stubGlobal(
       "fetch",

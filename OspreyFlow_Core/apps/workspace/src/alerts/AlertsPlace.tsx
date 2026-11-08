@@ -30,7 +30,7 @@ export interface AlertsPlaceProps {
   /** ADR-112's `load_screening_lists`: subscribing to and refreshing a screening list. */
   canManageLists?: boolean;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
-  /** The alert inbox's jump: the new investigation an alert was branched into, opened. */
+  /** The alert inbox's jump: the case an alert was opened in, opened. */
   onOpenInvestigation?: (investigationId: string) => void;
   /** ADR-139: `manage_strength_influencers`, so the installation-wide influencers are offered. */
   canManageInfluencers?: boolean;

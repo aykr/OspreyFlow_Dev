@@ -5,7 +5,7 @@ import { askToSearch, fetchPatternPreview, listPatterns, loadPattern, runPattern
 
 // `savePattern`/`listPatterns`/`loadPattern` are otherwise-thin `fetch` wrappers (`site/api.ts`'s
 // own `api.test.ts` leaves those untested elsewhere in this codebase) — but their `!response.ok`
-// check is exactly the branch `GlassCanvas.tsx`'s `findPaths` was found to get wrong (`if
+// check is exactly the path `GlassCanvas.tsx`'s `findPaths` was found to get wrong (`if
 // (!response.ok) return;`, silently dropping a failed save/load with nothing surfaced to the
 // analyst). These pin down that each of the three new calls throws instead, so a failed save or
 // load produces an error `QueryBuilderPanel.tsx` can show rather than a call that looks like it
