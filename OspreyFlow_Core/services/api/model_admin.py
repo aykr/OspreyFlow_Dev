@@ -11,6 +11,13 @@ Three places, each holding only its own part:
   API with the master key the Conduit already holds;
 - **the audit** (`ModelAdminAudit`, decision 7): who changed what, never the key.
 
+**Limits** (ADR-135 Amendment 3): each hosted engine's calls go with its own gateway key
+(`usage.engine_key`, derived from the master key, never stored), and the engine's limits are that
+key's (`rpm_limit`, `tpm_limit`, and a token budget as `max_budget` per `1d` or `30d`, every hosted
+entry priced at one unit a token so the gateway's spend is the tokens used). They are kept in the
+models file beside the engines, made equal in the gateway with the entries, and audited
+(`limits_changed`). The key-admin answers are discarded: `/key/update`'s carries the key.
+
 **A key passes through and is kept by nothing here** (decision 4): it arrives as a `SecretStr`, is
 revealed once, inside the request body sent to the gateway, and is never logged, returned or
 written. The gateway's answers are never passed on: they can carry part of a key (measured), so a
@@ -39,10 +46,12 @@ import yaml
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from adapters.model_litellm.connection import check_connection
+from adapters.model_litellm.usage import engine_key, engine_key_alias
 from schemas.deployment import ModelProviderConfig, ModelsConfig
 from schemas.model_admin import (
     AdminEngine,
     ConnectionTestResult,
+    EngineLimits,
     KeyState,
     ModelAdminAction,
     ModelAdminEntry,
@@ -91,6 +100,8 @@ class ModelSettings(BaseModel):
     providers: list[ModelProviderConfig] = Field(default_factory=list)
     defaults: dict[str, str] = Field(default_factory=dict)
     keys: dict[str, KeyRecord] = Field(default_factory=dict)
+    #: Each engine's limits (ADR-135 Amendment 3); an engine not here has none.
+    limits: dict[str, EngineLimits] = Field(default_factory=dict)
 
 
 class ModelSettingsFile:
@@ -202,12 +213,32 @@ def gateway_model_name(provider: str, model: str) -> str:
     return f"{provider}/{model}"
 
 
+#: Every hosted entry's price: one unit a token, prompt and completion alike, so the gateway's spend
+#: on an engine's key is the tokens it used and a budget is set in tokens (ADR-135 Amendment 3).
+TOKEN_PRICE = 1
+#: A budget's period as the gateway takes it (measured: `1d` resets at midnight UTC, `30d` on the
+#: first of the next month).
+BUDGET_DURATION = {"day": "1d", "month": "30d"}
+
+
+def key_limits(limits: EngineLimits) -> dict[str, object]:
+    """An engine's limits as its gateway key's fields; `None` clears one (measured)."""
+    return {
+        "rpm_limit": limits.requests_per_minute,
+        "tpm_limit": limits.tokens_per_minute,
+        "max_budget": limits.budget_tokens * TOKEN_PRICE if limits.budget_tokens else None,
+        "budget_duration": BUDGET_DURATION[limits.budget_period] if limits.budget_period else None,
+    }
+
+
 class GatewayAdmin:
-    """LiteLLM's admin API, as measured (ADR-135 Amendment 2). Every failure becomes a
+    """LiteLLM's admin API, as measured (ADR-135 Amendments 2 and 3). Every failure becomes a
     `ModelAdminRefused` with fixed words and the status alone."""
 
-    def __init__(self, http: httpx.AsyncClient) -> None:
+    def __init__(self, http: httpx.AsyncClient, *, master: str | None = None) -> None:
         self._http = http
+        # The master key the client already carries; each engine's key is derived from it.
+        self._master = master or str(http.headers.get("authorization", "")).removeprefix("Bearer ")
 
     @property
     def http(self) -> httpx.AsyncClient:
@@ -230,15 +261,24 @@ class GatewayAdmin:
         )
 
     async def stored_entries(self) -> set[str]:
+        return set(await self.entries())
+
+    async def entries(self) -> dict[str, bool]:
+        """Each entry the Conduit made, and whether it is priced a unit a token (an entry made
+        before ADR-135 Amendment 3 is not, so its engine's budget would never be reached)."""
         resp = await self._call("GET", "/v2/model/info")
         if resp.status_code != 200:
             raise self._refused(resp, "the list of engines")
-        ids: set[str] = set()
+        held: dict[str, bool] = {}
         for row in resp.json().get("data", []):
             model_id = str(dict(row.get("model_info") or {}).get("id") or "")
             if model_id.startswith("osprey-"):
-                ids.add(model_id)
-        return ids
+                params = dict(row.get("litellm_params") or {})
+                held[model_id] = all(
+                    _number(params.get(f)) == TOKEN_PRICE
+                    for f in ("input_cost_per_token", "output_cost_per_token")
+                )
+        return held
 
     async def add_entry(self, provider: ModelProviderConfig, model: str) -> None:
         """`POST /model/new` (measured). An entry is never patched: an edited engine's entries are
@@ -247,6 +287,8 @@ class GatewayAdmin:
         params: dict[str, object] = {
             "model": gateway_model_name(provider.name, model),
             "litellm_credential_name": credential_name(provider.name),
+            "input_cost_per_token": TOKEN_PRICE,
+            "output_cost_per_token": TOKEN_PRICE,
         }
         if provider.api_base:
             params["api_base"] = provider.api_base
@@ -294,6 +336,33 @@ class GatewayAdmin:
         resp = await self._call("DELETE", f"/credentials/{credential_name(provider)}")
         if resp.status_code not in (200, 404):  # 404: none was held (measured)
             raise self._refused(resp, "the key's removal")
+
+    async def put_engine_key(self, provider: str, limits: EngineLimits) -> None:
+        """The engine's own gateway key, made if the gateway has none (`/key/info` 404, measured)
+        and its limits set (`/key/update`, measured to change them at once, `None` clearing one).
+        Never deleted to change it, which would lose the budget's spend so far. Every answer is
+        discarded: the update's carries the key."""
+        key = engine_key(self._master, provider)
+        fields = key_limits(limits)
+        found = await self._call("GET", f"/key/info?key={key}")
+        if found.status_code == 200:
+            resp = await self._call("POST", "/key/update", {"key": key, **fields})
+        elif found.status_code == 404:
+            resp = await self._call("POST", "/key/generate", {
+                "key": key, "key_alias": engine_key_alias(provider), **fields,
+                "metadata": {"osprey_engine": provider},
+            })  # fmt: skip
+        else:
+            raise self._refused(found, "the engine's limits")
+        if resp.status_code != 200:
+            raise self._refused(resp, "the engine's limits")
+
+    async def delete_engine_key(self, provider: str) -> None:
+        resp = await self._call(
+            "POST", "/key/delete", {"keys": [engine_key(self._master, provider)]}
+        )
+        if resp.status_code not in (200, 404):  # 404: none was held (measured)
+            raise self._refused(resp, "the engine's limits' removal")
 
 
 # --- the audit ----------------------------------------------------------------------------------
@@ -502,6 +571,7 @@ class ModelAdmin:
                 key_present=self.key_state(p.name) == "set",
                 privacy_contract=p.privacy_contract,
                 contract_reference=p.contract_reference,
+                budget_period=current.limits.get(p.name, EngineLimits()).budget_period,
             )
             for p in current.providers
         }
@@ -525,6 +595,7 @@ class ModelAdmin:
                     key_set_at=records[p.name].set_at if p.name in records else None,
                     key_set_by=records[p.name].set_by if p.name in records else None,
                     default_for=[r for r, e in current.defaults.items() if e == p.name],
+                    limits=current.limits.get(p.name, EngineLimits()),
                 )
                 for p in current.providers
             ],
@@ -534,6 +605,11 @@ class ModelAdmin:
             sendable_handling_codes=list(self._installed.sendable),
             source="models file" if self._settings is not None else "osprey.yaml",
         )
+
+    @property
+    def gateway_http(self) -> httpx.AsyncClient:
+        """The gateway client with the master key: the only token that may read its usage."""
+        return self._gateway.http
 
     async def history(self) -> list[ModelAdminEntry]:
         return await self._audit.recent()
@@ -549,7 +625,8 @@ class ModelAdmin:
             try:
                 async with self._exclusive:
                     self._fresh()
-                    held = await self._gateway.stored_entries()
+                    entries = await self._gateway.entries()
+                    held = set(entries)
                     current = self.settings
                     keys = dict(current.keys)
                     for p in current.providers:
@@ -559,7 +636,11 @@ class ModelAdmin:
                             keys[p.name] = record.model_copy(update={"lost": True})
                     if keys != current.keys:
                         self._save(current.model_copy(update={"keys": keys}, deep=True))
-                    await self._reconcile(self.settings, held)
+                    unpriced = frozenset(
+                        p.name for p in current.providers
+                        if any(not entries.get(entry_id(p.name, m), True) for m in p.roles.values())
+                    )  # fmt: skip
+                    await self._reconcile(self.settings, held, rebuilt=unpriced)
             except (ModelAdminRefused, OSError) as failed:
                 log.warning("model engines not reconciled with the gateway: %s", _said(failed))
         self._on_change(self.routes())
@@ -592,6 +673,8 @@ class ModelAdmin:
         for model_id, (p, model) in wanted.items():
             if model_id not in held:
                 await self._gateway.add_entry(p, model)
+        for p in settings.providers:
+            await self._gateway.put_engine_key(p.name, settings.limits.get(p.name, EngineLimits()))
 
     async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> None:
         """After a change failed part-way: the gateway made equal to the file again, best effort;
@@ -760,12 +843,15 @@ class ModelAdmin:
                     "first."
                 )
             keys = {k: v for k, v in current.keys.items() if k != name}
+            limits = {k: v for k, v in current.limits.items() if k != name}
             proposed = current.model_copy(update={
                 "providers": [p for p in current.providers if p.name != name], "keys": keys,
+                "limits": limits,
             }, deep=True)  # fmt: skip
             # Removing is always allowed, local only or not: it can only narrow what leaves.
             await self._reconcile(proposed)
             await self._gateway.delete_credential(name)
+            await self._gateway.delete_engine_key(name)
             self._save(proposed)
 
         await self._change(by, "engine_removed", name, work)
@@ -839,6 +925,31 @@ class ModelAdmin:
         await self._change(by, "key_removed", name, work)
         await self._audited(by, "key_removed", name)
 
+    async def set_limits(self, by: str, name: str, limits: EngineLimits) -> None:
+        """An engine's limits (ADR-135 Amendment 3), applied by the gateway to the engine's key at
+        once, then kept in the models file and audited with each changed value."""
+        before: list[EngineLimits] = []
+
+        async def work(current: ModelSettings) -> None:
+            if all(p.name != name for p in current.providers):
+                raise ModelAdminRefused("There is no engine of that name.", status=404)
+            if self._installed.local_only:
+                raise ModelAdminRefused(
+                    "This deployment's osprey.yaml declares local_only: true, so no engine outside "
+                    "it is asked anything and there is nothing to limit."
+                )
+            before.append(current.limits.get(name, EngineLimits()))
+            await self._gateway.put_engine_key(name, limits)
+            kept = {**current.limits, name: limits}
+            self._save(current.model_copy(update={"limits": kept}, deep=True))
+
+        await self._change(by, "limits_changed", name, work)
+        old, new = before[0].model_dump(), limits.model_dump()
+        changes: dict[str, dict[str, object]] = {
+            f: {"from": old[f], "to": new[f]} for f in new if old[f] != new[f]
+        }
+        await self._audited(by, "limits_changed", name, changes)
+
     async def test(self, by: str, name: str) -> ConnectionTestResult:
         try:
             provider = self._provider(name)
@@ -871,6 +982,13 @@ class ModelAdmin:
 
 def _said(failed: BaseException) -> str:
     return failed.words if isinstance(failed, ModelAdminRefused) else type(failed).__name__
+
+
+def _number(value: object) -> float | None:
+    try:
+        return float(cast(Any, value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _plain(value: object) -> object:
