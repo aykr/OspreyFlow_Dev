@@ -103,6 +103,7 @@ RefusalReason = Literal[
     "superseded_by_a_correction",
     "withdrawn_rows_loaded_again",
     "read_past_by_a_later_refresh",
+    "own_link_written_since",
 ]
 
 
@@ -147,6 +148,10 @@ class Refusal:
                 f"{self.count} later incremental refresh(es) of its source read past its "
                 "watermark, and reverting it would leave its rows unread for good; revert them "
                 "first"
+            ),
+            "own_link_written_since": (
+                f"{self.count} link(s) a returning row of it merged into were written again "
+                "since, and putting them back would take that write away"
             ),
             "rewritten_by_another_writer": (
                 f"{self.count} node(s) it created were written again by a load outside this "
@@ -193,6 +198,9 @@ class LoadReverted:
     nodes_restored: int = 0
     links_restored: int = 0
     events_restored: int = 0
+    #: ADR-110 Amendment 16: the links a returning row of the load merged into that its own
+    #: withdrawn key recorded, put back exactly as they were before the merge.
+    links_put_back: int = 0
 
 
 @dataclass
@@ -346,7 +354,10 @@ def _refusals_for(
     merged_nodes = tuple(n for n in record.merged_node_ids if n not in plan_nodes)
     if merged_nodes:
         refusals.append(Refusal(record.load_id, "merged_nodes", len(merged_nodes), merged_nodes))
-    merged_links = tuple(e for e in record.merged_edge_ids if e not in plan_links)
+    # ADR-110 Amendment 16: a returning row's merge into its own withdrawn key's link is the row's
+    # own, put back by the revert; every other merge still refuses it (ADR-127 decision 6).
+    own = {m.edge_id for m in record.own_key_merges}
+    merged_links = tuple(e for e in record.merged_edge_ids if e not in plan_links and e not in own)
     if merged_links:
         refusals.append(Refusal(record.load_id, "merged_links", len(merged_links), merged_links))
     if record.uncovered_writes:
@@ -490,6 +501,22 @@ async def _later_refusals(
             later = await deps.ledger.reads_past(record.load_id)
             if later:
                 refusals.append(Refusal(record.load_id, "read_past_by_a_later_refresh", later))
+    # ADR-110 Amendment 16: a link a returning row merged into is put back only while it is as
+    # that load left it; written since (by any load, of any case), the revert is refused, in words
+    # that name no other load or case (rule 3). One an earlier attempt put back already is fine.
+    for record in plan:
+        since = 0
+        for prior in record.own_key_merges:
+            now_held = await deps.graph.read_link_state(prior.edge_id)
+            if now_held is None:
+                since += 1
+            elif now_held.load_id != record.load_id and (now_held.load_id, now_held.revision) != (
+                prior.load_id,
+                prior.revision,
+            ):
+                since += 1
+        if since:
+            refusals.append(Refusal(record.load_id, "own_link_written_since", since))
     merged_into: set[str] = set()
     for record in await deps.ledger.records_merging(sorted(plan_nodes), sorted(plan_links)):
         if record.load_id in in_plan:
@@ -561,12 +588,23 @@ async def _revert_one(
         ]
         reverting_nodes[:] = [n for n in record.created_node_ids if n not in left_alone]
         nodes, links = reverting_nodes, list(record.created_edge_ids)
-        if not nodes and not links and not record.rows_withdrawn:
+        if not nodes and not links and not record.rows_withdrawn and not record.own_key_merges:
             return
         tx = await deps.graph.begin_transaction()
         try:
             if nodes or links:
                 await deps.graph.revert_elements(nodes, links, tx)
+            for prior in record.own_key_merges:
+                # ADR-110 Amendment 16: the link as it was before this load's merge. Planning
+                # refused a link written since; one put back by an earlier attempt is left as is.
+                if await deps.graph.restore_link_state(prior, written_by=record.load_id, tx=tx):
+                    counts["links_put_back"] = counts.get("links_put_back", 0) + 1
+                    continue
+                held = await deps.graph.read_link_state(prior.edge_id, tx)
+                if held is None or (held.load_id, held.revision) != (prior.load_id, prior.revision):
+                    raise RuntimeError(
+                        "a link a returning row merged into was written again during the revert"
+                    )
             if record.rows_withdrawn:
                 # ADR-110 Amendment 8 point 5: what this full snapshot withdrew, back in the same
                 # transaction. Idempotent: a rerun finds nothing left withdrawn by it.

@@ -464,6 +464,27 @@ class RecipeRunStore:
                 found.update(r["row_key"] for r in rows)
         return found
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """ADR-110 Amendment 16: of these keys, those an earlier full snapshot of the recipe in the
+        case withdrew, each with the links its record holds (`edge_ids`). A returning row's merge
+        into one of them is its own. Per recipe and case, in chunks, as `withdrawn_row_keys_among`;
+        a key recorded before rows recorded their links holds none."""
+        found: dict[str, tuple[str, ...]] = {}
+        unique = list(dict.fromkeys(keys))
+        async with self._pool.acquire() as conn:
+            for start in range(0, len(unique), _KEY_CHUNK):
+                rows = await conn.fetch(
+                    "SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "
+                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",
+                    recipe_id,
+                    case,
+                    unique[start : start + _KEY_CHUNK],
+                )
+                found.update((r["row_key"], tuple(r["edge_ids"] or ())) for r in rows)
+        return found
+
     async def withdrawn_keys_kept_again(self, load_id: str) -> int:
         """How many of the keys `load_id` withdrew are kept again by a later load: its revert is
         refused while any is (ADR-110 Amendment 8 point 5)."""

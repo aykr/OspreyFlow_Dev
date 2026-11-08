@@ -125,6 +125,17 @@ class WithdrawalLedger:
             if k[:2] == (recipe_id, case) and k[2] not in present
         ]
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """As the ledger: the withdrawn keys of the recipe and case among `keys`, with the links
+        each one's record holds (none for a key recorded before rows recorded them)."""
+        return {
+            k[2]: tuple(v[2] or ())
+            for k, v in self.withdrawn.items()
+            if k[:2] == (recipe_id, case) and k[2] in set(keys)
+        }
+
     async def withdrawn_row_keys_among(
         self, recipe_id: str, case: str, keys: Sequence[str]
     ) -> set[str]:
