@@ -100,3 +100,12 @@ The first scan found two button names not containing their visible text (2.5.3, 
 light and GOV.UK themes: 15 failed. Fixed in the names (and the keyboard spec's); the harness's `open=area`
 then matched the button by its text, so the area form is scanned open: 20 passed (five states, three themes,
 and 2.5.3's own check per state).
+
+## Live, the files the change reaches (Prompt L)
+
+Platform lease on stack a, taken 22:02:15 UTC, released 22:03:22 UTC, at the rebased branch:
+`test_route_rights.py`, `test_tile_cache.py`, `test_prefetch.py` and `test_statelessness.py` (the Conduit's
+real lifespan in uvicorn subprocesses: the Maps admin, its Postgres audit and the schedule made at start),
+17 passed in 44 s; `map_admin_audit` then present in the stack's `ospreyflow` database. Not run: the restore
+and bundle exit tests (`tests/harness/test_restore_exit_test.py`, `test_bundle_exit_test.py`), which need a
+real deployment, and this lane never starts one (`make dev-up` is the owner's).
