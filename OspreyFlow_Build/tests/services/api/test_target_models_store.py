@@ -93,28 +93,42 @@ async def test_the_versions_on_postgres(store: PostgresTargetModelStore) -> None
     assert await store.draft(dataset) is None
 
 
-async def test_two_drafts_opened_at_once_one_is_refused(store: PostgresTargetModelStore) -> None:
+def _all_at_once(monkeypatch: pytest.MonkeyPatch, *, locked: bool, callers: int) -> None:
+    """Every caller waits, its transaction open, until all have one: only then is the lock taken
+    (or, planted out, not), so the calls truly overlap rather than running one after another as
+    the pool's connections open."""
+    real = PostgresTargetModelStore._locked
+    met = asyncio.Barrier(callers)
+
+    async def at_once(self: Any, conn: Any, dataset_id: str) -> None:
+        await asyncio.wait_for(met.wait(), 20)
+        if locked:
+            await real(self, conn, dataset_id)
+
+    monkeypatch.setattr(PostgresTargetModelStore, "_locked", at_once)
+
+
+async def test_two_drafts_opened_at_once_one_is_refused(
+    store: PostgresTargetModelStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _all_at_once(monkeypatch, locked=True, callers=4)
     dataset = new_id()
     results = await asyncio.gather(
         *(store.open_draft(dataset, ENGINEER) for _ in range(4)), return_exceptions=True
     )
     opened = [r for r in results if not isinstance(r, BaseException)]
     refused = [r for r in results if isinstance(r, TargetModelRefused)]
-    assert len(opened) == 1 and len(refused) == 3
+    assert len(opened) == 1 and len(refused) == 3, results
     assert [m.state for m in await store.versions(dataset)] == ["draft"]
 
 
 async def test_the_drafts_race_fails_with_the_lock_removed(
     store: PostgresTargetModelStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rule 15, red (the round-1 review's must-fix 8): with the advisory lock planted out, four
-    drafts at once are not each refused in words. They race past the store's own check to the
-    indexes, which refuse with a raw unique violation, a 500 at the route."""
-
-    async def unlocked(self: Any, conn: Any, dataset_id: str) -> None:
-        return None
-
-    monkeypatch.setattr(PostgresTargetModelStore, "_locked", unlocked)
+    """Rule 15, red (the round-1 review's must-fix 8): the same four drafts at once, the advisory
+    lock planted out. They race past the store's own check to the indexes, which refuse with a raw
+    unique violation (a 500 at the route), not in words."""
+    _all_at_once(monkeypatch, locked=False, callers=4)
     dataset = new_id()
     results = await asyncio.gather(
         *(store.open_draft(dataset, ENGINEER) for _ in range(4)), return_exceptions=True
@@ -125,12 +139,13 @@ async def test_the_drafts_race_fails_with_the_lock_removed(
 
 
 async def test_two_make_lives_at_once_one_is_refused_in_words(
-    store: PostgresTargetModelStore,
+    store: PostgresTargetModelStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Two *Make live*s of the same draft at once: one makes it live, the other is refused in
     words (the draft it names is gone), and there is one live version."""
     dataset = new_id()
     await store.open_draft(dataset, ENGINEER)
+    _all_at_once(monkeypatch, locked=True, callers=2)
     results = await asyncio.gather(
         *(store.make_live(dataset, 1, ENGINEER) for _ in range(2)), return_exceptions=True
     )
