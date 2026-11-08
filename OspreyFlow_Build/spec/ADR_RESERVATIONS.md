@@ -74,6 +74,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
 | ADR-142 Amendment 4 | Sister lanes: case-b, studio-b and rules-b take the steps that do not wait on their parent's current one, on the sol account; a third test stack (the owner's ruling, 8 November) | orchestrator | 2026-11-08 | reserved |
 | ADR-140 Amendment 13 | Phase 9 as built: connectors (SQL, API, JSON) and the screening-list connector, its templates, deployment-wide import, subscription by list id, schedule and Refresh now (L1.6) | studio-b | 2026-11-08 | reserved |
+| ADR-143 Amendment 4 | Analyst-defined link types as built: the same name may be proposed in another case, the accepter chooses Direct or Probabilistic, links promotable once the version is live, no proposal from a case reading no dataset or a composite (L3.5) | case-b | 2026-11-08 | reserved |
 
 ## Baseline
 
