@@ -831,12 +831,29 @@ The invariants, each with the test that fails if it is broken (rule 12):
   *Not the same* one `NOT_SAME_AS`, marked as the stricter of the two ends; no node is written.
   - `test_same_writes_one_link_and_merges_nothing`, red with the writer merging.
 - **Pictures in the layer** (decision 7; ADR-105 Amendment 3): an uploaded picture's Document (its id
-  the layer's own) and its `DEPICTS`, each with the picture's marking; a picture the case holds is
-  linked there and stays in its dataset.
-  - `test_a_pictures_document_and_link_are_in_the_layer_with_its_marking`.
+  the layer's own) and its `DEPICTS`, each with the picture's marking and its own source note; a later
+  picture supersedes the earlier, both audited before anything is written; a type that has no picture
+  is refused before the file is kept; a picture the case holds is linked there, marked at least as the
+  image is, and stays in its dataset.
+  - `test_a_pictures_document_and_link_are_in_the_layer_with_its_marking`;
+    `test_a_second_picture_supersedes_the_first_and_both_are_audited_first`;
+    `test_a_picture_for_a_type_with_none_is_refused_before_the_file_is_kept`;
+    `test_a_picture_the_case_holds_is_linked_in_the_layer_and_stays_in_its_dataset`.
+- **A drawn link's marking is kept** by an edit (409 `link_marking_kept`): the store keeps one link
+  per audience, so a changed marking would leave a second one.
+  - `test_a_drawn_links_marking_is_kept_and_no_second_link_is_left`.
+- **Changed only on its board** (decision 5; C15): on the analysis canvas a drawn item is read-only;
+  ADR-105's picture route, a link's change and a retract refuse it (409 `drawn_on_its_board`).
+  - `test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`;
+    `test_a_drawn_link_is_not_changed_from_the_canvas`.
+- **Decisions only about this board's drawn items**: a match decision names a drawn item of this
+  board and a loaded item the reader may see, within the ceiling.
+  - `test_a_decision_reaches_only_this_boards_drawn_items`; `test_a_match_above_the_ceiling_is_refused`.
 - **Withdrawn, never deleted** (decision 5): out of every read, kept in the store, with every drawn
-  link and picture resting on it; a marking is never lowered by an edit.
+  link and picture resting on it; refused while a promoted link rests on it (L3.4 reverts the
+  promotion first); a marking is never lowered by an edit.
   - `test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store`;
+    `test_withdrawing_with_a_promoted_link_resting_on_it_is_refused`;
     `test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking`.
 - **Restored in its own case's layer** (Amendment 2 decision 4).
   - `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer`, red with the layer lost.

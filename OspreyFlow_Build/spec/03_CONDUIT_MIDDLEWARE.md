@@ -161,8 +161,8 @@ PATCH  /v1/investigations/{id}/board-items/{item}             the author edits t
 POST   /v1/investigations/{id}/board-items/{item}/withdraw    the author withdraws their own item (`Withdrawn`): out of every read, never deleted; each drawn link and picture resting on it goes with it; its watch ends
 GET    /v1/investigations/{id}/boards/{board}/matches         *Looks like a loaded item* (`MatchSuggestions`): `inferred`, acting on nothing
 POST   /v1/investigations/{id}/boards/{board}/matches         *Same* (one `SAME_AS`, score 1.0) or *Not the same* (one `NOT_SAME_AS`) in the layer (`MatchDecision`); no node is written
-PUT    /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   upload a picture of a drawn node (`?name`, `?marking`): an image Document and its DEPICTS in the layer
-POST   /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   link a picture the case holds (`PictureChoice`) by a DEPICTS in the layer; the image stays in its dataset
+PUT    /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   upload a picture of a drawn node (`?name`, `?marking`, `?source_note`, all required): an image Document and its DEPICTS in the layer; a later picture supersedes it; audited before the file or the graph is written
+POST   /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   link a picture the case holds (`PictureChoice`: an image Document the caller may see) by a DEPICTS in the layer, marked at least as the image is; the image stays in its dataset
 GET    /v1/investigations/{id}/boards/{board}/pictures        each drawn node's picture the caller may see
 GET    /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   that picture's file
 GET    /v1/investigations/{id}/drawn-watches                  the watches drawing set in the case (`DrawnWatch`), each withheld whole from a caller who may not see its item
@@ -179,8 +179,17 @@ set, the deployment's highest where none is set; Amendment 2 decision 3), `above
 `not_a_property` (422: a type's required property missing, or one it does not declare),
 `ends_not_on_the_board` (422), `wrong_ends` (422), `already_drawn` (409: the same link already
 drawn between the two), `not_your_item` (403), `promoted` (409: changed only by reverting its
-promotion, L3.4). A withdrawal is `withdraw_elements` under `board-withdrawal:<item>`: the element
-is reverted for every reader and kept in the store.
+promotion, L3.4; a withdrawal is refused the same way while a promoted link rests on the item),
+`not_a_marking` (422), `no_source` (422: an edit, or a picture, with no source left),
+`marking_never_lowered` (409), `link_marking_kept` (409: a drawn link's marking is not changed by
+an edit, since the store would leave a second link for the other audience), `no_such_document`
+(422), `not_a_picture` (422), `no_picture_for_this_type` (422, before the file is kept). Edits,
+pictures and match decisions are judged against the ceiling as the merged handling of what they
+touch, and every refusal is judged before the layer is made. A withdrawal is `withdraw_drawn` under
+`board-withdrawal:<item>`: the element and what rests on it are reverted for every reader and kept
+in the store. A drawn item is changed only on its board: the canvas routes that would change one
+(ADR-105's entity picture, a link's change, a retract) answer 409 `drawn_on_its_board` in words
+(`test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`, `test_a_drawn_link_is_not_changed_from_the_canvas`).
 
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending

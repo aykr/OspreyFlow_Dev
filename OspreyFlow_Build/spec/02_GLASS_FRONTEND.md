@@ -522,7 +522,8 @@ offers *← Back to the alert*, which returns to the alert's address with the al
 ### 2.0b Boards: drawing on a case (ADR-143 decisions 4 to 7 and 13; Amendment 2 decision 5; L3.3)
 
 *Boards* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
-board* (blank, or from the selection on the canvas, its loaded items kept as live references) and
+board* (blank, from one of the case's views this person may see, or from the selection on the canvas,
+its loaded items kept as live references) and
 *New drawing as a case of its own* (a name, the highest marking it may hold, a starter model: a drawn
 dataset, its home case with the maker as its Author, and its board, in one step; the Glass then opens
 that case on its board). A board opens to:
@@ -532,13 +533,17 @@ that case on its board). A board opens to:
   a data engineer"), and *Declare a ‹type›*;
 - **the item form**: *What do you call it?*, the type's required properties (a required name filled
   from the label until changed), *Handling marking* (only the markings up to the case's ceiling and
-  the person's clearance), the three grading selects of the scheme, *Source note*; *Add to board*;
+  the person's clearance), the three grading selects of the scheme, *Source note*, *A document of the
+  case* (the Documents on the board: no route lists a case's documents, and these are ones the person
+  already sees), at least one of the two, and *Icon* (how it looks only, not evidence); *Add to board*;
 - **the link form**, opened from the selected item by *Draw a link…*, from an item's menu, by the
   item's ⟶ handle dragged onto another item, or by Alt-drag (C7): *Links to*, *What links them?* as
   radios, what the link says, the marking, the grading and the source;
 - **the inspector** of the selected item: who drew it, its grading, marking and source; for one's own
-  drawn item *Edit*, *Withdraw* (asked once: it is kept in the audit) and a picture with its own
-  marking; a loaded item is a live reference, not editable here;
+  drawn item *Edit*, *Withdraw* (asked once, naming the drawn links that go with it: it is kept in
+  the audit), a picture uploaded with its own marking and *Where the picture comes from*, or *Or a
+  picture on the board* (an image Document there) with the link's marking; a loaded item is a live
+  reference, not editable here;
 - ***Looks like a loaded item***: each suggestion with *Same* and *Not the same*; a suggestion does
   nothing by itself, and *Same* merges nothing.
 
