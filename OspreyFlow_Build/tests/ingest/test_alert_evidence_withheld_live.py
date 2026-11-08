@@ -1317,32 +1317,44 @@ async def _live_alert_nodes(graph: Any, alert_id: str, rule_id: str) -> list[str
         cursor = page.next_cursor
 
 
-async def test_a_close_whose_re_mark_fails_is_finished_on_the_graphs_chain_in_any_order(
-    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+async def test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds(
+    stores: dict[str, Any], analytics: AnalyticsPort
 ) -> None:
-    """Round 3, item 2: a true positive's record holds the confirm (N to C) and the re-mark (C to R);
-    pointing the alert at R fails after the re-mark's graph commit. The next read finds each node's
-    newest revision from the graph's own stored state (`stored_writes`, unfiltered: superseded C is
-    still answered), whatever order the pairs are read in, and the alert names R. Red with the pairs
-    applied as recorded, last first (as an unordered map may): the alert named C, superseded."""
+    """Round 3, item 2 (the node half of item 4): a record holds an alert's node rename (N to C),
+    and C is then superseded to R by a write outside the record (as `retract_node` and
+    `supersede_node`'s other callers still do until L2.8c). The next read follows the graph's own
+    `superseded_by` from N (`stored_writes`, unfiltered) to R, and the alert names R. Red with the
+    recorded successor trusted: the alert named C, superseded, which no read answers."""
+    from datetime import UTC, datetime
+
+    from conduit_common.identity import new_node_id
+    from schemas.domain import NodeWrite
+
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
-        alert, _old, raised = await _link_above_node(stores, graph, analytics, case, "OR")
-        await stores["alerts"].apply_repoints({_old: raised})
-        real = stores["alerts"].set_alert_node
+        await _raised(stores, graph, analytics, case, "NC")
+        (alert,) = await _case_alerts(stores, ANALYST, case)
+        assert alert.alert_node_id is not None
 
-        async def fails_once(*args: Any, **kwargs: Any) -> bool:
-            monkeypatch.setattr(stores["alerts"], "set_alert_node", real)
-            raise ConnectionError("Postgres went away after the re-mark's graph commit")
+        async def superseded(node_id: str) -> str:
+            node = await graph.get_node(node_id, SECRET_LOADER)
+            assert node is not None
+            tx = await graph.begin_transaction()
+            new = await graph.supersede_node(node_id, NodeWrite(
+                id=new_node_id(), type=node.type, properties=node.properties, provenance=node.provenance,
+                handling=node.handling, created_by="t", created_at=datetime.now(UTC),
+                datasets=node.datasets), tx)  # fmt: skip
+            await graph.commit_transaction(tx)
+            return str(new)
 
-        monkeypatch.setattr(stores["alerts"], "set_alert_node", fails_once)
-        with pytest.raises(ConnectionError):
-            await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert.id, SECRET_LOADER,
-                                      disposition="true_positive", reason="confirmed")  # fmt: skip
+        n = alert.alert_node_id
+        c = await superseded(n)
+        record = await _plant_record(stores, {})
+        await stores["alerts"]._add_to_record(record, alert_nodes=[(n, c)])
+        r = await superseded(c)  # outside the record
         await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
         (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
-        node = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
-        assert node is not None and node.handling.classification == "SECRET"
+        assert row.alert_node_id == r != c
 
 
 async def test_two_settles_of_one_record_at_once_leave_one_live_alert_node(
