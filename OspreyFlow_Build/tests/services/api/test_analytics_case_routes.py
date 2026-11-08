@@ -10,8 +10,8 @@ What a mistake here would do, and the case that catches it:
 
 - a timeline read of a case the account has no level on would reveal its event counts
   (`test_a_case_the_account_cannot_see_answers_not_found_and_reads_nothing`);
-- a branch's timeline would stay empty, because its events live under the original case
-  (`test_a_branch_reads_its_parents_events_on_the_links_it_holds`);
+- a case counting another case's events (`test_a_case_made_from_another_reads_its_own_events_alone`;
+  ADR-144 Amendment 1, which ended ADR-084 Amendment 2's inheritance);
 - a request body could name another case's events into a read through `inherited`
   (`test_an_inherited_sent_by_the_caller_is_discarded`).
 
@@ -124,14 +124,14 @@ def test_a_case_the_account_cannot_see_answers_not_found_and_reads_nothing(
 
 
 @pytest.mark.parametrize("route", sorted(BODIES))
-def test_a_branch_reads_its_parents_events_on_the_links_it_holds(client: Any, route: str) -> None:
+def test_a_case_made_from_another_reads_its_own_events_alone(client: Any, route: str) -> None:
+    """ADR-144 Amendment 1: no case counts another's events, even one it was made from before
+    L3.2 and whose events the account may see."""
     response = client.post(route, json=BODIES[route])
     assert response.status_code == 200, response.text
     (sent,) = client.analytics.filters
     assert sent.investigation_scope == "branch-1"
-    assert sent.inherited is not None
-    assert sent.inherited.scopes == ["inv-1"]
-    assert sorted(sent.inherited.edge_ids) == ["e1", "e2"]
+    assert sent.inherited is None
 
 
 def test_a_case_that_is_not_a_branch_reads_its_own_events_only(client: Any) -> None:

@@ -22,9 +22,8 @@ from services.api.history import RELABEL_SQL
 APP = Path(__file__).resolve().parents[4] / "OspreyFlow_Core" / "services" / "api" / "app.py"
 
 #: Decision 8's table, site by site: the function in `app.py` that records a step, and its label.
+#: (No site writes "Branched" since L3.2, ADR-144 Amendment 1; rows that hold it keep it.)
 SITES = {
-    "branch_investigation": "Branched",
-    "branch_investigation_by_filter": "Branched",
     "seed": "Seeded",
     # ADR-128 decision 1: a list of identifiers added to the canvas, as a seed.
     "add_by_identifiers_route": "Seeded",

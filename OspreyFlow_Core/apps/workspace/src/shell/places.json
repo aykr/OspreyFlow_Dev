@@ -7,7 +7,7 @@
       "key": "g",
       "sections": ["Case", "Boards", "Monitoring"],
       "rights": [
-        "ask_model", "branch_case", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
+        "ask_model", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
         "edit_graph", "export", "extract_files", "investigate", "keep_watches", "load_screening_lists",
         "manage_strength_influencers", "propose_link_type", "read_alert_queue", "read_data_feeds",
         "read_held_rows", "read_report_feed", "read_reports", "read_rule_audit",

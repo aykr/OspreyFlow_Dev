@@ -473,7 +473,8 @@ class DatasetStampingGraph:
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        await self._refuse_touching_a_read_only_layer({n.id for n in stamped})
+        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
+            await self._refuse_touching_a_read_only_layer({n.id for n in stamped})
         await self._checked(stamped)
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
@@ -482,9 +483,10 @@ class DatasetStampingGraph:
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        await self._refuse_touching_a_read_only_layer(
-            {end for e in stamped for end in (e.source, e.target)}
-        )
+        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
+            await self._refuse_touching_a_read_only_layer(
+                {end for e in stamped for end in (e.source, e.target)}
+            )
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
@@ -593,9 +595,10 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         inner: Any = self.inner
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        await self._refuse_touching_a_read_only_layer(
-            {end for e in stamped for end in (e.source, e.target)}
-        )
+        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
+            await self._refuse_touching_a_read_only_layer(
+                {end for e in stamped for end in (e.source, e.target)}
+            )
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
