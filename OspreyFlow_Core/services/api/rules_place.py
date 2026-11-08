@@ -14,6 +14,9 @@ the Studio's Runs, ADR-140).
 
 from __future__ import annotations
 
+import asyncio
+import math
+import time
 from collections.abc import Iterable
 
 from schemas.rights import Right, rights_for
@@ -62,3 +65,24 @@ def refusal() -> dict[str, object]:
         "rights": sorted(r.value for r in OPENING_RIGHTS),
         "needs": sorted(r.value for r in NEEDS),
     }
+
+
+#: An alert's address answers every refusal at the end of the quantum it falls in, counted from the
+#: request's start (ADR-146 Amendment 2 point 6; the orchestrator's independent review of L2.9,
+#: blocker 1): an id that never existed, an alert in a case the reader may not open, and one whose
+#: evidence is hidden from them are told apart by neither status, body nor when the answer comes,
+#: while the hidden alert's reads fit in one quantum (measured under the rules lease,
+#: `process/lanes/rules/l2.9/address-timing.txt`). Successes are not held: they say the alert is
+#: there anyway.
+ADDRESS_REFUSAL_QUANTUM = 0.25
+#: The clock and the wait the address reads, here so a test can stand a clock in for them.
+monotonic = time.monotonic
+sleep = asyncio.sleep
+
+
+def refusal_wait(started: float, now: float, quantum: float | None = None) -> float:
+    """How long a refusal waits so it is answered at the end of the quantum it falls in: at one
+    quantum from the start, or the next whole one past it."""
+    quantum = ADDRESS_REFUSAL_QUANTUM if quantum is None else quantum
+    elapsed = max(0.0, now - started)
+    return max(1, math.ceil(elapsed / quantum)) * quantum - elapsed

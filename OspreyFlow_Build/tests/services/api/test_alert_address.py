@@ -113,9 +113,12 @@ class AddressStore(TriageStore):
                 continue
             mine = a.typology is not None and a.investigation_id == investigation_id
             mine = mine or (a.typology is None and a.owner_id == reader.id)
+            # Shared with the owner's team (`_SHARED_SQL`): a team set on it, the reader's unit.
+            mine = mine or (a.typology is None and a.team is not None and a.team == reader.org_unit)
             if mine and (reach is None or a.dataset_id in reach):
                 kind = "typology" if a.typology else "hotlist"
-                return QueueRow(a, kind, "medium", "case" if a.typology else "owner")
+                audience = "case" if a.typology else ("team" if a.team else "owner")
+                return QueueRow(a, kind, "medium", audience)
         raise AlertNotFoundError(alert_id)
 
 
@@ -145,7 +148,8 @@ class Names:
 
 
 def _ask(alerts: list[Alert], hidden: set[str], levels: dict[str, AccessLevel], ids: list[str],
-         who: Principal = ANALYST) -> tuple[list[tuple[int, str]], Cases, Audit]:  # fmt: skip
+         who: Principal = ANALYST, *, cases: Cases | None = None,
+         datasets: Any = None) -> tuple[list[tuple[int, str]], Cases, Audit]:  # fmt: skip
     from services.api.app import (
         app,
         get_alerts_store,
@@ -160,14 +164,14 @@ def _ask(alerts: list[Alert], hidden: set[str], levels: dict[str, AccessLevel], 
 
     recorder = Recorder()
     graph, analytics = ScopedGraph(recorder, hidden), ScopedAnalytics(recorder, hidden)
-    cases = Cases(CASE, levels)
+    cases = cases if cases is not None else Cases(CASE, levels)
     audit = Audit()
     previous = app.router.lifespan_context
     app.router.lifespan_context = _no_lifespan
     app.dependency_overrides.update({
         get_principal: lambda: who, get_investigations: lambda: cases, get_graph: lambda: graph,
         get_analytics: lambda: analytics, get_alerts_store: lambda: AddressStore(alerts),
-        get_audit: lambda: audit, get_principal_names: Names, get_datasets: Datasets,
+        get_audit: lambda: audit, get_principal_names: Names, get_datasets: datasets or Datasets,
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
@@ -236,3 +240,142 @@ def test_the_jump_s_case_of_its_own_is_gone() -> None:
     paths = {getattr(r, "path", "") for r in app.routes}
     assert not any(p.endswith("/jump") for p in paths), sorted(p for p in paths if "jump" in p)
     assert "/v1/alerts/{alert_id}" in paths
+
+
+# --- the refusal's timing (the orchestrator's independent review of L2.9, blocker 1) ------------
+
+
+class Clock:
+    """A clock the fakes advance as they read, standing in for each read's cost, and the sleep the
+    route waits out a refusal with, which advances it too (`rules_place.monotonic`/`sleep`)."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+        self.slept: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def _timed(alerts: list[Alert], hidden: set[str], levels: dict[str, AccessLevel], ids: list[str],
+           monkeypatch: pytest.MonkeyPatch) -> list[float]:  # fmt: skip
+    """Each id asked for alone, and the clock's reading when its answer was given, from its start."""
+    from services.api import rules_place
+
+    clock = Clock()
+    monkeypatch.setattr(rules_place, "monotonic", clock.monotonic)
+    monkeypatch.setattr(rules_place, "sleep", clock.sleep)
+    # Every read the route makes costs time: the case check 2 ms, each graph and analytics read 5 ms.
+    for cls, names, cost in ((Cases, ["get_authorized"], 0.002),
+                             (ScopedGraph, ["get_nodes", "get_edges"], 0.005),
+                             (ScopedAnalytics, ["list_events"], 0.005)):  # fmt: skip
+        for name in names:
+            original = getattr(cls, name)
+
+            async def costly(self: Any, *a: Any, _o: Any = original, _c: float = cost, **k: Any) -> Any:
+                clock.now += _c
+                return await _o(self, *a, **k)
+
+            monkeypatch.setattr(cls, name, costly)
+    answered = []
+    for i in ids:
+        start = clock.now
+        (answer,), _, _ = _ask(alerts, hidden, levels, [i])
+        assert answer[0] == 404, answer
+        answered.append(round(clock.now - start, 6))
+    return answered
+
+
+def test_every_refusal_is_answered_on_the_same_quantum(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rule 3: a member must not tell an alert over evidence hidden from them from no alert at all,
+    by when the answer comes. An id that never existed and one in a case the reader may not open
+    stop after the level check; an alert over a hidden link is read through the queue's scope and its
+    evidence first. Each refusal is answered at the end of the quantum it falls in
+    (`rules_place.ADDRESS_REFUSAL_QUANTUM`), so all three are answered at the same instant. Red with
+    the wait removed: the hidden alert's answer comes later than the missing one's."""
+    from services.api.rules_place import ADDRESS_REFUSAL_QUANTUM
+
+    alerts = [_in(OVER_LINK), _in(V1, id="v-other", investigation_id=OTHER_CASE)]
+    answered = _timed(alerts, {"e-secret"}, MEMBER, ["no-such-alert", "v-other", OVER_LINK.id],
+                      monkeypatch)  # fmt: skip
+    assert answered == [ADDRESS_REFUSAL_QUANTUM] * 3, answered
+
+
+def test_a_refusal_past_one_quantum_waits_for_the_next() -> None:
+    from services.api.rules_place import ADDRESS_REFUSAL_QUANTUM as Q
+    from services.api.rules_place import refusal_wait
+
+    assert refusal_wait(10.0, 10.0) == pytest.approx(Q)
+    assert refusal_wait(10.0, 10.0 + Q / 4) == pytest.approx(Q * 3 / 4)
+    assert refusal_wait(10.0, 10.0 + Q * 1.5) == pytest.approx(Q / 2)
+
+
+# --- the review's minors: a team-shared alert, and a case's read-only layer ---------------------
+
+
+def test_another_member_s_alert_shared_with_the_reader_s_team_is_answered() -> None:
+    """The queue's scope admits a hotlist alert shared with its owner's team to that team
+    (`_SHARED_SQL`): its address answers a member of the team as the queue would. Red with the
+    fake's team admission removed: refused as a missing alert."""
+    shared = _in(V1, typology=None, rule_id="hotlist:h1", owner_id="someone-else", team=ANALYST.org_unit)
+    (answer,), _, audit = _ask([shared], set(), MEMBER, [shared.id])
+    assert answer[0] == 200, answer
+    assert '"audience":"team"' in answer[1] and audit.actions == ["open_alert_at_address"]
+
+
+ORIGINAL = "case-original"
+LAYER = "layer-of-the-original"
+
+
+class LayerCases(Cases):
+    """Levels on this case and on the case it was made from."""
+
+    def __init__(self, levels: dict[str, dict[str, AccessLevel]]) -> None:
+        super().__init__(CASE, levels.get(CASE, {}))
+        self.by_case = levels
+
+    async def get_authorized(self, investigation_id: str, principal: Principal, *, need: AccessLevel) -> Any:
+        self.checked.append(investigation_id)
+        self.case_id, self.levels = investigation_id, self.by_case.get(investigation_id, {})
+        return await _Case.get_authorized(self, investigation_id, principal, need=need)
+
+
+class LayerDatasets(Datasets):
+    """A case made from another and not converted: it reads its dataset and the original's layer,
+    read-only, which only a reader holding a level on the original reads (`scope_to_case`)."""
+
+    async def ids_of_case(self, investigation_id: str) -> list[str]:
+        return [DATASET, LAYER] if investigation_id == CASE else []
+
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        return LAYER if investigation_id == CASE else None
+
+    async def case_of_layer(self, layer_id: str) -> str | None:
+        return ORIGINAL if layer_id == LAYER else None
+
+
+@pytest.mark.parametrize("holds_the_original", [True, False])
+def test_an_alert_in_the_case_s_read_only_layer_is_answered_only_to_a_reader_of_the_original(
+    holds_the_original: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The address reads as the case reads: an alert over the original case's layer is answered to a
+    reader holding a level there, and refused exactly as a missing one to a member of this case
+    alone (rule 3). Red with the route scoping without `holds_a_level`: the second answered too, or
+    the first refused."""
+    import tests.services.api.test_alert_address as here
+
+    monkeypatch.setattr(here, "DATASET", LAYER)  # the alert's nodes are the layer's
+    alert = _in(V1)
+    levels = {CASE: {ANALYST.id: AccessLevel.VIEWER}}
+    if holds_the_original:
+        levels[ORIGINAL] = {ANALYST.id: AccessLevel.VIEWER}
+    (answer, missing), _, _ = _ask([alert], set(), {}, [alert.id, "no-such-alert"],
+                                   cases=LayerCases(levels), datasets=LayerDatasets)  # fmt: skip
+    if holds_the_original:
+        assert answer[0] == 200, answer
+    else:
+        assert answer == missing and answer[0] == 404, answer

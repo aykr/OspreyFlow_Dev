@@ -29983,8 +29983,26 @@ on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where t
    its case not theirs, its dataset not one its case reads, not in their queue there (another member's
    own hotlist alert), or any cited node, link or transaction hidden — is answered exactly as one that
    does not exist (404 `alert_not_found`), and the case's level check is made for a missing id too, on
-   no case. The reads after that check differ between an alert refused in a case the reader may open
-   and an id that never existed; what the reader is told does not. An alert raised in no case has no
+   no case. **Answered at the same time too** (the orchestrator's independent review, blocker 1): the
+   reads after the level check differ (an id that never existed, or one in a case the reader may not
+   open, stops there; an alert in a case they may open is read through the queue's scope and its
+   evidence first, so a member could otherwise tell an alert over evidence hidden from them from no
+   alert at all by when the 404 came). No set of reads can be made the same for an id that has no
+   evidence to read, so every refusal of the address is answered at the end of the quantum it falls in,
+   counted from the request's start (`rules_place.ADDRESS_REFUSAL_QUANTUM`, 250 ms; `refusal_wait`);
+   a success is not held, since it says the alert is there anyway. Tests:
+   `test_alert_address.py`'s `test_every_refusal_is_answered_on_the_same_quantum` (a clock the fakes
+   advance as they read: red with the wait removed, the hidden alert answered at 17 ms against the
+   missing one's 2 ms) and `test_alert_address_live.py` through the real app and stores, its timings
+   under the rules lease in `process/lanes/rules/l2.9/address-timing.txt`. **What it does not cover,
+   the owner's question (L2.9 Q3):** an alert whose evidence takes longer than one quantum to read for
+   the reader (evidence an alert may cite is not capped) is refused on a later quantum, so it alone is
+   still told apart from a missing one. Recommended: (a) accept it, recorded, since the reads that
+   take that long are of an alert large enough to be rare; (b) cap the evidence an alert cites, and
+   size the quantum to read the cap; (c) a larger quantum. Until the owner rules, the guarantee is the
+   one measured, no wider. The same class, already on main and not this step's: the queue's own list,
+   `GET …/alert-queue`, reads every alert's evidence in the case before leaving out the hidden ones,
+   so its time grows with them. An alert raised in no case has no
    address yet (L2.10's dataset alerts, through the home case). The workspace's router
    (`shell/router.ts`, the History API, no dependency) reads `/alerts/<id>` and `/rules`, keeps them
    over the sign-in round trip, and opens another case's alert by the reload every case switch is

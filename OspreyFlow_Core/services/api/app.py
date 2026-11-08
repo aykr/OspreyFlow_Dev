@@ -387,6 +387,7 @@ from . import resolution as resolution_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
+from . import rules_place as rules_place_clock
 from . import search as search_module
 from .add_by_identifiers import (
     MAX_IDENTIFIERS,
@@ -734,7 +735,7 @@ from .rule_sentences import (
     sentence_of,
 )
 from .rules_place import PLACE as RULES_PLACE
-from .rules_place import opens_rules_place, reads_queue_rows
+from .rules_place import opens_rules_place, reads_queue_rows, refusal_wait
 from .rules_place import refusal as rules_place_refusal
 from .rules_place import rows_refusal as queue_rows_refusal
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
@@ -6868,10 +6869,37 @@ async def open_alert_at_address(
     an email and the queue all open: the case it is worked in, and its explanation there, read as
     `explain_alert` reads it. Refused exactly as an alert that does not exist (404
     `alert_not_found`, rule 3; ADR-146's test) when the reader may not open that case, when the
-    alert is not in their queue there, or when any of its evidence is hidden from them. The case's
-    level check is made for a missing alert too, on no case, so the reads say nothing either.
-    Replaces the jump's case of its own (ADR-144 Amendment 2 decision 2): the alert is worked in
-    the case it arose in, and its evidence opened there as a private view."""
+    alert is not in their queue there, or when any of its evidence is hidden from them: the same
+    status and body, and answered at the same time. The reads differ (an id that never existed, or
+    one in a case the reader may not open, stops after the level check; an alert in a case they may
+    open is read through the queue's scope and its evidence first), so every refusal waits to the
+    end of the quantum it falls in from the request's start (`rules_place.refusal_wait`; ADR-146
+    Amendment 2 point 6). Replaces the jump's case of its own (ADR-144 Amendment 2 decision 2): the
+    alert is worked in the case it arose in, and its evidence opened there as a private view."""
+    started = rules_place_clock.monotonic()
+    try:
+        return await _alert_at_address(
+            alert_id, principal, investigations, graph, analytics, alerts_store, principal_names,
+            audit, datasets,
+        )  # fmt: skip
+    except AlertNotFoundError:
+        await rules_place_clock.sleep(refusal_wait(started, rules_place_clock.monotonic()))
+        raise
+
+
+async def _alert_at_address(
+    alert_id: str,
+    principal: Principal,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    alerts_store: AlertStore,
+    principal_names: Any,
+    audit: Any,
+    datasets: DatasetStore,
+) -> AlertAtAddress:
+    """`open_alert_at_address`'s reads: the case's level check (made for a missing id too, on no
+    case), the reader scoped to the alert's case, then the queue's own read of it."""
     case_id = await alerts_store.case_of(alert_id)
     try:
         await investigations.get_authorized(case_id or "", principal, need=AccessLevel.VIEWER)
