@@ -237,3 +237,19 @@ async def test_a_different_encryption_key_drops_credentials_too() -> None:
         )
     gateway.restart(salt_key="salt-two")
     assert gateway.credential("osprey-gemini") is None
+
+
+async def test_an_entry_deleted_while_cooled_down_still_answers_the_cooldown() -> None:
+    """Measured with the Conduit's own client against the pinned image: deleting a cooled entry
+    leaves its name answering 429 until the cooldown passes, then "Invalid model name"."""
+    clock = Clock()
+    gateway = _gateway(clock)
+    async with _client(gateway) as client:
+        await client.post("/model/new", json=_entry("osprey-gemini-a", PLANTED))
+        assert (await _chat(client, "gemini/gemini-2.5-flash")).status_code == 401
+        await client.post("/model/delete", json={"id": "osprey-gemini-a"})
+        cooled = await _chat(client, "gemini/gemini-2.5-flash")
+        clock.now = 61.0
+        gone = await _chat(client, "gemini/gemini-2.5-flash")
+    assert cooled.status_code == 429 and "cooldown_list" in cooled.text
+    assert gone.status_code == 400 and "Invalid model name" in gone.text

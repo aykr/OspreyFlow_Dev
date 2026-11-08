@@ -20,3 +20,14 @@ Each plant at the real call site, run, then restored; 8 November 2026.
 | `apps/workspace/src/admin/sections/Models.test.tsx` "shows the Conduit's refusal in its words and still never the key" | the key field not cleared after sending | 1 failed |
 | `keyboard/admin-models.spec.ts::every registered Models action has its own proving test case above` | one case's `registerCovered` removed | 1 failed |
 | `a11y/every-harness.spec.ts` on `models-harness.html` | none needed: the first scan found three key buttons whose names did not contain their visible text (2.5.3), fixed | 3 failed (dark, light, GOV.UK), then 16 passed |
+
+## Live check, 8 November 2026 (platform lease on test stack a, since released)
+
+The Conduit's own client (`GatewayAdmin`, `check_connection`, run from `ospreyflow/api:ci` with this branch's
+`packages` and `services` mounted) against the pinned LiteLLM image with its own database and a stand-in
+provider, on an internal-only Docker network (no provider reachable, synthetic keys):
+credential + entry made (`osprey-openai-known-model`); wrong key → `key_refused`, no key fragment in the words;
+rotated → `cooling_down` at once, `ok` after the cooldown; entry patched → `ok`; key removed → `key_refused`;
+entry removed → `cooling_down` (**the stand-in said `not_routed`: corrected, with
+`test_an_entry_deleted_while_cooled_down_still_answers_the_cooldown`**); unknown model → `not_routed`; PATCH of
+an unknown id → refused in fixed words (HTTP 404); wrong gateway token → `gateway_token`, no token fragment.

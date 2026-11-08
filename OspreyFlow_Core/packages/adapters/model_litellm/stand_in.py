@@ -26,7 +26,10 @@ stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Me
   and an entry naming a missing credential answers as a missing key; **`GET /credentials` returns
   the key masked to two characters at each end** (`sk****4Z`), which is why the stand-in counts
   every such read (`credential_reads`);
-- restarted with a different encryption key, every stored entry and credential is dropped.
+- restarted with a different encryption key, every stored entry and credential is dropped;
+- an entry deleted while it is cooled down still answers 429 for its `model_name` until the
+  cooldown passes, not "Invalid model name" (measured on 8 November 2026 with the Conduit's own
+  client, `GatewayAdmin`, under the platform lease on stack a).
 
 Not measured, so not modelled as refusals: `POST /credentials` for a name that exists, and `PATCH`
 for one that does not (the Conduit's code does neither: it creates once and patches what it made).
@@ -101,6 +104,8 @@ class StandInGateway:
     _db: dict[str, _Stored] = field(default_factory=dict)
     _creds: dict[str, tuple[str, str]] = field(default_factory=dict)
     _cooled_until: dict[str, float] = field(default_factory=dict)
+    #: A deleted entry's name, still cooled down: (its id, until when).
+    _cooled_names: dict[str, tuple[str, float]] = field(default_factory=dict)
 
     # --- what a test may inspect --------------------------------------------------------------
 
@@ -151,6 +156,7 @@ class StandInGateway:
                 self.log.append("Error decrypting value for key: api_key")
                 del self._creds[name]
         self._cooled_until.clear()
+        self._cooled_names.clear()
 
     # --- the API ------------------------------------------------------------------------------
 
@@ -183,6 +189,9 @@ class StandInGateway:
                 return _error(
                     400, f"{{'error': 'Model with id={model_id} not found in db'}}", "auth_error"
                 )
+            until = self._cooled_until.get(model_id, -1.0)
+            if until > self.clock():
+                self._cooled_names[self._db[model_id].model_name] = (model_id, until)
             del self._db[model_id]
             return httpx.Response(200, json={"message": f"Model: {model_id} deleted successfully"})
         if method == "GET" and path in ("/v2/model/info", "/model/info"):
@@ -299,6 +308,14 @@ class StandInGateway:
         if model_name in self.config_models:
             return _ok(model_name)
         ids = [i for i in self.stored_ids() if self._db[i].model_name == model_name]
+        gone = self._cooled_names.get(model_name)
+        if not ids and gone is not None and gone[1] > self.clock():
+            return _error(
+                429,
+                "No deployments available for selected model, Try again in 5 seconds. Passed "
+                f"model={model_name}. pre-call-checks=False, cooldown_list=['{gone[0]}']",
+                "internal_server_error",
+            )
         if not ids:
             message = (
                 f"/chat/completions: Invalid model name passed in model={model_name}. Call "
