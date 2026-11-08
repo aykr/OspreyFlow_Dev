@@ -116,6 +116,8 @@ export function ExpertSettings(props: ExpertSettingsProps) {
   const kind = node.kind as ExpertKind;
   const [rec, setRec] = useState<Rec>(node.config ?? {});
   const [label, setLabel] = useState(node.label);
+  // The threshold as typed ("0." on the way to "0.6"), read as a number when applied.
+  const [threshold, setThreshold] = useState(text(node.config?.threshold));
   const [checked, setChecked] = useState<string[] | null>(null);
   const [checking, setChecking] = useState(false);
   const set = (k: string, v: unknown) => setRec((r) => ({ ...r, [k]: v }));
@@ -275,8 +277,8 @@ export function ExpertSettings(props: ExpertSettingsProps) {
             <Input
               aria-label="Threshold (between 0 and 1; part of the version)"
               inputMode="decimal"
-              value={text(rec.threshold)}
-              onChange={(e) => set("threshold", e.target.value.trim() === "" ? undefined : Number(e.target.value))}
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
             />
           </Field>
           <Rows
@@ -316,7 +318,16 @@ export function ExpertSettings(props: ExpertSettingsProps) {
         </>
       )}
       <div>
-        <Button variant="primary" disabled={busy} onClick={() => onApply(prune(rec) as Rec, label.trim() || STAGING_KIND_NAMES[kind])}>
+        <Button
+          variant="primary"
+          disabled={busy}
+          onClick={() => {
+            // A threshold that is not a number is sent as written, for the gate to refuse in words.
+            const typed = threshold.trim();
+            const withThreshold = kind === "fuzzy_match" ? { ...rec, threshold: typed === "" ? undefined : Number.isNaN(Number(typed)) ? typed : Number(typed) } : rec;
+            onApply(prune(withThreshold) as Rec, label.trim() || STAGING_KIND_NAMES[kind]);
+          }}
+        >
           Apply step settings
         </Button>
       </div>
