@@ -46,6 +46,11 @@ LIVE_PLANTS = {
         ("        marking = state.handling\n",
          "        marking = state.handling.model_copy(update={\"classification\": \"OFFICIAL\"})\n"),
     ], [CONF, "-k", "link_state or restored_link"]),
+    "L4": ("the restore altering one stored property (occurrences + 1)", ADAPTER, [
+        ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
+         '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'
+         '        props["occurrences"] = int(props.get("occurrences") or 1) + 1\n'),
+    ], [CONF, "-k", "round_trips_exactly"]),
     "L3": ("nothing captured, live: the load keeps no prior state", PUB, [
         ("                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)\n",
          "                report.own_key_merges = []\n"),
