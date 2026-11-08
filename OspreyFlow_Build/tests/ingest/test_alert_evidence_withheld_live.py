@@ -53,6 +53,7 @@ from tests.ingest.test_typology_rules import (
     _structuring,
     arcadedb_adapter,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 #: The rules suite's own live stores and DuckDB analytics, as fixtures of this file.
 stores = _rules_suite.stores
@@ -1209,3 +1210,37 @@ async def test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_r
         assert alert.alert_node_id in await working.node_ids(case), "the read path cannot purge"
         await purge_remarked_copies(stores["alerts"], WorkingSetService(graph, working, SCHEME))
         assert alert.alert_node_id not in await working.node_ids(case)
+
+
+async def test_a_record_another_test_left_never_breaks_an_unrelated_read(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """The journal lives in a shared store: a record another test or run left (its links in no
+    graph this read reaches) waits for the stale threshold and never breaks a read. An unrelated
+    queue read answers as ever, with the real graph and with one whose stored-state lookup refuses
+    outright (the settle logs it and leaves the record). Red with the settle letting a record's
+    failure through: the read failed."""
+    left = await _plant_record(stores, {f"gone-{new_id()}": f"gone-{new_id()}-new"})
+    try:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "LO")
+            (alert,) = await _case_alerts(stores, ANALYST, case)
+            assert await _listed(stores, graph, analytics, case, TEAMMATE) == [alert.id]
+
+            class Refusing:
+                """The graph, but its stored-state lookup refuses (an outage of that one read)."""
+
+                def __getattr__(self, name: str) -> Any:
+                    return getattr(graph, name)
+
+                async def stored_link_states(self, edge_ids: Any) -> Any:
+                    raise ConnectionError("the stored-state lookup is unavailable")
+
+            assert await _listed(stores, Refusing(), analytics, case, TEAMMATE) == [alert.id]
+        async with stores["alerts"]._pool.acquire() as conn:
+            kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_writes WHERE id = $1", left)
+        assert kept == 1, "the leftover waits for the stale threshold, neither applied nor dropped"
+    finally:
+        async with stores["alerts"]._pool.acquire() as conn:
+            await conn.execute("DELETE FROM alert_repoint_writes WHERE id = $1", left)

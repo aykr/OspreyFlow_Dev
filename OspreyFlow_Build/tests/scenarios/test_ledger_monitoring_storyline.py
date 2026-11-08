@@ -72,6 +72,7 @@ from tests.scenarios.ledger_monitoring_support import (
     World,
     load_week,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table

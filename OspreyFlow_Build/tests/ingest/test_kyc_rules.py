@@ -63,6 +63,7 @@ from schemas.domain import (
     SourceRef,
     TypologyRuleInput,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 SCHEME = load_uk_le_scheme()
 ONTOLOGY = load_deployment_ontology()

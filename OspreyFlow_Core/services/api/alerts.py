@@ -701,10 +701,21 @@ class AlertStore:
             )
         cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
         for row in rows:
-            done = await self._settle_record(graph, row["id"])
+            try:
+                done = await self._settle_record(graph, row["id"])
+            except Exception:  # noqa: BLE001 - one record never breaks a read: it waits
+                # A record this read cannot settle (its links in no graph this deployment reads,
+                # a store refusing for the moment) is left for a later settle or the stale
+                # threshold; the read answers as the queue's check finds the alerts now.
+                _log.warning("repoint record %s not settled", row["id"], exc_info=True)
+                continue
             if done is None and row["recorded_at"] < cutoff:
                 links = json.loads(row["links"]) if isinstance(row["links"], str) else row["links"]
-                states = await graph.stored_link_states(sorted(links)) if links else {}
+                try:
+                    states = await graph.stored_link_states(sorted(links)) if links else {}
+                except Exception:  # noqa: BLE001 - as above
+                    _log.warning("repoint record %s not judged stale", row["id"], exc_info=True)
+                    continue
                 if not any(states.get(o) and states[o].superseded for o in links):
                     await self._close_record(row["id"])  # the write never happened
 

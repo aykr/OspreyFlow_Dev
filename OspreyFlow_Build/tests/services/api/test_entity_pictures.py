@@ -45,6 +45,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 from .working_set.fakes import FakeWorkingSetStore
 
