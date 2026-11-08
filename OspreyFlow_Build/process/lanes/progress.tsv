@@ -26,8 +26,8 @@ glass	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
 glass	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
 glass	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
 glass	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
-case	L3.1	L	review	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
-case	L3.1b	L	todo	Phase 5's model half; Make live's owner step; home cases; drawn kind
+case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
+case	L3.1b	L	building	Phase 5's model half; Make live's owner step; home cases; drawn kind
 case	L3.2	L	todo	Case views replace branches; no branches anywhere
 case	L3.3	L	todo	Drawing boards; drawn datasets; drawn items watched; marking ceiling
 case	L3.4	L	todo	Promotion; a removed case's layer merged or deleted
