@@ -29593,3 +29593,132 @@ tree clean.
 **Cost.** A view saved from the canvas does not yet keep a threshold of its own (the case's resolution
 slider is the case's), and the lens shows what the view holds without its own Inspector edits, which act
 on the case as before.
+
+### ADR-135, Amendment 3 (8 November 2026) — Model usage and limits: calls and tokens per engine and job from the gateway's own records, limits per engine applied by the gateway on the engine's own key, a budget in tokens, no person in usage
+
+Status: accepted; the orchestrator's settlements of 8 November 2026 (the owner away; each the
+conservative option, on the owner's review list), written by the platform lane. Built in P2. Amends
+ADR-135 Amendment 2 (decisions 3 and 6: the gateway's entries and the Models routes) and settles
+what `00_ARCHITECTURE.md` §2.4 and `04_VAULT_BACKEND.md` §4 promise ("routing, fallback, per-team
+budgets and rate limits") for usage and limits. ADR-135, its Amendments 1 and 2, ADR-136 and
+ADR-112 Amendment 7 are otherwise unchanged.
+
+**The settlements, 8 November 2026:**
+1. **Limits are per engine** (Q1 A). Per-team budgets and rate limits wait for teams (ADR-112
+   Amendment 5, admin's L2.5): there is no team to set one on until then.
+2. **A budget is in tokens per day or per month** (Q2 A), every token priced at one unit, so no
+   price list is kept or shown.
+3. **No usage per person** (Q3 A), and **the Conduit sends the gateway no person's id**.
+
+**Measured first** (rule 15), on 8 November 2026 under four platform leases on test stack a, the
+gateway image the product pins (LiteLLM 1.101.0), its own database on the stack's Postgres, a
+network of the lane's own and a stand-in provider (no hosted provider was called):
+- The gateway records every call under each of its tags (the body's `metadata.tags` or `tags`, and
+  two `User-Agent: …` tags it adds itself) per day, in `LiteLLM_DailyTagSpend`: calls, successes,
+  failures, prompt and completion tokens. A call refused for an unknown model or an exhausted
+  budget is a failure. `GET /tag/daily/activity?start_date&end_date` answers them per day under
+  `breakdown.entities`; it refuses a request without both dates (400), answers an empty or reversed
+  period with nothing, and answers only the master key (a virtual key: 401). **No prompt or answer
+  text is kept**: a recognisable planted prompt and answer were in no row of the spend log or the
+  daily tables. A body's `user` is kept, as `end_user`.
+- **An `rpm` or `tpm` on a model entry is not enforced** (four calls at two a minute all answered:
+  the default routing reads it as a weight).
+- **A virtual key's limits are enforced**: `rpm_limit`, `tpm_limit`, per-model `model_rpm_limit`
+  and `model_tpm_limit`, and `max_budget` per `budget_duration`. A request once the minute's
+  requests or tokens have reached the limit is refused 429 `throttling_error`, **naming the key's
+  SHA-256** and when the minute resets; once the spend has reached the budget, 429
+  `budget_exceeded`, **naming the key's alias and its last four characters**. The call that crosses
+  a limit is answered; the next is refused. Spend is each token times the entry's
+  `input_cost_per_token` and `output_cost_per_token` (none: no spend, so a budget is never
+  reached). A `1d` budget resets at the next midnight UTC after its first spend, `30d` on the
+  first of the next month.
+- `POST /key/generate` takes a chosen key value; its `key_alias` must be unique (400).
+  `GET /key/info?key=` answers 404 for a key it does not hold, as `POST /key/update` and
+  `POST /key/delete` do; **`/key/update`'s answer carries the key**. A call with a deleted key is 401,
+  echoing its last four characters and its hash.
+- **Held in the gateway's own memory until it restarts**: a model's price once a priced entry has
+  registered it (an unpriced entry of the same model name then still spends), and a key's minute of
+  requests and its spend, kept by the key's hash, so a key deleted and made again with the same
+  value carries both over.
+
+**Decision.**
+
+1. **Usage** (*Admin › Models*, behind `manage_models`): calls (and of them, failed), prompt tokens,
+   answer tokens and tokens per engine and per job, for the last 7 or 30 days, this month or days
+   chosen (whole UTC days, both ends included, at most 366, a longer or backwards period refused
+   in words, never cut short), with the sums by engine, by job and in all. **Read from the
+   gateway's own records** (`GET /tag/daily/activity` with the master key,
+   `adapters/model_litellm/usage.read_usage`), keeping only tags of the Conduit's own shape and
+   only their figures. An engine no longer on the deployment keeps its rows, named so.
+2. **Every call names its engine and job, and nothing else about it.** The routing makes each call
+   inside `usage.calling(engine, job)`; the client tags a JSON call `osprey:<engine>/<job>`
+   (`metadata.tags`) and sends no `user` and nothing else about who asked, from which case or
+   dataset. A transcription is not tagged (below, "Left").
+3. **Each hosted engine's calls go with its own gateway key** (`usage.engine_key`): an HMAC-SHA-256
+   of the engine's name under the gateway master key the Conduit already holds, never stored,
+   written, logged or returned, the same in every replica, and changed with the master key. The
+   Conduit makes it in the gateway with the engine's entries (`/key/info`, then `/key/generate` or
+   `/key/update`; never deleted to change it, which would lose the budget's spend so far) and
+   deletes it with the engine. Local calls keep the master key and have no limits.
+4. **Limits** (`PUT /v1/admin/models/engines/{name}/limits`, `EngineLimits`): requests a minute,
+   tokens a minute, and a token budget per day or month (both or neither, refused in words half
+   set), each optional. They are the engine key's `rpm_limit`, `tpm_limit`, `max_budget` and
+   `budget_duration` (`1d`, `30d`), applied by the gateway from the next call; **every hosted
+   entry is priced one unit a token** (`input_cost_per_token` and `output_cost_per_token`), so the
+   gateway's spend on the key is the tokens used. An entry made before this amendment, unpriced,
+   is made again at the next start. The limits are kept in the models file beside the engines,
+   shown on each engine's row, and audited (`limits_changed`, each changed value's old and new).
+5. **What a person sees when a limit stops a request**: 429 `model_limit_reached`, in the Conduit's
+   own words, naming the engine's label and which limit (its requests or tokens a minute, with the
+   time to try again, or its token budget for today or this month, with when it returns), and to
+   ask someone who manages models (`ModelLimitReached`, a kind of `ExtractionFailedError`, so every
+   caller that already handles a failed model call still does). **Never the gateway's words**,
+   which name the key's hash or part of the key; built from the refusal's type, kind and reset
+   time alone (`usage.limit_refusal`).
+6. **Routes**, each behind `manage_models` (rule 4): `GET /v1/admin/models/usage?start&end` (the last
+   30 days by default; 502 in fixed words where the gateway cannot give it) and `PUT
+   /v1/admin/models/engines/{name}/limits`. The count of Models routes is eleven.
+
+**Left, and why:**
+- **Per-team limits**: no teams yet (settlement 1). When ADR-112 Amendment 5's teams are built, a
+  team's limits are a further key or the gateway's own teams, by a further amendment.
+- **Fallbacks** (`04_VAULT_BACKEND.md` §4's `router_settings.fallbacks`): not in P2's row.
+- **Transcription is not tagged**: whether the gateway reads a tag from a multipart form was not
+  measured, so none is sent; a transcription's engine key still carries that engine's limits, but
+  its usage is not counted per job.
+- **An engine removed and added again under the same name** within the gateway's lifetime carries
+  its key's minute and spend over (measured above): its limits are no looser for it.
+- Whether a request refused by a rate limit is recorded as a failure was not measured; no figure
+  relies on it.
+
+**Tests that would fail if it were broken** (rule 12; each shown red first,
+`process/lanes/platform/P2_RED_RECORD.md`):
+- **The stand-in records and refuses as measured** (`tests/adapters/model_litellm/test_stand_in_gateway_usage.py`):
+  a model entry's rate not enforced; a key's rate and budget refusing the call after the crossing
+  one, naming its hash or last four; budgets resetting at midnight and on the first; only the master
+  key reading the activity; red with the budget check removed, the rate check off by one, and any
+  key reading the activity.
+- **The figures equal a planted gateway record**, and calls made through the real routing
+  (`RoutedModel` → adapter → client → stand-in) are counted by engine and job
+  (`tests/services/api/test_model_usage_and_limits.py`); red with `succeeded` read from the calls
+  and with every tag read.
+- **Access (rule 4)**: every `/v1/admin/models` route refuses a principal without `manage_models`
+  (`test_model_admin_routes.py`, which walks them all); red with the right removed from each new
+  route.
+- **A limit set stops the next request through the real routing path**, in fixed words with no key,
+  fragment or hash; red with the limits never sent, with every call on the master key, and with the
+  gateway's words put into the person's.
+- **Nothing identifying leaks**: a planted prompt, answer, key and source-system id are in no usage,
+  Models or history response; no request to the gateway carries a person's id; red with a `user`
+  planted in the client's body, and with the prompt tagged and every tag read.
+- **Live** (`test_model_gateway_live.py`, under the platform lease on stack a): the entry read back
+  as priced, a rate and then a budget each stopping the next call, and the day's records read back
+  as counts with no text; red with the entries unpriced on a fresh gateway (the budget never
+  reached).
+- **Keyboard (rule 13)**: setting an engine's limits and choosing the usage's period, each by
+  keyboard and red when its action does nothing (`apps/workspace/keyboard/admin-models.spec.ts`);
+  **axe** in the dark, light and GOV.UK themes, the limits form open included.
+
+**Cost.** One gateway key per hosted engine, and a key lookup and update for each at every start
+and change. The gateway's spend figures are tokens, not money, for every hosted entry: its own
+dashboard's "spend" is the tokens used.
