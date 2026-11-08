@@ -101,6 +101,30 @@ New ones are added at the bottom as they happen.
 27. **Fresh sessions, not repurposed ones,** as you agreed: each brief tells the new session which
     report to read first.
 
+28. **Rules' L2.8c questions, settled on the recommendations** (rules' and mine): a cloned link's original
+    is marked `superseded_by` its clone, and `supersede_node` reports each pair to its caller before commit,
+    so every supersede reaches the repoint journal (rules found the originals were only marked `reverted`,
+    so the settle could not follow them); "publishing's removals" is Amendment 10 point 6's second gap
+    (a removal pushed to open canvases at once, a small working-set change ratified at merge); and D8 is
+    measured under a named lease and stack and recorded in ADR-109 Amendment 11 (reserved, `10cd960`).
+
+29. **Case L3.2, Q1 and Q3, on case's recommendations:** until L2.9's private view, the alert jump keeps
+    making a case of its own (its own layer, no origin link, so no branch word remains); and jump cases
+    made since L3.1 stay ordinary cases, because moving them would show their maker's marks to people
+    they never shared them with. (Your rulings the same afternoon: *Ask the model about these* keeps its
+    conversation with a private view only its creator sees; a shared branch's view is private to its
+    maker, its other members named in the migration's report.)
+30. **Studio L1.3, all three on studio's recommendations:** a schemas-only commit merged first for the
+    staging steps and source references (published recipes stay byte-for-byte); a staged row's source
+    references go in each element's existing provenance, so no adapter change; ADR-140 Amendment 11
+    reserved (`f359ee3`) for what phase 7a built.
+31. **Your P1 and admin rulings, for the record:** keys in the gateway's own database through its admin
+    API (not my recommendation; every deployment gains that database, and ADR-135 Amendment 2 carries
+    its key, backup and offline-install consequences); engines and defaults in a models file beside
+    osprey.yaml; no second person, every change audited; a new `manage_models` right (ADR-112
+    Amendment 7 reserved, `4c2edce`); a layer's size in bytes stored; the promotion policy field built
+    now in L2.4 part 2 and enforced in L3.4.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
