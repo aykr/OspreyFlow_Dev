@@ -260,7 +260,8 @@ async def test_a_scheduled_slot_runs_once_and_as_someone_still_allowed(root: Pat
     async def may_run(owner: str) -> str | None:
         return allowed[owner]
 
-    async def run(lid: str) -> object:
+    async def run(lid: str, owner: str) -> object:
+        assert owner == "admin-1"
         return await import_list(lid, store=store, rows_kept=rows, root=root, trigger="schedule",
                                  known=_known(root / "client.csv"))  # fmt: skip
 
@@ -281,3 +282,74 @@ async def test_a_scheduled_slot_runs_once_and_as_someone_still_allowed(root: Pat
     assert scheduler.seen == [list_id]
     words = (await store.get(list_id)).schedule_words
     assert words and "05:00" in words
+
+
+# --- the lane review of L1.6 ----------------------------------------------------------------------
+
+
+async def test_a_list_given_a_schedule_after_its_first_import_still_imports_its_changes(
+    root: Path,
+) -> None:
+    """Review item 3: the schedule was part of the version's record, so a scheduled list's next
+    changed import read its previous version as "another list's" and crashed."""
+    store, rows = InMemoryListStore(), InMemoryListRows()
+    list_id = await _client_list(store)
+    await import_list(list_id, store=store, rows_kept=rows, root=root,
+                      known=_known(root / "client.csv"))  # fmt: skip
+    await store.set_schedule(list_id, ListSchedule(every="daily", hour=5), "admin-1",
+                             datetime(2026, 11, 8, tzinfo=UTC))  # fmt: skip
+    (root / "client.csv").write_text((root / "client.csv").read_text().replace("XB", "XC"))
+    done = await import_list(list_id, store=store, rows_kept=rows, root=root,
+                             known=_known(root / "client.csv"))  # fmt: skip
+    assert (done.outcome, done.version, done.changed) == ("updated", 2, 1)
+
+
+async def test_a_version_file_left_by_an_import_that_never_applied_is_stepped_over(
+    root: Path,
+) -> None:
+    """Review item 16: a process that died between keeping v2's file and applying it left the
+    list at v1 for ever, every later import refused as "already kept with other rows". v2's rows
+    were never live, so the next import keeps v3 and leaves the orphan untouched."""
+    store, rows = InMemoryListStore(), InMemoryListRows()
+    list_id = await _client_list(store)
+    known = _known(root / "client.csv")
+    await import_list(list_id, store=store, rows_kept=rows, root=root, known=known)
+    record = await store.get(list_id)
+    rows.write(deployment_reference(record, 2), [{**SAMPLE_ROW, "ref": "ORPHAN"}])
+    (root / "client.csv").write_text((root / "client.csv").read_text().replace("XB", "XC"))
+    done = await import_list(list_id, store=store, rows_kept=rows, root=root,
+                             known=_known(root / "client.csv"))  # fmt: skip
+    assert (done.outcome, done.version, done.previous_version) == ("updated", 3, 1)
+    assert rows.read(deployment_reference(record, 2)) == [
+        dict(SAMPLE_ROW, ref="ORPHAN", aliases=None, date_of_birth=None)
+    ]
+
+
+SAMPLE_ROW: dict[str, object] = {
+    "ref": "X", "primary_name": "Someone", "aliases": "", "date_of_birth": " ",
+    "nationality": "XA", "identifiers": None, "programme": None, "listing": "sanction",
+    "entity_type": "Person",
+}  # fmt: skip
+
+
+async def test_an_own_list_with_blank_cells_is_unchanged_when_imported_again() -> None:
+    """Review item 7: the real keeper reads a blank cell back as empty (None), the CSV gives "",
+    so the digests differed and every re-import of an unchanged list kept a new version. The twin
+    now keeps cells as the real keeper does; `test_list_rows_parquet_live.py` runs the real one."""
+    rows = InMemoryListRows()
+    body = b"estab_id,estab_name,region\nE1,HMP Synthetic One,\nE2,HMP Synthetic Two, \n"
+    first, _ = import_own_list("ds-a", "rl-a", body, rows_kept=rows, named=["rl-a"],
+                               name="establishments", key_column="estab_id")  # fmt: skip
+    again, outcome = import_own_list("ds-a", "rl-a", body, rows_kept=rows, named=["rl-a"])
+    assert (again.version, outcome) == (first.version, "unchanged")
+    assert (rows.read(first) or [])[0]["region"] is None
+
+
+async def test_a_name_two_readable_lists_share_is_offered_as_neither(root: Path) -> None:
+    """Review item 15: the gate refuses a Lookup of a name two readable lists share; offering one
+    of them would offer what the gate then refuses."""
+    store, one, _two = await _two_lists(root)
+    await store.subscribe("ds-a", one, "author-1")
+    own_same_name = OWN_A.model_copy(update={"name": "Client list"})
+    offered = await offered_lists("ds-a", store=store, own=[own_same_name])
+    assert "Client list" not in {o.name for o in offered}

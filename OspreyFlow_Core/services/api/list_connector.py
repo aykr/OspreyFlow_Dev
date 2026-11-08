@@ -44,13 +44,13 @@ import asyncpg
 from services.ingest.connectors.screening_templates import (
     TemplateRefused,
     screening_rows,
-    template_files,
 )
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import (
     DEPLOYMENT_WIDE,
     SCREENING_COLUMNS,
     StagingError,
+    _text,
     list_rows_path,
     read_staged_table,
     readable_lists,
@@ -69,11 +69,18 @@ from schemas.list_connector import (
     OfferedList,
 )
 from schemas.monitoring import ListSchedule
+from schemas.screening import ScreeningListStatus
 
-from .ingest_sources import ingest_root, is_inside
 from .rule_schedule import cron_of, schedule_words
 from .scheduler import DEFAULT_TIMEZONE, due_slots, next_slot
-from .screening_refresh import LICENCE_NOT_CONFIRMED, LICENCES, synthetic_digests
+from .screening_refresh import (
+    LICENCE_NOT_CONFIRMED,
+    LICENCES,
+    ListRefused,
+    check_location,
+    read_files,
+    synthetic_digests,
+)
 
 log = logging.getLogger(__name__)
 
@@ -82,8 +89,6 @@ CONNECTOR_SYNTHETIC = (
     Path(__file__).resolve().parents[2] / "connectors" / "screening" / ("synthetic.sha256")
 )
 BLANK_LICENCE = "the client's own list: its terms are the client's"
-#: The OFAC files read beside `SDN.CSV` when they are there, as ADR-133's refresh reads them.
-_OFAC_COMPANIONS = {"alt_csv": "ALT.CSV", "add_csv": "ADD.CSV"}
 
 
 class ListConnectorRefused(Exception):
@@ -532,15 +537,17 @@ class InMemoryListRows:
         self.files: dict[tuple[str, str, int], tuple[ReferenceList, list[dict[str, object]]]] = {}
 
     def write(self, reference: ReferenceList, rows: Sequence[dict[str, object]]) -> str:
-        _table(reference, rows)  # the same refusals: a key column missing, a key on two rows
+        # The same refusals (a key column missing, a key on two rows), and the cells as the real
+        # keeper keeps them: a blank or space-only cell read back empty (review item 7).
+        kept: list[dict[str, object]] = [dict(r.cells) for r in _table(reference, rows).rows]
         key = (reference.dataset_id, reference.name, reference.version)
         held = self.files.get(key)
-        if held is not None and (held[0] != reference or held[1] != list(rows)):
+        if held is not None and (held[0] != reference or held[1] != kept):
             raise StagingError(
                 [f"the list {reference.name!r} (version {reference.version}) is already kept "
                  "with other rows; a version's rows are never replaced"]
             )  # fmt: skip
-        self.files[key] = (reference, [dict(r) for r in rows])
+        self.files[key] = (reference, kept)
         return f"reference_lists/{reference.dataset_id}/{reference.name}@v{reference.version}"
 
     def read(self, reference: ReferenceList) -> list[dict[str, object]] | None:
@@ -609,51 +616,54 @@ def admit_list(
 
 
 def read_list_files(record: DeploymentList, root: Path | None = None) -> dict[str, bytes]:
-    """The list's file, and for OFAC its companions, read from inside the ingest folder only; a
-    location outside it is refused in words that do not say whether anything is there."""
-    root = root if root is not None else ingest_root()
-    main = (root / record.location).resolve()
-    if not is_inside(root, main):
-        raise ListConnectorRefused(
-            "the list's location is outside the ingest folder; nothing was read"
-        )
-    if not main.is_file():
-        raise ListConnectorRefused(f"there is no file at {record.location} in the ingest folder")
-    files = {"main": main.read_bytes()}
-    for role in template_files(record.template)[1:]:
-        name = _OFAC_COMPANIONS[role]
-        for candidate in (main.parent / name, main.parent / name.lower()):
-            resolved = candidate.resolve()
-            if is_inside(root, resolved) and resolved.is_file():
-                files[role] = resolved.read_bytes()
-                break
-    return files
+    """The list's file, and for OFAC its companions, read from inside the ingest folder only, by
+    ADR-133's own reader (`screening_refresh.read_files`, review item 14); a location outside it is
+    refused in words that do not say whether anything is there. A blank template's list is one
+    file, read through the same location check."""
+    try:
+        if record.template != "blank":
+            status = ScreeningListStatus(
+                list_name=record.name, source=record.template, location=record.location,
+                synthetic=record.synthetic, licence=record.licence,
+            )  # fmt: skip
+            return read_files(status, root)
+        main = check_location(record.location, root)
+        if not main.is_file():
+            raise ListRefused(f"there is no file at {record.location} in the ingest folder")
+        return {"main": main.read_bytes()}
+    except ListRefused as refused:
+        raise ListConnectorRefused(str(refused)) from refused
 
 
 def check_list_location(location: str, root: Path | None = None) -> None:
-    root = root if root is not None else ingest_root()
-    if not is_inside(root, (root / location).resolve()):
-        raise ListConnectorRefused(
-            "the list's location is outside the ingest folder; nothing was read"
-        )
+    try:
+        check_location(location, root)
+    except ListRefused as refused:
+        raise ListConnectorRefused(str(refused)) from refused
 
 
 # --- an import -----------------------------------------------------------------------------------
 
 
 def rows_digest(rows: Sequence[dict[str, object]]) -> str:
-    """The rows' identity: equal rows, in any order, give one digest (a version is its rows)."""
-    canonical = sorted(json.dumps(r, sort_keys=True, ensure_ascii=False) for r in rows)
+    """The rows' identity: equal rows, in any order, give one digest (a version is its rows). Each
+    cell is taken as the keeper keeps it (`staging_catalogue._text`: a blank cell is empty), so a
+    file and the version kept from it agree (review item 7)."""
+    canonical = sorted(
+        json.dumps({k: _text(v) for k, v in r.items()}, sort_keys=True, ensure_ascii=False)
+        for r in rows
+    )
     return hashlib.sha256("\n".join(canonical).encode("utf-8")).hexdigest()
 
 
 def deployment_reference(record: DeploymentList, version: int | None = None) -> ReferenceList:
     """The list's record as the staging catalogue reads it: deployment-wide, a screening list keyed
     on the publisher's reference, at `version` (its current one by default)."""
+    # Not its schedule: a version's record is what its rows are, and a schedule set after a version
+    # was kept must not make that version read as another list's (review item 3).
     return ReferenceList(
         id=record.id, dataset_id=DEPLOYMENT_WIDE, name=record.name, kind="screening",
         key_column="ref", version=version if version is not None else record.version,
-        schedule=record.schedule,
     )  # fmt: skip
 
 
@@ -718,9 +728,12 @@ async def import_list(
             f"{record.name} is unchanged at version {record.version}: no new version was kept",
             version=record.version, previous_version=record.version,
         )  # fmt: skip
-    version = record.version + 1
-    before = rows_kept.read(deployment_reference(record)) if record.version else []
+    # A version file an import kept but never applied (the process stopped between the two) was
+    # never live, so no element names it: it is stepped over, never replaced (review item 16).
+    kept = [r.version for r in rows_kept.kept(DEPLOYMENT_WIDE) if r.id == record.id]
+    version = max([record.version, *kept]) + 1
     try:
+        before = rows_kept.read(deployment_reference(record)) if record.version else []
         rows_kept.write(deployment_reference(record, version), mapped.rows)
     except StagingError as refused:
         return await done("failed", "; ".join(refused.problems), failure=True)
@@ -768,9 +781,11 @@ async def offered_lists(
     (`readable_lists`), its own and the deployment-wide lists it subscribes to. `own` is the
     dataset's lists as kept; anything else in it is never offered."""
     every = [*own, *await deployment_references(store)]
-    readable, _clashes = readable_lists(
+    readable, clashes = readable_lists(
         every, dataset_id=dataset_id, subscribed=await store.subscribed(dataset_id)
     )
+    # A name two readable lists share is refused by the gate, so it is offered as neither (review
+    # item 15).
     return sorted(
         (
             OfferedList(
@@ -781,6 +796,7 @@ async def offered_lists(
                 deployment_wide=r.dataset_id == DEPLOYMENT_WIDE,
             )  # fmt: skip
             for r in readable.values()
+            if r.name not in clashes
         ),
         key=lambda o: (o.deployment_wide, o.name.lower()),
     )
@@ -846,7 +862,8 @@ class DeploymentListScheduler:
     store: ListStore
     claim: Callable[[str], Awaitable[bool]]
     may_run: Callable[[str], Awaitable[str | None]]
-    run: Callable[[str], Awaitable[ListImport]]
+    #: The import, run as the schedule's owner (given by id, for the audit).
+    run: Callable[[str, str], Awaitable[ListImport]]
     seen: list[str] = field(default_factory=list)
 
     async def tick(self, now: datetime) -> None:
@@ -875,4 +892,4 @@ class DeploymentListScheduler:
             )  # fmt: skip
             return
         self.seen.append(scheduled.list_id)
-        await self.run(scheduled.list_id)
+        await self.run(scheduled.list_id, scheduled.owner)
