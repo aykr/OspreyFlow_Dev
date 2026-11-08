@@ -37,6 +37,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast
 
+import httpx
 from fastapi import (
     Depends,
     FastAPI,
@@ -261,6 +262,14 @@ from schemas.ingest import (
 )
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.model import OfferedEngines
+from schemas.model_admin import (
+    ConnectionTestResult,
+    DefaultsInput,
+    EngineInput,
+    KeyInput,
+    ModelAdminHistory,
+    ModelsAdminView,
+)
 from schemas.monitoring import (
     CheckNotJudged,
     ListScheduleInput,
@@ -340,6 +349,7 @@ from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
 from . import kyc as kyc_module
+from . import model_admin as model_admin_module
 from . import ownership as ownership_module
 from . import readiness as readiness_module
 from . import reports as reports_module
@@ -1080,6 +1090,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.target_models = target_model_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
+    # ADR-135 Amendment 2: *Admin › Models*. The engines it holds route the next request, with no
+    # restart (`RoutedModel.set_routes`); the gateway's entries are made equal to them at start.
+    gateway_config = LiteLLMConfig.from_env()
+    gateway_http = httpx.AsyncClient(
+        base_url=gateway_config.base_url,
+        headers={"Authorization": f"Bearer {gateway_config.api_key}"},
+    )
+    model_admin_audit = await model_admin_module.PostgresModelAdminAudit.connect(
+        config.postgres.dsn
+    )
+    routed = model if isinstance(model, RoutedModel) else None
+    model_admin = model_admin_module.ModelAdmin(
+        installed=model_admin_module.Installed.from_env(models, os.environ),
+        settings_file=model_admin_module.ModelSettingsFile.from_env(),
+        gateway=model_admin_module.GatewayAdmin(gateway_http),
+        audit=model_admin_audit,
+        on_change=routed.set_routes if routed is not None else (lambda _routes: None),
+    )
+    await model_admin.start()
+    app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme
     app.state.yardstick = yardstick
@@ -1212,6 +1242,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # one left here would fail them; without it they judge with the weights file's influencers.
         app.state.strength_influencers = None
         await litellm_client.aclose()
+        app.state.model_admin = None
+        await model_admin_audit.close()
+        await gateway_http.aclose()
         await resources.close()
 
 
@@ -1345,9 +1378,20 @@ def get_valkey(request: Request) -> Valkey:
     return request.app.state.valkey  # type: ignore[no-any-return]
 
 
-def get_model_routes() -> ModelRoutes:
-    """ADR-135: the engines, read from the Conduit's own environment as the routing reads them."""
+def get_model_routes(request: Request) -> ModelRoutes:
+    """ADR-135: the engines as the routing reads them — *Admin › Models*' (ADR-135 Amendment 2)
+    where the app holds it, else the Conduit's own environment."""
+    admin = getattr(request.app.state, "model_admin", None)
+    if admin is not None:
+        return admin.routes()  # type: ignore[no-any-return]
     return routes_from_env(DeploymentModels.from_env(), os.environ)
+
+
+def get_model_admin(request: Request) -> model_admin_module.ModelAdmin:
+    admin = getattr(request.app.state, "model_admin", None)
+    if admin is None:
+        raise HTTPException(status_code=503, detail="model administration is not running")
+    return admin  # type: ignore[no-any-return]
 
 
 def get_jobs(request: Request) -> JobQueue:
@@ -13278,6 +13322,119 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
     would only refuse. Not a gate — every route still checks its own right."""
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+
+
+# --- Admin › Models (ADR-135 Amendment 2, ADR-112 Amendment 7) ----------------------------------
+# Every route needs `manage_models` (rule 4). None returns, logs or audits a key: the key route
+# reads its own body, so no validation error can echo it; the gateway's words are never passed on.
+
+ModelAdminDep = Annotated[model_admin_module.ModelAdmin, Depends(get_model_admin)]
+_MANAGE_MODELS = [Depends(require_right(Right.MANAGE_MODELS))]
+
+
+def _model_admin_refused(refused: model_admin_module.ModelAdminRefused) -> HTTPException:
+    return HTTPException(
+        status_code=refused.status, detail={"error": "model_admin_refused", "detail": refused.words}
+    )
+
+
+@app.get("/v1/admin/models", dependencies=_MANAGE_MODELS)
+async def models_admin_view_route(admin: ModelAdminDep) -> ModelsAdminView:
+    return admin.view()
+
+
+@app.get("/v1/admin/models/history", dependencies=_MANAGE_MODELS)
+async def models_admin_history_route(admin: ModelAdminDep) -> ModelAdminHistory:
+    return ModelAdminHistory(entries=await admin.history())
+
+
+@app.post("/v1/admin/models/engines", dependencies=_MANAGE_MODELS)
+async def models_admin_add_engine_route(
+    body: EngineInput, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.add_engine(principal.id, body.provider)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.put("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
+async def models_admin_edit_engine_route(
+    name: str, body: EngineInput, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.edit_engine(principal.id, name, body.provider)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.delete("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
+async def models_admin_remove_engine_route(
+    name: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.remove_engine(principal.id, name)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.put("/v1/admin/models/defaults", dependencies=_MANAGE_MODELS)
+async def models_admin_defaults_route(
+    body: DefaultsInput, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.set_defaults(principal.id, body.defaults)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+_KEY_BODY_REFUSED = (
+    'Send the key as JSON, {"key": "…"}, at most 4096 characters. Nothing was changed.'
+)
+
+
+@app.put("/v1/admin/models/engines/{name}/key", dependencies=_MANAGE_MODELS)
+async def models_admin_set_key_route(
+    name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    """Write-only. The body is read here rather than by FastAPI, whose validation errors carry the
+    input back; a body that is not `{"key": "…"}` is refused in fixed words."""
+    try:
+        key = KeyInput.model_validate_json(await request.body()).key
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail={"error": "key_refused", "detail": _KEY_BODY_REFUSED}
+        ) from None
+    try:
+        await admin.set_key(principal.id, name, key)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.delete("/v1/admin/models/engines/{name}/key", dependencies=_MANAGE_MODELS)
+async def models_admin_remove_key_route(
+    name: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.remove_key(principal.id, name)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.post("/v1/admin/models/engines/{name}/test", dependencies=_MANAGE_MODELS)
+async def models_admin_test_route(
+    name: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ConnectionTestResult:
+    try:
+        return await admin.test(principal.id, name)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
 
 
 @app.get("/v1/models/engines")

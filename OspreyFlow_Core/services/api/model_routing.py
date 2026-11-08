@@ -228,6 +228,11 @@ class RoutedModel:
     def routes(self) -> ModelRoutes:
         return self._routes
 
+    def set_routes(self, routes: ModelRoutes) -> None:
+        """ADR-135 Amendment 2: *Admin › Models* changes the engines while the Conduit runs; the
+        next request is routed by them, with no restart."""
+        self._routes = routes
+
     async def held(self, datasets: Sequence[str] | None) -> Mapping[str, Dataset]:
         """Each of `datasets` this router can read the egress of; the rest are `none`."""
         if not datasets or self._egress is None:
