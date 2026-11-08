@@ -960,8 +960,8 @@ them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The
 draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
 reports and 67 naming people rather than 229 and 68.
 
-**Chapter 4 in the Studio's drawer and guided mode** (ADR-140 Amendment 8, 7 November 2026; built on the studio lane, **not
-yet walked live**): the pipeline opens in **guided mode**, every person's default, as a numbered list of
+**Chapter 4 in the Studio's drawer and guided mode** (ADR-140 Amendment 8, 7 November 2026; walked live from scratch
+on 8 November, Amendment 10, though not yet from the seeded draft): the pipeline opens in **guided mode**, every person's default, as a numbered list of
 its steps beside a picture of the pipeline; **Expert** (the header's mode switch, kept for the person
 in their browser) shows the canvas instead, and either opens the same **drawer** beside the pipeline.
 Each click above that opened a screen now opens it in the drawer, with the pipeline still in view:
@@ -977,14 +977,22 @@ by dragging it, or by keyboard: **Choose** on the column, then **Bind â€¹columnâ
 The seeded draft above stays the demo's path: building the map takes about eighty bindings, far too
 long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training,
 and it ends exactly where the seeded draft starts. `keyboard/ingest-studio.spec.ts` walks these steps
-by keys alone and checks the saved map equals `pid_intel_reports_recipe.yaml`'s.
-1. On the **3 Pipelines** tab, type *Intelligence reports* in **Pipeline name**, then **New pipeline**.
-   It opens in guided mode.
-2. **Source: New source**: choose the *Intelligence reports* file under **Registered source**, then
-   **Use this source**. Its marking, units, legal basis and six handling columns come with it.
-   **Preview**, then **Run preview**, shows its rows.
-3. **Settings**, then *The draft's own settings*: under *Skip rows this case has already loaded*, type
-   `report_ref` in **Key column name**, press Enter, then **Save** and **Close the drawer**.
+by keys alone and checks the saved map equals `pid_intel_reports_recipe.yaml`'s; they were walked
+live on 8 November (`apps/workspace/live/studio-reports-walk.spec.ts`, Amendment 10 has the figures).
+1. On the **2 Sources** tab, **Register a source**, **Next**, choose `pid_intel_reports.csv` under
+   **File**, **Next**. Give it its marking (*OFFICIAL*, handling code *P*, originator and owning unit
+   `fenwick-moor-security`), the units its rows may name (`fenwick-moor-security, regional-intel-unit`)
+   and its legal basis (*Synthetic demonstration data*), then **Register** and **Open in a pipeline**.
+   The seed registers no source, so a case seeded fresh needs this step once.
+2. On the **3 Pipelines** tab, type *Intelligence reports* in **Pipeline name**, then **New pipeline**.
+   It opens in guided mode. **Source: New source**: choose the file under **Registered source**, then
+   **Use this source**: its marking, units and legal basis come with it. **Preview**, then
+   **Run preview**, shows its rows.
+3. **Settings**, then *The draft's own settings*. Under *Columns that carry the marking*, type each
+   part's column, the same name as the part (`classification`, `handling_code`, `action_code`,
+   `sanitisation_code`, `originator`, `owning_unit`): registering a source declares none. Under *Skip
+   rows this case has already loaded*, type `report_ref` in **Key column name** and press Enter. Then
+   **Save** and **Close the drawer**.
 4. **Map: Map**, then **Open map editor**. Add each of the map's eleven entities with **+ entity**, in
    the committed file's order: the report (`Document`), three areas (`Location`), three prisoners and
    three outside people (`Person`), and the number (`Endpoint`). For each:
