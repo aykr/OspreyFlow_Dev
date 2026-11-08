@@ -752,6 +752,19 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "open-a-folded-panel-by-keyboard",
 ] as const);
 
+// ADR-135 Amendment 2: Admin › Models (platform lane P1), its own harness until the section is in
+// Admin's list.
+export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
+  "add-a-model-engine-by-keyboard",
+  "edit-a-model-engine-by-keyboard",
+  "enter-a-model-key-by-keyboard",
+  "rotate-a-model-key-by-keyboard",
+  "remove-a-model-key-by-keyboard",
+  "test-a-model-engine-by-keyboard",
+  "set-each-jobs-default-engine-by-keyboard",
+  "remove-a-model-engine-by-keyboard",
+] as const);
+
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "save-a-persons-roles-by-keyboard",
   "register-a-dashboard-by-keyboard",

@@ -33,6 +33,9 @@ const HARNESS_ONLY: Record<string, string[]> = {
 // Glass's, where it once drew the other two gated (the live audit of 1 November 2026 found their text
 // at 4.25:1); the state is kept so Home with a single card is scanned too.
 const EXTRA_STATES: Record<string, string[]> = {
+  // ADR-135 Amendment 2: Admin › Models with an engine being added, a key being entered, and a
+  // local-only deployment (platform lane P1).
+  "models-harness.html": ["open=add", "open=key", "local=1"],
   "start-harness.html": ["rights=investigate"],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
