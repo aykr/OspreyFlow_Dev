@@ -27770,6 +27770,83 @@ secret in `deployment.env` and a planted licensed row never appear in it); expor
 the model, pipelines and lists as drafts; `--dry-run` writes nothing; an imported model is not live until a
 person makes it live.
 
+### ADR-140, Amendment 10 (8 November 2026) — Phase 6's exit met: the reports pipeline built from scratch in guided mode by keys, an expert-mode edit, and a live walk under the lease
+
+Status: written 8 November 2026 by the studio lane (L1.2b), the orchestrator's reservation of the same
+day. It records what Amendment 8 left unmet ("Phase 6's exit is not met, in either half"); Amendment 8
+is not edited.
+
+**What is met.**
+1. **Built from scratch in guided mode.** `keyboard/ingest-studio.spec.ts` builds the Prison
+   Intelligence reports pipeline from a new pipeline by keys alone: its registered source, Preview, the
+   row key on the draft's own settings, and in the Map editor all eleven elements and ten links of
+   `pid_intel_reports_recipe.yaml` with their conditions, the report's text as content, the six
+   handling parts bound on every element, the `msisdn` transform, the literal, the optional bindings
+   and the four ignored columns with their notes; then Test and Deploy as v1. The saved map must
+   **equal** the committed one (row template, unmapped fields and the key), not contain it: the map is
+   read from `keyboard/fixtures/pid_intel_reports_map.json`, which
+   `tests/demo_fixtures/test_reports_map_fixture.py` holds to the committed YAML.
+2. **Edited in expert mode.** The same pipeline, built as above, is edited on the canvas: an Extract
+   fed by Map is added and set, the save carries it, the map is not saved again, and Test runs again
+   before Deploy.
+3. **Walked live**, under the stack lease "L1.2b live walk" (studio, 06:30:25Z–07:12:44Z on
+   8 November), on the throwaway stack. The synthetic case was seeded by `scripts.seed_pid` into a
+   Postgres database of its own; the ArcadeDB database was the throwaway's shared one, not fresh, and
+   the seed's own Ch6 check failed on it (not chapter 4's figure). The Conduit ran on its own port.
+   Two offline test runs on closed ports (no lane) ran on the machine during the walk, so its timings
+   are indicative only. `apps/workspace/live/studio-reports-walk.spec.ts` drove the real Glass by keys
+   alone: the reports file registered on Sources, a new pipeline, its source, Preview, the six marking
+   columns and the row key on the draft's own settings, the whole map, Test, Deploy as v1, and Run now
+   from Runs (116 seconds).
+   - **Asserted by the walk:** the map as the Conduit stored it equals the committed map, its ignored
+     columns and its key; the run succeeded, reading 350 rows and rejecting 1.
+   - **Checked after the walk, by a script reading both files:** the deployed YAML in the scratch
+     recipe repository equals the committed file's map, ignored columns, key and marking columns.
+   - **Observed, not asserted:** Test read 350 reports and rejected row 17, the teaching row
+     (`msisdn: … a phone number has no letters in it`), as chapter 4 says; the run made 350 nodes,
+     referenced 747 and made 748 links (on the shared, non-fresh graph), in 103.4 seconds of load.
+   - **A difference recorded, not resolved:** the from-scratch Deploy pinned no pack
+     (`pack_versions: {}`) where the committed file pins `niem: 3`. A recipe's pin comes from its
+     pipeline's domain-model step (`services/ingest/pipeline.py`), which a new pipeline does not have;
+     the seeded draft's does. The map binds core types only, so the load is the same. Phase 5's removal
+     of the domain-model step (a pipeline reads its model from its dataset) is where this is settled.
+4. **DEMO_GUIDE chapter 4** has the from-scratch steps beside the seeded draft, which stays the demo's
+   timed path.
+
+**Found while building, and fixed.**
+- **The Map editor could make no link of a type declared from or to any type.** `MENTIONED_IN` runs
+  from `*` to a Document, and the editor's link filter read `*` as a type's name, so every link of the
+  reports map was refused ("No ontology link type connects these two entity types"). It now reads an
+  end as the load does (`packages/ontology/validation.py`'s `validate_edge_endpoints`): `*` alone means
+  any type, and a list holding `*` beside named types is judged by its named types. Elsewhere the
+  Conduit reads `*` anywhere in the list as any type (`rule_sentences.py`, `pattern_ask.py`,
+  `link_types.py`); the two readings agree for every type the ontology declares today, and the load's
+  is the one a Map must meet. A system link type (`SAME_AS`, declared `*` to `*`) is never offered. The live walk found it; the keyboard harness had
+  listed the three types the map uses, so it could not (rule 15), and now declares the type as the
+  ontology does.
+- **A person declares a source's marking columns on the draft's own settings, not at registration.**
+  The register wizard declares none; the harness's reports source had carried them as registered, a
+  path no person has. The keyboard case and the guide now declare them where a person can.
+- An unmapped column's note box and *Ignore* button were named only "note (optional)" and "Ignore" on
+  every row; each is now named with its column (*Note for ignoring ‹column›*, *Ignore ‹column›*).
+- A map's link buttons showed "Mentioned in: area_1 → report" under the name "Link 1: Mentioned in,
+  area_1 to report" (WCAG 2.5.3); each now shows the words its name ends with. The first axe scan of
+  a map with links found it.
+- The keyboard harness now refuses a Map save that leaves a declared part of the marking unbound, as
+  `check_recipe_rules` does (rule 15; 422 `recipe_rule`), so the from-scratch case could not pass with
+  one unbound. It models that refusal alone of the rules'. The comparison of a saved map with the
+  committed one forgives only what the schema reads as absent (`keyboard/mapMeaning.ts`).
+
+**Tests.** The from-scratch case (red with the save dropping a note, and with the transform dropped);
+the refusal case (red with the harness's refusal removed); the expert-edit case (red with *Apply
+extract settings* dropping the library); the drift test (red with one binding changed); the naming
+case in `SourceFieldsPanel.ignore.test.tsx` (red with the names removed); the axe state
+`pipeline=reports-map` in dark, light and GOV.UK with its label check (red on the link names before the
+fix). `rowTemplate.test.ts`'s wildcard, mixed-list and system cases (each red with its guard removed);
+`keyboard/mapMeaning.test.ts` (red on a comparison forgiving any null or empty value); the from-scratch case red at *Link type* with the harness
+declaring `MENTIONED_IN` as the ontology does and the old filter. Each is in
+`process/lanes/studio/L1.2a_RED_RECORD.md` (B1–B9).
+
 ### ADR-112, Amendment 5 (7 November 2026) — the Rule author role, two more rights, and teams
 
 Status: accepted from the owner's rulings of 7 November 2026 (R1, D5, the teams discussion). ADR-112 and its

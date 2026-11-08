@@ -95,6 +95,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     // guided mode, and the Map editor under its strip with a column chosen to bind.
     "pipeline=guided", "pipeline=expert&mode=expert", "pipeline=preview", "pipeline=map-preview",
     "pipeline=test", "pipeline=deploy", "pipeline=expert-step&expert=1", "pipeline=map",
+    // Phase 6's exit (ADR-140 Amendment 10): the Map editor holding chapter 4's whole reports map.
+    "pipeline=reports-map",
   ],
   // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
   // every section in the side list, a coming placeholder open.

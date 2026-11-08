@@ -828,6 +828,7 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   "go-back-to-a-step-from-the-map-strip-by-keyboard",
   "bind-a-column-by-choosing-both-and-enter",
   "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard",
+  "edit-the-reports-pipeline-in-expert-mode-by-keyboard",
   // The review of L1.2: guided mode's read-only expert step, an edit in expert mode, the load rules
   // from the Load step, letting a chosen column go, and the drawer's Settings after Preview.
   "an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",

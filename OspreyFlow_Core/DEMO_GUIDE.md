@@ -960,8 +960,8 @@ them the run) and 31 for the incidents; `--check` then reads Ch5 229 and 68. The
 draft or a half-added branch included; it does not correct the teaching row, so chapter 5 then reads 228
 reports and 67 naming people rather than 229 and 68.
 
-**Chapter 4 in the Studio's drawer and guided mode** (ADR-140 Amendment 8, 7 November 2026; built on the studio lane, **not
-yet walked live**): the pipeline opens in **guided mode**, every person's default, as a numbered list of
+**Chapter 4 in the Studio's drawer and guided mode** (ADR-140 Amendment 8, 7 November 2026; walked live from scratch
+on 8 November, Amendment 10, though not yet from the seeded draft): the pipeline opens in **guided mode**, every person's default, as a numbered list of
 its steps beside a picture of the pipeline; **Expert** (the header's mode switch, kept for the person
 in their browser) shows the canvas instead, and either opens the same **drawer** beside the pipeline.
 Each click above that opened a screen now opens it in the drawer, with the pipeline still in view:
@@ -972,6 +972,57 @@ the rows a source reads, or the graph Map or Load would make, and **does not cou
 still refuses a draft until Test has run since its last edit. *Open map editor* collapses the pipeline
 to a strip across the top (a step on it goes back to the pipeline). In the map editor a column is bound
 by dragging it, or by keyboard: **Choose** on the column, then **Bind ‹column› here** on the binding.
+
+**Building chapter 4's pipeline from scratch** (ADR-140 Amendment 10, 8 November 2026).
+The seeded draft above stays the demo's path: building the map takes about eighty bindings, far too
+long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training.
+It makes the seeded draft's map, but not its pipeline: a new pipeline has no domain-model step, so its
+Deploy pins no pack where the seeded draft pins NIEM v3 (Amendment 10 records the difference). `keyboard/ingest-studio.spec.ts` walks these steps
+by keys alone and checks the saved map equals `pid_intel_reports_recipe.yaml`'s; they were walked
+live on 8 November (`apps/workspace/live/studio-reports-walk.spec.ts`, Amendment 10 has the figures).
+1. On the **2 Sources** tab, **Register a source**, **Next**, choose `pid_intel_reports.csv` under
+   **File**, **Next**. Give it its marking (*OFFICIAL*, handling code *P*, originator and owning unit
+   `fenwick-moor-security`), the units its rows may name (`fenwick-moor-security, regional-intel-unit`)
+   and its legal basis (*Synthetic demonstration data*), then **Register** and **Open in a pipeline**.
+   The seed registers no source, so a case seeded fresh needs this step once.
+2. On the **3 Pipelines** tab, type *Intelligence reports* in **Pipeline name**, then **New pipeline**.
+   It opens in guided mode. **Source: New source**: choose the file under **Registered source**, then
+   **Use this source**: its marking, units and legal basis come with it. **Preview**, then
+   **Run preview**, shows its rows.
+3. **Settings**, then *The draft's own settings*. Under *Columns that carry the marking*, type each
+   part's column, the same name as the part (`classification`, `handling_code`, `action_code`,
+   `sanitisation_code`, `originator`, `owning_unit`): registering a source declares none. Under *Skip
+   rows this case has already loaded*, type `report_ref` in **Key column name** and press Enter. Then
+   **Save** and **Close the drawer**.
+4. **Map: Map**, then **Open map editor**. Add each of the map's eleven entities with **+ entity**, in
+   the committed file's order: the report (`Document`), three areas (`Location`), three prisoners and
+   three outside people (`Person`), and the number (`Endpoint`). Each entity's ref, its match-on and the
+   column each property takes are `pid_intel_reports_recipe.yaml`'s `row_template`: for instance the
+   report's `message_id` takes `report_ref`, `sent_at` takes `submitted_at` and `document_kind` takes
+   `category`, and the number's `value_raw` takes `phone_mentioned`. For each:
+   - set **Entity ref**, **POLE class**, **Entity type** and **Match on**, then *reference existing*;
+   - add each property under **Add a property** and bind its column (**Choose** the column, then
+     **Bind ‹column› here**). The number's `value_normalised` and `e164` take the `msisdn` **Transform**,
+     its `endpoint_kind` is a **Literal** `msisdn`, and an outside person's `given_names` and
+     `date_of_birth` are **Optional**;
+   - for every entity but the report and the first area, tick **Conditional element** and choose the
+     column it waits on (*is not null*): the second and third areas on `area_ref_2` and `area_ref_3`,
+     each prisoner on `subject_N`, each outside person on `subject_N_nino`, the number on
+     `phone_mentioned`;
+   - on the report, set **Its own text** to *Document text* from `report_text`;
+   - tick **Override handling for this element** and set each of the six parts to *From column ‹part›*.
+     The editor says which part is unbound, and the save refuses a map that leaves one.
+5. Add the ten `MENTIONED_IN` links under **From entity**, **To entity** and **Link type**, then
+   **Add link**: each area, person and the number to the report. Give each the same condition as its
+   first end, and bind its six handling parts the same way.
+6. Under the unmapped columns, give `subject_1_role`, `subject_2_role`, `subject_3_role` and
+   `reviewer_initials` their notes in **Note for ignoring ‹column›**, then **Ignore ‹column›**.
+7. **Save draft**. Then **Test** (**Run the test**) and **Deploy** (**Deploy as v1**): from here it is
+   chapter 4 as above.
+
+An expert-mode edit of it: **Expert**, then **+ Extract** on the canvas (fed by Map). Open
+**Extract: Extract**, choose an **Extraction library**, then **Apply extract settings**. The edit is the
+pipeline's, and the map is not saved again. Test runs again before Deploy.
 
 ## 9. Related documents
 

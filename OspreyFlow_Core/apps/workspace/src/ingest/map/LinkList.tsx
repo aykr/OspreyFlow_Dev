@@ -28,8 +28,16 @@ export interface LinkListProps {
 
 // Build order step 30 (rule 7): each link type is named as a person reads it (ADR-091), never by its
 // ontology key, which stays only the value the type select sends.
+// The button shows the words its name ends with (WCAG 2.5.3, label in name): it once showed
+// "Mentioned in: area_1 → report" under the name "Link 1: Mentioned in, area_1 to report", so a
+// speech-input user saying what they saw reached nothing. Found by the axe scan of the Map editor
+// holding chapter 4's reports map, the first scan of a map with links (8 November 2026).
+function wordsOf(edge: RecipeEdge, ontology: OntologySchema): string {
+  return `${linkTypeName(edge.type, ontology.edge_types)}, ${edge.from} to ${edge.to}`;
+}
+
 function labelOf(edge: RecipeEdge, index: number, ontology: OntologySchema): string {
-  return `Link ${index + 1}: ${linkTypeName(edge.type, ontology.edge_types)}, ${edge.from} to ${edge.to}`;
+  return `Link ${index + 1}: ${wordsOf(edge, ontology)}`;
 }
 
 export function LinkList({ template, ontology, selectedIndex, onSelect, onAdd }: LinkListProps) {
@@ -77,7 +85,7 @@ export function LinkList({ template, ontology, selectedIndex, onSelect, onAdd }:
                 onClick={() => onSelect(index)}
                 style={{ width: "100%", textAlign: "left" }}
               >
-                {`${linkTypeName(edge.type, ontology.edge_types)}: ${edge.from} → ${edge.to}`}
+                {wordsOf(edge, ontology)}
               </Button>
             </li>
           ))}

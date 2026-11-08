@@ -5,6 +5,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { REPORTS_HANDLING_COLUMNS, REPORTS_MAP, declareTheMarkingColumns, mapTheReports, meaning } from "./reportsMap";
 
 const REGISTRY = "INGEST_STUDIO_ACTIONS";
 const HARNESS = "/keyboard/ingest-studio-harness.html";
@@ -398,10 +399,16 @@ test("a column is bound in the Map editor by choosing it and the binding, then E
   registerCovered(REGISTRY, "bind-a-column-by-choosing-both-and-enter");
 });
 
-// Phase 6's exit: chapter 4's *Intelligence reports* pipeline built from scratch in guided mode, by
-// keys alone, the way the demo script walks it: name it, choose its registered source, preview the
-// rows, map a report to a Document (the title bound by the keyboard bind), Test, Deploy as v1.
-test("the reports pipeline is built from scratch in guided mode by keyboard", async ({ page }) => {
+// Phase 6's exit (ADR-140 Amendment 10): chapter 4's *Intelligence reports* pipeline built from
+// scratch in guided mode, by keys alone, as the demo script walks it, into exactly the committed map.
+// The map is read from `fixtures/pid_intel_reports_map.json`, which
+// `tests/demo_fixtures/test_reports_map_fixture.py` holds to `pid_intel_reports_recipe.yaml`, and each
+// entity, link, condition, content binding, handling part, transform, literal, optional binding,
+// ignored column and the row key is set through the controls a person uses. The saved map must equal
+// the committed one, not merely contain it.
+/** Chapter 4's from-scratch walk up to the map's save: name, source, Preview, the row key, every
+ * element and link, the ignored columns. Asserts the saved map is the committed one. */
+async function buildTheReportsMap(page: Page) {
   await page.goto(HARNESS);
   await page.getByRole("textbox", { name: "Pipeline name" }).focus();
   await page.keyboard.type("Intelligence reports");
@@ -416,19 +423,38 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   await press(page, "Preview");
   await press(page, "Run preview");
   await expect(drawer(page).getByRole("cell", { name: "Report two" })).toBeVisible();
+  // On the draft's own settings: the column carrying each part of the marking (the register wizard
+  // declares none), and the row key, what makes a report the same report again.
+  await press(page, "Settings");
+  await press(page, "The draft's own settings");
+  await declareTheMarkingColumns(page);
+  for (const part of REPORTS_MAP.deduplicate.key) {
+    await page.getByRole("textbox", { name: "Key column name" }).focus();
+    await page.keyboard.type(part.field!);
+    await page.keyboard.press("Enter");
+  }
+  await press(page, "Save");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "PATCH" && a.path.endsWith("/r-new") && a.body!.includes('"deduplicate"'))).toBe(true);
+  const patch = (await asked(page)).filter((a) => a.method === "PATCH" && a.path.endsWith("/r-new")).at(-1)!;
+  const sent = JSON.parse(patch.body!) as { deduplicate: unknown; handling: { handling_columns?: unknown } };
+  expect(sent.deduplicate).toEqual(REPORTS_MAP.deduplicate);
+  expect(sent.handling.handling_columns).toEqual(REPORTS_HANDLING_COLUMNS);
+  await press(page, "Close the drawer");
   await openTheMapEditor(page);
-  await press(page, "+ entity");
-  await expect(page.getByRole("button", { name: /^Entity 1: .* \(Document\)$/ })).toBeVisible();
-  const add = page.getByLabel("Add a property");
-  await add.focus();
-  await page.keyboard.type("title");
-  await press(page, "Choose column title");
-  await press(page, "Bind title here: title");
+  await mapTheReports(page);
   await press(page, "Save draft");
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template"))).toBe(true);
-  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template"))!;
-  const template = (JSON.parse(put.body!) as { row_template: { entities: { type: string; properties: Record<string, unknown> }[] } }).row_template;
-  expect(template.entities).toMatchObject([{ type: "Document", properties: { title: { field: "title" } } }]);
+  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).at(-1)!;
+  const saved = JSON.parse(put.body!) as { row_template: unknown; unmapped_fields: unknown };
+  expect(meaning(saved.row_template)).toEqual(meaning(REPORTS_MAP.row_template));
+  expect(meaning(saved.unmapped_fields)).toEqual(meaning(REPORTS_MAP.unmapped_fields));
+  await expect(page.getByText(/does not bind/)).toHaveCount(0);
+}
+
+test("the reports pipeline is built from scratch in guided mode by keyboard, into the committed map", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
+  await buildTheReportsMap(page);
   await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
   await page.keyboard.press("Enter");
   // The harness refuses as the routes do: the map's save cleared Test's mark, so Deploy is refused
@@ -447,6 +473,74 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
   expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-new/publish"))).toBe(true);
   registerCovered(REGISTRY, "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard");
+});
+
+// Phase 6's exit, its second half: the reports pipeline, built as above, edited in expert mode. An
+// Extract on the report's text is added on the canvas and set; the save carries it, fed by Map, and
+// leaves the committed map as it was; Test and Deploy as v1 then take the edited pipeline.
+test("the reports pipeline is edited in expert mode by keyboard, and the save carries it", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
+  await buildTheReportsMap(page);
+  const templateSaves = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).length;
+  await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
+  await page.keyboard.press("Enter");
+  await press(page, "Close the drawer");
+  await press(page, "Expert");
+  const canvas = page.getByRole("group", { name: "Pipeline" });
+  await expect(canvas).toBeVisible();
+  await press(page, "+ Extract");
+  await expect(canvas.getByRole("button", { name: "Extract: Extract" })).toBeVisible();
+  await canvas.getByRole("button", { name: "Extract: Extract" }).focus();
+  await page.keyboard.press("Enter");
+  const library = page.getByLabel("Extraction library");
+  await library.focus();
+  await library.selectOption("spacy");
+  await press(page, "Apply extract settings");
+  // The save after Apply is the one that carries the setting; an earlier one (the Extract added)
+  // does not, so wait for a save holding an extract with any library before reading the last.
+  const saves = async () => (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline"));
+  await expect.poll(async () => (await saves()).some((a) => /"kind":"extract"[^}]*"library"/.test(a.body ?? ""))).toBe(true);
+  const put = (await saves()).at(-1)!;
+  const graph = JSON.parse(put.body!) as { nodes: { id: string; kind: string; config?: { library?: string } }[]; edges: { source: string; target: string }[] };
+  const extract = graph.nodes.find((n) => n.kind === "extract")!;
+  expect(extract.config!.library).toBe("spacy");
+  const map = graph.nodes.find((n) => n.kind === "map")!;
+  expect(graph.edges).toContainEqual({ source: map.id, target: extract.id });
+  // The edit is the pipeline's; the committed map is not saved again.
+  expect((await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).length).toBe(templateSaves);
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText(/hasn't passed Test since its last edit/)).toBeVisible();
+  await press(page, "Test");
+  await press(page, "Run the test");
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
+  registerCovered(REGISTRY, "edit-the-reports-pipeline-in-expert-mode-by-keyboard");
+});
+
+// Rule 15: the harness refuses a Map save that leaves a declared part of the marking unbound, as
+// `check_recipe_rules` does, so the case above could not pass with one unbound. A report saved with
+// none of the six bound is refused in words naming the part and its column.
+test("a reports map leaving a declared part of the marking unbound is refused at save, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await page.getByRole("textbox", { name: "Pipeline name" }).focus();
+  await page.keyboard.type("Intelligence reports");
+  await press(page, "New pipeline");
+  await press(page, "Source: New source");
+  const chooser = page.getByRole("combobox", { name: "Registered source" });
+  await chooser.focus();
+  await chooser.selectOption("src-reports");
+  await press(page, "Use this source");
+  await press(page, "The draft's own settings");
+  await declareTheMarkingColumns(page);
+  await press(page, "Save");
+  await press(page, "Close the drawer");
+  await openTheMapEditor(page);
+  await press(page, "+ entity");
+  await press(page, "Save draft");
+  await expect(page.getByRole("alert").filter({ hasText: /does not bind classification, which the source declares in column 'classification'/ })).toBeVisible();
 });
 
 // --- The review of L1.2 (7 November 2026): what the first pass left unproved -------------------
