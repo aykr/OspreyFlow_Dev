@@ -247,3 +247,82 @@ async def test_the_migrated_case_check_fails_with_a_branchs_link_swapped_in(
     await migrate(store, cases, write=True, say=lambda _: None)
     assert await store.layer_of_case("branch") is None
     assert await store.read_only_layer_of("branch") == await store.layer_of_case("enron-case")
+
+
+async def test_a_branch_reading_its_originals_layer_is_named_and_given_none(
+    store: InMemoryDatasetStore,
+) -> None:
+    """The final L3.1 review's second blocker, in memory (the Postgres half, at `_main`, is in
+    `test_migrate_cases_to_one_dataset_store.py`): a branch made since L3.1 reads its original's
+    layer through a link and is refused a layer of its own. The run names it, gives it none, and
+    goes on; a second run changes nothing."""
+    cases = [CaseRow("enron-case", "Enron", UNIT, None)]
+    await migrate(store, cases, write=True, say=lambda _: None)
+    await store.copy_case("enron-case", "twig", case_name="Twig")
+    cases.append(CaseRow("twig", "Twig", UNIT, "enron-case"))
+    for write in (False, True):
+        lines: list[str] = []
+        report = await migrate(store, cases, write=write, say=lines.append)
+        assert report.writes == [] and report.layers_made == []
+        assert report.read_their_originals_layer == ["Twig (twig)"]
+        (said,) = [line for line in lines if "made since L3.1" in line]
+        assert said.strip() == (
+            "1 branch made since L3.1 reads its original's layer and is given none: Twig (twig)"
+        )
+    assert await store.layer_of_case("twig") is None
+
+
+async def test_the_branch_is_refused_a_layer_with_its_link_unread(
+    store: InMemoryDatasetStore,
+) -> None:
+    """Rule 15, red: the run as it was, reading no link, asks for the branch's layer and stops."""
+    from services.api.datasets import BranchLayerError
+
+    class _LinksUnread:
+        def __init__(self, inner: InMemoryDatasetStore) -> None:
+            self._inner = inner
+
+        async def read_only_layer_of(self, investigation_id: str) -> None:
+            return None
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+    await migrate(store, [CaseRow("enron-case", "Enron", UNIT, None)], write=True, say=print)
+    await store.copy_case("enron-case", "twig", case_name="Twig")
+    with pytest.raises(BranchLayerError):
+        await migrate(
+            _LinksUnread(store),  # type: ignore[arg-type]
+            [CaseRow("twig", "Twig", UNIT, "enron-case")],
+            write=True,
+            say=lambda _: None,
+        )
+
+
+async def test_a_legacy_branch_naming_several_datasets_is_counted_and_the_dry_run_agrees(
+    store: InMemoryDatasetStore,
+) -> None:
+    """The final L3.1 review's 3a: a case made from another before L3.1 that names several datasets
+    had its layer made inside `compose_for_case`, uncounted and unnamed, and the dry run said one
+    write more than the real run made. Now its layer is made first, counted and named, and the dry
+    run's writes are the real run's."""
+    store.cases["legacy-both"] = ["enron", "fixture-corp"]
+    cases = [
+        CaseRow("enron-case", "Enron", UNIT, None),
+        CaseRow("legacy-both", "Legacy both", UNIT, "enron-case"),
+    ]
+    dry_lines: list[str] = []
+    dry = await migrate(store, cases, write=False, say=dry_lines.append)
+    lines: list[str] = []
+    real = await migrate(store, cases, write=True, say=lines.append)
+    assert len(dry.writes) == len(real.writes)
+    assert [w.split()[0] for w in dry.writes] == [
+        "make", "make", "create", "set", "case",
+    ]  # fmt: skip
+    assert [w.split()[0] for w in real.writes] == [
+        "ensure_layer", "ensure_layer", "create_composite", "set_egress", "set_for_case",
+    ]  # fmt: skip
+    assert real.layers_made == ["enron-case", "legacy-both"]
+    assert real.kept_their_own_layer == ["Legacy both (legacy-both)"]
+    assert any("Legacy both (legacy-both)" in line and "L3.2 retires it" in line for line in lines)
+    assert await store.layer_of_case("legacy-both") is not None

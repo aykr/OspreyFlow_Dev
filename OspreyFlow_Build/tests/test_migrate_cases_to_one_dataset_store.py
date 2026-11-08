@@ -6,6 +6,7 @@ Amendment 12 item 9, ADR-143 decision 1)."""
 from __future__ import annotations
 
 import asyncpg
+import pytest
 from scripts.migrate_cases_to_one_dataset import migrate
 from scripts.stamp_datasets import CaseRow
 from services.api.config import PostgresConfig
@@ -176,6 +177,110 @@ async def test_the_real_run_places_a_removed_case_and_reports_rows_with_no_case(
         await conn.execute("DELETE FROM investigation_datasets WHERE investigation_id = 'nobody'")
         assert await index_one_dataset_per_case(conn) is True
         await conn.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()
+
+
+def _writes_said(out: str) -> int:
+    """The run's own count of its writes, from its last line ("…; n writes …")."""
+    (last,) = [line for line in out.splitlines() if " writes" in line and "not placed;" in line]
+    return int(last.split("not placed;")[1].split("writes")[0].strip().replace(",", ""))
+
+
+async def test_a_branch_reading_its_originals_layer_is_given_none_and_a_rerun_changes_nothing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The final L3.1 review's second blocker, at `_main`: once a branch made since L3.1 holds a
+    `case_layer_reads` row, the migration called `ensure_layer` for it, which refuses a branch
+    (`BranchLayerError`): the run stopped there, the one-row index was never built, and every
+    re-run stopped at the same case. The dry run could not foresee it, reading no links. Now the
+    branch is named and given none; the dry run says exactly the writes the real run makes; and a
+    second run changes nothing. Red with the links unread (below)."""
+    import scripts.migrate_cases_to_one_dataset as migration
+
+    admin, schema, dsn = await _old_deployment()
+    try:
+        conn = await asyncpg.connect(dsn)
+        await conn.execute("DELETE FROM investigation_datasets WHERE investigation_id = 'nobody'")
+        assert await migration._main([], dsn=dsn) == 0  # the first run, as on the deployment
+        # Then a branch made under L3.1's code: it reads 'one''s layer through a link.
+        await conn.execute(
+            "INSERT INTO investigations (id, name, owning_unit, branched_from) "
+            "VALUES ('twig', 'Twig', 'u', 'one')"
+        )
+        store = await PostgresDatasetStore.connect(dsn)
+        try:
+            await store.copy_case("one", "twig", case_name="Twig")
+            assert await store.read_only_layer_of("twig") == await store.layer_of_case("one")
+        finally:
+            await store.close()
+        await conn.execute("DROP INDEX IF EXISTS investigation_datasets_one_per_case")
+        capsys.readouterr()
+        assert await migration._main(["--dry-run"], dsn=dsn) == 0
+        dry = capsys.readouterr().out
+        assert await migration._main([], dsn=dsn) == 0
+        real = capsys.readouterr().out
+        assert _writes_said(dry) == _writes_said(real) == 0
+        for said in (dry, real):
+            assert "1 branch made since L3.1 reads its original's layer and is given none: " in said
+            assert "Twig (twig)" in said
+        assert "One dataset per case is now a rule of the store." in real
+        assert await migration._main([], dsn=dsn) == 0
+        assert _writes_said(capsys.readouterr().out) == 0
+        assert await conn.fetchval(
+            "SELECT count(*) FROM datasets WHERE layer_of = 'twig'"
+        ) == 0  # fmt: skip
+        await conn.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()
+
+
+async def test_the_branch_stops_the_migration_with_its_link_unread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15, red: the migration as it was, reading no link, asks `ensure_layer` for the branch
+    and is refused."""
+    import scripts.migrate_cases_to_one_dataset as migration
+    from services.api.datasets import BranchLayerError
+
+    class _LinksUnread:
+        """The store as the migration read it before this fix: no link seen; every write still
+        the real store's, which refuses a branch a layer."""
+
+        def __init__(self, inner: object) -> None:
+            self._inner = inner
+
+        async def read_only_layer_of(self, investigation_id: str) -> None:
+            return None
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._inner, name)
+
+    admin, schema, dsn = await _old_deployment()
+    try:
+        conn = await asyncpg.connect(dsn)
+        await conn.execute("DELETE FROM investigation_datasets WHERE investigation_id = 'nobody'")
+        assert await migration._main([], dsn=dsn) == 0
+        await conn.execute(
+            "INSERT INTO investigations (id, name, owning_unit, branched_from) "
+            "VALUES ('twig', 'Twig', 'u', 'one')"
+        )
+        store = await PostgresDatasetStore.connect(dsn)
+        try:
+            await store.copy_case("one", "twig", case_name="Twig")
+        finally:
+            await store.close()
+        await conn.close()
+        real = migration.migrate
+
+        async def unread(store: object, cases: object, **kwargs: object) -> object:
+            return await real(_LinksUnread(store), cases, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(migration, "migrate", unread)
+        with pytest.raises(BranchLayerError):
+            await migration._main([], dsn=dsn)
     finally:
         await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
         await admin.close()

@@ -13,7 +13,11 @@ For each case, oldest first:
    one composite per distinct set in a unit, reused by every case naming that set, named for its
    members, its egress the strictest of theirs (`datasets.compose_for_case`). Nothing is copied: a
    composite is read as its members, so the case reads exactly what it read before.
-3. Every case it placed gets its **analyst layer**, empty, if it has none.
+3. Every case it placed gets its **analyst layer**, empty, if it has none, made before its dataset
+   is set so a dry run counts exactly what a real run makes; a case made from another before L3.1
+   keeps one of its own (named and counted). A branch made since L3.1, which reads its original's
+   layer through `case_layer_reads`, is given none, and is named and counted as such (ADR-144
+   Amendment 1 decision 2); the dry run reads those links too.
 4. A case it cannot place is **reported, never guessed**: one that reads nothing, one naming a
    dataset of another unit, one naming a composite beside another dataset.
 
@@ -73,6 +77,8 @@ class Report:
     layers_made: list[str] = field(default_factory=list)
     #: Cases made from another case before L3.1, given a layer of their own (labels).
     kept_their_own_layer: list[str] = field(default_factory=list)
+    #: Branches made since L3.1, which read their original's layer and are given none (labels).
+    read_their_originals_layer: list[str] = field(default_factory=list)
     #: Each case not placed, with why, in words.
     unplaced: list[str] = field(default_factory=list)
     #: Every write made (or, in a dry run, that would be made), in order.
@@ -88,7 +94,14 @@ class DryRun:
         self._writes = writes
 
     def __getattr__(self, name: str) -> Any:
-        if name in {"chosen_of_case", "layer_of_case", "list_all", "egress_of", "ids_of_case"}:
+        if name in {
+            "chosen_of_case",
+            "layer_of_case",
+            "read_only_layer_of",
+            "list_all",
+            "egress_of",
+            "ids_of_case",
+        }:
             return getattr(self._inner, name)
         raise AttributeError(f"a dry run does not call {name}")
 
@@ -187,19 +200,33 @@ async def migrate(
     for case in cases:
         label = f"{case.name or 'Unnamed case'} ({case.id})"
         chosen = await store.chosen_of_case(case.id)
+        # Read before anything is written, so a dry run and a real run decide alike: on a real run
+        # a case's layer could otherwise be made inside `set_for_case` or `compose_for_case`,
+        # uncounted, and the dry run would say one write more than the real run makes.
+        had_a_layer = await store.layer_of_case(case.id) is not None
+        reads_its_originals = await store.read_only_layer_of(case.id) is not None
         if not chosen:
             report.unplaced.append(f"{label}: reads no dataset, so there is nothing to place it on")
             continue
         if {d.owning_unit for d in chosen} != {case.owning_unit}:
             report.unplaced.append(f"{label}: names a dataset of another unit")
             continue
+        if len(chosen) > 1 and any(d.kind != SOURCE for d in chosen):
+            report.unplaced.append(f"{label}: names a composite beside another dataset")
+            continue
+        if reads_its_originals:
+            # A branch made since L3.1 reads its original's layer and holds none (ADR-144
+            # Amendment 1 decision 2); `ensure_layer` refuses it one.
+            report.read_their_originals_layer.append(label)
+        elif not had_a_layer:
+            await _give_a_layer(case, through)
+            report.layers_made.append(case.id)
+            if case.branched_from:
+                report.kept_their_own_layer.append(label)
         if len(chosen) == 1:
             report.kept.append(case.id)
             kept = f"  {label}: reads {chosen[0].name}, kept"
             say(kept + (f"; {_READ_ONLY}" if chosen[0].kind == COMPOSITE else ""))
-        elif any(d.kind != SOURCE for d in chosen):
-            report.unplaced.append(f"{label}: names a composite beside another dataset")
-            continue
         else:
             members = [d.id for d in chosen]
             key = (case.owning_unit, frozenset(members))
@@ -217,11 +244,18 @@ async def migrate(
                 f"  {label}: names {len(members)} datasets, now reads a composite of them; "
                 + _READ_ONLY
             )
-        if await store.layer_of_case(case.id) is None:
-            await _give_a_layer(case, through)
-            report.layers_made.append(case.id)
-            if case.branched_from:
-                report.kept_their_own_layer.append(label)
+    if report.read_their_originals_layer:
+        count = len(report.read_their_originals_layer)
+        say(
+            f"  {count:,} {'branch' if count == 1 else 'branches'} made since L3.1 "
+            + (
+                "reads its original's layer and is"
+                if count == 1
+                else "read their original's layer and are"
+            )
+            + " given none: "
+            + ", ".join(report.read_their_originals_layer)
+        )
     if report.kept_their_own_layer:
         count = len(report.kept_their_own_layer)
         one = count == 1
@@ -311,6 +345,11 @@ async def snapshot(conn: asyncpg.Connection) -> InMemoryDatasetStore:
         "ORDER BY investigation_id, position"
     ):
         held.cases.setdefault(r["investigation_id"], []).append(r["dataset_id"])
+    # A branch made since L3.1 reads its original's layer through a link, not a layer of its own;
+    # the dry run reads the links too, or it would plan a layer the real run is refused.
+    if await conn.fetchval("SELECT to_regclass('case_layer_reads') IS NOT NULL"):
+        for r in await conn.fetch("SELECT investigation_id, layer_id FROM case_layer_reads"):
+            held.layer_reads[r["investigation_id"]] = r["layer_id"]
     return held
 
 
