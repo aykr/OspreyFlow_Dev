@@ -26,3 +26,22 @@
 - Platform lease on stack a, 20:52:21–20:54:02 UTC: after three calls with an engine key (and about 75 s),
   its SHA-256 is in `LiteLLM_VerificationToken` (left out of every backup) and in `LiteLLM_SpendLogs`,
   `LiteLLM_DailyTagSpend` (which the usage reads), `LiteLLM_DailyUserSpend` and `LiteLLM_DailyTeamSpend`.
+
+## Item 3 run live, item 5 written (resumed session, 8 November 2026)
+
+Platform lease on stack a, taken 21:00:51 UTC, released 21:10:54 UTC; the pinned gateway and the stand-in
+provider on networks of the lane's own (`plat-p3-net`, `plat-p3-pub`), its own database `litellm_p3`
+(dropped after), `OSPREY_LIVE_GATEWAY_URL=http://127.0.0.1:54400`:
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_model_gateway_live.py::test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway` (live) | `LiteLLM_DailyTagSpend` taken out of the tables allowed to hold the key's hash | 1 failed, naming `LiteLLM_DailyTagSpend` **and `LiteLLM_DeletedVerificationToken`** |
+| `tests/harness/test_gateway_backup.py::test_a_backup_holds_no_engine_key_of_the_gateway` | a deleted engine key's row planted in `LiteLLM_DeletedVerificationToken`, before the table was left out | 1 failed |
+
+**A green that was not one.** The first live run (21:04:19–21:05:37) passed on a fresh gateway, which had
+deleted no key. The plant's run, the second on that gateway, found the hash also in
+`LiteLLM_DeletedVerificationToken`: the first run's `finally` had deleted the engine key, and the next run
+derives the same key (an HMAC of the engine's name). So the check passes on a first run and fails on any
+later one, as a deployment would after its first engine removal or revocation (rule 15: the plant must meet
+the dependency in the state the real call site meets it). The table is now left out of every backup; live
+again at 21:09:25–21:10:42 on the same gateway, the deleted keys present: 1 passed.

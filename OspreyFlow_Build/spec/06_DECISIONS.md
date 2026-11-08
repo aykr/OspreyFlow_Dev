@@ -29894,6 +29894,59 @@ network of the lane's own and a stand-in provider (no hosted provider was called
 and change. The gateway's spend figures are tokens, not money, for every hosted entry: its own
 dashboard's "spend" is the tokens used.
 
+**As built in P3** (8 November 2026, the platform lane; the items carried from P2's independent review,
+`process/lanes/platform/BRIEF.md` P3 items 1–6). Amendment 3 is otherwise unchanged; where this says so it
+replaces one of its "Left" entries.
+1. **Old engine keys are revoked at every reconcile** (replacing "A changed master key leaves the old engine
+   keys in the gateway"). `GatewayAdmin.revoke_stale_engine_keys` reads every page of `GET /key/list`
+   (measured: SHA-256 hashes, newest first, at most 100 a page, `total_pages` given) before deleting
+   anything, and deletes by hash (`POST /key/delete`, measured: a hash is taken, an unknown one is 404,
+   the deleted key's next call 401) each key tagged `metadata.osprey_engine` that the current master key
+   would not derive for an enabled engine. A key without that tag is not the Conduit's and is left alone;
+   more than a hundred pages is refused in words, never cut short. Each engine key is now made with the
+   tag.
+2. **Each engine's key is limited to its own engine's models** (`/key/generate` and `/key/update` with
+   `models`, the gateway's entry names of that engine alone). Measured: a key so limited is refused any
+   other model, held or not, 403 `key_model_access_denied`, naming the allowed models and never the key;
+   `/key/update` changes `models` at once.
+3. **The engine key's hash in a backup: kept in the spend tables, nowhere else.** Measured (platform lease,
+   stack a): after calls with an engine key its SHA-256 is in `LiteLLM_VerificationToken` and in the
+   `api_key` columns of `LiteLLM_SpendLogs`, `LiteLLM_DailyTagSpend` (which the usage reads),
+   `LiteLLM_DailyUserSpend` and `LiteLLM_DailyTeamSpend`; and, **once the key is deleted** (an engine
+   removed, or item 1's revocation), in `LiteLLM_DeletedVerificationToken` with the name's last four and
+   its metadata — found only by a second live run, since a first run on a fresh gateway has deleted
+   nothing. **Decided:** the four spend tables keep their rows, hash included, so a restore keeps its
+   usage; a hash opens nothing and the key it names is either current (and remade by the restore's first
+   start) or revoked. `LiteLLM_DeletedVerificationToken` joins the tables whose rows no backup holds
+   (`harness/backup.py`'s `GATEWAY_SEALED_TABLES`), since a restore has no use for a deleted key. The live
+   check (`test_model_gateway_live.py`'s `pg_dump` case) calls with the key, waits for the spend tables,
+   and fails if the hash is in any table of the kept dump but the four.
+4. **A garbled answer at start never stops the Conduit starting**: the first `ModelAdmin.start()` treats
+   any failure of the gateway's answer (a non-JSON 200 included) as a gateway not yet reachable, logged by
+   its kind and retried in the background as Amendment 3 decision 3 already says.
+5. **Why usage figures are not an unfiltered count under rule 7.** Rule 7 forbids the Glass an unfiltered
+   count of *graph data*: a figure about nodes, links or records that a person's access would have
+   filtered, so that the figure itself tells them something their access hides. Usage is not that: it
+   counts **calls to the model gateway and their tokens, per engine and per job**, from the gateway's own
+   tags (`osprey:<engine>/<job>`), which carry no case, dataset, entity, person or content (decision 2;
+   the planted-prompt and planted-id tests hold it). No access rule filters a call by what it was about,
+   because nothing about what it was about is kept, so there is nothing an unfiltered call count could
+   disclose that a filtered one would hide. It is deployment-wide operational data, shown only behind
+   `manage_models`. A figure per case, dataset or person would be a different thing and would need its
+   own decision; none is made.
+6. **The Glass shows `model_limit_reached` where it shows `engine_refused`** (Ask to search,
+   `patterns/api.ts`, in the Conduit's own words).
+7. **Minors**: no engine key is derived from an empty master key (refused); a hosted engine may not be
+   named `local` (`packages/schemas/deployment.py`); *Test the connection*'s calls are tagged
+   `osprey:<engine>/test`; `model_keys.py` closes its gateway client and audit.
+
+**Tests** (each shown red by a plant at its real call site, `process/lanes/platform/P3_RED_RECORD.md`):
+`tests/services/api/test_model_engine_keys.py` (rotation revokes, every page read, one engine's key refused
+another's models, garbled first answer, empty master, `local` refused, the test call's tag);
+`tests/adapters/model_litellm/test_stand_in_gateway_usage.py` (the stand-in refuses as measured);
+`tests/harness/test_gateway_backup.py::test_a_backup_holds_no_engine_key_of_the_gateway` (a deleted key's row
+left out); `test_model_gateway_live.py`'s `pg_dump` case (live, the platform lease on stack a);
+`apps/workspace/src/patterns/QueryBuilderPanel.test.tsx`.
 
 ### ADR-142, Amendment 4 (8 November 2026) — sister lanes and a third test stack
 

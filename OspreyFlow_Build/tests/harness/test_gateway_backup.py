@@ -88,12 +88,16 @@ def test_a_backup_holds_no_engine_key_of_the_gateway(
     """ADR-135 Amendment 3: each engine's own gateway key is a row of `LiteLLM_VerificationToken`
     (its hash, its last four, its spend). Restored elsewhere, that row would keep the old
     deployment's engine key working there, for anyone who holds the old master key; so no backup
-    holds those rows, and a restore's first start makes each engine's key afresh."""
+    holds those rows, and a restore's first start makes each engine's key afresh. A key deleted (an
+    engine removed, or revoked at a reconcile after the master key changed) leaves the same hash,
+    its name's last four and its metadata in `LiteLLM_DeletedVerificationToken` (measured in P3, ADR-135
+    Amendment 3's "As built in P3"), which a restore has no use for, so its rows are left out too."""
     compose = _env(tmp_path / "dep", SALT_HERE)
     engine_hash = "9aed966cd5732b4d1da7a405e41fee7b74772b0f73edc0ef564ec9814571918f"
     engine_row = f"{engine_hash}\tsk-...ENG4\t12.0"
     gateway = _pg_dump_honouring_exclusions({
         "LiteLLM_VerificationToken": [engine_row],
+        "LiteLLM_DeletedVerificationToken": [f"{engine_hash[::-1]}\tsk-...DEL7\t3.0"],
         "LiteLLM_SpendLogs": ["2026-11-08\tgemini/gemini-2.5-flash\t1"],
     })  # fmt: skip
 
@@ -110,7 +114,9 @@ def test_a_backup_holds_no_engine_key_of_the_gateway(
     backup.backup_postgres_all(compose, tmp_path / "set" / "postgres")
     dumped = (tmp_path / "set" / "postgres" / "litellm.sql").read_text()
     assert "9aed966cd5732b4d" not in dumped and "ENG4" not in dumped
+    assert engine_hash[::-1] not in dumped and "DEL7" not in dumped
     assert 'CREATE TABLE public."LiteLLM_VerificationToken"' in dumped
+    assert 'CREATE TABLE public."LiteLLM_DeletedVerificationToken"' in dumped
 
 
 def _set(tmp_path: Path, *, keys: list[str]) -> Path:

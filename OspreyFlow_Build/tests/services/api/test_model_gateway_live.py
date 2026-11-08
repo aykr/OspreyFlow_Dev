@@ -87,7 +87,8 @@ def _rows(dump: str, table: str) -> list[str]:
 
 
 #: Measured 8 November 2026 (P3, the platform lease on stack a): after calls made with an engine's
-#: key, its SHA-256 is in these four tables' `api_key` columns, and in the key table (left out).
+#: key, its SHA-256 is in these four tables' `api_key` columns, and in the key table (left out); once
+#: deleted (a second run deletes the first's), in `LiteLLM_DeletedVerificationToken` too (left out).
 SPEND_TABLES_WITH_KEY_HASH = frozenset({
     "LiteLLM_SpendLogs", "LiteLLM_DailyTagSpend", "LiteLLM_DailyUserSpend", "LiteLLM_DailyTeamSpend",
 })  # fmt: skip
@@ -145,7 +146,7 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
         assert all(_rows(kept, table) == [] for table in tables)
         # Named, not taken from the list under test: a table dropped from it is still checked.
         for table in ("LiteLLM_CredentialsTable", "LiteLLM_ProxyModelTable", "LiteLLM_Config",
-                      "LiteLLM_VerificationToken"):  # fmt: skip
+                      "LiteLLM_VerificationToken", "LiteLLM_DeletedVerificationToken"):  # fmt: skip
             assert _rows(kept, table) == [], table
         assert GOOD not in kept and key not in kept
         assert 'CREATE TABLE public."LiteLLM_CredentialsTable"' in kept

@@ -324,6 +324,10 @@ GATEWAY_SEALED_TABLES = (
     # elsewhere it would keep the old deployment's engine key working there; a restore's first
     # start makes each engine's key afresh (its budget's spend so far starts again).
     '"LiteLLM_VerificationToken"',
+    # ADR-135 Amendment 3, as built in P3: a deleted engine key (an engine removed, or revoked at a
+    # reconcile after the master key changed) keeps its hash, its name's last four and its metadata
+    # here. A restore has no use for a deleted key, so none of it is carried.
+    '"LiteLLM_DeletedVerificationToken"',
 )
 
 
