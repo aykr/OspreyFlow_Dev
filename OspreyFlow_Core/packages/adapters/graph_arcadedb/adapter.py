@@ -40,6 +40,7 @@ from ports.graph import (
     BulkEdgeResult,
     DatasetFootprint,
     FindLimitExceeded,
+    LinkCloned,
     NodeSuggestions,
     RarityTooLarge,
     RestoredElements,
@@ -2102,7 +2103,14 @@ class GraphArcadeDBAdapter:
 
     # --- supersession --------------------------------------------------------
 
-    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
+    async def supersede_node(
+        self,
+        node_id: NodeId,
+        replacement: NodeWrite,
+        tx: TxId,
+        *,
+        on_link_cloned: LinkCloned | None = None,
+    ) -> NodeId:
         schema = self._require_schema()
         entity_type = schema.entity_type(replacement.type)
         if entity_type is None:
@@ -2156,12 +2164,22 @@ class GraphArcadeDBAdapter:
         )
 
         await self._repoint_incident_edges(
-            node_id, new_node_id, created_by=replacement.created_by, tx=tx
+            node_id,
+            new_node_id,
+            created_by=replacement.created_by,
+            tx=tx,
+            on_link_cloned=on_link_cloned,
         )
         return new_node_id
 
     async def _repoint_incident_edges(
-        self, old_node_id: NodeId, new_node_id: NodeId, *, created_by: str, tx: TxId
+        self,
+        old_node_id: NodeId,
+        new_node_id: NodeId,
+        *,
+        created_by: str,
+        tx: TxId,
+        on_link_cloned: LinkCloned | None = None,
     ) -> None:
         """`superseded_by` only marks the old node invisible by default —
         it does nothing to the edges still recorded against it, and a
@@ -2182,7 +2200,7 @@ class GraphArcadeDBAdapter:
             session_id=tx,
         )
         for edge_record in out_edges:
-            await self._clone_edge_onto(
+            clone = await self._clone_edge_onto(
                 edge_record,
                 source=new_node_id,
                 target=edge_record["target"],
@@ -2190,13 +2208,14 @@ class GraphArcadeDBAdapter:
                 now=now,
                 tx=tx,
             )
+            await self._name_clone(old_lit, edge_record, clone, tx, on_link_cloned)
 
         in_edges = await self._client.gremlin(
             f'g.V().has("id",{old_lit}).inE().has("reverted",false).elementMap()',
             session_id=tx,
         )
         for edge_record in in_edges:
-            await self._clone_edge_onto(
+            clone = await self._clone_edge_onto(
                 edge_record,
                 source=edge_record["source"],
                 target=new_node_id,
@@ -2204,6 +2223,7 @@ class GraphArcadeDBAdapter:
                 now=now,
                 tx=tx,
             )
+            await self._name_clone(old_lit, edge_record, clone, tx, on_link_cloned)
 
         if out_edges or in_edges:
             await self._client.gremlin(
@@ -2211,6 +2231,30 @@ class GraphArcadeDBAdapter:
                 '.property("reverted", true)',
                 session_id=tx,
             )
+
+    async def _name_clone(
+        self,
+        old_node_lit: str,
+        edge_record: dict[str, Any],
+        clone: EdgeId,
+        tx: TxId,
+        on_link_cloned: LinkCloned | None,
+    ) -> None:
+        """The original names its clone as `superseded_by`, as `supersede_edge` marks the link it
+        replaces, so the graph's own stored state says where it went; and the caller is told,
+        before the commit (ADR-109 Amendment 11). The original is found from the corrected node
+        by its own type and id, so another type holding the same id (ADR-110 Amendment 18) is
+        never marked."""
+        old_type = logical_type_name(edge_record["label"])
+        label_lit = groovy_string_literal(edge_record["label"])
+        await self._client.gremlin(
+            f'g.V().has("id",{old_node_lit}).bothE({label_lit}).has("reverted",false)'
+            f'.has("id",{groovy_string_literal(edge_record["id"])})'
+            f'.property("superseded_by", {groovy_string_literal(clone)})',
+            session_id=tx,
+        )
+        if on_link_cloned is not None:
+            await on_link_cloned(str(edge_record["id"]), clone, old_type)
 
     async def _clone_edge_onto(
         self,
