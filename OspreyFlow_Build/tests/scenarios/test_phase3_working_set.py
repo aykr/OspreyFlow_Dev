@@ -301,7 +301,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_no_withheld_count(
         breach_body = over_cap.json()
         assert breach_body["error"] == "limit_exceeded"
         assert breach_body["cap_kind"] == "nodes"
-        assert set(breach_body["options"]) == {"branch", "filter", "promote_to_batch"}
+        assert set(breach_body["options"]) == {"save_as_view", "filter", "promote_to_batch"}
 
 
 def test_a_principal_in_a_different_org_unit_is_denied(
