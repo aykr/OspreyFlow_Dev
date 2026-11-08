@@ -11,6 +11,7 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { IngestStudio } from "../src/ingest/IngestStudio";
+import REPORTS_MAP from "./fixtures/pid_intel_reports_map.json";
 
 await applyHarnessBrand();
 
@@ -153,6 +154,13 @@ const asked: { method: string; path: string; body?: string }[] = [];
 // Phase 3's exit (ADR-140 Amendment 6): a pipeline named on the canvas, created here, then given a
 // registered source. Absent until created, so every other case sees the registry it always saw.
 let created: Record<string, unknown> | null = null;
+// Phase 6's exit (ADR-140 Amendment 10): `?pipeline=reports-map` opens chapter 4's reports pipeline
+// already holding the whole committed map, for the axe scan of the Map editor at its fullest.
+if (startParams.get("pipeline") === "reports-map")
+  created = { ...base, recipe_id: "r-new", version: 1, status: "draft", label: "Intelligence reports",
+    source_location: "harbour-extract/intel_reports.csv", handling: REPORTS_HANDLING, ready_for_profile: true, created_at: day(0),
+    row_template: REPORTS_MAP.row_template, unmapped_fields: REPORTS_MAP.unmapped_fields, deduplicate: REPORTS_MAP.deduplicate,
+    pipeline: { ...CHAIN, nodes: CHAIN.nodes.map((n) => (n.id === "source" ? { ...n, label: "Intelligence reports file", config: { source_id: "src-reports" } } : n)) } };  // prettier-ignore
 (window as unknown as { __asked: typeof asked }).__asked = asked;
 
 // The routes' refusals, as the Conduit answers them (rule 15: a fake models what the real route
@@ -426,7 +434,15 @@ if (params.get("pipeline") === "source") {
 // with a step's drawer open, a source's and Map's Preview, Test and Deploy in the drawer, an expert
 // step read in guided mode, and the Map editor under its strip with a column chosen to bind.
 const pipelineState = params.get("pipeline");
-if (pipelineState && pipelineState !== "source") {
+if (pipelineState === "reports-map") {
+  // The Map editor holding the committed reports map, its Endpoint chosen: a condition, a transform,
+  // a literal, all six handling parts bound, and the ignored columns with their notes.
+  await pressNamed("Open Intelligence reports");
+  await pressNamed("Map: Map");
+  await pressNamed("Open map editor");
+  await pressNamed("Entity 11: number (Endpoint)");
+  for (let i = 0; i < 20; i++) await settle();
+} else if (pipelineState && pipelineState !== "source") {
   await pressNamed("Open Visit bookings");
   if (pipelineState === "guided" || pipelineState === "expert") await pressNamed("Source: Call log");
   if (pipelineState === "preview") {
