@@ -12,3 +12,4 @@ takes them (then struck through with the brief's commit). Newest last.
 | rules | Ask to search (`patterns/api.ts`) shows `model_limit_reached` as it shows `engine_refused` | platform, P2 | L2.10 (saved patterns) |
 | case | L3.4: a withdrawal leaves in place a promoted link the withdrawer may not see (settled, `MORNING.md` item 60) | case, L3.3 | L3.4 |
 | studio-b | Wire the subscribed list ids into `studio_staging` and `reference_list_import`, and retire L1.4's stand-in import, once L1.4 is on main | studio-b, L1.6 | after L1.4 |
+| studio | L1.5 first: Test of a pipeline with no staging steps still counts over masked rows (pre-existing rule 3 oracle) | independent review of L1.4 | L1.5 |
