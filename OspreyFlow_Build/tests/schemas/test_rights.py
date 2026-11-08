@@ -30,7 +30,7 @@ TABLE: dict[str, set[str]] = {
     "draw_on_boards": {A}, "promote_to_dataset": {A}, "propose_types": {A}, "accept_types": {D},
     # ADR-112 Amendment 5 decisions 1 and 2: the Rule author's right; the drawn-dataset merge.
     "author_rules": {U}, "merge_datasets": {D},
-    "read_alert_queue": {A, D, R}, "triage_alerts": {A, U}, "deploy_rules": {A, D},
+    "read_alert_queue": {A, D, R, U}, "triage_alerts": {A, U}, "deploy_rules": {A, D},
     "read_rule_audit": {A, D, M}, "read_held_rows": {A, D}, "decide_held_rows": {A, D},
     "trace_ownership": {A}, "keep_watches": {A}, "load_screening_lists": {D, M},
     # ADR-139 decision 3: analysts propose and approve; the administrator too (Amendment 1).
@@ -90,10 +90,12 @@ def test_the_old_roles_keep_working_for_the_transition() -> None:
 
 
 def test_the_rule_author_writes_rules_and_works_alerts_and_holds_no_studio_right() -> None:
-    """ADR-112 Amendment 5 decision 2: `author_rules` and `triage_alerts`, and nothing of the
-    Studio's (planted red: `RULE_AUTHOR` given `edit_pipelines`)."""
+    """ADR-112 Amendment 5 decision 2: `author_rules` and `triage_alerts`, with `read_alert_queue`
+    since the owner's ruling on L2.9 Q1 (a), 8 November 2026 (ADR-146 Amendment 2 point 5): whoever
+    triages reads the queue. Nothing of the Studio's (planted red: `RULE_AUTHOR` given
+    `edit_pipelines`)."""
     held = rights_for([U])
-    assert held == {Right.AUTHOR_RULES, Right.TRIAGE_ALERTS}
+    assert held == {Right.AUTHOR_RULES, Right.TRIAGE_ALERTS, Right.READ_ALERT_QUEUE}
     studio = {Right.EDIT_PIPELINES, Right.VERIFY_PIPELINES, Right.PUBLISH_PIPELINES,
               Right.RUN_PIPELINES, Right.SCHEDULE_PIPELINES, Right.EDIT_TARGET_MODEL,
               Right.MERGE_DATASETS, Right.ACCEPT_TYPES, Right.REVIEW_PROMOTIONS}  # fmt: skip

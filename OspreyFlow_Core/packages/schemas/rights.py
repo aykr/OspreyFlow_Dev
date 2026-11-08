@@ -127,8 +127,10 @@ REPORTS_VIEWER = frozenset(
     {R.READ_ALERT_QUEUE, R.READ_REPORTS, R.READ_REPORT_FEED, R.READ_DATA_FEEDS}
 )
 
-#: ADR-112 Amendment 5 decision 2: works alerts and writes rules; holds no Studio right.
-RULE_AUTHOR = frozenset({R.AUTHOR_RULES, R.TRIAGE_ALERTS})
+#: ADR-112 Amendment 5 decision 2: works alerts and writes rules; holds no Studio right. It reads
+#: the alert queue, since whoever triages must (the owner's ruling on L2.9 Q1 (a), 8 November 2026;
+#: ADR-146 Amendment 2 point 5), so Rules and Monitoring's entry read answers it.
+RULE_AUTHOR = frozenset({R.AUTHOR_RULES, R.TRIAGE_ALERTS, R.READ_ALERT_QUEUE})
 
 #: The built-in roles: ADR-112's four and Amendment 5's *Rule author*, by the name the identity
 #: provider gives them. None can be edited, only copied into a custom role (Amendment 4).
