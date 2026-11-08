@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
 from schemas.monitoring import CheckNotJudged, WouldRaise
@@ -881,6 +882,27 @@ class RejectionRecord(BaseModel):
     sample_unreadable: bool = False
 
 
+class LinkPriorState(BaseModel):
+    """ADR-110 Amendment 16: a link exactly as it was stored just before a returning row's load
+    merged into it. A row a full snapshot withdrew comes back, and its write merges into the link
+    its own withdrawn key recorded; the load keeps that link's prior state so its revert can put the
+    link back as it was, and refuses if the link was written since (its `revision` or `load_id`
+    moved).
+
+    **Graph data (rule 3).** `stored` holds the link's properties, provenance and marking as the
+    adapter stores them. It is held in the run ledger for `services/ingest/load_revert.py` alone:
+    no route, view, report, log or metering carries it, and `LoadReport` leaves it out of every
+    dump. `handling` is the link's marking when it was read; a restore writes the link back at it,
+    never at a weaker one."""
+
+    edge_id: EdgeId
+    edge_type: str
+    revision: int = Field(ge=1)
+    load_id: str | None = None
+    handling: Handling
+    stored: dict[str, Any] = Field(default_factory=dict)
+
+
 class RowElements(BaseModel):
     """What one kept row wrote (ADR-110 Amendment 8 point 2): the nodes it wrote or matched and the
     links it wrote, created or merged into, each by its stored id, and the events it wrote, by
@@ -958,6 +980,10 @@ class LoadReport(BaseModel):
     withdrawn_row_keys: list[str] = Field(default_factory=list)
     withdrawn_node_ids: list[NodeId] = Field(default_factory=list)
     withdrawn_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-110 Amendment 16: each link a returning row merged into that its own withdrawn key
+    #: recorded, as it was stored before the merge. Graph data, for the ledger alone (rule 3): left
+    #: out of every dump, so no view, report or route can carry it.
+    own_key_merges: SkipJsonSchema[list[LinkPriorState]] = Field(default_factory=list, exclude=True)
     rows_withdrawn: int = 0
     links_kept_an_occurrence: int = 0
     rows_left_in_place: int = 0
@@ -1294,6 +1320,11 @@ class LoadRecord(BaseModel):
     rows_withdrawn: int = 0
     withdrawn_node_ids: list[NodeId] = Field(default_factory=list)
     withdrawn_edge_ids: list[EdgeId] = Field(default_factory=list)
+    #: ADR-110 Amendment 16: the links a returning row merged into that its own withdrawn key
+    #: recorded, each as stored before the merge. Its revert restores them, refused if one was
+    #: written since, and a merge into any other link is still refused (ADR-127 decision 6). Graph
+    #: data (rule 3): read by `load_revert` alone, never by a view. A record from before has none.
+    own_key_merges: list[LinkPriorState] = Field(default_factory=list)
     #: ADR-110 Amendment 6 point 1: the watermark an incremental refresh's load reached. The next
     #: refresh reads from the latest such record of a succeeded run that is not reverted; the
     #: revert is refused while a later refresh read past it.
