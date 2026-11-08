@@ -1,0 +1,17 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index d162a8f..05f3228 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -112,6 +112,12 @@ const EXTRA_STATES: Record<string, string[]> = {
+     "contacts=built&staged=lookup", "contacts=built&staged=join", "contacts=built&staged=derive-preview",
+     "contacts=1&staged=filter", "contacts=built&staged=map", "contacts=1&staged=union",
+     "contacts=1&staged=dedupe",
++    // Phase 8 (ADR-140 decisions 3, 12, 13 and 16): a SQL step's drawer with Check SQL's words, a fuzzy
++    // match's drawer, the pipeline's YAML in expert mode, Test disclosing an expert step, and an expert
++    // step read whole by a person without the right to write one.
++    "contacts=built&staged=sql&mode=expert&rights=expert", "contacts=built&staged=fuzzy&mode=expert&rights=expert",
++    "contacts=built&staged=yaml&mode=expert&rights=expert", "contacts=built&staged=expert-test&mode=expert&rights=expert",
++    "pipeline=expert-step&expert=1&mode=expert",
+   ],
+   // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
+   // every section in the side list, a coming placeholder open.

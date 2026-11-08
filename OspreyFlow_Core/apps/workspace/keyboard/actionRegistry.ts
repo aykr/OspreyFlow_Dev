@@ -986,6 +986,13 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
   "a-drawer-refuses-what-the-save-gate-refuses-by-keyboard",
   "remove-a-staging-step-by-keyboard",
   "build-visits-and-contacts-by-keys-for-phase-7s-exit",
+  // ADR-140 decisions 3, 12, 13 and 16 (redesign phase 8): the expert steps, Show YAML, and Test's
+  // disclosure.
+  "add-a-sql-step-and-check-its-sql-by-keyboard",
+  "set-a-fuzzy-match-in-its-drawer-by-keyboard",
+  "read-an-expert-step-without-the-right-by-keyboard",
+  "show-and-save-the-pipeline-yaml-by-keyboard",
+  "read-the-expert-steps-a-test-disclosed-by-keyboard",
 ] as const);
 
 // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.
