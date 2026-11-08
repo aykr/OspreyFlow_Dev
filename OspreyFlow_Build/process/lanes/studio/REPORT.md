@@ -1,16 +1,17 @@
-# studio lane · report · L1.2d (ADR-110 Amendment 18), 8 November 2026
-1. **A link write names its type: met.** `upsert_edges`' merge and both of `supersede_edge`'s writes are typed (`hasLabel`). A merge or a correction of one type's link never touches another type's link holding the same id.
-2. **An ambiguous id is refused:** `supersede_edge` and `read_link_state` raise the new `ports.graph.AmbiguousLinkId` where two types hold the id, changing nothing, never taking the first type found.
-3. **Who meets it, and how:**
-   - a route answers `409 link_id_ambiguous` in words naming no type (one app handler, ratified for it alone);
-   - a true-positive close is refused whole and not closed (QF a);
-   - a resolution run skips the one link, records the rest, and names it in its run result (the orchestrator's ruling);
-   - a returning row's load keeps no prior state for such a link, and its revert refuses one that became ambiguous.
-4. **Red on record** (`L1.2a_RED_RECORD.md`, `plants/plants5.py`): D4–D8 offline (the load, the revert, the route, resolution, the close); D1–D3 and L5 under the lease.
-5. **Leases:** studio "L1.2d: three conformance cases green, plants D1-D3", 03:36:57Z–03:37:49Z, and "L1.2d: the reordered two-types case green, L5 red", 03:41:47Z–03:42:36Z. Each was checked before and after with `pgrep`, `lsof` and `docker ps`; case's offline run on the closed ports was the only other process. The stack is stopped.
-   - Green: conformance 12 of 12; touched units 178 of 178 offline.
-6. **Reordered, not weakened:** L1.2c's two-types restore case now reads and merges while one type holds the id, then adds the other. Amendment 18 refuses the read it used to make, and the case still shows the restore is typed (L5 red).
-7. **Coordination:** glass was told before `adapter.py` changed; its L2.8b touches other functions. It knows the exception, the 409, and that its repoint journal must keep no record of a refused close. My test of the close's answer is against main's `_close`.
-8. **On main, not part of this step:** the fast tier's fix `72a5cdc`. `unreverted_loads` now leaves out `own_key_merges` with the other element lists, a fix in the code, not the test.
-9. **Spec:** ADR-110 Amendment 18, written as reserved, with who meets the refusal and how.
-10. **Next:** L3.1b's pinned `model_version` (schemas through the orchestrator first) and the Test run's draft version, then Part B, then L3.1b's screens.
+# studio lane · report · L1.2d (ADR-110 Amendment 18), with review round 1, 8 November 2026
+1. **Every link write and state read names its type: met.** `upsert_edges`' merge, `supersede_edge(…, *, old_type)` and the restore each write their named type alone; `read_link_state(edge_id, edge_type)` reads its named type alone. Every caller passes the old `Edge`'s type: link changes, pictures, extraction's confirm and resolution's conflicts.
+2. **Rule 3, the round's blocker:** the first fix's refusal searched every type and told the corrector another link holds the id. It's removed whole, so nothing searches and nothing is refused: `AmbiguousLinkId`, its 409, the close refused whole, resolution's skip and their tests all went.
+3. **A returning row's own link is read by its recorded type (QG a):**
+   - `RowElements.edge_types` (schema `2bc3a08`, through the orchestrator) and the ledger's `edge_types` column, added by the store's idempotent start-up DDL;
+   - a row kept before is never captured, and its load stays refused as `merged_links`, which is tested in the unit suite and in the real ledger.
+4. **Rule 12:** resolution reports `conflicts_recorded`, asserted through the trigger (`test_trigger.py`), run under the lease.
+5. **Red on record** (`L1.2a_RED_RECORD.md`, `plants/plants5.py`): O1–O10 and D9 offline; D1–D3, L0–L5, W1, W2 and D10 under the lease.
+6. **Lease:** studio "L1.2d round 1: …", 04:13:30Z–04:21:05Z. `pgrep`, `lsof` and `docker ps` were checked before and after; case's offline run on the closed ports was the only other process. The stack is stopped.
+   - Green: conformance 12 of 12; ledger 16 of 16; the live files and the trigger.
+   - Two of this round's test faults were caught and fixed under the lease: a re-stamp by the ontology's type name, and the scope case's old answer.
+7. **Coordination:** glass was told before `supersede_edge` changed; only its new tests need `old_type`. Case accepted the stamping wrapper's change.
+8. **Spec:** ADR-110 Amendment 18, rewritten to the ruling. `builders.py:498-499`, an access-filtered path read by id, is recorded as a minor.
+9. **Slips, mine:**
+   - a staging command named whole directories; the classifier refused it, and the round was staged by named files;
+   - the three deleted test files went into `96a53c1`.
+10. **Next:** L3.1b's `model_version` (schemas to the orchestrator first) and the Test run's draft version, then Part B, then L3.1b's screens.
