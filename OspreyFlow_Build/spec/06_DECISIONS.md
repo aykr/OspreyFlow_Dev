@@ -29410,3 +29410,57 @@ binding), `test_the_deployed_worker_connects_the_judgement_store_and_binds_it` (
 default again), and `test_written_back_reads_in_full_stages.py`'s close recording its link in the shared
 stand-in (red with the close's record removed). Each red under the rules lease on stack a, or
 offline (`process/lanes/rules/l2.8d/`).
+
+### ADR-144, Amendment 2 (8 November 2026) — case views as built: the refusal's name, no origin link on an alert's case (B14's link withdrawn), who applies a view's window and threshold, and an opened view is a read-only lens
+
+Status: accepted from the owner's rulings recorded in L3.2 (Q1) and L3.2b (8 November 2026, the open view)
+and the orchestrator's settlements, reserved for the case lane (`ADR_RESERVATIONS.md`). Built in L3.2 (the
+Conduit half) and L3.2b (the Glass half). ADR-144 and Amendment 1 are unchanged except where this says so.
+
+**Decision.**
+
+1. **The refusal's name.** Amendment 1 decision 2 refused a write into the original's layer from a case
+   made from another, under a code that named the retired kind of case. Since L3.2 the code is
+   `original_layer_read_only` (409), for the cases made so before L3.2 that the upgrade has not yet turned
+   into views (spec 03 §3.1, `01_DOMAIN_MODEL.md` §2.2a).
+2. **No origin link on an alert's case (the owner's Q1).** *Open the alert* makes a case of its own that
+   reads the alert's dataset and holds the alert's entities. It carries no link to the case the alert was
+   raised in, since no case is made from another. `08_ACCEPTANCE_SCENARIOS.md` B14's "a link to the
+   originating investigation" is withdrawn; its entities half stands
+   (`test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` asserts both halves as now
+   written).
+3. **Who applies a view's window and threshold.** The **Conduit** applies the threshold. Opening a view
+   (`GET …/views/{view}`) returns each node it shows with the cluster it falls in at the view's
+   `threshold`, or the case's when the view has none. The cluster is worked out from the `SAME_AS` and
+   `NOT_SAME_AS` links among the shown nodes alone, read with the reader's principal, so a hidden node
+   never joins two shown ones (rule 3) and a manual split holds however loose the view
+   (`test_a_view_opens_collapsed_at_its_threshold`,
+   `test_a_view_collapses_only_through_what_its_reader_may_see`,
+   `test_the_reader_check_fails_with_the_matches_read_unscoped`). The **Glass** applies the window: it
+   sets the timeline to the view's `window`, as it does for the case. A view saved from the canvas keeps
+   the chosen nodes, their positions and the timeline's window, and leaves its threshold unset.
+4. **An opened view is a read-only lens (the owner's ruling of 8 November 2026, the option recommended to
+   them).** Opening a view puts its items on the canvas in place of the case's working set, as a working
+   set of the Glass's own that is never joined to the case's delta stream. A banner names the view and its
+   *Private* or *Shared* tag, counts what it could not show without saying which or why, and offers
+   *Back to the case*. Nothing in a view changes the case's working set: no expand, links among, paths or
+   messages put on, remove, or manual same-as or split. The selection bar offers *Save as a view*, *Ask
+   the model about these…* and *Clear*; a node's menu offers only an allowlist of actions that change
+   nothing. Asked another way, such an action is said, not done. The rejected options were an editable lens, dimming the rest
+   of the case's canvas, and adding the view's items to the case (what a branch used to do). Proved by
+   `SelectionBar.test.tsx` (in a view, nothing that changes the case) and `keyboard/views.spec.ts`.
+5. **The cap's and the questions' options.** The working set's typed `limit_exceeded` names
+   `save_as_view`, `filter` and `promote_to_batch`. The over-cap dialog's way out is *Save as a view*:
+   entity types, a date window or both, saved as a private filtered view and opened as the lens. A view
+   still past the cap, or matching nothing, is deleted again and said so, never cut to fit (rule 2). The
+   questions' 409 names `ask_in_a_view`.
+
+**Tests.** As named in decisions 2–5; the Glass's privacy is `ViewsPanel.test.tsx` and
+`keyboard/views.spec.ts` (another member is shown nothing of a private view, and is offered no share or
+delete on a shared one), each red with the creator check planted out
+(`process/lanes/case/L3.2b_RED_RECORD.md`). `tools/no_branches_check.py` runs in `make ci` with the real
+tree clean.
+
+**Cost.** A view saved from the canvas does not yet keep a threshold of its own (the case's resolution
+slider is the case's), and the lens shows what the view holds without its own Inspector edits, which act
+on the case as before.
