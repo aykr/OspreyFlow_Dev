@@ -40,7 +40,7 @@ async def test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queu
         (mine,) = await store.list_authorized(reader)
         assert mine.id == notice.id and mine.typology is None
         assert await store.list_case_queue(case, reader) == []
-        view = await alert_to_view(mine, reader, graph=None, analytics=NO_TRANSACTIONS)  # type: ignore[arg-type]
+        view = await alert_to_view(mine, reader, graph=None, analytics=NO_TRANSACTIONS, case="inbox-case")  # type: ignore[arg-type]
         assert view.words == "The scheduled run of Daily export was refused: x"
         assert view.rule_id == f"schedule:{recipe.recipe_id}" and view.referent_node_ids == []
         someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})

@@ -140,7 +140,7 @@ async def readable(
     await settle_repoints(alerts, graph)
     cited = await alerts.cited_by_ids([i.alert.alert_id for i in items if i.alert is not None])
     evidence = await read_evidence(
-        list(cited.values()), reader, graph, analytics, scope=lambda a: a.investigation_id
+        list(cited.values()), reader, graph, analytics, scope=lambda _: case_id
     )
     shown: list[StoredPackItem] = []
     for item in items:

@@ -270,17 +270,21 @@ async def test_a_link_with_a_hidden_end_is_hidden_as_the_port_hides_it() -> None
     assert await _shown(store, graph, analytics) == []
 
 
-async def test_the_queue_reads_an_alerts_transactions_in_its_own_case_as_the_inbox_does() -> None:
-    """L2.8b item 8: one scope for the queue and the inbox, the alert's own case. An alert listed in
-    this case's queue (a team's monitor alert, raised in another case) cites a transaction loaded
-    in its own case; read in the queue's case it was not found, and the alert withheld from every
-    reader. Red with the queue's case as the scope."""
+async def test_a_shared_alert_raised_elsewhere_gives_none_of_that_cases_transactions() -> None:
+    """L2.8b's R1 (rule 3): a team member in this case is shown a team's monitor alert raised in
+    case-2, whose transaction was loaded there. The analytics store's case is a filter, not an
+    access check, so the queue and the explanation read transactions in the reader's own case,
+    never the alert's: the alert's transaction is not found here, so the alert is withheld and its
+    explanation refused, and nothing of case-2 is given. Red with the alert's own case as the
+    scope: the alert was listed and explained with case-2's transaction."""
+    from services.api.alerts import AlertNotFoundError
+
     alert = _alert("elsewhere", nodes=["n-a"], edges=["e-1"], events=["t-c2"]).model_copy(
         update={"investigation_id": "case-2"}
     )
     store, graph, analytics, _ = _world(set(), [alert])
     analytics.scoped["t-c2"] = "case-2"
-    assert await _shown(store, graph, analytics) == ["elsewhere"]
+    assert await _shown(store, graph, analytics) == []
 
     class TeamQueue(TriageStore):
         """`get_queue_alert` as the queue's scope answers for a team's alert raised elsewhere."""
@@ -288,8 +292,10 @@ async def test_the_queue_reads_an_alerts_transactions_in_its_own_case_as_the_inb
         async def get_queue_alert(self, alert_id: str, investigation_id: str, reader: Principal) -> QueueRow:
             return QueueRow(alert, "monitor", "medium", "team")
 
-    why = await alert_queue.explain(TeamQueue([alert]), graph, analytics, CASE, "elsewhere", READER)  # type: ignore[arg-type]
-    assert [t.event_id for t in why.transactions] == ["t-c2"]
+    with pytest.raises(AlertNotFoundError):
+        await alert_queue.explain(TeamQueue([alert]), graph, analytics, CASE, "elsewhere", READER)  # type: ignore[arg-type]
+    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
+    assert view.evidence_available is False and view.words is None
 
 
 async def test_the_canvas_draws_a_cited_link_whose_other_end_the_alert_does_not_name() -> None:
@@ -327,7 +333,7 @@ async def test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence(hidd
         update={"edge_ids": ["e-secret"] if hidden_id == "e-secret" else ["e-1"]}
     )
     _, graph, analytics, _ = _world({hidden_id}, [alert])
-    view = await alert_to_view(alert, READER, graph, analytics)  # type: ignore[arg-type]
+    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
     assert view.evidence_available is False
     assert view.words is None
     assert view.referent_node_ids == []
@@ -337,7 +343,7 @@ async def test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence(hidd
 async def test_the_inbox_shows_the_words_when_every_piece_of_evidence_is_readable() -> None:
     alert = WORDED.model_copy(update={"edge_ids": ["e-1"]})
     _, graph, analytics, _ = _world(set(), [alert])
-    view = await alert_to_view(alert, READER, graph, analytics)  # type: ignore[arg-type]
+    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
     assert view.evidence_available is True
     assert view.words == WORDED.words
 
@@ -347,7 +353,7 @@ async def test_a_notify_stub_has_no_evidence_to_withhold() -> None:
         id=new_id(), rule_id="hotlist:h1", owner_id="o", mode=AlertMode.NOTIFY_STUB, created_at=NOW
     )
     _, graph, analytics, recorder = _world(set(), [stub])
-    view = await alert_to_view(stub, READER, graph, analytics)  # type: ignore[arg-type]
+    view = await alert_to_view(stub, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
     assert view.evidence_available is True
     assert recorder.calls == []
 

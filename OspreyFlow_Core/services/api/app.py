@@ -6435,7 +6435,12 @@ async def list_alerts_route(
     said "the alerts of the case's datasets", which the store never read."""
     rows = await alerts_store.list_authorized(principal, graph=graph)
     return AlertList(
-        alerts=[await alert_to_view(a, principal, graph, analytics, hotlists_store) for a in rows]
+        alerts=[
+            await alert_to_view(
+                a, principal, graph, analytics, hotlists_store, case=investigation.id
+            )
+            for a in rows
+        ]
     )
 
 
@@ -6453,7 +6458,9 @@ async def get_alert_route(
     analytics: AnalyticsDep,
 ) -> AlertView:
     alert = await alerts_store.get_authorized(alert_id, principal, graph=graph)
-    return await alert_to_view(alert, principal, graph, analytics, hotlists_store)
+    return await alert_to_view(
+        alert, principal, graph, analytics, hotlists_store, case=investigation.id
+    )
 
 
 @app.post(
@@ -6483,7 +6490,8 @@ async def jump_alert_route(
     branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
     `None` rather than silently pointed at a wrong investigation."""
     alert = await jumpable_alert(
-        alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics
+        alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics,
+        case=investigation.id,
     )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.

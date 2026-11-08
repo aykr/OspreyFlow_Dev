@@ -109,7 +109,7 @@ async def test_a_visible_match_writes_a_full_alert_with_its_referent(alert_store
         assert alert is not None
         assert alert.mode.value == "full"
         assert alert.referent_node_ids == [node_id]
-        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS) is True
+        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS, case="inbox-case") is True
 
 
 async def test_alert_evidence_is_unreadable_after_referent_access_is_revoked(
@@ -137,7 +137,7 @@ async def test_alert_evidence_is_unreadable_after_referent_access_is_revoked(
             policy="strict",
         )
         assert alert is not None
-        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS) is True
+        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS, case="inbox-case") is True
 
         # Revoke: supersede the node with a replacement OWNER can no longer see — a different
         # owning_unit AND a classification above OWNER's own clearance, so no path back for them.
@@ -147,7 +147,7 @@ async def test_alert_evidence_is_unreadable_after_referent_access_is_revoked(
         )
         await graph.commit_transaction(tx)
 
-        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS) is False
+        assert await evidence_available(alert, OWNER, graph, NO_TRANSACTIONS, case="inbox-case") is False
 
 
 async def test_revoked_alert_remains_listed_as_unavailable_not_removed(alert_store, audit) -> None:
@@ -182,7 +182,7 @@ async def test_revoked_alert_remains_listed_as_unavailable_not_removed(alert_sto
         # The row itself: not gone, not raising — a direct read still succeeds.
         reread = await alert_store.get_authorized(alert.id, OWNER)
         assert reread.id == alert.id
-        assert await evidence_available(reread, OWNER, graph, NO_TRANSACTIONS) is False
+        assert await evidence_available(reread, OWNER, graph, NO_TRANSACTIONS, case="inbox-case") is False
 
         listed = await alert_store.list_authorized(OWNER)
         assert any(a.id == alert.id for a in listed)

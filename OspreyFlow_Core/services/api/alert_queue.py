@@ -133,7 +133,7 @@ async def monitoring_queue(
         investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses
     )
     readable = await read_evidence(
-        [row.alert for row in rows], reader, graph, analytics, scope=lambda a: a.investigation_id
+        [row.alert for row in rows], reader, graph, analytics, scope=lambda _: investigation_id
     )
     shown: list[QueuedAlert] = []
     for row in rows:
@@ -181,7 +181,7 @@ async def _visible_row(
     await settle_repoints(store, graph)
     row = await store.get_queue_alert(alert_id, investigation_id, reader)
     readable = await read_evidence(
-        [row.alert], reader, graph, analytics, scope=lambda a: a.investigation_id
+        [row.alert], reader, graph, analytics, scope=lambda _: investigation_id
     )
     if not readable.whole(row.alert):
         raise AlertNotFoundError(alert_id)
@@ -235,8 +235,7 @@ async def explain_with_evidence(
     transactions: list[ExplainedTransaction] = []
     cited_events: list[EventRecord] = []
     if alert.event_ids:
-        if (where := alert.investigation_id) is None:
-            raise AlertNotFoundError(alert_id)  # nowhere to read them: hidden, as the check says
+        where = investigation_id  # the reader's own case, as the queue's check reads them (R1)
         ids = sorted(set(alert.event_ids))
         for start in range(0, len(ids), EVENT_CHUNK):
             chunk = ids[start : start + EVENT_CHUNK]

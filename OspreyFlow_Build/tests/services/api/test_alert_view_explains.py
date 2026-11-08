@@ -135,7 +135,7 @@ def _alert(node_ids: list[str], *, rule_id: str = "hotlist:hl-1") -> Alert:
 
 
 async def _view(alert: Alert, principal: Principal, graph: Any, hotlists: Any = None) -> Any:
-    return await alert_to_view(alert, principal, graph, NO_TRANSACTIONS, hotlists_store=hotlists)
+    return await alert_to_view(alert, principal, graph, NO_TRANSACTIONS, hotlists_store=hotlists, case="inbox-case")
 
 
 async def test_the_owner_sees_the_hotlist_as_typed_and_its_review_date() -> None:

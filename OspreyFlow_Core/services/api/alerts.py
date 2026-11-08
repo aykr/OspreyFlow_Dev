@@ -1122,19 +1122,21 @@ async def settle_repoints(store: object, graph: GraphPort) -> None:
 
 
 async def evidence_available(
-    alert: Alert, principal: Principal, graph: GraphPort, analytics: AnalyticsPort
+    alert: Alert, principal: Principal, graph: GraphPort, analytics: AnalyticsPort, *, case: str
 ) -> bool:
     """The read-time recheck `06_DECISIONS.md` ADR-039 requires — never trusted from write time.
     `NOTIFY_STUB` alerts have nothing to recheck (`Alert.mode`'s own docstring: no referent is ever
     stored for one) and are always "available" in this narrow sense. A `FULL` alert's evidence is
     available only if *every* node, link and transaction it cites (and its own `Alert` node) is
     visible to `principal` right now — one hidden piece withdraws the whole alert's evidence, and
-    with it its words (ADR-146 decision 10, gap map G3). Its transactions are read in the case it
-    was raised in; one with none has nowhere to read them, so they count as hidden."""
+    with it its words (ADR-146 decision 10, gap map G3). Its transactions are read in the reader's
+    own `case`, as the queue reads them: the analytics store's case is a filter, not an access
+    check, so reading them in the case the alert was raised in would give a reader that case's
+    transactions without asking whether they may view it (rule 3; L2.8b's R1)."""
     if alert.mode is AlertMode.NOTIFY_STUB:
         return True
     readable = await read_evidence(
-        [alert], principal, graph, analytics, scope=lambda a: a.investigation_id
+        [alert], principal, graph, analytics, scope=lambda _: case
     )
     return readable.whole(alert)
 
