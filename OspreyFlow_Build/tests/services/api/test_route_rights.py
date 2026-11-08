@@ -438,6 +438,9 @@ def _token(key: rsa.RSAPrivateKey, sub: str, roles: list[str]) -> dict[str, str]
 
 def _call(client: TestClient, route: APIRoute, case: str, headers: dict[str, str]) -> int:
     path = route.path.replace("{investigation_id}", case)
+    # A path parameter with a closed set of values (the dry run's action, L2.4 part 2) is given one
+    # of them: "x" would be refused as malformed (422) before any check could be shown to run.
+    path = path.replace("{action}", "merge")
     path = re.sub(r"\{[a-z_]+\}", "x", path)
     method = sorted(route.methods)[0]
     return client.request(method, path, headers=headers, json={}).status_code
