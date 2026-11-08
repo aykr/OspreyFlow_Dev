@@ -1,0 +1,9 @@
+# red D10 timeout: the lock pool's acquire given no timeout — lease rules, stack b, 2026-11-08T12:44:06Z, at b9f960f + working tree
+        it cancels the task and raises TimeoutError.  To avoid the task
+        #     except asyncio.TimeoutError:
+            except exceptions.CancelledError as exc:
+                raise TimeoutError from exc
+E               asyncio.exceptions.CancelledError
+../../../../miniconda3/lib/python3.12/asyncio/queues.py:158: CancelledError
+exc_type = <class 'asyncio.exceptions.CancelledError'>
+exc_val = CancelledError(), exc_tb = <traceback object at 0x12641e100>

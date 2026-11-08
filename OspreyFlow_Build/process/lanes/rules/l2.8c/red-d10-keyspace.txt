@@ -1,0 +1,5 @@
+# red D10 key space: the record lock back in the one-key space — lease rules, stack b, 2026-11-08T12:44:38Z, at b9f960f + working tree
+E           AssertionError: the writer settled its own empty record, not skipped it
+E           assert None == []
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:83: AssertionError
+1 failed in 1.18s

@@ -444,6 +444,26 @@ def _pairs(raw: Any) -> list[tuple[str, str]]:
     return [(str(p[0]), str(p[1])) for p in _loaded(raw)]
 
 
+#: The repoint records' advisory locks live in Postgres's two-key space under this first key,
+#: never the one-key space every `pg_advisory_xact_lock(hashtext(...))` elsewhere in the Conduit
+#: shares (`strength_influencers`, `target_models`, `studio_recipes`): a one-key lock and a two-key
+#: lock never conflict, so no record's lock waits on, or is skipped for, another store's lock on
+#: the same text (L2.8c, D10). The value is the ASCII of "ARPR"; `recipe_runs`' two-key locks
+#: (`hashtext(recipe)`, `hashtext(case)`) meet it only should a recipe id hash to it, which makes
+#: one settle skip a record a later read settles, as any collision here does.
+REPOINT_LOCK_SPACE = 0x41525052
+
+#: How long a settle waits for a connection from the lock pool before it refuses, in words
+#: (`RepointLockBusy`), rather than waiting for ever (L2.8c, D10). A settle holds a lock connection
+#: for one record's settle, seconds; one still waiting after this has met a stuck pool.
+REPOINT_LOCK_WAIT = 30.0
+
+
+class RepointLockBusy(Exception):
+    """No connection came free in the repoint records' lock pool within `REPOINT_LOCK_WAIT`: the
+    record is left, unsettled, for a later read (L2.8c, D10)."""
+
+
 class RepointRecordGone(Exception):
     """A pair was to be recorded in a repoint record that is missing or already applied; the write
     it describes must not be committed, since nothing would apply it (ADR-109 Amendment 10, D2)."""
@@ -458,6 +478,8 @@ class AlertStore:
         #: each wait for another, for ever (found when four reads settled at once). A settle waiting
         #: here holds nothing in `_pool`, so the two pools can never wait on each other.
         self._lock_pool = lock_pool
+        #: `REPOINT_LOCK_WAIT`, per store so a test can shorten it.
+        self.lock_wait = REPOINT_LOCK_WAIT
         #: Where each written alert is kept for alert trends (ADR-134 decision 3): the analytics
         #: store's `load_alert_facts`, attached by `build_run_resources`. `None` keeps nothing.
         self.fact_sink: FactSink | None = None
@@ -755,7 +777,11 @@ class AlertStore:
                 _log.exception("repoint record %s left for a later settle", record_id)
             raise
         await self._release_record(record_id)
-        repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
+        try:
+            repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
+        except RepointLockBusy:
+            # The write has committed and its record is released: a later read settles it (D10).
+            _log.warning("repoint record %s left for a later settle", record_id, exc_info=True)
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
         """Before every read of alerts: every record whose write has committed is applied, so no
@@ -810,6 +836,24 @@ class AlertStore:
             moved = await _repoint_cited_links(conn, finals)
         await self.publish_facts(moved)
         return moved
+
+    async def rename_alert_nodes(self, renamed: Mapping[str, str]) -> None:
+        """Every alert naming an old node in `renamed` made to name the node it maps to, in one
+        transaction, under the id-ordered lock `apply_repoints` takes: the rows locked together in
+        id order first, so a rename and a repoint of the same alerts never take them in opposite
+        orders and deadlock (L2.8c, D9)."""
+        if not renamed:
+            return
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "SELECT id FROM alerts WHERE alert_node_id = ANY($1::text[]) "
+                "ORDER BY id FOR UPDATE",
+                sorted(renamed),
+            )
+            for old, newest in renamed.items():
+                await conn.execute(
+                    "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
+                )
 
     async def _add_to_record(
         self,
@@ -901,16 +945,31 @@ class AlertStore:
         # returned to the pool holding it, and the server frees a session lock when its connection
         # ends, so a crashed settle never holds one for good. `hashtext` can map two ids to one key:
         # harmless, since a collision only makes a reader skip a record, which a later read settles.
-        async with self._lock_pool.acquire() as lock:
-            if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
+        # The wait for a lock connection is bounded (`REPOINT_LOCK_WAIT`, D10): past it the settle
+        # refuses in words and the record waits for a later read.
+        try:
+            lock = await self._lock_pool.acquire(timeout=self.lock_wait)
+        except TimeoutError as waited:
+            raise RepointLockBusy(
+                f"repoint record {record_id} not settled: no lock connection came free within "
+                f"{self.lock_wait:g} seconds; it is left for a later read"
+            ) from waited
+        try:
+            if not await lock.fetchval(
+                "SELECT pg_try_advisory_lock($1, hashtext($2))", REPOINT_LOCK_SPACE, record_id
+            ):
                 return None
             try:
                 return await self._settle_held(graph, record_id, writer=writer)
             finally:
                 try:
-                    await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)
+                    await lock.execute(
+                        "SELECT pg_advisory_unlock($1, hashtext($2))", REPOINT_LOCK_SPACE, record_id
+                    )
                 except Exception:  # noqa: BLE001 - the lock must not outlive this settle
                     await lock.close()
+        finally:
+            await self._lock_pool.release(lock)
 
     async def _settle_held(
         self, graph: GraphPort, record_id: str, *, writer: bool
@@ -963,12 +1022,7 @@ class AlertStore:
             else:
                 renamed[old] = newest
         await self.apply_repoints(finals)
-        if renamed:
-            async with self._pool.acquire() as conn, conn.transaction():
-                for old, newest in renamed.items():
-                    await conn.execute(
-                        "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
-                    )
+        await self.rename_alert_nodes(renamed)
         remarked = await self._remark_citing(
             graph,
             record_id,
