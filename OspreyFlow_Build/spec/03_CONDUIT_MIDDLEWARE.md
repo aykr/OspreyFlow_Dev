@@ -769,8 +769,12 @@ a link alerts may cite (a true positive's confirmed `SAME_AS`, a link change, a 
 replacement or removal) keeps one record in Postgres from before the graph's commit until every
 citing alert cites the newest revision, its node is re-marked and renamed, and its working-set
 copies are purged, whatever the triage write then does; a record is applied, before every read of
-alerts, once the graph's own stored states show its write committed, and only a stale one whose
-write never committed is dropped. Transactions are read in the reader's own case.
+alerts, once the graph's own stored states show its write committed (each link read for its own
+type; an id two types hold moves no alert), its re-marks re-run where one never landed, and a
+record held open by a writer committing in many transactions is applied only once that writer has
+left. A record is dropped only when stale and its write never committed, or closed by its writer
+when it records nothing or rolls back before sending its commit. Transactions are read in the
+reader's own case.
 The queue then checks the new revision for every reader, as it checks any link (ADR-109 Amendments 9
 and 10). The rule audit withholds an entry naming a node, link or transaction the reader cannot see
 (a firing written before its links were recorded keeps its entry, its words withheld), a pack's
