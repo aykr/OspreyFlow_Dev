@@ -160,6 +160,14 @@ New ones are added at the bottom as they happen.
 40. **Admin's L2.5 is split:** L2.5b finishes *Disable…*'s transfer list once case's ownership route
     (L3.8) is on main, several case steps away.
 
+41. **Your answers given in the lanes' own windows, for the record.** Rules L2.8d: a corrected node's own
+    pair recorded by each caller (no port change); carry (g) built now from my review's items 11 and 13;
+    ADR-109 Amendment 12; the alert store's DDL under one advisory lock. Admin L2.5: custom roles in a
+    versioned Postgres table, held as `role:<id>` in Keycloak and read per request; the Super user a
+    preset of analyst, data engineer and rule author, never one role; the guard rails (no edit leaves no
+    enabled holder of manage_people; no unknown right, both halves of a decision 7 pair, or a right the
+    giver lacks), recorded as ADR-145 Amendment 5; team members are the holders of the team's role.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
