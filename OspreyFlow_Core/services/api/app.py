@@ -127,6 +127,8 @@ from schemas.admin import (
     AdminLinkedCase,
     AdminPeopleRows,
     AdminSchedule,
+    AuditSectionEntry,
+    AuditSectionPage,
     BuiltInRole,
     ChangeScheduleInput,
     ComponentHealth,
@@ -147,10 +149,12 @@ from schemas.admin import (
     InviteInput,
     LayerAction,
     LayerDryRun,
+    OperationsAgeing,
     OrganisationArrival,
     OrganisationLinkInput,
     PauseScheduleInput,
     PersonAccount,
+    PromotionAlertSetting,
     RegisteredDashboard,
     RolesCatalogue,
     RolesInput,
@@ -423,6 +427,7 @@ from schemas.trends import (
 )
 
 from . import alert_queue, map_places
+from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
@@ -431,6 +436,7 @@ from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
 from . import model_usage as model_usage_module
 from . import ownership as ownership_module
+from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
 from . import reports as reports_module
 from . import resolution as resolution_module
@@ -1041,6 +1047,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-145 Amendment 5: custom roles and teams, and Admin › People's reads and Disable….
     custom_roles = await CustomRoleStore.connect(config.postgres.dsn)
     admin_people = await AdminPeopleStore.connect(config.postgres.dsn)
+    # ADR-145 decisions 9 and 10 (L2.6): Admin › Audit's reads, and Operations' ageing.
+    audit_section = await audit_section_module.AuditSectionReader.connect(config.postgres.dsn)
+    promotion_ageing = await promotion_ageing_module.PromotionAgeingStore.connect(
+        config.postgres.dsn
+    )
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1125,6 +1136,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigations = investigations
     app.state.custom_roles = custom_roles
     app.state.admin_people = admin_people
+    app.state.audit_section = audit_section
+    app.state.promotion_ageing = promotion_ageing
+    # The seam case's L3.4 fills with the promotion record (`promotion_ageing.WaitingPromotions`).
+    app.state.waiting_promotions = promotion_ageing_module.NoPromotionsYet()
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
@@ -1383,6 +1398,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
+        await audit_section.close()
+        await promotion_ageing.close()
         # A closed store must not outlive the app: a request's custom roles are read through it.
         app.state.custom_roles = None
         await history.close()
@@ -1921,6 +1938,27 @@ def get_admin_people(request: Request) -> AdminPeopleStore:
 
 
 CustomRolesDep = Annotated[CustomRoleStore, Depends(get_custom_roles)]
+
+
+def get_audit_section(request: Request) -> audit_section_module.AuditSectionReader:
+    return request.app.state.audit_section  # type: ignore[no-any-return]
+
+
+def get_promotion_ageing(request: Request) -> promotion_ageing_module.PromotionAgeingStore:
+    return request.app.state.promotion_ageing  # type: ignore[no-any-return]
+
+
+def get_waiting_promotions(request: Request) -> promotion_ageing_module.WaitingPromotions:
+    return request.app.state.waiting_promotions  # type: ignore[no-any-return]
+
+
+AuditSectionDep = Annotated[audit_section_module.AuditSectionReader, Depends(get_audit_section)]
+PromotionAgeingDep = Annotated[
+    promotion_ageing_module.PromotionAgeingStore, Depends(get_promotion_ageing)
+]
+WaitingPromotionsDep = Annotated[
+    promotion_ageing_module.WaitingPromotions, Depends(get_waiting_promotions)
+]
 AdminPeopleDep = Annotated[AdminPeopleStore, Depends(get_admin_people)]
 
 
@@ -16235,6 +16273,180 @@ async def set_dataset_owner_setting(
         principal=principal,
         action="set_dataset_owner_setting",
         resolved_query={"before": before, "after": body.owners_may_be},
+        result_cardinality=1,
+    )
+    return body
+
+
+# --- Admin › Audit (ADR-145 decision 10, O2) and Operations' ageing (decision 9, O3) — L2.6 ------
+
+
+class AuditFiltersRefused(Exception):
+    def __init__(self, words: str) -> None:
+        super().__init__(words)
+        self.words = words
+
+
+@app.exception_handler(AuditFiltersRefused)
+async def _audit_filters_refused_handler(
+    request: Request, exc: AuditFiltersRefused
+) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "audit_filters", "detail": exc.words})
+
+
+@app.get("/v1/admin/audit", dependencies=[Depends(require_right(Right.READ_AUDIT))])
+async def read_audit_section(
+    principal: PrincipalDep,
+    reader: AuditSectionDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
+    held_in: Annotated[Literal["case_and_admin", "rules", "models"], Query()] = "case_and_admin",
+    kind: Annotated[str | None, Query(max_length=40)] = None,
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    case: Annotated[str | None, Query(max_length=200)] = None,
+    dataset: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """Admin › Audit: one record at a time, read under the reader's own principal (rule 3;
+    `audit_section.py` says how each is read). The stream by unit in its `WHERE` clause; the rule
+    audit through `readable_rule_audit` behind the case rule-audit route's own gate; the engines'
+    history whole. Every filter narrows; none widens."""
+    filters = audit_section_module.StreamFilters(
+        who=who or None, kind=kind or None, investigation_id=case or None,
+        dataset_id=dataset or None, since=since, until=until,
+    )  # fmt: skip
+    rights = rights_for(principal.roles)
+    note: str | None = None
+    if held_in == "case_and_admin":
+        if filters.kind is not None and filters.kind not in audit_section_module.STREAM_KINDS:
+            raise AuditFiltersRefused(f"{filters.kind!r} is not a kind of this record")
+        rows, total = await reader.stream(principal, filters, offset=offset, limit=limit)
+        entries = audit_section_module.stream_entries(rows, rights)
+        note = audit_section_module.STREAM_NOTE
+    elif held_in == "rules":
+        if filters.investigation_id is None:
+            raise AuditFiltersRefused("the rule audit is read for one case: choose the case")
+        if filters.dataset_id is not None or filters.kind not in (None, "rules"):
+            raise AuditFiltersRefused("the rule audit is filtered by case, person and time only")
+        if Right.READ_RULE_AUDIT not in rights:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"error": "right_required", "right": Right.READ_RULE_AUDIT.value},
+            )
+        # The case rule-audit route's own gate: an Author, or the unit's administrator (ADR-052 §4).
+        case_ = await _authorize(
+            filters.investigation_id, principal, investigations, audit, AccessLevel.AUTHOR,
+            admin_safety_net=True,
+        )  # fmt: skip
+        # Withheld as its own read withholds (whole entries, before any filter), then narrowed.
+        whole = await readable_rule_audit(
+            audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
+            offset=0, limit=10**9,
+        )  # fmt: skip
+        kept = [
+            e for e in whole.entries
+            if (filters.who is None or e.principal_id == filters.who)
+            and (filters.since is None or e.recorded_at >= filters.since)
+            and (filters.until is None or e.recorded_at < filters.until)
+        ]  # fmt: skip
+        total = len(kept)
+        entries = [
+            AuditSectionEntry(
+                recorded_at=e.recorded_at,
+                principal_id=e.principal_id,
+                action=e.action,
+                kind="rules",
+                held_in="rules",
+                investigation_id=case_.id,
+                case_name=case_.name,
+                detail=e.detail,
+                result_cardinality=e.result_cardinality,
+            )  # fmt: skip
+            for e in kept[offset : offset + limit]
+        ]
+    else:
+        if filters.investigation_id or filters.dataset_id or filters.kind not in (None, "models"):
+            raise AuditFiltersRefused("the engines' history is filtered by person and time only")
+        entries, total = await reader.model_history(filters, offset=offset, limit=limit)
+        note = "Engines are the deployment's, so their history is not a unit's."
+    names = await principal_names.display_names({e.principal_id for e in entries})
+    entries = [e.model_copy(update={"principal_name": names.get(e.principal_id)}) for e in entries]
+    await audit.record(
+        principal=principal,
+        action="read_audit_section",
+        investigation_id=filters.investigation_id if held_in == "rules" else None,
+        resolved_query={
+            "held_in": held_in,
+            "kind": filters.kind,
+            "who": filters.who,
+            "case": filters.investigation_id,
+            "dataset": filters.dataset_id,
+            "since": since.isoformat() if since else None,
+            "until": until.isoformat() if until else None,
+            "offset": offset,
+            "limit": limit,
+        },  # fmt: skip
+        result_cardinality=len(entries),
+    )
+    return AuditSectionPage(entries=entries, total=total, offset=offset, limit=limit, note=note)
+
+
+@app.get(
+    "/v1/admin/operations/ageing", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))]
+)
+async def read_operations_ageing(
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    waiting: WaitingPromotionsDep,
+    audit: AuditDep,
+) -> OperationsAgeing:
+    """Operations' ageing (O3): what ages and when, and the promotions waiting for review, each
+    with its age and whether it is overdue. The promotions come from the seam case's L3.4 fills,
+    filtered there as this reader (rule 3); until then none is recorded, and the screen says so."""
+    days = await ageing.alert_after_days()
+    now = datetime.now(UTC)
+    rows = [
+        promotion_ageing_module.waiting_row(p, now, days)
+        for p in await waiting.waiting_for_review(principal)
+    ]
+    await audit.record(
+        principal=principal,
+        action="read_operations_ageing",
+        resolved_query={"alert_after_days": days},
+        result_cardinality=len(rows),
+    )
+    return OperationsAgeing(
+        alert_after_days=days,
+        rules=promotion_ageing_module.ageing_rules(days),
+        waiting=rows,
+        promotions_recorded=bool(getattr(waiting, "recorded", False)),
+    )
+
+
+@app.put(
+    "/v1/admin/settings/promotion-alert-days",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def set_promotion_alert_days(
+    body: PromotionAlertSetting,
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    audit: AuditDep,
+) -> PromotionAlertSetting:
+    """*Alert the reviewers and administrators after N days* (decision 9), audited."""
+    before = await ageing.alert_after_days()
+    await ageing.set_alert_after_days(body.alert_after_days)
+    await audit.record(
+        principal=principal,
+        action="set_promotion_alert_days",
+        resolved_query={"before": before, "after": body.alert_after_days},
         result_cardinality=1,
     )
     return body

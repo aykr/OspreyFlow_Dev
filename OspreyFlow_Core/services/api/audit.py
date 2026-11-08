@@ -50,6 +50,12 @@ CREATE INDEX IF NOT EXISTS audit_log_investigation_id_idx
     ON audit_log (investigation_id);
 CREATE INDEX IF NOT EXISTS audit_log_principal_id_idx
     ON audit_log (principal_id);
+-- ADR-145 decision 10 (L2.6): the acting principal's unit, so Admin › Audit can read an entry that
+-- names no case by unit (a reader of one unit sees that unit's entries alone). An entry written
+-- before this column has none, and Audit leaves it out unless it names a case, saying so.
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT;
+CREATE INDEX IF NOT EXISTS audit_log_org_unit_idx ON audit_log (org_unit, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_recorded_at_idx ON audit_log (recorded_at DESC, id DESC);
 """
 
 
@@ -108,8 +114,8 @@ class AuditWriter:
                 await conn.execute(
                     "INSERT INTO audit_log "
                     "(recorded_at, principal_id, action, investigation_id, "
-                    " resolved_query, result_cardinality, justification) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    " resolved_query, result_cardinality, justification, org_unit) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                     datetime.now(UTC),
                     principal.id,
                     action,
@@ -117,6 +123,7 @@ class AuditWriter:
                     json.dumps(resolved_query),
                     result_cardinality,
                     justification,
+                    principal.org_unit,
                 )
         except (OSError, asyncpg.PostgresError) as exc:
             raise AuditWriteError(f"audit write failed for action {action!r}: {exc}") from exc
