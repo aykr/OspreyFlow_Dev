@@ -8,7 +8,7 @@
 6. **Bindings at their call sites: met.** `recipe_run` → runner, runner → stage, the stamping graph → adapter, the worker's `register_all`. `alerts` is now a required keyword on both jobs (`test_pipeline_enrich_journal.py`, `test_worker_registration.py`, each red at its site).
 7. **Purge published: met.** The purge is published, and each socket projects it for its reader (red: nothing sent / no record). The re-marking script publishes too. A settle holding no working set still waits for a socket's resync (Amendment 11 point 8).
 8. **Step 3, the fakes' tolerance: met** (red with it put back).
-9. **Gate commit 47435fa, tree ba907b5c, rebased on main 83b3d17** (`gates/47435fa.ci.txt`, `.test.txt`). Leased run on stack b, 14:41–14:59Z: 150 passed, 1 failed. The failure is `test_kyc_rules`' true-positive case, which fails on main too (glass's `final/kyc-on-main.txt`). **make -k ci:** every gate green but the seven trivy image builds (Docker Hub 429). **make test:** Python 8,154 passed, 3 failed; JS 2,650/2,651. None of the failures are this branch's: the local osprey.yaml, the closed Valkey port, `graphify-out` at the root, and a MatrixView budget under load (2,563 ms), which passes alone.
+9. **Gate commit e9c8fd3, tree 0a8da0dc, rebased on main 2b984f2** (admin's L2.4 part 2 merged; `gates/e9c8fd3.*`). **Leased run** on stack a, 15:16–15:22Z: 97/97, covering this lane's live file and the graph-port suite's supersede, restore, withdraw, revert, link-state and footprint cases. **make -k ci:** exit 0, every gate green. **make test:** Python 8,220 passed, 4 failed, 2 errors; JS 2,653/2,654. None of the failures are this branch's: the local osprey.yaml; the closed Valkey port; `graphify-out` at the root; the phone fixture's object store, closed offline; the proxy image build, refused by Docker Hub's 429; and a MatrixView budget under load, which passes alone. The earlier run at 47435fa, before the rebase, is kept: its leased run was 150/151, the one failure the KYC test that fails on main.
 10. **Graph-port withdraw cases:** with main's `_restore_link_state`, the withdraw and link-state cases pass under the marking (`round1/withdraw-cases-with-marking.txt`; the leased run above).
 11. **Carried to L2.8d, a line each:**
     - (a) A conformance case for "another type holding the id is never marked" (Amendment 11 point 1).
@@ -21,8 +21,8 @@
 12. **Commits:**
     - b9f960f-era work rebased onto 83b3d17. Round 0: step 3; D9 and D10; the graph marking; the callers and publish; the amendment.
     - 3b3066f round 1, then rebased.
-    - 47435fa round 2.
-    - The gate records' commit.
+    - 18d4e9d round 2 (47435fa before the rebase onto 2b984f2).
+    - e9c8fd3 the first gate records; this commit holds the second.
 13. **Ratify (outside rules' map):**
     - Graph: `ports/graph.py`; the ArcadeDB adapter (marking and self-loop); graph-port suite cases.
     - Case's: `dataset_scope.py`; `working_set/service.py` (`publisher`, 7 lines after `__init__`).
