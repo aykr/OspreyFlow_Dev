@@ -16294,94 +16294,20 @@ async def _audit_filters_refused_handler(
     return JSONResponse(status_code=422, content={"error": "audit_filters", "detail": exc.words})
 
 
-@app.get("/v1/admin/audit", dependencies=[Depends(require_right(Right.READ_AUDIT))])
-async def read_audit_section(
-    principal: PrincipalDep,
-    reader: AuditSectionDep,
-    audit: AuditDep,
-    investigations: InvestigationsDep,
-    graph: GraphDep,
-    analytics: AnalyticsDep,
-    alerts_store: AlertsStoreDep,
-    principal_names: PrincipalNamesDep,
-    held_in: Annotated[Literal["case_and_admin", "rules", "models"], Query()] = "case_and_admin",
-    kind: Annotated[str | None, Query(max_length=40)] = None,
-    who: Annotated[str | None, Query(max_length=200)] = None,
-    case: Annotated[str | None, Query(max_length=200)] = None,
-    dataset: Annotated[str | None, Query(max_length=200)] = None,
-    since: datetime | None = None,
-    until: datetime | None = None,
-    offset: Annotated[int, Query(ge=0)] = 0,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+async def _served_audit(
+    principal: Principal,
+    audit: AuditWriter,
+    principal_names: PrincipalNameDirectory,
+    entries: list[AuditSectionEntry],
+    *,
+    held_in: str,
+    filters: audit_section_module.StreamFilters,
+    total: int,
+    offset: int,
+    limit: int,
+    note: str | None,
 ) -> AuditSectionPage:
-    """Admin › Audit: one record at a time, read under the reader's own principal (rule 3;
-    `audit_section.py` says how each is read). The stream by unit in its `WHERE` clause; the rule
-    audit through `readable_rule_audit` behind the case rule-audit route's own gate; the engines'
-    history whole. Every filter narrows; none widens."""
-    filters = audit_section_module.StreamFilters(
-        who=who or None, kind=kind or None, investigation_id=case or None,
-        dataset_id=dataset or None, since=since, until=until,
-    )  # fmt: skip
-    rights = rights_for(principal.roles)
-    note: str | None = None
-    if held_in == "case_and_admin":
-        if filters.kind is not None and filters.kind not in audit_section_module.STREAM_KINDS:
-            raise AuditFiltersRefused(f"{filters.kind!r} is not a kind of this record")
-        # ADR-052 §4: only the unit's administrator sees its cases without a level on them.
-        cases = ADMIN_ROLE in principal.roles
-        rows, total = await reader.stream(
-            principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
-        )
-        entries = audit_section_module.stream_entries(rows, rights)
-        note = (
-            audit_section_module.STREAM_NOTE if cases else audit_section_module.STREAM_NOTE_NO_CASES
-        )
-    elif held_in == "rules":
-        if filters.investigation_id is None:
-            raise AuditFiltersRefused("the rule audit is read for one case: choose the case")
-        if filters.dataset_id is not None or filters.kind not in (None, "rules"):
-            raise AuditFiltersRefused("the rule audit is filtered by case, person and time only")
-        if Right.READ_RULE_AUDIT not in rights:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"error": "right_required", "right": Right.READ_RULE_AUDIT.value},
-            )
-        # The case rule-audit route's own gate: an Author, or the unit's administrator (ADR-052 §4).
-        case_ = await _authorize(
-            filters.investigation_id, principal, investigations, audit, AccessLevel.AUTHOR,
-            admin_safety_net=True,
-        )  # fmt: skip
-        # Withheld as its own read withholds (whole entries, before any filter), then narrowed.
-        whole = await readable_rule_audit(
-            audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
-            offset=0, limit=10**9,
-        )  # fmt: skip
-        kept = [
-            e for e in whole.entries
-            if (filters.who is None or e.principal_id == filters.who)
-            and (filters.since is None or e.recorded_at >= filters.since)
-            and (filters.until is None or e.recorded_at < filters.until)
-        ]  # fmt: skip
-        total = len(kept)
-        entries = [
-            AuditSectionEntry(
-                recorded_at=e.recorded_at,
-                principal_id=e.principal_id,
-                action=e.action,
-                kind="rules",
-                held_in="rules",
-                investigation_id=case_.id,
-                case_name=case_.name,
-                detail=e.detail,
-                result_cardinality=e.result_cardinality,
-            )  # fmt: skip
-            for e in kept[offset : offset + limit]
-        ]
-    else:
-        if filters.investigation_id or filters.dataset_id or filters.kind not in (None, "models"):
-            raise AuditFiltersRefused("the engines' history is filtered by person and time only")
-        entries, total = await reader.model_history(filters, offset=offset, limit=limit)
-        note = "Engines are the deployment's, so their history is not a unit's."
+    """Names who acted, only for the entries served (ADR-106 decision 3), and audits the read."""
     names = await principal_names.display_names({e.principal_id for e in entries})
     entries = [e.model_copy(update={"principal_name": names.get(e.principal_id)}) for e in entries]
     await audit.record(
@@ -16394,14 +16320,137 @@ async def read_audit_section(
             "who": filters.who,
             "case": filters.investigation_id,
             "dataset": filters.dataset_id,
-            "since": since.isoformat() if since else None,
-            "until": until.isoformat() if until else None,
+            "since": filters.since.isoformat() if filters.since else None,
+            "until": filters.until.isoformat() if filters.until else None,
             "offset": offset,
             "limit": limit,
-        },  # fmt: skip
+        },
         result_cardinality=len(entries),
     )
     return AuditSectionPage(entries=entries, total=total, offset=offset, limit=limit, note=note)
+
+
+@app.get("/v1/admin/audit", dependencies=[Depends(require_right(Right.READ_AUDIT))])
+async def read_audit_section(
+    principal: PrincipalDep,
+    reader: AuditSectionDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+    kind: Annotated[str | None, Query(max_length=40)] = None,
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    case: Annotated[str | None, Query(max_length=200)] = None,
+    dataset: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """Admin › Audit's stream (`audit_section.py`): by unit in its `WHERE` clause, a case's
+    entries only for the unit's administrator (ADR-052 §4), words withheld but where the reader's
+    own section shows them. Every filter narrows; none widens."""
+    filters = audit_section_module.StreamFilters(
+        who=who or None, kind=kind or None, investigation_id=case or None,
+        dataset_id=dataset or None, since=since, until=until,
+    )  # fmt: skip
+    if filters.kind is not None and filters.kind not in audit_section_module.STREAM_KINDS:
+        raise AuditFiltersRefused(f"{filters.kind!r} is not a kind of this record")
+    rights = rights_for(principal.roles)
+    cases = ADMIN_ROLE in principal.roles
+    rows, total = await reader.stream(
+        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
+    )
+    note = audit_section_module.STREAM_NOTE if cases else audit_section_module.STREAM_NOTE_NO_CASES
+    return await _served_audit(
+        principal, audit, principal_names, audit_section_module.stream_entries(rows, rights),
+        held_in="case_and_admin", filters=filters, total=total, offset=offset, limit=limit,
+        note=note,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/admin/audit/rules",
+    dependencies=[
+        Depends(require_right(Right.READ_AUDIT)),
+        Depends(require_right(Right.READ_RULE_AUDIT)),
+        Depends(require_admin_role),
+    ],
+)
+async def read_audit_section_rules(
+    principal: PrincipalDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
+    case: Annotated[str, Query(min_length=1, max_length=200)],
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """A case's rule audit in Admin › Audit, for the Administrator only (the owner's ruling that
+    the rule audit returns here; ADR-145 Amendment 6 records the exception to ADR-146 Amendment 2
+    point 3). Read through `readable_rule_audit` behind the case rule-audit route's own gate, whole
+    before any filter, so a filter narrows only what that read already withheld."""
+    filters = audit_section_module.StreamFilters(
+        who=who or None, investigation_id=case, since=since, until=until
+    )
+    case_ = await _authorize(
+        case, principal, investigations, audit, AccessLevel.AUTHOR, admin_safety_net=True
+    )
+    whole = await readable_rule_audit(
+        audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
+        offset=0, limit=10**9,
+    )  # fmt: skip
+    kept = [
+        e for e in whole.entries
+        if (filters.who is None or e.principal_id == filters.who)
+        and (filters.since is None or e.recorded_at >= filters.since)
+        and (filters.until is None or e.recorded_at < filters.until)
+    ]  # fmt: skip
+    entries = [
+        AuditSectionEntry(
+            recorded_at=e.recorded_at, principal_id=e.principal_id, action=e.action, kind="rules",
+            held_in="rules", investigation_id=case_.id, case_name=case_.name, detail=e.detail,
+            result_cardinality=e.result_cardinality,
+        )  # fmt: skip
+        for e in kept[offset : offset + limit]
+    ]
+    return await _served_audit(
+        principal, audit, principal_names, entries, held_in="rules", filters=filters,
+        total=len(kept), offset=offset, limit=limit, note=None,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/admin/audit/models",
+    dependencies=[
+        Depends(require_right(Right.READ_AUDIT)),
+        Depends(require_right(Right.MANAGE_MODELS)),
+    ],
+)
+async def read_audit_section_models(
+    principal: PrincipalDep,
+    reader: AuditSectionDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """The engines' history in Admin › Audit, only for a holder of `manage_models` too, who reads it
+    in *Models* already (the orchestrator's ruling: it names people of every unit)."""
+    filters = audit_section_module.StreamFilters(who=who or None, since=since, until=until)
+    entries, total = await reader.model_history(filters, offset=offset, limit=limit)
+    return await _served_audit(
+        principal, audit, principal_names, entries, held_in="models", filters=filters,
+        total=total, offset=offset, limit=limit,
+        note="Engines are the deployment's, so their history is not a unit's.",
+    )  # fmt: skip
 
 
 @app.get(

@@ -15,6 +15,10 @@ What a mistake would do, and the case that catches it (each shown red at its rea
   `test_the_dataset_filter_reads_only_words_the_reader_is_shown`;
 - a case's entry sent to a holder of `read_audit` who is not the unit's administrator:
   `test_no_case_entry_without_the_safety_net`;
+- a system principal's unit (`operator`) read by a real unit of that name, or the writer's unit not
+  recorded at all: `test_a_system_unit_is_never_a_real_units`;
+- the indexes built inside the bootstrap's transaction, or left invalid:
+  `test_the_indexes_are_built_concurrently_and_valid`;
 - the engines' history truncated at its own read's 200: `test_the_engines_history_pages_with_its_true_total`;
 - "once" left to the caller: `test_an_overdue_alert_is_raised_once_by_the_database`.
 """
@@ -65,7 +69,7 @@ async def world() -> AsyncIterator[SimpleNamespace]:
     case_a = await cases.create(ANA_A, name="Op Kestrel")
     case_b = await cases.create(ANA_B, name="Op Harrier")
     yield SimpleNamespace(cases=cases, audit=audit, models=models, reader=reader, ageing=ageing,
-                          raw=raw, case_a=case_a, case_b=case_b)  # fmt: skip
+                          raw=raw, case_a=case_a, case_b=case_b, dsn=dsn)  # fmt: skip
     await raw.close()
     for store in (cases, audit, models, reader, ageing):
         await store.close()
@@ -208,3 +212,26 @@ async def test_no_case_entry_without_the_safety_net(world: SimpleNamespace) -> N
     rows, total = await world.reader.stream(A, cases=False, rights=FULL, filters=StreamFilters(),
                                             offset=0, limit=50)  # fmt: skip
     assert _seen(rows) == {("adm-a", "set_person_roles", None)} and total == 1
+
+
+async def test_a_system_unit_is_never_a_real_units(world: SimpleNamespace) -> None:
+    operator = Principal(id="revert-cli", clearance="OFFICIAL", org_unit="operator", roles=[])
+    await _record(world, operator, "load_reverted", None, {"load_id": "l1"})
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-a"})
+    units = dict(await world.raw.fetch("SELECT action, org_unit FROM audit_log"))
+    assert units == {"load_reverted": "system:operator", "set_person_roles": "unit-a"}
+    named_so = Principal(id="adm-op", clearance="SECRET", org_unit="operator", roles=["osprey-admin"])
+    rows, total = await world.reader.stream(named_so, cases=True, rights=FULL,
+                                            filters=StreamFilters(), offset=0, limit=50)  # fmt: skip
+    assert (rows, total) == ([], 0)
+
+
+async def test_the_indexes_are_built_concurrently_and_valid(world: SimpleNamespace) -> None:
+    valid = dict(await world.raw.fetch(
+        "SELECT c.relname, i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+        "WHERE c.relname IN ('audit_log_org_unit_idx', 'audit_log_recorded_at_idx') "
+        "AND pg_table_is_visible(c.oid)"))  # fmt: skip
+    assert valid == {"audit_log_org_unit_idx": True, "audit_log_recorded_at_idx": True}
+    # A second start finds them and builds nothing again.
+    again = await AuditWriter.connect(world.dsn)
+    await again.close()

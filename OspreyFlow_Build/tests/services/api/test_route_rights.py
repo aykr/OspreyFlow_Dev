@@ -400,6 +400,8 @@ ROUTE_RIGHTS = {
     "set_dataset_owner_setting": "administer_system",
     # ADR-145 decisions 9 and 10 (L2.6): Admin › Audit, and Operations' ageing and its N days.
     "read_audit_section": "read_audit",
+    "read_audit_section_rules": "read_audit",
+    "read_audit_section_models": "read_audit",
     "read_operations_ageing": "operate_schedules",
     "set_promotion_alert_days": "operate_schedules",
     "set_dataset_egress_route": "administer_system",

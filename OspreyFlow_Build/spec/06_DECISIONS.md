@@ -30999,7 +30999,10 @@ Status: built in Lane 2's L2.6 (admin), recorded for review; the lane's decision
 decision 11 as built, and what they left open. Amendment 3 decision 3 is now met: Audit is built, so
 `read_audit` alone opens the Admin place.
 
-1. **Three records, read one at a time** (`GET /v1/admin/audit`, `read_audit`; `services/api/audit_section.py`):
+1. **Three records, read one at a time, each by a route declaring every right it needs** (so the route
+   tests see each; `services/api/audit_section.py`): the stream `GET /v1/admin/audit` (`read_audit`);
+   the rule audit `GET /v1/admin/audit/rules` (`read_audit`, `read_rule_audit` and the `osprey-admin`
+   role); the engines' history `GET /v1/admin/audit/models` (`read_audit` and `manage_models`).
    - **The audit stream** (`audit_log`): the case audit, the people, roles and dataset audits, and the
      loads. An entry is a unit's when the case it names is that unit's, or, naming no case, when its
      writer was of that unit: `AuditWriter.record` now writes the acting principal's `org_unit`. **The
@@ -31011,14 +31014,27 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      (`osprey-admin`, ADR-052 §4's safety net): a holder of `read_audit` without that role is read
      only the entries naming no case, and told so. An entry naming no case is its writer's unit's, not
      the unit of what it is about (a unit-B administrator's change to unit A's dataset is unit B's):
-     the stream records no other unit for it. A removed case's entries are still its unit's.
+     the stream records no other unit for it. A removed case's entries are still its unit's. The
+     platform's own principals' units (`operator`, `system`) are recorded as `system:<unit>`, so a
+     real unit of the same name never reads their entries (and reads none of its own written without a
+     case: fail closed).
+   - **The indexes** Audit reads by (`audit_log_org_unit_idx`, `audit_log_recorded_at_idx`) are
+     built at start `CONCURRENTLY`, each in a statement of its own outside the bootstrap's
+     transaction (`audit.build_indexes`), so a large `audit_log` keeps taking audit writes, and so
+     every route keeps answering, while they build; one left invalid by a crash is dropped and built
+     again at the next start.
    - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
      stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
-     route's own gate (an Author, or the unit's administrator by ADR-052 §4's safety net) and
-     `read_rule_audit`; a filter narrows only after the read has withheld what it withholds.
-   - **The engines' history** (`model_admin_audit`, ADR-112 Amendment 7 decision 7) is read whole by
-     every holder of `read_audit`: engines are the deployment's, not a unit's, and it holds no key.
-     Paged with its true total, where *Models*' own history reads the latest 200.
+     route's own gate and only for the Administrator (`osprey-admin`): an Author holding both rights is
+     refused here and reads it in Rules and Monitoring. A filter narrows only after the read has
+     withheld what it withholds. **This is an exception to ADR-146 Amendment 2 point 3** (a
+     `read_rule_audit` route is the Rules and Monitoring place's): the owner ruled that the rule audit
+     returns to Admin › Audit for the Administrator, and this route is that return, held to the
+     administrator's role.
+   - **The engines' history** (`model_admin_audit`, ADR-112 Amendment 7 decision 7) is read only by a
+     holder of `manage_models` too (the orchestrator's ruling at review, the strict default: it names
+     people of every unit, which a reader of one unit's entries must not read). Paged with its true
+     total, where *Models*' own history reads the latest 200.
 2. **An entry's words.** No read of the stream existed to decide what an entry's `resolved_query` may
    tell, and it can name nodes, documents and queries. Its words and count are withheld
    (`words_withheld`) except for the two kinds whose words the reader's own section already shows: *People
@@ -31043,7 +31059,9 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
 5. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
    database (`ON CONFLICT DO NOTHING` on its id), to the dataset's Authors holding `review_promotions` and
    the administrators (`administer_system`) of the dataset's unit — enabled people only, never a service
-   account, never the proposer. Its words name the load and the dataset, never what it adds (rule 7).
+   account, never the proposer, and, where the dataset has a highest marking, only those cleared to it,
+   since the alert names the dataset (`recipients_of`'s `classification`). Its words name the load and
+   the dataset, never what it adds (rule 7).
    **Promotions are case's L3.4:** everything reads them through one seam, `WaitingPromotions` (its
    record `PendingPromotion`), which the Conduit fills with `NoPromotionsYet` until then. L3.4 provides
    `waiting_for_review(reader)` filtered in its own store as the reader, `all_waiting()` for the sweep,

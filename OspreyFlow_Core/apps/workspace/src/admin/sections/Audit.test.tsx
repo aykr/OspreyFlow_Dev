@@ -65,7 +65,7 @@ describe("Admin › Audit", () => {
     const q = asked[1]!.searchParams;
     expect(asked[1]!.pathname).toBe("/v1/admin/audit");
     expect(Object.fromEntries(q)).toEqual({
-      held_in: "case_and_admin", kind: "assertions", who: "eng-1", case: "c9", dataset: "ds-b",
+      kind: "assertions", who: "eng-1", case: "c9", dataset: "ds-b",
       since: "2026-11-01T00:00:00.000Z", until: "2026-11-09T00:00:00.000Z", offset: "0", limit: "50",
     }); // prettier-ignore
     // The entry the Conduit sent is shown though it is not eng-1's: the screen narrows nothing.
@@ -85,12 +85,13 @@ describe("Admin › Audit", () => {
     fireEvent.change(screen.getByLabelText("Case (id, required)"), { target: { value: "c1" } });
     fireEvent.click(screen.getByRole("button", { name: "Show entries" }));
     await waitFor(() => expect(asked).toHaveLength(2));
-    expect(Object.fromEntries(asked[1]!.searchParams)).toMatchObject({ held_in: "rules", case: "c1" });
+    expect(asked[1]!.pathname).toBe("/v1/admin/audit/rules");
+    expect(Object.fromEntries(asked[1]!.searchParams)).toMatchObject({ case: "c1" });
     expect(await screen.findByText("No entries you may read match these filters.")).toBeTruthy();
   });
 
   it("says a case it may not read as one not found, and nothing more", async () => {
-    serve((u) => (u.searchParams.get("held_in") === "rules" ? json(404, { detail: "not found" }) : json(200, { entries: [], total: 0, offset: 0, limit: 50 })));
+    serve((u) => (u.pathname.endsWith("/audit/rules") ? json(404, { detail: "not found" }) : json(200, { entries: [], total: 0, offset: 0, limit: 50 })));
     render(<Audit api={API} />);
     fireEvent.change(screen.getByLabelText("Record"), { target: { value: "rules" } });
     fireEvent.change(screen.getByLabelText("Case (id, required)"), { target: { value: "c9" } });

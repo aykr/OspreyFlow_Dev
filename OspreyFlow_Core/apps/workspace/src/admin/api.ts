@@ -206,10 +206,16 @@ export interface AuditQuery {
   offset?: number;
   limit?: number;
 }
+/** Each record its own route, each declaring its rights: the stream (`read_audit`), a case's rule
+ * audit (and `read_rule_audit`, for the Administrator), the engines' history (and `manage_models`). */
 export const readAudit = (api: AdminApi, query: AuditQuery) => {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
-  return call<AuditSectionPage>(api, `audit?${params.toString()}`);
+  for (const [key, value] of Object.entries(query))
+    if (key !== "held_in" && value !== undefined && value !== "") params.set(key, String(value));
+  const q = params.toString();
+  if (query.held_in === "rules") return call<AuditSectionPage>(api, `audit/rules?${q}`);
+  if (query.held_in === "models") return call<AuditSectionPage>(api, `audit/models?${q}`);
+  return call<AuditSectionPage>(api, `audit?${q}`);
 };
 /** Operations' ageing (ADR-145 decision 9): what ages and when, and the promotions waiting. */
 export const operationsAgeing = (api: AdminApi) => call<OperationsAgeing>(api, "operations/ageing");

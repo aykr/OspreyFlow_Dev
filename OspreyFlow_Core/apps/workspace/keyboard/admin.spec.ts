@@ -64,11 +64,11 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
     asked.push(`${request.method()} ${path}`);
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-    if (path === "audit") {
+    if (path === "audit" || path === "audit/rules") {
       const q = new URL(request.url()).searchParams;
-      asked.push(`AUDIT ${q.toString()}`);
+      asked.push(`AUDIT ${path} ${q.toString()}`);
       const offset = Number(q.get("offset") ?? 0);
-      const rules = q.get("held_in") === "rules";
+      const rules = path === "audit/rules";
       const entry = rules ? { ...AUDIT_ENTRY, action: "rule_deployed", kind: "rules", held_in: "rules",
                               detail: { rule_id: "r1" }, words_withheld: false, result_cardinality: 1 } : AUDIT_ENTRY;  // prettier-ignore
       return json(200, { entries: [entry], total: rules ? 1 : 120, offset, limit: 50, note: null });
@@ -681,14 +681,14 @@ test("the audit is read by kind and person by keyboard", async ({ page }) => {
   await page.keyboard.type("u1");
   await press(page, "Show entries");
   await expect.poll(() => asked.filter((a) => a.startsWith("AUDIT"))).toContainEqual(
-    expect.stringContaining("held_in=case_and_admin&kind=assertions&who=u1"),
+    expect.stringContaining("AUDIT audit kind=assertions&who=u1"),
   );
   registerCovered(REGISTRY, "read-the-audit-by-kind-and-person-by-keyboard");
 });
 
 test("a case's rule audit is read in Audit by keyboard", async ({ page }) => {
   const asked = await serve(page);
-  await page.goto("/keyboard/admin-harness.html?rights=read_audit,read_rule_audit");
+  await page.goto("/keyboard/admin-harness.html?rights=read_audit,read_rule_audit");  // the Conduit asks osprey-admin too
   await expect(page.getByRole("table", { name: "Audit entries" })).toBeVisible();
   const record = page.getByLabel("Record");
   await record.focus();
@@ -697,7 +697,7 @@ test("a case's rule audit is read in Audit by keyboard", async ({ page }) => {
   await page.getByLabel("Case (id, required)").focus();
   await page.keyboard.type("c1");
   await press(page, "Show entries");
-  await expect.poll(() => asked).toContainEqual(expect.stringContaining("held_in=rules&case=c1"));
+  await expect.poll(() => asked).toContainEqual(expect.stringContaining("AUDIT audit/rules case=c1"));
   await expect(page.getByRole("table", { name: "Audit entries" })).toContainText("rule deployed");
   registerCovered(REGISTRY, "read-a-cases-rule-audit-by-keyboard");
 });

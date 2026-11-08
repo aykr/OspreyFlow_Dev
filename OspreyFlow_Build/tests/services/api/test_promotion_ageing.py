@@ -7,6 +7,8 @@ What a mistake would do, and the case that catches it (each shown red at its cal
 - the alert a day late (`>` for `>=`) or a day early: `test_the_alert_fires_at_n_days_and_not_before`;
 - raised again on every sweep: `test_the_alert_fires_once`;
 - the alert telling what the promotion adds: `test_the_alert_names_the_load_not_its_contents`;
+- an administrator not cleared to the dataset's marking alerted (its name above them):
+  `test_no_recipient_below_the_datasets_marking`;
 - a recipient who may not review it (the proposer, a disabled account, another unit's administrator,
   an Author without `review_promotions`): `test_the_alert_goes_to_reviewers_and_the_units_administrators`.
 
@@ -124,3 +126,24 @@ def test_age_and_overdue_as_operations_lists_them() -> None:
     assert waiting_row(P, SENT + timedelta(days=2), 3).overdue is False
     [rule] = ageing_rules(1)
     assert rule.after_days == 1 and rule.then.startswith("After 1 day it is flagged overdue")
+
+
+def test_no_recipient_below_the_datasets_marking() -> None:
+    from dataclasses import replace
+
+    marked = replace(P, dataset_marking="SECRET")
+    scheme = ["OFFICIAL", "SECRET", "TOP SECRET"]
+    people = [
+        PersonAccount(id="adm-1", username="a", name="a", enabled=True, roles=["osprey-admin"],
+                      org_unit="unit-1", clearance="OFFICIAL"),
+        PersonAccount(id="adm-2", username="b", name="b", enabled=True, roles=["osprey-admin"],
+                      org_unit="unit-1", clearance="TOP SECRET"),
+        PersonAccount(id="adm-3", username="c", name="c", enabled=True, roles=["osprey-admin"],
+                      org_unit="unit-1", clearance=None),
+        PersonAccount(id="eng-1", username="d", name="d", enabled=True, roles=["data_engineer"],
+                      org_unit="unit-1", clearance="SECRET"),
+    ]  # fmt: skip
+    assert recipients_of(marked, ["eng-1"], people, classification=scheme) == ["adm-2", "eng-1"]
+    # No marking: no clearance asked.
+    assert recipients_of(P, ["eng-1"], people, classification=scheme) == [
+        "adm-1", "adm-2", "adm-3", "eng-1"]  # fmt: skip

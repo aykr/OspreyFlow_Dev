@@ -11,6 +11,9 @@ What a mistake would do, and the case that catches it (each shown red at its cal
   dataset's words to a holder of `read_audit` alone): `test_an_entrys_withheld_words_stay_withheld`;
 - the rule audit read around `readable_rule_audit` (its withheld entries served):
   `test_the_rule_audit_is_served_as_its_own_read_withholds_it`;
+- the rule audit served to an Author who is not the administrator:
+  `test_the_rule_audit_needs_the_administrators_role`;
+- the engines' history to a holder of `read_audit` alone: `test_the_engines_history_is_only_for_a_holder_of_manage_models`;
 - the rule audit of another unit's case, or of a case the reader may not manage, served:
   `test_the_rule_audit_of_a_case_the_reader_may_not_manage_is_not_found`;
 - a filter widening the rule audit (paging before narrowing): `test_rule_audit_filters_narrow_after_withholding`.
@@ -32,6 +35,7 @@ from services.api.investigations import Investigation, InvestigationNotFoundErro
 from services.api.promotion_ageing import InMemoryAgeingStore, NoPromotionsYet, PendingPromotion
 
 from schemas.domain import Principal, RuleAuditEntry, RuleAuditPage
+from schemas.rights import ADMIN as ADMIN_RIGHTS
 
 T0 = datetime(2026, 11, 8, 9, 0, tzinfo=UTC)
 TOKENS: dict[str, Principal] = {}
@@ -130,7 +134,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
 
     monkeypatch.setattr(app_module, "with_derived_packs", _with_packs)
     yield SimpleNamespace(client=TestClient(app), reader=reader, audit=audit, ageing=ageing,
-                          monkeypatch=monkeypatch)  # fmt: skip
+                          monkeypatch=monkeypatch, cases_=state["investigations"])  # fmt: skip
 
 
 def _as(person: str) -> dict[str, str]:
@@ -143,27 +147,65 @@ def _row(action: str, detail: dict[str, Any], case: str | None = "c1") -> Stream
                      result_cardinality=7)  # fmt: skip
 
 
-ROUTES: list[tuple[str, str, dict[str, Any] | None, str]] = [
-    ("GET", "/v1/admin/audit", None, "read_audit"),
-    ("GET", "/v1/admin/audit?held_in=models", None, "read_audit"),
-    ("GET", "/v1/admin/operations/ageing", None, "operate_schedules"),
-    ("PUT", "/v1/admin/settings/promotion-alert-days", {"alert_after_days": 4}, "operate_schedules"),
+#: Each route, each right it declares, and the roles that together pass every check it declares.
+ROUTES: list[tuple[str, str, dict[str, Any] | None, list[str], list[str]]] = [
+    ("GET", "/v1/admin/audit", None, ["read_audit"], ["right:read_audit"]),
+    ("GET", "/v1/admin/audit/models", None, ["read_audit", "manage_models"],
+     ["right:read_audit", "right:manage_models"]),
+    ("GET", "/v1/admin/audit/rules?case=c1", None, ["read_audit"], ["osprey-admin"]),
+    ("GET", "/v1/admin/operations/ageing", None, ["operate_schedules"], ["right:operate_schedules"]),
+    ("PUT", "/v1/admin/settings/promotion-alert-days", {"alert_after_days": 4},
+     ["operate_schedules"], ["right:operate_schedules"]),
 ]  # fmt: skip
+EVERY = ["administer_system", "manage_people", "manage_dashboards", "manage_ontology",
+         "manage_models", "read_rule_audit", "read_audit", "operate_schedules"]  # fmt: skip
 
 
-@pytest.mark.parametrize(("method", "path", "body", "right"), ROUTES)
+@pytest.mark.parametrize(("method", "path", "body", "rights", "passes"), ROUTES)
 def test_every_route_refuses_without_its_right(
-    world: SimpleNamespace, method: str, path: str, body: Any, right: str
-) -> None:
-    # Every other administration right but this one.
-    others = ["administer_system", "manage_people", "manage_dashboards", "manage_ontology",
-              "manage_models", "read_rule_audit", "read_audit", "operate_schedules"]  # fmt: skip
-    _token("almost", [f"right:{r}" for r in others if r != right])
-    answer = world.client.request(method, path, json=body, headers=_as("almost"))
-    assert answer.status_code == 403, answer.text
-    assert answer.json()["detail"] == {"error": "right_required", "right": right}
-    _token("holder", [f"right:{right}"])
+    world: SimpleNamespace, method: str, path: str, body: Any, rights: list[str],
+    passes: list[str],
+) -> None:  # fmt: skip
+    """Each right a route declares is refused without it, holding every other right and the
+    administrator role (so the refusal is that right's); the roles in `passes` are answered."""
+    _readable(world, [])
+    for right in rights:
+        _token("almost", ["osprey-admin", *(f"right:{r}" for r in EVERY if r != right)])
+        if right in {r.value for r in ADMIN_RIGHTS}:
+            # The administrator's role gives the right itself; refuse it with single rights alone.
+            _token("almost", [f"right:{r}" for r in EVERY if r != right])
+        answer = world.client.request(method, path, json=body, headers=_as("almost"))
+        assert answer.status_code == 403, (right, answer.text)
+        detail = answer.json()["detail"]
+        assert detail == {"error": "right_required", "right": right}, (right, detail)
+    _token("holder", passes)
     assert world.client.request(method, path, json=body, headers=_as("holder")).status_code == 200
+
+
+def test_each_audit_route_declares_every_check_it_makes() -> None:
+    """Declared, so the rights table, the place test and the section test see each (rule 12).
+    `read_rule_audit` cannot be refused over HTTP apart from the administrator's role, which
+    confers it, so its proof is that the route declares it."""
+    from fastapi.routing import APIRoute
+
+    from tests.services.api.test_place_routes import _checks
+
+    routes = {r.endpoint.__name__: r for r in app.routes if isinstance(r, APIRoute)}
+    assert _checks(routes["read_audit_section"]) == {"read_audit"}
+    assert _checks(routes["read_audit_section_rules"]) == {
+        "read_audit", "read_rule_audit", "role:osprey-admin"}  # fmt: skip
+    assert _checks(routes["read_audit_section_models"]) == {"read_audit", "manage_models"}
+
+
+def test_the_rule_audit_needs_the_administrators_role(world: SimpleNamespace) -> None:
+    """The owner's ruling returns the rule audit to Admin › Audit for the Administrator: a holder
+    of both rights who is an Author of the case, but not the administrator, is refused."""
+    _readable(world, [_rule_entry("rule_deployed", 1)])
+    _token("author", ["right:read_audit", "right:read_rule_audit"])
+    world.cases_.authors["c1"].add("author")
+    refused = world.client.get("/v1/admin/audit/rules?case=c1", headers=_as("author"))
+    assert refused.status_code == 403
+    assert "osprey-admin" in str(refused.json()["detail"])
 
 
 def test_the_stream_is_read_as_the_reader_with_filters_passed_through(world: SimpleNamespace) -> None:
@@ -232,7 +274,7 @@ def test_the_rule_audit_is_served_as_its_own_read_withholds_it(world: SimpleName
     kept = _rule_entry("rule_deployed", 1, rule_id="r1")
     world.audit.rule_entries = [secret, kept]
     calls = _readable(world, [kept])
-    answer = world.client.get("/v1/admin/audit?held_in=rules&case=c1", headers=_as("adm-1"))
+    answer = world.client.get("/v1/admin/audit/rules?case=c1", headers=_as("adm-1"))
     assert answer.status_code == 200, answer.text
     page = answer.json()
     assert [e["action"] for e in page["entries"]] == ["rule_deployed"] and page["total"] == 1
@@ -248,41 +290,44 @@ def test_the_rule_audit_of_a_case_the_reader_may_not_manage_is_not_found(
 ) -> None:
     _readable(world, [_rule_entry("rule_deployed", 1)])
     # Another unit's case, for this unit's administrator; and for that unit's, a case not theirs.
-    assert world.client.get("/v1/admin/audit?held_in=rules&case=c9",
+    assert world.client.get("/v1/admin/audit/rules?case=c9",
                             headers=_as("adm-1")).status_code == 404  # fmt: skip
-    assert world.client.get("/v1/admin/audit?held_in=rules&case=c1",
+    assert world.client.get("/v1/admin/audit/rules?case=c1",
                             headers=_as("adm-9")).status_code == 404  # fmt: skip
-    # A holder of read_audit and read_rule_audit who is neither an Author nor an administrator.
-    assert world.client.get("/v1/admin/audit?held_in=rules&case=c1",
-                            headers=_as("aud-r")).status_code == 404  # fmt: skip
+    # A holder of read_audit and read_rule_audit who is not the administrator.
+    assert world.client.get("/v1/admin/audit/rules?case=c1",
+                            headers=_as("aud-r")).status_code == 403  # fmt: skip
     # read_audit without read_rule_audit.
-    refused = world.client.get("/v1/admin/audit?held_in=rules&case=c1", headers=_as("aud-1"))
+    refused = world.client.get("/v1/admin/audit/rules?case=c1", headers=_as("aud-1"))
     assert refused.status_code == 403
     assert refused.json()["detail"]["right"] == "read_rule_audit"
     # No case chosen.
-    assert world.client.get("/v1/admin/audit?held_in=rules", headers=_as("adm-1")).status_code == 422
+    assert world.client.get("/v1/admin/audit/rules", headers=_as("adm-1")).status_code == 422
 
 
 def test_rule_audit_filters_narrow_after_withholding(world: SimpleNamespace) -> None:
     served = [_rule_entry("rule_evaluated", m, who="ana-1" if m % 2 else "eng-1") for m in range(6)]
     served.reverse()  # newest first, as the read serves them
     calls = _readable(world, served)
-    answer = world.client.get("/v1/admin/audit?held_in=rules&case=c1&who=eng-1&limit=2",
+    answer = world.client.get("/v1/admin/audit/rules?case=c1&who=eng-1&limit=2",
                               headers=_as("adm-1")).json()  # fmt: skip
     assert answer["total"] == 3
     assert [e["principal_id"] for e in answer["entries"]] == ["eng-1", "eng-1"]
     # The whole readable audit was asked for, so paging never happens before the filter.
     assert calls[0]["offset"] == 0 and calls[0]["limit"] >= 10**6
-    for refused in ("&dataset=ds-a", "&kind=assertions"):
-        assert world.client.get(f"/v1/admin/audit?held_in=rules&case=c1{refused}",
-                                headers=_as("adm-1")).status_code == 422  # fmt: skip
 
 
-def test_the_engines_history_takes_person_and_time_only(world: SimpleNamespace) -> None:
-    answer = world.client.get("/v1/admin/audit?held_in=models", headers=_as("aud-1"))
+def test_the_engines_history_is_only_for_a_holder_of_manage_models(world: SimpleNamespace) -> None:
+    """The orchestrator's ruling: the history names people of every unit, so a holder of
+    `read_audit` alone, of any unit, is refused it; one holding `manage_models` too reads it."""
+    for who, unit in (("aud-1", "unit-1"), ("aud-9", "unit-2")):
+        _token(who, ["right:read_audit"], unit=unit)
+        refused = world.client.get("/v1/admin/audit/models", headers=_as(who))
+        assert refused.status_code == 403
+        assert refused.json()["detail"] == {"error": "right_required", "right": "manage_models"}
+    _token("mod-1", ["right:read_audit", "right:manage_models"], unit="unit-2")
+    answer = world.client.get("/v1/admin/audit/models", headers=_as("mod-1"))
     assert answer.status_code == 200 and answer.json()["total"] == 0
-    assert world.client.get("/v1/admin/audit?held_in=models&case=c1",
-                            headers=_as("aud-1")).status_code == 422  # fmt: skip
 
 
 class _Waiting:

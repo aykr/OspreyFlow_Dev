@@ -96,8 +96,10 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
   // ADR-145 Amendment 3 decision 3: once Audit is built, `read_audit` alone opens it, and it reads.
   it("opens Audit for a holder of read_audit alone, which reads the audit", async () => {
     const asked = serve();
-    place(["read_audit"]);
+    const nav = place(["read_audit"]);
     expect(screen.getByRole("heading", { name: "Audit" })).toBeTruthy();
+    // Audit alone: no other section is offered for read_audit.
+    expect(nav.getAllByRole("button").map((b) => b.textContent)).toEqual(["Audit"]);
     await waitFor(() => expect(asked).toContain("/v1/admin/audit"));
   });
 

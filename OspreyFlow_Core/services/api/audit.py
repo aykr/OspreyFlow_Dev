@@ -54,9 +54,41 @@ CREATE INDEX IF NOT EXISTS audit_log_principal_id_idx
 -- names no case by unit (a reader of one unit sees that unit's entries alone). An entry written
 -- before this column has none, and Audit leaves it out unless it names a case, saying so.
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT;
-CREATE INDEX IF NOT EXISTS audit_log_org_unit_idx ON audit_log (org_unit, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS audit_log_recorded_at_idx ON audit_log (recorded_at DESC, id DESC);
 """
+
+#: Admin › Audit's indexes, each built `CONCURRENTLY` in a statement of its own (it cannot run in a
+#: transaction, and a script of several statements is one): a plain `CREATE INDEX` on a large
+#: `audit_log` would block every insert while it builds, and an audit write that cannot complete
+#: refuses the read it audits (fail closed), so every route would be refused until it finished.
+#: A build left invalid by a crash is dropped and built again at the next start.
+_CONCURRENT_INDEXES: tuple[tuple[str, str], ...] = (
+    ("audit_log_org_unit_idx", "audit_log (org_unit, recorded_at DESC)"),
+    ("audit_log_recorded_at_idx", "audit_log (recorded_at DESC, id DESC)"),
+)
+
+#: The units the platform's own principals carry (a reverted load's `operator`, a prefetch's
+#: `system`), recorded as `system:<unit>` so that a real unit of the same name never reads their
+#: entries in Admin › Audit (ADR-145 Amendment 6). A real unit named so reads none of its own
+#: written-without-a-case entries there either: fail closed.
+SYSTEM_UNITS = frozenset({"operator", "system"})
+
+
+def recorded_unit(org_unit: str | None) -> str | None:
+    if org_unit in SYSTEM_UNITS:
+        return f"system:{org_unit}"
+    return org_unit
+
+
+async def build_indexes(conn: asyncpg.Connection) -> None:
+    for name, on in _CONCURRENT_INDEXES:
+        valid = await conn.fetchval(
+            "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+            "WHERE c.relname = $1 AND pg_table_is_visible(c.oid)",
+            name,
+        )
+        if valid is False:
+            await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
+        await conn.execute(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {on}")
 
 
 class AuditWriteError(Exception):
@@ -91,6 +123,7 @@ class AuditWriter:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
+            await build_indexes(conn)
         return cls(pool)
 
     async def close(self) -> None:
@@ -123,7 +156,7 @@ class AuditWriter:
                     json.dumps(resolved_query),
                     result_cardinality,
                     justification,
-                    principal.org_unit,
+                    recorded_unit(principal.org_unit),
                 )
         except (OSError, asyncpg.PostgresError) as exc:
             raise AuditWriteError(f"audit write failed for action {action!r}: {exc}") from exc

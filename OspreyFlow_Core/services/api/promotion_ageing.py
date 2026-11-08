@@ -56,6 +56,9 @@ class PendingPromotion:
     dataset_unit: str
     proposed_by: str
     proposed_at: datetime
+    #: The dataset's highest marking (ADR-145 decision 8), when it has one: a recipient must be
+    #: cleared to it, since the alert names the dataset.
+    dataset_marking: str | None = None
 
 
 class WaitingPromotions(Protocol):
@@ -131,14 +134,19 @@ def recipients_of(
     authors: Sequence[str],
     people: Iterable[PersonAccount],
     custom: Mapping[str, Iterable[Right]] | None = None,
+    classification: Sequence[str] = (),
 ) -> list[str]:
     """Decision 11's recipients: the dataset's Authors (its home case's, `authors`) whose rights
     hold `review_promotions`, and the administrators (`administer_system`) of the dataset's unit;
-    only enabled accounts, never a service account, never the proposer."""
+    only enabled accounts, never a service account, never the proposer, and, where the dataset
+    has a highest marking, only those cleared to it (`classification`, lowest first, the
+    deployment's scheme): the alert names the dataset, so it goes to nobody its name is above."""
     held = set(authors)
     out: set[str] = set()
     for person in people:
         if not person.enabled or person.system_account or person.id == p.proposed_by:
+            continue
+        if not cleared_to(person.clearance, p.dataset_marking, classification):
             continue
         rights = rights_for(person.roles, custom)
         if person.id in held and Right.REVIEW_PROMOTIONS in rights:
@@ -146,6 +154,15 @@ def recipients_of(
         elif Right.ADMINISTER_SYSTEM in rights and person.org_unit == p.dataset_unit:
             out.add(person.id)
     return sorted(out)
+
+
+def cleared_to(clearance: str | None, marking: str | None, classification: Sequence[str]) -> bool:
+    """Whether a clearance reaches a marking in the scheme; an unknown one, or none, never does."""
+    if marking is None:
+        return True
+    if clearance not in classification or marking not in classification:
+        return False
+    return classification.index(clearance) >= classification.index(marking)
 
 
 class OverdueAlerts(Protocol):
