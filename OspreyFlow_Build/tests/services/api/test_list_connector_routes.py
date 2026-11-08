@@ -1,6 +1,6 @@
-"""The screening-list connector's routes, and a dataset's lists, behind their rights and the dataset's
-own gate (`06_DECISIONS.md` ADR-140 Amendment 13; rules 3 and 4: every read path has its
-access-control case).
+"""The screening-list connector's routes, and a dataset's lists, behind their rights and the
+dataset's own gate (`06_DECISIONS.md` ADR-140 Amendment 13; rules 3 and 4: every read path has
+its access-control case).
 
 The real app and the real `get_principal` run; the token resolver, the cases and the stores stand
 in. What a mistake would do, and the case that catches it:
@@ -14,7 +14,8 @@ in. What a mistake would do, and the case that catches it:
 - a dataset offered a list it does not subscribe to, or another dataset's own list —
   `test_a_dataset_is_offered_only_its_own_and_its_subscribed_lists`;
 - a dataset's own list imported from a file that is not the dataset's, or for a list its live
-  model does not name, or replacing a version — `test_a_dataset_s_own_list_is_imported_from_its_own_files`;
+  model does not name, or replacing a version —
+  `test_a_dataset_s_own_list_is_imported_from_its_own_files`;
 - any of it unaudited — every case reads the audit.
 """
 

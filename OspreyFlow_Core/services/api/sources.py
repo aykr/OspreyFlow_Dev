@@ -1,8 +1,9 @@
 """Connections and registered sources (`06_DECISIONS.md` ADR-140 decision 7, Amendment 4).
 
-**Connections** are the deployment's, kept by its administrators: one kind today, `files`, the
-ingest root. The built-in one (`FILES_CONNECTION_ID`) is written at start-up so every deployment has
-it; an administrator may name others, for the folders an operator keeps apart.
+**Connections** are the deployment's, kept by its administrators: `files`, the ingest root, and
+phase 9's `sql`, `api` and `json` (Amendment 13), each holding its settings and a secret's name
+only. The built-in one (`FILES_CONNECTION_ID`) is written at start-up so every deployment has it;
+an administrator may name others, for the folders an operator keeps apart.
 
 **Sources** belong to a dataset. Every read takes the dataset in its `WHERE` (rule 3): a source of
 another dataset is not found, and the answer says nothing of whether it exists. A source is
@@ -58,6 +59,9 @@ class SourceStore(Protocol):
         self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
     ) -> SourceTable: ...
     async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
+    async def connection(self, connection_id: str) -> Connection: ...
+    async def cursor(self, source_id: str) -> str | None: ...
+    async def set_cursor(self, source_id: str, cursor: str | None) -> None: ...
     async def set_refresh_paused(
         self, source_id: str, *, paused: bool, reason: str | None
     ) -> None: ...
@@ -87,6 +91,7 @@ def _registered(dataset_id: str, body: RegisterSourceInput, principal: Principal
         connector_profile=body.connector_profile,
         handling=body.handling,
         legal_basis=body.legal_basis,
+        read=body.read,
         # Amendment 6 point 6: the owner is whoever set it, and nothing starts paused.
         refresh=body.refresh.model_copy(
             update={
@@ -140,6 +145,7 @@ class InMemorySourceStore:
     def __init__(self) -> None:
         self._connections: dict[str, Connection] = {FILES_CONNECTION_ID: _built_in(_now())}
         self._sources: dict[str, SourceTable] = {}
+        self._cursors: dict[str, str | None] = {}
 
     async def connections(self) -> list[Connection]:
         return sorted(
@@ -153,9 +159,25 @@ class InMemorySourceStore:
             name=body.name.strip(),
             created_by=principal.id,
             created_at=_now(),
+            settings=body.settings,
         )
         self._connections[made.id] = made
         return made
+
+    async def connection(self, connection_id: str) -> Connection:
+        if connection_id not in self._connections:
+            raise UnknownConnectionError(connection_id)
+        return self._connections[connection_id]
+
+    async def cursor(self, source_id: str) -> str | None:
+        if source_id not in self._sources:
+            raise SourceNotFoundError(source_id)
+        return self._cursors.get(source_id)
+
+    async def set_cursor(self, source_id: str, cursor: str | None) -> None:
+        if source_id not in self._sources:
+            raise SourceNotFoundError(source_id)
+        self._cursors[source_id] = cursor
 
     async def list_for(self, dataset_id: str) -> list[SourceTable]:
         return sorted(
@@ -241,21 +263,36 @@ CREATE TABLE IF NOT EXISTS ingest_sources (
     UNIQUE (dataset_id, location)
 );
 CREATE INDEX IF NOT EXISTS ingest_sources_dataset ON ingest_sources (dataset_id);
+-- ADR-140 Amendment 13: a connection's settings (a secret's name, never its value), a source's
+-- read, and how far an incremental connector source has read.
+ALTER TABLE ingest_connections ADD COLUMN IF NOT EXISTS settings JSONB;
+ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS read JSONB;
+CREATE TABLE IF NOT EXISTS connector_cursors (
+    source_id TEXT PRIMARY KEY REFERENCES ingest_sources (id) ON DELETE CASCADE,
+    cursor TEXT
+);
 """
 
 _SOURCE_COLUMNS = (
     "id, dataset_id, connection_id, name, location, connector_profile, handling, legal_basis, "
-    "refresh, version, created_by, created_at, updated_by, updated_at"
+    "refresh, version, created_by, created_at, updated_by, updated_at, read"
 )
 
 
 def _source(row: asyncpg.Record) -> SourceTable:
     data: dict[str, Any] = dict(row)
-    for key in ("handling", "refresh"):
+    for key in ("handling", "refresh", "read"):
         if isinstance(data[key], str):
             data[key] = json.loads(data[key])
     data["refresh"] = SourceRefresh(**data["refresh"])
     return SourceTable(**data)
+
+
+def _connection(row: asyncpg.Record) -> Connection:
+    data: dict[str, Any] = dict(row)
+    if isinstance(data.get("settings"), str):
+        data["settings"] = json.loads(data["settings"])
+    return Connection(**data)
 
 
 class PostgresSourceStore:
@@ -281,11 +318,43 @@ class PostgresSourceStore:
     async def connections(self) -> list[Connection]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, kind, name, created_by, created_at FROM ingest_connections "
+                "SELECT id, kind, name, created_by, created_at, settings FROM ingest_connections "
                 "ORDER BY id <> $1, name",
                 FILES_CONNECTION_ID,
             )
-        return [Connection(**dict(r)) for r in rows]
+        return [_connection(r) for r in rows]
+
+    async def connection(self, connection_id: str) -> Connection:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, kind, name, created_by, created_at, settings FROM ingest_connections "
+                "WHERE id = $1",
+                connection_id,
+            )
+        if row is None:
+            raise UnknownConnectionError(connection_id)
+        return _connection(row)
+
+    async def cursor(self, source_id: str) -> str | None:
+        async with self._pool.acquire() as conn:
+            known = await conn.fetchval("SELECT 1 FROM ingest_sources WHERE id = $1", source_id)
+            if known is None:
+                raise SourceNotFoundError(source_id)
+            value = await conn.fetchval(
+                "SELECT cursor FROM connector_cursors WHERE source_id = $1", source_id
+            )
+        return value if value is None else str(value)
+
+    async def set_cursor(self, source_id: str, cursor: str | None) -> None:
+        async with self._pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    "INSERT INTO connector_cursors (source_id, cursor) VALUES ($1, $2) "
+                    "ON CONFLICT (source_id) DO UPDATE SET cursor = EXCLUDED.cursor",
+                    source_id, cursor,
+                )  # fmt: skip
+            except asyncpg.ForeignKeyViolationError as exc:
+                raise SourceNotFoundError(source_id) from exc
 
     async def add_connection(self, body: ConnectionInput, principal: Principal) -> Connection:
         made = Connection(
@@ -294,12 +363,14 @@ class PostgresSourceStore:
             name=body.name.strip(),
             created_by=principal.id,
             created_at=_now(),
+            settings=body.settings,
         )
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "INSERT INTO ingest_connections (id, kind, name, created_by, created_at) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO ingest_connections (id, kind, name, created_by, created_at, settings) "
+                "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
                 made.id, made.kind, made.name, made.created_by, made.created_at,
+                made.settings.model_dump_json() if made.settings else None,
             )  # fmt: skip
         return made
 
@@ -335,11 +406,12 @@ class PostgresSourceStore:
             try:
                 await conn.execute(
                     f"INSERT INTO ingest_sources ({_SOURCE_COLUMNS}) VALUES "
-                    "($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14)",
+                    "($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, "
+                    "$15::jsonb)",
                     made.id, made.dataset_id, made.connection_id, made.name, made.location,
                     made.connector_profile, json.dumps(made.handling), made.legal_basis,
                     made.refresh.model_dump_json(), made.version, made.created_by, made.created_at,
-                    None, None,
+                    None, None, made.read.model_dump_json() if made.read else None,
                 )  # fmt: skip
             except asyncpg.UniqueViolationError as exc:
                 raise SourceAlreadyRegisteredError(body.location) from exc

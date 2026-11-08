@@ -233,6 +233,8 @@ ROUTE_RIGHTS = {
     "pause_source_refresh": "schedule_pipelines",
     "resume_source_refresh": "schedule_pipelines",
     # ADR-140 Amendment 13: the screening-list connector, subscriptions by id, a dataset's lists.
+    "read_connector_source": "add_ingest_files",
+    "test_admin_connection": "administer_system",
     "list_deployment_lists": "load_screening_lists",
     "add_deployment_list": "load_screening_lists",
     "refresh_deployment_list": "load_screening_lists",

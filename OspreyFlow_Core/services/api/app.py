@@ -66,6 +66,7 @@ from services.extract.writer import (
     retract_node,
 )
 from services.ingest.connectors.geo.site_grid import site_grid_rows
+from services.ingest.connectors.reads import ConnectorRefused
 from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, run_recipe
 from services.ingest.pipeline import (
     pipeline_from_recipe,
@@ -385,6 +386,8 @@ from schemas.sentences import (
 from schemas.sources import (
     Connection,
     ConnectionInput,
+    ConnectionTest,
+    ConnectorRead,
     GovernanceEdited,
     PauseRefreshInput,
     RegisterSourceInput,
@@ -500,6 +503,7 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
+from .connector_reads import Readers, check_connection, read_into_file
 from .credentials import MissingCredentialError
 from .custom_roles import (
     CustomRoleStore,
@@ -8949,6 +8953,33 @@ async def list_admin_connections(sources: SourcesDep) -> list[Connection]:
 
 
 @app.post(
+    "/v1/admin/connections/{connection_id}/test",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def test_admin_connection(
+    connection_id: str,
+    request: Request,
+    principal: PrincipalDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+) -> ConnectionTest:
+    """*Test connection* (ADR-140 Amendment 13): a SQL login signed in over TLS and found read-only,
+    an API's host allowed and its secret set. Nothing is read, and no secret is answered."""
+    try:
+        connection = await sources.connection(connection_id)
+    except UnknownConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "not_found", "detail": "There is no such connection."},
+        ) from exc
+    result = await check_connection(connection, get_connector_readers(request))
+    await audit.record(principal=principal, action="test_ingest_connection",
+                       resolved_query={"connection_id": connection_id, "ok": result.ok},
+                       result_cardinality=1)  # fmt: skip
+    return result
+
+
+@app.post(
     "/v1/admin/connections",
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
@@ -9793,6 +9824,7 @@ async def list_dataset_sources(
 async def register_dataset_source(
     dataset_id: StudioDatasetDep,
     body: RegisterSourceInput,
+    request: Request,
     principal: SourceAuthorDep,
     sources: SourcesDep,
     studio_recipes: StudioRecipesDep,
@@ -9801,7 +9833,19 @@ async def register_dataset_source(
     """Registers a source once (ADR-140 decision 7). A Files source must be a file the dataset's
     listing offers: the same confinement Connect has (`ingest_sources.list_source_files`), so a path
     outside the ingest root, or another dataset's folder, is refused in the same words whether or
-    not it exists."""
+    not it exists. A SQL, API or JSON source (Amendment 13) is read once now, into its own file in
+    the dataset's folder, and registered on that file only if the read succeeds."""
+    try:
+        connection = await sources.connection(body.connection_id)
+    except UnknownConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "unknown_connection", "detail": "There is no such connection."},
+        ) from exc
+    if connection.kind != "files":
+        body, first_cursor = await _first_connector_read(dataset_id, body, connection, request)
+    else:
+        first_cursor = None
     offered = {f.source_location for f in list_source_files(datasets=[dataset_id]).files}
     if body.location not in offered:
         raise HTTPException(
@@ -9828,6 +9872,8 @@ async def register_dataset_source(
                 "detail": "This dataset already has a source reading that file.",
             },
         ) from exc
+    if first_cursor is not None:
+        await sources.set_cursor(made.id, first_cursor)
     await audit.record(
         principal=principal,
         action="register_dataset_source",
@@ -9835,6 +9881,92 @@ async def register_dataset_source(
         result_cardinality=1,
     )
     return made
+
+
+def get_connector_readers(request: Request) -> Readers:
+    """What a connector read reaches (ADR-140 Amendment 13): the real database driver, the network
+    through the egress allow-list; a test sets fixtures that refuse what the real ones refuse."""
+    readers = getattr(request.app.state, "connector_readers", None)
+    return readers if readers is not None else Readers()
+
+
+def _connector_refused(refused: ConnectorRefused) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail={"error": "read_refused", "detail": str(refused)},
+    )
+
+
+async def _first_connector_read(
+    dataset_id: str, body: RegisterSourceInput, connection: Connection, request: Request
+) -> tuple[RegisterSourceInput, str | None]:
+    """A non-file source's first read: its rows land as its own file, which it is then registered
+    on, with a folder watch on that file when the policy watches. Refused whole, in words."""
+    if body.read is None or body.read.kind != connection.kind:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "read_needed",
+                    "detail": f"A source on a {connection.kind} connection needs its own read."},
+        )  # fmt: skip
+    name = body.location
+    try:
+        rows, file = await read_into_file(
+            body, connection, dataset_id=dataset_id, name=name, cursor=None,
+            readers=get_connector_readers(request),
+        )  # fmt: skip
+    except ConnectorRefused as refused:
+        raise _connector_refused(refused) from refused
+    refresh = body.refresh
+    if refresh.trigger == "watch":
+        refresh = refresh.model_copy(update={"pattern": file.name})
+    return body.model_copy(update={"location": str(file), "refresh": refresh}), rows.cursor
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/sources/{source_id}/read",
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES)), NoLoadingAComposite],
+)
+async def read_connector_source(
+    dataset_id: StudioDatasetDep,
+    source_id: str,
+    request: Request,
+    principal: SourceAuthorDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+) -> ConnectorRead:
+    """*Refresh now* for a SQL, API or JSON source (ADR-140 Amendment 13): read again through its
+    connection, landing whole as its file; an incremental SQL source reads only rows past its
+    cursor, so the file holds only what is new, and its watch runs the source's pipelines on it."""
+    source = await _source_of(sources, dataset_id, source_id)
+    connection = await sources.connection(source.connection_id)
+    if connection.kind == "files":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "read_refused",
+                    "detail": "A file source is read from its file: upload the new file instead."},
+        )  # fmt: skip
+    cursor = await sources.cursor(source_id)
+    try:
+        rows, file = await read_into_file(
+            source, connection, dataset_id=dataset_id, name=Path(source.location).stem,
+            cursor=cursor, readers=get_connector_readers(request),
+        )  # fmt: skip
+    except ConnectorRefused as refused:
+        raise _connector_refused(refused) from refused
+    await sources.set_cursor(source_id, rows.cursor)
+    words = (
+        f"{len(rows.rows)} rows read into {file.name}"
+        if rows.rows
+        else f"nothing new was found; {file.name} now holds no rows"
+    )
+    await audit.record(
+        principal=principal,
+        action="read_connector_source",
+        resolved_query={"dataset_id": dataset_id, "source_id": source_id},
+        result_cardinality=len(rows.rows),
+    )
+    return ConnectorRead(source_id=source_id, file=str(file), rows=len(rows.rows),
+                         cursor=rows.cursor, words=words)  # fmt: skip
 
 
 @app.get(
