@@ -211,6 +211,17 @@ branch, runs `make ci`, and keeps the merge only if it is no redder than `main`.
 
 **And the fast tier too (from 8 November 2026).** `make ci` does not run `make test`, the fast tier GitHub's `test` job runs, so L2.8's and L1.2c's merges, each green on `make ci`, left eight fast-tier tests red on `main` unseen for hours. A merge that changes code also runs `make test` on the merge result (closed ports, no lane; about 14 minutes) before it is kept, and a failure there that is not the machine's own (the local `osprey.yaml`, a root `graphify-out`, pinned ports) blocks it as a `make ci` failure does.
 
+**A lane's own gate run stands for an identical tree (the owner's ruling, 8 November 2026, to speed
+merges).** A lane reports ready-to-merge at a commit rebased onto current `main`, with `make -k ci` and
+`make test` run offline at that commit and their outputs saved as `process/lanes/<lane>/gates/<sha>.ci.txt`
+and `<sha>.test.txt` (failures listed, each explained). If `main` is still an ancestor of that commit, the
+`--no-ff` merge's tree is the tested tree (the orchestrator checks `git rev-parse <sha>^{tree}` against
+the merge result's), and the merge is kept on the lane's run; only what the orchestrator adds at the merge
+(registry ids, reservation rows, allowlist lines) is checked by its own targeted gates. If `main` has moved,
+the lane rebases and runs again, or the orchestrator gates the merge as before. Several ready lanes are
+gated in one run, split only if red. Gates run in a merge worktree, so `main` stays free. The seven trivy
+image scans, refused locally by Docker Hub's pull limit, are left to GitHub's CI.
+
 **Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
 map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
 no conflict with another lane's work, and is recorded in the merge's friction row. Shared files

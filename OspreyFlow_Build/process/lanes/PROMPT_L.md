@@ -33,8 +33,11 @@ Co-Authored-By lines.
 
 Before you report ready-to-merge, run the lane-reviewer agent on your own branch against your brief
 and rules 1-15, fix what it finds, and say in your report that you did and what it found (the build
-plan's review rule 1). Run make ci and make test (the fast tier) at a commit, offline, and give their
-counts.
+plan's review rule 1). Then rebase onto current main, and at that commit run make -k ci and make test
+offline, saving their outputs as process/lanes/<lane>/gates/<sha>.ci.txt and <sha>.test.txt with every
+failure explained (the seven trivy image scans may fail on Docker Hub's pull limit). Send the commit,
+its tree (git rev-parse <sha>^{tree}) and the counts with ready-to-merge: if main has not moved, the
+orchestrator merges on your run.
 
 End with a report of at most twenty lines, also saved to process/lanes/<lane>/REPORT.md: each exit
 criterion and whether it is met, with the test that proves it; what is left and why; the commits;
