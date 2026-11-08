@@ -325,6 +325,14 @@ export type HotlistAudience = "only_me" | "team";
  */
 export type HotlistAudienceEditable = boolean;
 /**
+ * Default: none. The private hosts a SQL or API connection may reach: each a host name in full (nomis-replica.client.internal) or a network inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7 (10.20.0.0/16) that a connection's host name resolves into. Everything else inside a network stays refused. Never admitted, whatever is listed: this machine, a cloud's metadata services (169.254.0.0/16, fd00:ec2::/32, 100.100.0.0/16), Docker's and the cluster's own names, and any address in the Conduit's own networks or the deployment's own services'. A host must still be on the egress allow-list.
+ */
+export type PrivateHosts = string[];
+/**
+ * Default: none. The name of each SQL or API connection's secret (NOMIS_REPLICA for OSPREY_CONNECTION_SECRET_NOMIS_REPLICA in deployment.env). Only the Conduit is given a declared secret, every other service having it blanked, and a connection whose secret is not declared reads nothing.
+ */
+export type Secrets = string[];
+/**
  * The mail server's name
  */
 export type Host = string;
@@ -490,6 +498,7 @@ export interface OspreyConfig {
   map?: MapConfig | null;
   reporting?: ReportingConfig;
   monitoring?: MonitoringConfig;
+  connectors?: ConnectorsConfig;
   /**
    * Default: none — one-time codes
    */
@@ -741,6 +750,15 @@ export interface ReportingConfig {
 export interface MonitoringConfig {
   hotlist_audience?: HotlistAudience;
   hotlist_audience_editable?: HotlistAudienceEditable;
+}
+/**
+ * The Studio's SQL and API connectors (`06_DECISIONS.md` ADR-140 Amendments 13 and 15). A
+ * connector never reaches inside the deployment or its network unless the operator admits a
+ * client's private database or API here; the installer's setting, never Admin's.
+ */
+export interface ConnectorsConfig {
+  private_hosts?: PrivateHosts;
+  secrets?: Secrets;
 }
 /**
  * The mail server the identity provider sends invitations and sign-in resets through
