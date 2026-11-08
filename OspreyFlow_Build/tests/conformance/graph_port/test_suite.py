@@ -6393,7 +6393,7 @@ def _call_on(
         interval=Interval(valid_from=at, valid_to=at), recipe_id="calls", recipe_version=1,
     )  # fmt: skip
     write.provenance.sources[0].locator = f"row {day}"
-    return write.model_copy(update={"properties": {"memo": f"day {day}"}})
+    return write.model_copy(update={"properties": {"duration_s": 60 * day}})
 
 
 async def _link_as_read(adapter: GraphPort, a: str, reader: Principal = CLEARED) -> Any:
@@ -6416,12 +6416,9 @@ async def test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_re
                                                       classification="SECRET")])  # fmt: skip
         state = await adapter.read_link_state(link)
         assert state is not None
-        assert (state.edge_id, state.edge_type, state.revision, state.load_id) == (
-            link,
-            "COMMUNICATED_WITH",
-            1,
-            "load-1",
-        )
+        assert (state.edge_id, state.revision, state.load_id) == (link, 1, "load-1")
+        # The store's own type, which the restore writes back to (an adapter may prefix its names).
+        assert "COMMUNICATED_WITH" in state.edge_type
         assert state.handling.classification == "SECRET"
         assert await adapter.read_link_state(new_edge_id()) is None
 

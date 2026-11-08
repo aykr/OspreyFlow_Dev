@@ -265,7 +265,8 @@ async def test_a_row_dropped_again_after_coming_back_is_left_in_place_in_words(
         await refresh.snapshot([A, B, C])
         await refresh.snapshot([A, C])
         back = await refresh.snapshot([A, B, C])
-        assert back.refresh_notes and "came back" in back.refresh_notes[0]  # type: ignore[attr-defined]
+        # Amendment 16: B's merge into its own link is B's own, so no words say it cannot revert.
+        assert back.refresh_notes == [] and back.own_key_merges  # type: ignore[attr-defined]
         assert await refresh.events() == 3
 
         again = await refresh.snapshot([A, C])
