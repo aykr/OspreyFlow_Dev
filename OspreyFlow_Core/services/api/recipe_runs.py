@@ -111,6 +111,7 @@ ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS event_ids TEXT[];
 ALTER TABLE withdrawn_row_keys ADD COLUMN IF NOT EXISTS event_ids TEXT[];
 """
 
+
 @dataclass(frozen=True)
 class KeptRow:
     """A kept key and what its row wrote (ADR-110 Amendment 8 point 2, and its events by
@@ -124,6 +125,7 @@ class KeptRow:
     #: An earlier full snapshot withdrew this key and its entry is still in `withdrawn_row_keys`:
     #: the row came back. Moving it aside again would collide, so it is left (Amendment 15).
     withdrawn_before: bool = False
+
 
 #: The record's own id lists: what `unreverted_loads` leaves out, since it answers a question about
 #: a load, not about its elements.
@@ -447,18 +449,20 @@ class RecipeRunStore:
     ) -> set[str]:
         """Which of these keys of the recipe and case an earlier full snapshot withdrew and has not
         given back (Amendment 15): a row that comes back, whose link never left. Per recipe and
-        case, so nothing of another case is asked."""
-        if not keys:
-            return set()
+        case, so nothing of another case is asked. In chunks, as `kept_row_keys`."""
+        found: set[str] = set()
+        unique = list(dict.fromkeys(keys))
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "
-                "AND investigation_id = $2 AND row_key = ANY($3::text[])",
-                recipe_id,
-                case,
-                list(dict.fromkeys(keys)),
-            )
-        return {r["row_key"] for r in rows}
+            for start in range(0, len(unique), _KEY_CHUNK):
+                rows = await conn.fetch(
+                    "SELECT row_key FROM withdrawn_row_keys WHERE recipe_id = $1 "
+                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",
+                    recipe_id,
+                    case,
+                    unique[start : start + _KEY_CHUNK],
+                )
+                found.update(r["row_key"] for r in rows)
+        return found
 
     async def withdrawn_keys_kept_again(self, load_id: str) -> int:
         """How many of the keys `load_id` withdrew are kept again by a later load: its revert is
@@ -490,9 +494,7 @@ class RecipeRunStore:
             )
         return int(status.split()[-1])
 
-    async def watermark(
-        self, recipe_id: str, case: str, source_id: str
-    ) -> SourceWatermark | None:
+    async def watermark(self, recipe_id: str, case: str, source_id: str) -> SourceWatermark | None:
         """The watermark an incremental refresh of `source_id` by this pipeline into this case reads
         from (ADR-110 Amendment 6 point 1): the one the latest unreverted load of a *succeeded* run
         reached. A failed run's is not kept, so the rows it did not finish are read again; a

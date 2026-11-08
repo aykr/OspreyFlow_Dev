@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from conduit_common.identity import new_id
@@ -225,43 +226,111 @@ async def test_the_unit_files_fake_moves_keys_as_the_ledger_does(
     """Rule 15's fixture rule, both ways: `test_snapshot_withdrawal.py`'s `WithdrawalLedger` stands
     in for this store, so the same records go to both and what each then keeps and has withdrawn
     must match. That covers a key kept, withdrawn, kept again, named withdrawn again (the guard
-    skips it), and named withdrawn though never kept (nothing moves), with no error from either."""
+    skips it), and named withdrawn though never kept (nothing moves), with no error from either.
+    Two cases hold the same keys, interleaved, and every answer is compared for each: a fake
+    that ignored the case would answer one case with the other's."""
     from schemas.ingest import LoadReport
 
-    from tests.ingest.test_row_keys import CASE
     from tests.ingest.test_snapshot_withdrawal import WithdrawalLedger
 
     recipe, k1, k2, never = new_id(), new_id(), new_id(), new_id()
-    loads = [new_id() for _ in range(4)]
-    steps: list[tuple[str, list[str], list[str]]] = [
-        (loads[0], [k1, k2], []),
-        (loads[1], [], [k1]),
-        (loads[2], [k1], []),
-        (loads[3], [], [k1, never]),
+    ours, theirs = new_id(), new_id()
+    loads = [new_id() for _ in range(7)]
+    steps: list[tuple[str, str, list[str], list[str]]] = [
+        (ours, loads[0], [k1, k2], []),
+        (theirs, loads[1], [k1, k2], []),
+        (ours, loads[2], [], [k1]),
+        (theirs, loads[3], [], [k2]),
+        (ours, loads[4], [k1], []),
+        (ours, loads[5], [], [k1, never]),
+        (theirs, loads[6], [], [k1]),
     ]
     fake = WithdrawalLedger()
     run_id = await _started(runs, recipe)
-    for load, kept, withdrawn in steps:
+    for case, load, kept, withdrawn in steps:
         elements = {
             k: _elements([f"n-{k}"], [f"e-{k}"], [f"v-{load}-{k}"]) for k in kept
         }
-        await runs.add_record(run_id, _keyed(load, recipe, CASE), row_keys=kept,
+        await runs.add_record(run_id, _keyed(load, recipe, case), row_keys=kept,
                               row_elements=elements, withdrawn_row_keys=withdrawn)  # fmt: skip
+        fake.case = case
         await fake.committed(
             LoadReport.model_construct(recipe_id=recipe, load_id=load, kept_row_keys=kept,
                                        kept_row_elements=elements, withdrawn_row_keys=withdrawn),
             source="cash.csv",
         )  # fmt: skip
 
+    def told(dropped: list[Any]) -> dict[str, tuple[bool, Any]]:
+        return {d.row_key: (d.withdrawn_before, d.event_ids) for d in dropped}
+
     keys = [k1, k2, never]
-    assert await runs.kept_row_keys(recipe, CASE, keys) == await fake.kept(
-        recipe, CASE, keys
-    )
-    assert await runs.kept_row_keys(recipe, CASE, keys) == {k1, k2}
     for load in loads:
         assert await runs.withdrawn_event_ids(load) == await fake.withdrawn_event_ids(
             load
         ), load
+    for case in (ours, theirs):
+        kept = await runs.kept_row_keys(recipe, case, keys)
+        assert kept == await fake.kept(recipe, case, keys), case
+        real = told(await runs.dropped_row_keys(recipe, case, present=set()))
+        assert real == told(await fake.dropped_row_keys(recipe, case, present=set())), (
+            case
+        )
+        among = await runs.withdrawn_row_keys_among(recipe, case, keys)
+        assert among == await fake.withdrawn_row_keys_among(recipe, case, keys), case
+    # What each case holds, so the comparison is over something different for each.
+    assert await runs.kept_row_keys(recipe, ours, keys) == {k1, k2}
+    assert await runs.kept_row_keys(recipe, theirs, keys) == set()
+    assert told(await runs.dropped_row_keys(recipe, ours, present=set()))[k1][0] is True
+    assert await runs.withdrawn_row_keys_among(recipe, theirs, keys) == {k2, k1}
+
+
+async def test_withdrawn_row_keys_among_reads_more_keys_than_one_statement_holds(
+    runs: RecipeRunStore,
+) -> None:
+    """Asked in chunks of `_KEY_CHUNK`, as `kept_row_keys` is. Every statement it sends to Postgres
+    is recorded, and none may carry more than one chunk of keys, while every withdrawn key past the
+    first chunk is still found. Red with the query unchunked (one `ANY` of every key), and with the
+    loop stopped after one chunk (`L1.2a_RED_RECORD.md`)."""
+    from contextlib import asynccontextmanager
+
+    from services.api.recipe_runs import _KEY_CHUNK
+
+    recipe, case, first, refresh = new_id(), new_id(), new_id(), new_id()
+    keys = [f"key-{n:06d}" for n in range(_KEY_CHUNK + 5)]
+    run_id = await _started(runs, recipe)
+    await runs.add_record(run_id, _keyed(first, recipe, case), row_keys=keys)
+    await runs.add_record(
+        run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=keys
+    )
+
+    sent: list[list[Any]] = []
+    pool = runs._pool
+
+    class Recording:
+        """The real pool's connection, every `fetch` kept with its values."""
+
+        def __init__(self, conn: Any) -> None:
+            self._conn = conn
+
+        async def fetch(self, sql: str, *values: Any) -> Any:
+            sent.append(list(values))
+            return await self._conn.fetch(sql, *values)
+
+    class RecordingPool:
+        @asynccontextmanager
+        async def acquire(self) -> Any:
+            async with pool.acquire() as conn:
+                yield Recording(conn)
+
+    runs._pool = RecordingPool()  # type: ignore[assignment]
+    try:
+        found = await runs.withdrawn_row_keys_among(recipe, case, keys)
+    finally:
+        runs._pool = pool
+    assert found == set(keys)
+    lists = [len(v) for values in sent for v in values if isinstance(v, list)]
+    assert lists and max(lists) <= _KEY_CHUNK, f"keys per statement: {lists}"
+    assert sum(lists) == len(keys)
 
 
 async def test_a_row_dropped_after_coming_back_is_told_as_withdrawn_before(

@@ -659,6 +659,8 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py
           ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py
           ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py
+          ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py
+          ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py
           ../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py
           ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py
           ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py
@@ -1008,6 +1010,8 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py
