@@ -58,8 +58,8 @@ describe("ViewsPanel", () => {
     conduit("alice");
     panel("alice");
     await screen.findByText("Alice's own");
-    expect(screen.getByRole("button", { name: "Share Alice's own with the case" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Share Kestrel's contacts with the case" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Share with the case: Alice's own" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Share with the case: Kestrel's contacts" })).toBeNull();
     expect(screen.getByRole("button", { name: "Delete Alice's own" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Kestrel's contacts" })).toBeTruthy();
     expect(screen.getAllByText("Private")).toHaveLength(1);
@@ -69,7 +69,7 @@ describe("ViewsPanel", () => {
   it("shares a private view through its own route and marks it shared", async () => {
     const calls = conduit("alice");
     panel("alice");
-    fireEvent.click(await screen.findByRole("button", { name: "Share Alice's own with the case" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Share with the case: Alice's own" }));
     await waitFor(() => expect(screen.getAllByText("Shared")).toHaveLength(2));
     expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/v1/investigations/c1/views/v-private/share"))).toBe(true);
   });
@@ -102,7 +102,7 @@ describe("ViewsPanel", () => {
     expect(list).not.toBeNull();
     const tags = Array.from(document.querySelectorAll("strong.govuk-tag")).map((t) => t.textContent);
     expect(tags).toEqual(["Private", "Shared"]);
-    expect(screen.getByRole("button", { name: "Share Alice's own with the case" }).className).toContain("govuk-button");
+    expect(screen.getByRole("button", { name: "Share with the case: Alice's own" }).className).toContain("govuk-button");
   });
 
   it("says when the case has no views yet", async () => {

@@ -195,7 +195,7 @@ function Actions({ govuk, view, mine, asking, onOpen, onShare, onAskDelete, onDe
         Open
       </button>
       {mine && !view.shared && (
-        <button type="button" className={button} aria-label={`Share ${view.name} with the case`} onClick={onShare}>
+        <button type="button" className={button} aria-label={`Share with the case: ${view.name}`} onClick={onShare}>
           Share with the case
         </button>
       )}
