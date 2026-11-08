@@ -42,8 +42,8 @@ describe("the places' table", () => {
   });
 
   it("offers Rules and Monitoring only to triage_alerts or author_rules, with the queue's read", () => {
-    // ADR-146 decision 2; the queue's read is what its first screen needs (the owner's open question
-    // on the Rule author, L2.9 Q1). Red with `needs` not read: the Rule author's rights open it.
+    // ADR-146 decision 2; the queue's read is what its first screen needs (ADR-146 Amendment 2
+    // point 5). Red with `needs` not read: a gate right without the queue's read opens it.
     expect(placesFor(new Set(["triage_alerts", "read_alert_queue"]))).toContain("rules");
     expect(placesFor(new Set(["author_rules", "read_alert_queue"]))).toContain("rules");
     expect(placesFor(new Set(["author_rules", "triage_alerts"]))).not.toContain("rules");

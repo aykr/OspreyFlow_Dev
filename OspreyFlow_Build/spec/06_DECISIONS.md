@@ -29920,11 +29920,11 @@ from about 20 hours to about 13.
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
 
-### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the four routes it shares (two reads, two writes); an alert's address; the jump replaced; the Rule author's queue read left to the owner
+### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the four routes it shares (two reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled
 
 Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
-the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below) and its interim on Q1,
-which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except where this says so.
+the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below), and the owner's ruling
+on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where this says so.
 *Open the evidence* (decision 6) is built on case's L3.2b read-only lens (ADR-144 Amendment 2), point 10.
 
 1. **The place's gate.** ADR-145 Amendment 1 shows a place from the checks its routes declare. ADR-146
@@ -29953,11 +29953,15 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
 4. **Offered where usable (ADR-145 Amendment 1).** `places.json` names the place's rights (the gate's)
    and its `needs` (its entry read's, `read_alert_queue`). Analysts and the Super user are offered it;
    the Data Engineer, the Administrator and the Reports Viewer are not.
-5. **The Rule author: open (the owner's Q1).** *Rule author* holds `author_rules` and `triage_alerts`
-   but not `read_alert_queue`, so the place's every read refuses it and it is offered no place until the
-   owner rules. Recommended: (a) the role gains `read_alert_queue` (ADR-112 Amendment 5 amended). Until
-   then ADR-112 Amendment 5's test "Rule author opens Rules and Monitoring" is a strict xfail naming the
-   question, and its triage routes are recorded as answering a role whose place is not offered.
+5. **The Rule author reads the queue (the owner's ruling on Q1, 8 November 2026: (a)).** Whoever
+   triages must read the queue, so *Rule author* holds `read_alert_queue` beside `author_rules` and
+   `triage_alerts`; this amends ADR-112 Amendment 5 decision 2's list (`rights.py`'s `RULE_AUTHOR`). The
+   role is offered Rules and Monitoring and the Glass, whose Home reads the same queue, and never the
+   Studio. `places.json`'s `needs` stays: it is not the interim but the place's entry read (ADR-145
+   Amendment 1), so a custom role with `triage_alerts` alone is still not offered a place whose first
+   screen refuses it. Tests: ADR-112 Amendment 5's "Rule author opens Rules and Monitoring"
+   (`test_place_routes.py`'s `test_a_rule_author_opens_rules_and_monitoring`, no longer an xfail) and
+   `test_rights.py`'s Rule author case, each red on the role without the right.
 6. **An alert's address.** `GET /v1/alerts/{alert_id}` answers `AlertAtAddress` (the case the alert is
    worked in, its `investigation_id`, and its explanation as `explain_alert` gives it there). The path
    names no case, so the reader is scoped to the alert's case (`scope_to_case`) after the level check

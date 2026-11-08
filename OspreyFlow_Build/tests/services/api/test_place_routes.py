@@ -125,10 +125,10 @@ EXPECTED_PLACES = {
     "data_engineer": ["glass", "ingest", "admin"],
     "osprey-admin": ["glass", "admin"],
     "reports_viewer": ["glass"],
-    # ADR-112 Amendment 5 decision 2 says Rule author opens Rules and Monitoring, but the role holds
-    # no `read_alert_queue`, so R&M's entry read refuses it: the owner's open question (L2.9 Q1);
-    # `test_a_rule_author_opens_rules_and_monitoring` waits on it. Never the Studio.
-    "rule_author": [],
+    # ADR-112 Amendment 5 decision 2, with `read_alert_queue` since the owner's ruling on L2.9 Q1
+    # (a): Rules and Monitoring, and the Glass, whose Home reads that queue too (as the Reports
+    # Viewer's does); never the Studio.
+    "rule_author": ["glass", "rules"],
     "super": ["glass", "ingest", "rules", "admin"],
 }
 #: The token roles each case signs in with: the four roles, the Super user preset, the legacy roles,
@@ -752,14 +752,11 @@ def test_rules_and_monitoring_refuses_a_role_it_is_not_offered_to_at_its_gate(ro
     assert by_gate > 0, "the role holds none of the place's rights: the case proves nothing"
 
 
-@pytest.mark.xfail(
-    reason="the owner's open question L2.9 Q1: the Rule author holds no read_alert_queue, so R&M's "
-    "entry read refuses it; (a) gives the role that right (ADR-112 Amendment 5)",
-    strict=True,
-)
 def test_a_rule_author_opens_rules_and_monitoring() -> None:
-    """ADR-112 Amendment 5's test: *Rule author* opens Rules and Monitoring and not the Studio."""
-    assert offered(TOKEN_ROLES["rule_author"]) == ["rules"]
+    """ADR-112 Amendment 5's test: *Rule author* opens Rules and Monitoring and not the Studio
+    (the owner's ruling on L2.9 Q1 (a): the role reads the queue, R&M's entry read)."""
+    places = offered(TOKEN_ROLES["rule_author"])
+    assert "rules" in places and "ingest" not in places, places
 
 
 #: The rights that act only in Rules and Monitoring (ADR-146 decision 2): a route asking for one of

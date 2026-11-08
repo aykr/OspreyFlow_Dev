@@ -402,8 +402,8 @@ Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin
 `apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
 first read also `needs`; a place is offered to whoever holds any one of its rights and all it needs, and
 nobody else: Rules and Monitoring for `triage_alerts` or `author_rules` with the queue's
-`read_alert_queue` (ADR-146 Amendment 2; whether the *Rule author* role gains that right is the owner's
-open question, and until it is answered that role is offered no place), the Studio for the right its first read
+`read_alert_queue` (ADR-146 Amendment 2; the *Rule author* role holds that right by the owner's ruling
+of 8 November 2026, point 5), the Studio for the right its first read
 needs (`edit_pipelines`, the recipe registry), Admin for the right of one of its built sections' first reads, the Glass for any
 right a case's routes need. While the rights are not yet known, or
 cannot be read, no place is offered, and Home says the rights could not be read. Every signed-in
@@ -438,8 +438,8 @@ What each role is offered (the owner's ruling of 7 November 2026; ADR-145 Amendm
 Amendment 2): an **Analyst** the Glass and Rules and Monitoring; a **Data Engineer** the Glass, the Studio
 and Admin (Admin › Operations, its `operate_schedules`); an **Administrator** Admin and the Glass (the
 case list, for an orphaned case's sharing and removal, link-strength influencers; the rule audit returns
-to them in Admin › Audit); a **Reports Viewer** the Glass; a **Rule author** none until the owner's
-question is answered; the **Super user** all four; of the legacy roles, `source_author` the Studio, and `source_approver`,
+to them in Admin › Audit); a **Reports Viewer** the Glass; a **Rule author** Rules and Monitoring and the
+Glass (whose Home reads the same queue), never the Studio; the **Super user** all four; of the legacy roles, `source_author` the Studio, and `source_approver`,
 `loader` and `compliance` no place. No route moved place and no role lost a right. One route's right changed:
 the Studio's pipeline-run history (`GET …/ingest/recipes/{id}/runs`) needs `run_pipelines` where it
 needed `read_data_feeds`, so Analysts, Reports Viewers and `read_data_feeds` granted alone are no longer

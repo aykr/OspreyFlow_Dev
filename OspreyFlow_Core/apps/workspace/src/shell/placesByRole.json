@@ -577,19 +577,14 @@
   "rule_author": {
    "rights": [
     "author_rules",
+    "read_alert_queue",
     "triage_alerts"
    ],
-   "places": [],
-   "answered_hidden": [
-    "alert_canvas",
-    "approve_alert_close",
-    "assign_alert",
-    "claim_alert",
-    "dispose_alert",
-    "read_alert_assignees",
-    "release_alert",
-    "send_back_alert_close"
-   ]
+   "places": [
+    "glass",
+    "rules"
+   ],
+   "answered_hidden": []
   },
   "source_approver": {
    "rights": [
