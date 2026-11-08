@@ -754,6 +754,18 @@ The invariants, each with the test that fails if it is broken (rule 12):
   on the case is refused every view route as the case's own routes refuse them.
   - `test_every_view_route_refuses_a_non_member` (rule 4).
 
+**Until the upgrade converts it** (L3.2 item 3), a case made from another before L3.2 still
+reads its original's dataset and, for a reader holding a level on the original, the original's
+layer. A write there that names no dataset (an accepted proposal, an accepted extraction, a rule's
+`ALERTED_ON`) is stamped into the source, which the original reads too. So no write there may link
+to, or merge into, a node of the original's layer. The refusal is 409 `branch_layer_read_only`,
+with words saying the case is waiting to become a view.
+- The stamping graph refuses it as its last word.
+- The two accept paths whose acceptance writes in two steps ask the same helper first
+  (`dataset_scope.refuse_touching_a_read_only_layer`), so nothing at all is written.
+- The layer is looked up at the writer's own clearance, so the check reads nothing they could not.
+- Proved by `tests/services/api/test_unconverted_case_writes.py`, red with the check removed.
+
 ### 2.3 Resolution state
 
 ```python

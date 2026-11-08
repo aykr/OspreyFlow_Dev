@@ -55,6 +55,7 @@ from schemas.domain import (
 )
 from schemas.model import ExtractionRequest
 
+from .dataset_scope import refuse_touching_a_read_only_layer
 from .datasets import DatasetStore
 from .document_reader import DocumentReaderService
 from .email_extraction import _edge_from_write
@@ -853,6 +854,8 @@ class QuestionsService:
             [f"accepting:{candidate_id}:mention"],
             principal,
         )
+        # L3.2 item 3: the link would touch the original case's work; refused before the node.
+        await refuse_touching_a_read_only_layer(self._graph, [record.document_id])
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
         mention = EdgeWrite(

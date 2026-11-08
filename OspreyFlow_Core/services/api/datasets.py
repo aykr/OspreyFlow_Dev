@@ -307,6 +307,21 @@ class BranchLayerError(Exception):
         )
 
 
+class TouchesTheOriginalsWorkError(BranchLayerError):
+    """L3.2 item 3: in a case made from another before L3.2, which the upgrade has not yet turned
+    into a view, a write that names no dataset is stamped into the source the case reads, which
+    its original case reads too. Linking to, or merging into, a node of the original case's own
+    layer would put the original's analysts in front of work done somewhere else, through the
+    source. Refused before anything is written."""
+
+    def __init__(self) -> None:
+        Exception.__init__(
+            self,
+            "This case is waiting to become a view of the case it was made from, and nothing "
+            "written here may touch that case's own work. Make the change in that case.",
+        )
+
+
 class UnknownDatasetEgressError(Exception):
     """An administrator named a dataset that does not exist (a 404)."""
 

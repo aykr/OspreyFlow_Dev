@@ -37,7 +37,7 @@ source as before.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
@@ -53,7 +53,14 @@ from schemas.domain import (
 )
 from schemas.ingest import LinkPriorState
 
-from .datasets import COMPOSITE, BranchLayerError, Dataset, DatasetStore, reads_dataset_names
+from .datasets import (
+    COMPOSITE,
+    BranchLayerError,
+    Dataset,
+    DatasetStore,
+    TouchesTheOriginalsWorkError,
+    reads_dataset_names,
+)
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
@@ -348,6 +355,24 @@ def _named(writes: Sequence[NodeWrite] | Sequence[EdgeWrite]) -> set[str]:
     return {d for w in writes for d in w.datasets}
 
 
+async def refuse_touching_a_read_only_layer(graph: GraphPort, node_ids: Iterable[str]) -> None:
+    """L3.2 item 3: in a case the upgrade has not yet turned into a view (one made from another
+    before L3.2, which reads its original's layer), no write links to, or merges into, a node of
+    the original case's layer (`TouchesTheOriginalsWorkError`). The stamping graph asks it of every
+    write as its last word; a service whose acceptance writes in two steps (a node, then its link
+    to a Document) asks it first, so nothing is written at all. The layer is looked up as the
+    writer may read it, at their own clearance and in that layer alone, so the check reads nothing
+    they could not."""
+    read_only = _READ_ONLY_LAYER.get()
+    scope = _CASE_SCOPE.get()
+    wanted = sorted(set(node_ids))
+    if read_only is None or scope is None or not wanted:
+        return
+    in_the_layer = scope[2].model_copy(update={"datasets": [read_only]})
+    if await graph.get_nodes(wanted, in_the_layer):
+        raise TouchesTheOriginalsWorkError
+
+
 class DatasetStampingGraph:
     """The Conduit's `GraphPort`: the adapter itself, with the request's case stamped on every
     write that names no dataset. Every other call goes to the adapter unchanged, and a capability
@@ -424,6 +449,10 @@ class DatasetStampingGraph:
         if read_only is not None and read_only in datasets:
             raise BranchLayerError
 
+    async def _refuse_touching_a_read_only_layer(self, node_ids: set[str]) -> None:
+        if self._dataset is None:
+            await refuse_touching_a_read_only_layer(self._inner, node_ids)
+
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
         into the case's own analyst layer goes ahead; and no write names a composite's id, under a
@@ -442,6 +471,7 @@ class DatasetStampingGraph:
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
+        await self._refuse_touching_a_read_only_layer({n.id for n in stamped})
         await self._checked(stamped)
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
@@ -450,6 +480,9 @@ class DatasetStampingGraph:
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
+        await self._refuse_touching_a_read_only_layer(
+            {end for e in stamped for end in (e.source, e.target)}
+        )
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
@@ -558,6 +591,9 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         inner: Any = self.inner
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
+        await self._refuse_touching_a_read_only_layer(
+            {end for e in stamped for end in (e.source, e.target)}
+        )
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
