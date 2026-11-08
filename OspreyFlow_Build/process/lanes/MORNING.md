@@ -256,6 +256,14 @@ New ones are added at the bottom as they happen.
     Playwright no longer reuses a server already on its port (`758328a`): two lanes' keyboard runs had been
     served another worktree's tree. Fresh sessions: admin L2.6 (Audit, ageing), case L3.3 (drawing boards).
 
+56. **Your switch at about 20:55 UTC:** sol runs out of tokens until 21:30, so rules, case, studio and platform
+    were paused cleanly (each a HANDOFF.md and a wip commit, no stack held) and resumed on the default account;
+    every lane and this orchestrator now share that one account. `accounts.conf` still maps them to sol, so
+    their next fresh sessions after 21:30 go back to sol unless you say otherwise. Platform P2 merged
+    (`66009ab`); P3 begins with P2's carried credential fixes. Open, yours if you wish: should the geospatial
+    admin routes drop their extra osprey-admin role check and rely on manage_geospatial alone? Kept both
+    (dropping one would loosen access).
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
