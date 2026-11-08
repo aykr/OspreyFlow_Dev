@@ -35,7 +35,7 @@
 ## Live figures (every one with its lease)
 
 - **Live set**, lease `case` (taken 18:51:49Z), run 18:52:04–18:54:56Z: 133 passed, 15 failed.
-  - 12 came from the re-screening fakes, which lacked `read_only_layer_of`. Fixed in 449dead.
+  - 11 came from the re-screening fakes, which lacked `read_only_layer_of` (7 in `test_ledger_monitoring_storyline.py`, 4 in `test_screening_refresh.py`). Fixed in 449dead. (An earlier version of this report said 12, which did not add up to the run's 15.)
   - 1 was the stamping test's design. Fixed in 449dead.
   - 3 in `ingest/test_kyc_rules.py` fail the same way on main's code, run under the same lease.
 - **Migration rehearsal**, lease `case`, in the throwaway `case_rehearsal` Postgres and ArcadeDB databases:
