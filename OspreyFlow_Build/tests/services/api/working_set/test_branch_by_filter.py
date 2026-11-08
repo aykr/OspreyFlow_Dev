@@ -254,6 +254,11 @@ class _Datasets:
     ) -> None:
         self.copies.append((source, new))
 
+    async def chosen_of_case(self, investigation_id: str) -> list[object]:
+        """As the store answers a case it holds no dataset for: none. The level check asks it,
+        to derive the case's packs from its dataset's model (ADR-126 Amendment 2)."""
+        return []
+
 
 @contextmanager
 def _route(

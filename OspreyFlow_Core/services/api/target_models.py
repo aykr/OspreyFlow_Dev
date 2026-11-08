@@ -62,6 +62,23 @@ def core_types_of(entity_types: Iterable[str], edge_types: Iterable[str]) -> fro
     return frozenset({*entity_types, *edge_types})
 
 
+class _ChosenOf(Protocol):
+    async def chosen_of_case(self, investigation_id: str) -> list[Any]: ...
+
+
+async def packs_of_case(
+    investigation_id: str, datasets: _ChosenOf, models: TargetModelStore
+) -> list[str] | None:
+    """A case's packs, derived (ADR-126 Amendment 2): its chosen dataset's live model's (a
+    composite's own). `None` while that dataset has no model yet (one `scripts.seed_target_models`
+    has not reached, ADR-126 Amendment 3), when the case's stored packs still stand."""
+    chosen = await datasets.chosen_of_case(investigation_id)
+    if not chosen:
+        return None
+    live = await models.live(chosen[0].id)
+    return sorted(live.packs) if live is not None else None
+
+
 # --- the rules ----------------------------------------------------------------------------------
 
 

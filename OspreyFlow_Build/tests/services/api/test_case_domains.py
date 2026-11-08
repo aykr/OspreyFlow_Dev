@@ -1,5 +1,7 @@
 """A case's domain packs (`06_DECISIONS.md` ADR-126 decisions 1 and 2, unit D1): chosen when the
-case is made, changed by an Author, listed to everyone who can see the case, taken by a branch.
+case is made, listed to everyone who can see the case, taken by a branch; once its dataset has a
+live domain model, read from that model and not changed through the case (ADR-126 Amendments 2
+and 3).
 Route behaviour through the real level dependencies with an in-memory store that applies the rules
 the real one does (the real store's SQL is `test_investigation_access_store.py`'s, against
 Postgres).
@@ -15,8 +17,11 @@ What a mistake here would do, and the case that catches it:
 - a listing without the packs would leave the Glass unable to read the setting
   (`test_the_case_list_carries_each_cases_packs`);
 - a PATCH open to an Editor, or one that answered an outsider with anything but a 404
-  (`test_only_an_author_changes_the_packs`);
-- a change nobody can see afterwards (`test_a_change_of_packs_is_audited_and_kept_in_the_history`);
+  (`test_an_editor_a_viewer_and_an_outsider_are_answered_before_the_packs`);
+- a case's packs changed through the case once they come from its dataset's domain model
+  (ADR-126 Amendment 2): `test_a_patch_of_packs_is_refused_in_words_and_nothing_changes`;
+- a case reading its stored packs when its dataset's live model says otherwise:
+  `test_a_cases_packs_are_its_datasets_live_models`, red with the stored packs read instead;
 - a PATCH that lost the blank-name refusal (`test_the_patch_keeps_the_blank_name_refusal`);
 - a branch, or an alert's jump, taking the wrong case's packs
   (`test_an_alert_jump_takes_the_packs_of_its_own_case_not_the_alerts`).
@@ -318,42 +323,94 @@ def test_a_viewer_may_see_the_setting(cases: _Cases, audit: _Audit) -> None:
     ]
 
 
+# --- derived from the dataset's domain model (ADR-126 Amendments 2 and 3) ---------------------
+
+
+def _with_a_model(cases: _Cases, audit: _Audit, packs: dict[str, int] | None) -> TestClient:
+    """Alice's client, inv-1 (stored FIBO) and inv-9 (stored none) both reading d1, and d1's live
+    model carrying `packs` (`None`: d1 has no model yet)."""
+    import asyncio
+
+    from services.api.app import get_target_models
+    from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModelStore
+
+    from schemas.dataset_model import TargetModelDraftInput
+
+    cases.seed_case("inv-9", owner=ALICE, domains=None, name="Another on d1")
+    client = _as(ALICE, cases, audit)
+    datasets = app.dependency_overrides[get_datasets]()
+    datasets.cases.update({"inv-1": ["d1"], "inv-9": ["d1"]})
+    models = InMemoryTargetModelStore(core_types=CORE_TYPES_FOR_TESTS)
+    if packs is not None:
+
+        async def made() -> None:
+            await models.open_draft("d1", ALICE)
+            await models.save_draft("d1", TargetModelDraftInput(packs=packs), ALICE)  # type: ignore[arg-type]
+            await models.make_live("d1", 1, ALICE)
+
+        asyncio.run(made())
+    app.dependency_overrides[get_target_models] = lambda: models
+    return client
+
+
+def _listed(client: TestClient) -> dict[str, list[str]]:
+    return {c["id"]: c["domains"] for c in client.get("/v1/investigations").json()}
+
+
+def test_a_cases_packs_are_its_datasets_live_models(cases: _Cases, audit: _Audit) -> None:
+    """inv-1 stored FIBO, inv-9 none; d1's live model carries NIEM and STIX, so both read those,
+    in the listing and through a case's own route (its level check), whatever they stored."""
+    client = _with_a_model(cases, audit, {"niem": 3, "stix": 1})
+    listed = _listed(client)
+    assert listed["inv-1"] == listed["inv-9"] == ["niem", "stix"]
+    one = client.get("/v1/investigations/inv-1")
+    assert one.status_code == 200, one.text
+    assert one.json()["domains"] == ["niem", "stix"]
+
+
+def test_a_cases_stored_packs_stand_while_its_dataset_has_no_model(
+    cases: _Cases, audit: _Audit
+) -> None:
+    """Before `scripts.seed_target_models` reaches the dataset (ADR-126 Amendment 3)."""
+    listed = _listed(_with_a_model(cases, audit, None))
+    assert listed["inv-1"] == ["fibo"] and listed["inv-9"] == []
+
+
+def test_the_derived_packs_check_fails_with_the_stored_packs_read_instead(
+    cases: _Cases, audit: _Audit, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: the derivation planted out, the stored packs are listed."""
+
+    async def stored(case: object, *_args: object) -> object:
+        return case
+
+    monkeypatch.setattr(app_module, "with_derived_packs", stored)
+    client = _with_a_model(cases, audit, {"niem": 3})
+    assert _listed(client)["inv-1"] == ["fibo"]
+    assert client.get("/v1/investigations/inv-1").json()["domains"] == ["fibo"]
+
+
 # --- the PATCH --------------------------------------------------------------------------------
 
 
-def test_an_author_changes_the_packs_and_the_response_carries_them(
-    cases: _Cases, audit: _Audit
+@pytest.mark.parametrize(
+    "body",
+    [{"domains": ["stix", "niem"]}, {"domains": []}, {"name": " Renamed ", "domains": ["niem"]}],
+    ids=["packs", "the-core-alone", "a-name-and-packs"],
+)
+def test_a_patch_of_packs_is_refused_in_words_and_nothing_changes(
+    cases: _Cases, audit: _Audit, body: dict[str, object]
 ) -> None:
-    response = _as(ALICE, cases, audit).patch(
-        "/v1/investigations/inv-1", json={"domains": ["stix", "niem"]}
-    )
+    """ADR-126 Amendment 2: a case's packs come from its dataset's domain model, so the case's own
+    setting is read-only: refused whole, a name beside them included, before anything is
+    written or audited."""
+    response = _as(ALICE, cases, audit).patch("/v1/investigations/inv-1", json=body)
 
-    assert response.status_code == 200, response.text
-    assert response.json()["domains"] == ["niem", "stix"]
-    assert response.json()["name"] == "C"
-    assert cases.cases["inv-1"].domains == ["niem", "stix"]
-    assert cases.names_set == []
-
-
-def test_an_author_may_choose_the_core_model_alone(cases: _Cases, audit: _Audit) -> None:
-    response = _as(ALICE, cases, audit).patch("/v1/investigations/inv-1", json={"domains": []})
-
-    assert response.status_code == 200, response.text
-    assert response.json()["domains"] == []
-    assert cases.cases["inv-1"].domains == []
-    assert [h[1].action for h in cases.history] == ["domains"], (
-        "an empty list is a change, not 'nothing given'"
-    )
-
-
-def test_a_name_and_packs_may_change_together(cases: _Cases, audit: _Audit) -> None:
-    response = _as(ALICE, cases, audit).patch(
-        "/v1/investigations/inv-1", json={"name": " Renamed ", "domains": ["niem"]}
-    )
-
-    assert response.status_code == 200, response.text
-    assert (response.json()["name"], response.json()["domains"]) == ("Renamed", ["niem"])
-    assert (cases.cases["inv-1"].name, cases.cases["inv-1"].domains) == ("Renamed", ["niem"])
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["error"] == "packs_from_the_model"
+    assert "dataset's domain model" in response.json()["detail"]["message"]
+    assert (cases.cases["inv-1"].name, cases.cases["inv-1"].domains) == ("C", ["fibo"])
+    assert cases.names_set == [] and cases.history == [] and audit.records == []
 
 
 def test_a_rename_alone_returns_the_packs_it_left_alone(cases: _Cases, audit: _Audit) -> None:
@@ -364,7 +421,11 @@ def test_a_rename_alone_returns_the_packs_it_left_alone(cases: _Cases, audit: _A
     assert cases.history == [], "a rename touches no packs"
 
 
-def test_only_an_author_changes_the_packs(cases: _Cases, audit: _Audit) -> None:
+def test_an_editor_a_viewer_and_an_outsider_are_answered_before_the_packs(
+    cases: _Cases, audit: _Audit
+) -> None:
+    """The level and the right are checked first, so who may not change the case is answered as
+    before (403, or 404 alike for another unit's case and none), never told how packs change."""
     body = {"domains": ["stix"]}
 
     editor = _as(BOB, cases, audit).patch("/v1/investigations/inv-1", json=body)
@@ -380,54 +441,6 @@ def test_only_an_author_changes_the_packs(cases: _Cases, audit: _Audit) -> None:
     )
     assert cases.cases["inv-1"].domains == ["fibo"]
     assert cases.history == []
-
-
-def test_a_change_of_packs_is_audited_and_kept_in_the_history(cases: _Cases, audit: _Audit) -> None:
-    _as(ALICE, cases, audit).patch("/v1/investigations/inv-1", json={"domains": ["niem", "fibo"]})
-
-    changed = [r for r in audit.records if r["action"] == "set_case_domains"]
-    assert len(changed) == 1
-    assert changed[0]["investigation_id"] == "inv-1"
-    assert changed[0]["resolved_query"] == {"before": ["fibo"], "after": ["fibo", "niem"]}
-    assert [(h[0], h[1].action, h[1].subject, h[1].changed_by) for h in cases.history] == [
-        ("inv-1", "domains", "fibo,niem", "alice")
-    ]
-
-
-def test_a_patch_of_name_and_packs_is_atomic_when_the_case_goes_between_the_steps(
-    cases: _Cases, audit: _Audit
-) -> None:
-    """The case is removed after the first write of the request. Nothing may be committed or
-    audited: a rename that stuck while the packs were refused would be half a change."""
-    cases.removed_mid_request = True
-
-    response = _as(ALICE, cases, audit).patch(
-        "/v1/investigations/inv-1", json={"name": "Renamed", "domains": ["niem"]}
-    )
-
-    assert response.status_code == 404
-    assert cases.cases["inv-1"].name == "C"
-    assert cases.cases["inv-1"].domains == ["fibo"]
-    assert cases.history == []
-    assert audit.records == []
-
-
-def test_the_audit_of_a_never_chosen_case_says_none_and_of_a_pole_case_says_empty(
-    cases: _Cases, audit: _Audit
-) -> None:
-    """`before` is the stored value, so "never chosen" (NULL) is not reported as POLE."""
-    cases.seed_case("never", owner=ALICE, domains=None)
-    cases.seed_case("pole", owner=ALICE, domains=[])
-    client = _as(ALICE, cases, audit)
-
-    client.patch("/v1/investigations/never", json={"domains": ["niem"]})
-    client.patch("/v1/investigations/pole", json={"domains": ["niem"]})
-
-    befores = {r["investigation_id"]: r["resolved_query"] for r in audit.records}
-    assert befores == {
-        "never": {"before": None, "after": ["niem"]},
-        "pole": {"before": [], "after": ["niem"]},
-    }
 
 
 def test_the_patch_keeps_the_blank_name_refusal(cases: _Cases, audit: _Audit) -> None:

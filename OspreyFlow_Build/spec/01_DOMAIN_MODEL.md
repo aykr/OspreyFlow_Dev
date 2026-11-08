@@ -140,9 +140,17 @@ vocabulary shared.
 **A case's domain packs (ADR-126).** Every deployment composes the core with every pack, but a case
 says which packs it is about: `Investigation.domains`, a sorted set of `fibo`, `niem` and `stix`.
 - **Empty means the POLE core alone.** NULL means no one has chosen yet, and reads as empty.
-- **Who sets it.** It is chosen at creation, changed by an Author, inherited by a branch, and set
-  by a seed only while NULL. Every reader of the case may see it: it says what kind of case it is,
-  never what it holds.
+- **Where it comes from (ADR-126 Amendments 2 and 3).** It is the packs of the case's dataset's
+  live domain model (`TargetModel`, §2.2b; a composite's own), derived at every read through the
+  case's level check, so every case reading a dataset carries the same packs. It changes only when
+  that model is made live, on the Ingest Studio's Model tab. A change through the case (`PATCH`) is
+  refused (409 `packs_from_the_model`), and the Glass shows it read-only. While the dataset has no
+  model yet (one `scripts.seed_target_models` has not reached), the case's stored value stands.
+  Every reader of the case may see it: it says what kind of case it is, never what it holds.
+- **The stored column, `investigations.domains`, is deprecated.** It is kept as a record: what a
+  case chose before models, read by `scripts.seed_target_models` to seed each dataset's first
+  model, and written at creation as before. Dropping it is a later step's decision, with a
+  migration of its own.
 - **What follows from it.** It decides which Reports figures the case shows (KYC for `fibo`, a POLE
   summary otherwise) and which link types its Trends offer.
 - **What does not.** It narrows nothing else: the canvas, patterns and Explore still offer every

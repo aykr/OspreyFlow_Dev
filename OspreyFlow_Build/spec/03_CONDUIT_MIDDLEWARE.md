@@ -410,6 +410,13 @@ GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pip
 PATCH  /v1/datasets/{dataset_id}/sources/{source_id}/governance   a new version of its governance, audited; deployed pipelines reading it need attention
 POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause   pauses its refresh, with why; not an edit; audited (schedule_pipelines; ADR-110 Amendment 13)
 POST   /v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume  resumes it; audited (schedule_pipelines)
+GET    /v1/datasets/{dataset_id}/model                     its domain model: the live version and the open draft (edit_target_model, ADR-112 Amendment 6)
+POST   /v1/datasets/{dataset_id}/model/draft               opens the draft, N+1, as a copy of live (v1 bare POLE if none); 409 model_refused for a second
+PUT    /v1/datasets/{dataset_id}/model/draft               saves it; an extension removed not retired, or a POLE core type, 409 model_refused
+DELETE /v1/datasets/{dataset_id}/model/draft               discards it; audited
+GET    /v1/datasets/{dataset_id}/model/impact              what making it live would change: types, the pipelines writing them, the cases and composites the reader may open
+POST   /v1/datasets/{dataset_id}/model/make-live           the named draft live; the pipelines writing a changed type flagged and paused with the reason; audited
+POST   /v1/datasets/{dataset_id}/model/revert              a new draft N+2 copying an earlier version, never a rewrite; 409 no_model_yet for a dataset with none
 POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
 GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}                        load one draft

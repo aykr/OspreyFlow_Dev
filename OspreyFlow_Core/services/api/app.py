@@ -763,6 +763,7 @@ from .target_models import (
     TargetModelRefused,
     TargetModelStore,
     core_types_of,
+    packs_of_case,
 )
 from .tile_cache import (
     cache_key_for,
@@ -1756,6 +1757,15 @@ async def require_admin_role(principal: PrincipalDep) -> Principal:
     return principal
 
 
+async def with_derived_packs(
+    case: Investigation, datasets: DatasetStore, models: TargetModelStore
+) -> Investigation:
+    """The case with its packs as ADR-126 Amendment 2 derives them, from its dataset's live domain
+    model; as stored while that dataset has no model yet (Amendment 3)."""
+    derived = await packs_of_case(case.id, datasets, models)
+    return case if derived is None else case.model_copy(update={"domains": derived})
+
+
 def _authorized_at(
     level: AccessLevel, *, admin_safety_net: bool = False
 ) -> Callable[..., Awaitable[Investigation]]:
@@ -1774,10 +1784,13 @@ def _authorized_at(
         principal: PrincipalDep,
         investigations: InvestigationsDep,
         audit: AuditDep,
+        datasets: DatasetsDep,
+        models: TargetModelsDep,
     ) -> Investigation:
-        return await _authorize(
+        case = await _authorize(
             investigation_id, principal, investigations, audit, level, admin_safety_net
         )
+        return await with_derived_packs(case, datasets, models)
 
     dependency.required_level = level  # type: ignore[attr-defined]
     return dependency
@@ -2993,9 +3006,16 @@ class InvestigationListing(BaseModel):
 
 @app.get("/v1/investigations")
 async def list_investigations(
-    principal: PrincipalDep, investigations: InvestigationsDep, datasets: DatasetsDep
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
 ) -> list[InvestigationListing]:
     hidden = await investigations.hidden_tab_ids(principal)
+    listed = [
+        (await with_derived_packs(case, datasets, models), level)
+        for case, level in await investigations.list_for(principal)
+    ]
     return [
         InvestigationListing(
             id=case.id,
@@ -3009,7 +3029,7 @@ async def list_investigations(
             datasets=[d.name for d in reads],
             dataset_ids=[d.id for d in reads],
         )
-        for case, level in await investigations.list_for(principal)
+        for case, level in listed
         for reads in [await datasets.of_case(case.id, principal)]
     ]
 
@@ -3078,6 +3098,17 @@ async def rename_investigation(
     audited on its own: a rename as `rename_investigation`, a change of packs as
     `set_case_domains` with the packs before and after. The response carries the case's name and
     packs as they now stand."""
+    if body.domains is not None:
+        # ADR-126 Amendment 2: the packs come from the dataset's domain model, read-only here.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "packs_from_the_model",
+                "message": "a case's domain packs come from its dataset's domain model: change "
+                "them on the Ingest Studio's Model tab, where they change for every case reading "
+                "the dataset",
+            },
+        )
     # One store call, one transaction: a case removed between two separate writes would leave a
     # rename committed and audited beside packs that were refused.
     after = None if body.domains is None else sorted(set(body.domains))
