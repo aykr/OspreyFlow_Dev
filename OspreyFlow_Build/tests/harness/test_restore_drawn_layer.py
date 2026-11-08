@@ -17,8 +17,9 @@ What a mistake would do, and the case that catches it:
 - a check that could not see that loss: `test_the_restore_check_fails_with_the_layer_lost`, the
   same comparison run against a restore whose node lost its layer (rule 15).
 
-Run only with a lease: `OSPREY_LANE` set and the stack's ports pinned; the ArcadeDB container is the
-lease's own, read from `scripts/lane_stacks.tsv` by the pinned port.
+Run with a lease (`OSPREY_LANE` set and the stack's ports pinned; the container is the lease's own,
+read from `scripts/lane_stacks.tsv` by the pinned port), or in CI's `conformance` job, which names its
+ArcadeDB service's container in `OSPREY_TEST_ARCADEDB_CONTAINER`.
 """
 
 from __future__ import annotations
@@ -51,13 +52,20 @@ UNIT = "unit-1"
 K, B = "case-k", "case-b"
 ALICE = Principal(id="alice", clearance="SECRET", org_unit=UNIT, roles=["analyst"])
 
+#: The ArcadeDB container to back up and restore in: named outright (CI's `conformance` job names its
+#: service's, `OSPREY_TEST_ARCADEDB_CONTAINER`), or a lane's leased one, found by its pinned port.
+NAMED = os.environ.get("OSPREY_TEST_ARCADEDB_CONTAINER")
+
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("OSPREY_LANE") or "ARCADEDB_HTTP_PORT" not in os.environ,
-    reason="needs a leased lane stack: OSPREY_LANE and its pinned ARCADEDB_HTTP_PORT",
+    not NAMED and (not os.environ.get("OSPREY_LANE") or "ARCADEDB_HTTP_PORT" not in os.environ),
+    reason="needs an ArcadeDB container to restore in: OSPREY_TEST_ARCADEDB_CONTAINER, or a leased "
+    "lane stack (OSPREY_LANE and its pinned ARCADEDB_HTTP_PORT)",
 )
 
 
 def _container() -> str:
+    if NAMED:
+        return NAMED
     port = os.environ["ARCADEDB_HTTP_PORT"]
     for line in STACKS.read_text(encoding="utf-8").splitlines():
         parts = line.split("\t")
