@@ -29935,17 +29935,21 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
    (`services/api/rules_place.py`, `require_rules_place`: any one of the two rights), refused with 403
    `place_required`. No role loses a right (`schemas/rights.py` is unchanged); what changes is that a
    right which acts only in the place no longer reaches it without the place.
-2. **What that costs (Q2 (a)).** The **Data Engineer** no longer deploys or retires rules, reads or decides
-   held rows, or manages screening lists; the **Administrator** no longer reads the rule audit or manages
-   screening lists. The rule audit returns to administrators with Admin › Audit (L2.6); screening lists
-   with the Studio's list connector (L1.6, ADR-140 Amendment 9); held rows stay a rule's, in Rules and
-   Monitoring. A whole-deployment rule's approval still needs `administer_system` and `deploy_rules`
-   both, and now the place too. On the owner's list for review.
-3. **Two shared reads, no gate.** The queue's list (`GET …/alert-queue`) is read outside the place by
-   Home's *Needs your attention*, the switcher's count and a report pack's alert items (the Glass), and
-   the held rows' list (`GET …/held-rows`) by Home's count. Each answers whoever holds its own right, as
-   before; a Reports Viewer's Home keeps its alerts, each row opening its case, until L2.12 builds that
-   journey (ADR-145 Amendment 4 decision 10).
+2. **What that costs (Q2 (a)).** The **Data Engineer** no longer deploys or retires rules, opens an
+   alert's detail, or manages screening lists; the **Administrator** no longer reads the rule audit or
+   manages screening lists. The rule audit returns to administrators with Admin › Audit (L2.6); screening
+   lists with the Studio's list connector (L1.6, ADR-140 Amendment 9). A whole-deployment rule's approval
+   still needs `administer_system` and `deploy_rules` both, and now the place too. On the owner's list
+   for review.
+3. **Routes shared with other places, no gate.** The queue's list (`GET …/alert-queue`) is read outside
+   the place by Home's *Needs your attention*, the switcher's count and a report pack's alert items (the
+   Glass); the held rows' list, rejection and release (`GET …/held-rows`, `POST …/held-rows/reject`,
+   `POST …/ingest/recipes/{id}/held-rows/release`) are worked in the Studio's Runs too (ADR-140) and
+   counted on Home. Each answers whoever holds its own right, as before, so the Data Engineer keeps
+   held rows in the Studio; a Reports Viewer's Home keeps its alerts, each row opening its case, until
+   L2.12 builds that journey (ADR-145 Amendment 4 decision 10). A route asking for a right that acts
+   only in the place (`author_rules`, `triage_alerts`, `deploy_rules`, `read_rule_audit`,
+   `keep_watches`, `load_screening_lists`) must be the place's.
 4. **Offered where usable (ADR-145 Amendment 1).** `places.json` names the place's rights (the gate's)
    and its `needs` (its entry read's, `read_alert_queue`). Analysts and the Super user are offered it;
    the Data Engineer, the Administrator and the Reports Viewer are not.
@@ -29955,10 +29959,14 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
    then ADR-112 Amendment 5's test "Rule author opens Rules and Monitoring" is a strict xfail naming the
    question, and its triage routes are recorded as answering a role whose place is not offered.
 6. **An alert's address.** `GET /v1/alerts/{alert_id}` answers `AlertAtAddress` (the case the alert is
-   worked in, its `investigation_id`, and its explanation as `explain_alert` gives it there). An alert
-   the reader may not see — its case not theirs, not in their queue there, or any cited node, link or
-   transaction hidden — is answered exactly as one that does not exist (404 `alert_not_found`), and the
-   case's level check is made for a missing id too, on no case. An alert raised in no case has no
+   worked in, its `investigation_id`, and its explanation as `explain_alert` gives it there). The path
+   names no case, so the reader is scoped to the alert's case (`scope_to_case`) after the level check
+   and before anything is read, reading its datasets and no others. An alert the reader may not see —
+   its case not theirs, its dataset not one its case reads, not in their queue there (another member's
+   own hotlist alert), or any cited node, link or transaction hidden — is answered exactly as one that
+   does not exist (404 `alert_not_found`), and the case's level check is made for a missing id too, on
+   no case. The reads after that check differ between an alert refused in a case the reader may open
+   and an id that never existed; what the reader is told does not. An alert raised in no case has no
    address yet (L2.10's dataset alerts, through the home case). The workspace's router
    (`shell/router.ts`, the History API, no dependency) reads `/alerts/<id>` and `/rules`, keeps them
    over the sign-in round trip, and opens another case's alert by the reload every case switch is
@@ -29976,10 +29984,18 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
    Glass's banner is *Case · Boards*. Connection strength (ADR-139), not alerts, stays in the Glass
    under the rail's ⋯ More. The count before the canvas stays 24.
 
-**Tests.** `test_place_routes.py` (the gate on every route but the two shared reads, red with it taken
-off `deploy_typology_rule` and with it open to all; each role offered exactly its places, the hidden
-place's routes refused over HTTP); `test_alert_address.py` (the four unseeable cases answered as a
-missing one, red with the case check and with the evidence check removed); `keyboard/shell.spec.ts`,
+9. **The place draws only for whom it is offered.** An address followed by someone the place is not
+   offered to lands on the Glass, the address left; under the place the Glass's Inspector, timeline and
+   status line are not drawn.
+
+**Tests.** `test_place_routes.py` (the gate on every route but the shared ones, red with it taken off
+`deploy_typology_rule` and with it open to all; every route asking for a right of the place alone is
+the place's, red with one planted; each role offered exactly its places, the hidden place's routes
+refused over HTTP); `test_alert_address.py`, its reader the principal the real `get_principal` gives a
+path with no case (reading no dataset) and its fakes refusing what the graph, the analytics and the
+queue's scope refuse (the seven unseeable cases answered as a missing one; red with the case check, the
+evidence check and the case scoping each removed, and with the reader read unscoped); `App.test.tsx`
+(the address for someone not offered the place; no working-set tools under it, each red); `keyboard/shell.spec.ts`,
 `keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
 new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
 address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.

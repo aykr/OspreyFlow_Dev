@@ -660,8 +660,10 @@ GET    /v1/alerts/{alert_id}   an alert at its own address: the case it is worke
 
 **Rules and Monitoring's gate (ADR-146 decision 2, Amendment 2).** Every route of this section and of
 §3.8a's queue, rules, rule audit, held rows and screening lists asks, after its own right, for
-`triage_alerts` or `author_rules` (`services/api/rules_place.py`; 403 `place_required`), but the two lists
-read outside the place: `GET …/alert-queue` and `GET …/held-rows`.
+`triage_alerts` or `author_rules` (`services/api/rules_place.py`; 403 `place_required`), but the routes
+used outside the place: `GET …/alert-queue` (Home, a report pack's alert items) and the held rows' `GET
+…/held-rows`, `POST …/held-rows/reject` and `POST …/ingest/recipes/{id}/held-rows/release` (the
+Studio's Runs).
 
 **Owner-only, and of a dataset** — a hotlist or a monitor is a standing watch that outlives any one
 investigation, and an alert belongs to the principal who owns the watch that fired it, not to
@@ -671,8 +673,9 @@ and is listed only in cases reading that dataset. A match in another dataset wri
 even a `notify` stub, and an alert's entities are read as its case reads them. The jump's case of its
 own went in L2.9 (ADR-146 Amendment 2): an alert is opened at its address, in the case it is worked in.
 `GET /v1/alerts/{alert_id}` reads the alert's case (`AlertStore.case_of`), makes the reader's level
-check on it (on no case, for a missing id, so the reads are the same), and reads the alert through the
-queue's own scope and whole-evidence check (`alert_queue.explain`): an alert of a case the reader may
+check on it (on no case, for a missing id), scopes the reader to that case's datasets
+(`scope_to_case`: the path names no case, so `get_principal` reads none), and reads the alert through
+the queue's own scope and whole-evidence check (`alert_queue.explain`): an alert of a case the reader may
 not open, not in their queue there, or any of whose cited nodes, links or transactions they cannot
 read now, is refused exactly as a missing alert (ADR-124 Amendment 17's refusal, now at the address;
 rule 3). An alert raised in no case has no address until L2.10's dataset alerts.

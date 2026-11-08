@@ -421,8 +421,9 @@ hidden from a person is one whose routes refuse them, but for a legacy role's ow
 as such. **Rules and Monitoring has a gate of its own**: its routes' own rights are held by people
 ADR-146 decision 2 does not open it to (a Data Engineer's `deploy_rules`, an Administrator's
 `read_rule_audit`), so every route of the place asks, after its own right, for `triage_alerts` or
-`author_rules` (403 `place_required`), but the two lists read outside it, the queue's (Home, the
-switcher's count, a report pack's alert items) and the held rows' (Home). The Conduit's place-routes test
+`author_rules` (403 `place_required`), but the routes used outside it: the queue's list (Home, the
+switcher's count, a report pack's alert items) and the held rows' list, rejection and release (Home,
+and the Studio's Runs). The Conduit's place-routes test
 (`test_place_routes.py`, in the build tree) assigns every route to the place whose screens call it
 (`/v1/admin/screening-lists` is Rules and Monitoring's, called by its screening lists); records what the routes answer each role, legacy role and right granted
 singly (`shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
@@ -509,7 +510,9 @@ is, the address kept (`alerts/address.ts`); an address opened while signed out i
 session storage over the sign-in round trip, which returns to the root. Opening an alert in the queue,
 on Home's *Needs your attention* or from the inbox's *Open the alert* gives it its address; Back leaves
 it. Home's alert rows open the alert for whoever Rules and Monitoring is offered to; for someone it is
-not (a Reports Viewer) they stay on the Glass's card and open the case, until L2.12.
+not (a Reports Viewer) they stay on the Glass's card and open the case, until L2.12. An address followed
+by someone the place is not offered to opens the Glass instead, and the address is left. The place, like
+the Studio, draws none of the Glass's working-set tools (the Inspector, the timeline, the status line).
 `keyboard/rules-place.spec.ts` proves the place's tabs and the address by keyboard; axe scans
 `keyboard/rules-place-harness.html` and `keyboard/monitoring-harness.html` (the tabs) in the three themes.
 

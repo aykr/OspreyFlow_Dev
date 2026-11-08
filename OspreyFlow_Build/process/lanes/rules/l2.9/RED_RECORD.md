@@ -144,3 +144,46 @@ test (a title mismatch) and was re-run.
     Tests  1 failed | 4 passed (5)
     FAIL  src/alerts/address.test.tsx > an alert at its address > opens another case on the alert, keeping the address, as every case switch is opened
 ```
+
+## 4. From the lane-reviewer (round 1)
+
+**The address scoped the reader to nothing (finding 1).** The route test ran with an unlimited
+principal; rewritten with the principal the real `get_principal` gives a path with no case
+(`datasets=[]`) and fakes that refuse outside its datasets, the readable alert was refused, before the
+fix (`scope_to_case` after the level check):
+
+```
+    /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/tests/services/api/test_alert_address.py:190: AssertionError: (404, '{"error":"alert_not_found"}')
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_a_readable_alert_is_answered_with_its_case_and_explanation
+```
+
+**Plant E — the reader read unscoped** (the `scope_to_case` call replaced by `datasets=None`): an alert
+of a dataset its case does not read was answered.
+
+```
+    /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/tests/services/api/test_alert_address.py:215: AssertionError: ('its dataset is not one its case reads', (200, '{"investigation_id":"case-1","explanation":{"alert":{"id":"v1","rule_...ience":"case","team":null,"close_proposed_by_name":null,"assignee_name":null}}'), (404, '{"error":"alert_not_found"}'))
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[its dataset is not one its case reads-alerts5-hidden5-levels5]
+```
+
+**The workspace (findings 4, 6, 8)**, each at the real component:
+
+```
+### App: the place drawn whatever the rights (its reset removed)
+  plant: src/App.tsx: 'if (!rightsSettled || opensRules || view !== "alerts") return;' -> 'return;'
+    ❯ src/App.test.tsx (32 tests | 1 failed | 31 skipped) 1594ms
+    × an alert's address opens the Glass, not Rules and Monitoring, for someone it is not offered to 1025ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 31 skipped (32)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > an alert's address opens the Glass, not Rules and Monitoring, for someone it is not offered to
+### App: the working-set tools under the place (alerts no longer excluded)
+  plant: src/App.tsx: '!["ingest", "alerts", "dossier", "reports", "dashboards"].includes(view)' -> '!["ingest", "dossier", "reports", "dashboards"].includes(vie'
+    ❯ src/App.test.tsx (32 tests | 1 failed | 31 skipped) 650ms
+    × Rules and Monitoring draws none of the Glass's working-set tools 139ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 31 skipped (32)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Rules and Monitoring draws none of the Glass's working-set tools
+### startScreen: a case chosen for Rules and Monitoring opened as a plain case
+  plant: src/shell/startScreen.tsx: 'where === "rules" ? input.openCaseOnRules(id)' -> 'where === "never" ? input.openCaseOnRules(id)'
+    ✘  1 keyboard/shell.spec.ts:303:1 › Rules and Monitoring's card opens by its key, and a case is chosen for it by keyboard (5.3s)
+    1 failed
+```
