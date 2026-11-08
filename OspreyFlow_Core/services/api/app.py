@@ -35,7 +35,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal, cast
+from typing import Annotated, Any, Final, Literal, cast, get_args
 
 import httpx
 from fastapi import (
@@ -14388,7 +14388,7 @@ def _size_words(size: int) -> str:
 async def layer_action_dry_run_route(
     dataset_id: str,
     investigation_id: str,
-    action: LayerAction,
+    action: str,
     request: Request,
     principal: PrincipalDep,
     datasets: DatasetsDep,
@@ -14400,7 +14400,14 @@ async def layer_action_dry_run_route(
     decision 1): what it would touch, in counts, and nothing written but the audit entry. Refused
     for a case that is open, not linked to this dataset directly, or (to merge) when the dataset is
     a composite or the person is not one of its Authors; deleting is also an administrator's. The
-    actions themselves are the promotion's (L3.4)."""
+    actions themselves are the promotion's (L3.4).
+
+    `action` is read as text and checked here, after the route's right: typed as `LayerAction`,
+    FastAPI refused an unknown one (422) before `require_right` ran, so a caller without the right
+    learnt the route's shape (case's live run, 8 November). An unknown action is 404."""
+    if action not in get_args(LayerAction):
+        raise HTTPException(status_code=404, detail={"error": "no_such_action"})
+    action = cast(LayerAction, action)
     dataset = await _admin_dataset_of(datasets, dataset_id)
     row = next(
         (c for c in await _linked_cases(dataset, datasets, investigations, graph, principal,

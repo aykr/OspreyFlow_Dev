@@ -492,3 +492,12 @@ def test_a_team_owner_is_the_team_and_people_are_the_direct_grants_only(
     answer = world.client.get("/v1/admin/datasets/ds-a/authors", headers=_as("admin")).json()
     assert answer["team"] == "r1"
     assert sorted(p["id"] for p in answer["people"]) == ["adm-2", "eng-1"]
+
+
+def test_an_unknown_action_is_refused_only_after_the_right(world: SimpleNamespace) -> None:
+    """The right is checked before the action is read (case's live run, 8 November): without
+    `administer_system` the answer is the gate's 403, never a 422 that tells the route's shape."""
+    path = "/v1/admin/datasets/ds-a/cases/gone-1/x/dry-run"
+    refused = world.client.post(path, headers=_as("analyst"))
+    assert refused.status_code == 403 and refused.json()["detail"]["error"] == "right_required"
+    assert world.client.post(path, headers=_as("admin")).status_code == 404
