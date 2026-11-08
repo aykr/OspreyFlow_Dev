@@ -1,0 +1,146 @@
+{
+ "dataset_id": "pid",
+ "about": "An inner Join on the exact key, trimmed and nothing else: '+44 7700 900719 ' meets '+44 7700 900719', '07700900720' does not meet '07700 900720'; an unmatched row is not passed on and is counted.",
+ "steps": [
+  {
+   "id": "with_owner",
+   "kind": "join",
+   "left": "visit_bookings",
+   "right": "number_owners",
+   "left_key": "contact_number",
+   "right_key": "number",
+   "how": "inner",
+   "add": [
+    {
+     "column": "owner_name",
+     "as": "owner"
+    }
+   ]
+  }
+ ],
+ "sources": {
+  "visit_bookings": {
+   "load_id": "ld-vb-1",
+   "key": [
+    "booking_id"
+   ],
+   "rows": [
+    {
+     "booking_id": "VB-2605-001",
+     "estab_id": "FMR",
+     "contact_number": "07700 900718",
+     "visitor": "S. Whitlow"
+    },
+    {
+     "booking_id": "VB-2605-002",
+     "estab_id": " hbk ",
+     "contact_number": "+44 7700 900719",
+     "visitor": "M. Ellery"
+    },
+    {
+     "booking_id": "VB-2605-003",
+     "estab_id": "XXX",
+     "contact_number": "07700900720",
+     "visitor": "A. Okafor"
+    },
+    {
+     "booking_id": "VB-2605-004",
+     "estab_id": "",
+     "contact_number": "not a number",
+     "visitor": "T. Price"
+    }
+   ]
+  },
+  "number_owners": {
+   "load_id": "ld-no-3",
+   "key": [
+    "number"
+   ],
+   "rows": [
+    {
+     "number": "07700 900718",
+     "owner_name": "Shona Whitlow"
+    },
+    {
+     "number": " +44 7700 900719 ",
+     "owner_name": "Mark Ellery"
+    },
+    {
+     "number": "07700 900720",
+     "owner_name": "Ada Okafor"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "booking_id",
+   "estab_id",
+   "contact_number",
+   "visitor",
+   "owner"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "booking_id": "VB-2605-001",
+     "estab_id": "FMR",
+     "contact_number": "07700 900718",
+     "visitor": "S. Whitlow",
+     "owner": "Shona Whitlow"
+    },
+    "refs": [
+     [
+      "visit_bookings",
+      0,
+      "e5ef771ecadb26c18f87a22ffef25a951aa8cfe7cfb078ff46b5760747875948",
+      "ld-vb-1"
+     ],
+     [
+      "number_owners",
+      0,
+      "902e4a798882087463efca13548356c8ce2c5174046ea448ff13502e34d3f0d4",
+      "ld-no-3"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "booking_id": "VB-2605-002",
+     "estab_id": " hbk ",
+     "contact_number": "+44 7700 900719",
+     "visitor": "M. Ellery",
+     "owner": "Mark Ellery"
+    },
+    "refs": [
+     [
+      "visit_bookings",
+      1,
+      "0195eda93ee2a848c99119fc98e4ee628f2c74be2458f62c7e039e332007d0b1",
+      "ld-vb-1"
+     ],
+     [
+      "number_owners",
+      1,
+      "2c60e52fc726abb3850b4e3c7e7975f2e7891328301ef193991a965b5c540872",
+      "ld-no-3"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "with_owner",
+    "kind": "join",
+    "rows_in": 4,
+    "rows_out": 2,
+    "unmatched": 2,
+    "filtered_out": 0,
+    "repeats_folded": 0,
+    "rejected": 0
+   }
+  ],
+  "rejections": []
+ }
+}

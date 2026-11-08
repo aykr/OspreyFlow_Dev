@@ -1,0 +1,131 @@
+{
+ "dataset_id": "pid",
+ "about": "Filter keeps rows for which every condition holds; the others are counted.",
+ "steps": [
+  {
+   "id": "kept",
+   "kind": "filter",
+   "input": "visit_bookings",
+   "keep": [
+    {
+     "field": "estab_id",
+     "is": "not_null"
+    },
+    {
+     "field": "estab_id",
+     "in": [
+      "FMR",
+      "hbk",
+      "XXX"
+     ]
+    }
+   ]
+  }
+ ],
+ "sources": {
+  "visit_bookings": {
+   "load_id": "ld-vb-1",
+   "key": [
+    "booking_id"
+   ],
+   "rows": [
+    {
+     "booking_id": "VB-2605-001",
+     "estab_id": "FMR",
+     "contact_number": "07700 900718",
+     "visitor": "S. Whitlow"
+    },
+    {
+     "booking_id": "VB-2605-002",
+     "estab_id": " hbk ",
+     "contact_number": "+44 7700 900719",
+     "visitor": "M. Ellery"
+    },
+    {
+     "booking_id": "VB-2605-003",
+     "estab_id": "XXX",
+     "contact_number": "07700900720",
+     "visitor": "A. Okafor"
+    },
+    {
+     "booking_id": "VB-2605-004",
+     "estab_id": "",
+     "contact_number": "not a number",
+     "visitor": "T. Price"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "booking_id",
+   "estab_id",
+   "contact_number",
+   "visitor"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "booking_id": "VB-2605-001",
+     "estab_id": "FMR",
+     "contact_number": "07700 900718",
+     "visitor": "S. Whitlow"
+    },
+    "refs": [
+     [
+      "visit_bookings",
+      0,
+      "e5ef771ecadb26c18f87a22ffef25a951aa8cfe7cfb078ff46b5760747875948",
+      "ld-vb-1"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "booking_id": "VB-2605-002",
+     "estab_id": " hbk ",
+     "contact_number": "+44 7700 900719",
+     "visitor": "M. Ellery"
+    },
+    "refs": [
+     [
+      "visit_bookings",
+      1,
+      "0195eda93ee2a848c99119fc98e4ee628f2c74be2458f62c7e039e332007d0b1",
+      "ld-vb-1"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "booking_id": "VB-2605-003",
+     "estab_id": "XXX",
+     "contact_number": "07700900720",
+     "visitor": "A. Okafor"
+    },
+    "refs": [
+     [
+      "visit_bookings",
+      2,
+      "3fdbe6e1856f7b8d1075c551d113247edaceab3b5edf9516066bdf2fd64a5dfe",
+      "ld-vb-1"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "kept",
+    "kind": "filter",
+    "rows_in": 4,
+    "rows_out": 3,
+    "unmatched": 0,
+    "filtered_out": 1,
+    "repeats_folded": 0,
+    "rejected": 0
+   }
+  ],
+  "rejections": []
+ }
+}

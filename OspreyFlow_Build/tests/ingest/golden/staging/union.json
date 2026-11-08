@@ -1,0 +1,141 @@
+{
+ "dataset_id": "pid",
+ "about": "Union stacks two tables with the same columns (in any order); each row keeps its own ref.",
+ "steps": [
+  {
+   "id": "all_owners",
+   "kind": "union",
+   "inputs": [
+    "number_owners",
+    "more_owners"
+   ]
+  }
+ ],
+ "sources": {
+  "number_owners": {
+   "load_id": "ld-no-7",
+   "key": [
+    "number"
+   ],
+   "rows": [
+    {
+     "number": "+447700900718",
+     "owner_name": "Shona Whitlow"
+    },
+    {
+     "number": "07700 900719",
+     "owner_name": "Mark Ellery"
+    },
+    {
+     "number": "0770 0900 718",
+     "owner_name": "S Whitlow (second line)"
+    },
+    {
+     "number": "unknown",
+     "owner_name": "Nobody"
+    }
+   ]
+  },
+  "more_owners": {
+   "load_id": "ld-no-8",
+   "rows": [
+    {
+     "owner_name": "Ada Okafor",
+     "number": "07700 900720"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "number",
+   "owner_name"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "number": "+447700900718",
+     "owner_name": "Shona Whitlow"
+    },
+    "refs": [
+     [
+      "number_owners",
+      0,
+      "85d8139ca5bcb32baf6af97c792dfe9795d275c2ccb3a861d26f7733e1b740aa",
+      "ld-no-7"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "07700 900719",
+     "owner_name": "Mark Ellery"
+    },
+    "refs": [
+     [
+      "number_owners",
+      1,
+      "e1c9221f14c4c14f54afec999de9e66f781a25a147aed859ee5f2ac8d602c5da",
+      "ld-no-7"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "0770 0900 718",
+     "owner_name": "S Whitlow (second line)"
+    },
+    "refs": [
+     [
+      "number_owners",
+      2,
+      "e6f4a9342c93b58fcdcfd907ddcd506d3e06a1220a2275e4902c0a9942a11523",
+      "ld-no-7"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "unknown",
+     "owner_name": "Nobody"
+    },
+    "refs": [
+     [
+      "number_owners",
+      3,
+      "a69f50eee46e418afc253e05b3768b9e53f8c2beb44287e16aea3f2de18b700f",
+      "ld-no-7"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "07700 900720",
+     "owner_name": "Ada Okafor"
+    },
+    "refs": [
+     [
+      "more_owners",
+      0,
+      "5f7d9cf892fafde45b2fd6d8ab31773199eb8e2ba4d5cb167a326d30a44789d1",
+      "ld-no-8"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "all_owners",
+    "kind": "union",
+    "rows_in": 5,
+    "rows_out": 5,
+    "unmatched": 0,
+    "filtered_out": 0,
+    "repeats_folded": 0,
+    "rejected": 0
+   }
+  ],
+  "rejections": []
+ }
+}

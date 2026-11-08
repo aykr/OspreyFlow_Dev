@@ -1,0 +1,99 @@
+{
+ "dataset_id": "pid",
+ "about": "Dedupe folds repeats on declared columns (trimmed); the first row stands for them and carries every repeat's ref.",
+ "steps": [
+  {
+   "id": "one_per_owner",
+   "kind": "dedupe",
+   "input": "number_owners",
+   "on": [
+    "owner_name"
+   ]
+  }
+ ],
+ "sources": {
+  "number_owners": {
+   "load_id": "ld-no-9",
+   "rows": [
+    {
+     "number": "+447700900718",
+     "owner_name": "Shona Whitlow"
+    },
+    {
+     "number": "07700 900719",
+     "owner_name": "Mark Ellery"
+    },
+    {
+     "number": "07700 900721",
+     "owner_name": " Shona Whitlow "
+    },
+    {
+     "number": "07700 900722",
+     "owner_name": "Shona Whitlow"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "number",
+   "owner_name"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "number": "+447700900718",
+     "owner_name": "Shona Whitlow"
+    },
+    "refs": [
+     [
+      "number_owners",
+      0,
+      "9f38f99040831462b196b14026dc15d023eac8e3302ce0a2ba352d594a0f123e",
+      "ld-no-9"
+     ],
+     [
+      "number_owners",
+      2,
+      "48983099bd834578454df7dfb0d63a553f5dd59bc020bdbc6f6d3dca5db4f729",
+      "ld-no-9"
+     ],
+     [
+      "number_owners",
+      3,
+      "ced842491f683190214f529365b98137b2957a3a66f36fa1871a5c576d481f9a",
+      "ld-no-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "number": "07700 900719",
+     "owner_name": "Mark Ellery"
+    },
+    "refs": [
+     [
+      "number_owners",
+      1,
+      "46cc4c5fb62f5a717990dbd7e5952c637ed388736da4343e85dab65f5110ff0a",
+      "ld-no-9"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "one_per_owner",
+    "kind": "dedupe",
+    "rows_in": 4,
+    "rows_out": 2,
+    "unmatched": 0,
+    "filtered_out": 0,
+    "repeats_folded": 2,
+    "rejected": 0
+   }
+  ],
+  "rejections": []
+ }
+}
