@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.56** · 2026-11-08 · For OspreyFlow v0.4.12 · Issued
+**Version 1.57** · 2026-11-08 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.57 | 2026-11-08 | §8: `ospreyflow map list`, `map verify`, `map prefetch` and `map build` (ADR-147). Appendix A regenerated: a WMTS provider's `credential_param`. |
 | 1.56 | 2026-11-08 | Appendix A regenerated from the deployment schema: `components.source_path`'s description, reworded without a build-calendar note. |
 | 1.55 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
 | 1.54 | 2026-11-05 | Describes v0.4.11. No change to its content. |

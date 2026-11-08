@@ -1,28 +1,25 @@
-# Platform P2 · gates at 58ee62c (tree 204d685bcadee902b6026863dbb767d9e95fd260), on main 1122bfa
+# Platform P3 · gates at 95b9312 (tree 0fd7f16ed84ff26d11b422bb78cea0add5c69a0a), on main 47b0bc4
 
 Run 8 November 2026 offline (store ports pinned to unused ports, no stack held), from `OspreyFlow_Build`:
-`make -k ci` (`58ee62c.ci.txt`), `make test` (`58ee62c.test.txt`), then `make test-js` (`58ee62c.test-js.txt`,
-which `make test` does not reach after a pytest failure, with the one failing case run alone and the harness's
-tests appended).
+`make -k ci` (`95b9312.ci.txt`), `make test` (`95b9312.test.txt`), `make test-js` (`95b9312.test-js.txt`).
+The branch's own fixes after them (the guide's version row and its PDF, from `test_docs_pdf.py`) are the
+commit after; nothing else changed.
 
-**`make -k ci`: green whole** (exit 0), the seven trivy image scans included.
+**`make -k ci`: green but for the environment.** The seven `trivy-image-*` scans could not build: Docker Hub
+refused the base images' pulls (`429 Too Many Requests`, 15 times in the log). `harness-a11y` lost its port
+(5193, another lane's server); run again alone once free: 34 passed (`95b9312.harness-a11y.txt`). Every other
+gate passed, `licence-check` included.
 
-**`make test`: 8660 passed, 4 failed, 2 errors, none from this branch:**
-- `test_deployment_schema.py::test_the_committed_osprey_yaml_still_validates`: this machine's own
-  `OspreyFlow_Core/osprey.yaml` (the owner's, never staged) names the map `osm-local-great-britain`, the test
-  expects `osm-local`. Not in the branch's diff.
-- `test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly`: reads `VALKEY_PORT`, which the
-  offline run pins to the unused 59993; it expects 6379. An artefact of the offline pins.
-- `test_layout.py::test_no_product_folder_is_left_at_the_root`: the repository root's `graphify-out/`, this
-  machine's (gitignored) knowledge graph.
-- `test_phone_extraction_fixture.py::test_the_extraction_loads_as_documents_held_by_the_phones`: needs an object
-  store, and the offline run holds none (the port guard's pins).
-- `test_workspace_proxy.py` (2 errors): its image build is refused by Docker Hub's pull limit (429 on
-  `nginx:1.30-alpine`).
+**`make test`: 8820 passed, 5 failed:**
+- `test_docs_pdf.py::test_the_guides_and_their_pdfs_are_in_step`: **the branch's** (the guide's `ospreyflow map`
+  rows); fixed in the next commit (version 1.57, its PDF rebuilt; 18 passed).
+- Not the branch's, as at P2's gates: `test_deployment_schema.py::test_the_committed_osprey_yaml_still_validates`
+  (the committed `osprey.yaml`'s map default), `test_valkey_config.py` (the offline pins), `test_layout.py`
+  (this machine's `graphify-out/`), `test_phone_extraction_fixture.py` (no object store offline).
 
-**`make test-js`: 2683 passed, 1 failed**: `MatrixView.budget.test.tsx` (the 50,000-node first-frame timing),
-under the load of a full run; run alone straight after, 1 passed. `apps/harness`: 45 passed.
+**`make test-js`: 2697 passed, 1 failed**: `MatrixView.budget.test.tsx`'s first-frame timing under a full run's
+load; alone, 1 passed.
 
-The branch's own suites, keyboard and axe (`process/lanes/platform/P2_RED_RECORD.md`): the Models keyboard
-walkthrough 11 passed and its axe scans 28 passed (7 states × dark, light and GOV.UK, and the label checks), on
-servers of the lane's own (the studio lane's Vite held 5185).
+The branch's own keyboard and axe, after the gates: `admin-maps.spec.ts` with `admin-models.spec.ts` 24 passed
+(`95b9312.keyboard-admin-maps.txt`); axe on `maps-harness.html` 20 passed in dark, light and GOV.UK
+(`95b9312.axe-maps-harness.txt`). Live, each under the platform lease on stack a (`P3_RED_RECORD.md`).
