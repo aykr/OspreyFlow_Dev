@@ -535,16 +535,27 @@ needs a transform that does not exist, that is a new adapter with a golden test 
 once and available to everyone.
 
 The staging steps (§9) obey the same rule (ADR-140 Amendment 11). A Join's or a Lookup's
-`normalise` names an adapter from the same registry, one that reads one column into one value
-(`msisdn`, `postcode`, `account_ref`…; never `split`, nor a many-column adapter such as
-`grid_ref`). A Derive names an operation from **Derive's catalogue**
-(`knowledge_adapters/derive.py`): `concat`, `split` (one part, by position), `substring`,
-`date_parse` (date order and zone declared), `arithmetic` (add, subtract, multiply or divide two
-columns, or a column and a constant), `case_when` (declared values to declared results) and
-`normalise` (any one-column adapter). Each operation has a golden file under
-`tests/knowledge_adapters/golden/derive/` that shows its refusals as well as its values. A refusal
-names the cause, never the cell's value. An operation outside the catalogue is refused by the
-recipe's schema and by the adapter alike.
+`normalise` names an adapter from the same registry, one that reads one column into one value of
+text (`derive.text_adapters`: `msisdn`, `postcode`, `account_ref`…). It is never `split`, which gives
+a list; nor a many-column adapter such as `grid_ref`; nor one whose result is structured
+(`datetime`, `person_name`, `address`, `card`), which Map binds one part at a time. A Derive names
+an operation from **Derive's catalogue** (`knowledge_adapters/derive.py`):
+
+- `concat`;
+- `split`: one part, by position, of what the `split` adapter gives, so Derive and Map never
+  disagree about a cell;
+- `substring`;
+- `date_parse`: date order and zone declared;
+- `arithmetic`: add, subtract, multiply or divide two columns, or a column and a constant; a
+  result past 1E±100 is refused;
+- `case_when`: declared values to declared results;
+- `normalise`: a text adapter, as above.
+
+Each operation's settings are typed, and a key it does not read is refused, as is a wrong number of
+columns. Each operation has a golden file under `tests/knowledge_adapters/golden/derive/` that shows
+its refusals as well as its values. A refusal names the cause, never the cell's value. A setting or
+a cell an operation cannot read rejects that row; it never stops the run. An operation outside the
+catalogue is refused by the recipe's schema and by the adapter alike.
 
 **Provenance and handling.** Set per source in stage 1 and overridable per element; a column can carry
 the handling — a records-management export often has its own classification column — but not the
@@ -989,8 +1000,9 @@ under different patterns or for different owners, or read by a keyless pipeline,
 
 **What a run cost** (Amendment 12): every run records its wall time, the rows it read, the bytes it
 put to the object store and the elements it wrote to the graph, on its report and in the ledger.
-Rows staged and bytes to Parquet are *not measured* until the staging catalogue is built (ADR-140), and are said so, never
-shown as 0. The run report, the Runs tab and Admin's run rows show them after the counts, and withhold
+Rows staged and bytes to Parquet are *not measured* for a run without staging steps, and are said
+so, never shown as 0. A staged load counts both (§9); they reach the run report when the Studio's
+run route runs a staged pipeline. The run report, the Runs tab and Admin's run rows show them after the counts, and withhold
 them where the counts are withheld.
 
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
@@ -1155,40 +1167,55 @@ Each step has an `id` that later steps read it by, a `kind`, an optional `label`
   `left`) and `add`;
 - `filter`: `input` and `keep`, a list of conditions, each naming a `field` and exactly one of
   `is` (`null` or `not_null`), `equals` or `in`;
-- `derive`: `input`, `column`, `operation`, `columns` and `settings`;
+- `derive`: `input`, `column`, `operation`, `columns` and `settings` (each operation's own, §4);
 - `union`: `inputs`, two or more;
 - `dedupe`: `input` and `on`.
 
 `add` lists the columns brought across, each `{column, as}`, with `as` optional. A step reads a
 pipeline's source table by its name, or an earlier step by its `id`. **The last step is the table
 Map reads.** Any other key is refused, so no step can carry an expression under a name of its own.
-A recipe without `staging` is written exactly as before.
+A recipe without `staging` is written exactly as before; `staging: []` is refused. YAML reads a bare
+`on` as true, so `on:` is written quoted (`"on": estab_id`).
 
 **What the save gate refuses** (`staging_rule_violations`):
 
 - a step that reads a later step, or a table the pipeline does not have;
 - a step that feeds nothing (every step but the last must feed a later one);
 - a step whose `id` is a source's name;
-- a key normalised by anything but a one-column adapter;
-- a Lookup of a list that is neither the dataset's own nor a screening list the dataset subscribes to.
-  This is refused in the same words as a list that does not exist.
+- a key normalised by anything but a text adapter (§4);
+- a Lookup of a list the dataset cannot read. A dataset reads its own lists, and a
+  **deployment-wide** screening list (one imported once for the deployment) that it subscribes to
+  **by the list's id**. Another dataset's list is never readable, whatever its kind or name. A
+  refusal uses the same words as for a list that does not exist, and a name two readable lists
+  share is refused too.
 
-A join must name both keys; the schema requires them.
+A join must name both keys, and a Derive's settings and columns must be its operation's; the schema
+refuses both. The gate runs before every staged run and every Test, which refuse the whole run if
+it fails; a list handed to a run under a name that is not its own is refused there too. No route
+saves or publishes staging steps yet: they arrive with the step drawers. Until then, publishing a
+recipe with steps is refused in words, and running one over a single source's rows
+(`run_recipe` or `dry_run_recipe` without its staged rows) is refused too.
 
 **What a run does with rows.** Nothing is dropped silently:
 
 - A Lookup keeps every row. A row with no match keeps empty cells and is counted.
-- A Join gives one row per match. A left Join keeps an unmatched row; an inner Join counts it. A key
-  the adapter refuses is a rejection on either side.
-- A Filter counts what it leaves out.
+- A Join gives one row per match. A left Join keeps an unmatched row; an inner Join counts it. A
+  right-hand row that meets no left row (a blank key, or a key no left row holds) is counted. A key
+  the adapter refuses is a rejection on either side, named by its side and its own source's row.
+- A Filter counts what it leaves out. Its declared values are read trimmed, as the cells are.
 - A Derive rejects a row its operation refuses, with the cause.
 - A Union requires the same columns in its inputs.
-- A Dedupe's first row stands for its repeats, carries their refs and counts them.
+- A Dedupe's first row stands for its repeats, carries their refs and counts them. A row with an
+  empty key part has no key, as the engine's deduplicate reads it, so it stands alone and is
+  never folded.
 
 Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
-with its refs as a `_refs` column, and Map reads the last table back from what was written. A
-rejection of a staging step is listed in the load report as *staging step <id>: <cause>*. Test and
-the load reject the same rows (`services/ingest/staged_run.py`).
+with its refs as a `_refs` column; this is the only place a row's key is kept. Map reads the last
+table back from what was written. The load's `raw.parquet` holds every source's rows as each
+source gave them. A staging rejection is listed in the load report as *staging step <id> (<side>
+side, <source> row <n>): <cause>*. Test and the load reject the same rows
+(`services/ingest/staged_run.py`). A staged load reports as *rows read* the rows its sources gave.
+It also counts the rows its steps staged and the bytes their Parquet took, for the run's metering.
 
 - **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
@@ -1203,10 +1230,10 @@ the load reject the same rows (`services/ingest/staged_run.py`).
   and never guessed. Every staged row carries `source_refs` — each input row's identity and `load_id`
   — into the element Map writes, so every link still shows where it came from (ADR-140 decision 11).
   As built (Amendment 11), the refs are the element's `provenance.sources`, one `SourceRef` per input
-  row: the source's name, `row <n>`, its `row_key` (the SHA-256 of its declared key columns, else of
-  its whole row) and its `load_id`. A Join's element names both sides. A Lookup's names the list row
-  it took values from, as `reference_list:<name>@v<version>`, with the key value as its `row_key`
-  and no load id. A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link marked
+  row: the source's name, `row <n>` and its `load_id`, which the load's `raw.parquet` resolves on
+  the server. **No row key, raw or hashed, is carried** (rule 7: a key is low-entropy, so a hash of it
+  is reversible); keys stay in the staged Parquet. A Join's element names both sides. A Lookup's
+  names the list row it took values from, as `reference_list:<name>@v<version>` with no load id. A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link marked
   `inferred`, never a merge; its threshold is part of the version; below-threshold rows are kept,
   unmatched and counted; a value Map binds from a matched column is `inferred`, with the match's score,
   until an analyst confirms the link (ADR-006 Amendment 1). Elements still meet existing nodes only
