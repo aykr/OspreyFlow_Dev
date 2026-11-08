@@ -1,10 +1,13 @@
-"""The gateway's database and the models file in a backup set, and the restore that refuses to lose
-model keys silently (`06_DECISIONS.md` ADR-135 Amendment 2 decision 9). Measured on the pinned
-LiteLLM: restarted under another encryption key, every stored engine and credential is dropped with
-only a warning in its log, so a restore onto another deployment must say so before it happens.
+"""The gateway's database and the models file in a backup set, and what a restore says
+(`06_DECISIONS.md` ADR-135 Amendment 2, the owner's ruling of 8 November 2026 on `05_DEPLOYMENT.md`
+§6.1: "A backup carries no secrets … Nothing in a backup may ever be encrypted with a
+deployment-scoped key"). The gateway's tables whose rows hold a key or a sealed value are dumped
+without their rows; every restore brings the engines back and names each key to enter again.
 
 Each case runs the real code path (`backup_postgres_all`, `run_restore`) with Docker answered by a
-stand-in runner; nothing reaches a deployment.
+stand-in runner whose `pg_dump` leaves out a table's rows for `--exclude-table-data`, as `pg_dump`
+does; nothing reaches a deployment. `test_model_gateway_live.py` checks the same flags against the
+real `pg_dump` and the pinned gateway's own tables.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from harness import backup, restore
-from harness.backup import gateway_key_check, schema_versions
+from harness.backup import schema_versions
 
 SALT_HERE = "salt-of-this-deployment-0123456789"
 SALT_THERE = "salt-of-another-deployment-987654"
@@ -30,44 +33,65 @@ def _env(folder: Path, salt: str) -> Path:
     return folder / "compose.yaml"
 
 
-def test_backup_dumps_the_gateway_s_database(
+PLANTED = "sk-PLANTED-backup-key-Q7Z4"
+SEALED = "sealed:" + PLANTED[::-1]  # stands for the gateway's encrypted copy of the key
+
+
+def _pg_dump_honouring_exclusions(tables: dict[str, list[str]]) -> object:
+    def dump(command: list[str]) -> str:
+        excluded = {a.split("=", 1)[1] for a in command if a.startswith("--exclude-table-data=")}
+        out = [f"-- dump of {command[-1]}"]
+        for table, rows in tables.items():
+            out.append(f'CREATE TABLE public."{table}" (v text);')
+            if f'public."{table}"' in excluded:
+                continue
+            out += [f'COPY public."{table}" (v) FROM stdin;', *rows, "\\."]
+        return "\n".join(out) + "\n"
+
+    return dump
+
+
+def test_a_backup_holds_no_key_and_no_sealed_value_of_the_gateway(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     compose = _env(tmp_path / "dep", SALT_HERE)
+    gateway = _pg_dump_honouring_exclusions({
+        "LiteLLM_CredentialsTable": [f"osprey-gemini\t{{\"api_key\": \"{SEALED}\"}}"],
+        "LiteLLM_ProxyModelTable": [f"osprey-gemini-flash\t{SEALED}"],
+        "LiteLLM_Config": [f"general_settings\t{SEALED}"],
+        "LiteLLM_SpendLogs": ["2026-11-08\tgemini/gemini-2.5-flash\t1"],
+    })  # fmt: skip
 
     def run(command: list[str], **_kw: object) -> str:
         if "--roles-only" in command:
             return "CREATE ROLE litellm;\n"
         if "-Atc" in command:
-            return "keycloak\nlitellm\nospreyflow\n"
-        return f"-- dump of {command[-1]}\nCREATE TABLE t (i int);\n"
+            return "litellm\nospreyflow\n"
+        if command[-1] == "litellm":
+            return gateway(command)  # type: ignore[operator]
+        return "-- dump of ospreyflow\nCREATE TABLE t (i int);\n"
 
     monkeypatch.setattr(backup, "_run", run)
     written = backup.backup_postgres_all(compose, tmp_path / "set" / "postgres")
-    names = sorted(p.name for _, p in written)
-    assert "litellm.sql" in names and "keycloak.sql" not in names
+    assert "litellm.sql" in {p.name for _, p in written}
+    everything = b"".join(p.read_bytes() for p in (tmp_path / "set").rglob("*") if p.is_file())
+    assert PLANTED.encode() not in everything and SEALED.encode() not in everything
+    # The schema is kept, and the gateway's other records (its spend log) too.
+    dumped = (tmp_path / "set" / "postgres" / "litellm.sql").read_text()
+    assert 'CREATE TABLE public."LiteLLM_CredentialsTable"' in dumped
+    assert 'COPY public."LiteLLM_SpendLogs"' in dumped
 
 
-def test_the_check_value_tells_encryption_keys_apart_and_never_holds_one(tmp_path: Path) -> None:
-    here = gateway_key_check(_env(tmp_path / "a", SALT_HERE).parent / "deployment.env")
-    again = gateway_key_check(_env(tmp_path / "b", SALT_HERE).parent / "deployment.env")
-    there = gateway_key_check(_env(tmp_path / "c", SALT_THERE).parent / "deployment.env")
-    assert here == again and here != there
-    assert here is not None and SALT_HERE not in here
-
-
-def _set(tmp_path: Path, *, sealed_under: str, keys: list[str]) -> Path:
+def _set(tmp_path: Path, *, keys: list[str]) -> Path:
     directory = tmp_path / "set"
     (directory / "config").mkdir(parents=True)
     (directory / "config" / "models.yaml").write_text(
         "providers: []\ndefaults: {}\nkeys:\n"
         + "".join(f"  {k}: {{set_at: '2026-11-08T00:00:00Z', set_by: a}}\n" for k in keys)
     )
-    check = gateway_key_check(_env(tmp_path / "source", sealed_under).parent / "deployment.env")
     manifest = {
         "format": 1,
         "schema_versions": schema_versions(include_weights=False),
-        "gateway_key_check": check,
         "files": [],
         "empty": [],
         "quiesced": True,
@@ -80,40 +104,26 @@ def _set(tmp_path: Path, *, sealed_under: str, keys: list[str]) -> Path:
     return directory
 
 
-def _dry_run(directory: Path, compose: Path, *, lost_ok: bool = False) -> object:
+def _dry_run(directory: Path, compose: Path) -> restore.DryRun:
     return restore.run_restore(
         directory=directory,
         compose_file=compose,
         database="ospreyflow",
         analytics_container_path="/data/analytics.duckdb",
         acknowledged=False,
-        keys_will_be_lost=lost_ok,
     )
 
 
-def test_a_set_sealed_under_another_key_is_refused_naming_each_key_lost(tmp_path: Path) -> None:
-    directory = _set(tmp_path, sealed_under=SALT_THERE, keys=["gemini", "openai"])
-    compose = _env(tmp_path / "here", SALT_HERE)
-    with pytest.raises(restore.RestoreRefused) as refused:
-        _dry_run(directory, compose)
-    assert "the keys of gemini, openai would be lost" in refused.value.reason
-    assert "--model-keys-will-be-lost" in refused.value.remedy
-    assert SALT_HERE not in str(refused.value) and SALT_THERE not in str(refused.value)
+def test_a_restore_names_each_key_to_enter_again(tmp_path: Path) -> None:
+    plan = _dry_run(_set(tmp_path, keys=["gemini", "openai"]), _env(tmp_path / "here", SALT_HERE))
+    assert plan.keys_to_enter == ("gemini", "openai")
+    said = plan.render()
+    assert "enter the key of gemini, openai again" in said and "Admin › Models" in said
 
 
-def test_the_override_restores_knowing_the_keys_are_lost(tmp_path: Path) -> None:
-    directory = _set(tmp_path, sealed_under=SALT_THERE, keys=["gemini"])
-    _dry_run(directory, _env(tmp_path / "here", SALT_HERE), lost_ok=True)
-
-
-def test_a_set_restored_where_it_was_taken_is_not_refused(tmp_path: Path) -> None:
-    directory = _set(tmp_path, sealed_under=SALT_HERE, keys=["gemini"])
-    _dry_run(directory, _env(tmp_path / "here", SALT_HERE))
-
-
-def test_a_set_with_no_key_set_loses_nothing_and_is_not_refused(tmp_path: Path) -> None:
-    directory = _set(tmp_path, sealed_under=SALT_THERE, keys=[])
-    _dry_run(directory, _env(tmp_path / "here", SALT_HERE))
+def test_a_restore_with_no_key_set_says_nothing_of_keys(tmp_path: Path) -> None:
+    plan = _dry_run(_set(tmp_path, keys=[]), _env(tmp_path / "here", SALT_HERE))
+    assert plan.keys_to_enter == () and "model keys" not in plan.render()
 
 
 def test_a_stopped_conduit_s_models_file_is_still_taken(

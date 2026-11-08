@@ -38,3 +38,18 @@ an unknown id → refused in fixed words (HTTP 404); wrong gateway token → `ga
 | --- | --- | --- |
 | `test_model_admin_routes.py::test_no_route_echoes_a_key_shaped_value_in_a_refusal` | the add route takes `body: EngineInput` (FastAPI's 422 echoes a key-shaped contract reference) | 1 failed |
 | `test_model_admin_routes.py::test_a_gateway_that_refuses_leaves_the_models_file_and_routing_as_they_were` | `edit_engine` saves the file before the gateway answers | 1 failed |
+
+## After the independent review (8 November 2026)
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_model_admin_routes.py::test_changing_an_engine_s_address_removes_its_key_and_sends_it_nowhere_new` | the address check in `edit_engine` never true (the key kept across an address change) | 1 failed |
+| `…::test_a_rotation_the_gateway_refuses_is_recorded_as_lost_and_not_offered` | the refused rotation not recorded lost | 1 failed |
+| `…::test_a_refusal_names_the_field_never_the_value_in_the_answer_or_the_audit` | no redaction in `_validated` and the route's 422 | 1 failed |
+| `…::test_two_changes_at_once_from_two_processes_both_land` | `_change` without the lock and the fresh read | passed at first (the stand-in never yielded, so the changes never overlapped); made to overlap with a slow gateway read, then 1 failed |
+| `…::test_a_change_that_fails_part_way_puts_the_gateway_back_and_saves_nothing` | `_change` without `_put_back` | 1 failed |
+| `test_gateway_backup.py::test_a_backup_holds_no_key_and_no_sealed_value_of_the_gateway` | `_without_secrets` returns no flag | 1 failed |
+
+Live, under the platform lease on stack b (released): `test_model_gateway_live.py` — the key round trip against the
+pinned gateway (1 passed, 132 s) and the real `pg_dump` with the backup's flags (1 passed); the stand-in provider
+`fakeprov.py` on a Docker network of the lane's own, `OSPREY_LIVE_GATEWAY_URL=http://127.0.0.1:54400`.

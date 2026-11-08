@@ -105,6 +105,12 @@ class StandInGateway:
     credential_reads: int = 0
     #: Every PATCH asked of it: unmeasured on the real gateway, so the Conduit's client sends none.
     patches: list[str] = field(default_factory=list)
+    #: When set, `POST /credentials` is refused with this status, as the real gateway refuses a
+    #: write its database does not take (measured: 500 on `POST /model/new`).
+    refuse_credentials: int | None = None
+    #: Every call the gateway made to a provider: the address it went to (None for the provider's
+    #: own) and the key it carried, so a test can say where a key was sent.
+    sent: list[tuple[str | None, str | None]] = field(default_factory=list)
     _db: dict[str, _Stored] = field(default_factory=dict)
     _creds: dict[str, tuple[str, str]] = field(default_factory=dict)
     _cooled_until: dict[str, float] = field(default_factory=dict)
@@ -204,6 +210,12 @@ class StandInGateway:
             return httpx.Response(200, json={"data": self._info()})
         if method == "POST" and path == "/chat/completions":
             return self._chat(body)
+        if path == "/credentials" and method == "POST" and self.refuse_credentials:
+            return _error(
+                self.refuse_credentials,
+                "{'error': 'Failed to create credential. Check your server logs.'}",
+                "internal_server_error",
+            )
         if path == "/credentials" and method == "POST":
             name = str(body.get("credential_name", ""))
             key = str(dict(body.get("credential_values") or {}).get("api_key", ""))
@@ -347,6 +359,7 @@ class StandInGateway:
         if "litellm_credential_name" in params:
             key = self.credential(params["litellm_credential_name"])
         group = f". Received Model Group={model_name}\nAvailable Model Group Fallbacks=None"
+        self.sent.append((params.get("api_base"), key))
         if provider is None:
             return _error(
                 500,

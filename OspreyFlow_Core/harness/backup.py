@@ -308,6 +308,27 @@ def databases_to_dump(listed: list[str]) -> list[str]:
     return [name for name in listed if name and name != KEYCLOAK_DATABASE]
 
 
+#: The gateway's own database (ADR-135 Amendment 2 decision 3).
+GATEWAY_DATABASE = "litellm"
+#: Its tables whose rows hold a key or a value sealed under the deployment's encryption key:
+#: the credentials, the model entries (every parameter sealed) and its stored settings.
+#: `05_DEPLOYMENT.md` §6.1: "A backup carries no secrets … Nothing in a backup may ever be
+#: encrypted with a deployment-scoped key." Their schema is kept, their rows are not, so every
+#: restore brings the engines back from the models file and asks for each key again (the owner's
+#: ruling, 8 November 2026).
+GATEWAY_SEALED_TABLES = (
+    '"LiteLLM_CredentialsTable"',
+    '"LiteLLM_ProxyModelTable"',
+    '"LiteLLM_Config"',
+)
+
+
+def _without_secrets(database: str) -> list[str]:
+    if database != GATEWAY_DATABASE:
+        return []
+    return [f"--exclude-table-data=public.{table}" for table in GATEWAY_SEALED_TABLES]
+
+
 def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Path]]:
     """Every database on the deployment's Postgres, and the roles they grant to (ADR-114
     Amendment 3). One dump was not the deployment: the dashboards keep their own `superset`
@@ -344,7 +365,16 @@ def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Pat
     )
     for database in databases_to_dump(listed.split()):
         dump = _run(
-            on_postgres + ["pg_dump", "--clean", "--if-exists", "-U", user, database],
+            on_postgres
+            + [
+                "pg_dump",
+                "--clean",
+                "--if-exists",
+                *_without_secrets(database),
+                "-U",
+                user,
+                database,
+            ],
             item="postgres",
         )
         target = folder / ("dump.sql" if database == main_database else f"{database}.sql")
@@ -690,25 +720,7 @@ def _set_aside(target: Path) -> str:
     )
 
 
-#: ADR-135 Amendment 2 decision 9: the fixed text whose HMAC under the gateway's encryption key the
-#: set records, so a restore can tell whether the keys in `litellm.sql` can be read here without
-#: either the set or this check ever holding the encryption key itself (32 random bytes, so the
-#: value reveals nothing usable about it).
-GATEWAY_KEY_CHECK_TEXT = b"ospreyflow-gateway-key-check"
 MODELS_FILE_IN_CONDUIT = "/run/osprey/model-settings/models.yaml"
-
-
-def gateway_key_check(env_path: Path) -> str | None:
-    """The check value for the deployment's gateway encryption key, or None where it has none."""
-    import hashlib
-    import hmac
-
-    from harness.render import GATEWAY_SALT
-
-    salt = _env_value_or(env_path, GATEWAY_SALT, "") if env_path.is_file() else ""
-    if not salt:
-        return None
-    return hmac.new(salt.encode(), GATEWAY_KEY_CHECK_TEXT, hashlib.sha256).hexdigest()
 
 
 def backup_models_file(compose_file: Path, destination: Path) -> Path | None:
@@ -799,9 +811,6 @@ def _take_set(
         "quiesced": quiesced,
         "schema_versions": schema_versions(),
         "audit_disposition": AUDIT_DISPOSITION,
-        # ADR-135 Amendment 2 decision 9: which encryption key `litellm.sql`'s keys are sealed
-        # under, as a check value, never the key.
-        "gateway_key_check": gateway_key_check(compose_file.parent / "deployment.env"),
         "files": [entry.__dict__ for entry in sorted(entries, key=lambda e: e.path)],
         # Items the deployment did not have yet, so the set holds nothing for them: a restore
         # leaves them as the fresh deployment has them, and says so.

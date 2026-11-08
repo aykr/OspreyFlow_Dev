@@ -190,7 +190,7 @@ def move_model_keys_into_gateway(compose_file: Path) -> str:
         return "no model key to move"
     command = ["exec", "-T", "api", "python", "-m", "services.api.model_keys", "move"]
     try:
-        _run(
+        said = _run(
             _compose(compose_file) + [*command, "--by", "apply"],
             stage="model keys",
             input="".join(f"{name}={key}\n" for name, key in keys.items()),
@@ -212,7 +212,8 @@ def move_model_keys_into_gateway(compose_file: Path) -> str:
         and not line.startswith(f"{KEYS_IN_GATEWAY}=")
     ]
     write_private(env_path, "\n".join([*kept, f"{KEYS_IN_GATEWAY}=yes"]) + "\n")
-    return f"moved into the gateway: {', '.join(sorted(keys))}"
+    # The Conduit's own words: what it moved, and any key dropped for an engine no longer enabled.
+    return " ".join(said.split()) or f"moved into the gateway: {', '.join(sorted(keys))}"
 
 
 def provider_secret_lines(

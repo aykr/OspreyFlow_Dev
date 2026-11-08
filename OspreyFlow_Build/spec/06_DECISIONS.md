@@ -28882,6 +28882,12 @@ provider was called):
      whom)", "no key" or "key lost: enter it again";
    - *Test the connection* for each engine, its answer in words (5);
    - the engines' history (7).
+   **Changing an engine's address removes its key** (the owner's ruling, 8 November 2026, on the
+   independent review): the address (`api_base`, the one setting that decides where the key is
+   sent) is the place a key was entered for, so an edit that changes it removes the engine's
+   credential, records "no key", audits the removal, and asks for the key again in words. A key is
+   never sent to an address it was not entered for (`test_changing_an_engine_s_address_removes_its_
+   key_and_sends_it_nowhere_new`, red without the removal).
    Adding an engine on a deployment whose `osprey.yaml` declares `local_only: true` is refused in
    words: that declaration, and `sendable_handling_codes`, stay the installer's, in `osprey.yaml`
    (`spec/04` §4: egress is default-denied). *Admin › System*'s engine table becomes the summary,
@@ -28983,20 +28989,18 @@ provider was called):
    is withdrawn). They work with the Glass unreachable or sign-in broken, which is what they are kept
    for.
 
-9. **Backup and restore.** `ospreyflow backup` already dumps every database on the deployment's
-   Postgres but Keycloak's, so the `litellm` database is in the set (`litellm.sql`), keys encrypted;
-   the models file is in the configuration. The encryption key is not: the set never holds a secret
-   (`05_DEPLOYMENT.md` §6.1). **Restored onto the deployment it came from** (its `deployment.env`
-   kept), every key works. **Restored onto another deployment**, the gateway cannot decrypt them and
-   drops every stored engine (measured). **So `ospreyflow restore` refuses, in words and changing
-   nothing,** a set whose gateway database was written under another encryption key, unless it is
-   given `--model-keys-will-be-lost`. It knows without holding the key: the set records a check value,
-   HMAC-SHA256 of the fixed text `ospreyflow-gateway-key-check` under the encryption key (the key is 32
-   random bytes, so the value reveals nothing usable), and restore computes the same under the
-   deployment's own. Restored with the flag, the reconcile finds each engine whose record says "key
-   set" missing from the gateway, shows "key lost: enter it again", offers it to no analyst, and
-   `ospreyflow doctor` names each. The administration guide says so beside `restore`.
-
+9. **Backup and restore** (corrected by the owner's ruling of 8 November 2026, on the
+   independent review: `05_DEPLOYMENT.md` §6.1, a standing constraint, says "A backup carries no
+   secrets … Nothing in a backup may ever be encrypted with a deployment-scoped key"). `ospreyflow
+   backup` dumps the gateway's `litellm` database **without the rows of the tables that hold a key
+   or a value sealed under the deployment's encryption key** (`LiteLLM_CredentialsTable`,
+   `LiteLLM_ProxyModelTable`, `LiteLLM_Config`: `pg_dump --exclude-table-data`, the schema kept);
+   the models file is in the set (engines, defaults and each key's record, never a key). **Every
+   restore**, onto the deployment the set came from or another, brings the engines, their models
+   and each job's default back, and its dry run names each engine whose key must be entered again
+   (in *Models* or with `ospreyflow models key`); the first start marks those keys "lost". The
+   restore refusal first built here, `--model-keys-will-be-lost` and the set's check value of the
+   encryption key, are withdrawn: no set ever holds a key to lose.
 10. **Offline.** The gateway is started with `LITELLM_LOCAL_MODEL_COST_MAP=True`, so it no longer
     reaches GitHub at start (ADR-114 Amendment 7: nothing reaches outside unless a configured feature
     needs it).
@@ -29063,6 +29067,25 @@ above where building them showed them wrong or unclear (rule 11):
   *Models* is the orchestrator's (Admin's section list), committed at the merge.
 - The key field's `autocomplete` is `off`, as decision 4 says.
 
+**After the independent review (8 November 2026).**
+- **A rotation the gateway refuses is recorded truthfully.** A key is replaced by removing the old
+  credential and making the new one (only measured calls); if the gateway then refuses the new one
+  (as it can, a 500 on a write its database does not take), the engine is recorded "key lost",
+  offered to no analyst, and the refusal says the engine has no key now.
+- **A refusal names the field, never the value.** Validators quote what they refuse
+  (`schemas.deployment`'s do); every value a request carried that is not shaped like a name is
+  replaced in the words sent back and in the audit row.
+- **One change at a time:** each change holds an advisory lock on the models file's folder (and a
+  lock within the process), reads the file afresh under it, changes the gateway, then saves; a
+  failure part-way, or a file that cannot be written, puts the gateway back and is audited.
+- `ospreyflow models key` and `apply` move keys only for enabled engines; a key for an engine
+  removed in *Models* is dropped and named. `model_keys status` only reads.
+- A local-only deployment keeps no hosted entry in the gateway and asks no engine anything; removing
+  an engine is always allowed.
+- **Left:** choosing the local engine's model for each job in *Models* (the pinned lists, decision
+  1): changing a local model downloads its weights and re-renders the model server, which stays
+  `ospreyflow apply`'s; *Models* shows them read-only.
+
 **Cost.** Every deployment gains the gateway's database (86 tables, about 12 MB empty), its
 migrations at each start, and an encryption key that must never change. The gateway's own log can
 carry a fragment of a refused key, as a provider words it (measured); that log is the operator's,
@@ -29091,10 +29114,11 @@ for the first install, now landing in the gateway by the same path once it start
   echoes (`test_connection_check.py`).
 - **The models file** replaces `osprey.yaml`'s providers and defaults whole; no engine is offered
   beside `local_only: true`; it is `600` after every write; a lost key is lost for every process.
-- **Restore onto another deployment** is refused in words without `--model-keys-will-be-lost`, and
-  with it the engines show "key lost" (the stand-in restarted with another encryption key);
-  `ospreyflow backup` writes `litellm.sql` and the check value; the encryption key is blanked in every
-  rendered service but the gateway; `doctor` reports a lost key.
+- **A backup holds no key and no sealed value** (a planted key searched for in every byte of the
+  set, red with the exclusion removed: `test_gateway_backup.py`; and the real `pg_dump` of the
+  pinned gateway's tables: `test_model_gateway_live.py`); a restore names each key to enter again;
+  the encryption key is blanked in every rendered service but the gateway; `doctor` reports a lost
+  key.
 - **Keyboard (rule 13):** every *Models* action reached and activated by keyboard
   (`apps/workspace/keyboard/admin-models.spec.ts`); **axe** in the dark, light and GOV.UK themes.
 - **The egress warning** (`spec/05` §2.1) reads `providers` (`tests/harness/test_egress_consequence.py`,

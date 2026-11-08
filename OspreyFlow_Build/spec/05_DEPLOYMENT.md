@@ -1098,6 +1098,13 @@ anything at rest with a key of its own. A connector credential that must survive
 therefore held by reference — an environment variable name or a secret-manager path, which is what
 §2.5 already requires of the harness — and never as ciphertext in a store.
 
+**The model gateway's keys** (ADR-135 Amendment 2 decision 9, the owner's ruling of 8 November
+2026) are held by this constraint too: the gateway seals each model key under the deployment's own
+encryption key, so `ospreyflow backup` leaves out the rows of its tables that hold a key or a sealed
+value (the schema kept), and every restore names the engines whose key must be entered again (in
+*Admin › Models* or with `ospreyflow models key`); their engines, models and defaults come back
+from the models file.
+
 **For `cluster`, the answer is different and not yet built.** Holding secrets outside the
 deployment, in a secret manager the restored deployment is pointed at, is recorded as the cluster
 profile's approach. It does not apply to `local-lite` or `small`, where standing up a secret

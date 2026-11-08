@@ -1,0 +1,8 @@
+/* Admin › Models (ADR-135 Amendment 2): its forms and action rows, from the design tokens only. */
+.admin-models-form {
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  max-width: 560px; padding: var(--sp-12); border: 1px solid var(--border-subtle);
+}
+.admin-models-row { display: flex; flex-direction: column; gap: var(--sp-4); }
+.admin-models-check { display: flex; align-items: center; gap: var(--sp-6); }
+.admin-models-actions { display: flex; flex-wrap: wrap; gap: var(--sp-6); }

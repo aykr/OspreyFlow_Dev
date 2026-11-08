@@ -13338,14 +13338,22 @@ async def _model_admin_body[Body: BaseModel](request: Request, shape: type[Body]
     """A Models route's body, read here rather than by FastAPI, whose 422 carries the input back:
     a field that refuses a value shaped like a key (the contract reference) would echo it. The
     refusal names each field and why, never what was sent."""
+    raw = await request.body()
     try:
-        return shape.model_validate_json(await request.body())
+        return shape.model_validate_json(raw)
     except ValidationError as invalid:
+        try:
+            sent = model_admin_module.sent_values(json.loads(raw))
+        except ValueError:
+            sent = {raw.decode("utf-8", "replace")}
         words = "; ".join(
             f"{'.'.join(str(p) for p in e['loc'])}: "
             + str(e.get("msg", "")).removeprefix("Value error, ")
             for e in invalid.errors(include_input=False, include_context=False, include_url=False)
         )
+        # A validator's message may quote what it refused (`schemas.deployment`'s do): never sent
+        # back, nor the request's other values, unless shaped like a name.
+        words = model_admin_module.redacted(words, sent)
         raise HTTPException(
             status_code=422, detail={"error": "model_admin_refused", "detail": words}
         ) from None

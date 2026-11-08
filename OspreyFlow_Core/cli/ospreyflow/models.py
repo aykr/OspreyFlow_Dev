@@ -187,8 +187,11 @@ def _provider(
         )
     enabled = ", ".join(str(p.get("name")) for p in _providers(models)) or "none"
     raise CommandRefused(
-        f"{name} is not a provider this deployment enables (enabled: {enabled}). Enable it under "
-        "models.providers in osprey.yaml and run ospreyflow apply; the local engine has no key."
+        f"{name} is not a provider this deployment enables (enabled: {enabled}). Add it in "
+        "Admin › Models. Until the first change is made there, adding it under "
+        "models.providers in osprey.yaml and running ospreyflow apply works too; after it, "
+        "osprey.yaml's providers are no longer read (ADR-135 Amendment 2). The local engine has "
+        "no key."
     )
 
 

@@ -12,6 +12,7 @@ import type {
 
 type ModelProviderConfig = AdminEngine["provider"];
 import { Button, Checkbox, Input, Select } from "../../design/primitives";
+import "./Models.css";
 import {
   addEngine,
   editEngine,
@@ -357,7 +358,16 @@ export function Models({ api }: { api: ModelsApi }) {
                     initial={draftOf(engine.provider)}
                     editing
                     onCancel={() => setOpen(null)}
-                    onSave={(draft) => act(editEngine(api, providerOf(draft)), `${draft.name} is saved.`)}
+                    onSave={(draft) => {
+                      const hadKey = engine.key_state === "set";
+                      const moved = (engine.provider.api_base ?? "") !== draft.api_base.trim();
+                      act(
+                        editEngine(api, providerOf(draft)),
+                        hadKey && moved
+                          ? `${draft.name} is saved. Its address changed, so its key was removed: a key is never sent to an address it was not entered for. Enter the key again.`
+                          : `${draft.name} is saved.`,
+                      );
+                    }}
                   />
                 ) : null;
               })()}

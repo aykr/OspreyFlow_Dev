@@ -41,7 +41,9 @@ from .model_admin import (
 KEY_VARIABLE = "OSPREY_MODEL_KEY_GIVEN"
 
 
-async def _admin() -> tuple[ModelAdmin, httpx.AsyncClient, PostgresModelAdminAudit]:
+async def _admin(
+    *, reconcile: bool = True
+) -> tuple[ModelAdmin, httpx.AsyncClient, PostgresModelAdminAudit]:
     gateway = LiteLLMConfig.from_env()
     http = httpx.AsyncClient(
         base_url=gateway.base_url, headers={"Authorization": f"Bearer {gateway.api_key}"}
@@ -53,26 +55,30 @@ async def _admin() -> tuple[ModelAdmin, httpx.AsyncClient, PostgresModelAdminAud
         gateway=GatewayAdmin(http),
         audit=audit,
     )
-    await admin.start()
+    if reconcile:  # `status` only reads: it changes neither the gateway nor the file
+        await admin.start()
     return admin, http, audit
 
 
-async def move_keys(admin: ModelAdmin, lines: Sequence[str], by: str) -> list[str]:
-    """Each `NAME=KEY` line's key into the gateway (decision 3, existing deployments): the engines
-    are `osprey.yaml`'s; the models file is written with them on the first key. Returns the names
-    moved. A provider not enabled is refused in words, before anything is moved."""
+async def move_keys(
+    admin: ModelAdmin, lines: Sequence[str], by: str
+) -> tuple[list[str], list[str]]:
+    """Each `NAME=KEY` line's key into the gateway (decision 3, existing deployments and every
+    install): the engines are the deployment's (the models file's, else `osprey.yaml`'s). Returns
+    the names moved and those **skipped**: an engine no longer enabled (removed in *Admin ›
+    Models*) has no use for a key, so its line is dropped and named rather than failing every
+    `apply` that follows."""
     pairs: dict[str, SecretStr] = {}
     for line in lines:
         name, sep, value = line.strip().partition("=")
         if sep and value:
             pairs[name.strip().lower()] = SecretStr(value.strip())
     enabled = {p.name for p in admin.settings.providers}
-    unknown = sorted(set(pairs) - enabled)
-    if unknown:
-        raise ModelAdminRefused(f"not an enabled engine: {', '.join(unknown)}; nothing was moved")
-    for name, key in pairs.items():
-        await admin.set_key(by, name, key, action="key_moved")
-    return sorted(pairs)
+    skipped = sorted(set(pairs) - enabled)
+    moved = sorted(set(pairs) & enabled)
+    for name in moved:
+        await admin.set_key(by, name, pairs[name], action="key_moved")
+    return moved, skipped
 
 
 async def _run(argv: Sequence[str]) -> int:
@@ -81,7 +87,7 @@ async def _run(argv: Sequence[str]) -> int:
     parser.add_argument("name", nargs="?")
     parser.add_argument("--by", default="cli")
     args = parser.parse_args(argv)
-    admin, http, audit = await _admin()
+    admin, http, audit = await _admin(reconcile=args.verb != "status")
     by = args.by if args.by.startswith("cli:") else f"cli:{args.by}"
     try:
         if args.verb == "status":
@@ -91,8 +97,10 @@ async def _run(argv: Sequence[str]) -> int:
             for role, engine_name in sorted(view.defaults.items()):
                 print(f"default:{role} {engine_name}")
         elif args.verb == "move":
-            moved = await move_keys(admin, sys.stdin.read().splitlines(), by)
+            moved, skipped = await move_keys(admin, sys.stdin.read().splitlines(), by)
             print(f"moved into the gateway: {', '.join(moved) or 'none'}")
+            if skipped:
+                print(f"dropped, no longer enabled engines: {', '.join(skipped)}")
         elif args.name is None:
             print("name the engine", file=sys.stderr)
             return 1
