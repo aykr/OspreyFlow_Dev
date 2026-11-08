@@ -211,6 +211,11 @@ New ones are added at the bottom as they happen.
     The restore refusal and its override flag go. The cost, re-entering keys after any restore, is the one
     §6.1 already accepts for every other secret.
 
+46. **A live-only regression on main since rules' L2.8c (`befcf56`):** 14 live pack tests fail, because their
+    fixture passes no alert store and Amendment 11 now refuses one without the journal. Neither L2.8c's
+    offline make test nor its leased run included those files. Fixed (tests only) on lane/rules, landing
+    with L2.8d. Lesson for every lane's leased run: include each live file the change can reach.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
