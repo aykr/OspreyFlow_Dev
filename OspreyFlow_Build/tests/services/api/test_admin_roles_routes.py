@@ -578,7 +578,7 @@ def _level(world: SimpleNamespace, grantee: str, level: str, *, configured: bool
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
         custom_roles=world.roles, principal_names=_People(configured), identity_admin=_Dashboards())))  # fmt: skip
     try:
-        asyncio.run(_may_hold_a_level(request, grantee, AccessLevel(level)))  # type: ignore[arg-type]
+        asyncio.run(_may_hold_a_level(request, grantee, AccessLevel(level), _People(configured)))  # type: ignore[arg-type]
     except HTTPException as refused:
         return refused.detail
     return None

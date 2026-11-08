@@ -624,6 +624,8 @@ NON_JSON_ROUTES: dict[str, str] = {
     "DELETE /v1/investigations/{investigation_id}/views/{view_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}": "204, no body",
     "DELETE /v1/admin/dashboards/{client_id}": "204, no body",
+    # L2.5 (ADR-145 Amendment 5 point 9): Name an Author.
+    "PUT /v1/admin/cases/{case_id}/authors/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/trends/{trend_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/packs/{pack_id}/items/{item_id}": "204, no body",
     "GET /v1/investigations/{investigation_id}/documents/{document_id}/file": "a file's bytes",

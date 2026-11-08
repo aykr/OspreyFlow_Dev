@@ -3474,7 +3474,9 @@ def _grantee(account_id: str) -> str:
     return name
 
 
-async def _may_hold_a_level(request: Request, grantee: str, level: AccessLevel) -> None:
+async def _may_hold_a_level(
+    request: Request, grantee: str, level: AccessLevel, names: PrincipalNameDirectory
+) -> None:
     """Who may hold a level in a case (ADR-112 Amendment 5 decisions 3 and 5, reconciled with
     ADR-111 decision 7 by ADR-145 Amendment 5 point 7): a team that exists (`team:<role id>`); an
     enabled person; a dashboard identity as Viewer and no higher. Any other account the directory
@@ -3493,7 +3495,7 @@ async def _may_hold_a_level(request: Request, grantee: str, level: AccessLevel) 
                 },
             )
         return
-    people = await get_principal_names(request).people([grantee])
+    people = await names.people([grantee])
     if people is None or grantee in people:
         return
     dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
@@ -3520,11 +3522,12 @@ async def set_investigation_grant(
     account_id: str,
     body: GrantInput,
     principal: PrincipalDep,
+    principal_names: PrincipalNamesDep,
     investigations: InvestigationsDep,
     audit: AuditDep,
 ) -> None:
     grantee = _grantee(account_id)
-    await _may_hold_a_level(request, grantee, body.level)
+    await _may_hold_a_level(request, grantee, body.level, principal_names)
     await investigations.set_grant(investigation.id, grantee, body.level, by=principal)
     await audit.record(
         principal=principal,
@@ -11936,6 +11939,7 @@ async def name_an_author_route(
     account_id: str,
     request: Request,
     principal: PrincipalDep,
+    principal_names: PrincipalNamesDep,
     investigations: InvestigationsDep,
     identity_admin: IdentityAdminDep,
     custom_roles: CustomRolesDep,
@@ -11976,7 +11980,7 @@ async def name_an_author_route(
             },
         )
     grantee = _grantee(account_id)
-    await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR)
+    await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR, principal_names)
     await investigations.set_grant(case.id, grantee, AccessLevel.AUTHOR, by=principal)
     await audit.record(
         principal=principal,
