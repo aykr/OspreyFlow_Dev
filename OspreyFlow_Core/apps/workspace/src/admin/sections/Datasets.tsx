@@ -312,9 +312,8 @@ function Authors({
         <fieldset aria-label={`Change owner of ${dataset.name}`} style={{ display: "grid", gap: "var(--sp-6)", margin: 0 }}>
           <legend>{`Who answers for ${dataset.name}?`}</legend>
           <label style={{ display: "grid", gap: "var(--sp-4)" }}>
-            <span>People: their account ids, separated by commas</span>
+            <span>{`New owners of ${dataset.name}: people's account ids, separated by commas`}</span>
             <Input
-              aria-label={`New owners of ${dataset.name}`}
               value={people}
               onChange={(e) => setPeople(e.target.value)}
             />

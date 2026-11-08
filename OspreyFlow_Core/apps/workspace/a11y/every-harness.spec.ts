@@ -103,6 +103,12 @@ const EXTRA_STATES: Record<string, string[]> = {
   "admin-harness.html": [
     "open=connections&rights=administer_system",
     "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Audit%20(coming)",
+    // L2.4 part 2: Datasets' details (policy with its warning, Authors, linked cases), Change
+    // owner… open, a removed case's dry run shown, and System's Dataset owners may be.
+    "rights=administer_system&serve=datasets&show=details",
+    "rights=administer_system&serve=datasets&show=owner",
+    "rights=administer_system&serve=datasets&show=dry-run",
+    "rights=administer_system&serve=datasets&open=System",
   ],
 };
 
