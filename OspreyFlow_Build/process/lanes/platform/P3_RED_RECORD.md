@@ -167,3 +167,12 @@ area was a single tile, so "one pause fewer than the tiles" was zero; the area w
 then passed with the pause. **Measured:** no record of httpcore's own loggers carries a URL past its host on
 a real fetch (their connection record names host and port), so a real fetch cannot show their filter red;
 a record made as httpx makes its own does.
+
+**A rule 14 slip, contained (23:49 UTC).** Under a lease on stack b the run exported stack a's ports from
+habit while the admin lane held stack a. The port guard refused it at start-up ("Nothing was collected and
+no connection was made", repeated with `--collect-only` to confirm), so nothing reached admin's stack. The
+ports are now taken from the acquire's own export line. **Live after the review round:** on stack b
+(23:52–23:53) and on stack c (23:53:36–23:54:49) every case that writes to an object store failed
+`INTERNAL_FAILURE` on `UploadPart`: Docker's disk was full (310 MB free of 197 GB). Stack c's Postgres also
+held `LinkTypeProposal` rows with a status `main`'s schema does not have (another lane's). Neither is the
+branch's; the run waits for space. Before the disk filled, the same live files passed whole on stack a.
