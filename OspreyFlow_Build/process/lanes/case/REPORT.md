@@ -1,4 +1,4 @@
-# Case lane · L3.1 · report (7 November 2026, after the final review, the branch ruling, the rule-14 breach and the leased re-run)
+# Case lane · L3.1 · report (8 November 2026, after the final review's fix round)
 
 **Phase 5's exit moved to L3.1b, by the owner's ruling.** The target-model half (`TargetModel`, reference lists, ADR-126 derived, the domain-model node) is L3.1b's. Writing into a composite is a later step of its own. Below is what L3.1 meets.
 
@@ -31,6 +31,32 @@
      - every write still needs the route's own level and right and passes the refusal and the last word.
    - Pinned by `test_a_viewer_is_answered_403_not_told_the_case_reads_a_composite`. It is red on 19bffba's own `app.py` (409 naming "both data") and again with the old viewer dependency put back.
 6. **Conflicts** (ADR-025 A1), Q2 and Q3 as ruled, egress (Postgres too), the candidate leak, the resolution run's split, the worker's bindings: met, each with a planted-red companion.
+
+## The final review's fix round (7–8 November)
+
+The orchestrator's final review of 0cd76bb found two blockers and three must-fixes. Each fix is red first:
+- **Blocker 1, rule 3: a case's layer leaked into the source through monitors.** Outside a composite case, an alert named no dataset, so its node and `ALERTED_ON` were stamped into the case's source. The node's words begin with the subject's name. So a subject drawn or marked in case A's layer put its name, and one more `Alert` in the counts, before case B on the same source.
+  - Now an alert any of whose referents or cited links lives in the case's layer goes into that layer (ADR-143 Amendment 1 item 7).
+  - `test_alerts_and_the_layer.py` drives a scheduled rule, a legacy rule's re-screening and a deployment-wide rule through their real entries, and reads each back as case B. Each is red with the old rule back.
+  - In a branch, an alert resting on the original's layer has its node withheld and its row raised (my call within the ruling: there it would be a leak or a refused write).
+- **Blocker 2: the migration stopped at a branch's link.** It called `ensure_layer`, which refuses a branch, so the index was never built and every re-run stopped at the same case. The dry run read no links.
+  - Now such a branch is named and counted and given none, and the snapshot reads `case_layer_reads`.
+  - Red with the links unread, in memory and at `_main` on Postgres.
+- **3a:** a legacy branch naming several datasets got its layer inside `compose_for_case`, uncounted, and the dry run said one write more than the real run (the rehearsal's "2 layers made, 3 writes" left out `legacy-both`'s).
+  - Now each layer is made before the case's dataset is set, so it is counted and named, and the dry run's writes are the real run's.
+  - Red on 0cd76bb's script: 5 dry writes to 4 real.
+- **3b:** a branch of an original with no layer got no link, and later a layer of its own at its first mark. Now the original's layer is made at branch time and the branch is linked to it, in both stores. Red on 0cd76bb's store.
+- **7 (the orchestrator's call, listed for the owner):** only a reader holding a level on the original reads its layer through a branch (`scope_to_case(..., holds_a_level=...)`, passed by every request, both schedule executors and the stream). Every reader of the branch is refused a write into it. Red with the link applied to everyone.
+- **4, 8, 9, 11, 12:**
+  - ADR-099 Amendment 15 item 3 is rewritten to the editor-level order.
+  - `dataset_scope`'s docstring is fixed.
+  - The live-set count is corrected (11 + 1 + 3 = 15).
+  - A red companion now shows a correction of the layer going through with the last word's check alone removed.
+  - The two stale reservation titles were sent to the orchestrator, who flips the rows.
+- **Carried:** 5 to L3.2 (a branch's unnamed writes reaching the original through the source, with its test there); 6 to L2.10 (a branch of a composite case: every monitor alert raises `BranchLayerError`, and the KYC sweep stops whole), passed to glass.
+- **Leased run (item 10).** Lease `case`, taken 00:03:36Z (8 November) and released 00:11:35Z, at 1a64bf3 (rebased on main 6311d78), with a throwaway ClickHouse on 18123, removed after. Before it started I checked `pgrep` and `lsof`, and the pytest's own environment (OSPREY_LANE=case; 2491, 55433, 6379, 18123). The orchestrator's `make ci` pytests (pids 48474 and 48475, closed ports, no lane) had already exited.
+  - It covered 95 files: `conformance/graph_port/test_analyst_layer.py` (the brief's "unchanged under case B" exit); every `services/api` file sorting before `test_investigation_levels.py`; the seven test files the fixes touch, the two migration ones included; and `test_statelessness_clickhouse.py`.
+  - Run 00:03:54–00:11:19Z, `-rfE`: **1,374 passed, 0 failed, 0 errors**, so there was nothing to run on main.
 
 ## Live figures (every one with its lease)
 
