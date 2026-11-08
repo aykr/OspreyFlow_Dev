@@ -89,7 +89,7 @@ LIVE_PLANTS = {
         ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
          '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'
          '        props["occurrences"] = int(props.get("occurrences") or 1) + 1\n'),
-    ], [CONF, "-k", "round_trips_exactly"]),
+    ], [CONF, "-k", "round_trips_exactly or merged_link_back_exactly"]),
     "L3": ("nothing captured, live: the load keeps no prior state", PUB, [
         ("                merged = _own_key_merges(report, own_links.own, own_links.priors)\n",
          "                merged = []\n"),

@@ -6549,24 +6549,34 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
     factory: GraphAdapterFactory,
 ) -> None:
     """ADR-110 Amendment 16: two types may hold one id (`stored_link_states` reads the worst of
-    them). The restore writes the type its state names, alone: the other is left as it is."""
+    them). The restore writes the type its state names, alone: the other type's link is exactly as
+    it was before the restore. (Before it, `upsert_edges`' merge writes by id alone and so rewrites
+    both; that is the merge's, recorded, and not what this case tests.)"""
+
+    def other_type(edges: list[Any]) -> list[Any]:
+        return sorted(
+            (e.occurrences, e.properties, e.audit.revision, e.audit.load_id)
+            for e in edges if e.type == "TRANSACTED"
+        )  # fmt: skip
+
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         call = _call_on(a, b, day=1, load_id="load-1")
-        other = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", load_id="load-1")
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
         _, (link,) = await _write(adapter, [], [call])
         _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
         assert also == link, "two types hold the one id"
-        alongside = (await _link_as_read(adapter, a))
         prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
         assert "COMMUNICATED_WITH" in prior.edge_type
+        before = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
+        assert before, "the other type's link is there"
 
         assert await _restore(adapter, prior) is True
 
-        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
-        associate = [e for e in edges if e.type == "ASSOCIATE_OF"]
-        assert [e.audit.load_id for e in associate] == ["load-1"]
-        assert await _link_as_read(adapter, a) == alongside
+        after = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
+        assert after == before, "the other type is left as it was"
+        restored = await adapter.read_link_state(link)
+        assert restored is not None and restored.load_id == "load-1"
 
 
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
