@@ -29427,8 +29427,10 @@ Conduit half) and L3.2b (the Glass half). ADR-144 and Amendment 1 are unchanged 
    reads the alert's dataset and holds the alert's entities. It carries no link to the case the alert was
    raised in, since no case is made from another. `08_ACCEPTANCE_SCENARIOS.md` B14's "a link to the
    originating investigation" is withdrawn; its entities half stands
-   (`test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` asserts both halves as now
-   written).
+   (`test_b14_an_alert_opens_into_a_case_holding_its_entities`, renamed from
+   `…_linked_to_the_original`, asserts both halves as now written). The case of its own is the jump
+   as built until L2.9 builds ADR-144 decision 4's private view of the alert in the case it arose
+   in; that view carries no origin link either, being a lens on that case.
 3. **Who applies a view's window and threshold.** The **Conduit** applies the threshold. Opening a view
    (`GET …/views/{view}`) returns each node it shows with the cluster it falls in at the view's
    `threshold`, or the case's when the view has none. The cluster is worked out from the `SAME_AS` and

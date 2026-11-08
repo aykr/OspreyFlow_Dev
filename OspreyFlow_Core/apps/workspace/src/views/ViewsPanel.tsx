@@ -92,7 +92,7 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
   return (
     <section aria-labelledby={`views-in-${caseId}`} className={govuk ? "case-views case-views--govuk" : "case-views"}>
       {heading}
-      {views.length === 0 ? (
+      {views.length === 0 && problem ? null : views.length === 0 ? (
         <p className={govuk ? "govuk-body-s" : "caption"}>
           No views yet. Select nodes on the canvas and choose <em>Save as a view</em>.
         </p>

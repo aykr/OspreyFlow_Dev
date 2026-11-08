@@ -822,15 +822,6 @@
 .case-tree__name:hover, .case-tree__name:focus-visible { background: var(--surface-hover); color: var(--text-primary); }
 .case-tree__name[aria-current="page"] { font-weight: 600; color: var(--text-primary); background: var(--surface-raised); box-shadow: inset 2px 0 0 var(--text-primary); }
 .case-tree__meta { flex: none; font-size: var(--fs-11); color: var(--text-tertiary); }
-.case-tree__more {
-  flex: none; width: 24px; height: 24px; display: grid; place-items: center; padding: 0; font: inherit;
-  color: var(--text-secondary); background: transparent; border: 0; border-radius: var(--r-control); cursor: pointer;
-}
-.case-tree__more:hover, .case-tree__more:focus-visible, .case-tree__more[aria-expanded="true"] { background: var(--surface-hover); color: var(--text-primary); }
-.case-tree__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); padding-left: var(--sp-8); font-size: var(--fs-12); }
-.case-tree__actions--confirm > span { flex-basis: 100%; color: var(--text-secondary); }
-.case-tree__danger { color: var(--error); }
-.case-tree__problem { margin: var(--sp-4) 0 0; font-size: var(--fs-12); color: var(--error); }
 
 /* The skip link and the phase banner under the OspreyFlow brand (ADR-132). Under GOV.UK the
    package's own govuk-skip-link and govuk-phase-banner classes draw them. The skip link is out of

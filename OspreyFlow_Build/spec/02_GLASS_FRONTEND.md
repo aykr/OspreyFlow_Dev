@@ -963,7 +963,11 @@ and *Clear* only, and a node's menu only what changes nothing (read, view messag
 explain a cluster, save the selection as a view); an action that would change the working set asked for
 another way is said ("This is a view: nothing in it changes the case. Go back to the case to change
 it."), not done. A view past the working set's cap is refused with its own figures, never cut to fit
-(rule 2).
+(rule 2). The lens is the Graph's: the Map, the Matrix and the status bar go on showing the
+case while a view is open. A view with no window clears the timeline's window while it is open, and
+*Back to the case* gives the case's window back and takes `case_view` out of the address. The over-cap
+dialog, the case's, steps aside while a view is open and comes back with the case if it is still past
+the cap.
 
 **Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open
 case's **Views in this case**: each view the reader may see (their own, and those shared with the case)

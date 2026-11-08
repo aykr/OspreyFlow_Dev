@@ -135,19 +135,26 @@ export function ViewOverCapDialog({
       return;
     }
     const result = await openView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
-    const keep = result.ok && result.opened.nodes.length > 0;
-    if (!keep) await deleteView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
-    setBusy(false);
-    if (result.ok && keep) {
+    if (result.ok && result.opened.nodes.length > 0) {
+      setBusy(false);
       onViewOpened(result.opened);
-    } else if (result.ok) {
-      setMessage("Nothing matched that choice, so no view was kept. Choose other types or dates.");
+      return;
+    }
+    // Not opened: the view just saved is removed, and what is said says whether it was (rule 2:
+    // never a claim the Glass has not checked).
+    const removed = await deleteView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
+    const kept = removed.ok
+      ? "No view was kept."
+      : `The view "${saved.view.name}" was saved and could not be removed: delete it from Views in this case.`;
+    setBusy(false);
+    if (result.ok) {
+      setMessage(`Nothing matched that choice. ${kept} Choose other types or dates.`);
     } else if (result.kind === "limit_exceeded") {
-      setMessage(`${figure(result.wouldBe)} No view was kept. Narrow the choice and try again.`);
+      setMessage(`${figure(result.wouldBe)} ${kept} Narrow the choice and try again.`);
     } else if (result.kind === "not_found") {
-      setMessage("The view could not be opened. Try again.");
+      setMessage(`The view could not be opened. ${kept} Try again.`);
     } else {
-      setMessage(result.message);
+      setMessage(`${result.message} ${kept}`);
     }
   }
 

@@ -31,7 +31,11 @@ type Call = { url: string; method: string; body: unknown; auth: string | undefin
 
 /** The Conduit's view routes: saving answers 201 with the view, opening answers `opening`, and a
  * delete answers 204. Every call is kept. */
-function conduit(opening: { status: number; body: unknown } = { status: 200, body: OPENED }, saving = { status: 201, body: VIEW as unknown }) {
+function conduit(
+  opening: { status: number; body: unknown } = { status: 200, body: OPENED },
+  saving = { status: 201, body: VIEW as unknown },
+  deleting = 204,
+) {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -44,7 +48,7 @@ function conduit(opening: { status: number; body: unknown } = { status: 200, bod
         auth: (init.headers as Record<string, string> | undefined)?.Authorization,
       });
       if (method === "POST") return new Response(JSON.stringify(saving.body), { status: saving.status });
-      if (method === "DELETE") return new Response(null, { status: 204 });
+      if (method === "DELETE") return new Response(deleting === 204 ? null : "{}", { status: deleting });
       return new Response(JSON.stringify(opening.body), { status: opening.status });
     }),
   );
@@ -212,7 +216,18 @@ describe("saving a smaller view", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Organisation" }));
     fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Nothing matched that choice, so no view was kept. Choose other types or dates.",
+      "Nothing matched that choice. No view was kept. Choose other types or dates.",
+    );
+    expect(calls.some((c) => c.method === "DELETE")).toBe(true);
+  });
+
+  it("says the view is still there, and where to delete it, when removing it fails", async () => {
+    const { calls } = open(conduit({ status: 409, body: { ...wouldBe, would_be: 50_020 } }, undefined, 500));
+    openForm();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      'Too many for the canvas: 50,020 nodes against a limit of 50,000. The view "Smaller view of this case" was saved and could not be removed: delete it from Views in this case. Narrow the choice and try again.',
     );
     expect(calls.some((c) => c.method === "DELETE")).toBe(true);
   });

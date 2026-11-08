@@ -1027,7 +1027,7 @@ test("CAP-A2-C6", async ({ page }) => {
   await shot(page, "CAP-A2-C6");
 });
 
-test("CAP-A2-C7", async ({ page, context }) => {
+test("CAP-A2-C7", async ({ page }) => {
   await principalStar(page);
   await page.getByRole("button", { name: "Show the timeline" }).click();
   // The window in which the phones were found: January to April 2026.
@@ -1045,18 +1045,18 @@ test("CAP-A2-C7", async ({ page, context }) => {
   await page.waitForTimeout(1500);
   console.log(`C7 counts: ${await counts(page).textContent()}`);
   await shot(page, "CAP-A2-C7-a");
-  const opened = context.waitForEvent("page", { timeout: 30_000 }).catch(() => null);
-  await page.getByRole("button", { name: "Branch to a new case" }).click();
-  // The branch opens in a tab of its own, or in this one; either way the shot is of the branch,
-  // marked ⑂ in the case switcher, never of the parent case.
-  const branch = (await opened) ?? page;
-  await branch.waitForLoadState();
-  // The branch's name is the case's own with its window ("… › 5 Jan – 30 Apr 2026, selected").
-  await expect(branch.getByRole("button", { name: /^Case: .+ › .+, selected$/ })).toBeVisible({
-    timeout: 60_000,
-  });
-  await branch.waitForTimeout(6000);
-  await shot(branch, "CAP-A2-C7-b");
+  // ADR-144 (L3.2b): the lit slice is saved as a private view of the case and opened as a
+  // read-only lens, named for its window ("5 Jan – 1 May 2026, selected"); never a case of its own.
+  await page.getByRole("button", { name: "Save as a view" }).click();
+  const name = page.getByLabel("View name");
+  await expect(name).toHaveValue(/, selected$/);
+  const called = await name.inputValue();
+  await page.getByRole("button", { name: "Save view" }).click();
+  await page.getByRole("button", { name: "Cases", exact: true }).click();
+  await page.getByRole("button", { name: `Open ${called}` }).click();
+  await expect(page.getByRole("region", { name: "Open view" })).toContainText(called, { timeout: 60_000 });
+  await page.waitForTimeout(6000);
+  await shot(page, "CAP-A2-C7-b");
 });
 
 test("CAP-A2-C10-a", async ({ page }) => {

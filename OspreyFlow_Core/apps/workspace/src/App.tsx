@@ -96,7 +96,7 @@ import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
 import { caseIsOpenable, openCase, openCaseView } from "./investigation/cases";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
-import { takeCaseView } from "./views/lensHandoff";
+import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
 import { ViewsPanel } from "./views/ViewsPanel";
 import { type CaseView, type CaseViewOpened, openView } from "./views/viewsApi";
@@ -877,19 +877,28 @@ export function App() {
   // ADR-144 (the owner's ruling of 8 November 2026, Amendment 2): an opened view takes the canvas's
   // place as a read-only lens. Its window goes to the timeline, as the case's would; the Conduit has
   // already collapsed its items at its threshold. "Back to the case" puts the case's canvas back.
+  // The case's own timeline window while a view is open, given back on *Back to the case*.
+  const caseWindowRef = useRef<{ validFrom: string; validTo: string | null } | null | undefined>(undefined);
+  // The latest view asked for: an earlier answer arriving after it is dropped.
+  const lensAskedRef = useRef(0);
+
   function showLens(opened: CaseViewOpened): void {
     setViewProblem(null);
+    const timeline = crossFilterRef.current?.store.getState();
+    if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
     setLens(buildLens(opened));
     setSelectedNodeIds([]);
     setSelectedNode(null);
-    const window = lensWindow(opened);
-    if (window) crossFilterRef.current?.store.getState().setWindow(window);
+    // The view's window, or none: a view keeps no window of the case's.
+    timeline?.setWindow(lensWindow(opened));
     setView("graph");
   }
 
   async function openLens(viewId: string): Promise<void> {
     if (!investigationId) return;
+    const asked = ++lensAskedRef.current;
     const result = await openView(API_BASE_URL, bearerToken, investigationId, viewId);
+    if (asked !== lensAskedRef.current) return;
     if (result.ok) {
       showLens(result.opened);
       return;
@@ -904,10 +913,18 @@ export function App() {
   }
 
   function closeLens(): void {
+    lensAskedRef.current += 1;
     setLens(null);
     setViewProblem(null);
     setSelectedNodeIds([]);
     setSelectedNode(null);
+    if (caseWindowRef.current !== undefined) {
+      crossFilterRef.current?.store.getState().setWindow(caseWindowRef.current);
+      caseWindowRef.current = undefined;
+    }
+    if (new URL(window.location.href).searchParams.has("case_view")) {
+      window.history.replaceState(window.history.state, "", withoutCaseView(window.location.href));
+    }
   }
 
   // A case opened on one of its views (from another case's row in the Cases drawer): opened once the

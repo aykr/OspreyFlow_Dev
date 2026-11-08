@@ -1,11 +1,11 @@
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
-index b0943ab..45fc4e8 100644
+index b0943ab..dd40cb1 100644
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -138,6 +138,17 @@ jobs:
-   # PROCESS-classified one by number. `06_DECISIONS.md` ADR-034 §B10. Allowlist at
-   # OspreyFlow_Build/tests/fixtures/decision_log_publication_allowlist.txt (6 known references, found on this
-   # gate's own first real run). See OspreyFlow_Build/tools/decision_log_publication_check.py's own docstring.
+@@ -134,6 +134,17 @@ jobs:
+       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.product_tree_link_check
+       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_product_tree_link_check.py
+ 
 +  # ADR-144 Amendment 1: no case's branch named in the Glass, the Conduit or packages/schemas; a
 +  # pipeline's branch kept by file, a git flag by token. See OspreyFlow_Build/tools/no_branches_check.py.
 +  no-branches-check:
@@ -17,9 +17,9 @@ index b0943ab..45fc4e8 100644
 +      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.no_branches_check
 +      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
 +
-   decision-log-publication-check:
-     runs-on: ubuntu-latest
-     steps:
+   # Same shape, one level down — does a PRODUCT-classified ADR in 06_DECISIONS.md cite a
+   # PROCESS-classified one by number. `06_DECISIONS.md` ADR-034 §B10. Allowlist at
+   # OspreyFlow_Build/tests/fixtures/decision_log_publication_allowlist.txt (6 known references, found on this
 diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
 index 905e117..5153cf6 100644
 --- a/OspreyFlow_Build/Makefile

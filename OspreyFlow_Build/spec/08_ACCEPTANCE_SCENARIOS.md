@@ -66,7 +66,7 @@ sightings into a rendered deployment.
 | A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (owner rulings R9 and R10) |
 | A6 | **over the wire** | `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire + the Glass** | `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
-| B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_an_investigation_linked_to_the_original` |
+| B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_a_case_holding_its_entities` |
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 

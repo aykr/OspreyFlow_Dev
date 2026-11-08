@@ -13,7 +13,9 @@ export function rememberCaseView(caseId: string, viewId: string, storage: Storag
   }
 }
 
-/** The view to open over `caseId`, from the address or the note, once; the note is then cleared. */
+/** The view to open over `caseId`, from the address or the note, once; the note is then cleared.
+ * A view id in the address is not checked against the case here: the Conduit answers a view of
+ * another case exactly as one that does not exist (404 `view_not_found`). */
 export function takeCaseView(caseId: string, search: string, storage: Storage = sessionStorage): string | null {
   const fromUrl = new URLSearchParams(search).get("case_view");
   let noted: string | null = null;
@@ -26,4 +28,11 @@ export function takeCaseView(caseId: string, search: string, storage: Storage = 
     noted = null;
   }
   return fromUrl || noted;
+}
+
+/** The address without `case_view`, so a reload after *Back to the case* opens the case, not the view. */
+export function withoutCaseView(href: string): string {
+  const url = new URL(href);
+  url.searchParams.delete("case_view");
+  return url.toString();
 }
