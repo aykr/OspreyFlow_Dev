@@ -29920,7 +29920,7 @@ from about 20 hours to about 13.
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
 
-### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and its two shared reads; an alert's address; the jump replaced; the Rule author's queue read left to the owner
+### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the four routes it shares (two reads, two writes); an alert's address; the jump replaced; the Rule author's queue read left to the owner
 
 Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
 the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below) and its interim on Q1,
