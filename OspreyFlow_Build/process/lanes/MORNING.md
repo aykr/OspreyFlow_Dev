@@ -228,6 +228,12 @@ New ones are added at the bottom as they happen.
     its window, a banner "View: <name> · n not shown · Back to the case"; nothing in a view changes the
     case's working set.
 
+49. **Studio L1.4, on studio's recommendations:** staging steps are pipeline nodes (one source of truth;
+    the recipe's staging list built from the graph at save); per-step counts on the load report, withheld
+    with the other counts; rejection refs with no row key; a dataset's own reference list read from its
+    version file, written by a small import module until L1.6 builds import, a run with no file refused in
+    words; the drawer's sample over the first ten rows with the person's own token, writing nothing.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
