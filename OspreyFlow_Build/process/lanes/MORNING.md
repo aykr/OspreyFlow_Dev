@@ -197,6 +197,11 @@ New ones are added at the bottom as they happen.
     while rules held it; nothing of the owner's or the tests' own databases was touched. Rules re-checks
     its run for that minute. Prompt L now says `acquire … &&` only, and no docker or psql on a stack not held.
 
+45. **A backup holds no model key** (platform P1): spec/05 §6.1, "a backup carries no secrets", already binds,
+    so the gateway's key rows are left out of every backup and each restore says which keys to enter again.
+    The restore refusal and its override flag go. The cost, re-entering keys after any restore, is the one
+    §6.1 already accepts for every other secret.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
