@@ -42,7 +42,7 @@ from services.api.investigations import (
 )
 from services.api.working_set.service import WorkingSetService
 
-from schemas.domain import Edge, Node, Principal, Subgraph
+from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal, Subgraph
 
 from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
@@ -260,6 +260,82 @@ def test_a_filtered_view_reads_the_readers_own_projection(world: _World) -> None
     assert opened["missing"] == 0
 
 
+# --- collapsed at the view's own threshold (spec 03 §3.1b; ADR-144 Amendment 2) ----------------
+
+
+def _match(edge_id: str, a: str, b: str, score: float, kind: str = SAME_AS) -> Edge:
+    return _in("src", edge(edge_id, a, b)).model_copy(
+        update={"type": kind, "properties": {"score": score}}
+    )
+
+
+def _hold(world: _World, link: Edge) -> None:
+    """A link the graph holds from now on (the fake copies `graph_edges` when it is made)."""
+    world.graph._graph_edges.append(link)
+
+
+def _clusters(opened: dict[str, Any]) -> dict[str, str]:
+    return {n["id"]: n["resolution"]["cluster_id"] for n in opened["nodes"]}
+
+
+def test_a_view_opens_collapsed_at_its_threshold(world: _World) -> None:
+    """Two views of the same nodes, one strict and one loose: a 0.7 match collapses `open` and
+    `near` into one entity in the loose view and leaves them apart in the strict one. A view with no
+    threshold opens at the case's. Red with `open_view` returning the nodes as stored, whose
+    cluster ids are their own whatever the threshold."""
+    _hold(world, _match("m-open-near", "open", "near", 0.7))
+    loose = _as("alice").get(f"{VIEWS}/{_saved(threshold=0.6)}").json()
+    strict = _as("alice").get(f"{VIEWS}/{_saved(threshold=0.9)}").json()
+    assert _clusters(loose)["open"] == _clusters(loose)["near"]
+    assert _clusters(strict)["open"] != _clusters(strict)["near"]
+    # No threshold of its own: the case's (0.85 by default, above the 0.7 match).
+    plain = _as("alice").get(f"{VIEWS}/{_saved()}").json()
+    assert _clusters(plain)["open"] != _clusters(plain)["near"]
+
+
+def test_a_split_holds_at_a_loose_view_threshold(world: _World) -> None:
+    """A manual split is never collapsed, however loose the view (`01_DOMAIN_MODEL.md` §4)."""
+    _hold(world, _match("m-open-near", "open", "near", 0.99))
+    _hold(world, _match("s-open-near", "open", "near", 1.0, NOT_SAME_AS))
+    opened = _as("alice").get(f"{VIEWS}/{_saved(threshold=0.1)}").json()
+    assert _clusters(opened)["open"] != _clusters(opened)["near"]
+
+
+def test_a_view_collapses_only_through_what_its_reader_may_see(world: _World) -> None:
+    """Rule 3: `open` and `near` each match the SECRET node, not each other. Alice (SECRET) sees
+    all three as one entity; Bob (OFFICIAL) sees `open` and `near` apart, so the collapse cannot
+    tell him a hidden node joins them."""
+    _hold(world, _match("m-open-secret", "open", "secret", 0.95))
+    _hold(world, _match("m-near-secret", "near", "secret", 0.95))
+    view_id = _saved(threshold=0.9, shared=True)
+    alice = _clusters(_as("alice").get(f"{VIEWS}/{view_id}").json())
+    assert alice["open"] == alice["near"] == alice["secret"]
+    bob = _clusters(_as("bob").get(f"{VIEWS}/{view_id}").json())
+    assert bob["open"] != bob["near"]
+    assert "secret" not in bob
+
+
+def test_the_reader_check_fails_with_the_matches_read_unscoped(
+    world: _World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, at the real call site's shape: `_matches` reading the `SAME_AS` links among the
+    shown nodes with the reader's principal. Planted to read them, and the nodes they reach, without
+    the reader's scope, Bob's `open` and `near` collapse through the SECRET node."""
+    _hold(world, _match("m-open-secret", "open", "secret", 0.95))
+    _hold(world, _match("m-near-secret", "near", "secret", 0.95))
+
+    async def unscoped(graph: Any, node_ids: Any, principal: Principal) -> Any:
+        wide = principal.model_copy(update={"datasets": None, "clearance": "SECRET"})
+        every = [n.id for n in await graph.get_nodes([*node_ids, "secret"], wide)]
+        links = await graph.edges_among(every, wide, edge_types=[SAME_AS, NOT_SAME_AS])
+        return every, links
+
+    monkeypatch.setattr(case_views_module, "_matches", unscoped)
+    view_id = _saved(threshold=0.9, shared=True)
+    bob = _clusters(_as("bob").get(f"{VIEWS}/{view_id}").json())
+    assert bob["open"] == bob["near"]
+
+
 # --- private until shared ---------------------------------------------------------------------
 
 
@@ -411,8 +487,13 @@ class _Questions:
         for entry_id, kept_with in (("q-case", None), ("q-view", view_id)):
             self.store.entries.append(
                 QuestionEntry(
-                    id=entry_id, investigation_id=CASE, author="alice", question="Who?",
-                    answer="Dana.", model="local-model", view_id=kept_with,
+                    id=entry_id,
+                    investigation_id=CASE,
+                    author="alice",
+                    question="Who?",
+                    answer="Dana.",
+                    model="local-model",
+                    view_id=kept_with,
                     created_at=datetime(2026, 11, 8, tzinfo=UTC),
                 )  # fmt: skip
             )
@@ -425,8 +506,14 @@ class _Questions:
 
         return [
             QuestionAnswer(
-                id=e.id, author=e.author, question=e.question, answer=e.answer, citations=[],
-                candidates=[], unplaced=0, created_at=e.created_at,
+                id=e.id,
+                author=e.author,
+                question=e.question,
+                answer=e.answer,
+                citations=[],
+                candidates=[],
+                unplaced=0,
+                created_at=e.created_at,
             )  # fmt: skip
             for e in await self.store.list_for_case(investigation_id, view_id)
         ]
@@ -527,9 +614,15 @@ def proposals(world: _World) -> Iterator[tuple[Any, str, str]]:
         candidates.store(
             [
                 ExtractionCandidate(
-                    id="cand-v", document_id="doc-1", entity_type="Person",
-                    properties={"family_name": "MERCER"}, confidence=0.9, model="local-model",
-                    locator="char span 0-6", excerpt_hash="", handling=HANDLING,
+                    id="cand-v",
+                    document_id="doc-1",
+                    entity_type="Person",
+                    properties={"family_name": "MERCER"},
+                    confidence=0.9,
+                    model="local-model",
+                    locator="char span 0-6",
+                    excerpt_hash="",
+                    handling=HANDLING,
                 )  # fmt: skip
             ],
             PEOPLE["alice"],
@@ -681,9 +774,12 @@ def test_a_deleted_views_conversation_and_proposals_are_read_by_no_one(
     q = f"/v1/investigations/{CASE}/questions"
     assert _as("alice").get(q, params={"view_id": conversation_view}).status_code == 404
     assert _ids(_as("alice").get(q)) == ["q-case"]
-    assert _as("alice").get(
-        f"/v1/investigations/{CASE}/ingest/candidates", params={"document_id": "doc-1"}
-    ).json() == []
+    assert (
+        _as("alice")
+        .get(f"/v1/investigations/{CASE}/ingest/candidates", params={"document_id": "doc-1"})
+        .json()
+        == []
+    )
     accepted = _as("alice").post(f"{q}/candidates/{candidate}/accept", params={"view_id": view_id})
     assert accepted.status_code == 404
     assert candidates.records[candidate].status.value == "pending"
