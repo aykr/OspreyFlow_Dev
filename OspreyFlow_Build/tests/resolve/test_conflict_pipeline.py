@@ -58,7 +58,8 @@ class _FakeGraphPort:
     def __init__(self) -> None:
         self.superseded: list[tuple[str, EdgeWrite]] = []
 
-    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: str) -> str:
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: str, *, old_type: str
+    ) -> str:
         self.superseded.append((edge_id, replacement))
         return replacement.id
 

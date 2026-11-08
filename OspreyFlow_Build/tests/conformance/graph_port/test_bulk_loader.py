@@ -352,7 +352,9 @@ async def test_a_superseded_link_is_not_in_the_end_of_load_corpus(
         a, b, c = await _endpoints(adapter, 3)
         _, (old,) = await _write(adapter, [], [_comm(a, b, occurrences=5, row="old")])
         tx = await adapter.begin_transaction()
-        await adapter.supersede_edge(old, _comm(a, b, occurrences=2, row="new"), tx)
+        await adapter.supersede_edge(
+            old, _comm(a, b, occurrences=2, row="new"), tx, old_type="COMMUNICATED_WITH"
+        )
         await adapter.commit_transaction(tx)
 
         await loader.bulk_load_edges([_comm(a, c, occurrences=4, row="bulk")])

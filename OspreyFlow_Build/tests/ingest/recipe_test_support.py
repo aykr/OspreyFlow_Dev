@@ -308,12 +308,17 @@ class MergingGraph(ValidatingGraph):
             "load_id": self._last_load.get(link.id, link.load_id),
         }
 
-    async def read_link_state(self, edge_id: str, tx: object = None) -> LinkPriorState | None:
+    async def read_link_state(
+        self, edge_id: str, edge_type: str, tx: object = None
+    ) -> LinkPriorState | None:
+        """As the adapter: the link of `edge_type` holding the id, read by that type alone."""
         found = self._held(edge_id)
         if found is None:
             return None
         held, index = found
         link = held[index]
+        if link.type != edge_type:
+            return None
         return LinkPriorState(
             edge_id=edge_id,
             edge_type=link.type,
@@ -328,7 +333,7 @@ class MergingGraph(ValidatingGraph):
         nothing written when it is already as `state.stored`; put back whole, at the marking the
         state was read at."""
         found = self._held(state.edge_id)
-        if found is None or state.left_digest is None:
+        if found is None or state.left_digest is None or found[0][found[1]].type != state.edge_type:
             return False
         held, index = found
         now = stored_digest(self._stored_form(held[index]))

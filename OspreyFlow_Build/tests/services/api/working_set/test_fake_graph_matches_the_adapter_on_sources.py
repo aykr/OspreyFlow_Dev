@@ -73,4 +73,4 @@ async def test_the_superseding_graph_refuses_withheld_provenance() -> None:
     graph = SupersedingGraph({"ab"})
     tx = await graph.begin_transaction()
     with pytest.raises(ValueError, match="withheld"):
-        await graph.supersede_edge("ab", _withheld_write(), tx)
+        await graph.supersede_edge("ab", _withheld_write(), tx, old_type=_withheld_write().type)

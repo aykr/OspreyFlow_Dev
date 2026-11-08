@@ -69,7 +69,9 @@ def test_supersede_edge_refuses_a_write_standing_for_more_than_one() -> None:
     before any read or write, so nothing is half-done."""
     store = CountingStore()
     with pytest.raises(OntologyError):
-        asyncio.run(make_adapter(store).supersede_edge("edge-1", _writes(2, count=2), "tx"))
+        asyncio.run(make_adapter(store).supersede_edge(
+            "edge-1", _writes(2, count=2), "tx", old_type="COMMUNICATED_WITH"
+        ))
     assert store.queries == [] and store.links == []
 
 

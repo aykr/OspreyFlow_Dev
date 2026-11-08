@@ -318,7 +318,8 @@ class _Supersede:
     async def begin_transaction(self) -> str:
         return "tx"
 
-    async def supersede_edge(self, edge_id: str, write: Any, tx: str) -> str:
+    async def supersede_edge(self, edge_id: str, write: Any, tx: str, *, old_type: str
+    ) -> str:
         found = self.ontology.edge_type(write.type)
         if found is None:
             raise OntologyError(f"{write.type!r} is not a type in the active ontology")

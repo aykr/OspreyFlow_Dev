@@ -52,24 +52,10 @@ PLANTS = {
     "O10": ("nobody told the put-back links changed", REVERT, [
         ("        if put_back and deps.links_changed is not None:\n", "        if False:\n"),
     ], [UNIT]),
-    "D4": ("L1.2d: the load not catching an ambiguous own link id", PUB, [
-        ("            except AmbiguousLinkId:\n                # ADR-110 Amendment 18: two types hold the id, so which to put back is not\n",
-         "            except KeyError:\n                # ADR-110 Amendment 18: two types hold the id, so which to put back is not\n"),
-    ], [UNIT, "-k", "not_captured_and_its_load_stays_refused"]),
-    "D5": ("L1.2d: the revert not catching an ambiguous own link id", REVERT, [
-        ("            except AmbiguousLinkId:\n                ambiguous += 1\n",
-         "            except KeyError:\n                ambiguous += 1\n"),
-    ], [UNIT, "-k", "ambiguous"]),
-    "D6": ("L1.2d: the app's AmbiguousLinkId handler removed (a 500 where a refusal belongs)", f"{CORE}/services/api/app.py", [
-        ("@app.exception_handler(AmbiguousLinkId)\n", ""),
-    ], ["tests/services/api/test_ambiguous_link_id_refused.py"]),
-    "D7": ("L1.2d: resolution's catch removed (one ambiguous link stops the batch)", f"{CORE}/services/resolve/same_as_writer.py", [
-        ("        except AmbiguousLinkId:\n", "        except KeyError:\n"),
-    ], ["tests/resolve/test_ambiguous_link_skipped.py"]),
-    "D8": ("L1.2d: the close swallowing the refusal (confirming the rest and closing)", f"{CORE}/services/api/alert_queue.py", [
-        ("                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}\n            except Exception:\n                await graph.rollback_transaction(tx)\n                raise\n",
-         "                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}\n            except Exception:\n                pass\n"),
-    ], ["tests/services/api/test_ambiguous_link_id_close_refused.py"]),
+    "D9": ("L1.2d: the capture reading a returning row's link by another type", PUB, [
+        ("            state = await self._graph.read_link_state(edge_id, edge_type, self._tx)\n",
+         "            state = await self._graph.read_link_state(edge_id, \"FAMILY_OF\", self._tx)\n"),
+    ], [UNIT]),
 }
 ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
 CONF = "tests/conformance/graph_port/test_suite.py"
@@ -87,16 +73,16 @@ LIVE_PLANTS = {
          "        marking = state.handling.model_copy(update={\"classification\": \"OFFICIAL\"})\n"),
     ], [CONF, "-k", "link_state or restored_link"]),
     "L5": ("the restore's write untyped (every type holding the id)", ADAPTER, [
-        ('            f"g.E().hasLabel({groovy_string_literal(state.edge_type)})"\n            f\'.has("id",{groovy_string_literal(state.edge_id)}){steps}\',\n',
+        ('            f"g.E().hasLabel({groovy_string_literal(type_name)})"\n            f\'.has("id",{groovy_string_literal(state.edge_id)}){steps}\',\n',
          '            f\'g.E().has("id",{groovy_string_literal(state.edge_id)}){steps}\',\n'),
     ], [CONF, "-k", "its_own_type"]),
     "W1": ("withdrawn_row_links without the case", f"{CORE}/services/api/recipe_runs.py", [
-        ('"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",\n',
-         '"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND $2::text IS NOT NULL AND row_key = ANY($3::text[])",\n'),
+        ('                    "WHERE recipe_id = $1 "\n                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",\n',
+         '                    "WHERE recipe_id = $1 "\n                    "AND $2::text IS NOT NULL AND row_key = ANY($3::text[])",\n'),
     ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_links_answers_this_recipe_and_case_alone"]),
     "W2": ("withdrawn_row_links without the recipe", f"{CORE}/services/api/recipe_runs.py", [
-        ('"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n',
-         '"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE $1::text IS NOT NULL "\n'),
+        ('"SELECT row_key, edge_ids, edge_types FROM withdrawn_row_keys "\n                    "WHERE recipe_id = $1 "\n',
+         '"SELECT row_key, edge_ids, edge_types FROM withdrawn_row_keys "\n                    "WHERE $1::text IS NOT NULL "\n'),
     ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_links_answers_this_recipe_and_case_alone"]),
     "T0": ("for item 8's cost: the capture turned off (the sink asked directly, nothing kept)", PUB, [
         ("                own_links = _OwnLinks(sink, graph, tx) if sink is not None else None\n",
@@ -107,15 +93,20 @@ LIVE_PLANTS = {
         ('                    f"g.E().hasLabel({groovy_string_literal(type_name)})"\n                    f\'.has("id",{edge_lit}){property_steps}\'\n',
          '                    f\'g.E().has("id",{edge_lit}){property_steps}\'\n'),
     ], [CONF, "-k", "merge_writes_its_own_type"]),
-    "D2": ("L1.2d: read_link_state taking the first type found", ADAPTER, [
-        ("        if len(held) > 1:\n            raise AmbiguousLinkId(edge_id, [t for t, _ in held])\n        ((type_name, row),) = held\n",
-         "        (type_name, row) = held[0]\n"),
-    ], [CONF, "-k", "refuses_an_id_two_types_hold"]),
-    "D3": ("L1.2d: supersede_edge taking the first type and marking by id alone", ADAPTER, [
-        ("        if len(holding) > 1:\n            raise AmbiguousLinkId(edge_id, [t for t, _ in holding])\n", ""),
-        ('            f\'g.E().hasLabel({old_label}).has("id",{edge_lit})\'\n            f\'.property("superseded_by", {new_id_lit})\',\n',
-         '            f\'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})\',\n'),
+    "D2": ("L1.2d: read_link_state ignoring its named type (always reading one type)", ADAPTER, [
+        ("        type_name = groovy_identifier(physical_type_name(edge_type))\n",
+         "        type_name = groovy_identifier(physical_type_name(\"COMMUNICATED_WITH\"))\n"),
+    ], [CONF, "-k", "reads_its_named_type_alone"]),
+    "D3": ("L1.2d: supersede_edge ignoring old_type (by id alone)", ADAPTER, [
+        ("            f'g.E().hasLabel({old_label}).has(\"id\",{edge_lit}).elementMap()', session_id=tx\n",
+         "            f'g.E().has(\"id\",{edge_lit}).elementMap()', session_id=tx\n"),
+        ("            f'g.E().hasLabel({old_label}).has(\"id\",{edge_lit})'\n",
+         "            f'g.E().has(\"id\",{edge_lit})'\n"),
     ], [CONF, "-k", "correction_marks_only_its_own"]),
+    "D10": ("L1.2d: the ledger not keeping a row's link types", f"{CORE}/services/api/recipe_runs.py", [
+        ("                    None if elements.get(k) is None else dict(elements[k].edge_types) for k in chunk\n",
+         "                    None for k in chunk\n"),
+    ], ["tests/services/api/test_row_key_withdrawal_ledger.py", "-k", "link_types_were_recorded"]),
     "L4": ("the restore altering one stored property (occurrences + 1)", ADAPTER, [
         ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
          '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'

@@ -296,14 +296,14 @@ async def test_a_returning_rows_load_reverts_and_the_chain_unwinds_live(
         first = await refresh.snapshot([A, B, C])
         second = await refresh.snapshot([A, C])
         (b_link,) = first.kept_row_elements[_key(B)].edge_ids  # type: ignore[attr-defined]
-        after_the_refresh = await graph.read_link_state(b_link)
+        after_the_refresh = await graph.read_link_state(b_link, "TRANSACTED")
         back = await refresh.snapshot([A, B, C])
         assert [m.edge_id for m in back.own_key_merges] == [b_link]  # type: ignore[attr-defined]
         assert await refresh.events() == 3
 
         undone = await refresh.revert(back.load_id)  # type: ignore[attr-defined]
         assert [r.links_put_back for r in undone.reverted] == [1]
-        assert await graph.read_link_state(b_link) == after_the_refresh, "exactly as it was"
+        assert await graph.read_link_state(b_link, "TRANSACTED") == after_the_refresh, "exactly as it was"
         assert await refresh.events() == 2
 
         await refresh.revert(second.load_id)  # type: ignore[attr-defined]

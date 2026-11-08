@@ -130,7 +130,8 @@ class CountingStore:
             self.links.append(record)
             self.edges.setdefault((params["src"], params["tgt"]), record)
             return []
-        if query.startswith('g.E().has("id"'):  # a merge into an existing edge
+        # A merge into an existing edge, its own type named (ADR-110 Amendment 18).
+        if query.startswith("g.E().hasLabel(") and '.has("id",' in query:
             assert params is not None
             for record in self.links:
                 if record["id"] == params["prop_id"]:

@@ -28,7 +28,6 @@ import pytest
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import (
-    AmbiguousLinkId,
     AmbiguousElementId,
     GraphPort,
     StoredLink,
@@ -682,6 +681,7 @@ async def test_expand_leaves_out_a_reverted_neighbour_and_a_superseded_one_for_a
                 created_at=now_utc(),
             ),
             tx,
+            old_type="USES",
         )
         await adapter.commit_transaction(tx)
         _, (late_link,) = await _write(
@@ -2774,11 +2774,13 @@ async def test_a_superseded_link_stores_the_current_parameter_set_and_the_rules_
                 interval=_past_interval(),
             ),
             tx,
+            old_type="COMMUNICATED_WITH",
         )
         await adapter.supersede_edge(
             old_family,
             _edge("FAMILY_OF", p, q, classification="OFFICIAL", interval=_past_interval()),
             tx,
+            old_type="FAMILY_OF",
         )
         await adapter.commit_transaction(tx)
 
@@ -2846,6 +2848,7 @@ async def test_a_superseded_link_does_not_count_in_the_corpus(
                 interval=_past_interval(),
             ),
             tx,
+            old_type="COMMUNICATED_WITH",
         )
         await adapter.commit_transaction(tx)
         _, (later_link,) = await _write(
@@ -3474,6 +3477,7 @@ async def test_supersede_edge_replaces_it_in_default_reads(
                 created_at=now_utc(),
             ),
             tx,
+            old_type="ASSOCIATE_OF",
         )
         await adapter.commit_transaction(tx)
 
@@ -3511,7 +3515,7 @@ async def test_a_write_after_supersede_merges_into_the_replacement_edge(
         )
         tx = await adapter.begin_transaction()
         replacement_edge_id = await adapter.supersede_edge(
-            old_edge_id, _edge("ASSOCIATE_OF", b, a, classification="OFFICIAL"), tx
+            old_edge_id, _edge("ASSOCIATE_OF", b, a, classification="OFFICIAL"), tx, old_type="ASSOCIATE_OF"
         )
         await adapter.commit_transaction(tx)
 
@@ -4264,6 +4268,7 @@ async def _unreadable_edge(adapter: GraphPort, reason: str) -> _Unreadable:
             edge_id,
             _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", datasets=["enron"]),
             tx,
+            old_type="ASSOCIATE_OF",
         )
         await adapter.commit_transaction(tx)
     elif reason == "reverted":
@@ -4792,7 +4797,7 @@ async def test_a_changed_link_keeps_its_datasets(factory: GraphAdapterFactory) -
         )
         tx = await adapter.begin_transaction()
         changed = await adapter.supersede_edge(
-            link, _edge("FAMILY_OF", a, b, classification="OFFICIAL"), tx
+            link, _edge("FAMILY_OF", a, b, classification="OFFICIAL"), tx, old_type="ASSOCIATE_OF"
         )
         await adapter.commit_transaction(tx)
         (seen,) = await adapter.edges_among([a, b], IN_FIXTURE)
@@ -5500,7 +5505,7 @@ async def _build_store(
     elif path == "edge_supersede":
         _, (first,) = await _write(adapter, [], [_link_k(ka, kb, occurrences=1)])
         tx = await adapter.begin_transaction()
-        await adapter.supersede_edge(first, link_k, tx)
+        await adapter.supersede_edge(first, link_k, tx, old_type=link_k.type)
         await adapter.commit_transaction(tx)
     elif path == "node_supersede":
         await _write(adapter, [], [link_k])
@@ -5519,7 +5524,7 @@ async def _build_store(
         assert l_id is not None
         raised = _link_l("secret", ka, lx)
         tx = await adapter.begin_transaction()
-        await adapter.supersede_edge(l_id, raised, tx)
+        await adapter.supersede_edge(l_id, raised, tx, old_type=link_l.type)
         await adapter.commit_transaction(tx)
     elif with_link and case == "raised_by_supersede_node":
         lx_end = await _replace_node(
@@ -5952,6 +5957,7 @@ async def test_strip_provenance_references_removes_the_prefix_from_live_and_supe
                 created_at=now_utc(),
             ),
             tx,
+            old_type="ASSOCIATE_OF",
         )
         await adapter.commit_transaction(tx)
         assert "manual:change:first" in await _sources_of(adapter, "ASSOCIATE_OF", old_id)
@@ -6228,6 +6234,7 @@ async def test_live_edges_touching_names_every_live_link_at_a_node_whatever_the_
             bd,
             _edge("ASSOCIATE_OF", b, d, classification="OFFICIAL", datasets=["enron"]),
             tx,
+            old_type="ASSOCIATE_OF",
         )
         await adapter.commit_transaction(tx)
         touching_b = await adapter.live_edges_touching([b])
@@ -6355,7 +6362,7 @@ async def test_stored_link_states_says_each_links_flags_whatever_the_reader_may_
         )
         tx = await adapter.begin_transaction()
         await adapter.supersede_edge(
-            changed, _edge("FAMILY_OF", a, b, classification="OFFICIAL", datasets=["enron"]), tx
+            changed, _edge("FAMILY_OF", a, b, classification="OFFICIAL", datasets=["enron"]), tx, old_type="FAMILY_OF"
         )
         await adapter.revert_elements([], [taken], tx)
         await adapter.commit_transaction(tx)
@@ -6411,10 +6418,10 @@ async def _merged_by(adapter: GraphPort, link: str, write: EdgeWrite) -> LinkPri
     """As a returning row's load does it: the link read before the write, in the load's own
     transaction, merged into, and read again after it, its digest kept as the load left it."""
     tx = await adapter.begin_transaction()
-    prior = await adapter.read_link_state(link, tx)
+    prior = await adapter.read_link_state(link, "COMMUNICATED_WITH", tx)
     assert prior is not None
     (merged,) = await adapter.upsert_edges([write], tx)
-    left = await adapter.read_link_state(link, tx)
+    left = await adapter.read_link_state(link, "COMMUNICATED_WITH", tx)
     await adapter.commit_transaction(tx)
     assert merged == link and left is not None
     return prior.model_copy(update={"left_digest": stored_digest(left.stored)})
@@ -6437,12 +6444,12 @@ async def test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_re
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1",
                                                          classification="SECRET")])  # fmt: skip
-        state = await adapter.read_link_state(link)
+        state = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert state is not None
         assert (state.edge_id, state.revision, state.load_id) == (link, 1, "load-1")
         assert "COMMUNICATED_WITH" in state.edge_type
         assert state.handling.classification == "SECRET"
-        assert await adapter.read_link_state(new_edge_id()) is None
+        assert await adapter.read_link_state(new_edge_id(), "COMMUNICATED_WITH") is None
 
 
 async def test_a_link_nobody_wrote_reads_back_to_the_same_digest(
@@ -6456,11 +6463,11 @@ async def test_a_link_nobody_wrote_reads_back_to_the_same_digest(
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=2, load_id="load-1")])
         tx = await adapter.begin_transaction()
-        inside = await adapter.read_link_state(link, tx)
+        inside = await adapter.read_link_state(link, "COMMUNICATED_WITH", tx)
         await adapter.commit_transaction(tx)
         await _link_as_read(adapter, a)
         await adapter.stored_link_states([link])
-        later = await adapter.read_link_state(link)
+        later = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert inside is not None and later is not None
         assert stored_digest(inside.stored) == stored_digest(later.stored)
 
@@ -6477,14 +6484,14 @@ async def test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exa
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=3, load_id="load-1",
                                                          classification="SECRET")])  # fmt: skip
         before = await _link_as_read(adapter, a)
-        state = await adapter.read_link_state(link)
+        state = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert state is not None
         assert await _restore(adapter, state.model_copy(
             update={"left_digest": stored_digest(state.stored)}
         )) is True  # fmt: skip
 
         assert await _link_as_read(adapter, a) == before
-        assert await adapter.read_link_state(link) == state
+        assert await adapter.read_link_state(link, "COMMUNICATED_WITH") == state
 
 
 async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
@@ -6503,7 +6510,7 @@ async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
 
         assert await _restore(adapter, prior) is True
         assert await _link_as_read(adapter, a) == before
-        assert await adapter.read_link_state(link) == prior.model_copy(update={"left_digest": None})
+        assert await adapter.read_link_state(link, "COMMUNICATED_WITH") == prior.model_copy(update={"left_digest": None})
         assert await _restore(adapter, prior) is True, "already put back"
         assert await _link_as_read(adapter, a) == before
 
@@ -6525,21 +6532,21 @@ async def test_restore_link_state_refuses_a_link_written_since_by_anyone(
             await _write(adapter, [], [_call_on(a, b, day=7, load_id="load-4")])
         elif how == "a correction":
             tx = await adapter.begin_transaction()
-            await adapter.supersede_edge(link, _call_on(a, b, day=5, load_id="load-3"), tx)
+            await adapter.supersede_edge(link, _call_on(a, b, day=5, load_id="load-3"), tx, old_type="COMMUNICATED_WITH")
             await adapter.commit_transaction(tx)
         elif how == "a provenance strip":
             assert await adapter.strip_provenance_references("doc") >= 1
         else:  # a re-stamp, in place
             client = adapter._client  # type: ignore[attr-defined]
-            state = await adapter.read_link_state(link)
+            state = await adapter.read_link_state(link, "COMMUNICATED_WITH")
             assert state is not None
             await client.sql(
                 f"UPDATE `{state.edge_type}` SET datasets = datasets || [:ds] WHERE id = :id",
                 params={"ds": "restamped", "id": link},
             )
-        now = await adapter.read_link_state(link)
+        now = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert await _restore(adapter, prior) is False, how
-        assert await adapter.read_link_state(link) == now, f"{how}: nothing changed"
+        assert await adapter.read_link_state(link, "COMMUNICATED_WITH") == now, f"{how}: nothing changed"
 
     for how in ("a later load", "a correction", "a provenance strip", "a re-stamp"):
         async with factory.context() as adapter:
@@ -6551,8 +6558,7 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
 ) -> None:
     """ADR-110 Amendment 16: two types may hold one id (`stored_link_states` reads the worst of
     them). The restore writes the type its state names, alone: the other type's link is exactly as
-    it was before the restore. (Before it, `upsert_edges`' merge writes by id alone and so rewrites
-    both; that is the merge's, recorded, and not what this case tests.)"""
+    it was before the restore (Amendment 18: every link write names its type)."""
 
     def other_type(edges: list[Any]) -> list[Any]:
         return sorted(
@@ -6565,9 +6571,8 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
         call = _call_on(a, b, day=1, load_id="load-1")
         other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
         _, (link,) = await _write(adapter, [], [call])
-        # The state is read, and the load merges, while one type holds the id (Amendment 18: a read
-        # of an id two types hold is refused); the other type's link comes after, and the restore
-        # finds its own type's link by type.
+        # The state is read, and the load merges, before the other type's link holds the id; the
+        # restore then finds its own type's link by its type alone.
         prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
         assert "COMMUNICATED_WITH" in prior.edge_type
         _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
@@ -6613,46 +6618,47 @@ async def test_a_merge_writes_its_own_type_and_never_another_holding_the_same_id
         assert [r[3] for r in of_type(edges, "COMMUNICATED_WITH")] == ["load-3"], "the merge landed"
 
 
-async def test_read_link_state_refuses_an_id_two_types_hold(factory: GraphAdapterFactory) -> None:
-    """L1.2d: a link's state is read by id, so an id two types hold is ambiguous, and the read
-    refuses it (`AmbiguousLinkId`) rather than taking whichever type it finds first."""
+async def test_read_link_state_reads_its_named_type_alone(factory: GraphAdapterFactory) -> None:
+    """ADR-110 Amendment 18: a state read names its type, so where two types hold one id each read
+    reaches its own type's link alone and is told nothing of the other's."""
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
-        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
         await _write(adapter, [], [other.model_copy(update={"id": link})])
 
-        with pytest.raises(AmbiguousLinkId):
-            await adapter.read_link_state(link)
+        call = await adapter.read_link_state(link, "COMMUNICATED_WITH")
+        paid = await adapter.read_link_state(link, "TRANSACTED")
+
+        assert call is not None and paid is not None
+        assert (call.edge_type, call.load_id) == ("COMMUNICATED_WITH", "load-1")
+        assert (paid.edge_type, paid.load_id) == ("TRANSACTED", "load-9")
+        assert await adapter.read_link_state(link, "FAMILY_OF") is None
 
 
 async def test_a_correction_marks_only_its_own_types_link_superseded(
     factory: GraphAdapterFactory,
 ) -> None:
-    """ADR-110 Amendment 18: `supersede_edge` finds the old link by id, so where two types hold the
-    id it refuses (`AmbiguousLinkId`) and changes nothing, rather than marking both superseded.
-    Where one type holds it, only that type's link is marked."""
+    """ADR-110 Amendment 18: `supersede_edge` reads and marks the old link in the type its caller
+    names (`old_type`), so where two types hold the id a correction of one leaves the other's
+    link live and unmarked."""
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
-        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
         await _write(adapter, [], [other.model_copy(update={"id": link})])
 
         tx = await adapter.begin_transaction()
-        with pytest.raises(AmbiguousLinkId):
-            await adapter.supersede_edge(link, _call_on(a, b, day=2, load_id="analyst"), tx)
-        await adapter.rollback_transaction(tx)
-        assert await adapter.stored_link_states([link]) == {
-            link: StoredLink(reverted=False, superseded=False)
-        }, "neither type marked"
-
-        _, (alone,) = await _write(adapter, [], [_call_on(a, b, day=3, load_id="load-5",
-                                                          classification="SECRET")])  # fmt: skip
-        tx = await adapter.begin_transaction()
-        await adapter.supersede_edge(alone, _call_on(a, b, day=3, load_id="analyst",
-                                                      classification="SECRET"), tx)  # fmt: skip
+        await adapter.supersede_edge(
+            link, _call_on(a, b, day=2, load_id="analyst"), tx, old_type="COMMUNICATED_WITH"
+        )
         await adapter.commit_transaction(tx)
-        assert (await adapter.stored_link_states([alone]))[alone].superseded is True
+
+        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        transacted = [e for e in edges if e.type == "TRANSACTED"]
+        assert [(e.id, e.audit.load_id) for e in transacted] == [(link, "load-9")], "left live"
+        paid = await adapter.read_link_state(link, "TRANSACTED")
+        assert paid is not None and "superseded_by" not in paid.stored, "and unmarked"
 
 
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
@@ -6668,7 +6674,7 @@ async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -
         (seen,) = await _link_as_read(adapter, a, CLEARED)
         assert seen[4].classification == "SECRET"
         assert await _link_as_read(adapter, a, OFFICIAL) == []
-        restored = await adapter.read_link_state(link)
+        restored = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert restored is not None and restored.handling.classification == "SECRET"
 
 
@@ -6687,12 +6693,12 @@ async def test_a_merge_that_raised_the_links_marking_is_put_back_at_the_marking_
             update={"handling": raising.handling.model_copy(update={"action_code": "A2"})}
         )
         prior = await _merged_by(adapter, link, raising)
-        merged = await adapter.read_link_state(link)
+        merged = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert merged is not None and merged.handling.action_code == "A2", "the merge raised it"
 
         assert await _restore(adapter, prior) is True
 
-        restored = await adapter.read_link_state(link)
+        restored = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert restored is not None and restored.handling == prior.handling
         assert restored.handling.action_code is None and restored.handling.classification == "OFFICIAL"
 
@@ -6792,7 +6798,7 @@ async def test_supersede_edge_refuses_a_write_standing_for_more_than_one(
         _, (old_edge_id,) = await _write(adapter, [], [_comm(a, b)])
         tx = await adapter.begin_transaction()
         with pytest.raises(OntologyError):
-            await adapter.supersede_edge(old_edge_id, _comm(a, b, writes=2), tx)
+            await adapter.supersede_edge(old_edge_id, _comm(a, b, writes=2), tx, old_type="COMMUNICATED_WITH")
         await adapter.rollback_transaction(tx)
         (link,) = await adapter.edges_among([a, b], EVERYTHING)
         assert link.id == old_edge_id and link.audit.superseded_by is None

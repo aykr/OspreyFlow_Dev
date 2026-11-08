@@ -137,7 +137,8 @@ class PictureGraph:
             ids.append(edge.id)
         return ids
 
-    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: TxId) -> str:
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: TxId, *, old_type: str
+    ) -> str:
         self.links = [(e, live and e.id != edge_id) for e, live in self.links]
         return self._store(replacement)
 
