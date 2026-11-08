@@ -1,6 +1,7 @@
 """*Admin › Models*' routes (`06_DECISIONS.md` ADR-135 Amendment 2, ADR-112 Amendment 7),
 through the real app, the real right check and the real logger, against the stand-in gateway that
-refuses as the pinned LiteLLM was measured to (`tests/adapters/model_litellm/test_stand_in_gateway.py`, rule 15).
+refuses as the pinned LiteLLM was measured to (rule 15;
+`tests/adapters/model_litellm/test_stand_in_gateway.py`).
 
 - rule 4: every `/v1/admin/models` route refuses a principal without `manage_models`, an
   administrator holding every other administration right included;

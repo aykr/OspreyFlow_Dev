@@ -398,11 +398,7 @@ class ModelAdmin:
             p.name: Engine(
                 name=p.name,
                 label=p.label or p.name,
-                models={
-                    r: gateway_model_name(p.name, m)
-                    for r, m in p.roles.items()
-                    if r in ROLES
-                },
+                models={r: gateway_model_name(p.name, m) for r, m in p.roles.items() if r in ROLES},
                 key_present=self.key_state(p.name) == "set",
                 privacy_contract=p.privacy_contract,
                 contract_reference=p.contract_reference,
