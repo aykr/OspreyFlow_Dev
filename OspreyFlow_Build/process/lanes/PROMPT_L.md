@@ -31,6 +31,11 @@ ending "Hash: recorded at merge." Commit in small Conventional Commits naming th
 OspreyFlow_Core/osprey.yaml or OspreyFlow_Core/data/; never merge to main; never push; no
 Co-Authored-By lines.
 
+Every question for the owner, every request (a reservation, a shared commit, a ratification) and your
+ready-to-merge go to the orchestrator's session (ospreyflow-7e) by cross-session message, never only in
+this window: the owner is often away, and the orchestrator answers or puts the question to the owner and
+sends the answer back. While a question is open, carry on with whatever it does not block.
+
 Before you report ready-to-merge, run the lane-reviewer agent on your own branch against your brief
 and rules 1-15, fix what it finds, and say in your report that you did and what it found (the build
 plan's review rule 1). Then rebase onto current main, and at that commit run make -k ci and make test
