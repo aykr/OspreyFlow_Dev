@@ -216,6 +216,11 @@ New ones are added at the bottom as they happen.
     correction that lowers its evidence, as a lowered cited link already does, the correction being the
     authorising act (the audit entry and pack items follow too).
 
+51. **Platform P2, on platform's recommendations (each can be widened later):** limits per engine, per team
+    when teams exist; a budget in tokens, not money, so no price list is kept; **no usage per person at all,
+    and no person id sent to the gateway** (the conservative choice; recording who uses models is yours to
+    turn on). The gateway's own per-model limits proved unenforced, so each engine gets its own gateway key.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
