@@ -80,6 +80,11 @@ LIVE_PLANTS = {
         ('"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n',
          '"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE $1::text IS NOT NULL "\n'),
     ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_links_answers_this_recipe_and_case_alone"]),
+    "T0": ("for item 8's cost: the capture turned off (the sink asked directly, nothing kept)", PUB, [
+        ("                own_links = _OwnLinks(sink, graph, tx) if sink is not None else None\n",
+         "                own_links = None\n"),
+        ("                    row_keys=own_links,\n", "                    row_keys=sink,\n"),
+    ], ["tests/services/api/test_pin_calls_refresh_live.py"]),
     "L4": ("the restore altering one stored property (occurrences + 1)", ADAPTER, [
         ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
          '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'
