@@ -541,7 +541,8 @@ async def _alert_datasets(graph: GraphPort, scheme: HandlingScheme, finding: Fin
     node_ids = [n for n in finding.node_ids if n not in pending]
     nodes = await graph.get_nodes(node_ids, reader) if node_ids else []
     edges = await graph.get_edges(list(finding.edge_ids), reader) if finding.edge_ids else []
-    touched = {d for element in (*nodes, *edges) for d in element.datasets} & layers
+    named = [*(d for n in nodes for d in n.datasets), *(d for e in edges for d in e.datasets)]
+    touched = set(named) & layers
     if not touched:
         return []
     if read_only_layer() in touched:

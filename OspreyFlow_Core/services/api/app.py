@@ -12977,7 +12977,7 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     # header's was never scoped and reads every one. The snapshot, a resync and each live push all
     # use the principal from here on.
     principal = await scope_to_case(
-        principal,  # type: ignore[arg-type]
+        principal,
         investigation_id,
         get_datasets(websocket),  # type: ignore[arg-type]
         holds_a_level=holds_a_level_in(lambda: get_investigations(websocket)),  # type: ignore[arg-type]
