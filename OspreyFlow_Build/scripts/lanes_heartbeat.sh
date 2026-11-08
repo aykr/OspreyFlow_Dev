@@ -95,19 +95,66 @@ progress_of() {
     END { if (total) { printf "%d %d\n", done+0, total; for (i=1;i<=n;i++) print line[i] } }' "$PROGRESS"
 }
 
-# The whole build in one line.
+# The step a lane is on: the first in review or being built, else the first still to do ("<id> <title>").
+current_of() {
+  [ -f "$PROGRESS" ] || return 0
+  awk -F'\t' -v lane="$1" '!/^#/ && NF>=4 && $1==lane {
+      if (!busy && ($4=="review" || $4=="building")) busy = $2 " " $5
+      if (!next_ && $4=="todo") next_ = $2 " " $5 }
+    END { print (busy ? busy : next_) }' "$PROGRESS"
+}
+
+# A progress bar: bar <done> <total> <width>, e.g. [███░░░░░░░░░].
+bar() {
+  local d="$1" t="$2" w="${3:-12}" f i out="["
+  [ "$t" -gt 0 ] || { echo "[]"; return; }
+  f=$(( (d * w + t / 2) / t ))
+  for ((i = 0; i < w; i++)); do if [ "$i" -lt "$f" ]; then out+="█"; else out+="░"; fi; done
+  echo "$out]"
+}
+
+# The whole build in one line; with a bar unless $1 is "plain" (`show --full` keeps its words alone).
 overall() {
   [ -f "$PROGRESS" ] || return 0
-  awk -F'\t' '!/^#/ && NF>=4 { n++; c[$4]++ }
-    END { if (n) printf "OVERALL: %d of %d steps done · %d in review · %d being built · %d to do\n\n", c["done"]+0, n, c["review"]+0, c["building"]+0, c["todo"]+0 }' "$PROGRESS"
+  local counts; counts="$(awk -F'\t' '!/^#/ && NF>=4 { n++; c[$4]++ }
+    END { if (n) printf "%d %d %d %d %d", c["done"]+0, n, c["review"]+0, c["building"]+0, c["todo"]+0 }' "$PROGRESS")"
+  [ -n "$counts" ] || return 0
+  set -- $counts "${1:-}"
+  local b=""; [ "${6:-}" = plain ] || b="$(bar "$1" "$2" 24) "
+  printf 'OVERALL: %s%d of %d steps done · %d in review · %d being built · %d to do\n\n' "$b" "$1" "$2" "$3" "$4" "$5"
 }
 
 # Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
+# Each test stack on one line; a lease held past its limit goes to the owner's list ($1).
+stacks_lines() {
+  local needs="$1" st lock
+  for st in $STACKS; do
+    if [ "$st" = a ]; then lock="$LEASE_DIR/stack.lease"; else lock="$LEASE_DIR/stack-$st.lease"; fi
+    if [ -d "$lock" ]; then
+      local h p s a; h=$(field holder "$lock/info"); p=$(field purpose "$lock/info"); s=$(field since "$lock/info")
+      a=$(age_s "$s")
+      echo "Test stack $st: leased by $h for '${p:0:70}', $(mins "$a") minutes"
+      if [ "$(mins "$a")" -ge "$LEASE_MAX_MIN" ]; then
+        echo "Test stack $st has been leased by $h since $s ($p)" >> "$needs"
+      fi
+    else
+      echo "Test stack $st: free"
+    fi
+  done
+}
+
+# `show` is one screen: a heading and at most one note line per lane, with the step it is on (the owner,
+# 8 November 2026: no scrolling). `show --full` adds every step as a checklist.
 show() {
+  local full=""; [ "${1:-}" = "--full" ] && full=1
+  local width="${COLUMNS:-$(tput cols 2>/dev/null || echo 110)}"; [ "$width" -gt 120 ] && width=120
   # Each run its own files: the owner's `watch` and anyone's `show` may run at the same moment.
   local needs mine
   needs="$(mktemp "$DIR/.needs.XXXXXX")"; mine="$(mktemp "$DIR/.orchestrator.XXXXXX")"
-  overall
+  if [ -n "$full" ]; then overall plain | sed '/^$/d'; else overall | sed '/^$/d'; fi
+  stacks_lines "$needs"
+  echo "Claude sessions running: $(sessions)"
+  echo
   for lane in $LANES; do
     local f="$DIR/$lane.beat" state="-" note="" at="" ago="never" ab="-" lc="-"
     if [ -f "$f" ]; then
@@ -155,6 +202,22 @@ show() {
     merged=""
     case "$ab" in +0/*) merged="all merged" ;; +*) merged="${ab%%/*} commits not yet merged"; merged="${merged#+}" ;; esac
     printf '%s: ' "$(echo "$lane" | tr '[:lower:]' '[:upper:]')"
+    if [ -z "$full" ]; then
+      # Two lines: the bar and the state; then the step it is on and its note, each within the screen.
+      local now line2
+      [ -n "$head" ] && printf '%s %s of %s done · ' "$(bar "$done" "$total" 12)" "$done" "$total"
+      case "$merged" in "all merged") merged=merged ;; *" commits not yet merged") merged="${merged%% *} to merge" ;; esac
+      if [ "$state" = paused ]; then
+        printf '%s · account %s%s\n' "$ago" "$account" "${merged:+ · $merged}"
+      else
+        printf '%s · %s · account %s%s\n' "$state" "$ago" "$account" "${merged:+ · $merged}"
+      fi
+      now="$(current_of "$lane")"
+      line2="${now:+now ${now%% *} $(echo "${now#* }" | cut -c1-48)}"
+      [ -n "$note" ] && line2="${line2:+$line2 — }$note"
+      [ -n "$line2" ] && printf '  %s\n' "${line2:0:$((width - 2))}"
+      continue
+    fi
     [ -n "$head" ] && printf '%s of %s done · ' "$done" "$total"
     if [ "$state" = paused ]; then
       printf '%s · account %s%s\n' "$ago" "$account" "${merged:+ · $merged}"
@@ -170,21 +233,6 @@ show() {
     echo
   done
   echo
-  local st lock
-  for st in $STACKS; do
-    if [ "$st" = a ]; then lock="$LEASE_DIR/stack.lease"; else lock="$LEASE_DIR/stack-$st.lease"; fi
-    if [ -d "$lock" ]; then
-      local h p s a; h=$(field holder "$lock/info"); p=$(field purpose "$lock/info"); s=$(field since "$lock/info")
-      a=$(age_s "$s")
-      echo "Test stack $st: leased by $h for '$p', $(mins "$a") minutes"
-      if [ "$(mins "$a")" -ge "$LEASE_MAX_MIN" ]; then
-        echo "Test stack $st has been leased by $h since $s ($p)" >> "$needs"
-      fi
-    else
-      echo "Test stack $st: free"
-    fi
-  done
-  echo "Claude sessions running: $(sessions)"
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi
   # The orchestrator's own queue: shown for information, never notified.
@@ -230,7 +278,7 @@ watch_loop() {
 case "${1:-show}" in
   beat) shift; beat "$@" ;;
   nudge) shift; nudge "$@" ;;
-  show) show ;;
+  show) shift; show "${1:-}" ;;
   watch) shift; watch_loop "${1:-300}" ;;
   *) echo "usage: lanes_heartbeat.sh beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | watch [seconds]" >&2; exit 2 ;;
 esac

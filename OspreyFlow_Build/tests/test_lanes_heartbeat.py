@@ -188,7 +188,7 @@ def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
 
 
 def test_each_lane_reads_as_a_checklist_of_every_step_in_words(hb, tmp_path) -> None:
-    """The view says in words what is done and what is left: an overall total, then per lane a
+    """`show --full` says in words what is done and what is left: an overall total, then per lane a
     heading with its count and state, and every step on its own line with its status spelled out."""
     table = tmp_path / "progress.tsv"
     table.write_text(
@@ -198,7 +198,7 @@ def test_each_lane_reads_as_a_checklist_of_every_step_in_words(hb, tmp_path) -> 
         "case\tL3.1\tL\tbuilding\tOnly step\n"
     )
     hb("beat", "studio", "working", "on the drawer")
-    out = hb("show", OSPREY_PROGRESS_FILE=str(table)).stdout
+    out = hb("show", "--full", OSPREY_PROGRESS_FILE=str(table)).stdout
     flat = [" ".join(line.split()) for line in out.splitlines()]
     assert "OVERALL: 1 of 5 steps done · 1 in review · 1 being built · 2 to do" in flat
     head = next(i for i, line in enumerate(flat) if line.startswith("STUDIO:"))
@@ -318,3 +318,32 @@ def test_a_stack_b_lease_older_than_its_limit_needs_you(hb) -> None:
     hb.hold_lease("rules", 121, "b")
     [line] = _needs(hb("show"))
     assert line.startswith("Test stack b has been leased by rules since ")
+
+
+
+def test_the_default_view_fits_one_screen_and_names_each_lanes_current_step(hb, tmp_path) -> None:
+    """The owner, 8 November 2026: "make the heartbeat report a bit more readable so that I don't have to
+    scroll". Six lanes with forty-odd steps ran to 68 lines, one per step. The default view is now one
+    heading and at most one note line per lane, with the step each lane is on; the checklist is
+    `show --full` (red against the per-step view)."""
+    rows = []
+    for lane in ("studio", "case", "admin", "rules", "platform", "docs"):
+        rows += [f"{lane}\t{lane[:2].upper()}{i}\tM\t{'done' if i < 3 else ('building' if i == 3 else 'todo')}\tStep {i}"
+                 for i in range(1, 9)]
+    table = tmp_path / "progress.tsv"
+    table.write_text("\n".join(rows) + "\n")
+    for lane in ("studio", "case", "admin", "rules", "platform", "docs"):
+        hb("beat", lane, "working", "x" * 300)
+    out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
+    lines = out.splitlines()
+    assert len(lines) <= 6 * 2 + 10, out
+    at = next(i for i, line in enumerate(lines) if line.startswith("STUDIO:"))
+    studio = lines[at]
+    assert "2 of 8 done" in studio and lines[at + 1].strip().startswith("now ST3 Step 3")
+    # A bar per lane and overall (the owner, the same afternoon: "some sort of progress bar").
+    assert "[███░░░░░░░░░]" in studio, studio
+    assert next(l for l in lines if l.startswith("OVERALL")).count("█") == 6  # 12 of 48, on a bar of 24
+    assert not any(line.strip().startswith("to do ") for line in lines)
+    assert all(len(line) <= 120 for line in lines), "a note is trimmed to the screen"
+    full = hb("show", "--full", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert "to do        ST8" in full
