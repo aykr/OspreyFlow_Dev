@@ -15,7 +15,8 @@ count: rules 3 and 7).
 
 **The cap is a job hand-off, not `working_set.models.LimitExceeded`.** That typed error's three
 options (`save_as_view`/`filter`/`promote_to_batch`) are working-set mutations; a pattern result,
-before `/seed` ever touches it, isn't one. `03_CONDUIT_MIDDLEWARE.md` §3.3 already specifies the answer:
+before `/seed` ever touches it, isn't one. `03_CONDUIT_MIDDLEWARE.md` §3.3 already specifies the
+answer:
 "large results return a job id" — the same shape `submit_supersede_node` uses for "a request that
 takes too long to be a reasonable synchronous operation," picked here from a real signal
 (`match_count` against the pattern's own `limit`), not a silent `.limit()` presented as complete.

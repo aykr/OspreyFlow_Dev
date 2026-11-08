@@ -4,9 +4,10 @@ An analyst asks the model about the case's Documents, or about the Documents the
 private case view (*Ask the model about these*, ADR-144 decision 4). The model reads every Document
 in the case's view that the analyst can see, whole, and answers from them only, saying which it
 draws on; anything it proposes (an entity, with the words that name it) is a pending finding in
-the same review queue as an extraction's, inferred until a person accepts it (rule 5), and placed in the Document where its words are, or left out and
-counted when they are not there. The conversation is kept with the case, or with the view it was
-asked in, read then only by those who may see the view (the owner's ruling of 8 November 2026).
+the same review queue as an extraction's, inferred until a person accepts it (rule 5), and placed
+in the Document where its words are, or left out and counted when they are not there. The
+conversation is kept with the case, or with the view it was asked in, read then only by those who
+may see the view (the owner's ruling of 8 November 2026).
 
 **Who may ask, and what the model is shown.** The case level is the route's (Editor to ask, since a
 question writes findings; Viewer to read the conversation). What the model reads is

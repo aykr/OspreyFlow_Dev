@@ -248,8 +248,8 @@ async def jumpable_alert(
     analytics: AnalyticsPort,
     case: str,
 ) -> Alert:
-    """The alert a jump opens a case from: the principal's own, and every node, link and transaction it
-    cites readable to them now, or refused exactly as a missing alert, before anything is created
+    """The alert a jump opens a case from: the principal's own, and every node, link and transaction
+    it cites readable to them now, or refused exactly as a missing alert, before anything is created
     (ADR-124 Amendment 17; rule 3, and ADR-146's tests: "`/alerts/<id>` for a reader who may not
     see the alert is refused exactly as a missing alert"). Seeding the readable referents of such an
     alert would give the jumper the entities the hidden link or transactions tie together."""
@@ -264,14 +264,14 @@ async def fetch_jumpable_referents(
 ) -> list[Node]:
     """The node-fetch half of the jump — `app.py`'s own route makes the case and seeds its working
     set, since both are already-established app.py-local orchestration (the
-    `investigations.create`/`working_set.seed`/`publish_delta`/`_record_history_step` sequence). This function is only
-    the part specific to an alert: re-fetching each referent fresh, as `principal` — the viewer at
-    jump time, never trusted from whatever `evidence_available` found true when the alert was
-    listed moments earlier, the same "re-verify from the authoritative source" discipline every
-    other read in this codebase already follows. The route first refuses an alert whose evidence is
-    not whole (`jumpable_alert`, ADR-124 Amendment 17); a referent gone between that check and this
-    read is not an error: the jump proceeds with whatever is readable, and says nothing of how many
-    were not (ADR-124 decision 1)."""
+    `investigations.create`/`working_set.seed`/`publish_delta`/`_record_history_step` sequence).
+    This function is only the part specific to an alert: re-fetching each referent fresh, as
+    `principal` — the viewer at jump time, never trusted from whatever `evidence_available` found
+    true when the alert was listed moments earlier, the same "re-verify from the authoritative
+    source" discipline every other read in this codebase already follows. The route first refuses an
+    alert whose evidence is not whole (`jumpable_alert`, ADR-124 Amendment 17); a referent gone
+    between that check and this read is not an error: the jump proceeds with whatever is readable,
+    and says nothing of how many were not (ADR-124 decision 1)."""
     readable: list[Node] = []
     for node_id in alert.referent_node_ids:
         node = await graph.get_node(node_id, principal)
