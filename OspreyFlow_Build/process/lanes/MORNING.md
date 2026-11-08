@@ -245,10 +245,16 @@ New ones are added at the bottom as they happen.
     sockets. Being fixed.
 
 54. **Rules and Monitoring is gated as ADR-146 decision 2 says** (rules L2.9, a tightening): offered only to
-    triage_alerts and author_rules holders, its routes refusing anyone else. The Data Engineer and the
-    Administrator lose Monitoring meanwhile: the rule audit returns with Admin › Audit (L2.6), screening-list
-    administration with the Studio (L1.6); held rows and deploy for the Data Engineer likewise follow their
-    steps. Home's counts are unchanged (named exemptions).
+    triage_alerts and author_rules holders, its routes refusing anyone else. Meanwhile the Data Engineer loses
+    rule deploy and retire, an alert's detail and screening-list administration (held rows stay, shared with
+    the Studio's Runs); the Administrator loses the rule audit (back with Admin › Audit, L2.6) and
+    screening-list administration (back with the Studio, L1.6). Home's counts are unchanged.
+
+55. **Merged:** admin L2.5 (`3656678`, the Invite escalation fixed) and case L3.2b (`3eca381`) in one gated
+    batch, whose one integration fault (admin's Roles screen listing the removed branch_case) was fixed in it;
+    **main's Glass no longer calls a removed branch route, so the single push is no longer blocked.**
+    Playwright no longer reuses a server already on its port (`758328a`): two lanes' keyboard runs had been
+    served another worktree's tree. Fresh sessions: admin L2.6 (Audit, ageing), case L3.3 (drawing boards).
 
 ## Evening, 7 November: your records of 7 November applied
 
