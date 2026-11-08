@@ -9,7 +9,7 @@ are listed and copied, never edited (`schemas.rights`).
 
 **Refused at the route** (`role_refusal`, `leaves_no_people_manager`): a name already used, no
 rights, a right that is not one, a forbidden pair (no role both proposes and approves the same kind
-of decision), a right the giver may not give (`giver_may_give`, pending the owner's Q3b), and a
+of decision), a right the giver may not give (`giver_may_give`, the owner's Q3b (a)), and a
 change that leaves no enabled person holding `manage_people` (ADR-145 Amendment 5).
 
 **A team** is a custom role with a display name and a contact mailbox. Its members are the role's
@@ -104,9 +104,9 @@ class RoleRefused(Exception):
 
 
 def giver_may_give(right: Right, giver_rights: Iterable[Right]) -> bool:
-    """Whether someone holding `giver_rights` may put `right` in a role, or give it. The one place
-    the owner's answer to L2.5 Q3b is decided; built as (a), pending it: an administration right
-    only by a holder of it, every other right freely. (b) would be `True`; (c) `right in held`."""
+    """Whether someone holding `giver_rights` may put `right` in a role, or give it: the owner's
+    ruling on L2.5 Q3b (a), 8 November 2026. An administration right only by a holder of it, every
+    other right freely; the clearance and handling ceiling (ADR-114 Amendment 5) stands apart."""
     return right not in ADMINISTRATION_RIGHTS or right in set(giver_rights)
 
 

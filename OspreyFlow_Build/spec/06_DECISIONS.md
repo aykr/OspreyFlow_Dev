@@ -29415,7 +29415,7 @@ offline (`process/lanes/rules/l2.8d/`).
 
 Status: written 8 November 2026 by the admin lane (L2.5), under the orchestrator's reservation of the
 same day. **Q1, Q2, Q3 and Q4 are the owner's rulings** of 8 November 2026, each the recommended
-option; **Q3b is pending the owner**; **Q5 is the orchestrator's settlement**, on the owner's review
+option; **Q3b is the owner's ruling** of 8 November 2026 ((a)); **Q5 is the orchestrator's settlement**, on the owner's review
 list. ADR-145 decisions 6 and 7, Amendment 4, and ADR-112 Amendments 4 and 5 stand except where
 this says so.
 
@@ -29442,12 +29442,12 @@ this says so.
    Amendment 4 added `draw_on_boards`, `promote_to_dataset`, `propose_types` and `accept_types` to the
    Analyst and Data Engineer in L2.5's `packages/schemas` commit, so that the pairs can be refused.
    Each right's route check comes with its own step.
-4. **Q3b, pending the owner: which rights need their holder.** Built as (a): only the administration
+4. **Q3b, the owner's ruling ((a)): which rights need their holder.** Only the administration
    rights (`schemas.rights.ADMINISTRATION_RIGHTS`, A1–A9) need a giver who holds them; any other right
    may be bundled or given by a holder of `manage_people`. This applies whether the right goes into a
-   custom role or is given to a person, singly, in a role or through a custom role. The other two
-   answers, (b) no right needs its holder and (c) every right does, are each one test in
-   `test_custom_roles.py`, marked `xfail(strict=True)`. The question arose because (c), as Q3 (a) was
+   custom role or is given to a person, singly, in a role or through a custom role. The answers not
+   chosen were (b), no right needs its holder, and (c), every right does. `giver_may_give` alone
+   decides it, held by `test_custom_roles.py`'s case for (a). The question arose because (c), as Q3 (a) was
    first worded, would bar an administrator, who holds none of the Analyst's rights, from making an
    analyst-like role. "Nobody can give more than they hold" for clearance and handling codes (ADR-114
    Amendment 5) is unchanged.

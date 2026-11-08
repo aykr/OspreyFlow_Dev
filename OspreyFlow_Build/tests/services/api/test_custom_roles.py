@@ -2,9 +2,8 @@
 Amendments 4 and 5). The routes that call them are `test_admin_roles_routes.py`'s; each refusal is
 shown red there, at the route, with its check removed (`L2.5_RED_RECORD.md`).
 
-The owner's answer to L2.5 Q3b is pending: (a) is built. `giver_may_give` alone decides it, and the
-three cases below say what each answer decides; the two not built are `xfail(strict=True)`, so
-changing the answer is the function and the markers.
+The owner ruled (a) on L2.5 Q3b (8 November 2026): only an administration right needs a giver
+who holds it. `giver_may_give` alone decides it.
 """
 
 from __future__ import annotations
@@ -69,7 +68,7 @@ def test_a_role_has_exactly_the_rights_given_once_each() -> None:
                         names_taken=()) == [Right.INVESTIGATE, Right.RUN_ANALYSIS]  # fmt: skip
 
 
-# --- L2.5 Q3b: which rights a giver must hold (pending the owner; (a) built) ---------------------
+# --- L2.5 Q3b: which rights a giver must hold (the owner's ruling, (a)) ---------------------------
 
 
 def test_q3b_a_an_administration_right_needs_its_holder() -> None:
@@ -78,16 +77,6 @@ def test_q3b_a_an_administration_right_needs_its_holder() -> None:
     assert giver_may_give(Right.ADMINISTER_SYSTEM, ADMIN)
     assert giver_may_give(Right.INVESTIGATE, PEOPLE_ONLY)
     _refused("beyond_your_rights", rights=["administer_system"], giver=PEOPLE_ONLY)
-
-
-@pytest.mark.xfail(strict=True, reason="L2.5 Q3b (b), not the answer built")
-def test_q3b_b_no_right_needs_its_holder() -> None:
-    assert giver_may_give(Right.ADMINISTER_SYSTEM, PEOPLE_ONLY)
-
-
-@pytest.mark.xfail(strict=True, reason="L2.5 Q3b (c), not the answer built")
-def test_q3b_c_every_right_needs_its_holder() -> None:
-    assert not giver_may_give(Right.INVESTIGATE, ADMIN)
 
 
 def test_an_administrator_may_bundle_an_analysts_rights() -> None:
