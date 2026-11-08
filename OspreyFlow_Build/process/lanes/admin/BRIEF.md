@@ -1,47 +1,45 @@
-# Admin lane · brief L2.4, part 2 · Admin › Datasets and System
+# Admin lane · brief L2.5 · people and roles, custom roles, teams and leads, and Disable
 
-Written by the orchestrator, 7 November 2026, for the glass lane after part 1's merge (`d035223`); moved
-to the **admin lane** on 8 November 2026, when glass was split (ADR-142 Amendment 3). This is the admin
-lane's first brief, for a fresh session on the orchestrator's account. Its wait is over: L3.1 (`738e0d2`) and
-L3.1b (`d198174`) are on `main`, with their fields. Opus, medium. Size L.
+Written by the orchestrator, 8 November 2026, after L2.4 part 2's merge. Rebase onto `main` first. Opus,
+medium. Size L. **Split** (the orchestrator's judgement): *Disable…*'s full transfer list reads the case
+lane's ownership route (L3.8), several case steps away (merge order 6). So L2.5 builds everything below and
+*Disable…* for what a person can own today; **L2.5b** (S) completes the transfer list once L3.8 is on main.
 
-**The lane.** `lane/admin` owns `apps/workspace/src/admin/**` except the Models and Maps sections (the
-platform lane's), and the Admin, people, roles, teams and audit routes in `services/api`
-(`process/BUILD_PLAN_PARALLEL_LANES.md`'s map). The shell, Home and the GOV.UK header are the rules lane's
-now: ask the orchestrator if this step needs a hook there. Live runs take a test stack
-(`stack_lease.sh acquire admin "<purpose>"`, a or b) and pin the ports it prints.
+**The lane.** `lane/admin` owns `apps/workspace/src/admin/**` except the Models and Maps sections, and the
+Admin, people, roles, teams and audit routes in `services/api`. The shell, Home and the GOV.UK header are
+the rules lane's. Live runs take a test stack (`stack_lease.sh acquire admin "<purpose>"`, a or b; pin
+the ports it prints). Before ready-to-merge: your own lane-reviewer pass, then make ci and make test at a
+commit (Prompt L).
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7 and 13 above all); ADR-145 decision 8 and Amendment 4
-decisions 6 and 7; ADR-143 Amendment 2 decisions 1 and 2; ADR-112 Amendments 4 and 5 (rights; a service
-account owns nothing); `spec/02_GLASS_FRONTEND.md`'s Admin area.
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 12, 13 and 15 above all); ADR-145 decision 7 and
+Amendment 4 (R1, R2, R3, A4, the guard rails); ADR-112 and Amendments 4, 5 and 7 (rights; the *Rule
+author* role and the Super user preset; `author_rules`, `merge_datasets`; a service account owns
+nothing); ADR-146 and Amendment 1 (teams, the lead, hand-over and cover, as the queue will read them);
+`spec/02_GLASS_FRONTEND.md`'s Admin area and `spec/03`'s people routes.
 
-**Build.**
-- **Admin › Datasets**, one row per dataset: its kind (*Source*, *Composite*, *Drawn*), unit, highest
-  marking it may hold, promotion policy; its **Authors** (people, a team, or both) and *Change owner…*
-  (the same choice *Make live* offers, refused for a service account, audited); **every linked case**
-  with its layer's item count, size and state (open, removed); for a removed case, *Merge into the
-  dataset* and *Delete*, each with its dry run (the actions themselves are L3.4's; here, the entries
-  and their refusals). **Never a layer's contents:** no item, label or property on any route.
-- **Admin › System: *Dataset owners may be*** people and teams (the default), people only, or teams only;
-  it governs *Change owner…* here and *Make live* in L3.1b.
-- Teams arrive with L2.5. Until then *Change owner…* offers people only, and says so.
+**Build** (the plan's row L2.5):
+1. **People:** the row (R3); Author visibility and *Name an Author* (R1).
+2. **Custom roles** (R2): an administrator defines a role from rights, with ADR-145 decision 7's
+   refusals at the route (the guard rails: no role that would lock every administrator out, no right a
+   role may not hold, service accounts refused).
+3. **ADR-112 Amendment 5:** `author_rules` and `merge_datasets` as rights, the *Rule author* role and the
+   Super user preset. Rights changes go to the orchestrator as a small `packages/schemas` commit, merged
+   first; run the whole of make ci on it before sending.
+4. **Teams:** name, mailbox, a level in a case, ownership; **the lead**, hand-over and cover, in the shape
+   ADR-146 Amendment 1's queue tools will read (rules' L2.10 consumes it; say what you expose).
+5. ***Disable…*** with transfers for what a person can own today: cases (and their home cases), datasets'
+   Authors, and anything else on main that names an owner; refused, in words, while any item is
+   untransferred. Leave one clearly named seam for L3.8's ownership route (views, boards, promotions,
+   proposed types) and list it as L2.5b's.
 
-**The hard parts (name them in your plan).** The layer counts are a new read across cases: an
-administrator sees counts for cases they are not a member of, and nothing else. Prove no route returns an
-item, label or property, red with one label added to the response. Counts are taken by the store, not
-filtered in the Conduit (rule 3). A removed case's row must not reveal more than an open one's.
+**Tests first, each red by a plant at the real call site:** decision 7's refusals at the route, each red
+with its check removed; *Disable…* refused with an item untransferred, and allowed once all are; a
+service account can neither own nor be made an owner or lead; a custom role's rights are exactly what it
+was given (red with one extra); ADR-112 Amendment 5's tests; keyboard cases for every new action (rule
+13), their registry ids as a diff for the orchestrator; axe in dark, light and GOV.UK.
 
-**Tests first.** Each column's route refuses without its right (the section's right from Amendment 3);
-the counts-only test above; *Change owner…* refused for a service account and against the System
-setting; keyboard cases in `keyboard/admin.spec.ts` for *Change owner…*, the System setting and each
-removed-case entry (rule 13; registry ids to me as a diff); axe in dark, light and GOV.UK.
+**Carried from L2.4 part 2's review, fix if quick:** a deployment default for the promotion policy; the
+policy shown under Details rather than in the row; registry ids for Details and Cancel.
 
-**Carried from part 1's review.**
-- The routes test in the reverse direction: a holder of the right alone is answered (Proposed types'
-  `require_admin_role`; the schedule preview, which also answers `operate_schedules`).
-- The place-test helper gap the review named.
-- REPORT at most twenty lines.
-
-**Exit.** ADR-145 Amendment 4's Datasets and System tests green; no layer contents on any route;
-`spec/02` updated in the same commits; a friction fragment; the report, with questions for the owner
-sent to me by message.
+**Exit.** The row's exit except the L3.8 seam; make ci and make test green offline; the live cases under a
+named lease and stack; a friction fragment. Report in Prompt L's format, then stop.
