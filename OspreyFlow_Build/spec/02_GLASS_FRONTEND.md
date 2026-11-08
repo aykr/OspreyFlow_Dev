@@ -513,6 +513,9 @@ it. Home's alert rows open the alert for whoever Rules and Monitoring is offered
 not (a Reports Viewer) they stay on the Glass's card and open the case, until L2.12. An address followed
 by someone the place is not offered to opens the Glass instead, and the address is left. The place, like
 the Studio, draws none of the Glass's working-set tools (the Inspector, the timeline, the status line).
+**Open the evidence** (R5) saves the alert's evidence, the nodes the reader was shown, as a private view of
+the alert's case and opens it as the read-only lens (§3.1h); its banner says "Opened from an alert" and
+offers *← Back to the alert*, which returns to the alert's address with the alert still open.
 `keyboard/rules-place.spec.ts` proves the place's tabs and the address by keyboard; axe scans
 `keyboard/rules-place-harness.html` and `keyboard/monitoring-harness.html` (the tabs) in the three themes.
 

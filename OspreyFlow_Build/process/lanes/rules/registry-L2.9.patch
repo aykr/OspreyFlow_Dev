@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index ea01d5e..c19bed3 100644
+index bce4d1f..8636eff 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 @@ -255,9 +255,9 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
@@ -7,7 +7,7 @@ index ea01d5e..c19bed3 100644
   * harness/spec pair). Every native `Input`/`Select`'s own Tab-reachability needs no case here, the
   * same exemption `QUERY_BUILDER_ACTIONS`'s own docstring already establishes — only an action with
 - * real state mutation or a real network call does: creating a hotlist or a monitor, jumping from
-- * an alert into a branched investigation, and opening that investigation once the jump result is
+- * an alert into the case it is opened in, and opening that case once the jump result is
 - * shown (a real callback out of the component, not only a local state flip).
 + * real state mutation or a real network call does: creating a hotlist or a monitor, and opening an
 + * inbox alert at its own address (ADR-146 decision 6, L2.9: a real callback out of the component,
@@ -25,7 +25,7 @@ index ea01d5e..c19bed3 100644
  ] as const);
  
  /**
-@@ -565,7 +564,7 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+@@ -568,7 +567,7 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
    "show-an-alert-on-the-canvas-by-keyboard",
    "close-an-alert-with-a-reason-by-keyboard",
    // The owner's answer of 1 November 2026: the closing reason, one of a closed list of five; and
@@ -34,13 +34,13 @@ index ea01d5e..c19bed3 100644
    "choose-a-closing-reason-by-keyboard",
    "reach-the-watches-and-alert-inbox-by-keyboard",
    "filter-the-queue-by-keyboard",
-@@ -750,6 +749,22 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+@@ -756,6 +755,25 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
    "rail-more-by-keyboard",
    "more-views-by-keyboard",
    "open-a-folded-panel-by-keyboard",
 +  // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the
 +  // switcher and back to the Glass's last view; and ADR-146 decision 6: Home opens an alert, not its
-+  // case, and Rules and Monitoring's card by its key.
++  // case, and Rules and Monitoring's card by its key, a case chosen for it.
 +  "switch-to-rules-and-monitoring-by-keyboard",
 +  "back-to-the-glass-from-rules-and-monitoring-by-keyboard",
 +  "open-an-alert-from-home-by-keyboard",
@@ -48,12 +48,15 @@ index ea01d5e..c19bed3 100644
 +] as const);
 +
 +/** Rules and Monitoring (ADR-146 decisions 2 and 6, L2.9): its tabs, an alert opened at its own
-+ * address and left by Back, and an address the reader may not see left for the queue.
-+ * `keyboard/rules-place.spec.ts`. */
++ * address and left by Back, an address the reader may not see left for the queue, and *Open the
++ * evidence* with the way back to the alert, still open. `keyboard/rules-place.spec.ts`. */
 +export const RULES_PLACE_ACTIONS = defineActionRegistry("RULES_PLACE_ACTIONS", [
 +  "move-between-the-tabs-by-keyboard",
 +  "open-an-alert-at-its-address-by-keyboard",
 +  "back-to-the-queue-from-an-address-by-keyboard",
++  // ADR-146 decision 6 (R5): Open the evidence, and the way back to the alert, still open.
++  "open-the-evidence-by-keyboard",
++  "back-to-the-alert-from-its-evidence-by-keyboard",
  ] as const);
  
  // ADR-135 Amendment 2: Admin › Models (platform lane P1), its own harness until the section is in

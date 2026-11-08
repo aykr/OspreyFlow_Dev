@@ -29925,7 +29925,7 @@ from about 20 hours to about 13.
 Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
 the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below) and its interim on Q1,
 which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except where this says so.
-*Open the evidence* (decision 6) is built after case's L3.2b, on its read-only lens, and recorded then.
+*Open the evidence* (decision 6) is built on case's L3.2b read-only lens (ADR-144 Amendment 2), point 10.
 
 1. **The place's gate.** ADR-145 Amendment 1 shows a place from the checks its routes declare. ADR-146
    decision 2 opens Rules and Monitoring to `triage_alerts` or `author_rules` and no one else, but its
@@ -29984,6 +29984,13 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
    Glass's banner is *Case · Boards*. Connection strength (ADR-139), not alerts, stays in the Glass
    under the rail's ⋯ More. The count before the canvas stays 24.
 
+10. **Open the evidence (R5).** The alert's detail offers *Open the evidence* to any reader of it. It saves
+    a private view of the alert's own case (`POST …/views`, ADR-144 decision 4, behind `investigate`)
+    holding the nodes the reader was just shown, named "From alert: ‹title›", leaves the alert's
+    address, and opens the view as the Glass's read-only lens. The lens's banner says "Opened from an
+    alert" and offers *← Back to the alert* (focused when it opens) before *Back to the case*; it
+    returns to the alert's address, the alert still open in the queue. A view opened any other way has
+    no way back to an alert. It replaces the jump's case of its own, and so ends L3.2's interim Q1.
 9. **The place draws only for whom it is offered.** An address followed by someone the place is not
    offered to lands on the Glass, the address left; under the place the Glass's Inspector, timeline and
    status line are not drawn.
@@ -29995,7 +30002,9 @@ refused over HTTP); `test_alert_address.py`, its reader the principal the real `
 path with no case (reading no dataset) and its fakes refusing what the graph, the analytics and the
 queue's scope refuse (the seven unseeable cases answered as a missing one; red with the case check, the
 evidence check and the case scoping each removed, and with the reader read unscoped); `App.test.tsx`
-(the address for someone not offered the place; no working-set tools under it, each red); `keyboard/shell.spec.ts`,
+(the address for someone not offered the place; no working-set tools under it; *Open the evidence*,
+then *← Back to the alert*, returns to the same alert, still open, red with the way back not navigating
+and with the evidence saved short; each red); `keyboard/shell.spec.ts`,
 `keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
 new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
 address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.

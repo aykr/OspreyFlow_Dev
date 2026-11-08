@@ -187,3 +187,33 @@ of a dataset its case does not read was answered.
     ✘  1 keyboard/shell.spec.ts:303:1 › Rules and Monitoring's card opens by its key, and a case is chosen for it by keyboard (5.3s)
     1 failed
 ```
+
+## 5. Open the evidence (item 4, on L3.2b)
+
+```
+### App: Back to the alert closes the view but does not return to the alert
+  plant: src/App.tsx: 'closeLens();\n                          navigate(alertPath(alertId));' -> 'closeLens();\n                          void alertId;'
+    ❯ src/App.test.tsx (33 tests | 1 failed | 32 skipped) 1773ms
+    × Open the evidence, then Back to the alert, returns to the same alert, still open 1253ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 32 skipped (33)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+### App: the evidence saved without the alert's nodes (the case's whole canvas)
+  plant: src/App.tsx: 'name: `From alert: ${title}`.slice(0, 200),\n                nodeIds,' -> 'name: `From alert: ${title}`.slice(0, 200),\n                '
+    ❯ src/App.test.tsx (33 tests | 1 failed | 32 skipped) 1599ms
+    × Open the evidence, then Back to the alert, returns to the same alert, still open 1188ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 32 skipped (33)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
+### AlertQueue: Open the evidence's handler dropped
+  plant: src/alerts/AlertQueue.tsx: 'const refused = await props.onOpenEvidence!({' -> 'const refused = await (async (_: unknown) => null)({'
+    ✘  1 keyboard/rules-place.spec.ts:70:1 › the evidence is opened, and Back to the alert returns to it, still open, by keyboard (5.3s)
+    Error: expect(locator).toBeVisible() failed
+    1 failed
+### ViewLensBanner: the way back to the alert's handler dropped
+  plant: src/views/ViewLensBanner.tsx: 'onClick={from.onBack}' -> 'onClick={() => undefined}'
+    ✘  1 keyboard/rules-place.spec.ts:70:1 › the evidence is opened, and Back to the alert returns to it, still open, by keyboard (5.3s)
+    Error: expect(page).toHaveURL(expected) failed
+    14 × locator resolved to <html lang="en" data-theme="dark" data-brand="ospreyflow">…</html>
+    1 failed
+```
