@@ -8,13 +8,10 @@ which `make test` does not reach after a pytest failure), the Models keyboard wa
 
 **make -k ci:** every gate passes but these.
 - The seven `trivy-image-*` scans: Docker Hub refused the base images, `429 Too Many Requests` (14 lines).
-- `citation-check`: this README's earlier version cited a test without its `tests/` prefix; corrected in the
-  commit after b298593 (`make citation-check` passes there).
 
 **make -k test:** 8334 passed, 2 skipped (the two live gateway tests, run under a lease instead), 5 failed, 2 errors.
 - `tests/services/api/test_admin_sections.py` (2): Models is in no section until the orchestrator commits the
   section-list diff; with it applied both pass.
-- `tests/test_doc_citations_check.py::test_the_repository_itself_is_clean`: the citation above.
 - `tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly`: expects
   `VALKEY_PORT` unset or 6379; this offline run pinned it to an unused port. Not a code fault.
 - `tests/harness/test_deployment_schema.py::test_the_committed_osprey_yaml_still_validates`: the unstaged
