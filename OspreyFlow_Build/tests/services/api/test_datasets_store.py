@@ -225,6 +225,7 @@ async def test_postgres_widens_an_old_kind_check_to_take_drawn(fresh_dsn: str) -
         checks = await conn.fetch(
             "SELECT pg_get_constraintdef(c.oid) AS d FROM pg_constraint c JOIN pg_class t "
             "ON t.oid = c.conrelid WHERE t.relname = 'datasets' AND c.contype = 'c' "
+            "AND t.relnamespace = current_schema()::regnamespace "
             "AND pg_get_constraintdef(c.oid) LIKE '%kind%'"
         )
         assert len(checks) == 1 and "drawn" in checks[0]["d"]

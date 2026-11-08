@@ -1157,6 +1157,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await history.close()
         await source_store.close()
         await target_model_store.close()
+        # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
+        # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
+        app.state.target_models = None
         await sites.close()
         await judgements_store.close()
         await link_notes_store.close()
