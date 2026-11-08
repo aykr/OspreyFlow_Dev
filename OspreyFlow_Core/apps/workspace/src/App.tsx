@@ -917,15 +917,15 @@ export function App() {
   // The latest view asked for: an earlier answer arriving after it is dropped.
   const lensAskedRef = useRef(0);
 
-  function showLens(opened: CaseViewOpened): void {
+  function showLens(opened: CaseViewOpened, fromAlert: { alertId: string; title: string } | null = null): void {
     // Whatever opened this view, an earlier `openLens` still in flight no longer replaces it.
     lensAskedRef.current += 1;
     setViewProblem(null);
     const timeline = crossFilterRef.current?.store.getState();
     if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
     setLens(buildLens(opened));
-    // Opened another way, a view has no alert to go back to (*Open the evidence* sets it after).
-    setLensFromAlert(null);
+    // A view opened from an alert (*Open the evidence*) keeps the way back to it; any other has none.
+    setLensFromAlert(fromAlert);
     setSelectedNodeIds([]);
     setSelectedNode(null);
     // The view's window, or none: a view keeps no window of the case's.
@@ -933,22 +933,25 @@ export function App() {
     setView("graph");
   }
 
-  async function openLens(viewId: string): Promise<void> {
-    if (!investigationId) return;
+  /** Opens a view as the lens; resolves to the words said when it could not be opened (also shown
+   * over the canvas), or `null` when it was, or when a later request replaced this one. */
+  async function openLens(viewId: string, fromAlert: { alertId: string; title: string } | null = null): Promise<string | null> {
+    if (!investigationId) return null;
     const asked = ++lensAskedRef.current;
     const result = await openView(API_BASE_URL, bearerToken, investigationId, viewId);
-    if (asked !== lensAskedRef.current) return;
+    if (asked !== lensAskedRef.current) return null;
     if (result.ok) {
-      showLens(result.opened);
-      return;
+      showLens(result.opened, fromAlert);
+      return null;
     }
-    setViewProblem(
+    const problem =
       result.kind === "not_found"
         ? "That view could not be opened. It may have been deleted, or not shared with you."
         : result.kind === "limit_exceeded"
           ? `This view holds more than the canvas can: ${result.wouldBe.would_be.toLocaleString("en-GB")} ${result.wouldBe.cap_kind === "nodes" ? "nodes" : "links"} against a limit of ${result.wouldBe.cap.toLocaleString("en-GB")}. Nothing was cut to fit.`
-          : result.message,
-    );
+          : result.message;
+    setViewProblem(problem);
+    return problem;
   }
 
   function closeLens(): void {
@@ -1707,9 +1710,10 @@ export function App() {
                 nodeIds,
               });
               if (!saved.ok) return saved.message;
+              // Said on the alert, which stays open at its address, when the view cannot be opened.
+              const problem = await openLens(saved.view.id, { alertId, title });
+              if (problem) return `The evidence was saved as the private view “${saved.view.name}”, but it could not be opened: ${problem}`;
               navigate("/");
-              await openLens(saved.view.id);
-              setLensFromAlert({ alertId, title });
               return null;
             }}
           />

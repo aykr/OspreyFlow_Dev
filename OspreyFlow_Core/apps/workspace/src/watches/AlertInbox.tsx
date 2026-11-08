@@ -118,9 +118,13 @@ export function AlertRow({ alert, onOpen }: AlertRowProps) {
           Evidence no longer available.
         </p>
       )}
-      <Button onClick={() => onOpen(alert.id)} disabled={unavailable}>
-        Open the alert
-      </Button>
+      {/* An alert has an address only with evidence to show and a case to open it in (ADR-146
+          Amendment 2 point 6): a notify stub, or one raised in no case, offers none. */}
+      {alert.mode === "full" && alert.investigation_id && (
+        <Button onClick={() => onOpen(alert.id)} disabled={unavailable}>
+          Open the alert
+        </Button>
+      )}
     </li>
   );
 }

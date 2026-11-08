@@ -69,7 +69,6 @@ export interface FiredOn {
 export const isScheduleNotice = (alert: AlertView) => alert.rule_id.startsWith("schedule:");
 
 
-
 /** ADR-099 Amendment 3: watches and their alerts are the dataset's, asked of the case. */
 function caseUrl(apiBaseUrl: string, investigationId: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`;

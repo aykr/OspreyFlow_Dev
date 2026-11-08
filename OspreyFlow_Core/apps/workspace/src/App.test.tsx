@@ -591,6 +591,8 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       expect(saved).toEqual([{ name: "From alert: Structuring", node_ids: ["n1"] }]);
       expect(within(banner).getByText("From alert: Structuring")).toBeTruthy();
       expect(within(banner).getByText("Opened from an alert")).toBeTruthy();
+      // The way back has focus when the view opens, so a keyboard user is on it.
+      await vi.waitFor(() => expect(document.activeElement?.textContent).toBe("← Back to the alert"));
       expect(within(banner).getByText("Private")).toBeTruthy();
       expect(screen.getByRole("region", { name: "You are in the Glass" })).toBeTruthy();
       fireEvent.click(within(banner).getByRole("button", { name: "← Back to the alert" }));
@@ -600,6 +602,49 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
         expect(screen.getByRole("button", { name: /Open alert:.*Structuring/ }).getAttribute("aria-pressed")).toBe("true"),
       );
       expect(await screen.findByRole("button", { name: "Open the evidence" })).toBeTruthy();
+      expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
+  // The review's round 2: a view saved but not opened is said on the alert, which stays open at its
+  // address; nothing is shown as opened.
+  test("Open the evidence says so on the alert when the view cannot be opened", async () => {
+    const node = {
+      id: "n1", type: "Account", properties: { name: "GB-MULE-0042" },
+      provenance: { state: "asserted", sources: [], first_seen: "2026-10-01T00:00:00Z" },
+      handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" },
+      audit: { created_at: "2026-10-01T00:00:00Z", created_by: "seed", revision: 1 },
+    }; // prettier-ignore
+    const alert = {
+      id: "a1", rule_id: "typology:r1", owner_id: "o", mode: "full", investigation_id: "inv-1", status: "open",
+      assignee: null, typology: "structuring", referent_node_ids: ["n1"], created_at: "2026-11-01T09:00:00Z",
+    }; // prettier-ignore
+    const row = { alert, summary: "4 movements", kind: "typology", severity: "medium", audience: "case", team: null };
+    const view = { id: "v-ev", case_id: "inv-1", name: "From alert: Structuring", created_by: "analyst-1", created_at: "2026-11-08T00:00:00Z", shared: false, chosen: 1 };
+    const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => {
+      const url = String(input).split("?")[0]!;
+      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate", "triage_alerts", "read_alert_queue"] });
+      if (url.endsWith("/v1/investigations")) return json([{ id: "inv-1", name: "Kestrel", level: "editor", created_at: "", created_by: "" }]);
+      if (url.endsWith("/inv-1/alert-queue")) return json([row]);
+      if (url.endsWith("/inv-1/alert-queue/a1")) return json({ ...row, nodes: [node], edges: [], transactions: [] });
+      if (url.endsWith("/v1/alerts/a1")) return json({ investigation_id: "inv-1", explanation: { ...row, nodes: [node], edges: [], transactions: [] } });
+      if (url.endsWith("/inv-1/views") && init?.method === "POST") return json(view, 201);
+      if (url.endsWith("/inv-1/views/v-ev")) return json({ error: "view_not_found" }, 404);
+      return new Promise<Response>(() => undefined);
+    });
+    try {
+      render(<App />);
+      fireEvent.click(await rulesPlace());
+      fireEvent.click(await screen.findByRole("button", { name: /Open alert:.*Structuring/ }));
+      fireEvent.click(await screen.findByRole("button", { name: "Open the evidence" }));
+      expect(
+        await screen.findByText(/The evidence was saved as the private view “From alert: Structuring”, but it could not be opened/),
+      ).toBeTruthy();
+      expect(window.location.pathname).toBe("/alerts/a1");
+      expect(screen.getByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
       expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");

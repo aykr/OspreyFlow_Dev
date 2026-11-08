@@ -1900,14 +1900,15 @@ def test_b13_a_hotlist_alone_fires_nothing_until_the_ingest_arrives(
     )
 
 
-def test_b14_an_alert_opens_into_a_case_holding_its_entities(
+def test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities(
     seizure_alert: dict, analyst: httpx.Client
 ) -> None:
     """**B14**: "Open the alert into a pre-populated investigation … The new working set contains
     the alert's entities and a link to the originating investigation."
 
-    The entities half holds, at the alert's own address in its case (ADR-146 Amendment 2); the link
-    half is withdrawn by ADR-144 Amendment 1, and no case of its own is made since L2.9.
+    The entities half holds, at the alert's own address in its own case (ADR-146 Amendment 2; B14 as
+    `spec/08_ACCEPTANCE_SCENARIOS.md` now says it); the link half is withdrawn (ADR-144 Amendment 1,
+    and Amendment 2 decision 2), and no case of its own is made since L2.9.
     """
     alert = seizure_alert["alerts"][0]
 
@@ -1917,6 +1918,8 @@ def test_b14_an_alert_opens_into_a_case_holding_its_entities(
     assert opened.status_code == 200, opened.text
     result = opened.json()
     assert result["explanation"]["nodes"], f"the alert opened with none of its entities: {result}"
+    # In the case it was raised in, never a case of its own.
+    assert result["investigation_id"] == alert["investigation_id"], result
     # ADR-124: no figure for what the reader may not read.
     assert "unreadable_count" not in result
 

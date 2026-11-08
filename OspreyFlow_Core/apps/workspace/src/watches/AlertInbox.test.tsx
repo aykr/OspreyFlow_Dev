@@ -184,7 +184,21 @@ describe("the hotlist alert's fired-on text", () => {
     mode: "full",
     referent_node_ids: ["n1"],
     evidence_available: true,
+    investigation_id: "case-1",
   };
+
+  test("offers no Open the alert for one with no address: raised in no case, or a notify stub", () => {
+    // ADR-146 Amendment 2 point 6: the address answers neither, so the row does not offer it.
+    for (const alert of [{ ...FULL, investigation_id: null }, NOTIFY_ALERT]) {
+      const { queryByRole, unmount } = render(
+        <ul>
+          <AlertRow alert={{ ...alert, fired_on: [{ type: "Endpoint", label: "x", files: [], more_files: 0 }] }} onOpen={() => undefined} />
+        </ul>,
+      );
+      expect(queryByRole("button", { name: "Open the alert" })).toBeNull();
+      unmount();
+    }
+  });
 
   test("withheld sources are said in words, with no file", () => {
     const { container } = render(

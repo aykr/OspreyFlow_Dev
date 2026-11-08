@@ -15,7 +15,7 @@ import { assertAllCovered, registerCovered, WATCH_PANEL_ACTIONS } from "./action
 
 declare global {
   interface Window {
-    __WATCH_HARNESS__?: { openedInvestigationId: string | null };
+    __WATCH_HARNESS__?: { openedAlertId: string | null };
   }
 }
 
