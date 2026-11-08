@@ -299,14 +299,21 @@ test("an alert on Home is reached by Tab and opened at its address by keyboard",
 });
 
 // ADR-146 decision 2 (rule 13): Rules and Monitoring's card on Home, by its key R, and with no case
-// open, a case chosen for it opens on the place.
+// open, a case chosen for it opens on the place (`openCaseOnRules`, `/rules?investigation=…`).
 test("Rules and Monitoring's card opens by its key, and a case is chosen for it by keyboard", async ({ page }) => {
-  await page.route("**/*/v1/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  const CASES = [{ id: "c1", name: "Operation Ledger (synthetic demo)", level: "author", created_at: "2026-10-01T09:00:00Z", created_by: "a" }];
+  await page.route("**/*/v1/**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(new URL(route.request().url()).pathname === "/v1/investigations" ? CASES : []) }),
+  );
   await page.goto("/keyboard/start-harness.html?rights=investigate,triage_alerts,read_alert_queue");
   await expect(page.getByRole("region", { name: "Rules and Monitoring" })).toBeVisible();
   await page.locator("body").focus();
   await page.keyboard.press("r");
   await expect(page.getByRole("heading", { name: "Choose the case whose alerts to work" })).toBeVisible();
+  await page.getByRole("button", { name: "Operation Ledger (synthetic demo)", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__START__?.opened)).toEqual({ id: "c1", view: "rules" });
+  await expect(page.getByText("Workspace on c1, rules")).toBeVisible();
   registerCovered(REGISTRY, "open-rules-and-monitoring-from-home-by-keyboard");
 });
 

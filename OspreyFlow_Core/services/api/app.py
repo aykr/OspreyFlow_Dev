@@ -6859,6 +6859,7 @@ async def open_alert_at_address(
     alerts_store: AlertsStoreDep,
     principal_names: PrincipalNamesDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AlertAtAddress:
     """An alert's own address, `/alerts/<id>` (ADR-146 decision 6), which Home, the canvas, a board,
     an email and the queue all open: the case it is worked in, and its explanation there, read as
@@ -6875,6 +6876,12 @@ async def open_alert_at_address(
         raise AlertNotFoundError(alert_id) from None
     if case_id is None:
         raise AlertNotFoundError(alert_id)
+    # The path names no case, so `get_principal` reads no dataset for this reader
+    # (`outside_any_case`): the reader reads the alert's case's datasets, and no others, as every
+    # route of a case does (ADR-099).
+    principal = await scope_to_case(
+        principal, case_id, datasets, holds_a_level=holds_a_level_in(investigations)
+    )
     explanation = await alert_queue.explain(
         alerts_store, graph, analytics, case_id, alert_id, principal
     )
@@ -11611,7 +11618,6 @@ async def list_held_rows(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
     dependencies=[
         Depends(require_right(Right.DECIDE_HELD_ROWS)),
-        Depends(require_rules_place),
         NoHeldRowsInACompositeCase,
     ],
 )
@@ -11751,7 +11757,6 @@ async def release_held_rows_route(
     "/v1/investigations/{investigation_id}/held-rows/reject",
     dependencies=[
         Depends(require_right(Right.DECIDE_HELD_ROWS)),
-        Depends(require_rules_place),
         NoHeldRowsInACompositeCase,
     ],
 )

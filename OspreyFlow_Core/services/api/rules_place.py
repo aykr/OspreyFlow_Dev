@@ -4,9 +4,10 @@ The place is opened by `triage_alerts` or `author_rules` (ADR-112 Amendment 5 de
 nothing else. Hiding it from the switcher is never the control (rule 3): every route of the place
 asks for the gate as well as the right its own action takes, so a person holding one of those
 action rights (the Data Engineer's `deploy_rules`, the Administrator's `read_rule_audit`) but
-neither opening right is refused there too. The two reads Home also makes for its counts, the
-queue list and the held rows list, are the only routes of the place without it
-(`tests/services/api/test_place_routes.py`, `HOME_READS`).
+neither opening right is refused there too. The routes of the place without it are those used
+outside it too (`tests/services/api/test_place_routes.py`, `SHARED`): the queue's list (Home, the
+switcher's count, a report pack's alert items) and the held rows' list, rejection and release (Home,
+and the Studio's Runs, ADR-140).
 """
 
 from __future__ import annotations

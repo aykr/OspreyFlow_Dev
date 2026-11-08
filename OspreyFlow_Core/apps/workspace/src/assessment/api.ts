@@ -5,7 +5,7 @@
 //
 // **`Yardstick`/`YardstickBand` are hand-mirrored here, not imported from
 // `packages/schemas/generated/`** — the same disclosed gap `watches/api.ts`'s own header comment
-// already names for `AlertView`/`AlertJumpResult`/`Investigation`: `packages/schemas/
+// already names for `AlertView`: `packages/schemas/
 // generate_ts.py`'s own model list is `schemas.{analytics,compute,domain,ingest,model,profile,
 // provider_profile}` only, and `Yardstick`/`YardstickBand` live in `packages/ontology/
 // yardstick.py`, outside that scope. `Judgement`/`IntelligenceGap`/`Assumption` *are* generated

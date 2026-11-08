@@ -776,6 +776,14 @@ export function App() {
   useEffect(() => {
     if (rulesAddressed && opensRules) setView("alerts");
   }, [rulesAddressed, opensRules]);
+  // ADR-145 N6 and ADR-146 decision 2: the place is drawn only for whom it is offered. Someone else
+  // following an address (an email's link) lands on the Glass, the address left; the Conduit would
+  // refuse the place's routes anyway (its gate), but for the two lists read outside it.
+  useEffect(() => {
+    if (!rightsSettled || opensRules || view !== "alerts") return;
+    setView(landingView(rights));
+    if (address.kind !== "none") navigate("/", { replace: true });
+  }, [rightsSettled, opensRules, view, rights, address.kind]);
   useEffect(() => {
     if (addressed?.status === "found" && addressedAlert && addressed.caseId !== investigationId) {
       openAlertInItsCase(addressedAlert, addressed.caseId);
@@ -1467,7 +1475,8 @@ export function App() {
   const mainViews = allowedViews.filter((v) => v.id === "graph" || v.id === "map");
   const otherViews = allowedViews.filter((v) => v.id !== "graph" && v.id !== "map");
   const showsWorkingSetTools =
-    showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards"].includes(view);
+    // Rules and Monitoring is a place of its own (ADR-146 decision 2), not a view over the working set.
+    showsInspector(rights) && !["ingest", "alerts", "dossier", "reports", "dashboards"].includes(view);
 
   return (
     // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
@@ -1991,7 +2000,7 @@ export function App() {
               })()}
           </div>
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "dashboards" && showsInspector(rights) && (
+        {view !== "ingest" && view !== "alerts" && view !== "dossier" && view !== "dashboards" && showsInspector(rights) && (
           <SidePanelFrame name="Inspector">
             <SidePanelStack
               panels={[

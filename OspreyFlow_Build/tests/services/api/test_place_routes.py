@@ -55,7 +55,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # The queue's list is read in the Glass too, by a report pack's alert items (ADR-134 decision 1).
     (r"/alert-queue$", frozenset({"glass", "rules"}),
      "Rules and Monitoring's Alerts; the Glass's report packs (reports/packsApi.ts)"),
-    (r"/held-rows(/|$)|/alert-queue|/alert-assignees|/alerts(/|$)|/hotlists|/monitors"
+    # Held rows are worked in the Studio's Runs too (ADR-140), and read by Home.
+    (r"/held-rows(/|$)", frozenset({"ingest", "rules"}),
+     "Rules and Monitoring's Held rows; the Studio's Runs (ingest/runs/RunsTab.tsx)"),
+    (r"/alert-queue|/alert-assignees|/alerts(/|$)|/hotlists|/monitors"
      r"|/rules(/|$)",
      frozenset({"rules"}), "Rules and Monitoring (alerts/, watches/)"),
     (r"^/v1/admin/", frozenset({"admin"}), "the Admin place"),
@@ -105,12 +108,15 @@ GATES: dict[str, frozenset[str]] = {"rules": frozenset({"triage_alerts", "author
 #: What a gated place's entry read needs beyond the gate (`places.json`'s `needs`): offered to a
 #: gate holder only where its first screen can be read (ADR-145 Amendment 1).
 NEEDS: dict[str, frozenset[str]] = {"rules": frozenset({"read_alert_queue"})}
-#: R&M's routes that do not carry its gate, each with its reason: read outside the place too, as the
-#: reader, on their own right (ADR-146 decision 9; the Reports Viewer's alerts on Home, ADR-145
-#: Amendment 4 decision 10). Each answers whoever holds its right, R&M offered or not.
+#: R&M's routes that do not carry its gate, each with its reason: used outside the place too, on
+#: their own right (ADR-146 decision 9; the Reports Viewer's alerts on Home, ADR-145 Amendment 4
+#: decision 10; held rows in the Studio's Runs, ADR-140). Each answers whoever holds its right, R&M
+#: offered or not (ADR-146 Amendment 2 point 3).
 SHARED_READS = {
     "read_alert_queue": "Home's Needs your attention, the switcher's count, a report pack's alert items",
-    "list_held_rows": "Home's held rows count",
+    "list_held_rows": "Home's held rows count; the Studio's Runs",
+    "reject_held_rows": "the Studio's Runs",
+    "release_held_rows_route": "the Studio's Runs",
 }
 
 #: What each named role is offered (ADR-145 decision 7 and Amendment 4 decision 1 list the places).
@@ -754,3 +760,37 @@ def test_rules_and_monitoring_refuses_a_role_it_is_not_offered_to_at_its_gate(ro
 def test_a_rule_author_opens_rules_and_monitoring() -> None:
     """ADR-112 Amendment 5's test: *Rule author* opens Rules and Monitoring and not the Studio."""
     assert offered(TOKEN_ROLES["rule_author"]) == ["rules"]
+
+
+#: The rights that act only in Rules and Monitoring (ADR-146 decision 2): a route asking for one of
+#: them is the place's, whatever its path.
+RULES_ONLY_RIGHTS = frozenset(
+    {"author_rules", "triage_alerts", "deploy_rules", "read_rule_audit", "keep_watches",
+     "load_screening_lists"}
+)  # fmt: skip
+
+
+def _unplaced_rules_routes(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:
+    return sorted(
+        r.path
+        for r in _routes()
+        if checks(r) & RULES_ONLY_RIGHTS and "rules" not in places_of(r.path)
+    )
+
+
+def test_every_route_asking_for_a_right_of_the_place_alone_is_the_place_s() -> None:
+    """The converse of the gate's test: the place's routes are found by their paths
+    (`PLACE_RULES`), so a later route of the place outside those paths would be counted as the
+    Glass's and escape its gate. Any route asking for a right that acts only in the place must be
+    placed in it (red with a planted route, below)."""
+    assert _unplaced_rules_routes() == []
+
+
+def test_a_route_of_the_place_outside_its_paths_is_found() -> None:
+    """The red half: a real Glass route read as if it asked for `deploy_rules` is reported."""
+    victim = next(r for r in _routes() if r.endpoint.__name__ == "list_trends")
+
+    def planted(route: APIRoute) -> frozenset[str]:
+        return _checks(route) | {"deploy_rules"} if route is victim else _checks(route)
+
+    assert _unplaced_rules_routes(planted) == [victim.path]

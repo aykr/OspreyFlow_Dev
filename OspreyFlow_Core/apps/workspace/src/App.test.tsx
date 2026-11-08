@@ -521,6 +521,33 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     }
   });
 
+  // ADR-146 decision 2 and ADR-145 N6: an address does not draw the place for someone it is not
+  // offered to (a Data Engineer reads the queue, for Home, but works no alert).
+  test("an alert's address opens the Glass, not Rules and Monitoring, for someone it is not offered to", async () => {
+    window.history.replaceState(null, "", "/alerts/a1");
+    try {
+      withRights(["investigate", "read_alert_queue", "deploy_rules", "edit_pipelines"]);
+      render(<App />);
+      expect(await screen.findByRole("region", { name: "You are in the Glass" })).toBeTruthy();
+      expect(screen.queryByRole("region", { name: "You are in Rules and Monitoring" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Rules and Monitoring" })).toBeNull();
+      await vi.waitFor(() => expect(window.location.pathname).toBe("/"));
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
+  // ADR-146 decision 2: a place of its own, not a view over the working set: no Inspector, timeline or
+  // status line under it, as under the Studio.
+  test("Rules and Monitoring draws none of the Glass's working-set tools", async () => {
+    withRights(["investigate", "triage_alerts", "read_alert_queue"]);
+    render(<App />);
+    fireEvent.click(await rulesPlace());
+    expect(await screen.findByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
+    expect(document.querySelector(".side-panel-header")).toBeNull();
+    expect(document.querySelector(".status-bar")).toBeNull();
+  });
+
   test("after the Glass tile, the graph is the one showing and the Studio is not", async () => {
     holdAllRequests();
     render(<App />);
