@@ -35,6 +35,22 @@ export interface AlertQueueProps extends AlertsApi {
   /** The signed-in account's id, to say "claimed by you". */
   accountId: string | null;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
+  /** The alert to open, from its address (ADR-146 decision 6), whatever the filters list. */
+  openAlertId?: string | null;
+  /** Told the alert opened here, so it is given its address; `null` when it is closed. */
+  onOpenAlert?: (alertId: string | null) => void;
+  /** ADR-146 decision 6, *Open the evidence*: the alert's evidence, as the reader was shown it,
+   * opened in the Glass as a private view of the alert's case, with the way back to the alert. */
+  onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
+}
+
+/** What *Open the evidence* opens: the nodes the reader was shown, under the alert's name, from the
+ * case the alert was read in (its view is saved there and nowhere else). */
+export interface AlertEvidence {
+  alertId: string;
+  title: string;
+  nodeIds: string[];
+  caseId: string;
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closing: "Closing", closed: "Closed" };
@@ -109,8 +125,16 @@ export function AlertQueue(props: AlertQueueProps) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [rows, setRows] = useState<QueuedAlert[] | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(props.openAlertId ?? null);
   const [problem, setProblem] = useState<string | null>(null);
+  // Back and Forward change the address: the alert open follows it.
+  useEffect(() => {
+    if (props.openAlertId !== undefined) setOpenId(props.openAlertId);
+  }, [props.openAlertId]);
+  const open = (alertId: string) => {
+    setOpenId(alertId);
+    props.onOpenAlert?.(alertId);
+  };
 
   const reload = useCallback(() => {
     setProblem(null);
@@ -171,7 +195,7 @@ export function AlertQueue(props: AlertQueueProps) {
                   type="button"
                   className="btn btn--quiet"
                   aria-pressed={openId === row.alert.id}
-                  onClick={() => setOpenId(row.alert.id)}
+                  onClick={() => open(row.alert.id)}
                   style={{ width: "100%", textAlign: "left", display: "block", padding: "var(--sp-8)", height: "auto", whiteSpace: "normal" }}
                 >
                   <span className="visually-hidden">Open alert: </span>
@@ -319,6 +343,32 @@ function AlertDetail(props: AlertDetailProps) {
       </p>
       {said && <p role="status" className="label">{said}</p>}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}
+      {props.onOpenEvidence && nodes.length > 0 && (
+        // Any reader of the alert: a private view saves nothing of the case (ADR-144), and the
+        // Conduit refuses it to someone who may not work the case.
+        <div>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() =>
+              void (async () => {
+                setBusy(true);
+                setProblem(null);
+                const refused = await props.onOpenEvidence!({
+                  alertId,
+                  title: alertTitle(alert, f.kind),
+                  nodeIds: nodes.map((n) => n.id),
+                  caseId: props.investigationId,
+                });
+                if (refused) setProblem(refused);
+                setBusy(false);
+              })()
+            }
+          >
+            Open the evidence
+          </Button>
+        </div>
+      )}
       {canTriage && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
           <Button

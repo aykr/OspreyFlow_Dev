@@ -66,7 +66,7 @@ sightings into a rendered deployment.
 | A1 | **over the wire** | `test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities`, `test_a1_redrawing_the_grid_does_not_duplicate_its_cells`, `test_a1_a_cells_geometry_reference_resolves_to_its_centroid` (the ref names the cell's polygon), `test_a1_incidents_geocode_into_the_cells_that_contain_them` (owner rulings R9 and R10) |
 | A6 | **over the wire** | `test_a6_the_reports_for_the_selection_open_with_a_source_locator_each` — not an extraction row |
 | B6 | **over the wire + the Glass** | `test_b6_the_shared_endpoints_messages_open_with_the_entity_spans_in_place`; `apps/workspace/live/scenario-b-document.spec.ts` for the highlight in place |
-| B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_into_a_case_holding_its_entities` |
+| B13, B14 | **over the wire** | `test_b13_an_ingest_fires_an_alert_naming_the_identifier_document_and_rule`, `test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities` |
 | A7 | **over the wire** | `test_a7_reports_can_be_filtered_to_one_item_category`, `test_a7_an_unknown_field_name_is_refused_rather_than_ignored` — the "Known gap" below is closed by `EventFilter.value_filters` |
 | A15 | **over the wire** | `test_a15_a_consult_originator_item_blocks_the_export_by_name_then_proceeds_with_a_justification` |
 
@@ -550,7 +550,7 @@ One later seizure record with two SIMs and a handset identifier.
 | B11 | Attribute the handle to a person | Manual link | A `SAME_AS` with score 1.0, provenance `asserted`, attributed to the analyst |
 | B12 | Add the endpoint to a hotlist | Hotlist | The hotlist records owner and review date |
 | B13 | Ingest the later seizure record | Hotlist alert | An alert fires naming the matched identifier, the triggering document and the rule |
-| B14 | Open the alert into a pre-populated case | Alert workflow | The new case reads the alert's dataset and its working set contains the alert's entities. It carries no link to the case the alert was raised in: no case is made from another (ADR-144 Amendment 1), so the origin link B14 once asked for is withdrawn (ADR-144 Amendment 2, the owner's Q1) |
+| B14 | Open the alert at its address | Alert workflow | The alert opens at its own address, `/alerts/<id>`, in the case it was raised in, with its entities; *Open the evidence* opens them as a private view of that case, with the way back to the alert (ADR-146 decision 6 and Amendment 2). No case of its own is made: no case is made from another (ADR-144 Amendment 1), so the origin link B14 once asked for is withdrawn (ADR-144 Amendment 2, the owner's Q1) |
 | B15 | Pivot on the handset identifier | Endpoint model | Both SIMs link to one device; the SIM-swap pattern is one traversal, not a special case |
 | B16 | Overlay the second investigation's timeline on the first | Cross-case overlay | Both event sets render on distinct tracks against a shared axis |
 | B17 | Brush to the seizure date | Temporal brush | Location events for the device in that window restrict the map |
@@ -561,7 +561,8 @@ One later seizure record with two SIMs and a handset identifier.
 
 **Each case reads only its datasets (ADR-099), and these rows depend on it.** B13 fires only if the
 seizure record is loaded into the hotlist's dataset, and B20 only on ingest into its pattern's
-dataset (a match in another dataset raises nothing). B14's new case reads the alert's dataset. B21's
+dataset (a match in another dataset raises nothing). B14's alert is read in its own case, as that case
+reads it. B21's
 path across the two investigations is found only from a case reading both datasets. B16's overlay
 reads the analytics store, which stays keyed by case (ADR-099 decision 7), so it is unchanged.
 

@@ -73,6 +73,8 @@ export type { RiskContribution } from "./RiskContribution";
 export type { NeighbourhoodRisk } from "./NeighbourhoodRisk";
 export type { ExplainedTransaction } from "./ExplainedTransaction";
 export type { AlertExplanation } from "./AlertExplanation";
+export type { AlertAtAddress } from "./AlertAtAddress";
+export type { AlertQueueCounts } from "./AlertQueueCounts";
 export type { AlertDispositionInput } from "./AlertDispositionInput";
 export type { HeldRowDecision } from "./HeldRowDecision";
 export type { Judgement } from "./Judgement";

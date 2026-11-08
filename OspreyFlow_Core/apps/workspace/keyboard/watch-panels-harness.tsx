@@ -4,14 +4,14 @@
 // `METRICS_PANEL_ACTIONS`, `query-builder-harness.tsx`'s own `QUERY_BUILDER_ACTIONS`), so it gets
 // its own harness rather than folding into any of them. Renders `HotlistPanel`, `MonitorPanel` and
 // `AlertInbox` together, the same shape they are mounted together under `App.tsx`'s `"watches"`
-// view. `POST/GET /v1/hotlists`, `POST/GET /v1/monitors`, `GET /v1/patterns`, `GET /v1/alerts` and
-// `POST /v1/alerts/{id}/jump` are intercepted by `watch-panels.spec.ts` via `page.route` — the
+// view. `POST/GET /v1/hotlists`, `POST/GET /v1/monitors`, `GET /v1/patterns` and `GET /v1/alerts`
+// are intercepted by `watch-panels.spec.ts` via `page.route` — the
 // same "real network call, mocked at the transport, not the component" shape
 // `query-builder.spec.ts` already uses.
 //
-// `AlertInbox`'s own `onOpenInvestigation` callback has no canvas/App.tsx counterpart in this
-// harness (nothing here drives a working set) — exposed instead as `window.__WATCH_HARNESS__` so a
-// spec case can prove the callback actually fires with the real investigation id, the same
+// `AlertInbox`'s own `onOpenAlert` callback (ADR-146 decision 6: the alert opened at its address;
+// `App.tsx` pushes it) is exposed as `window.__WATCH_HARNESS__` so a spec case can prove the callback
+// actually fires with the real alert id, the same
 // `window.__KEYBOARD__` shape `keyboard/harness.tsx` already uses for `GlassCanvas`'s own
 // focus/selection callbacks.
 import { createRoot } from "react-dom/client";
@@ -24,11 +24,11 @@ import { MonitorPanel } from "../src/watches/MonitorPanel";
 
 declare global {
   interface Window {
-    __WATCH_HARNESS__?: { openedInvestigationId: string | null };
+    __WATCH_HARNESS__?: { openedAlertId: string | null };
   }
 }
 
-window.__WATCH_HARNESS__ = { openedInvestigationId: null };
+window.__WATCH_HARNESS__ = { openedAlertId: null };
 
 function Harness() {
   return (
@@ -39,8 +39,8 @@ function Harness() {
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"
         investigationId="inv-1"
-        onOpenInvestigation={(investigationId) => {
-          window.__WATCH_HARNESS__!.openedInvestigationId = investigationId;
+        onOpenAlert={(alertId) => {
+          window.__WATCH_HARNESS__!.openedAlertId = alertId;
         }}
       />
     </div>

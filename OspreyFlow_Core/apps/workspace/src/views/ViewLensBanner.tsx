@@ -13,17 +13,22 @@ export interface ViewLensBannerProps {
   shared: boolean;
   missing: number;
   onBack: () => void;
+  /** Where the view was opened from, with its own way back (ADR-146 decision 6: "From alert ‹title› ·
+   * ← Back to the alert"), drawn before the way back to the case. */
+  from?: { label: string; backLabel: string; onBack: () => void };
 }
 
-export function ViewLensBanner({ name, shared, missing, onBack }: ViewLensBannerProps) {
+export function ViewLensBanner({ name, shared, missing, onBack, from }: ViewLensBannerProps) {
   const govuk = currentBrand() === "govuk";
   const note = missingNote(missing);
   // Focus comes here when the view opens, wherever it was asked for (the Cases drawer, the over-cap
   // dialog that has just closed), so a keyboard user is never left on the page body.
   const back = useRef<HTMLButtonElement>(null);
-  useEffect(() => back.current?.focus(), []);
+  const backFrom = useRef<HTMLButtonElement>(null);
+  useEffect(() => (backFrom.current ?? back.current)?.focus(), []);
   return (
     <div role="region" aria-label="Open view" className="view-lens-banner">
+      {from && <span className="view-lens-banner__from">{from.label}</span>}
       <span>
         View: <span className="view-lens-banner__name">{name}</span>
       </span>
@@ -32,6 +37,11 @@ export function ViewLensBanner({ name, shared, missing, onBack }: ViewLensBanner
       </span>
       {note && <span className="view-lens-banner__note">{note}</span>}
       <span className="view-lens-banner__note">Nothing in a view changes the case.</span>
+      {from && (
+        <button ref={backFrom} type="button" className={govuk ? "govuk-button view-lens-banner__back" : "btn btn--primary view-lens-banner__back"} onClick={from.onBack}>
+          {from.backLabel}
+        </button>
+      )}
       <button ref={back} type="button" className={govuk ? "govuk-button govuk-button--secondary view-lens-banner__back" : "btn view-lens-banner__back"} onClick={onBack}>
         Back to the case
       </button>

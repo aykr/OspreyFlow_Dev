@@ -5,6 +5,7 @@
 import type {
   Alert,
   AlertAssignee,
+  AlertAtAddress,
   AlertDispositionInput,
   AlertExplanation,
   CompiledSentence,
@@ -142,12 +143,12 @@ export interface AlertsApi {
   investigationId: string;
 }
 
-export const listQueue = (a: AlertsApi, query: QueueFilter | QueueQuery) =>
-  call<QueuedAlert[]>(
-    caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue?${queueSearch(typeof query === "string" ? { status: query } : query)}`),
-    a.bearerToken,
-    "Reading the alert queue",
-  );
+export const listQueue = (a: AlertsApi, query: QueueFilter | QueueQuery) => {
+  // The search on its own line keeps the path one plain template, which the Conduit's place test
+  // reads as Rules and Monitoring's entry read (`test_place_routes.py`).
+  const search = queueSearch(typeof query === "string" ? { status: query } : query);
+  return call<QueuedAlert[]>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue?${search}`), a.bearerToken, "Reading the alert queue");
+};
 
 export const listAssignees = (a: AlertsApi) =>
   call<AlertAssignee[]>(caseUrl(a.apiBaseUrl, a.investigationId, "alert-assignees"), a.bearerToken, "Reading who alerts may be given to");
@@ -270,3 +271,15 @@ export const setListSchedule = (a: ListsApi, listName: string, schedule: ListSch
     "Setting the refresh schedule",
     { method: "PUT", body: { schedule } },
   );
+
+/** ADR-146 decision 6: an alert at its own address, `GET /v1/alerts/{id}`: its case and its
+ * explanation there, or `null` where the Conduit answers that it does not exist, which is also its
+ * answer for an alert the reader may not see (rule 3); the two are never told apart here. */
+export async function openAlertAtAddress(apiBaseUrl: string, bearerToken: string, alertId: string): Promise<AlertAtAddress | null> {
+  const response = await fetch(`${apiBaseUrl}/v1/alerts/${encodeURIComponent(alertId)}`, {
+    headers: { Authorization: `Bearer ${bearerToken}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw await failure(response, "Opening the alert");
+  return (await response.json()) as AlertAtAddress;
+}

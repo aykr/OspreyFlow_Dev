@@ -1,5 +1,5 @@
 """Phase 7 Stage 6c's own new HTTP surface — `POST/GET /v1/hotlists`, `POST/GET /v1/monitors`,
-`GET /v1/alerts`, `POST /v1/alerts/{id}/jump` — proven the same way Phase 6a's own exit criterion
+`GET /v1/alerts`, and since L2.9 an alert's address, `GET /v1/alerts/{id}` — proven the same way Phase 6a's own exit criterion
 was (`test_phase6a_glass_surfaces.py`'s own module docstring has the full reasoning for the
 pattern): real FastAPI app, real ArcadeDB/Postgres/Valkey, real HTTP, one principal.
 
@@ -405,15 +405,14 @@ def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
             assert shared["files"][0]["name"] == shared_file.rsplit("/", 1)[-1]
 
 
-def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
+def test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
-    """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
-    link to the originating investigation." The task's own question ("what happens when a referent
-    became unreadable between the alert firing and the jump") was answered as a partial success
-    (ADR-124 decision 1) until L2.8: an alert whose evidence the jumper cannot wholly read is now
-    refused exactly as a missing alert, making no case (ADR-124 Amendment 17, the orchestrator's
-    Q1), since the readable referents are the entities the hidden one ties together. An alert whose every referent is readable branches and seeds them all."""
+    """`08_ACCEPTANCE_SCENARIOS.md` B14, as ADR-146 decision 6 and Amendment 2 have it: the alert opens
+    at its own address, in the case it was raised in, with its entities; no case of its own is made
+    (the jump went in L2.9). An alert one of whose referents the reader cannot read is answered
+    exactly as a missing alert (ADR-124 Amendment 17's refusal, now at the address; rule 3), since the
+    readable referents are the entities the hidden one ties together."""
     private_key, _ = keypair
     headers = _bearer(private_key)
 
@@ -427,8 +426,6 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
     from services.api.app import app
 
     with TestClient(app) as client:
-        # "The investigation the triggering ingest was in" needs a real `Investigation` row, so one
-        # is created here exactly as an ingest route would, not synthesised.
         origin_investigation_id = _case(client, headers)
 
         alert = Alert(
@@ -444,31 +441,18 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
         readable_only = alert.model_copy(update={"id": new_id(), "referent_node_ids": [readable_node_id]})
         asyncio.run(_write_alert(readable_only))
 
-        refused = client.post(
-            f"/v1/investigations/{origin_investigation_id}/alerts/{alert.id}/jump", headers=headers
-        )
-        missing = client.post(
-            f"/v1/investigations/{origin_investigation_id}/alerts/{new_id()}/jump", headers=headers
-        )
+        refused = client.get(f"/v1/alerts/{alert.id}", headers=headers)
+        missing = client.get(f"/v1/alerts/{new_id()}", headers=headers)
         assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
         assert refused.status_code == 404
 
-        jumped = client.post(
-            f"/v1/investigations/{origin_investigation_id}/alerts/{readable_only.id}/jump",
-            headers=headers,
-        )
-        assert jumped.status_code == 201, jumped.text
-        result = jumped.json()
-        assert result["seeded_count"] == 1
-        # ADR-124: no figure for what the jumper may not read.
+        opened = client.get(f"/v1/alerts/{readable_only.id}", headers=headers)
+        assert opened.status_code == 200, opened.text
+        result = opened.json()
+        assert result["investigation_id"] == origin_investigation_id
+        assert [n["id"] for n in result["explanation"]["nodes"]] == [readable_node_id]
+        # ADR-124: no figure for what the reader may not read.
         assert "unreadable_count" not in result
-        # ADR-144 Amendment 1 (L3.2's Q1): the case opened records no case it came from.
-        assert "branched_from" not in result["investigation"]
-
-        membership = client.get(
-            f"/v1/investigations/{result['investigation']['id']}", headers=headers
-        )
-        assert membership.status_code == 200, membership.text
 
 
 def test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling(

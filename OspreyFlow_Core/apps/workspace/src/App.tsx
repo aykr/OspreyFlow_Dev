@@ -99,7 +99,7 @@ import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
 import { ViewsPanel } from "./views/ViewsPanel";
-import { type CaseView, type CaseViewOpened, openView } from "./views/viewsApi";
+import { type CaseView, type CaseViewOpened, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
@@ -119,7 +119,10 @@ import type { HistoryStepSummary } from "./workingset/models";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
-import { AlertsPlace } from "./alerts/AlertsPlace";
+import { RulesPlace } from "./alerts/RulesPlace";
+import { evidenceCase, openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./alerts/address";
+import { StrengthPanel } from "./strength/StrengthPanel";
+import { alertPath, navigate, noteAddress, takeNotedAddress, useAddress } from "./shell/router";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
 import {
@@ -252,6 +255,10 @@ export function App() {
   // on without a click (the identity provider already knows the person), and open the Ingest tab
   // when the Ingest Studio tile was the one pressed. Read once. Grants nothing.
   const [handoff] = useState(() => readHandoff(window.location.search, sessionStorage));
+  // ADR-146 decision 6: an alert's address, kept over the sign-in round trip, which returns to the
+  // root (`shell/router.ts`).
+  useState(() => noteAddress());
+  const address = useAddress();
   const autoSignInStartedRef = useRef(false);
   // Distinguishes "this token was just refused outright" (wrong audience, wrong claims — show the
   // reason, do not retry) from "this token merely expired mid-session" (retry silently, preserving
@@ -291,6 +298,8 @@ export function App() {
           setPrincipal(displayPrincipalFromUser(user));
           scheduleRenewal(user.expires_at);
           restoreViewStateAfterReauth();
+          const noted = takeNotedAddress();
+          if (noted) navigate(noted, { replace: true });
           signedIn = true;
           clearHandoff(sessionStorage);
         } catch {
@@ -668,6 +677,9 @@ export function App() {
   // ADR-144 and the owner's ruling of 8 November 2026 (Amendment 2): an opened view, shown on the
   // canvas as a read-only lens over the case, and `viewsRead` bumped to read the views again.
   const [lens, setLens] = useState<Lens | null>(null);
+  // ADR-146 decision 6: the alert a view was opened from (*Open the evidence*), for the lens's way
+  // back to it, still open; `null` for a view opened any other way.
+  const [lensFromAlert, setLensFromAlert] = useState<{ alertId: string; title: string } | null>(null);
   const [viewsRead, setViewsRead] = useState(0);
   const [viewProblem, setViewProblem] = useState<string | null>(null);
   // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
@@ -717,8 +729,8 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
-  >(handoff.view === "ingest" ? "ingest" : "graph");
+    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership" | "strength"
+  >(handoff.view === "ingest" ? "ingest" : address.kind !== "none" ? "alerts" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
   useEffect(() => {
@@ -735,10 +747,11 @@ export function App() {
     };
   }, [investigationId, bearerToken, counts.nodes, counts.edges]);
   // ADR-115 E6: the open-alert count, the case's queue counted as the reader (rule 3), drawn on the
-  // banner's Monitoring section since ADR-145 Amendment 2 (it left the rail).
+  // switcher's Rules and Monitoring since ADR-146 decision 2 (it left the Glass's banner).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
+  const opensRules = startPlaces(rights).includes("rules");
   useEffect(() => {
-    if (!investigationId || !bearerToken || !rights?.has("read_alert_queue")) {
+    if (!investigationId || !bearerToken || !opensRules) {
       setAlertCount(undefined);
       return;
     }
@@ -755,10 +768,32 @@ export function App() {
     return () => {
       cancelled = true;
     };
-    // The count is read again when the analyst comes back from the Alerts place.
-  }, [investigationId, bearerToken, rights, view]);
-  // Which application is open, and (so the switch can go back to it) the Glass view last open.
-  const app = view === "ingest" ? "ingest" : "glass";
+    // The count is read again when the analyst comes back from Rules and Monitoring.
+  }, [investigationId, bearerToken, opensRules, view]);
+  // ADR-146 decision 6: an alert's address opens Rules and Monitoring on it, in the case the
+  // Conduit says it is worked in; another case's is opened on the alert (a reload, as every case
+  // switch is). Leaving the address (Back, or Back to the queue) leaves the alert, not the place.
+  const addressedAlert = address.kind === "alert" ? address.alertId : null;
+  const addressed = useAlertAtAddress(API_BASE_URL, bearerToken, opensRules ? addressedAlert : null);
+  const rulesAddressed = address.kind === "rules" || addressedAlert !== null;
+  useEffect(() => {
+    if (rulesAddressed && opensRules) setView("alerts");
+  }, [rulesAddressed, opensRules]);
+  // ADR-145 N6 and ADR-146 decision 2: the place is drawn only for whom it is offered. Someone else
+  // following an address (an email's link) lands on the Glass, the address left; the Conduit would
+  // refuse the place's routes anyway (its gate), but for the two lists read outside it.
+  useEffect(() => {
+    if (!rightsSettled || opensRules || view !== "alerts") return;
+    setView(landingView(rights));
+    if (address.kind !== "none") navigate("/", { replace: true });
+  }, [rightsSettled, opensRules, view, rights, address.kind]);
+  useEffect(() => {
+    if (addressed?.status === "found" && addressedAlert && addressed.caseId !== investigationId) {
+      openAlertInItsCase(addressedAlert, addressed.caseId);
+    }
+  }, [addressed, addressedAlert, investigationId]);
+  // Which place is open, and (so the switch can go back to it) the Glass view last open.
+  const app = view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
   // ADR-128 decision 3: an attachment of the case brief opens where the thing lives (`openAttachment.ts`).
   const openBriefAttachment = (kind: AttachmentKind, id: string) => {
     const place = placeOf(kind, id);
@@ -882,13 +917,15 @@ export function App() {
   // The latest view asked for: an earlier answer arriving after it is dropped.
   const lensAskedRef = useRef(0);
 
-  function showLens(opened: CaseViewOpened): void {
+  function showLens(opened: CaseViewOpened, fromAlert: { alertId: string; title: string } | null = null): void {
     // Whatever opened this view, an earlier `openLens` still in flight no longer replaces it.
     lensAskedRef.current += 1;
     setViewProblem(null);
     const timeline = crossFilterRef.current?.store.getState();
     if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
     setLens(buildLens(opened));
+    // A view opened from an alert (*Open the evidence*) keeps the way back to it; any other has none.
+    setLensFromAlert(fromAlert);
     setSelectedNodeIds([]);
     setSelectedNode(null);
     // The view's window, or none: a view keeps no window of the case's.
@@ -896,27 +933,31 @@ export function App() {
     setView("graph");
   }
 
-  async function openLens(viewId: string): Promise<void> {
-    if (!investigationId) return;
+  /** Opens a view as the lens; resolves to the words said when it could not be opened (also shown
+   * over the canvas), or `null` when it was, or when a later request replaced this one. */
+  async function openLens(viewId: string, fromAlert: { alertId: string; title: string } | null = null): Promise<string | null> {
+    if (!investigationId) return null;
     const asked = ++lensAskedRef.current;
     const result = await openView(API_BASE_URL, bearerToken, investigationId, viewId);
-    if (asked !== lensAskedRef.current) return;
+    if (asked !== lensAskedRef.current) return null;
     if (result.ok) {
-      showLens(result.opened);
-      return;
+      showLens(result.opened, fromAlert);
+      return null;
     }
-    setViewProblem(
+    const problem =
       result.kind === "not_found"
         ? "That view could not be opened. It may have been deleted, or not shared with you."
         : result.kind === "limit_exceeded"
           ? `This view holds more than the canvas can: ${result.wouldBe.would_be.toLocaleString("en-GB")} ${result.wouldBe.cap_kind === "nodes" ? "nodes" : "links"} against a limit of ${result.wouldBe.cap.toLocaleString("en-GB")}. Nothing was cut to fit.`
-          : result.message,
-    );
+          : result.message;
+    setViewProblem(problem);
+    return problem;
   }
 
   function closeLens(): void {
     lensAskedRef.current += 1;
     setLens(null);
+    setLensFromAlert(null);
     setViewProblem(null);
     setSelectedNodeIds([]);
     setSelectedNode(null);
@@ -1368,6 +1409,9 @@ export function App() {
           openCase,
           browseCases: () => setBrowsingCases(true),
           openStudio: () => setView("ingest"),
+          openRules: () => setView("alerts"),
+          openAlert: (alertId) => navigate(alertPath(alertId)),
+          openCaseOnRules: (id) => openRulesOnCase(id),
         })
       : null;
   if (startScreenShown)
@@ -1424,6 +1468,8 @@ export function App() {
     { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
     // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
     { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
+    // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
+    { id: "strength", label: "Connection strength", icon: "strength" as const, onSelect: () => setView("strength"), pressed: view === "strength" },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
   // Someone offered none of Graph and Map (a Reports Viewer) has theirs in the switch itself.
@@ -1438,7 +1484,8 @@ export function App() {
   const mainViews = allowedViews.filter((v) => v.id === "graph" || v.id === "map");
   const otherViews = allowedViews.filter((v) => v.id !== "graph" && v.id !== "map");
   const showsWorkingSetTools =
-    showsInspector(rights) && !["ingest", "dossier", "reports", "dashboards"].includes(view);
+    // Rules and Monitoring is a place of its own (ADR-146 decision 2), not a view over the working set.
+    showsInspector(rights) && !["ingest", "alerts", "dossier", "reports", "dashboards"].includes(view);
 
   return (
     // ADR-132: the window less whatever the brand frame shows above (`brand/BrandFrame.tsx`).
@@ -1454,10 +1501,14 @@ export function App() {
           <PlaceSwitcher
             places={startPlaces(rights)}
             current={app}
+            counts={{ rules: alertCount }}
             onChoose={(place) => {
               if (place === "admin") setStartChoice("admin");
               else if (place === "ingest") setView("ingest");
+              else if (place === "rules") setView("alerts");
               else if (app !== "glass") setView(lastGlassView());
+              // Rules and Monitoring's addresses are its own: another place leaves them.
+              if (place !== "rules" && address.kind !== "none") navigate("/");
             }}
           />
         }
@@ -1520,14 +1571,12 @@ export function App() {
       <ContextBanner
         place={app}
         // ADR-145 decision 1: the Glass's sections; Boards is coming (Lane 3's board screens).
+        // Monitoring left for Rules and Monitoring (ADR-146 decision 2), its count with it.
         sections={
           app === "glass"
             ? [
-                { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView(landingView(rights)) },
+                { id: "case", label: "Case", current: true, onSelect: () => setView(landingView(rights)) },
                 { id: "boards", label: "Boards", current: false },
-                ...((railEntries(rights) as string[]).includes("alerts")
-                  ? [{ id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts"), badge: alertCount }]
-                  : []),
               ]
             : []
         }
@@ -1638,28 +1687,62 @@ export function App() {
           />
         )}
         {view === "alerts" && (
-          <AlertsPlace
+          <RulesPlace
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
             accountId={principal?.sub ?? null}
             isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             canManageLists={rights?.has("load_screening_lists") ?? false}
-            canManageInfluencers={rights?.has("manage_strength_influencers") ?? false}
-            entityTypes={ontologySchema?.entity_types ?? []}
-            edgeTypes={edgeTypes}
-            onInfluencersChanged={() => setStrengthRead((n) => n + 1)}
             onCanvas={(outcome, nodeIds) => {
               applyStarterDelta(outcome.delta);
               pendingHighlight.current = nodeIds;
               setView("graph");
             }}
-            onOpenInvestigation={(newInvestigationId) => {
-              sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
-              setInvestigationId(newInvestigationId);
-              setView("graph");
+            address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
+            onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
+            // ADR-146 decision 6 (R5): the alert's evidence as a private view of its case (ADR-144
+            // decision 4), opened as the Glass's read-only lens, with the way back to the alert.
+            onOpenEvidence={async ({ alertId, title, nodeIds, caseId }) => {
+              // Saved into the alert's own case, and refused in words if that is not the case open.
+              const into = evidenceCase(
+                { alertId, caseId },
+                investigationId,
+                addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null,
+              );
+              if ("refused" in into) return into.refused;
+              const saved = await saveView(API_BASE_URL, bearerToken, into.caseId, {
+                name: `From alert: ${title}`.slice(0, 200),
+                nodeIds,
+              });
+              if (!saved.ok) return saved.message;
+              // Said on the alert, which stays open at its address, when the view cannot be opened.
+              const problem = await openLens(saved.view.id, { alertId, title });
+              // Said there alone: the Glass, visited next, must not carry it over its canvas.
+              if (problem) {
+                setViewProblem(null);
+                return `The evidence was saved as the private view “${saved.view.name}”, but it could not be opened: ${problem}`;
+              }
+              navigate("/");
+              return null;
             }}
           />
+        )}
+        {view === "strength" && investigationId && (
+          // ADR-139: what makes a link strong in this case, and who may change it.
+          <section aria-label="Connection strength" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
+            <h2 className="value" style={{ margin: 0 }}>Connection strength</h2>
+            <StrengthPanel
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              accountId={principal?.sub ?? null}
+              canManage={rights?.has("manage_strength_influencers") ?? false}
+              entityTypes={ontologySchema?.entity_types ?? []}
+              edgeTypes={edgeTypes}
+              onChanged={() => setStrengthRead((n) => n + 1)}
+            />
+          </section>
         )}
         {view === "reports" && (
           <ReportsPlace key={reportsStart.opened} initialTab={reportsStart.tab} apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
@@ -1681,7 +1764,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
+        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "strength" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && lens && (
               <ViewLensBanner
@@ -1689,6 +1772,19 @@ export function App() {
                 shared={lens.opened.view.shared ?? false}
                 missing={lens.opened.missing}
                 onBack={closeLens}
+                from={
+                  lensFromAlert
+                    ? {
+                        label: "Opened from an alert",
+                        backLabel: "← Back to the alert",
+                        onBack: () => {
+                          const { alertId } = lensFromAlert;
+                          closeLens();
+                          navigate(alertPath(alertId));
+                        },
+                      }
+                    : undefined
+                }
               />
             )}
             {view === "graph" && viewProblem && (
@@ -1951,7 +2047,7 @@ export function App() {
               })()}
           </div>
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "dashboards" && showsInspector(rights) && (
+        {view !== "ingest" && view !== "alerts" && view !== "dossier" && view !== "dashboards" && showsInspector(rights) && (
           <SidePanelFrame name="Inspector">
             <SidePanelStack
               panels={[

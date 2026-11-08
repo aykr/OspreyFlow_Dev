@@ -224,7 +224,6 @@ def test_the_withheld_figure_walk_sees_every_route() -> None:
         "POST /v1/investigations/{investigation_id}/expand/preview",
         "POST /v1/investigations/{investigation_id}/seed",
         "POST /v1/investigations/{investigation_id}/history/{step_id}",
-        "POST /v1/investigations/{investigation_id}/alerts/{alert_id}/jump",
         "PUT /v1/investigations/{investigation_id}/resolution/threshold",
         "GET /healthz",
     ):

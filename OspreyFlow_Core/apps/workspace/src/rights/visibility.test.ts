@@ -24,22 +24,22 @@ const READER = ["read_alert_queue", "read_reports", "read_report_feed", "read_da
 
 describe("what the Glass offers each role", () => {
   it("offers an analyst the investigation and no administration", () => {
-    // The owner's answer of 1 November 2026: no Watches entry; watches are in Monitoring's Watches tab.
-    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "alerts", "ownership", "history", "explore", "questions", "dashboards"]);
+    // ADR-146 decision 2: Monitoring is a place of its own (`shell/places.ts`), not the rail's;
+    // Connection strength, which is not alerts, stays in the Glass.
+    expect(railEntries(new Set(ANALYST))).toEqual(["cases", "ownership", "history", "explore", "questions", "dashboards", "strength"]);
     expect(viewsFor(new Set(ANALYST))).toEqual(["graph", "map", "matrix", "reports"]);
     expect(landingView(new Set(ANALYST))).toBe("graph");
   });
 
-  it("keeps watches reachable for someone who keeps watches but does not read the queue", () => {
-    // With the rail's Watches entry gone, Monitoring is where watches are: a person granted
-    // `keep_watches` alone must still be offered it, or their watches would be unreachable.
-    expect(railEntries(new Set(["investigate", "keep_watches"]))).toContain("alerts");
-    expect(railEntries(new Set(["investigate"]))).not.toContain("alerts");
+  it("offers no alerts in the Glass's rail: they are in Rules and Monitoring", () => {
+    for (const rights of [ANALYST, ENGINEER, READER, ["investigate", "keep_watches"]]) {
+      expect(railEntries(new Set(rights)) as string[]).not.toContain("alerts");
+    }
   });
 
   it("offers a data engineer the Studio and no watches or ownership", () => {
     // ADR-145 decision 1: the Studio is a place of its own, reached from the switcher, not the rail.
-    expect(railEntries(new Set(ENGINEER))).toEqual(["cases", "alerts", "history", "explore", "dashboards"]);
+    expect(railEntries(new Set(ENGINEER))).toEqual(["cases", "history", "explore", "dashboards", "strength"]);
   });
 
   it("offers an administrator the Admin area and nothing of a case's content", () => {
@@ -48,8 +48,8 @@ describe("what the Glass offers each role", () => {
     expect(viewsFor(new Set(ADMIN))).toEqual([]);
   });
 
-  it("lands a reports viewer on Reports, with the alerts and the feed", () => {
-    expect(railEntries(new Set(READER))).toEqual(["cases", "alerts", "dashboards"]);
+  it("lands a reports viewer on Reports, with the feed", () => {
+    expect(railEntries(new Set(READER))).toEqual(["cases", "dashboards"]);
     expect(viewsFor(new Set(READER))).toEqual(["reports"]);
     expect(landingView(new Set(READER))).toBe("reports");
     expect(canDownloadFeed(new Set(READER))).toBe(true);

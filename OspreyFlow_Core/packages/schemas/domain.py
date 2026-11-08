@@ -1373,6 +1373,27 @@ class AlertExplanation(BaseModel):
     assignee_name: str | None = None
 
 
+class AlertAtAddress(BaseModel):
+    """An alert opened at its own address, `/alerts/<id>` (ADR-146 decision 6): the case it is
+    worked in and its explanation, as `explain_alert` gives it in that case. Answered only where the
+    reader may open that case and see the alert whole; otherwise exactly as for an alert that does
+    not exist (404 `alert_not_found`, rule 3)."""
+
+    investigation_id: str
+    explanation: AlertExplanation
+
+
+class AlertQueueCounts(BaseModel):
+    """A case's alert queue as counts alone (ADR-146 Amendment 2 point 3): what Home shows a reader
+    of the queue whom Rules and Monitoring is not offered to (the Data Engineer), who is given no
+    alert's title, words or id. Counted as the queue is, so an alert any of whose evidence is hidden
+    from the reader is not counted (rule 3)."""
+
+    open: int
+    claimed: int
+    closing: int
+
+
 class AlertDispositionInput(BaseModel):
     """Closing an alert (ADR-133 decision 7: "closing needs a reason"): one of the closed list of
     reasons (`CLOSING_REASONS`), and words. A reason outside the list is refused in words that name
@@ -1708,6 +1729,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     NeighbourhoodRisk,
     ExplainedTransaction,
     AlertExplanation,
+    AlertAtAddress,
+    AlertQueueCounts,
     AlertDispositionInput,
     HeldRowDecision,
     Judgement,

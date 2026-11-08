@@ -20,7 +20,7 @@ export interface TopBarView {
 
 export interface TopBarProps {
   /** Which application is open, for the line under the bar in the Ingest Studio (ADR-065). */
-  app: "glass" | "ingest";
+  app: "glass" | "ingest" | "rules";
   /** The place switcher (`PlaceSwitcher`). */
   places?: ReactNode;
   /** The case switcher, where a surface keeps it in the bar rather than the banner. */

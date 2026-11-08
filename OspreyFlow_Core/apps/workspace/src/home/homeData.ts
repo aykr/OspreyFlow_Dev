@@ -8,11 +8,16 @@ import type { CaseListing } from "../investigation/cases";
 
 export type Unreadable = "unreadable";
 export type Tone = "ok" | "warn" | "error" | "info";
-export type Place = "glass" | "ingest" | "admin";
+export type Place = "glass" | "ingest" | "rules" | "admin";
 
 export interface QueuedAlertLite {
   alert: { id: string; status: string; assignee: string | null; typology?: string | null; created_at: string };
   summary: string;
+}
+export interface AlertQueueCountsLite {
+  open: number;
+  claimed: number;
+  closing: number;
 }
 export interface HeldRowLite {
   id: string;
@@ -31,6 +36,8 @@ export interface DashboardLite {
 
 export interface CaseFigures {
   alerts?: QueuedAlertLite[] | Unreadable;
+  /** The queue as counts alone, for a reader refused its rows (ADR-146 Amendment 2 point 3). */
+  alertCounts?: AlertQueueCountsLite | Unreadable;
   held?: HeldRowLite[] | Unreadable;
   recipes?: RecipeLite[] | Unreadable;
   entities?: number | Unreadable;
@@ -59,6 +66,8 @@ export interface AttentionRow {
   detail: string;
   at: string;
   caseId?: string;
+  /** An alert's row opens the alert at its address (ADR-146 decision 6), not its case. */
+  alertId?: string;
 }
 export interface RecentCase {
   id: string;
@@ -69,6 +78,8 @@ export interface RecentCase {
 }
 export interface HomeSummary {
   glass: Fact[];
+  /** Rules and Monitoring's: the alerts in the reader's queues (ADR-146 decision 2). */
+  rules: Fact[];
   studio: Fact[];
   admin: Fact[];
   attention: AttentionRow[];
@@ -92,7 +103,8 @@ export function isOpenInQueue(status: string): boolean {
   return status === "open" || status === "claimed" || status === "closing";
 }
 
-/** The alerts in a case's team queue still open (ADR-109; Home and the banner's Monitoring count). */
+/** The alerts in a case's team queue still open (ADR-109; Home and the switcher's Rules and
+ * Monitoring count). */
 export function openInQueue(queue: readonly { alert: { status: string } }[]): number {
   return queue.filter(({ alert }) => isOpenInQueue(alert.status)).length;
 }
@@ -103,6 +115,7 @@ export function summariseHome(input: HomeInputs): HomeSummary {
   const figures = cases.map((c) => ({ id: c.id, ...(input.perCase[c.id] ?? {}) }));
 
   const glass: Fact[] = [];
+  const rules: Fact[] = [];
   const attention: AttentionRow[] = [];
   const queues = figures.filter((f) => f.alerts !== undefined);
   if (queues.length > 0) {
@@ -122,15 +135,27 @@ export function summariseHome(input: HomeInputs): HomeSummary {
         if (own) mine += 1;
         if (open || own) {
           attention.push({
-            place: "glass", tone: "warn", at: alert.created_at, caseId: f.id,
+            place: "rules", tone: "warn", at: alert.created_at, caseId: f.id, alertId: alert.id,
             title: `${typologyLabel(alert.typology)} alert in ${names.get(f.id)}`,
             detail: own ? `${summary} Claimed by you.` : summary,
           }); // prettier-ignore
         }
       }
     }
-    glass.push({ tone: inQueue > 0 ? "warn" : "ok", text: `${plural(inQueue, "alert", "alerts")} in your team's queue, ${mine} claimed by you` });
-    if (unread > 0) glass.push({ tone: "error", text: `The queue of ${plural(unread, "case", "cases")} could not be read` });
+    rules.push({ tone: inQueue > 0 ? "warn" : "ok", text: `${plural(inQueue, "alert", "alerts")} in your team's queue, ${mine} claimed by you` });
+    if (unread > 0) rules.push({ tone: "error", text: `The queue of ${plural(unread, "case", "cases")} could not be read` });
+  }
+  // A reader refused the rows is told how many alone, with no alert listed (ADR-146 Amendment 2 point 3).
+  const counted = figures.filter((f) => f.alerts === undefined && f.alertCounts !== undefined);
+  if (counted.length > 0) {
+    let open = 0;
+    let unread = 0;
+    for (const f of counted) {
+      if (!readable(f.alertCounts)) unread += 1;
+      else open += f.alertCounts.open + f.alertCounts.claimed + f.alertCounts.closing;
+    }
+    rules.push({ tone: open > 0 ? "warn" : "ok", text: `${plural(open, "alert", "alerts")} open in your cases' queues` });
+    if (unread > 0) rules.push({ tone: "error", text: `The queue of ${plural(unread, "case", "cases")} could not be read` });
   }
   if (readable(input.cases)) {
     const last = input.lastCaseId ? names.get(input.lastCaseId) : undefined;
@@ -213,7 +238,7 @@ export function summariseHome(input: HomeInputs): HomeSummary {
         created: c.created_at,
       };
     });
-  return { glass, studio, admin, attention, recent, services, held: heldTotal };
+  return { glass, rules, studio, admin, attention, recent, services, held: heldTotal };
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -263,8 +288,12 @@ export async function loadHome(args: {
           may("edit_pipelines") ? get<RecipeLite[]>(`${at}/ingest/recipes`) : undefined,
           may("investigate") ? get<{ nodes: Record<string, number> }>(`${at}/explore/counts`) : undefined,
         ]);
+        // Refused the rows (the place not offered), the queue is read as counts alone.
+        const alertCounts =
+          may("read_alert_queue") && alerts === undefined ? await get<AlertQueueCountsLite>(`${at}/alert-queue/counts`) : undefined;
         perCase[c.id] = {
           alerts,
+          ...(alertCounts !== undefined ? { alertCounts } : {}),
           held,
           recipes,
           entities: readable(counts) ? Object.values(counts.nodes).reduce((a, b) => a + b, 0) : counts,

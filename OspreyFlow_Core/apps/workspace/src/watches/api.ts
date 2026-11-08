@@ -1,13 +1,12 @@
-// Fetch wrappers for `POST`/`GET .../hotlists`, `POST`/`GET .../monitors`, `GET /v1/alerts` and
-// `POST /v1/alerts/{alert_id}/jump` (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s
-// own conventions (Bearer auth, throw on a non-`ok` response).
+// Fetch wrappers for `POST`/`GET .../hotlists`, `POST`/`GET .../monitors` and `GET /v1/alerts`
+// (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s own conventions (Bearer auth, throw
+// on a non-`ok` response). The jump's case of its own went in L2.9 (ADR-146 decision 6).
 //
-// **`AlertView`/`AlertJumpResult`/`Investigation` are hand-mirrored here, not imported from
+// **`AlertView` is hand-mirrored here, not imported from
 // `packages/schemas/generated/`.** Checked directly against `packages/schemas/generate_ts.py`
 // before writing this: its own model list is `schemas.{analytics,compute,domain,ingest,model,
-// profile,provider_profile}` only — `services/api/watch_routes.py` (where `AlertView`/
-// `AlertJumpResult` live) and `services/api/investigations.py` (where `Investigation` lives) are
-// both outside that scope, by construction, since neither is a `packages/schemas` module at all.
+// profile,provider_profile}` only — `services/api/watch_routes.py`, where `AlertView` lives, is
+// outside that scope, by construction, since it is no `packages/schemas` module at all.
 // `Hotlist`/`Monitor` *are* generated (`schemas.domain.ALL_MODELS`) and imported below rather than
 // redeclared — a disclosed gap, rather than left
 // silently hand-mirrored with no note — a future edit to either Python shape has nothing to make
@@ -69,19 +68,6 @@ export interface FiredOn {
 /** ADR-110 decision 10: a notice that a scheduled run failed or was refused, not a match. */
 export const isScheduleNotice = (alert: AlertView) => alert.rule_id.startsWith("schedule:");
 
-/** Mirrors `services/api/investigations.py::Investigation` field-for-field. */
-export interface InvestigationSummary {
-  id: string;
-  created_at: string;
-  created_by: string;
-  owning_unit: string;
-}
-
-/** Mirrors `services/api/watch_routes.py::AlertJumpResult` field-for-field. */
-export interface AlertJumpResult {
-  investigation: InvestigationSummary;
-  seeded_count: number;
-}
 
 /** ADR-099 Amendment 3: watches and their alerts are the dataset's, asked of the case. */
 function caseUrl(apiBaseUrl: string, investigationId: string): string {
@@ -221,18 +207,3 @@ export async function listAlerts(
   return body.alerts;
 }
 
-export async function jumpAlert(
-  apiBaseUrl: string,
-  bearerToken: string,
-  investigationId: string,
-  alertId: string,
-): Promise<AlertJumpResult> {
-  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/alerts/${encodeURIComponent(alertId)}/jump`, {
-    method: "POST",
-    headers: authHeaders(bearerToken),
-  });
-  if (!response.ok) {
-    throw new Error(`POST .../alerts/${alertId}/jump failed: ${response.status}`);
-  }
-  return (await response.json()) as AlertJumpResult;
-}

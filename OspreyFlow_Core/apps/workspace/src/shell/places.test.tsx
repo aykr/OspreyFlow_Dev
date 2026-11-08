@@ -18,17 +18,38 @@ afterEach(() => {
 });
 
 describe("the places' table", () => {
-  it("names the three places in order, with the sections ADR-145 decision 1 gives", () => {
-    expect(PLACES.map((p) => [p.id, p.name])).toEqual([["glass", "The Glass"], ["ingest", "Ingest Studio"], ["admin", "Admin"]]);
-    expect(PLACES[0]!.sections).toEqual(["Case", "Boards", "Monitoring"]);
+  it("names the four places in order, with the sections ADR-145 and ADR-146 give", () => {
+    expect(PLACES.map((p) => [p.id, p.name])).toEqual([
+      ["glass", "The Glass"],
+      ["ingest", "Ingest Studio"],
+      ["rules", "Rules and Monitoring"],
+      ["admin", "Admin"],
+    ]);
+    // ADR-146 decision 2: Monitoring left the Glass.
+    expect(PLACES[0]!.sections).toEqual(["Case", "Boards"]);
     expect(PLACES[1]!.sections).toEqual(["1 Model", "2 Sources", "3 Pipelines", "4 Runs"]);
+    // The owner's M1: the place's tabs.
+    expect(PLACES[2]!.sections).toEqual(["Alerts", "What raises alerts", "Held rows", "Changes"]);
   });
 
-  it("opens each place for any one of its rights and for nothing else", () => {
-    for (const place of PLACES) for (const right of place.rights) expect(placesFor(new Set([right]))).toContain(place.id);
+  it("opens each place for any one of its rights, with what it needs, and for nothing else", () => {
+    for (const place of PLACES) {
+      for (const right of place.rights) expect(placesFor(new Set([right, ...(place.needs ?? [])]))).toContain(place.id);
+    }
     expect(placesFor(new Set(["a_right_nobody_has"]))).toEqual([]);
     // Rights not yet known, or not read: no place is offered on a guess.
     expect(placesFor(null)).toEqual([]);
+  });
+
+  it("offers Rules and Monitoring only to triage_alerts or author_rules, with the queue's read", () => {
+    // ADR-146 decision 2; the queue's read is what its first screen needs (ADR-146 Amendment 2
+    // point 5). Red with `needs` not read: a gate right without the queue's read opens it.
+    expect(placesFor(new Set(["triage_alerts", "read_alert_queue"]))).toContain("rules");
+    expect(placesFor(new Set(["author_rules", "read_alert_queue"]))).toContain("rules");
+    expect(placesFor(new Set(["author_rules", "triage_alerts"]))).not.toContain("rules");
+    for (const other of ["read_alert_queue", "deploy_rules", "read_held_rows", "decide_held_rows", "read_rule_audit", "load_screening_lists", "keep_watches"]) {
+      expect(placesFor(new Set([other, "read_alert_queue"]))).not.toContain("rules");
+    }
   });
 
   // The routes' own answer for every role, legacy role and right granted singly, recorded by the
@@ -54,6 +75,16 @@ describe("the place switcher", () => {
     expect(chose).toHaveBeenCalledWith("ingest");
   });
 
+  it("carries the open-alert count on Rules and Monitoring, its count in its name, and none for nothing", () => {
+    // ADR-146 decision 2: the count left the Glass's banner for the switcher.
+    const { rerender } = render(<PlaceSwitcher places={["glass", "rules"]} current="glass" onChoose={() => {}} counts={{ rules: 3 }} />);
+    const nav = within(screen.getByRole("navigation", { name: "Places" }));
+    expect(nav.getByRole("button", { name: "Rules and Monitoring 3 open" })).toBeTruthy();
+    expect(nav.getByRole("button", { name: "The Glass" })).toBeTruthy();
+    rerender(<PlaceSwitcher places={["glass", "rules"]} current="glass" onChoose={() => {}} counts={{ rules: 0 }} />);
+    expect(nav.getByRole("button", { name: "Rules and Monitoring" })).toBeTruthy();
+  });
+
   it("draws nothing for a person whose rights open no place", () => {
     render(<PlaceSwitcher places={[]} current={null} onChoose={() => {}} />);
     expect(screen.queryByRole("navigation", { name: "Places" })).toBeNull();
@@ -76,6 +107,12 @@ describe("the place switcher", () => {
 });
 
 describe("the context banner", () => {
+  it("says the person is in Rules and Monitoring, with the case it works on", () => {
+    render(<ContextBanner place="rules" caseSwitcher={<button type="button">Case Kestrel</button>} />);
+    const banner = screen.getByRole("region", { name: "You are in Rules and Monitoring" });
+    expect(within(banner).getByRole("button", { name: "Case Kestrel" })).toBeTruthy();
+  });
+
   it("names the place, the case and what it reads in one region", () => {
     render(<ContextBanner place="glass" caseSwitcher={<button type="button">Case Kestrel</button>} datasets={["Prison intel", "Kestrel notes"]} />);
     const banner = screen.getByRole("region", { name: "You are in the Glass" });

@@ -1,4 +1,5 @@
-// The Monitoring place on its Connection strength tab (ADR-139 decision 3), served by the page itself:
+// The Glass's Connection strength view (ADR-139 decision 3; a tab of Monitoring until Monitoring left
+// the Glass, ADR-146 decision 2), drawn as `App.tsx` draws it, served by the page itself:
 // for `strength.spec.ts` and the every-harness axe scan (`a11y/every-harness.spec.ts`, which finds
 // this page by its directory), in both brands (`?brand=govuk`). Nothing here reaches a server; what
 // the page is sent is kept in `window.__STRENGTH__.sent`, so a spec can read it.
@@ -14,7 +15,7 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
-import { AlertsPlace } from "../src/alerts/AlertsPlace";
+import { StrengthPanel } from "../src/strength/StrengthPanel";
 import type { EdgeTypeDef, EntityTypeDef } from "../../../packages/schemas/generated";
 
 declare global {
@@ -127,25 +128,16 @@ const EDGES = [
 ] as unknown as EdgeTypeDef[]; // prettier-ignore
 
 createRoot(document.getElementById("root")!).render(
-  <AlertsPlace
-    apiBaseUrl="http://strength-harness.invalid"
-    bearerToken="unused"
-    investigationId="inv-1"
-    accountId={`analyst-${as}`}
-    isAdministrator={false}
-    canManageInfluencers={as !== "editor"}
-    entityTypes={ENTITIES}
-    edgeTypes={EDGES}
-    onCanvas={() => undefined}
-  />,
+  <section aria-label="Connection strength" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)" }}>
+    <h2 className="value" style={{ margin: 0 }}>Connection strength</h2>
+    <StrengthPanel
+      apiBaseUrl="http://strength-harness.invalid"
+      bearerToken="unused"
+      investigationId="inv-1"
+      accountId={`analyst-${as}`}
+      canManage={as !== "editor"}
+      entityTypes={ENTITIES}
+      edgeTypes={EDGES}
+    />
+  </section>,
 );
-
-// The page opens on the Connection strength tab, as a reader would reach it by keyboard.
-for (let i = 0; i < 40; i++) {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  const tab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === "Connection strength");
-  if (tab) {
-    if (params.get("open") !== "queue") tab.click();
-    break;
-  }
-}

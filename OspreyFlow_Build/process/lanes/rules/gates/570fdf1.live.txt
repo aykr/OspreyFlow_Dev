@@ -1,0 +1,16 @@
+# leased live run at 570fdf1 (tree 93a8e1e4fc1a87ed47dc4b9b2c5ea90f008dcf04), 0 changed files — lease rules, stack a, start 2026-11-08T21:27:14Z
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+2 failed, 1493 passed, 5 warnings in 368.97s (0:06:08)
+end 21:33:25Z
+# 18 files: test_place_routes, test_alert_address, test_monitoring_routes, test_monitoring_queue, test_alert_close_approval,
+#   test_rule_maker_checker_routes, test_rule_sentence_routes, test_screening_list_routes, test_route_rights,
+#   test_alert_evidence_withheld, test_alert_view_explains_live, test_case_queue_reads, test_pack_alert_item, test_hotlists,
+#   test_investigation_levels, test_no_corpus_counts_on_the_wire, ingest/test_typology_rule_routes, scenarios/test_phase7_stage6c_watch_routes.
+# Explained, both failing on main:
+#   test_route_rights: "in the app, not the table: ['models_admin_limits_route', 'models_admin_usage_route']" — P2's two model
+#     routes (f05683d) were never added to ROUTE_RIGHTS on main; outside rules' map, a request to the orchestrator.
+#   test_typology_rule_routes' rule list: the shared database's leftover rules (L2.8d's record).
+# The lease was released and stack a brought down by the runner's exit trap (status after: a, b and c free). The P2 find was passed to platform by the orchestrator.
+# Earlier runs, superseded: at 1149f0e (rules lease, stack b, 21:09–21:13Z, before the Q1 ruling) 1,492 passed, the same 2 failed, 1 xfailed; and before the rebase onto P2: rules lease, stack a, at eff80cf — 1,465 passed, 21 failed, 2 errors,
+#   each explained and the three fixed files then 44/44 on stack b (process/lanes/rules/l2.9 and the report).

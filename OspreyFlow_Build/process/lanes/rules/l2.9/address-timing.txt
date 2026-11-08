@@ -1,0 +1,15 @@
+# The address's refusal timings (ADR-146 Amendment 2 point 6; the orchestrator's independent review of L2.9, blocker 1).
+# test_alert_address_live.py at 364912c (tree bf74accb051c752f4303a06a255593c0237f1436), under the rules lease on stack c, 2026-11-08T22:49:01Z to 22:49:42Z;
+# the real app, get_principal, PostgresAlertStore.case_of, the hotlist store and ArcadeDB. Wall-clock per request through TestClient.
+quantum 250 ms; 30 timed requests each, after 3 to warm
+without the wait:
+  missing: n=30 median=4.5 ms q1=4.2 q3=4.9 max=6.3
+  elsewhere: n=30 median=4.4 ms q1=4.2 q3=5.1 max=5.7
+  hidden: n=30 median=100.8 ms q1=80.0 q3=126.5 max=176.6
+with the wait:
+  missing: n=30 median=253.3 ms q1=252.7 q3=254.2 max=254.7
+  elsewhere: n=30 median=253.1 ms q1=252.8 q3=253.8 max=254.8
+  hidden: n=30 median=253.7 ms q1=252.8 q3=254.2 max=254.7
+# Read: without the wait the hidden alert costs about 20 times a missing one (its queue read and evidence reads);
+# with it all three are answered within 2 ms of each other at one quantum. The hidden path's slowest (176.6 ms) is under the
+# 250 ms quantum by about 70 ms on this machine at this load; an alert whose evidence takes longer is the owner's Q3.

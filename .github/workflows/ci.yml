@@ -644,6 +644,7 @@ jobs:
           ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py
           ../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py
           ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py
+          ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py
           ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py
           ../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py
           ../OspreyFlow_Build/tests/services/api/test_starter_run.py
@@ -1007,6 +1008,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_alert_address_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py

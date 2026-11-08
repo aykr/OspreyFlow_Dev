@@ -110,14 +110,26 @@ export type MonitoringTab =
   | "Held rows"
   | "Audit";
 
-/** The Monitoring place on one of its tabs (ADR-133 decision 5). Since the owner's answer of
- * 1 November 2026 the Watches tab is the only way to the hotlists and the alert inbox: the rail's
- * Watches entry is gone. */
+/** Rules and Monitoring on one of its tabs (ADR-146 decision 2; the Monitoring place's tabs before
+ * it, by their old names: Queue and Watches' inbox are *Alerts*; Rules, Watches' hotlists and Lists are
+ * *What raises alerts*; Audit is *Changes*). Connection strength stayed in the Glass, under the
+ * rail's More. Reached through the place switcher, as a person reaches it. */
 export async function monitoringTab(page: Page, tab: MonitoringTab): Promise<void> {
-  await rail(page, "Monitoring").click();
-  const place = page.getByRole("region", { name: "Monitoring" });
+  if (tab === "Connection strength") {
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "More" }).click();
+    await page.getByRole("group", { name: "More" }).getByRole("button", { name: "Connection strength" }).click();
+    await expect(page.getByRole("region", { name: "Connection strength" })).toBeVisible();
+    await page.waitForTimeout(2500);
+    return;
+  }
+  await page.getByRole("navigation", { name: "Places" }).getByRole("button", { name: /^Rules and Monitoring/ }).click();
+  const place = page.getByRole("region", { name: "Rules and Monitoring" });
   await expect(place).toBeVisible();
-  await place.getByRole("tab", { name: tab, exact: true }).click();
+  const now: Record<Exclude<MonitoringTab, "Connection strength">, string> = {
+    Queue: "Alerts", Rules: "What raises alerts", Watches: "What raises alerts", Lists: "What raises alerts",
+    "Held rows": "Held rows", Audit: "Changes",
+  }; // prettier-ignore
+  await place.getByRole("tab", { name: now[tab], exact: true }).click();
   await page.waitForTimeout(2500);
 }
 

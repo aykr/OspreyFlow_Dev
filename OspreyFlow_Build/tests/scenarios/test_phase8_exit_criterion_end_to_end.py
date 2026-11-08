@@ -692,7 +692,9 @@ def test_phase8_exit_criterion_end_to_end(
     # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
     # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
     # this fix, `401 signature has expired`, not assumed).
-    headers = _bearer(private_key, roles=["loader"], exp=int(_time.time()) + 3600)
+    # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+    # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+    headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
 
     from services.api.app import app
 
@@ -1034,10 +1036,18 @@ def test_phase8_exit_criterion_end_to_end(
         # this walkthrough's own action produced the most recent one.
         newest_hotlist_alert = hotlist_alerts[0]
 
-        # === B14: open the alert into a pre-populated investigation.
-        jumped = client.post(f"/v1/alerts/{newest_hotlist_alert.id}/jump", headers=headers)
-        assert jumped.status_code == 201, jumped.text
-        assert jumped.json()["seeded_count"] >= 1
+        # === B14: open the alert at its own address, in its case, with its entities (ADR-146
+        # decision 6 and Amendment 2; the jump's case of its own went in L2.9).
+        opened = client.get(f"/v1/alerts/{newest_hotlist_alert.id}", headers=headers)
+        assert opened.status_code == 200, opened.text
+        assert opened.json()["explanation"]["nodes"]
+        # Its refusal (rule 3): a stranger to its case asking for the same alert is answered byte for
+        # byte as for an id that never existed.
+        stranger = _bearer(private_key, sub=f"b14-stranger-{new_id()}", roles=["analyst"],
+                           exp=int(_time.time()) + 3600)  # fmt: skip
+        refused = client.get(f"/v1/alerts/{newest_hotlist_alert.id}", headers=stranger)
+        missing = client.get(f"/v1/alerts/no-such-alert-{new_id()}", headers=stranger)
+        assert (refused.status_code, refused.content) == (404, missing.content), refused.text
 
         # === B15: pivot on the handset identifier — both SIMs link to one device, one traversal.
         # depth=3: msisdn --SAME_AS--> sim_b (1) --PAIRED_WITH--> handset (2)

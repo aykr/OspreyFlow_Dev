@@ -11,7 +11,7 @@ export const LAST_GLASS_VIEW_KEY = "ospreyflow.lastGlassView";
 
 /** The Glass's views kept as the one to come back to — `App.tsx`'s and the keyboard harness's alike.
  * Messages (`dossier`) is not among them: it is drawn for one node, which a reload does not keep. */
-export const KEPT_GLASS_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports", "dashboards", "alerts", "ownership"];
+export const KEPT_GLASS_VIEWS: readonly string[] = ["graph", "map", "matrix", "reports", "dashboards", "strength", "ownership"];
 
 function stored(): string | null {
   try {

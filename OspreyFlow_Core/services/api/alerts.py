@@ -804,6 +804,17 @@ class AlertStore:
             )
         return [_row_to_queue_row(row) for row in rows]
 
+    async def case_of(self, alert_id: str) -> str | None:
+        """The case an alert was raised in (`investigation_id`), or `None` for an id no alert holds
+        or one raised in no case. Unscoped, so never answered to a reader: the address route
+        (`open_alert_at_address`) checks the reader's level on it and reads the alert through the
+        queue's own scope (`get_queue_alert`) before it says anything."""
+        async with self._pool.acquire() as conn:
+            found = await conn.fetchval(
+                "SELECT investigation_id FROM alerts WHERE id = $1", alert_id
+            )
+        return found if isinstance(found, str) else None
+
     async def get_queue_alert(
         self, alert_id: str, investigation_id: str, principal: Principal
     ) -> QueueRow:

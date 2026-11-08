@@ -32,13 +32,17 @@ SITES = {
     "remove_nodes": "Removed",
     "explore_starter_run_route": "Ran a starter question",
     "shared_pair_canvas_route": "Showed two who share contacts",
-    "jump_alert_route": "Opened from an alert",
     "ownership_canvas": "Showed an ownership structure",
     "alert_canvas": "Opened an alert",
     # ADR-128 decision 3: an edit to the case brief. Recorded through a helper of its own so the five
     # edit routes name one label; the step holds no canvas snapshot (`history_labels.NOT_RESTORABLE`).
     "_record_brief_edit": "Edited the brief",
 }
+
+
+#: Labels no site writes any more, still shown on the steps that hold them: the alert jump's case of
+#: its own went in L2.9 (ADR-146 decision 6: an alert is worked in the case it arose in).
+RETIRED = {"Opened from an alert"}
 
 
 def _fixed_labels() -> dict[str, str]:
@@ -66,9 +70,9 @@ def _recording_calls() -> list[tuple[str, ast.Call]]:
 
 
 def test_the_fixed_texts_are_decision_8s_table_and_the_fallback() -> None:
-    assert set(SITES.values()) | {"Changed"} == set(_fixed_labels().values())
+    assert set(SITES.values()) | RETIRED | {"Changed"} == set(_fixed_labels().values())
     assert history_labels.CHANGED == "Changed"
-    assert history_labels.FIXED_LABELS == set(SITES.values())
+    assert history_labels.FIXED_LABELS == set(SITES.values()) | RETIRED
 
 
 @pytest.mark.parametrize("text", sorted(set(SITES.values()) | {"Changed"}))

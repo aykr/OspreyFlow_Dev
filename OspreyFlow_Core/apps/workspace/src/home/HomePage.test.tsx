@@ -13,11 +13,12 @@ import { HomePage } from "./HomePage";
 afterEach(cleanup);
 
 const SUMMARY: HomeSummary = {
-  glass: [{ tone: "warn", text: "3 alerts in your team's queue, 1 claimed by you" }],
+  glass: [{ tone: "info", text: "1 case open to you" }],
+  rules: [{ tone: "warn", text: "3 alerts in your team's queue, 1 claimed by you" }],
   studio: [{ tone: "warn", text: "2 rows held for review" }],
   admin: [{ tone: "ok", text: "3 of 3 services healthy" }],
-  attention: [{ place: "glass", tone: "warn", title: "KYC screening alert in Operation Ledger", detail: "A match. Claimed by you.",
-                at: "2026-10-13T06:46:00Z", caseId: "c1" }],  // prettier-ignore
+  attention: [{ place: "rules", tone: "warn", title: "KYC screening alert in Operation Ledger", detail: "A match. Claimed by you.",
+                at: "2026-10-13T06:46:00Z", caseId: "c1", alertId: "al-1" }],  // prettier-ignore
   recent: [{ id: "c1", name: "Operation Ledger", level: "Editor", entities: 68, created: "2026-10-11T09:00:00Z" }],
   services: [{ name: "Graph store", ok: true }],
   held: 2,
@@ -55,6 +56,29 @@ describe("Home", () => {
     cleanup();
     home(["edit_pipelines", "operate_schedules"]);
     expect(cards()).toEqual(["Ingest Studio", "Admin"]);
+  });
+
+  it("opens an alert from Needs your attention at its address, not its case (ADR-146 decision 6)", () => {
+    const openAlert = vi.fn();
+    const { opened, chose } = home(["investigate", "triage_alerts", "read_alert_queue"], { onOpenAlert: openAlert });
+    expect(panel("Rules and Monitoring").getByText("3 alerts in your team's queue, 1 claimed by you")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("region", { name: "Needs your attention" })).getByRole("button", { name: /KYC screening alert/ }));
+    expect(openAlert).toHaveBeenCalledWith("al-1");
+    expect(opened).not.toHaveBeenCalled();
+    // Its card's key, R, opens the place.
+    fireEvent.keyDown(window, { key: "r" });
+    expect(chose).toHaveBeenLastCalledWith("rules");
+  });
+
+  it("keeps a reader's alerts on the Glass, opening the case, where Rules and Monitoring is hidden", () => {
+    // A Reports Viewer reads the queue but works no alert (ADR-145 Amendment 4 decision 10).
+    const openAlert = vi.fn();
+    const { opened } = home(["read_alert_queue", "read_reports"], { onOpenAlert: openAlert });
+    expect(screen.queryByRole("region", { name: "Rules and Monitoring" })).toBeNull();
+    expect(panel("The Glass").getByText("3 alerts in your team's queue, 1 claimed by you")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("region", { name: "Needs your attention" })).getByRole("button", { name: /KYC screening alert/ }));
+    expect(opened).toHaveBeenCalledWith("c1", "glass");
+    expect(openAlert).not.toHaveBeenCalled();
   });
 
   it("gives brass to the first usable place only", () => {

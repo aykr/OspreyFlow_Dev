@@ -1,27 +1,66 @@
 {
-  "//": "ADR-145 decisions 1 and N6: the three places and the rights that open each. A place is offered to whoever holds one of its rights, and its rights are exactly the rights its own routes need, so a place hidden from a person is one whose every route refuses them (rule 3). The Conduit's place-routes test (`test_place_routes.py`) reads this file and fails when it and the routes disagree.",
+  "//": "ADR-145 decisions 1 and N6, Amendment 4 decision 1, ADR-146 decision 2: the four places and the rights that open each. A place is offered to whoever holds one of its rights and every right in its `needs`, and its rights are exactly the rights its own routes need (Rules and Monitoring: its gate's, which every one of its routes asks for, and `needs` its entry read's), so a place hidden from a person is one whose every route refuses them (rule 3). The Conduit's place-routes test (`test_place_routes.py`) reads this file and fails when it and the routes disagree.",
   "places": [
     {
       "id": "glass",
       "name": "The Glass",
       "key": "g",
-      "sections": ["Case", "Boards", "Monitoring"],
+      "sections": [
+        "Case",
+        "Boards"
+      ],
       "rights": [
-        "ask_model", "confirm_inferred", "create_case", "decide_held_rows", "deploy_rules",
-        "edit_graph", "export", "extract_files", "investigate", "keep_watches", "load_screening_lists",
-        "manage_strength_influencers", "propose_link_type", "read_alert_queue", "read_data_feeds",
-        "read_held_rows", "read_report_feed", "read_reports", "read_rule_audit",
-        "record_assessment", "remove_case", "resolve_entities", "run_analysis", "share_case",
-        "trace_ownership", "triage_alerts"
+        "ask_model",
+        "confirm_inferred",
+        "create_case",
+        "edit_graph",
+        "export",
+        "extract_files",
+        "investigate",
+        "manage_strength_influencers",
+        "propose_link_type",
+        "read_alert_queue",
+        "read_data_feeds",
+        "read_report_feed",
+        "read_reports",
+        "record_assessment",
+        "remove_case",
+        "resolve_entities",
+        "run_analysis",
+        "share_case",
+        "trace_ownership"
       ]
     },
     {
       "id": "ingest",
       "name": "Ingest Studio",
       "key": "i",
-      "sections": ["1 Model", "2 Sources", "3 Pipelines", "4 Runs"],
+      "sections": [
+        "1 Model",
+        "2 Sources",
+        "3 Pipelines",
+        "4 Runs"
+      ],
       "rights": [
         "edit_pipelines"
+      ]
+    },
+    {
+      "id": "rules",
+      "name": "Rules and Monitoring",
+      "key": "r",
+      "sections": [
+        "Alerts",
+        "What raises alerts",
+        "Held rows",
+        "Changes"
+      ],
+      "rights": [
+        "author_rules",
+        "triage_alerts"
+      ],
+      "needs": [
+        "read_alert_queue"
       ]
     },
     {
@@ -30,7 +69,10 @@
       "key": "a",
       "sections": [],
       "rights": [
-        "administer_system", "manage_dashboards", "manage_people", "operate_schedules"
+        "administer_system",
+        "manage_dashboards",
+        "manage_people",
+        "operate_schedules"
       ]
     }
   ]

@@ -1,4 +1,5 @@
-// The three places' keyboard harness (ADR-145 decisions 1–3, `CLAUDE.md` rule 13): the real brand
+// The four places' keyboard harness (ADR-145 decisions 1–3 and Amendment 4, ADR-146 decision 2,
+// `CLAUDE.md` rule 13): the real brand
 // frame, the real `TopBar` with the real `PlaceSwitcher` (inside the GOV.UK header under `?brand=govuk`),
 // the real `ContextBanner` with the Glass's sections and its cross-link, and the real Admin place,
 // wired as `App.tsx` wires them — the view to come back to through the same `useLastGlassView`. `?rights=`
@@ -42,12 +43,12 @@ const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people").split(","));
 const places = placesFor(rights);
 const CASES: Record<string, string> = { kestrel: "Kestrel", harrier: "Harrier" };
-type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "alerts" | "ingest";
+type View = "graph" | "map" | "dossier" | "matrix" | "reports" | "strength" | "alerts" | "ingest";
 
 function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
-  const [view, setView] = useState<View>(start === "ingest" ? "ingest" : "graph");
+  const [view, setView] = useState<View>(start === "ingest" ? "ingest" : start === "rules" ? "alerts" : "graph");
   const caseId = initialInvestigationId() ?? "kestrel";
   // The same kept-view list as `App.tsx` (`KEPT_GLASS_VIEWS`), so the Messages case tests the Glass's.
   const lastGlassView = useLastGlassView(view, "ingest", "graph");
@@ -62,12 +63,13 @@ function Harness() {
       else here.delete("view");
       location.assign(`${location.pathname}?${here}`);
     });
-  const place: PlaceId = admin ? "admin" : view === "ingest" ? "ingest" : "glass";
+  const place: PlaceId = admin ? "admin" : view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
   const choose = (to: PlaceId) => {
     window.__PLACES__!.chosen.push(to);
     setAdmin(to === "admin");
     if (to === "ingest") setView("ingest");
-    else if (to === "glass" && view === "ingest") setView(lastGlassView());
+    else if (to === "rules") setView("alerts");
+    else if (to === "glass" && (view === "ingest" || view === "alerts")) setView(lastGlassView());
   };
   const caseMenu = (
     <button type="button" className="btn" onClick={() => reopen(caseId === "kestrel" ? "harrier" : "kestrel")}>
@@ -78,8 +80,9 @@ function Harness() {
     <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
       <ClassificationStrip marking="OFFICIAL" />
       <TopBar
-        app={place === "ingest" ? "ingest" : "glass"}
-        places={<PlaceSwitcher places={places} current={place} onChoose={choose} />}
+        app={place === "ingest" ? "ingest" : place === "rules" ? "rules" : "glass"}
+        // `?badge=1`: Rules and Monitoring with its open count, as `App.tsx` draws it (ADR-146 decision 2).
+        places={<PlaceSwitcher places={places} current={place} onChoose={choose} counts={{ rules: params.has("badge") ? 3 : undefined }} />}
         views={
           place === "glass"
             ? (["graph", "map", "dossier"] as const).map((v) => ({
@@ -108,10 +111,8 @@ function Harness() {
         sections={
           place === "glass"
             ? [
-                { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView("graph") },
+                { id: "case", label: "Case", current: true, onSelect: () => setView("graph") },
                 { id: "boards", label: "Boards", current: false },
-                // `?badge=1`: Monitoring with its open count, as `App.tsx` draws it (ADR-145 Amendment 2).
-                { id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts"), badge: params.has("badge") ? 3 : undefined },
               ]
             : []
         }
@@ -145,6 +146,8 @@ function Harness() {
                 { id: "history", label: "History", icon: "history", onSelect: () => undefined },
                 { id: "questions", label: "Questions", icon: "questions", onSelect: () => undefined },
                 { id: "dashboards", label: "Dashboards", icon: "dashboards", onSelect: () => undefined },
+                // ADR-139: Connection strength stayed in the Glass when Monitoring left it.
+                { id: "strength", label: "Connection strength", icon: "strength", onSelect: () => setView("strength") },
               ]}
               onHelp={() => undefined}
             />

@@ -29919,3 +29919,136 @@ from about 20 hours to about 13.
    refused by the port guard to anyone but its holder; the tests are `tests/test_stack_lease.py`'s
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
+
+### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the five routes it shares (three reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled
+
+Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
+the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below), and the owner's ruling
+on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where this says so.
+*Open the evidence* (decision 6) is built on case's L3.2b read-only lens (ADR-144 Amendment 2), point 10.
+
+1. **The place's gate.** ADR-145 Amendment 1 shows a place from the checks its routes declare. ADR-146
+   decision 2 opens Rules and Monitoring to `triage_alerts` or `author_rules` and no one else, but its
+   routes' own rights (`read_alert_queue`, `deploy_rules`, `read_held_rows`, `decide_held_rows`,
+   `read_rule_audit`, `load_screening_lists`, `keep_watches`) are held by people the decision does not
+   open it to. So every route of the place asks, after its own right, for the place's gate
+   (`services/api/rules_place.py`, `require_rules_place`: any one of the two rights, and the queue's
+   read, `read_alert_queue`, that the place's entry needs), refused with 403 `place_required`. The gate
+   is no wider than the offer (point 4): a holder of `triage_alerts` without the queue's read, directly
+   or through a custom role, is refused at every route of the place, as the switcher hides it from them
+   (the orchestrator's independent review; `test_place_routes.py`'s
+   `test_a_gate_right_without_the_queue_read_is_refused_at_the_gate`, red at the eight triage routes
+   with the gate asking for an opening right alone). No role loses a right (`schemas/rights.py` is unchanged); what changes is that a
+   right which acts only in the place no longer reaches it without the place.
+2. **What that costs (Q2 (a)).** The **Data Engineer** no longer deploys or retires rules, opens an
+   alert's detail, or manages screening lists; the **Administrator** no longer reads the rule audit or
+   manages screening lists. The rule audit returns to administrators with Admin › Audit (L2.6); screening
+   lists with the Studio's list connector (L1.6, ADR-140 Amendment 9). A whole-deployment rule's approval
+   still needs `administer_system` and `deploy_rules` both, and now the place too. On the owner's list
+   for review.
+3. **Routes shared with other places, no gate.** The queue's list (`GET …/alert-queue`) and its counts are read outside
+   the place by Home's *Needs your attention*, the switcher's count and a report pack's alert items (the
+   Glass); the held rows' list, rejection and release (`GET …/held-rows`, `POST …/held-rows/reject`,
+   `POST …/ingest/recipes/{id}/held-rows/release`) are worked in the Studio's Runs too (ADR-140) and
+   counted on Home. Each answers whoever holds its own right, as before, so the Data Engineer keeps
+   held rows in the Studio. **The queue's rows** (each alert's title, words and id) go only to a reader
+   the place is offered to and to the Reports Viewer, whose Home keeps its list of the alerts on the
+   cases they can read, each row opening its case, until L2.12 builds that journey (ADR-145 Amendment 4
+   decision 10; by the role, so a custom role copied from it is given counts); the Reports Viewer has
+   no way into an alert's detail, which is the place's. Any other reader of the queue (the Data
+   Engineer) is refused the rows (403 `queue_rows_not_offered`) and reads **the queue's counts**,
+   `GET …/alert-queue/counts` (`AlertQueueCounts`: open, claimed and closing, counted as the queue
+   counts them, so an alert with hidden evidence is not counted), and Home says how many and lists
+   none (the orchestrator's ruling (a) on its independent review's item 4, within ADR-145 Amendment 4
+   decision 10; `tests/services/api/test_alert_queue_counts.py`, red with the rows' check removed:
+   the Data Engineer answered every row; `home/homeData.test.ts`). A route asking for a right that acts
+   only in the place (`author_rules`, `triage_alerts`, `deploy_rules`, `read_rule_audit`,
+   `keep_watches`, `load_screening_lists`) must be the place's.
+4. **Offered where usable (ADR-145 Amendment 1).** `places.json` names the place's rights (the gate's)
+   and its `needs` (its entry read's, `read_alert_queue`). Analysts and the Super user are offered it;
+   the Data Engineer, the Administrator and the Reports Viewer are not.
+5. **The Rule author reads the queue (the owner's ruling on Q1, 8 November 2026: (a)).** Whoever
+   triages must read the queue, so *Rule author* holds `read_alert_queue` beside `author_rules` and
+   `triage_alerts`; this amends ADR-112 Amendment 5 decision 2's list (`rights.py`'s `RULE_AUTHOR`). The
+   role is offered Rules and Monitoring and the Glass, whose Home reads the same queue, and never the
+   Studio. `places.json`'s `needs` stays: it is not the interim but the place's entry read (ADR-145
+   Amendment 1), so a custom role with `triage_alerts` alone is still not offered a place whose first
+   screen refuses it. Tests: ADR-112 Amendment 5's "Rule author opens Rules and Monitoring"
+   (`test_place_routes.py`'s `test_a_rule_author_opens_rules_and_monitoring`, no longer an xfail) and
+   `test_rights.py`'s Rule author case, each red on the role without the right.
+6. **An alert's address.** `GET /v1/alerts/{alert_id}` answers `AlertAtAddress` (the case the alert is
+   worked in, its `investigation_id`, and its explanation as `explain_alert` gives it there). The path
+   names no case, so the reader is scoped to the alert's case (`scope_to_case`) after the level check
+   and before anything is read, reading its datasets and no others. An alert the reader may not see —
+   its case not theirs, its dataset not one its case reads, not in their queue there (another member's
+   own hotlist alert), or any cited node, link or transaction hidden — is answered exactly as one that
+   does not exist (404 `alert_not_found`), and the case's level check is made for a missing id too, on
+   no case. **Answered at the same time too** (the orchestrator's independent review, blocker 1): the
+   reads after the level check differ (an id that never existed, or one in a case the reader may not
+   open, stops there; an alert in a case they may open is read through the queue's scope and its
+   evidence first, so a member could otherwise tell an alert over evidence hidden from them from no
+   alert at all by when the 404 came). No set of reads can be made the same for an id that has no
+   evidence to read, so every refusal of the address is answered at the end of the quantum it falls in,
+   counted from the request's start (`rules_place.ADDRESS_REFUSAL_QUANTUM`, 250 ms; `refusal_wait`);
+   a success is not held, since it says the alert is there anyway. Tests:
+   `test_alert_address.py`'s `test_every_refusal_is_answered_on_the_same_quantum` (a clock the fakes
+   advance as they read: red with the wait removed, the hidden alert answered at 17 ms against the
+   missing one's 2 ms) and `test_alert_address_live.py` through the real app and stores, its timings
+   under the rules lease in `process/lanes/rules/l2.9/address-timing.txt`. **What it does not cover,
+   the owner's question (L2.9 Q3):** an alert whose evidence takes longer than one quantum to read for
+   the reader (evidence an alert may cite is not capped) is refused on a later quantum, so it alone is
+   still told apart from a missing one. Recommended: (a) accept it, recorded, since the reads that
+   take that long are of an alert large enough to be rare; (b) cap the evidence an alert cites, and
+   size the quantum to read the cap; (c) a larger quantum. Until the owner rules, the guarantee is the
+   one measured, no wider. The same class, already on main and not this step's: the queue's own list,
+   `GET …/alert-queue`, reads every alert's evidence in the case before leaving out the hidden ones,
+   so its time grows with them. An alert raised in no case has no
+   address yet (L2.10's dataset alerts, through the home case). The workspace's router
+   (`shell/router.ts`, the History API, no dependency) reads `/alerts/<id>` and `/rules`, keeps them
+   over the sign-in round trip, and opens another case's alert by the reload every case switch is
+   (`alerts/address.ts`). Home's alert rows, the queue and the inbox open the address.
+7. **The jump replaced.** `POST …/alerts/{alert_id}/jump`, the case of its own (ADR-144 Amendment 2
+   decision 2), is removed with its client and tests; the inbox's *Open the alert* opens the address.
+   ADR-124 Amendment 17's refusal now stands at the address (point 6). The history label "Opened from
+   an alert" is written by no site and still shown on the steps that hold it. B14 is amended in
+   `08_ACCEPTANCE_SCENARIOS.md` to the address, and its over-the-wire test, ADR-144 Amendment 2's
+   `test_b14_an_alert_opens_into_a_case_holding_its_entities`, is renamed
+   `test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities` and asserts the alert's
+   own case. The drawn-dataset copy
+   guard the jump called (`refuse_copying_a_drawn_dataset`, `read_the_same_dataset`) has no caller
+   left; it is the case lane's to keep or remove.
+8. **The place's screens.** Tabs *Alerts* (the queue with an alert's detail beside it, and the inbox
+   until L2.10), *What raises alerts* (rules and templates, hotlists, watched patterns, screening
+   lists), *Held rows* and *Changes* (the rule audit), the last two by the case level as before. The
+   open-alert count is on the switcher's *Rules and Monitoring* ("Rules and Monitoring 3 open"); the
+   Glass's banner is *Case · Boards*. Connection strength (ADR-139), not alerts, stays in the Glass
+   under the rail's ⋯ More. The count before the canvas stays 24.
+
+9. **The place draws only for whom it is offered.** An address followed by someone the place is not
+   offered to lands on the Glass, the address left; under the place the Glass's Inspector, timeline and
+   status line are not drawn.
+10. **Open the evidence (R5).** The alert's detail offers *Open the evidence* to any reader of it. It saves
+    a private view of the alert's own case (`POST …/views`, ADR-144 decision 4, behind `investigate`)
+    holding the nodes the reader was just shown, named "From alert: ‹title›" — into the case the alert
+    was read in, and refused in words when that is not the case open or the alert's address names
+    another (`alerts/address.ts`'s `evidenceCase`, the orchestrator's independent review) — leaves the
+    alert's address, and opens the view as the Glass's read-only lens. The lens's banner says "Opened from an
+    alert" and offers *← Back to the alert* (focused when it opens) before *Back to the case*; it
+    returns to the alert's address, the alert still open in the queue. A view opened any other way has
+    no way back to an alert. It replaces the jump's case of its own, and so ends L3.2's interim Q1.
+
+**Tests.** `test_place_routes.py` (the gate on every route but the shared ones, red with it taken off
+`deploy_typology_rule` and with it open to all; every route asking for a right of the place alone is
+the place's, red with one planted; each role offered exactly its places, the hidden place's routes
+refused over HTTP); `test_alert_address.py`, its reader the principal the real `get_principal` gives a
+path with no case (reading no dataset) and its fakes refusing what the graph, the analytics and the
+queue's scope refuse (seven unseeable cases answered as a missing one: red with the case check removed,
+with the evidence checks removed for the hidden link, transaction and node, and with the reader left
+unscoped for the alert of another dataset; the owner-only hotlist alert is the real store's queue scope,
+proved on Postgres by `test_monitoring_queue.py`); `App.test.tsx`
+(the address for someone not offered the place; no working-set tools under it; *Open the evidence*,
+then *← Back to the alert*, returns to the same alert, still open, red with the way back not navigating
+and with the evidence saved short; each red); `keyboard/shell.spec.ts`,
+`keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
+new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
+address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.

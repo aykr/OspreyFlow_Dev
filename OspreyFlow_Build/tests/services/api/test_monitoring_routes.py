@@ -32,6 +32,7 @@ from services.api.app import (
     get_monitoring_settings,
     get_principal,
     get_principal_names,
+    get_working_set,
 )
 from services.api.config import MonitoringSettings, PostgresConfig
 from services.api.hotlists import HotlistStore
@@ -183,6 +184,9 @@ def world() -> Iterator[tuple[_World, TestClient]]:
         get_hotlists_store: w.hotlists_store,
         get_monitoring_settings: lambda: w.settings,
         get_principal_names: lambda: _Names(),
+        # The close and its approval take the working set (L2.8d: a re-marked node's copies are
+        # purged); no alert here re-marks a node, so a stand-in that is never called serves.
+        get_working_set: lambda: object(),
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

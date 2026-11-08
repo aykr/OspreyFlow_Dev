@@ -37,6 +37,12 @@ export interface StartScreenInput {
   browseCases: () => void;
   /** The Studio on the open case. */
   openStudio: () => void;
+  /** Rules and Monitoring on the open case. */
+  openRules: () => void;
+  /** An alert at its address (ADR-146 decision 6). */
+  openAlert: (alertId: string) => void;
+  /** Opens a case on Rules and Monitoring (a reload, as every case switch is). */
+  openCaseOnRules: (id: string) => void;
 }
 
 export function startScreen(input: StartScreenInput): ReactElement | null {
@@ -48,7 +54,12 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
   // ADR-145 N6: a place chosen or handed off (`?view=ingest|admin`) is drawn only if the person's
   // rights open it, else Home — decided here, before anything of the place is drawn.
   const chosen = investigationId ? startChoice : startFor(startChoice);
-  const where = chosen === "glass" || chosen === "ingest" || chosen === "admin" ? (startPlaces(rights).includes(chosen) ? chosen : "start") : chosen;
+  const where =
+    chosen === "glass" || chosen === "ingest" || chosen === "rules" || chosen === "admin"
+      ? startPlaces(rights).includes(chosen)
+        ? chosen
+        : "start"
+      : chosen;
   // ADR-145 decision 1: Home's cards and the switcher go to a place the same way. With a case open
   // behind, the Glass offers the cases with a way back to it, and the Studio opens on it; Admin needs
   // no case either way.
@@ -57,6 +68,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
     setStartChoice(place === "admin" ? "admin" : null);
     if (place === "glass") input.browseCases();
     if (place === "ingest") input.openStudio();
+    if (place === "rules") input.openRules();
   };
   const switcher = (current: StartPlace | null) => (
     <PlaceSwitcher places={startPlaces(rights)} current={current} onChoose={choose} />
@@ -71,6 +83,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         account={input.account}
         marking={input.marking}
         onOpenCase={(id, place) => input.openCase(id, place === "ingest" ? "ingest" : undefined)}
+        onOpenAlert={input.openAlert}
         onChoose={choose}
       />
     );
@@ -99,9 +112,9 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
       bearerToken={input.bearerToken}
       lastCaseId={input.lastCaseId}
       isAdministrator={input.isAdministrator}
-      title={where === "ingest" ? "Choose the case to load into" : "Choose a case"}
+      title={where === "ingest" ? "Choose the case to load into" : where === "rules" ? "Choose the case whose alerts to work" : "Choose a case"}
       onStart={backToStart}
-      onOpen={(id) => input.openCase(id, where === "ingest" ? "ingest" : undefined)}
+      onOpen={(id) => (where === "rules" ? input.openCaseOnRules(id) : input.openCase(id, where === "ingest" ? "ingest" : undefined))}
     />
     </>
   );

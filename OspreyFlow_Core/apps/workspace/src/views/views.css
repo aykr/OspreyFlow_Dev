@@ -31,6 +31,8 @@
 .view-lens-banner__name { font-weight: 600; }
 .view-lens-banner__note { color: var(--text-secondary); }
 .view-lens-banner__back { margin-left: auto; min-height: var(--h-control-24); }
+.view-lens-banner__back + .view-lens-banner__back { margin-left: 0; }
+.view-lens-banner__from { font-weight: 600; }
 
 /* The *Save as a view* form, over the canvas just above the selection bar. */
 .save-view-anchor {

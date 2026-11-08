@@ -34,6 +34,9 @@ export interface HomePageProps {
   onChoose: (place: StartPlace) => void;
   /** Opens a case, in the Glass or the Studio. */
   onOpenCase: (id: string, place: "glass" | "ingest") => void;
+  /** Opens an alert at its address, in Rules and Monitoring (ADR-146 decision 6: Home opens the
+   * alert, not the case). */
+  onOpenAlert?: (alertId: string) => void;
   account: ReactNode;
   marking: string | null;
   now?: Date;
@@ -45,6 +48,8 @@ const WORDS: Record<StartPlace, { who: string; what: string }> = {
            what: "Work a case on the graph, map and timeline. Record assessments with their evidence, and build trends and report packs." },
   ingest: { who: "For data engineers",
             what: "Draw pipelines from source to load over the domain model. Each transform is tested, and nothing is scripted." },
+  rules: { who: "For analysts and rule authors",
+           what: "Work the alerts that rules and watches raise, in one queue, and see what raises them." },
   admin: { who: "For administrators",
            what: "Manage people, roles and dashboard identities, and watch the services. The console never reads case content." },
 }; // prettier-ignore
@@ -52,7 +57,7 @@ const PANELS = Object.fromEntries(
   (Object.keys(WORDS) as StartPlace[]).map((place) => [place, { ...WORDS[place], title: PLACE_NAME[place], key: PLACE_KEY[place] }]),
 ) as Record<StartPlace, { title: string; who: string; what: string; key: string }>;
 
-const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", admin: "Admin area" };
+const APP: Record<Place, string> = { glass: "Glass", ingest: "Ingest Studio", rules: "Rules and Monitoring", admin: "Admin area" };
 const GLYPH: Record<Fact["tone"], string> = { ok: "✓", warn: "△", error: "!", info: "·" };
 
 function greeting(now: Date): string {
@@ -136,7 +141,17 @@ function AdminPicture({ services }: { services: HomeSummary["services"] }) {
   );
 }
 
-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, account, marking, now = new Date() }: HomePageProps) {
+/** Rules and Monitoring's picture: the alerts waiting for the reader, as a figure. */
+function RulesPicture({ open }: { open: number | null }) {
+  return (
+    <div className="home-pic__pipeline home-pic--rules" aria-hidden="true">
+      <span className="value home-pic__figure">{open === null ? "…" : open.toLocaleString("en-GB")}</span>
+      <span className="home-pic__caption">{open === 1 ? "alert waiting for you" : "alerts waiting for you"}</span>
+    </div>
+  );
+}
+
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, account, marking, now = new Date() }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
@@ -154,8 +169,24 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
     return () => window.removeEventListener("keydown", onKey);
   }, [allowed, onChoose]);
 
-  const facts = (place: StartPlace) => (summary ? (place === "glass" ? summary.glass : place === "ingest" ? summary.studio : summary.admin) : null);
-  const attention = summary ? summary.attention.filter((a) => allowed.has(a.place)) : [];
+  // Someone whose rights read the queue but do not open Rules and Monitoring (a Reports Viewer) keeps
+  // the alerts on the Glass's card, each row opening its case, as before ADR-146.
+  const alertsInGlass = !allowed.has("rules") && allowed.has("glass");
+  const facts = (place: StartPlace) =>
+    summary
+      ? place === "glass"
+        ? [...summary.glass, ...(alertsInGlass ? summary.rules : [])]
+        : place === "rules"
+          ? summary.rules
+          : place === "ingest"
+            ? summary.studio
+            : summary.admin
+      : null;
+  const attention = summary
+    ? summary.attention
+        .map((a) => (a.place === "rules" && alertsInGlass ? { ...a, place: "glass" as const, alertId: undefined } : a))
+        .filter((a) => allowed.has(a.place))
+    : [];
   const noCases = summary !== null && summary.recent.length === 0;
   const current = TIPS[((tip % TIPS.length) + TIPS.length) % TIPS.length]!;
 
@@ -200,6 +231,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                 <div className={`home-panel__picture${place === "glass" ? " network-canvas" : ""}`}>
                   {place === "glass" && <GlassPicture />}
                   {place === "ingest" && <StudioPicture held={summary?.held ?? null} />}
+                  {place === "rules" && <RulesPicture open={summary ? summary.attention.filter((a) => a.place === "rules").length : null} />}
                   {place === "admin" && <AdminPicture services={summary?.services ?? null} />}
                 </div>
                 <div className="home-panel__body">
@@ -232,7 +264,13 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                 {attention.map((a) => (
                   <li key={`${a.place}-${a.title}-${a.at}`}>
                     <button type="button" className="home-attention__row"
-                            onClick={() => (a.caseId && a.place !== "admin" ? onOpenCase(a.caseId, a.place) : onChoose(a.place))}>
+                            onClick={() =>
+                              a.alertId && onOpenAlert
+                                ? onOpenAlert(a.alertId)
+                                : a.caseId && (a.place === "glass" || a.place === "ingest")
+                                  ? onOpenCase(a.caseId, a.place)
+                                  : onChoose(a.place)
+                            }>
                       <span className={`home-glyph home-glyph--${a.tone}`} aria-hidden="true">{GLYPH[a.tone]}</span>
                       <span className="home-attention__text">
                         <span className="home-attention__title">{a.title}</span>
