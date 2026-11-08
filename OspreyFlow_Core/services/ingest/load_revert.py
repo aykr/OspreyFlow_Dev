@@ -81,7 +81,7 @@ from typing import Any, Literal, Protocol
 
 from conduit_common.transactions import rollback_keeping_failure
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
+from ports.graph import AmbiguousLinkId, GraphPort
 from schemas.domain import Principal
 from schemas.ingest import LoadRecord, stored_digest
 
@@ -104,6 +104,7 @@ RefusalReason = Literal[
     "withdrawn_rows_loaded_again",
     "read_past_by_a_later_refresh",
     "own_link_written_since",
+    "own_link_id_ambiguous",
 ]
 
 
@@ -148,6 +149,10 @@ class Refusal:
                 f"{self.count} later incremental refresh(es) of its source read past its "
                 "watermark, and reverting it would leave its rows unread for good; revert them "
                 "first"
+            ),
+            "own_link_id_ambiguous": (
+                f"{self.count} link(s) a returning row of it merged into share their id with a "
+                "link of another type, so which to put back is not certain"
             ),
             "own_link_written_since": (
                 f"{self.count} link(s) a returning row of it merged into were written again "
@@ -509,9 +514,13 @@ async def _later_refusals(
     # that load left it; written since (by any load, of any case), the revert is refused, in words
     # that name no other load or case (rule 3). One an earlier attempt put back already is fine.
     for record in plan:
-        since = 0
+        since = ambiguous = 0
         for prior in record.own_key_merges:
-            now_held = await deps.graph.read_link_state(prior.edge_id)
+            try:
+                now_held = await deps.graph.read_link_state(prior.edge_id)
+            except AmbiguousLinkId:
+                ambiguous += 1
+                continue
             held = stored_digest(now_held.stored) if now_held is not None else None
             # As this load left it, or as it was before (put back by an earlier attempt); any
             # other state is a write since, by anyone, and refuses.
@@ -527,6 +536,8 @@ async def _later_refusals(
                 since += 1
         if since:
             refusals.append(Refusal(record.load_id, "own_link_written_since", since))
+        if ambiguous:
+            refusals.append(Refusal(record.load_id, "own_link_id_ambiguous", ambiguous))
     merged_into: set[str] = set()
     for record in await deps.ledger.records_merging(sorted(plan_nodes), sorted(plan_links)):
         if record.load_id in in_plan:

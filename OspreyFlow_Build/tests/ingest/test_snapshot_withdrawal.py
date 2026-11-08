@@ -624,6 +624,59 @@ async def test_a_returning_rows_revert_is_refused_once_an_analyst_corrected_its_
     assert await graph.read_link_state(a_link) == before and a_link in graph.superseded
 
 
+async def test_an_own_link_whose_id_two_types_hold_is_not_captured_and_its_load_stays_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-110 Amendment 18: at the load, an own link's id that two types hold is ambiguous, so no
+    prior state is kept for it. The merge stays a merge, and its load is refused a revert as any
+    merge is, rather than putting back whichever type answered first."""
+    from ports.graph import AmbiguousLinkId
+
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+
+    async def ambiguous(edge_id: str, tx: object = None) -> None:
+        raise AmbiguousLinkId(edge_id, ["T1", "T2"])
+
+    monkeypatch.setattr(graph, "read_link_state", ambiguous)
+    back = await _snapshot(graph, keys, [A, B], "load-3")
+    monkeypatch.undo()
+
+    assert back.own_key_merges == [] and back.merged_edge_ids
+    with pytest.raises(RevertRefused) as refused:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+    assert [r.reason for r in refused.value.refusals] == ["merged_links"]
+
+
+async def test_a_returning_rows_revert_is_refused_when_its_links_id_became_ambiguous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-110 Amendment 18: at the revert, an own link's id that two types now hold refuses the
+    revert before anything changes, in words naming no type or other link."""
+    from ports.graph import AmbiguousLinkId
+
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    await _snapshot(graph, keys, [A, B], "load-3")
+    live = _live_values(graph), _live_links(graph)
+
+    async def ambiguous(edge_id: str, tx: object = None) -> None:
+        raise AmbiguousLinkId(edge_id, ["T1", "T2"])
+
+    monkeypatch.setattr(graph, "read_link_state", ambiguous)
+    with pytest.raises(RevertRefused) as refused:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+
+    (refusal,) = refused.value.refusals
+    assert (refusal.reason, refusal.count) == ("own_link_id_ambiguous", 1)
+    assert "T1" not in refusal.words() and "share their id" in refusal.words()
+    assert (_live_values(graph), _live_links(graph)) == live, "nothing changed"
+
+
 async def test_a_merge_into_a_link_that_is_not_the_rows_own_still_refuses_the_revert() -> None:
     """ADR-127 decision 6 stands for every other merge: a new row on the dropped row's pair (not
     the dropped row coming back) merges into its link, and its load is refused as before."""

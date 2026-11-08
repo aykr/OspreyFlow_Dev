@@ -28,6 +28,7 @@ import pytest
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.errors import OntologyError
 from ports.graph import (
+    AmbiguousLinkId,
     AmbiguousElementId,
     GraphPort,
     StoredLink,
@@ -6577,6 +6578,77 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
         assert after == before, "the other type is left as it was"
         restored = await adapter.read_link_state(link)
         assert restored is not None and restored.load_id == "load-1"
+
+
+async def test_a_merge_writes_its_own_type_and_never_another_holding_the_same_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """L1.2d: a write that merges into a link of one type leaves another type's link holding the
+    same id exactly as it was. Before, the merge's update named the id alone, and rewrote both."""
+
+    def of_type(edges: list[Any], edge_type: str) -> list[Any]:
+        return sorted(
+            (e.occurrences, e.properties, e.audit.revision, e.audit.load_id)
+            for e in edges if e.type == edge_type
+        )  # fmt: skip
+
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
+        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+        assert also == link, "two types hold the one id"
+        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        before = of_type(edges, "TRANSACTED")
+
+        _, (merged,) = await _write(adapter, [], [_call_on(a, b, day=5, load_id="load-3")])
+
+        assert merged == link
+        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        assert of_type(edges, "TRANSACTED") == before, "the other type is left as it was"
+        assert [r[3] for r in of_type(edges, "COMMUNICATED_WITH")] == ["load-3"], "the merge landed"
+
+
+async def test_read_link_state_refuses_an_id_two_types_hold(factory: GraphAdapterFactory) -> None:
+    """L1.2d: a link's state is read by id, so an id two types hold is ambiguous, and the read
+    refuses it (`AmbiguousLinkId`) rather than taking whichever type it finds first."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
+        await _write(adapter, [], [other.model_copy(update={"id": link})])
+
+        with pytest.raises(AmbiguousLinkId):
+            await adapter.read_link_state(link)
+
+
+async def test_a_correction_marks_only_its_own_types_link_superseded(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 18: `supersede_edge` finds the old link by id, so where two types hold the
+    id it refuses (`AmbiguousLinkId`) and changes nothing, rather than marking both superseded.
+    Where one type holds it, only that type's link is marked."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-1")
+        await _write(adapter, [], [other.model_copy(update={"id": link})])
+
+        tx = await adapter.begin_transaction()
+        with pytest.raises(AmbiguousLinkId):
+            await adapter.supersede_edge(link, _call_on(a, b, day=2, load_id="analyst"), tx)
+        await adapter.rollback_transaction(tx)
+        assert await adapter.stored_link_states([link]) == {
+            link: StoredLink(reverted=False, superseded=False)
+        }, "neither type marked"
+
+        _, (alone,) = await _write(adapter, [], [_call_on(a, b, day=3, load_id="load-5",
+                                                          classification="SECRET")])  # fmt: skip
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(alone, _call_on(a, b, day=3, load_id="analyst",
+                                                      classification="SECRET"), tx)  # fmt: skip
+        await adapter.commit_transaction(tx)
+        assert (await adapter.stored_link_states([alone]))[alone].superseded is True
 
 
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:

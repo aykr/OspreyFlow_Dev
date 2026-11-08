@@ -37,6 +37,7 @@ from ontology.weights import WeightRules, load_weight_history, load_weight_rules
 from ports.graph import (
     RARITY_PAIR_CAP,
     AmbiguousElementId,
+    AmbiguousLinkId,
     BulkEdgeResult,
     FindLimitExceeded,
     NodeSuggestions,
@@ -676,7 +677,11 @@ class GraphArcadeDBAdapter:
             )
             if existing is not None:
                 edge_lit = groovy_string_literal(edge_id)
-                command = f'g.E().has("id",{edge_lit}){property_steps}'
+                # ADR-110 Amendment 18: its own type alone, never another type holding the id.
+                command = (
+                    f"g.E().hasLabel({groovy_string_literal(type_name)})"
+                    f'.has("id",{edge_lit}){property_steps}'
+                )
                 await self._client.gremlin(command, params=bound_params, session_id=tx)
                 if merged_interval is not None and merged_interval.valid_to is None:
                     # ADR-127 decision 11: a merge that leaves the span open writes no flattened
@@ -1922,28 +1927,37 @@ class GraphArcadeDBAdapter:
     #: as `upsert_edges` writes it (epoch milliseconds wrapped in `Date`).
     _NOT_PRIOR_STATE = frozenset({"valid_from", "valid_to"})
 
-    async def read_link_state(
-        self, edge_id: EdgeId, tx: TxId | None = None
-    ) -> LinkPriorState | None:
+    async def _link_rows(self, edge_id: EdgeId, tx: TxId | None) -> list[tuple[str, Any]]:
+        """Every edge type's stored row holding `edge_id`, through each type's unique `id`
+        index: none, one, or (an id two types hold) several."""
+        found: list[tuple[str, Any]] = []
         for type_name in await self._types_with_unique_id("edge"):
             rows = await self._client.sql(
                 f"SELECT FROM `{groovy_identifier(type_name)}` WHERE id = :id",
                 params={"id": edge_id},
                 session_id=tx,
             )
-            if rows:
-                row = rows[0]
-                stored = self._as_stored(row)
-                audit = AuditStub.model_validate(row["audit"])
-                return LinkPriorState(
-                    edge_id=edge_id,
-                    edge_type=type_name,
-                    revision=audit.revision,
-                    load_id=audit.load_id,
-                    handling=Handling.model_validate(row["handling"]),
-                    stored=stored,
-                )
-        return None
+            found.extend((type_name, row) for row in rows)
+        return found
+
+    async def read_link_state(
+        self, edge_id: EdgeId, tx: TxId | None = None
+    ) -> LinkPriorState | None:
+        held = await self._link_rows(edge_id, tx)
+        if not held:
+            return None
+        if len(held) > 1:
+            raise AmbiguousLinkId(edge_id, [t for t, _ in held])
+        ((type_name, row),) = held
+        audit = AuditStub.model_validate(row["audit"])
+        return LinkPriorState(
+            edge_id=edge_id,
+            edge_type=type_name,
+            revision=audit.revision,
+            load_id=audit.load_id,
+            handling=Handling.model_validate(row["handling"]),
+            stored=self._as_stored(row),
+        )
 
     def _as_stored(self, row: Mapping[str, Any]) -> dict[str, Any]:
         return {
@@ -2250,8 +2264,18 @@ class GraphArcadeDBAdapter:
         validate_properties(edge_type, replacement.properties)
 
         edge_lit = groovy_string_literal(edge_id)
-        existing_results = await self._client.gremlin(
-            f'g.E().has("id",{edge_lit}).elementMap()', session_id=tx
+        # ADR-110 Amendment 18: the old link's own type, found by id; an id two types hold is
+        # refused, so a correction never marks another type's link superseded.
+        holding = await self._link_rows(edge_id, tx)
+        if len(holding) > 1:
+            raise AmbiguousLinkId(edge_id, [t for t, _ in holding])
+        old_label = groovy_string_literal(holding[0][0]) if holding else None
+        existing_results = (
+            await self._client.gremlin(
+                f'g.E().hasLabel({old_label}).has("id",{edge_lit}).elementMap()', session_id=tx
+            )
+            if old_label is not None
+            else []
         )
         if not existing_results:
             raise OntologyError(f"cannot supersede {edge_id!r}: no such edge")
@@ -2279,7 +2303,8 @@ class GraphArcadeDBAdapter:
         # out: its occurrences live on in the replacement (ADR-120 Amendment 5).
         new_id_lit = groovy_string_literal(replacement_edge_id)
         await self._client.gremlin(
-            f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
+            f'g.E().hasLabel({old_label}).has("id",{edge_lit})'
+            f'.property("superseded_by", {new_id_lit})',
             session_id=tx,
         )
         type_name = groovy_identifier(physical_type_name(replacement.type))

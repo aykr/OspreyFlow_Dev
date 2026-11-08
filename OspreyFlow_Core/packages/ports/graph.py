@@ -86,6 +86,16 @@ class RestoredElements:
     edge_ids: tuple[EdgeId, ...] = ()
 
 
+class AmbiguousLinkId(Exception):
+    """ADR-110 Amendment 18: a link id two edge types hold. A write or a state read by id alone
+    could reach either, so it is refused rather than given to whichever type answers first."""
+
+    def __init__(self, edge_id: str, types: Sequence[str]) -> None:
+        super().__init__(f"link id {edge_id!r} is held by {len(types)} edge types")
+        self.edge_id = edge_id
+        self.types = tuple(types)
+
+
 @dataclass(frozen=True)
 class StoredLink:
     """What `GraphPort.stored_link_states` says of one link: whether it is reverted, and whether it
@@ -746,7 +756,8 @@ class GraphPort(Protocol):
     ) -> LinkPriorState | None:
         """ADR-110 Amendment 16: the link exactly as stored, whatever the caller may read, found
         through its type's unique `id` index; inside `tx` when given, so a load reads it before its
-        own write in the same transaction. `None` if no live or reverted link holds the id. Graph
+        own write in the same transaction. `None` if no live or reverted link holds the id;
+        `AmbiguousLinkId` if two types hold it (ADR-110 Amendment 18), never the first found. Graph
         data for the revert alone (rule 3): never passed to a view, report or log.
 
         **Opaque.** The state is the adapter's own stored form: `edge_type` is the store's name for

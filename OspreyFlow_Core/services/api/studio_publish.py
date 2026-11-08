@@ -41,7 +41,7 @@ from services.ingest.watermark import RefreshRead, WatermarkRead, WatermarkRefus
 from conduit_common.transactions import rollback_keeping_failure
 from ontology.handling import HandlingScheme, merge_handling
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
+from ports.graph import AmbiguousLinkId, GraphPort
 from ports.media import MediaStore
 from schemas.analytics import EventRecord
 from schemas.domain import (
@@ -760,7 +760,12 @@ class _OwnLinks:
         self.own = await self._sink.withdrawn_row_links(recipe_id, case, back) if back else {}
         self.priors = {}
         for edge_id in sorted({e for links in self.own.values() for e in links}):
-            state = await self._graph.read_link_state(edge_id, self._tx)
+            try:
+                state = await self._graph.read_link_state(edge_id, self._tx)
+            except AmbiguousLinkId:
+                # ADR-110 Amendment 18: two types hold the id, so which to put back is not
+                # certain; no prior state is kept, and the merge stays a merge (its revert refused).
+                continue
             if state is not None:
                 self.priors[edge_id] = state
         return kept
