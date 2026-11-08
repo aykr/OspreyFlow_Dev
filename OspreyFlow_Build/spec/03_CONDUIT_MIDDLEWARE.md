@@ -766,10 +766,11 @@ referent's marking cannot be read in the load, or where a cited link cannot be r
 is raised after the commit (taken back or replaced since it was found; one such link never stops a
 sweep). They are also the deployer's §3.8 alerts, and the case team's queue below. Every write that supersedes
 a link alerts may cite (a true positive's confirmed `SAME_AS`, a link change, a picture's
-replacement or removal) records `old → new` in Postgres before the graph's commit and repoints every
-citing alert after it, the rows locked together in id order and renamed as they stand, whatever the
-triage write then does; a failure between the two stores is settled from the graph's own stored
-states, before every read of alerts, and a repointed alert's node is re-marked to its new evidence.
+replacement or removal) keeps one record in Postgres from before the graph's commit until every
+citing alert cites the newest revision, its node is re-marked and renamed, and its working-set
+copies are purged, whatever the triage write then does; a record is applied, before every read of
+alerts, once the graph's own stored states show its write committed, and only a stale one whose
+write never committed is dropped. Transactions are read in the reader's own case.
 The queue then checks the new revision for every reader, as it checks any link (ADR-109 Amendments 9
 and 10). The rule audit withholds an entry naming a node, link or transaction the reader cannot see
 (a firing written before its links were recorded keeps its entry, its words withheld), a pack's

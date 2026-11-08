@@ -28354,65 +28354,69 @@ new right `edit_target_model`, and names no holder. ADR-112's table gains one ro
 
 ### ADR-109, Amendment 10 (8 November 2026) — a superseded link's repoint is recorded before the graph's commit, settled from the graph's stored states, and re-marks the moved alerts' nodes
 
-Status: accepted 8 November 2026, the orchestrator's settlement of L2.8b's items 6 and 7 and its
-ruling on the lane's finding of the same day, reserved in `ADR_RESERVATIONS.md`. Built by the glass
-lane in L2.8b. Amendment 9 is unchanged except where this says so.
+Status: accepted 8 November 2026, the orchestrator's settlement of L2.8b's items 6 and 7, its rulings
+on the lane's findings of the same day and on its reviewer's round (B1 to B9, R1, R2), reserved in
+`ADR_RESERVATIONS.md`. Built by the glass lane in L2.8b. Amendment 9 is unchanged except where this
+says so.
 
 **Why.** Amendment 9 repointed the alerts citing a confirmed link in the close's own Postgres
 transaction, after the graph had committed the new revision. A refused triage (another member's at
 the same moment) rolled the repoint back with it, and any failure between the two stores left
 every citing alert on the superseded link, withheld from every reader for good (ADR-146 decision 10
-reads a link by its id). The other callers of `supersede_edge` (a link change, a picture's replace
-or removal) repointed nothing. And a repointed alert keeps its own `Alert` node: where the new
-revision is marked above it (an analyst raising a cited link's handling), the node, and the
-finding's words it carries, stayed readable by expand and `list_nodes`, the gap `7fac778` closed for
-new nodes, made after the raise.
+reads a link by its id). A link change and a picture's replace or removal repointed nothing. And a
+repointed alert keeps its own `Alert` node: where the new revision is marked above it (an analyst
+raising a cited link's handling), the node, and the finding's words it carries, stayed readable by
+expand and `list_nodes`, the gap `7fac778` closed for new nodes, made after the raise.
 
-1. **Every supersede of a link alerts may cite runs inside `AlertStore.repointing`** (the close's
-   confirm, `LinkChangeService.change`, `EntityPictureService`'s replace and removal). Once the
-   graph has returned the new revision's id, and before its commit, `old → new` is recorded in
-   Postgres (`alert_link_repoints`, created with its index in `AlertStore`'s start-up DDL) and
-   committed. After the graph's commit, every alert citing the old link is repointed (all rows
-   locked together in id order, renamed in SQL as they stand; Amendment 9 point 1) and the record
-   cleared. The repoint belongs to the supersede, not to the triage write, so a refused triage no
-   longer undoes it.
-2. **Any failure is settled from the graph's own stored states** (`stored_link_states`, the graph's
-   unfiltered lookup, which returns nothing to a reader): the old link superseded and the new one
-   stored, the repoint is applied; the old link still live, the write did not happen and the record
-   is dropped. An ambiguous graph commit is settled the same way.
-3. **The settle runs before every read of alerts**: the queue's reads (`monitoring_queue`,
-   `_visible_row`), the inbox's (`AlertStore.list_authorized` and `get_authorized`, given the
-   graph) and a pack's recheck. It is a writer (the service's lookup, its own transaction, the same
-   id-ordered lock), applies only, and changes nothing a reader is answered beyond which revision an
-   alert cites: the queue still checks that revision as the reader. A record older than
-   `STALE_REPOINT_AFTER` (an hour) has lost its writer: dropped if its old link is live, applied if
-   it is superseded. The settle runs at the first read after a start, so no separate start-up step
-   is needed.
-4. **A repointed alert's node is re-marked to its new evidence** (`alerts.remark_alerts`, which
-   `scripts.remark_alert_nodes` also runs for the nodes written before `7fac778`): a node below the
-   highest marking of what its alert rests on now is superseded by a revision at that marking, and
-   the alert pointed at it.
-5. **A re-marked node's copies leave every working set** (Valkey), with their links: a stored copy
-   keeps the marking it was copied with and is served from the store. The routes that repoint (the
-   close, a link change, a picture's replace or removal) remove them through the working-set
-   service they hold (`remove_reverted`: each case's stream dropped, one removal appended); the
-   script does the same from its own store and deletes the case's delta stream. A settle on a read
-   path, after a crash between the graph's commit and the repoint, re-marks but cannot purge: the
-   alert store holds no working sets. Recorded for L2.10, with a named test to come.
-7. **A finding's pending write is cited by its stored id.** A pending write the store merges into
+1. **One record per write.** Every supersede of a link alerts may cite, and of an alert's own node,
+   runs inside `AlertStore.repointing` (the close's confirm of its match and of its node, a link
+   change, a picture's replace or removal, the re-marking script). A record
+   (`alert_repoint_writes`, in `AlertStore`'s start-up DDL) is opened before the write; once the
+   graph has returned each new id, and before its commit, `old → new` is added to it, links and
+   nodes, and each link's successor is kept (`alert_link_successors`). The writer never drops its
+   record: it catches `Exception`, so a cancellation stays one, and a commit can land after any
+   check of it.
+2. **A record is applied only once its write has committed**, read from the graph's own stored
+   states (`stored_link_states`, the graph's unfiltered lookup, which returns nothing to a reader;
+   the confinement test allows it in this module and the revert's). Applying it brings every citing
+   alert to the newest revision, following kept successors through any chain of writes; renames the
+   recorded nodes; and re-marks the moved alerts' nodes to their evidence now (`remark_alerts`,
+   each supersede recorded in the same record before its commit). Every step is idempotent, so a
+   failure part-way is finished by the next settle; the record is closed only after its
+   working-set purge (point 4). A record still empty belongs to its writer alone.
+3. **The settle runs before every read of alerts**: the queue's reads, the inbox's
+   (`AlertStore.list_authorized` and `get_authorized`, given the graph), the rule audit's and a
+   pack's recheck. It is a writer: the service's lookup, its own transactions, the id-ordered lock.
+   It changes which revision an alert cites and the marking of its node, nothing a reader is
+   answered beyond that: the queue still checks every revision as the reader. A record older than
+   `STALE_REPOINT_AFTER` (an hour) whose write never committed has lost its writer and is dropped;
+   no other path drops one.
+4. **A superseded node's copies leave every working set** (Valkey), with their links
+   (`WorkingSetService.remove_reverted`: each case's stream dropped, one removal appended). The
+   routes that repoint purge through the working-set service they hold; a record applied by a
+   settle on a read path, which holds none, waits with its nodes until the next working-set read
+   (the socket's first sync and its catch-up, `purge_remarked_copies`).
+5. **A finding's pending write is cited by its stored id.** A pending write the store merges into
    one it already holds (a second screening hit on the same match) returns the held link's id; the
-   finding cites that, never the write's own, which no link holds and the queue's link check would
-   read as hidden from every reader.
-6. **Rule 7.** The settle's work depends on whether any write anywhere is mid-supersede, never on
-   what the reader may see, and it returns nothing: a timing that says only that someone, somewhere,
-   is changing a link. Recorded, not claimed as nothing.
+   finding cites that, never the write's own, which no link holds.
+6. **Not yet covered** (L2.8c): `supersede_node`'s clones of a node's incident links (under new
+   ids, the originals reverted), whose callers include `confirm_node` and `retract_node` outside the
+   close, `supersede.py` and `pipeline_run.py`; and `same_as_writer.py`'s supersede of `NOT_SAME_AS`
+   links. An alert citing such a link is withheld the same way until L2.8c wraps them.
+7. **Rule 7.** The settle's work depends on whether any write anywhere is mid-supersede, never on
+   what the reader may see, and it returns nothing: a timing that says only that someone,
+   somewhere, is changing a link. Recorded as a property of the design, not measured.
 
 **Tests.** `tests/ingest/test_alert_evidence_withheld_live.py`: a failure between the graph's commit
 and the repoint (the next read settles it; the OFFICIAL reader still not given the alert), a graph
-failure (the record dropped), a triage refused after the commit, the stale threshold, the analyst's
-re-mark of a cited link (the alert withheld, its node neither read, expanded to nor listed), the
-script's re-mark and purge; `test_kyc_rules.py`'s confirmed screening match through the real path;
-`test_link_changes.py` and `test_entity_pictures.py`, a citing alert following each supersede;
-`test_alert_node_marking.py::test_a_pending_link_the_store_merges_is_cited_by_the_stored_id`; the
-graph-port conformance case `test_supersede_edge_returns_the_replacements_own_id`. Each red first,
-under the glass lease (`process/lanes/glass/l2.8b/`).
+failure, a triage refused after the commit, the stale threshold, a commit that lands after the
+writer failed (a timeout and a cancellation), a chain of writes, a re-mark retried, the read-path
+purge, an analyst's re-mark of a cited link (the alert withheld; its node neither read, expanded to
+nor listed; the canvas's copy purged), a link change's repoint (moved here from
+`test_link_changes.py`), the script's re-mark and purge; `test_kyc_rules.py`'s confirmed screening
+match through the real path and a refused close with a real Alert node; `test_entity_pictures.py`;
+`test_alert_node_marking.py::test_a_pending_link_the_store_merges_is_cited_by_the_stored_id` and
+`::test_a_re_mark_over_a_link_it_cannot_read_lists_the_alert_unsafe_and_changes_nothing`;
+`test_unfiltered_node_lookup_confined.py`; the graph-port conformance case
+`test_supersede_edge_returns_the_replacements_own_id`. Each red first, under the glass lease
+(`process/lanes/glass/l2.8b/`).
