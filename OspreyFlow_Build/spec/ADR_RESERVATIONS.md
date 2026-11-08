@@ -62,6 +62,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-142 Amendment 3 | Six lanes: glass split into admin and rules, a platform lane for maps and model administration, docs after the new screens run deployed; lanes on chosen accounts (studio, case, rules and platform on sol); two throwaway stacks, each leased (the owner's records of 8 November) | orchestrator | 2026-11-08 | reserved |
 | ADR-135 Amendment 2 | Model engines, each job's model and their keys are managed in the Glass's Admin place (keys write-only, never shown back, each change audited behind its own right); the CLI stays for headless and recovery use (the owner's ruling, 8 November) | platform | 2026-11-08 | reserved |
 | ADR-147 | Maps administration: providers and their keys in Admin under ADR-135 Amendment 2's rule, the local basemap's build and verify, prefetch areas on a schedule, and the analyst's basemap switch and place search (the owner's records of 8 November) | platform | 2026-11-08 | reserved |
+| ADR-109 Amendment 11 | A node's cloned links name their clones (superseded_by, reported to the caller before commit), so every supersede reaches the repoint journal; the journal's lock and timing (L2.8c, closing Amendment 10 point 6) | rules | 2026-11-08 | reserved |
 
 ## Baseline
 
