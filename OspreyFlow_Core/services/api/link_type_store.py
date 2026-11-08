@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS link_type_proposals (
     proposed_at TIMESTAMPTZ NOT NULL,
     reason TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN
-        ('pending', 'promoted', 'rejected', 'withdrawn', 'merged', 'retired')),
+        ('pending', 'promoted', 'rejected', 'withdrawn', 'merged', 'retired', 'accepted')),
     decided_by TEXT,
     decided_at TIMESTAMPTZ,
     decision_reason TEXT,
@@ -58,6 +58,11 @@ INSERT INTO link_type_overlay (singleton, revision) VALUES (TRUE, 0) ON CONFLICT
 ALTER TABLE link_type_proposals ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 CREATE INDEX IF NOT EXISTS link_type_proposals_dataset_idx
     ON link_type_proposals (dataset_id, status);
+-- ADR-143 decision 9: `accepted` on the dataset's Model tab. The check is replaced whole, so a
+-- table made before it takes the new status too.
+ALTER TABLE link_type_proposals DROP CONSTRAINT IF EXISTS link_type_proposals_status_check;
+ALTER TABLE link_type_proposals ADD CONSTRAINT link_type_proposals_status_check CHECK (status IN
+    ('pending', 'promoted', 'rejected', 'withdrawn', 'merged', 'retired', 'accepted'));
 """
 
 _COLUMNS = (
@@ -126,6 +131,54 @@ class LinkTypeProposalStore:
                 list(dataset_ids),
             )
         return [_row(r) for r in rows]
+
+    async def named_in_case(
+        self, investigation_id: str, names: Sequence[str] | None
+    ) -> list[LinkTypeProposal]:
+        """This case's own proposals of these names (every name for `None`), whatever their
+        status, oldest first: what the case may say of its own types (ADR-143 decision 9)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM link_type_proposals WHERE investigation_id = $1 "
+                "AND ($2::text[] IS NULL OR name = ANY($2::text[])) ORDER BY proposed_at, id",
+                investigation_id,
+                None if names is None else list(names),
+            )
+        return [_row(r) for r in rows]
+
+    async def accepted_for_datasets(self, dataset_ids: Sequence[str]) -> list[LinkTypeProposal]:
+        """The proposals accepted into these datasets' models on the Model tab."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM link_type_proposals "
+                "WHERE dataset_id = ANY($1::text[]) AND status = 'accepted' "
+                "ORDER BY proposed_at, id",
+                list(dataset_ids),
+            )
+        return [_row(r) for r in rows]
+
+    async def for_dataset(self, dataset_id: str) -> list[LinkTypeProposal]:
+        """The Model tab's list: every proposal of this dataset, newest first. The dataset is in
+        the query, so another dataset's proposal is never read (rule 3)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM link_type_proposals WHERE dataset_id = $1 "
+                "ORDER BY proposed_at DESC, id",
+                dataset_id,
+            )
+        return [_row(r) for r in rows]
+
+    async def get_for_dataset(self, proposal_id: str, dataset_id: str) -> LinkTypeProposal:
+        """One proposal of this dataset; another dataset's is not found, as a missing one."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM link_type_proposals WHERE id = $1 AND dataset_id = $2",
+                proposal_id,
+                dataset_id,
+            )
+        if row is None:
+            raise ProposalNotFoundError(proposal_id)
+        return _row(row)
 
     async def pending_named(self, names: Sequence[str]) -> list[LinkTypeProposal]:
         """Pending proposals of these names, for a case whose view holds one of their links."""

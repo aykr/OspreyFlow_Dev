@@ -65,6 +65,29 @@ class MemoryStore:
             p for p in await self.all() if p.name in names and p.status is ProposalStatus.PENDING
         ]
 
+    async def named_in_case(self, case: str, names: list[str] | None) -> list[LinkTypeProposal]:
+        return [
+            p
+            for p in await self.all()
+            if p.investigation_id == case and (names is None or p.name in names)
+        ]
+
+    async def accepted_for_datasets(self, ids: list[str]) -> list[LinkTypeProposal]:
+        return [
+            p
+            for p in await self.all()
+            if p.dataset_id in ids and p.status is ProposalStatus.ACCEPTED
+        ]
+
+    async def for_dataset(self, dataset_id: str) -> list[LinkTypeProposal]:
+        return [p for p in reversed(await self.all()) if p.dataset_id == dataset_id]
+
+    async def get_for_dataset(self, pid: str, dataset_id: str) -> LinkTypeProposal:
+        p = self.rows.get(pid)
+        if p is None or p.dataset_id != dataset_id:
+            raise ProposalNotFoundError(pid)
+        return p
+
     async def get(self, pid: str) -> LinkTypeProposal:
         if pid not in self.rows:
             raise ProposalNotFoundError(pid)
@@ -319,8 +342,7 @@ class _Supersede:
     async def begin_transaction(self) -> str:
         return "tx"
 
-    async def supersede_edge(self, edge_id: str, write: Any, tx: str, *, old_type: str
-    ) -> str:
+    async def supersede_edge(self, edge_id: str, write: Any, tx: str, *, old_type: str) -> str:
         found = self.ontology.edge_type(write.type)
         if found is None:
             raise OntologyError(f"{write.type!r} is not a type in the active ontology")
@@ -402,9 +424,10 @@ async def test_a_link_of_a_rejected_type_can_still_be_corrected_without_retyping
 
 # --- ADR-099 Amendment 3: a proposal belongs to its dataset --------------------------------------
 #
-# A type an analyst defines is usable in every case reading the dataset of the case it was defined
-# in, and in no other, until an administrator promotes it. `inv-2` and `inv-3` stand for two other
-# cases: one reading the same dataset, one reading another. A principal scoped to a case carries
+# A type an analyst defines belongs to the dataset of the case it was defined in. Since ADR-143
+# decision 9 (L3.5) it is usable in that case alone until a data engineer of the dataset accepts it
+# and its model version is live (`test_analyst_link_types.py`). `inv-2` and `inv-3` stand for two
+# other cases: one reading the same dataset, one reading another. A principal scoped to a case carries
 # its datasets (`app.get_principal`), which is all the service reads them from.
 
 
@@ -412,7 +435,7 @@ def _in(*datasets: str) -> Principal:
     return EDITOR.model_copy(update={"datasets": list(datasets)})
 
 
-async def test_a_proposal_is_offered_in_every_case_reading_its_dataset_and_no_other() -> None:
+async def test_a_proposal_is_offered_in_its_own_case_alone_not_every_case_of_its_dataset() -> None:
     service, _, _, _, _ = await _service()
     p = await service.propose(
         "inv-1",
@@ -427,8 +450,9 @@ async def test_a_proposal_is_offered_in_every_case_reading_its_dataset_and_no_ot
         reason="They know each other by sight",
     )
     assert p.dataset_id == "fixture-corp"
-    assert "KNOWN_TO" in names(await service.case_types("inv-2", _in("fixture-corp")))
-    assert "KNOWN_TO" in names(await service.case_types("inv-3", _in("enron", "fixture-corp")))
+    assert "KNOWN_TO" in names(await service.case_types("inv-1", _in("fixture-corp")))
+    assert "KNOWN_TO" not in names(await service.case_types("inv-2", _in("fixture-corp")))
+    assert "KNOWN_TO" not in names(await service.case_types("inv-3", _in("enron", "fixture-corp")))
     assert "KNOWN_TO" not in names(await service.case_types("inv-3", _in("enron")))
     # Its own branch reads the same datasets, so it has it; not because it is a branch.
     assert "KNOWN_TO" not in names(await service.case_types("branch-1", _in("enron")))
@@ -465,7 +489,7 @@ async def test_a_proposal_of_another_dataset_is_not_offered_where_its_link_is_in
     assert "KNOWN_TO" not in names(await service.case_types("inv-2", _in("enron")))
 
 
-async def test_the_proposer_withdraws_from_any_case_reading_its_dataset() -> None:
+async def test_the_proposer_withdraws_from_its_own_case_alone() -> None:
     service, _, _, _, _ = await _service()
     p = await service.propose(
         "inv-1",
@@ -481,8 +505,9 @@ async def test_the_proposer_withdraws_from_any_case_reading_its_dataset() -> Non
     )
     with pytest.raises(ProposalNotFoundError):
         await service.withdraw("inv-3", p.id, _in("enron"), reason="no", is_author=False)
+    with pytest.raises(ProposalNotFoundError):  # the same dataset, another case (rule 3)
+        await service.withdraw("inv-2", p.id, _in("fixture-corp"), reason="no", is_author=False)
     withdrawn = await service.withdraw(
-        "inv-2", p.id, _in("fixture-corp"), reason="not needed", is_author=False
+        "inv-1", p.id, _in("fixture-corp"), reason="not needed", is_author=False
     )
     assert withdrawn.status is ProposalStatus.WITHDRAWN
-

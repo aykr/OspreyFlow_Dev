@@ -117,3 +117,32 @@ async def test_a_proposal_keeps_its_dataset_and_is_found_for_it_and_no_other(
     assert [q.id for q in await store.pending_for_datasets([mine])] == [p.id]
     await store.decide(p.id, status=ProposalStatus.WITHDRAWN, by="x", at=p.proposed_at, reason="r")
     assert await store.pending_for_datasets([mine]) == []
+
+
+async def test_the_model_tab_reads_its_own_datasets_proposals_and_no_other(
+    store: LinkTypeProposalStore,
+) -> None:
+    """ADR-143 decision 9 in the database itself (rule 3): the Model tab's list and its decisions
+    read by `dataset_id` in the query, so another dataset's proposal is never read and answers as
+    a missing one. An `accepted` status is kept (the check was replaced whole), and a case reads
+    its own proposals whatever their status, by name or all."""
+    mine, theirs = new_id(), new_id()
+    case = new_id()
+    p = _proposal(case=case, name="BRIBED").model_copy(update={"dataset_id": mine})
+    other = _proposal(name="BRIBED").model_copy(update={"dataset_id": theirs})
+    for proposal in (p, other):
+        await store.create(proposal)
+    assert [q.id for q in await store.for_dataset(mine)] == [p.id]
+    assert (await store.get_for_dataset(p.id, mine)).id == p.id
+    with pytest.raises(ProposalNotFoundError):
+        await store.get_for_dataset(other.id, mine)
+    await store.decide(
+        p.id, status=ProposalStatus.ACCEPTED, by="dan", at=p.proposed_at, reason="r",
+        promoted_name="BRIBED",
+    )  # fmt: skip
+    assert (await store.get(p.id)).status is ProposalStatus.ACCEPTED
+    assert [q.id for q in await store.accepted_for_datasets([mine])] == [p.id]
+    assert await store.accepted_for_datasets([theirs]) == []
+    assert [q.id for q in await store.named_in_case(case, ["BRIBED"])] == [p.id]
+    assert [q.id for q in await store.named_in_case(case, None)] == [p.id]
+    assert await store.named_in_case(case, ["OTHER"]) == []

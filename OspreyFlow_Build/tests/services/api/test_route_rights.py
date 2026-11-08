@@ -128,8 +128,14 @@ ROUTE_RIGHTS = {
     "list_judgements_route": "investigate",
     "change_link_route": "edit_graph",
     "case_link_types_route": "investigate",
-    "propose_link_type_route": "propose_link_type",
-    "withdraw_link_type_route": "propose_link_type",
+    # ADR-143 decision 9 (L3.5): the Analyst's `propose_types`, never with `accept_types`.
+    "propose_link_type_route": "propose_types",
+    "withdraw_link_type_route": "propose_types",
+    "promotable_link_types_route": "investigate",
+    # The Studio's Model tab decides them, behind the dataset's gate (ADR-090 Amendment 4).
+    "list_model_proposals": "accept_types",
+    "accept_model_proposal": "accept_types",
+    "decline_model_proposal": "accept_types",
     "list_link_type_proposals_route": "manage_ontology",
     "promote_link_type_route": "manage_ontology",
     "reject_link_type_route": "manage_ontology",
@@ -466,8 +472,11 @@ def test_every_right_guards_at_least_one_route() -> None:
                "export_override", "review_promotions",
                # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (boards,
                # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).
-               "promote_to_dataset", "propose_types", "accept_types",
-               "merge_datasets", "author_rules"}  # fmt: skip
+               "promote_to_dataset",
+               "merge_datasets", "author_rules",
+               # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
+               # the rights and the role screens is the orchestrator's (case-b's report).
+               "propose_link_type"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet
 
