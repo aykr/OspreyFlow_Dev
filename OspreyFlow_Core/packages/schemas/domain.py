@@ -18,7 +18,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_serializer, model_validator
 
 from schemas.sentences import RuleSentence, SentenceRuleParams
 
@@ -258,6 +258,20 @@ class SourceRef(BaseModel):
     document_id: DocumentId
     locator: str
     excerpt_hash: str
+    #: ADR-140 decision 11 (`source_refs` through staging): the source row's identity — its
+    #: dedupe key, or its row hash when the source declares none — and the load that read it. Set
+    #: on an element a staged row made (a Join gives two refs, one per side); `None` otherwise,
+    #: and then left out of what is stored, so an element written before stays what it was.
+    row_key: str | None = Field(default=None, title="SourceRowKey")
+    load_id: str | None = Field(default=None, title="SourceLoadId")
+
+    @model_serializer(mode="wrap")
+    def _leave_out_unset_staging_identity(self, handler: Any) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        for name in ("row_key", "load_id"):
+            if data.get(name) is None:
+                data.pop(name, None)
+        return data
 
 
 class Provenance(BaseModel):

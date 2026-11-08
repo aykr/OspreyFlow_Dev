@@ -68,6 +68,70 @@ export type Nodes = PipelineNode[];
 export type Source = string;
 export type Target = string;
 export type Edges1 = PipelineEdge[];
+export type Staging = (LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep)[] | null;
+export type Id2 = string;
+export type Label2 = string | null;
+export type Kind1 = "lookup";
+export type Input = string;
+export type List = string;
+export type On = string;
+export type Normalise = string | null;
+/**
+ * @minItems 1
+ */
+export type Add = [AddedColumn, ...AddedColumn[]];
+export type Column = string;
+export type As = string | null;
+export type Id3 = string;
+export type Label3 = string | null;
+export type Kind2 = "join";
+export type Left = string;
+export type Right = string;
+export type LeftKey = string;
+export type RightKey = string;
+export type Normalise1 = string | null;
+export type How = "inner" | "left";
+/**
+ * @minItems 1
+ */
+export type Add1 = [AddedColumn, ...AddedColumn[]];
+export type Id4 = string;
+export type Label4 = string | null;
+export type Kind3 = "filter";
+export type Input1 = string;
+/**
+ * @minItems 1
+ */
+export type Keep = [FilterCondition, ...FilterCondition[]];
+export type Field4 = string;
+export type Is1 = ("not_null" | "null") | null;
+export type Equals1 = string | null;
+export type In = [string, ...string[]] | null;
+export type Id5 = string;
+export type Label5 = string | null;
+export type Kind4 = "derive";
+export type Input2 = string;
+export type Column1 = string;
+export type Operation = "concat" | "split" | "substring" | "date_parse" | "arithmetic" | "case_when" | "normalise";
+/**
+ * @minItems 1
+ */
+export type Columns = [string, ...string[]];
+export type Id6 = string;
+export type Label6 = string | null;
+export type Kind5 = "union";
+/**
+ * @minItems 2
+ */
+export type Inputs = [string, string, ...string[]];
+export type Id7 = string;
+export type Label7 = string | null;
+export type Kind6 = "dedupe";
+export type Input3 = string;
+/**
+ * @minItems 1
+ */
+export type On1 = [string, ...string[]];
 
 export interface Recipe {
   id: Id;
@@ -83,6 +147,7 @@ export interface Recipe {
   unmapped_fields?: UnmappedFields;
   schedule?: ScheduleConfig | null;
   pipeline?: PipelineGraph | null;
+  staging?: Staging;
   [k: string]: unknown;
 }
 export interface RecipeConnector {
@@ -248,4 +313,102 @@ export interface PipelineEdge {
   source: Source;
   target: Target;
   [k: string]: unknown;
+}
+/**
+ * Add columns from a reference list on a key: every row of `input` is kept, and a row whose
+ * key is not in the list keeps empty cells for the added columns (counted, never dropped). The
+ * list is the dataset's own, or a screening list the dataset subscribes to (ADR-140 Amendment 9
+ * decision 3); its key column is the list's own `key_column`.
+ */
+export interface LookupStep {
+  id: Id2;
+  label?: Label2;
+  kind: Kind1;
+  input: Input;
+  list: List;
+  on: On;
+  normalise?: Normalise;
+  add: Add;
+}
+/**
+ * A column a Lookup or a Join brings across, optionally renamed.
+ */
+export interface AddedColumn {
+  column: Column;
+  as?: As;
+}
+/**
+ * Join two tables on a declared key, never a guessed one (brief §6): exact, or each side read
+ * through the same Knowledge Adapter first (E.164, prison number, IBAN…). A row of `left` with
+ * several matches gives one row per match, each carrying both sides' refs.
+ */
+export interface JoinStep {
+  id: Id3;
+  label?: Label3;
+  kind: Kind2;
+  left: Left;
+  right: Right;
+  left_key: LeftKey;
+  right_key: RightKey;
+  normalise?: Normalise1;
+  how?: How;
+  add: Add1;
+}
+/**
+ * Keep the rows for which every condition holds; the others are counted, not lost.
+ */
+export interface FilterStep {
+  id: Id4;
+  label?: Label4;
+  kind: Kind3;
+  input: Input1;
+  keep: Keep;
+}
+/**
+ * One declared condition on a column: exactly one of `is`, `equals` or `in`.
+ */
+export interface FilterCondition {
+  field: Field4;
+  is?: Is1;
+  equals?: Equals1;
+  in?: In;
+}
+/**
+ * A new column from a catalogued operation over named columns (brief §6). `settings` are the
+ * operation's declared settings (a separator, a part, a time zone…), data and never code; the
+ * operation refuses a wrong one in words, as its golden file shows.
+ */
+export interface DeriveStep {
+  id: Id5;
+  label?: Label5;
+  kind: Kind4;
+  input: Input2;
+  column: Column1;
+  operation: Operation;
+  columns: Columns;
+  settings?: Settings;
+}
+export interface Settings {
+  [k: string]: unknown;
+}
+/**
+ * Stack tables with the same columns; each row keeps its own refs.
+ */
+export interface UnionStep {
+  id: Id6;
+  label?: Label6;
+  kind: Kind5;
+  inputs: Inputs;
+}
+/**
+ * Drop repeats on declared columns (today's deduplication key, as a step). The first row in
+ * the input's order stands for its repeats and carries all their refs, so the element it becomes
+ * names every source row it stands for; the repeats are counted.
+ */
+export interface DedupeStep {
+  id: Id7;
+  label?: Label7;
+  kind: Kind6;
+  input: Input3;
+  on: On1;
 }

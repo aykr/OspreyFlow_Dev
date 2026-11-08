@@ -40,6 +40,7 @@ from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
 from schemas.screening import ALL_MODELS as SCREENING_MODELS  # noqa: E402
 from schemas.sentences import ALL_MODELS as SENTENCE_MODELS  # noqa: E402
 from schemas.sources import ALL_MODELS as SOURCE_MODELS  # noqa: E402
+from schemas.staging import ALL_MODELS as STAGING_MODELS  # noqa: E402
 from schemas.strength import ALL_MODELS as STRENGTH_MODELS  # noqa: E402
 from schemas.trends import ALL_MODELS as TREND_MODELS  # noqa: E402
 
@@ -53,6 +54,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *DOMAIN_MODELS,
     *ANALYTICS_MODELS,
     *INGEST_MODELS,
+    *STAGING_MODELS,
     *SOURCE_MODELS,
     *PROFILE_MODELS,
     *MAPCONFIG_MODELS,

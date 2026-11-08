@@ -28,6 +28,7 @@ from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Pr
 from schemas.monitoring import CheckNotJudged, WouldRaise
 
 from .connectors import load_connector_profiles
+from .staging import StagingStep
 
 # --- Studio roles (09_INGEST_STUDIO.md §8) -------------------------------
 
@@ -889,6 +890,11 @@ class Recipe(BaseModel):
     #: published before phase C (and on a v1 draft) — those run as the one canonical chain, and
     #: their committed YAML stays byte-for-byte what it was (`exclude_none` at serialisation).
     pipeline: PipelineGraph | None = None
+    #: ADR-140 decision 11 (redesign phase 7): the staging steps between the source tables and Map,
+    #: the last one the table Map reads (`schemas/staging.py`). `None` on every recipe without
+    #: them, and left out of the YAML (`exclude_none`), so a recipe published before stays
+    #: byte-for-byte what it was (`tests/schemas/test_recipe_staging.py`).
+    staging: list[StagingStep] | None = None
 
 
 # --- Rejections and the load report (09_INGEST_STUDIO.md §5) -------------
