@@ -1,5 +1,5 @@
 {
-  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate); OspreyFlow_Build/tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
+  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate); tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
   "row_template": {
     "entities": [
       {
