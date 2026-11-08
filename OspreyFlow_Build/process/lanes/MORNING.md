@@ -154,6 +154,12 @@ New ones are added at the bottom as they happen.
     composite holds none of its members' data. The alternative, merging into a member dataset the merger
     chooses (an Author of that member doing it), is yours to choose for L3.4.
 
+39. **Merges now stand on the lanes' own gate runs when the tree is the tested one** (your ruling), and a
+    finished lane's idle session is ended and reopened fresh for its next step (your ruling). The first
+    such merge, admin's L2.4 part 2 (`a1d7f94`), took minutes rather than half an hour.
+40. **Admin's L2.5 is split:** L2.5b finishes *Disable…*'s transfer list once case's ownership route
+    (L3.8) is on main, several case steps away.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

@@ -226,6 +226,12 @@ before. Several ready lanes are
 gated in one run, split only if red. Gates run in a merge worktree, so `main` stays free. The seven trivy
 image scans, refused locally by Docker Hub's pull limit, are left to GitHub's CI.
 
+**A fresh session for each step (the owner's ruling, 8 November 2026).** When a lane's step is merged
+and the lane is idle (its worktree clean, nothing unmerged, no lease held, no child process), the
+orchestrator ends that session's process itself and opens a fresh one on the lane's account for the next
+brief (`lanes_launch.sh open <lane>`). A fresh session carries the brief and the reports, not a long
+history, so it costs fewer tokens.
+
 **Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
 map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
 no conflict with another lane's work, and is recorded in the merge's friction row. Shared files
