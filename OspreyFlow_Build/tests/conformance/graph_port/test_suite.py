@@ -6508,7 +6508,7 @@ async def _merged_by(adapter: GraphPort, link: str, write: EdgeWrite) -> LinkPri
     return prior.model_copy(update={"left_digest": stored_digest(left.stored)})
 
 
-async def _restore(adapter: GraphPort, state: LinkPriorState) -> bool:
+async def _restore_link_state(adapter: GraphPort, state: LinkPriorState) -> bool:
     tx = await adapter.begin_transaction()
     restored = await adapter.restore_link_state(state, tx)
     await adapter.commit_transaction(tx)
@@ -6567,7 +6567,7 @@ async def test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exa
         before = await _link_as_read(adapter, a)
         state = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert state is not None
-        assert await _restore(adapter, state.model_copy(
+        assert await _restore_link_state(adapter, state.model_copy(
             update={"left_digest": stored_digest(state.stored)}
         )) is True  # fmt: skip
 
@@ -6589,10 +6589,10 @@ async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
         prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
         assert await _link_as_read(adapter, a) != before
 
-        assert await _restore(adapter, prior) is True
+        assert await _restore_link_state(adapter, prior) is True
         assert await _link_as_read(adapter, a) == before
         assert await adapter.read_link_state(link, "COMMUNICATED_WITH") == prior.model_copy(update={"left_digest": None})
-        assert await _restore(adapter, prior) is True, "already put back"
+        assert await _restore_link_state(adapter, prior) is True, "already put back"
         assert await _link_as_read(adapter, a) == before
 
 
@@ -6629,7 +6629,7 @@ async def test_restore_link_state_refuses_a_link_written_since_by_anyone(
                 params={"ds": "restamped", "id": link},
             )
         now = await adapter.read_link_state(link, "COMMUNICATED_WITH")
-        assert await _restore(adapter, prior) is False, how
+        assert await _restore_link_state(adapter, prior) is False, how
         assert await adapter.read_link_state(link, "COMMUNICATED_WITH") == now, f"{how}: nothing changed"
 
     for how in ("a later load", "a correction", "a provenance strip", "a re-stamp"):
@@ -6664,7 +6664,7 @@ async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_
         before = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
         assert before, "the other type's link is there"
 
-        assert await _restore(adapter, prior) is True
+        assert await _restore_link_state(adapter, prior) is True
 
         after = other_type((await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges)
         assert after == before, "the other type is left as it was"
@@ -6781,7 +6781,7 @@ async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -
                                                          classification="SECRET")])  # fmt: skip
         prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3",
                                                           classification="SECRET"))  # fmt: skip
-        assert await _restore(adapter, prior) is True
+        assert await _restore_link_state(adapter, prior) is True
         (seen,) = await _link_as_read(adapter, a, CLEARED)
         assert seen[4].classification == "SECRET"
         assert await _link_as_read(adapter, a, OFFICIAL) == []
@@ -6807,7 +6807,7 @@ async def test_a_merge_that_raised_the_links_marking_is_put_back_at_the_marking_
         merged = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert merged is not None and merged.handling.action_code == "A2", "the merge raised it"
 
-        assert await _restore(adapter, prior) is True
+        assert await _restore_link_state(adapter, prior) is True
 
         restored = await adapter.read_link_state(link, "COMMUNICATED_WITH")
         assert restored is not None and restored.handling == prior.handling

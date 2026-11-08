@@ -227,3 +227,15 @@ def test_a_release_looks_only_at_its_own_stack(lease) -> None:
         del _DOCKER["a-up"]
     assert b.returncode == 0, b.stderr
     assert a.returncode == 1 and "still up" in a.stderr
+
+
+
+@pytest.mark.parametrize(("first", "stack", "endpoint"), [(False, "a", "localhost:9000"), (True, "b", "localhost:9002")])
+def test_acquire_pins_the_stack_s_own_object_store(lease, first: bool, stack: str, endpoint: str) -> None:
+    """Found 8 November 2026 (the rules lane): with no object-store pin, a run on stack b reached stack a's
+    store on 9000 (MINIO_ENDPOINT's default). The export line names the stack's own store (red without it)."""
+    if first:
+        lease("acquire", "studio", "walk")
+    taken = lease("acquire", "rules", "axe scans")
+    assert f"stack {stack}" in taken.stdout
+    assert f"MINIO_ENDPOINT={endpoint}" in taken.stdout

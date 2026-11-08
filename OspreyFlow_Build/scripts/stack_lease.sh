@@ -29,7 +29,8 @@ lock_of() { if [ "$1" = a ]; then echo "$DIR/stack.lease"; else echo "$DIR/stack
 # A stack's containers, and the export line for its pinned ports (the table's own columns).
 containers_of() { grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" '$1 == s && $3 != "-" { printf "%s ", $3 }' | sed 's/ $//'; }
 ports_line() {
-  grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" -v lane="$2" '$1 == s && $5 != "-" { printf "%s=%s ", $5, $4 }
+  grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" -v lane="$2" '$1 == s && $5 == "MINIO_ENDPOINT" { printf "%s=localhost:%s ", $5, $4; next }
+    $1 == s && $5 != "-" { printf "%s=%s ", $5, $4 }
     END { printf "POSTGRES_PASSWORD=throwaway OSPREY_LANE=%s", lane }'
   [ "$1" = a ] || printf ' CLICKHOUSE_HTTP_PORT=59994'
   echo

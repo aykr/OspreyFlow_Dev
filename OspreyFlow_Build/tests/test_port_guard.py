@@ -84,7 +84,9 @@ def _run(tmp_path: Path, test_source: str, env: dict[str, str]) -> subprocess.Co
     environ = {
         k: v
         for k, v in os.environ.items()
-        if k not in {"CI", "PYTEST_ADDOPTS", *URL_SETTINGS}
+        # OSPREY_LANE and OSPREY_LEASE_DIR: a lane's own shell sets them, and they would change what the
+        # planted run is allowed (found 8 November 2026 by the rules lane: two cases red in any lane shell).
+        if k not in {"CI", "PYTEST_ADDOPTS", "OSPREY_LANE", "OSPREY_LEASE_DIR", *URL_SETTINGS}
         and not k.endswith("_PORT")
         and not k.endswith("_HOST")
     }

@@ -1,7 +1,7 @@
 # The lanes' throwaway test stacks (ADR-142 Amendment 3), one lease each. Read by scripts/stack_lease.sh
 # (which containers a holder starts and stops, and the ports it prints) and tests/port_guard.py (which ports
 # only that stack's holder may reach). Tab-separated: stack, service, container, host port, the setting a
-# test pins it with (- for none), and whether the port guard refuses it to anyone else (yes/no).
+# test pins it with (- for none; the object store's MINIO_ENDPOINT is given as localhost:<port>), and whether the port guard refuses it to anyone else (yes/no).
 # Stack a is the original one (SESSIONS_RUNBOOK.md §4); its lease keeps the old path, stack.lease.
 # ClickHouse 18123 is started by test_statelessness_clickhouse.py itself, so that test runs under stack a only.
 # Every port is guarded, the object stores included (8 November 2026: an offline run wrote to stack a's
@@ -10,9 +10,9 @@
 a	arcadedb	osprey-probe-arcadedb-new	2491	ARCADEDB_HTTP_PORT	yes
 a	postgres	osprey-test-pg	55433	POSTGRES_PORT	yes
 a	valkey	osprey-test-valkey-6379	6379	VALKEY_PORT	yes
-a	objectstore	osprey-test-objectstore	9000	-	yes
+a	objectstore	osprey-test-objectstore	9000	MINIO_ENDPOINT	yes
 a	clickhouse	-	18123	CLICKHOUSE_HTTP_PORT	yes
 b	arcadedb	osprey-test-b-arcadedb	2492	ARCADEDB_HTTP_PORT	yes
 b	postgres	osprey-test-b-pg	55434	POSTGRES_PORT	yes
 b	valkey	osprey-test-b-valkey	6380	VALKEY_PORT	yes
-b	objectstore	osprey-test-b-objectstore	9002	-	yes
+b	objectstore	osprey-test-b-objectstore	9002	MINIO_ENDPOINT	yes
