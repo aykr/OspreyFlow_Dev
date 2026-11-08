@@ -42,6 +42,15 @@ Amendment 5) has meant clearance and handling codes, never rights.
 - (c) Every right, literally: an administrator bundles only rights they hold.
 Admin is building (a) behind one function, marked pending; L2.5 waits for your answer before it merges.
 
+**A second question for you (rules' L2.8d; access, so yours):** an alert raised with no Alert node of
+its own (no single safe marking existed) is protected only by the queue's check of its evidence. When an
+analyst's correction lowers that evidence from SECRET to OFFICIAL, should the alert, its words written over
+the SECRET revision, be listed to OFFICIAL readers?
+- (a) Yes, as Amendments 10 and 11 already do for a lowered cited link: the correction is the authorising act.
+- **(b) No (what is built meanwhile, the strict default):** the queue also refuses a reader below any of the
+  alert's stored handlings, so a correction never lowers who may read it, for nodes and links alike.
+- (c) As (b), in its own step after L2.9.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
