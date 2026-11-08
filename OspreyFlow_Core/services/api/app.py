@@ -489,6 +489,7 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
+from .credentials import MissingCredentialError
 from .custom_roles import (
     CustomRoleStore,
     RoleRefused,
@@ -896,7 +897,7 @@ from .tile_cache import (
     tile_cache_storage_config,
     write_cached_tile,
 )
-from .tile_proxy import MissingMapKeyError, build_upstream_url, fetch_tile
+from .tile_proxy import MissingMapKeyError, TileFetchFailed, build_upstream_url, fetch_tile
 from .trends import (
     TrendDefinitionRefused,
     TrendStore,
@@ -7681,7 +7682,22 @@ async def get_map_tile_route(
         url = build_upstream_url(provider, z, x, y, key=_map_key(request, provider_id))
     except MissingMapKeyError as missing:
         raise HTTPException(status_code=503, detail=str(missing)) from None
-    tile_bytes = await fetch_tile(url)
+    except MissingCredentialError:
+        raise HTTPException(
+            status_code=503, detail=str(MissingMapKeyError(provider_id))
+        ) from None
+    try:
+        tile_bytes = await fetch_tile(url)
+    except TileFetchFailed as failed:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"The map provider {provider_id!r} refused the tile (HTTP {failed.status}). If it "
+                "was refused for its key, set the key again in Admin › Maps."
+                if failed.status
+                else f"The map provider {provider_id!r} could not be reached."
+            ),
+        ) from None
     if provider.cache is not None:
         write_cached_tile(tile_bytes, storage=tile_cache_storage, object_key=cache_key)
     return Response(content=tile_bytes, media_type=image_content_type(tile_bytes))

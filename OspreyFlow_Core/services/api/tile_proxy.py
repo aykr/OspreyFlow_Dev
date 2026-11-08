@@ -28,6 +28,8 @@ original template-substitution behaviour unchanged.
 
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import Awaitable, Callable
 from typing import cast
 from urllib.parse import quote
@@ -36,6 +38,49 @@ import httpx
 from services.api.credentials import resolve_env_credential
 
 from schemas.mapconfig import MapProvider, OgcServiceKind
+
+# --- no map key in any log record (ADR-147 decision 2) -----------------------------------------
+#
+# A provider takes its key in the tile URL's query, so anything that logs a URL logs the key: httpx
+# logs every request's URL at INFO ("HTTP Request: GET https://…?key=…"), and its `HTTPStatusError`
+# names the URL. The query of every URL those loggers write is dropped here, and the fetch below
+# raises errors of its own that carry a status and nothing else.
+
+_URL_QUERY = re.compile(r"(https?://[^\s?\"']*)\?[^\s\"']*")
+
+
+def _without_query(value: object) -> object:
+    text = str(value)
+    if "?" not in text or "://" not in text:
+        return value
+    return _URL_QUERY.sub(r"\1?…", text)
+
+
+class _NoUrlQuery(logging.Filter):
+    """Drops the query of every URL in a record of the HTTP client's loggers."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(_without_query(a) for a in record.args)
+        record.msg = _without_query(record.msg)
+        return True
+
+
+for _name in ("httpx", "httpcore"):
+    logging.getLogger(_name).addFilter(_NoUrlQuery())
+
+
+class TileFetchFailed(RuntimeError):
+    """The provider refused a tile, or could not be reached. Never its URL, which may carry a
+    key."""
+
+    def __init__(self, status: int | None) -> None:
+        self.status = status
+        super().__init__(
+            f"the provider answered HTTP {status}"
+            if status
+            else "the provider could not be reached"
+        )
 
 
 class MissingMapKeyError(RuntimeError):
@@ -133,15 +178,21 @@ def build_upstream_url(
     values: dict[str, str] = {**provider.variables, "z": str(z), "x": str(x), "y": str(y)}
     secret = _key_for(provider, key)
     if secret is not None:
-        values["credential"] = secret
+        values["credential"] = quote(secret, safe="")
     return template.format(**values)
 
 
 async def _http_get(url: str) -> bytes:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, timeout=10.0)
-        response.raise_for_status()
-        return response.content
+    """`TileFetchFailed` for a refusal or a failed connection, raised `from None`, so neither
+    httpx's message nor its traceback (both name the URL) reaches a log."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0)
+    except httpx.HTTPError:
+        raise TileFetchFailed(None) from None
+    if response.status_code >= 400:
+        raise TileFetchFailed(response.status_code)
+    return response.content
 
 
 async def fetch_tile(url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get) -> bytes:

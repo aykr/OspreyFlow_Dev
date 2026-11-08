@@ -30106,7 +30106,7 @@ and with the evidence saved short; each red); `keyboard/shell.spec.ts`,
 new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
 address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.
 
-## ADR-147 — Maps administration: providers and their keys in Admin under ADR-135 Amendment 2's rule, the local basemap built and verified in the Conduit, prefetch areas on a schedule — ACCEPTED (design)
+## ADR-147 — Maps administration: providers and their keys in Admin under the model keys' rule, the local basemap built and verified in the Conduit, prefetch areas on a schedule — ACCEPTED (design)
 
 Status: accepted 8 November 2026; the owner's ruling of 8 November (map provider keys follow the model
 keys' rule: managed in Admin, write-only, never returned, logged or echoed, every change audited, behind
@@ -30115,7 +30115,8 @@ keys' rule: managed in Admin, write-only, never returned, logged or echoed, ever
 L's rule that a lane builds its recommended option and logs it (`process/lanes/platform/REPORT.md`,
 "Decisions taken"). Written by the platform lane in P3 (`07_BUILD_PLAN.md`'s lane table, row P3). The
 analyst's basemap switch and place search are P4's, under a later amendment. ADR-014, ADR-015, ADR-016,
-ADR-049 Stage 2 §6, ADR-054 Amendment 4 and ADR-067 are otherwise unchanged.
+ADR-054 Amendment 4 and ADR-067 are otherwise unchanged; so is the set-up console's Geospatial screen
+but for its Build and Verify.
 
 **Context.** Maps had no Admin section. Providers were set only in `osprey.yaml`'s `map:`, read once at
 start; a hosted provider's key only as `credential: env:VAR` in the Conduit's environment; the set-up

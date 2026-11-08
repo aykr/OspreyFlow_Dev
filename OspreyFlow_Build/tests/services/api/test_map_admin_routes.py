@@ -42,8 +42,7 @@ EVERY_OTHER_ADMIN_RIGHT = Principal(
     clearance="OFFICIAL",
     org_unit="u",
     roles=[
-        f"right:{r}"
-        for r in ("administer_system", "manage_people", "manage_models", "read_audit")
+        f"right:{r}" for r in ("administer_system", "manage_people", "manage_models", "read_audit")
     ],
 )
 OSM = {
@@ -195,9 +194,10 @@ def test_a_planted_key_is_in_no_response_log_audit_or_maps_file(
     assert PLANTED not in world.kept()
     assert world.admin.key_for("hosted-tiles") == PLANTED
     view = answers[-3].json()
-    assert next(p for p in view["providers"] if p["provider"]["id"] == "hosted-tiles")[
-        "key_state"
-    ] == "set"
+    assert (
+        next(p for p in view["providers"] if p["provider"]["id"] == "hosted-tiles")["key_state"]
+        == "set"
+    )
     assert [e.action for e in world.audit.entries] == ["provider_added", "key_set"]
 
 
@@ -250,3 +250,87 @@ def test_an_area_over_the_cap_is_refused_in_words_through_the_route(world: World
     answer = client.put("/v1/admin/maps/areas", content=json.dumps({"areas": [big]}))
     assert answer.status_code == 422
     assert "tiles over its zooms" in answer.json()["detail"]["detail"]
+
+
+# --- What Admin may name (the review's blocker): an `env:` reference to any of the Conduit's
+# --- secrets, or an address inside the deployment, from a holder of `manage_geospatial` alone.
+
+
+@pytest.mark.parametrize(
+    "credential", ["env:POSTGRES_PASSWORD", "env:OIDC_TOKEN_EXCHANGE_CLIENT_SECRET", "env:MAP_KEY"]
+)
+def test_admin_never_names_an_environment_variable_for_a_provider_s_key(
+    world: World, credential: str
+) -> None:
+    client = TestClient(app)
+    answer = client.post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "exfil", "credential": credential}}))  # fmt: skip
+    assert answer.status_code == 422, answer.text
+    assert "Admin › Maps" in answer.json()["detail"]["detail"]
+    assert credential.removeprefix("env:") not in answer.text
+    assert world.admin.config().providers[-1].id == "osm-local" and world.audit.entries == []
+
+
+def test_an_installer_s_reference_is_kept_by_an_edit_and_never_changed_by_one(
+    world: World, tmp_path: Path
+) -> None:
+    installed = {**HOSTED, "credential": "env:OS_DATAHUB_API_KEY"}
+    world.admin._installed = MapConfig.model_validate(  # noqa: SLF001 - the installer's osprey.yaml
+        {"default": "osm-local", "providers": [OSM, installed]}
+    )
+    client = TestClient(app)
+    kept = client.put("/v1/admin/maps/providers/hosted-tiles", content=json.dumps(
+        {"provider": {**installed, "label": "Renamed"}}))  # fmt: skip
+    assert kept.status_code == 200, kept.text
+    changed = client.put("/v1/admin/maps/providers/hosted-tiles", content=json.dumps(
+        {"provider": {**installed, "credential": "env:POSTGRES_PASSWORD"}}))  # fmt: skip
+    assert changed.status_code == 422 and "POSTGRES" not in changed.text
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "http://localhost/{z}/{x}/{y}.png", "http://127.0.0.1:2480/{z}/{x}/{y}",
+        "http://[::1]/{z}/{x}/{y}", "http://169.254.169.254/latest/meta-data/{z}/{x}/{y}",
+        "http://10.0.0.5/{z}/{x}/{y}", "http://172.18.0.4:5432/{z}/{x}/{y}",
+        "http://192.168.1.10/{z}/{x}/{y}", "http://postgres:5432/{z}/{x}/{y}",
+        "http://keycloak/{z}/{x}/{y}", "https://{host}/{z}/{x}/{y}", "ftp://tiles.example.test/{z}",
+        "file:///etc/passwd", "file:///data/tiles/../../etc/passwd", "gopher://tiles.example.test/",
+        "https://user:pw@tiles.example.test/{z}/{x}/{y}",
+    ],
+)  # fmt: skip
+def test_admin_never_points_the_conduit_inside_the_deployment(world: World, address: str) -> None:
+    client = TestClient(app)
+    answer = client.post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "inside", "source": address}}))  # fmt: skip
+    assert answer.status_code == 422, (address, answer.text)
+    assert world.audit.entries == []
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["https://tiles.example.test/{z}/{x}/{y}.png?key={credential}",
+     "http://gis.corp.example.test/tiles/{z}/{x}/{y}.png?key={credential}"],
+)  # fmt: skip
+def test_a_named_host_outside_the_deployment_is_taken(world: World, address: str) -> None:
+    client = TestClient(app)
+    answer = client.post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "outside", "source": address}}))  # fmt: skip
+    assert answer.status_code == 200, answer.text
+
+
+def test_a_wmts_endpoint_is_held_to_the_same_rule(world: World) -> None:
+    wmts = {**HOSTED, "id": "w", "source": None, "service": "wmts", "layer": "a",
+            "tile_matrix_set": "GM", "format": "image/png", "wmts_style": "default",
+            "endpoint": "http://arcadedb:2480/wmts"}  # fmt: skip
+    answer = TestClient(app).post(
+        "/v1/admin/maps/providers", content=json.dumps({"provider": wmts})
+    )
+    assert answer.status_code == 422
+
+
+def test_a_key_is_never_given_to_a_provider_the_browser_fetches(world: World) -> None:
+    client = TestClient(app)
+    answer = client.post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "browser", "proxy": "none"}}))  # fmt: skip
+    assert answer.status_code == 422 and "browser" in answer.json()["detail"]["detail"]

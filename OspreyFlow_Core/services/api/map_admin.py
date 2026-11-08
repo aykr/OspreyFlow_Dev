@@ -348,6 +348,82 @@ def area_tiles(area: PrefetchArea) -> int:
     return total
 
 
+def _refused(words: str) -> MapAdminRefused:
+    return MapAdminRefused(words, status=422)
+
+
+def _checked_address(provider_id: str, address: str) -> None:
+    """An address *Admin › Maps* may give the Conduit (ADR-147 decision 2a): `file://` under the
+    tiles folder, or `http(s)` to a dotted host name outside the deployment — never `localhost`, an
+    IP address that is loopback, link-local (a cloud's metadata service), private or reserved, a
+    dotless name (a service of the deployment's own: `postgres`, `keycloak`), credentials in the
+    address, or a host the template fills in. The tile route answers only an image, so even a name
+    that resolves inside reads nothing but tiles back."""
+    import ipaddress
+    from urllib.parse import urlsplit
+
+    where = f"The provider {_shown(provider_id)}'s address"
+    if address.startswith("file://"):
+        path = address.removeprefix("file://")
+        if ".." in Path(path).parts or not path.startswith(f"{TILES_CONTAINER_PATH}/"):
+            raise _refused(
+                f"{where} is a local file outside the tiles folder ({TILES_CONTAINER_PATH})."
+            )
+        return
+    probe = re.sub(r"\{(z|x|y|credential)\}", "0", address)
+    parts = urlsplit(probe)
+    if parts.scheme not in ("http", "https"):
+        raise _refused(f"{where} must be an https or http address, or a file in the tiles folder.")
+    host = parts.hostname or ""
+    if "{" in parts.netloc or "}" in parts.netloc:
+        raise _refused(f"{where} names its host by a variable; write the host out.")
+    if parts.username or parts.password:
+        raise _refused(
+            f"{where} carries a user name or password; set a key in Admin › Maps instead."
+        )
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None:
+        inside = (ip.is_loopback, ip.is_link_local, ip.is_private, ip.is_reserved,
+                  ip.is_unspecified, ip.is_multicast)  # fmt: skip
+        if any(inside):
+            raise _refused(
+                f"{where} is inside this deployment or its network; name a host outside it."
+            )
+        return
+    if host == "localhost" or host.endswith(".localhost") or "." not in host:
+        raise _refused(
+            f"{where} names a host inside this deployment (a name with no dot, or localhost); name "
+            "the provider's host in full."
+        )
+
+
+def admissible(provider: MapProvider, before: MapProvider | None) -> None:
+    """What *Admin › Maps* may set (ADR-147 decision 2a). **An `env:` reference is the installer's
+    alone**: one added or changed here would let a holder of `manage_geospatial` send any of the
+    Conduit's own secrets (its database password, its token-exchange secret) to an address of their
+    choosing, so a provider added here has none, and an edit keeps the one `osprey.yaml` gave. Its
+    addresses are held to `_checked_address`. A key goes only to a provider the Conduit fetches."""
+    kept = before.credential if before is not None else None
+    if provider.credential != kept:
+        raise _refused(
+            "A provider's key is set in Admin › Maps with Enter key, never by naming one of the "
+            "Conduit's settings here; an installer's reference in osprey.yaml stays as it is."
+        )
+    for address in (provider.source, provider.endpoint):
+        if address is not None:
+            _checked_address(provider.id, address)
+    if provider.profile is not None:
+        raise _refused("A ready-made provider profile is set in osprey.yaml, not here.")
+    if provider.needs_key and provider.proxy == "none":
+        raise _refused(
+            "A provider that takes a key must be fetched by the Conduit: fetched by the browser, "
+            "its key would be in every analyst's browser."
+        )
+
+
 def _container_file(source: str | None) -> Path | None:
     if source is None or not source.startswith("file://"):
         return None
@@ -557,6 +633,7 @@ class MapAdmin:
             config = self.config()
             if any(p.id == provider.id for p in config.providers):
                 raise MapAdminRefused(f"There is already a map provider {_shown(provider.id)}.")
+            admissible(provider, None)
             self._save_map(self._validated(config.default, [*config.providers, provider]))
             await self._record(by, "provider_added", provider.id, {
                 "tier": {"old": None, "new": tier_of(provider)},
@@ -572,6 +649,7 @@ class MapAdmin:
             old = self.provider(provider_id)
             if provider.id != provider_id:
                 raise MapAdminRefused("A provider's id cannot be changed; add a new provider.")
+            admissible(provider, old)
             providers = [provider if p.id == provider_id else p for p in config.providers]
             self._save_map(self._validated(config.default, providers))
             before, after = old.model_dump(mode="json"), provider.model_dump(mode="json")
@@ -795,10 +873,15 @@ class MapAdmin:
 
 
 def _failure_words(error: BaseException) -> str:
-    from .tile_proxy import MissingMapKeyError
+    from .credentials import MissingCredentialError
+    from .tile_proxy import MissingMapKeyError, TileFetchFailed
 
-    if isinstance(error, MissingMapKeyError):
+    if isinstance(error, (MissingMapKeyError, MissingCredentialError)):
         return "The provider needs a key and none is set."
+    if isinstance(error, TileFetchFailed):
+        if error.status:
+            return f"The provider refused a tile (HTTP {error.status})."
+        return "The provider could not be reached."
     if isinstance(error, OSError):
         return "The provider could not be reached."
     import httpx

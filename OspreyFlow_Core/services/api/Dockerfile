@@ -35,14 +35,10 @@ COPY scripts ./scripts
 COPY connectors ./connectors
 COPY recipes ./recipes
 
-# ADR-147 decision 3: the tier-1 basemap build (planetiler, a Java program) runs in the Conduit, so the
-# image carries a Java 21 runtime, made by `jlink` from the Temurin JDK (pinned by digest) with every
-# module the JDK has, since planetiler's needs are not listed by module. The planetiler jar itself is
-# not in the image: `ospreyflow map build --planetiler-jar` places it in the deployment's tiles folder.
-FROM eclipse-temurin:21-jdk@sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb AS java
-RUN jlink --add-modules ALL-MODULE-PATH --strip-debug --no-header-files --no-man-pages \
-    --compress=zip-6 --output /opt/java-runtime
-
+# ADR-147 decision 3: the tier-1 basemap build (planetiler) needs Java 21, which is **not** in this
+# image while the owner rules on its licence: the Temurin runtime is GPL-2.0 with the Classpath
+# exception, and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL. Until then *Build*
+# says in words that Java is not installed in the Conduit (`map_admin.MapAdmin.basemap`).
 FROM python:3.12-slim
 
 # Base-image OS packages lag the upstream image's own last-published point
@@ -66,7 +62,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 10001 osprey
-COPY --from=java /opt/java-runtime /opt/java
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/packages ./packages
@@ -75,7 +70,7 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/connectors ./connectors
 COPY --from=builder /app/recipes ./recipes
 
-ENV PATH="/app/.venv/bin:/opt/java/bin:${PATH}" \
+ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"
