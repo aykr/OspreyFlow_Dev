@@ -29919,3 +29919,67 @@ from about 20 hours to about 13.
    refused by the port guard to anyone but its holder; the tests are `tests/test_stack_lease.py`'s
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
+
+### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and its two shared reads; an alert's address; the jump replaced; the Rule author's queue read left to the owner
+
+Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
+the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below) and its interim on Q1,
+which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except where this says so.
+*Open the evidence* (decision 6) is built after case's L3.2b, on its read-only lens, and recorded then.
+
+1. **The place's gate.** ADR-145 Amendment 1 shows a place from the checks its routes declare. ADR-146
+   decision 2 opens Rules and Monitoring to `triage_alerts` or `author_rules` and no one else, but its
+   routes' own rights (`read_alert_queue`, `deploy_rules`, `read_held_rows`, `decide_held_rows`,
+   `read_rule_audit`, `load_screening_lists`, `keep_watches`) are held by people the decision does not
+   open it to. So every route of the place asks, after its own right, for the place's gate
+   (`services/api/rules_place.py`, `require_rules_place`: any one of the two rights), refused with 403
+   `place_required`. No role loses a right (`schemas/rights.py` is unchanged); what changes is that a
+   right which acts only in the place no longer reaches it without the place.
+2. **What that costs (Q2 (a)).** The **Data Engineer** no longer deploys or retires rules, reads or decides
+   held rows, or manages screening lists; the **Administrator** no longer reads the rule audit or manages
+   screening lists. The rule audit returns to administrators with Admin › Audit (L2.6); screening lists
+   with the Studio's list connector (L1.6, ADR-140 Amendment 9); held rows stay a rule's, in Rules and
+   Monitoring. A whole-deployment rule's approval still needs `administer_system` and `deploy_rules`
+   both, and now the place too. On the owner's list for review.
+3. **Two shared reads, no gate.** The queue's list (`GET …/alert-queue`) is read outside the place by
+   Home's *Needs your attention*, the switcher's count and a report pack's alert items (the Glass), and
+   the held rows' list (`GET …/held-rows`) by Home's count. Each answers whoever holds its own right, as
+   before; a Reports Viewer's Home keeps its alerts, each row opening its case, until L2.12 builds that
+   journey (ADR-145 Amendment 4 decision 10).
+4. **Offered where usable (ADR-145 Amendment 1).** `places.json` names the place's rights (the gate's)
+   and its `needs` (its entry read's, `read_alert_queue`). Analysts and the Super user are offered it;
+   the Data Engineer, the Administrator and the Reports Viewer are not.
+5. **The Rule author: open (the owner's Q1).** *Rule author* holds `author_rules` and `triage_alerts`
+   but not `read_alert_queue`, so the place's every read refuses it and it is offered no place until the
+   owner rules. Recommended: (a) the role gains `read_alert_queue` (ADR-112 Amendment 5 amended). Until
+   then ADR-112 Amendment 5's test "Rule author opens Rules and Monitoring" is a strict xfail naming the
+   question, and its triage routes are recorded as answering a role whose place is not offered.
+6. **An alert's address.** `GET /v1/alerts/{alert_id}` answers `AlertAtAddress` (the case the alert is
+   worked in, its `investigation_id`, and its explanation as `explain_alert` gives it there). An alert
+   the reader may not see — its case not theirs, not in their queue there, or any cited node, link or
+   transaction hidden — is answered exactly as one that does not exist (404 `alert_not_found`), and the
+   case's level check is made for a missing id too, on no case. An alert raised in no case has no
+   address yet (L2.10's dataset alerts, through the home case). The workspace's router
+   (`shell/router.ts`, the History API, no dependency) reads `/alerts/<id>` and `/rules`, keeps them
+   over the sign-in round trip, and opens another case's alert by the reload every case switch is
+   (`alerts/address.ts`). Home's alert rows, the queue and the inbox open the address.
+7. **The jump replaced.** `POST …/alerts/{alert_id}/jump`, the case of its own (ADR-144 Amendment 2
+   decision 2), is removed with its client and tests; the inbox's *Open the alert* opens the address.
+   ADR-124 Amendment 17's refusal now stands at the address (point 6). The history label "Opened from
+   an alert" is written by no site and still shown on the steps that hold it. The drawn-dataset copy
+   guard the jump called (`refuse_copying_a_drawn_dataset`, `read_the_same_dataset`) has no caller
+   left; it is the case lane's to keep or remove.
+8. **The place's screens.** Tabs *Alerts* (the queue with an alert's detail beside it, and the inbox
+   until L2.10), *What raises alerts* (rules and templates, hotlists, watched patterns, screening
+   lists), *Held rows* and *Changes* (the rule audit), the last two by the case level as before. The
+   open-alert count is on the switcher's *Rules and Monitoring* ("Rules and Monitoring 3 open"); the
+   Glass's banner is *Case · Boards*. Connection strength (ADR-139), not alerts, stays in the Glass
+   under the rail's ⋯ More. The count before the canvas stays 24.
+
+**Tests.** `test_place_routes.py` (the gate on every route but the two shared reads, red with it taken
+off `deploy_typology_rule` and with it open to all; each role offered exactly its places, the hidden
+place's routes refused over HTTP); `test_alert_address.py` (the four unseeable cases answered as a
+missing one, red with the case check and with the evidence check removed); `keyboard/shell.spec.ts`,
+`keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
+new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
+address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.

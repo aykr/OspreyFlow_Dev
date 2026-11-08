@@ -195,15 +195,16 @@ The rail on the left (48px with 36px buttons, DESIGN.md v0.3 §5a; ADR-097 step 
 analyst goes to most (ADR-145 Amendment 2, the owner's choice of variant B): *Cases* and *Explore* (where
 to start in the case's data, ADR-100, §3.1), then **⋯ More**, a menu of the rest, one click away:
 *Ownership* (beneficial ownership and due diligence — ADR-109, §3.3), *History*, *Questions* (the case's
-questions to the model, ADR-098, §3.1) and *Dashboards* (ADR-111 Amendment 3). *More*'s name says which of
-them is open ("More, History open"). *Monitoring* (the one alert queue, its rules, the watches with
-their alert inbox in its *Watches* tab, held rows and audit — ADR-109, ADR-133, §3.3) is the context
-banner's section (§2.0a), not the rail's. It is the Glass's alone:
+questions to the model, ADR-098, §3.1), *Dashboards* (ADR-111 Amendment 3) and *Connection strength*
+(ADR-139, a tab of Monitoring until Monitoring left the Glass). *More*'s name says which of them is open
+("More, History open"). Monitoring (the one alert queue, its rules, the watches, held rows and the rule
+audit — ADR-109, ADR-133, §3.3) is no longer the Glass's: it is *Rules and Monitoring*, a place of its
+own (§2.0a; ADR-146 decision 2). The rail is the Glass's alone:
 the Ingest Studio has no rail, and *Ingest Studio*, *Admin* and *Proposed types* left it for the place
 switcher (§2.0, ADR-145 decision 1). Each is an icon button whose accessible name is its label;
-*Show names* widens the rail to show the labels and *Hide names* narrows it again. The banner's
-*Monitoring* carries the case's open and claimed alerts as a count (said in its name, "Monitoring 3
-open"), and *Help*, above *Show names*,
+*Show names* widens the rail to show the labels and *Hide names* narrows it again. The switcher's
+*Rules and Monitoring* carries the case's open, claimed and closing alerts as a count (said in its name,
+"Rules and Monitoring 3 open"), and *Help*, above *Show names*,
 reopens the **welcome panel** (ADR-115 E6): over the canvas's top left (320px, 280 below 1100; a shadow, no
 hairline) it says what the canvas holds, offers the case's three latest history steps to pick up from
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
@@ -382,23 +383,27 @@ One row, 40px. From the left:
 - **The account**, at the right-hand end (item 5 above).
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
-the Glass (search, the view switch, Export). Monitoring (with the watches in its Watches tab) is the
-banner's section, Ownership and History are under the rail's ⋯ More; the resolution threshold, named **Match strictness** for what
+the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
+Ownership, History and Connection strength are under the rail's ⋯ More; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
 Every menu opens on Enter or Space, closes on Escape (focus returns to its button), on a click
 outside it, and when keyboard focus moves outside it, so it never traps a keyboard user.
 
-### 2.0a Three places: the switcher, the context banner, Home (ADR-145 decisions 1–3)
+### 2.0a Four places: the switcher, the context banner, Home (ADR-145 decisions 1–3, Amendment 4; ADR-146 decision 2)
 
 This replaces "there is no application switch" (ADR-097 step 1), which this section said until
 7 November 2026.
 
-**The places.** *The Glass* (analysis: Case · Boards · Monitoring; *Boards* arrives with Lane 3's
-board screens), *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs) and *Admin*. One
-table, `apps/workspace/src/shell/places.json`, names them and the single rights that open each; a place
-is offered to whoever holds any one of them, and nobody else: the Studio for the right its first read
+**The places.** *The Glass* (analysis: Case · Boards; *Boards* arrives with Lane 3's board screens),
+*Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs), *Rules and Monitoring* (alerts:
+Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin*. One table,
+`apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
+first read also `needs`; a place is offered to whoever holds any one of its rights and all it needs, and
+nobody else: Rules and Monitoring for `triage_alerts` or `author_rules` with the queue's
+`read_alert_queue` (ADR-146 Amendment 2; whether the *Rule author* role gains that right is the owner's
+open question, and until it is answered that role is offered no place), the Studio for the right its first read
 needs (`edit_pipelines`, the recipe registry), Admin for the right of one of its built sections' first reads, the Glass for any
 right a case's routes need. While the rights are not yet known, or
 cannot be read, no place is offered, and Home says the rights could not be read. Every signed-in
@@ -413,9 +418,13 @@ or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a Studio 
 the administrator role (`require_admin_role`); a check inside a route's body is not read. A place
 hidden from a person is one whose routes refuse them, but for a legacy role's own Studio actions
 (`source_approver`'s publishing, `loader`'s running), which answer by their own rights and are recorded
-as such. The Conduit's place-routes test (`test_place_routes.py`, in the build tree)
-assigns every route to the place whose screens call it (`/v1/admin/screening-lists` is the Glass's,
-called by Monitoring › Lists); records what the routes answer each role, legacy role and right granted
+as such. **Rules and Monitoring has a gate of its own**: its routes' own rights are held by people
+ADR-146 decision 2 does not open it to (a Data Engineer's `deploy_rules`, an Administrator's
+`read_rule_audit`), so every route of the place asks, after its own right, for `triage_alerts` or
+`author_rules` (403 `place_required`), but the two lists read outside it, the queue's (Home, the
+switcher's count, a report pack's alert items) and the held rows' (Home). The Conduit's place-routes test
+(`test_place_routes.py`, in the build tree) assigns every route to the place whose screens call it
+(`/v1/admin/screening-lists` is Rules and Monitoring's, called by its screening lists); records what the routes answer each role, legacy role and right granted
 singly (`shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
 names exactly the single rights that open each place and that a screen of that place uses each; checks
 every call site the workspace's source names against its route's places; and calls every route of each
@@ -424,11 +433,12 @@ any signed-in person may read (as `test_route_rights.py`, the route-rights test,
 schedule preview, which computes run times from the text sent and reads no store, and the export
 ledger's route (an Admin route), exempt only while no screen calls it.
 
-What each role is offered (the owner's ruling of 7 November 2026; ADR-145 Amendment 1): an
-**Analyst** the Glass; a **Data Engineer** the Glass, the Studio and Admin (Admin › Operations, its
-`operate_schedules`); an **Administrator** Admin and the Glass (the case list, for an orphaned case's
-sharing and removal, the rule audit, link-strength influencers); a **Reports Viewer** the Glass; the
-**Super user** all three; of the legacy roles, `source_author` the Studio, and `source_approver`,
+What each role is offered (the owner's ruling of 7 November 2026; ADR-145 Amendment 1; ADR-146
+Amendment 2): an **Analyst** the Glass and Rules and Monitoring; a **Data Engineer** the Glass, the Studio
+and Admin (Admin › Operations, its `operate_schedules`); an **Administrator** Admin and the Glass (the
+case list, for an orphaned case's sharing and removal, link-strength influencers; the rule audit returns
+to them in Admin › Audit); a **Reports Viewer** the Glass; a **Rule author** none until the owner's
+question is answered; the **Super user** all four; of the legacy roles, `source_author` the Studio, and `source_approver`,
 `loader` and `compliance` no place. No route moved place and no role lost a right. One route's right changed:
 the Studio's pipeline-run history (`GET …/ingest/recipes/{id}/runs`) needs `run_pipelines` where it
 needed `read_data_feeds`, so Analysts, Reports Viewers and `read_data_feeds` granted alone are no longer
@@ -438,7 +448,8 @@ answered an Analyst or an Administrator.
 
 **The switcher.** In the top bar after the mark, one button per place in the table's order, the current
 one `aria-current="page"`. Choosing Admin leaves the case for the Admin place (it needs none); choosing
-the Studio opens it on the open case; choosing the Glass returns to the Glass view last open. Under the
+the Studio, or Rules and Monitoring, opens it on the open case; choosing the Glass returns to the Glass
+view last open. *Rules and Monitoring* carries the open-alert count, taken as the reader (rule 7). Under the
 GOV.UK brand the switcher stands inside the GOV.UK header (ADR-132 Amendment 6). GOV.UK Frontend 6.6.0's
 `header` has no navigation (its parameters are the product name and the homepage link), so the header
 carries a small local extension: one slot after the logo (`brand/govuk/GovukHeader.tsx`, drawn only in
@@ -447,10 +458,11 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
-- in the Glass: "You are in the Glass · Case · Boards · Monitoring · ‹case menu› · reads ‹the case's
-  datasets›", the sections a navigation named *In the Glass* (*Case* the case's views, *Monitoring* the
-  Monitoring place, *Boards* drawn as "Boards (coming)", `aria-disabled`, until Lane 3 builds it);
+- in the Glass: "You are in the Glass · Case · Boards · ‹case menu› · reads ‹the case's datasets›", the
+  sections a navigation named *In the Glass* (*Case* the case's views, *Boards* drawn as "Boards
+  (coming)", `aria-disabled`, until Lane 3 builds it);
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
+- in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
 
 The datasets are the case's, as `GET /v1/investigations/{id}/datasets` answers this reader. Not drawn
@@ -474,9 +486,10 @@ decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090 Am
 ask for the administrator role as well as `manage_ontology`.
 
 **The count (ADR-145 Amendment 2).** A keyboard user passes 24 controls before the canvas — 25 on the
-deployed page, whose brand frame adds the skip link first — in this order: the mark, the three places,
-search with *Add many from a list* and *Filters*, Graph, Map, *More views*, *Export*, the theme, the
-account; the banner's Case, Boards and Monitoring, the case menu and the cross-link; the rail's Cases,
+deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
+(Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
+*More views*, *Export*, the theme, the account; the banner's Case and Boards, the case menu and the
+cross-link; the rail's Cases,
 Explore, ⋯ More, Help and Show names; and the Graph's *Match strictness*. `App.chrome.test.tsx` counts
 them on the real `App` and fails if one returns.
 
@@ -484,6 +497,21 @@ them on the real `App` and fails if one returns.
 banner's cross-link (through the real case module and a reload), its sections and Home's cards end to
 end, each shown red with its handler or the kept view removed (rule 13); `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
 in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
+
+**An alert's address (ADR-146 decision 6, Amendment 2).** Every alert has an address, `/alerts/<id>`,
+and Rules and Monitoring has one, `/rules`; the rest of the workspace keeps its state as before. The
+router (`shell/router.ts`) uses the History API with no dependency; the server already answers every path
+with the workspace. The address grants nothing: the Conduit says which case the alert is worked in
+(`GET /v1/alerts/{id}`, §3.8 of spec 03), and answers an alert the reader may not see exactly as a
+missing one, which the place says in one sentence for both ("There is no alert at this address that you
+can see.") with *← Back to the queue*. An alert of another case is opened by the reload every case switch
+is, the address kept (`alerts/address.ts`); an address opened while signed out is kept in the tab's
+session storage over the sign-in round trip, which returns to the root. Opening an alert in the queue,
+on Home's *Needs your attention* or from the inbox's *Open the alert* gives it its address; Back leaves
+it. Home's alert rows open the alert for whoever Rules and Monitoring is offered to; for someone it is
+not (a Reports Viewer) they stay on the Glass's card and open the case, until L2.12.
+`keyboard/rules-place.spec.ts` proves the place's tabs and the address by keyboard; axe scans
+`keyboard/rules-place-harness.html` and `keyboard/monitoring-harness.html` (the tabs) in the three themes.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
@@ -1090,7 +1118,9 @@ analyst will learn to dismiss.
 **Typology rules and the *Alerts* place (ADR-109).** A case's typology rules (structuring, rapid
 movement, circular flow — each a closed set of parameters, never an expression) judge its loads,
 before commit or after as each rule declares, and raise alerts to **the case team's queue**: the
-*Alerts* place on the left rail (*Monitoring* since ADR-133), after *Cases*. It opens on the queue (open and claimed by
+*Alerts* place on the left rail (*Monitoring* since ADR-133; since ADR-146 decision 2 *Rules and
+Monitoring*, a place of the switcher, §2.0a, its tabs *Alerts*, *What raises alerts*, *Held rows* and
+*Changes*). It opens on the queue (open and claimed by
 default; closed and all by choice), each alert named by its typology and its finding in words, the
 entities named as the reader sees them — an alert any part of which the reader cannot see is not
 shown or counted. Opening one shows **what fired it**: the finding, when the rule ran (as the data
@@ -1140,7 +1170,7 @@ drawn — the Query builder (§3.3) — and saved there; in the *Alerts* place's
 it. It always runs after each load commits (said in the form, with no choice offered). Deploying has
 its own keyboard case (`deploy-a-drawn-pattern-rule-by-keyboard`).
 
-**Rules written as sentences (ADR-133 stage (b)).** The Monitoring place's Rules tab holds *Write a
+**Rules written as sentences (ADR-133 stage (b)).** Rules and Monitoring's *What raises alerts* tab (the Monitoring place's Rules tab before it) holds *Write a
 rule as a sentence* (`src/alerts/SentenceBuilder.tsx`): subject (grouped by POLE class), up to five
 conditions on its declared properties, an optional relationship and frequency, then severity, team,
 when it runs, what a hit does before commit, and scope — every blank a list read from `/v1/ontology`,
@@ -1151,7 +1181,7 @@ goes the other way. *Preview on the last 90 days* says the count and up to five 
 was refused (`limit_exceeded` in words). Keyboard cases `build-a-rule-as-a-sentence-by-keyboard` and
 `preview-a-rule-by-keyboard`; the monitoring harness's `tab=rules&sentence=preview` state is axe-scanned.
 
-**Screening lists and the AML templates (ADR-133 stage (c)).** The Monitoring place's **Lists** tab
+**Screening lists and the AML templates (ADR-133 stage (c)).** Rules and Monitoring's *What raises alerts* tab (the Monitoring place's **Lists** tab before it)
 (`src/alerts/ListsPanel.tsx`) shows each subscribed screening list — connector, version, entries, last
 update, licence, and its state, a failed refresh in words. Whoever holds `load_screening_lists` reads it
 from `GET /v1/admin/screening-lists`, with **Refresh now** per list, the latest refreshes and *Subscribe
@@ -1197,8 +1227,8 @@ the view switch itself, never proved by keyboard before, in `keyboard/shell.spec
 
 **The Glass follows the person's rights (ADR-112).** It reads `GET /v1/me/rights` at sign-in and
 leaves out what it would only be refused — never in place of the Conduit's check
-(`rights/visibility.ts`): the rail shows *Monitoring* (`alerts`) for read_alert_queue or keep_watches (ADR-133 Amendment 5: the
-watches are in its Watches tab, the rail having no Watches entry),
+(`rights/visibility.ts`): the rail shows no alerts (Rules and Monitoring is a place, §2.0a; ADR-146
+decision 2), *Connection strength* for investigate or manage_strength_influencers,
 *Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
 *Dashboards* for read_reports (the Ingest Studio, Admin and Proposed types are no longer on the rail:
 the place switcher offers the places, `shell/places.ts`, §2.0a); the view switch offers Graph and Map for
