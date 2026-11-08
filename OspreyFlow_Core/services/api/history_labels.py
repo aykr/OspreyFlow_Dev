@@ -17,6 +17,8 @@ LINKS_AMONG = "Showed links among the view"
 REMOVED = "Removed"
 STARTER_QUESTION = "Ran a starter question"
 SHARED_CONTACTS = "Showed two who share contacts"
+#: Written by no site since L2.9 (the alert jump's case of its own went); still shown on the steps
+#: that hold it.
 OPENED_FROM_ALERT = "Opened from an alert"
 OWNERSHIP = "Showed an ownership structure"
 ALERT_CANVAS = "Opened an alert"
@@ -28,7 +30,7 @@ BRIEF_EDITED = "Edited the brief"
 
 CHANGED = "Changed"
 
-#: The labels a write site may use.
+#: The labels a write site may use, and those shown on stored steps no site writes any more.
 FIXED_LABELS = frozenset(
     {
         SEEDED,

@@ -1,6 +1,13 @@
-"""The three places (`06_DECISIONS.md` ADR-145 decisions 1 and N6, Amendment 1): the switcher shows
-a person only the places their rights open, and **each hidden place's routes refuse that
-person** (rule 3: hiding a place is never the control).
+"""The four places (`06_DECISIONS.md` ADR-145 decisions 1 and N6, Amendments 1 and 4; ADR-146
+decision 2): the switcher shows a person only the places their rights open, and **each hidden
+place's routes refuse that person** (rule 3: hiding a place is never the control).
+
+Rules and Monitoring is opened by `triage_alerts` or `author_rules` and by nothing else (ADR-146
+decision 2), whatever right its routes' actions take: every one of its routes carries the place's
+own gate (`require_rules_place`, read here as `place:rules`), but the two lists read outside it
+too, by Home for its counts and by the Glass's report packs (`SHARED_READS`). It is offered only to
+a gate holder who can also make its entry read, the queue (`NEEDS`; the owner's open question on
+the Rule author, L2.9 Q1).
 
 A route's checks, as read here (`_checks`), are the right its decorator names (`require_right`), the
 Studio role its signature or its dependencies ask for (`require_studio_role`, `SourceAuthorDep`; a
@@ -25,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -41,11 +49,17 @@ BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
 
 # (path pattern, the places whose screens call it, which screen). First match wins.
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
-    (r"^/v1/admin/screening-lists", frozenset({"glass"}), "Monitoring › Lists (alerts/api.ts)"),
+    # ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, its routes with it.
+    (r"^/v1/admin/screening-lists|^/v1/screening-lists$", frozenset({"rules"}),
+     "Rules and Monitoring's screening lists (alerts/api.ts)"),
+    # The queue's list is read in the Glass too, by a report pack's alert items (ADR-134 decision 1).
+    (r"/alert-queue$", frozenset({"glass", "rules"}),
+     "Rules and Monitoring's Alerts; the Glass's report packs (reports/packsApi.ts)"),
+    (r"/held-rows(/|$)|/alert-queue|/alert-assignees|/alerts(/|$)|/hotlists|/monitors"
+     r"|/rules(/|$)",
+     frozenset({"rules"}), "Rules and Monitoring (alerts/, watches/)"),
     (r"^/v1/admin/", frozenset({"admin"}), "the Admin place"),
     (r"^/v1/exports$", frozenset({"admin"}), "the export ledger, Admin's right (ADR-112 A8)"),
-    (r"/ingest/recipes/\{recipe_id\}/held-rows/release$", frozenset({"glass"}),
-     "Monitoring's held rows (alerts/api.ts)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
      "extraction of a case's files, an investigation right (ADR-112 I4)"),
     (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)",
@@ -79,20 +93,37 @@ EXEMPT = {
 #: needs.
 ENTRY = {
     "ingest": {"list_studio_recipe_registry"},
+    # The queue, the first read of R&M's first tab, Alerts (ADR-146 decision 2).
+    "rules": {"read_alert_queue"},
     "admin": {"list_people_route", "list_dashboards_route", "list_schedules_route",
               "admin_datasets_route", "list_link_type_proposals_route"},
 }  # fmt: skip
 
-#: What each named role is offered (ADR-145 decision 7 lists the places).
+#: A place's gate (ADR-146 decision 2): a check its every route makes, passed by any one of the
+#: rights named, read from the route as `place:<id>` (`required_place`).
+GATES: dict[str, frozenset[str]] = {"rules": frozenset({"triage_alerts", "author_rules"})}
+#: What a gated place's entry read needs beyond the gate (`places.json`'s `needs`): offered to a
+#: gate holder only where its first screen can be read (ADR-145 Amendment 1).
+NEEDS: dict[str, frozenset[str]] = {"rules": frozenset({"read_alert_queue"})}
+#: R&M's routes that do not carry its gate, each with its reason: read outside the place too, as the
+#: reader, on their own right (ADR-146 decision 9; the Reports Viewer's alerts on Home, ADR-145
+#: Amendment 4 decision 10). Each answers whoever holds its right, R&M offered or not.
+SHARED_READS = {
+    "read_alert_queue": "Home's Needs your attention, the switcher's count, a report pack's alert items",
+    "list_held_rows": "Home's held rows count",
+}
+
+#: What each named role is offered (ADR-145 decision 7 and Amendment 4 decision 1 list the places).
 EXPECTED_PLACES = {
-    "analyst": ["glass"],
+    "analyst": ["glass", "rules"],
     "data_engineer": ["glass", "ingest", "admin"],
     "osprey-admin": ["glass", "admin"],
     "reports_viewer": ["glass"],
-    # ADR-112 Amendment 5 decision 2: works alerts in the Glass; Rules and Monitoring, which
-    # `author_rules` opens, is the rules lane's L2.9. Never the Studio.
-    "rule_author": ["glass"],
-    "super": ["glass", "ingest", "admin"],
+    # ADR-112 Amendment 5 decision 2 says Rule author opens Rules and Monitoring, but the role holds
+    # no `read_alert_queue`, so R&M's entry read refuses it: the owner's open question (L2.9 Q1);
+    # `test_a_rule_author_opens_rules_and_monitoring` waits on it. Never the Studio.
+    "rule_author": [],
+    "super": ["glass", "ingest", "rules", "admin"],
 }
 #: The token roles each case signs in with: the four roles, the Super user preset, the legacy roles,
 #: every right granted singly (`right:<name>`), and nobody's.
@@ -103,7 +134,7 @@ TOKEN_ROLES: dict[str, list[str]] = (
     | {f"right:{r.value}": [f"right:{r.value}"] for r in Right}
     | {"none": []}
 )
-PLACE_ORDER = ["glass", "ingest", "admin"]
+PLACE_ORDER = ["glass", "ingest", "rules", "admin"]
 
 
 def _routes() -> list[APIRoute]:
@@ -127,6 +158,9 @@ def _checks_of(dependant: object) -> set[str]:
                     found.add(str(conduit._STUDIO_ROLE_RIGHT[cell.cell_contents]))
         if call is conduit.require_admin_role:
             found.add(f"role:{conduit.ADMIN_ROLE}")
+        place = getattr(call, "required_place", None)
+        if place is not None:
+            found.add(f"place:{place}")
         found |= _checks_of(dependency)
     return found
 
@@ -137,9 +171,19 @@ def _checks(route: APIRoute) -> frozenset[str]:
     return frozenset(_checks_of(route.dependant))
 
 
+def _held(roles: list[str]) -> set[str]:
+    rights = {str(r) for r in rights_for(roles)}
+    gates = {f"place:{p}" for p, openers in GATES.items() if rights & openers}
+    return rights | {f"role:{r}" for r in roles} | gates
+
+
 def _answers(route: APIRoute, roles: list[str]) -> bool:
-    held = {str(r) for r in rights_for(roles)} | {f"role:{r}" for r in roles}
-    return _checks(route) <= held
+    return _checks(route) <= _held(roles)
+
+
+def _entry_checks(place: str, route: APIRoute) -> frozenset[str]:
+    """A gated place's entry is read only by its gate's holders: its screen is drawn for no one else."""
+    return _checks(route) | ({f"place:{place}"} if place in GATES else set())
 
 
 def places_of(path: str) -> frozenset[str]:
@@ -154,6 +198,11 @@ def _placed() -> list[APIRoute]:
     return [r for r in _routes() if _checks(r) and r.endpoint.__name__ not in EXEMPT]
 
 
+def _hidden_checked() -> list[APIRoute]:
+    """The placed routes a hidden place's must refuse: all but Home's own reads."""
+    return [r for r in _placed() if r.endpoint.__name__ not in SHARED_READS]
+
+
 def _entry_routes(place: str) -> list[APIRoute]:
     if place in ENTRY:
         return [r for r in _routes() if r.endpoint.__name__ in ENTRY[place]]
@@ -163,7 +212,10 @@ def _entry_routes(place: str) -> list[APIRoute]:
 def offered(roles: list[str]) -> list[str]:
     """The places whose entry this person's checks reach, from the routes alone (not
     `places.json`): the Studio's and Admin's entry reads, any route of the Glass."""
-    return [p for p in PLACE_ORDER if any(_answers(r, roles) for r in _entry_routes(p))]
+    held = _held(roles)
+    return [
+        p for p in PLACE_ORDER if any(_entry_checks(p, r) <= held for r in _entry_routes(p))
+    ]
 
 
 def answered_hidden(roles: list[str]) -> list[str]:
@@ -172,13 +224,20 @@ def answered_hidden(roles: list[str]) -> list[str]:
     read needs `edit_pipelines`. Recorded per role in `placesByRole.json`, so each is seen."""
     hidden = set(PLACE_ORDER) - set(offered(roles))
     return sorted(
-        r.endpoint.__name__ for r in _placed() if places_of(r.path) <= hidden and _answers(r, roles)
+        r.endpoint.__name__
+        for r in _hidden_checked()
+        if places_of(r.path) <= hidden and _answers(r, roles)
     )
 
 
 def _places_json() -> dict[str, frozenset[str]]:
     table = json.loads(PLACES_JSON.read_text())
     return {place["id"]: frozenset(place["rights"]) for place in table["places"]}
+
+
+def _places_json_needs() -> dict[str, frozenset[str]]:
+    table = json.loads(PLACES_JSON.read_text())
+    return {place["id"]: frozenset(place.get("needs", [])) for place in table["places"]}
 
 
 def _by_role() -> dict[str, dict[str, list[str]]]:
@@ -225,6 +284,8 @@ def _own_place(rel: str) -> str | None:
         return None
     if rel.startswith("ingest/"):
         return "ingest"
+    if rel.startswith(("alerts/", "watches/")):
+        return "rules"
     return "admin" if rel.startswith("admin/") else "glass"
 
 
@@ -259,10 +320,13 @@ def _fragments(text: str, prefix: str = "") -> list[str]:
         if " " in literal or "/" not in literal:
             continue
         segments = [s for s in literal.strip("/").split("/") if s]
-        # A generic helper's literal (`/v1/admin/${path}`) names no route: two real segments, or a
-        # path from `/v1/` itself (`/v1/investigations`, `/v1/investigations/${id}`).
+        # A generic helper's literal (`/v1/admin/${path}`, `alerts/api.ts`'s
+        # `/v1/investigations/${id}/${path}`, read where it is called through `RELATIVE_CALLS`)
+        # names no route: two real segments, or a path from `/v1/` itself (`/v1/investigations`,
+        # `/v1/investigations/${id}`).
         literal_segments = [s for s in segments if re.fullmatch(r"[a-z][a-z-]*", s) and s != "v1"]
-        rooted = segments[:1] == ["v1"] and segments != ["v1", "admin", "{x}"]
+        generic = (["v1", "admin", "{x}"], ["v1", "investigations", "{x}", "{x}"])
+        rooted = segments[:1] == ["v1"] and segments not in generic
         if len(literal_segments) >= 2 or (rooted and literal_segments):
             found.append("/" + "/".join(segments))
     return found
@@ -354,7 +418,7 @@ def _misplaced(root: Path) -> list[tuple[str, list[str], list[str]]]:
 def test_every_call_site_s_place_is_among_its_route_s_places() -> None:
     reached = screen_places(WORKSPACE_SRC)
     assert len(reached) > 60, "the source scan found too few call sites to mean anything"
-    assert {"glass", "ingest", "admin"} <= set().union(*reached.values())
+    assert {"glass", "ingest", "rules", "admin"} <= set().union(*reached.values())
     assert _misplaced(WORKSPACE_SRC) == []
 
 
@@ -414,7 +478,15 @@ def test_places_json_names_exactly_the_single_rights_that_open_each_place() -> N
     """`placesFor` asks for any one right, so every way into a place must be a single right, or
     hold one, or be the administrator role (whose holders hold Admin's rights)."""
     table = _places_json()
+    needs = _places_json_needs()
     for place in PLACE_ORDER:
+        if place in GATES:
+            # A gated place is opened by its gate's rights, given its entry read's own checks.
+            assert table[place] == GATES[place], (place, sorted(table[place]))
+            assert needs[place] == NEEDS[place], (place, sorted(needs[place]))
+            assert {_checks(r) for r in _entry_routes(place)} == {NEEDS[place]}, place
+            continue
+        assert needs[place] == frozenset(), place
         openers = _openers(place)
         singles = {next(iter(s)) for s in openers if len(s) == 1}
         assert table[place] == singles, (place, sorted(table[place] ^ singles))
@@ -434,7 +506,11 @@ def test_each_right_a_place_claims_reaches_a_screen_of_that_place() -> None:
     unused = []
     for place, rights in _places_json().items():
         for right in rights:
-            routes = [r for r in _entry_routes(place) if _checks(r) == {right}]
+            if place in GATES:
+                held = {f"place:{place}"} | NEEDS[place]
+                routes = [r for r in _entry_routes(place) if _entry_checks(place, r) <= held]
+            else:
+                routes = [r for r in _entry_routes(place) if _checks(r) == {right}]
             if not any(place in _callers(r, reached) for r in routes):
                 unused.append((place, right))
     assert unused == []
@@ -567,7 +643,9 @@ def test_every_route_of_a_hidden_place_refuses_the_role(role: str) -> None:
     roles = TOKEN_ROLES[role]
     hidden = set(PLACE_ORDER) - set(offered(roles))
     recorded = set(json.loads(BY_ROLE_JSON.read_text())["roles"][role]["answered_hidden"])
-    routes = [r for r in _placed() if places_of(r.path) <= hidden and not _answers(r, roles)]
+    routes = [
+        r for r in _hidden_checked() if places_of(r.path) <= hidden and not _answers(r, roles)
+    ]
     assert set(answered_hidden(roles)) == recorded, "placesByRole.json is out of date"
     who = Principal(id=f"place-{role}", clearance="SECRET", org_unit="unit-1", roles=roles)
     answered: list[tuple[str, int]] = []
@@ -584,7 +662,7 @@ def test_every_route_of_a_hidden_place_refuses_the_role(role: str) -> None:
             response = client.request(method, _path(route), headers=headers, json={})
             if response.status_code < 400:
                 answered.append((route.endpoint.__name__, response.status_code))
-            by_a_check = re.search(r"right_required|lacks required", response.text)
+            by_a_check = re.search(r"right_required|place_required|lacks required", response.text)
             if response.status_code == 403 and by_a_check:
                 refused_by_a_check += 1
     finally:
@@ -594,3 +672,85 @@ def test_every_route_of_a_hidden_place_refuses_the_role(role: str) -> None:
     if routes:
         # Most refusals are the checks' own: the right is checked before anything else.
         assert refused_by_a_check >= len(routes) * 0.8, (role, refused_by_a_check, len(routes))
+
+
+# --- Rules and Monitoring's gate (ADR-146 decision 2, ADR-145 Amendment 4) ----------------------
+
+
+def _rules_routes() -> list[APIRoute]:
+    return [r for r in _placed() if "rules" in places_of(r.path)]
+
+
+def _ungated(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:
+    """R&M's routes whose declared checks hold no `place:rules`."""
+    return sorted(r.endpoint.__name__ for r in _rules_routes() if "place:rules" not in checks(r))
+
+
+def test_every_route_of_rules_and_monitoring_carries_its_gate_but_the_shared_reads() -> None:
+    """Hiding is never the control: a person offered no R&M is refused at each of its routes by its
+    own gate, whatever right the route's action takes (the Data Engineer holds `deploy_rules`,
+    the Administrator `read_rule_audit`). Red with the gate taken off any one route
+    (`test_a_route_without_the_gate_is_found`)."""
+    assert len(_rules_routes()) > 30, "too few R&M routes to mean anything"
+    assert _ungated() == sorted(SHARED_READS)
+
+
+def test_the_shared_reads_are_named_routes_of_the_place() -> None:
+    names = {r.endpoint.__name__: r for r in _routes()}
+    for name in SHARED_READS:
+        assert name in names and "rules" in places_of(names[name].path), name
+
+
+def test_a_route_without_the_gate_is_found() -> None:
+    """The red half of the case above: a real R&M route read as its decorator would be without
+    `Depends(require_rules_place)` (its own right alone) is reported."""
+    victim = next(r for r in _routes() if r.endpoint.__name__ == "deploy_typology_rule")
+
+    def without_gate(route: APIRoute) -> frozenset[str]:
+        return _checks(route) - {"place:rules"} if route is victim else _checks(route)
+
+    assert without_gate(victim) == {"deploy_rules"}
+    assert _ungated(without_gate) == sorted({*SHARED_READS, "deploy_typology_rule"})
+
+
+@pytest.mark.parametrize("role", ["data_engineer", "osprey-admin", "reports_viewer"])
+def test_rules_and_monitoring_refuses_a_role_it_is_not_offered_to_at_its_gate(role: str) -> None:
+    """Over HTTP, at each gated route, for the three roles ADR-146 decision 2 does not offer it to:
+    refused, and refused by the place's gate itself (`place_required`) wherever the role holds the
+    route's own right (the Data Engineer's deploy_rules, read_held_rows and load_screening_lists,
+    the Administrator's read_rule_audit, everyone's read_alert_queue). The gate is checked after
+    the route's right, so a route whose right the role lacks names that right instead."""
+    from services.api.app import app, get_principal, require_studio_dataset
+
+    who = Principal(id=f"gate-{role}", clearance="SECRET", org_unit="unit-1", roles=[role])
+    app.dependency_overrides[get_principal] = lambda: who
+    app.dependency_overrides[require_studio_dataset] = lambda dataset_id: dataset_id
+    client = TestClient(app, raise_server_exceptions=False)
+    gated = [r for r in _rules_routes() if "place:rules" in _checks(r)]
+    not_by_gate: list[tuple[str, int]] = []
+    by_gate = 0
+    try:
+        for route in gated:
+            method = sorted(route.methods or {"GET"})[0]
+            response = client.request(method, _path(route), json={})
+            own = _checks(route) - {"place:rules"}
+            expected = "place_required" if own <= _held([role]) else "right_required"
+            if response.status_code != 403 or expected not in response.text:
+                not_by_gate.append((route.endpoint.__name__, response.status_code))
+            elif expected == "place_required":
+                by_gate += 1
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+        app.dependency_overrides.pop(require_studio_dataset, None)
+    assert not_by_gate == []
+    assert by_gate > 0, "the role holds none of the place's rights: the case proves nothing"
+
+
+@pytest.mark.xfail(
+    reason="the owner's open question L2.9 Q1: the Rule author holds no read_alert_queue, so R&M's "
+    "entry read refuses it; (a) gives the role that right (ADR-112 Amendment 5)",
+    strict=True,
+)
+def test_a_rule_author_opens_rules_and_monitoring() -> None:
+    """ADR-112 Amendment 5's test: *Rule author* opens Rules and Monitoring and not the Studio."""
+    assert offered(TOKEN_ROLES["rule_author"]) == ["rules"]

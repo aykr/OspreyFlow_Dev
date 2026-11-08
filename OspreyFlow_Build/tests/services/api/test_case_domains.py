@@ -22,9 +22,10 @@ What a mistake here would do, and the case that catches it:
   (ADR-126 Amendment 2): `test_a_patch_of_packs_is_refused_in_words_and_nothing_changes`;
 - a case reading its stored packs when its dataset's live model says otherwise:
   `test_a_cases_packs_are_its_datasets_live_models`, red with the stored packs read instead;
-- a PATCH that lost the blank-name refusal (`test_the_patch_keeps_the_blank_name_refusal`);
-- a branch, or an alert's jump, taking the wrong case's packs
-  (`test_an_alert_jump_takes_the_packs_of_its_own_case_not_the_alerts`).
+- a PATCH that lost the blank-name refusal (`test_the_patch_keeps_the_blank_name_refusal`).
+
+The alert jump's case of its own, whose packs were tested here, went in L2.9: an alert is worked in
+the case it arose in (ADR-146 decision 6).
 """
 
 from __future__ import annotations
@@ -503,46 +504,6 @@ class _Valkey:
         return 1
 
 
-@pytest.mark.parametrize("alert_case", ["inv-other", None])
-def test_an_alert_jump_takes_the_packs_of_its_own_case_not_the_alerts(
-    cases: _Cases, audit: _Audit, monkeypatch: pytest.MonkeyPatch, alert_case: str | None
-) -> None:
-    """The jumper is not authorised against `alert.investigation_id`, and it may be None, so the
-    branch takes the packs of the case the route authorised (ADR-126 decision 1). The alert's own
-    case here carries a different set, which the jump must never read."""
-    cases.seed_case("inv-other", owner=EVE, domains=["stix"], name="Other unit's")
-    cases.seed_case("inv-2", owner=ALICE, domains=["fibo", "niem"], name="The jumper's case")
-    alert = Alert(
-        id="al-1",
-        rule_id="r-1",
-        owner_id="alice",
-        mode=AlertMode.FULL,
-        referent_node_ids=[],
-        investigation_id=alert_case,
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-    )
-
-    async def _no_referents(*args: object, **kwargs: object) -> list[object]:
-        return []
-
-    monkeypatch.setattr(app_module, "fetch_jumpable_referents", _no_referents)
-    client = _as(ALICE, cases, audit)
-    app.dependency_overrides[get_alerts_store] = lambda: _Alerts(alert)
-    app.dependency_overrides[get_graph] = lambda: object()
-    app.dependency_overrides[get_working_set] = lambda: _Delta()
-    app.dependency_overrides[get_history] = lambda: _History()
-    app.dependency_overrides[get_valkey] = lambda: _Valkey()
-    # The jump checks the alert's evidence is whole (ADR-124 Amendment 17): this alert cites no
-    # event, so the analytics store is never read, and a bare stand-in says so if it were.
-    app.dependency_overrides[get_analytics] = lambda: object()
-
-    jumped = client.post("/v1/investigations/inv-2/alerts/al-1/jump")
-
-    assert jumped.status_code == 201, jumped.text
-    assert jumped.json()["investigation"]["domains"] == ["fibo", "niem"]
-    assert cases.asked_domains == [["fibo", "niem"]]
-
-
 # --- the store's read side, without Postgres ---------------------------------------------------
 
 
@@ -661,43 +622,3 @@ def test_every_column_list_on_the_cases_table_carries_domains() -> None:
         assert "domains" in columns, columns
 
 
-@pytest.mark.parametrize(
-    ("parent_domains", "inherited"), [(None, None), ([], []), (["fibo", "niem"], ["fibo", "niem"])]
-)
-def test_an_alert_jump_inherits_the_stored_value_exactly(
-    cases: _Cases,
-    audit: _Audit,
-    monkeypatch: pytest.MonkeyPatch,
-    parent_domains: list[str] | None,
-    inherited: list[str] | None,
-) -> None:
-    """ADR-126 decision 2: a never-chosen case (NULL) gives a never-chosen branch, and a case
-    chosen as POLE (`{}`) gives `{}`. The read-side list is `[]` for both, so inheriting it would
-    turn every branch of an unchosen case into a chosen POLE one."""
-    cases.seed_case("inv-2", owner=ALICE, domains=parent_domains, name="Parent")
-    alert = Alert(
-        id="al-1",
-        rule_id="r-1",
-        owner_id="alice",
-        mode=AlertMode.FULL,
-        referent_node_ids=[],
-        investigation_id=None,
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-    )
-
-    async def _no_referents(*args: object, **kwargs: object) -> list[object]:
-        return []
-
-    monkeypatch.setattr(app_module, "fetch_jumpable_referents", _no_referents)
-    client = _as(ALICE, cases, audit)
-    app.dependency_overrides[get_alerts_store] = lambda: _Alerts(alert)
-    app.dependency_overrides[get_graph] = lambda: object()
-    app.dependency_overrides[get_working_set] = lambda: _Delta()
-    app.dependency_overrides[get_history] = lambda: _History()
-    app.dependency_overrides[get_valkey] = lambda: _Valkey()
-    # The jump checks the alert's evidence is whole (ADR-124 Amendment 17): this alert cites no
-    # event, so the analytics store is never read, and a bare stand-in says so if it were.
-    app.dependency_overrides[get_analytics] = lambda: object()
-
-    assert client.post("/v1/investigations/inv-2/alerts/al-1/jump").status_code == 201
-    assert cases.asked_domains == [inherited]

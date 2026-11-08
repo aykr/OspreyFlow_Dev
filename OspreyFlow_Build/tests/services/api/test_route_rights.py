@@ -158,7 +158,7 @@ ROUTE_RIGHTS = {
     "list_monitors_route": "keep_watches",
     "list_alerts_route": "keep_watches",
     "get_alert_route": "keep_watches",
-    "jump_alert_route": "keep_watches",
+    "open_alert_at_address": "read_alert_queue",
     "paths_route": "investigate",
     "connections_route": "investigate",
     "resolve_now_route": "resolve_entities",

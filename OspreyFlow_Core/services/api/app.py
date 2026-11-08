@@ -195,6 +195,7 @@ from schemas.domain import (
     Alert,
     AlertAssignee,
     AlertAssignInput,
+    AlertAtAddress,
     AlertDispositionInput,
     AlertExplanation,
     AlertKind,
@@ -551,7 +552,6 @@ from .history_labels import (
     EXPANDED,
     LINKS_AMONG,
     NOT_RESTORABLE,
-    OPENED_FROM_ALERT,
     OWNERSHIP,
     REMOVED,
     SEEDED,
@@ -731,6 +731,9 @@ from .rule_sentences import (
     preview_sentence,
     sentence_of,
 )
+from .rules_place import PLACE as RULES_PLACE
+from .rules_place import opens_rules_place
+from .rules_place import refusal as rules_place_refusal
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .run_source import (
     SourceChangedSinceVerifyError,
@@ -875,7 +878,6 @@ from .typology_rules import (
     TypologyRuleStore,
 )
 from .watch_routes import (
-    AlertJumpResult,
     AlertList,
     AlertView,
     CreateHotlistRequest,
@@ -883,8 +885,6 @@ from .watch_routes import (
     HotlistList,
     MonitorList,
     alert_to_view,
-    fetch_jumpable_referents,
-    jumpable_alert,
 )
 from .worker import JobWorker
 from .worker_main import register_all
@@ -1897,6 +1897,19 @@ def require_right(right: Right) -> Any:
 
     _dependency.required_right = right  # type: ignore[attr-defined]
     return _dependency
+
+
+async def require_rules_place(principal: PrincipalDep) -> Principal:
+    """ADR-146 decision 2: Rules and Monitoring's gate, asked by every route of the place beside the
+    right its own action takes (`rules_place.py`), checked after that right (whose refusal names
+    it) and before anything the route reads: 403 `place_required`, so a right that only acts in the
+    place never opens it."""
+    if not opens_rules_place(principal.roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=rules_place_refusal())
+    return principal
+
+
+require_rules_place.required_place = RULES_PLACE  # type: ignore[attr-defined]
 
 
 #: ADR-112: a Studio role's check, read as the right it always meant, so `data_engineer` — which
@@ -5179,7 +5192,10 @@ async def patterns_load_route(
 @app.post(
     "/v1/investigations/{investigation_id}/hotlists",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def create_hotlist_route(
     investigation: InvestigationEditorDep,
@@ -5208,7 +5224,10 @@ async def create_hotlist_route(
 
 @app.get(
     "/v1/investigations/{investigation_id}/hotlists",
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def list_hotlists_route(
     investigation: InvestigationViewerDep,
@@ -5252,7 +5271,10 @@ async def _audience_fixed_handler(request: Request, exc: HotlistAudienceFixed) -
 
 @app.put(
     "/v1/investigations/{investigation_id}/hotlists/{hotlist_id}/audience",
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def set_hotlist_audience_route(
     hotlist_id: str,
@@ -6722,6 +6744,7 @@ async def list_exports_route(
     # until it is merged (ADR-143 Amendment 2 decision 5).
     dependencies=[
         Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
         Depends(refuse_rules_in_a_drawn_case_as_editor),
     ],
 )
@@ -6756,7 +6779,10 @@ async def create_monitor_route(
 
 @app.get(
     "/v1/investigations/{investigation_id}/monitors",
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def list_monitors_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, monitors_store: MonitorsStoreDep
@@ -6766,7 +6792,10 @@ async def list_monitors_route(
 
 @app.get(
     "/v1/investigations/{investigation_id}/alerts",
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def list_alerts_route(
     investigation: InvestigationViewerDep,
@@ -6794,7 +6823,10 @@ async def list_alerts_route(
 
 @app.get(
     "/v1/investigations/{investigation_id}/alerts/{alert_id}",
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(require_rules_place),
+    ],
 )
 async def get_alert_route(
     investigation: InvestigationViewerDep,
@@ -6811,80 +6843,50 @@ async def get_alert_route(
     )
 
 
-@app.post(
-    "/v1/investigations/{investigation_id}/alerts/{alert_id}/jump",
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+@app.get(
+    "/v1/alerts/{alert_id}",
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
 )
-async def jump_alert_route(
-    investigation: InvestigationEditorDep,
+async def open_alert_at_address(
     alert_id: str,
     principal: PrincipalDep,
-    alerts_store: AlertsStoreDep,
-    graph: GraphDep,
     investigations: InvestigationsDep,
-    working_set: WorkingSetDep,
-    history: HistoryDep,
-    audit: AuditDep,
-    valkey: ValkeyDep,
-    datasets: DatasetsDep,
+    graph: GraphDep,
     analytics: AnalyticsDep,
-) -> AlertJumpResult:
-    """`08_ACCEPTANCE_SCENARIOS.md` B14: a case of its own holding the alert's entities, reading the
-    alert's dataset with an empty layer of its own. It records no case it came from (ADR-144
-    Amendment 1; the orchestrator's settlement of L3.2's Q1, 8 November 2026): the audit row names
-    the alert's case, and L2.9 replaces this route with the alert opened as a private view
-    (ADR-146 decision 6)."""
-    alert = await jumpable_alert(
-        alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics,
-        case=investigation.id,
+    alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
+    audit: AuditDep,
+) -> AlertAtAddress:
+    """An alert's own address, `/alerts/<id>` (ADR-146 decision 6), which Home, the canvas, a board,
+    an email and the queue all open: the case it is worked in, and its explanation there, read as
+    `explain_alert` reads it. Refused exactly as an alert that does not exist (404
+    `alert_not_found`, rule 3; ADR-146's test) when the reader may not open that case, when the
+    alert is not in their queue there, or when any of its evidence is hidden from them. The case's
+    level check is made for a missing alert too, on no case, so the reads say nothing either.
+    Replaces the jump's case of its own (ADR-144 Amendment 2 decision 2): the alert is worked in
+    the case it arose in, and its evidence opened there as a private view."""
+    case_id = await alerts_store.case_of(alert_id)
+    try:
+        await investigations.get_authorized(case_id or "", principal, need=AccessLevel.VIEWER)
+    except (InvestigationNotFoundError, InsufficientAccessError):
+        raise AlertNotFoundError(alert_id) from None
+    if case_id is None:
+        raise AlertNotFoundError(alert_id)
+    explanation = await alert_queue.explain(
+        alerts_store, graph, analytics, case_id, alert_id, principal
     )
-    # Before any case is made: an alert whose data is a drawn dataset opens no case reading it.
-    await refuse_copying_a_drawn_dataset(
-        datasets,
-        dataset_id=alert.dataset_id,
-        case_id=None if alert.dataset_id else alert.investigation_id,
-    )
-    # ADR-126: the packs are those of the route's own authorised case, never of
-    # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
-    opened = await investigations.create(
-        principal,
-        name=f"Opened from alert {alert.id}",
-        domains=investigation.domains_to_inherit(),
-    )
-    # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
-    # neither, a dataset of its own.
-    if alert.dataset_id is not None:
-        await datasets.set_for_case(opened.id, [alert.dataset_id], principal, case_name=opened.name)
-    elif alert.investigation_id is not None:
-        # The jumper may hold no level on the alert's case, so the new case reads its dataset and
-        # keeps an empty layer of its own, never that case's (ADR-143 Amendment 1 item 3).
-        await datasets.read_the_same_dataset(
-            alert.investigation_id, opened.id, case_name=opened.name, created_by=principal.id
-        )
-    if not await datasets.ids_of_case(opened.id):
-        own = await datasets.create(principal, opened.name, suffix_if_taken=True)
-        await datasets.set_for_case(opened.id, [own.id], principal, case_name=opened.name)
-    principal = await scope_to_case(principal, opened.id, datasets)
-    nodes = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
-    outcome = await working_set.seed(opened.id, nodes, [], principal)
-    await publish_delta(valkey, opened.id, outcome.delta)
-    await _record_history_step(
-        working_set,
-        history,
-        opened.id,
-        seq=outcome.delta.seq,
-        label=OPENED_FROM_ALERT,
-        principal=principal,
-    )
+    explanation = await _named_explanation(explanation, principal_names)
     await audit.record(
         principal=principal,
-        action="alerts_jump",
-        investigation_id=opened.id,
-        resolved_query={"alert_id": alert.id, "from_investigation_id": alert.investigation_id},
-        result_cardinality=len(nodes),
+        action="open_alert_at_address",
+        investigation_id=case_id,
+        resolved_query={"alert_id": alert_id},
+        result_cardinality=len(explanation.nodes),
     )
-    return AlertJumpResult(investigation=opened, seeded_count=len(nodes))
+    return AlertAtAddress(investigation_id=case_id, explanation=explanation)
 
 
 # --- the pathfinder (Phase 7 Stage 5) -----------------------------------------
@@ -10463,7 +10465,10 @@ async def read_alert_queue(
 
 @app.get(
     "/v1/investigations/{investigation_id}/alert-assignees",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def read_alert_assignees(
     investigation: InvestigationEditorDep,
@@ -10498,7 +10503,10 @@ async def _alert_assignee_ids(
 
 @app.get(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}",
-    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
 )
 async def explain_alert(
     alert_id: str,
@@ -10516,18 +10524,7 @@ async def explain_alert(
     explanation = await alert_queue.explain(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
-    proposer = explanation.alert.close_proposed_by
-    assignee = explanation.alert.assignee
-    people = sorted({p for p in (proposer, assignee) if p})
-    if people:
-        # ADR-106 Amendment 1: the proposer and the assignee by name, asked for those ids alone.
-        names = await principal_names.display_names(people)
-        explanation = explanation.model_copy(
-            update={
-                "close_proposed_by_name": names.get(proposer) if proposer else None,
-                "assignee_name": names.get(assignee) if assignee else None,
-            }
-        )
+    explanation = await _named_explanation(explanation, principal_names)
     await audit.record(
         principal=principal,
         action="explain_alert",
@@ -10536,6 +10533,25 @@ async def explain_alert(
         result_cardinality=len(explanation.nodes),
     )
     return explanation
+
+
+async def _named_explanation(
+    explanation: AlertExplanation, principal_names: PrincipalNameDirectory
+) -> AlertExplanation:
+    """ADR-106 Amendment 1: the proposer and the assignee by name, asked for those ids alone, once
+    the reader has been served the alert."""
+    proposer = explanation.alert.close_proposed_by
+    assignee = explanation.alert.assignee
+    people = sorted({p for p in (proposer, assignee) if p})
+    if not people:
+        return explanation
+    names = await principal_names.display_names(people)
+    return explanation.model_copy(
+        update={
+            "close_proposed_by_name": names.get(proposer) if proposer else None,
+            "assignee_name": names.get(assignee) if assignee else None,
+        }
+    )
 
 
 async def _triage_audit(
@@ -10557,7 +10573,10 @@ async def _triage_audit(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/claim",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def claim_alert(
     alert_id: str,
@@ -10577,7 +10596,10 @@ async def claim_alert(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/release",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def release_alert(
     alert_id: str,
@@ -10597,7 +10619,10 @@ async def release_alert(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/disposition",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def dispose_alert(
     alert_id: str,
@@ -10608,7 +10633,6 @@ async def dispose_alert(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     analytics: AnalyticsDep,
-
     working_set: WorkingSetDep,
 ) -> Alert:
     """Closes the alert with its disposition and reason. A true positive confirms its node
@@ -10631,7 +10655,10 @@ async def dispose_alert(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/approve-close",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def approve_alert_close(
     alert_id: str,
@@ -10641,14 +10668,18 @@ async def approve_alert_close(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     analytics: AnalyticsDep,
-
     working_set: WorkingSetDep,
 ) -> Alert:
     """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
     alert — never the member who proposed it."""
     try:
         alert = await alert_queue.approve_close(
-            alerts_store, graph, analytics, investigation.id, alert_id, principal,
+            alerts_store,
+            graph,
+            analytics,
+            investigation.id,
+            alert_id,
+            principal,
             working_set=working_set,
         )
     except alert_queue.CloseRefused as refused:
@@ -10662,7 +10693,10 @@ async def approve_alert_close(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/send-back",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def send_back_alert_close(
     alert_id: str,
@@ -10694,7 +10728,10 @@ async def send_back_alert_close(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/assign",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def assign_alert(
     alert_id: str,
@@ -10733,7 +10770,10 @@ async def _assignment_refused_handler(
 
 @app.post(
     "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/canvas",
-    dependencies=[Depends(require_right(Right.TRIAGE_ALERTS))],
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def alert_canvas(
     alert_id: str,
@@ -11025,7 +11065,10 @@ async def rarity_route(
 
 @app.get(
     "/v1/investigations/{investigation_id}/rules",
-    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
 )
 async def list_typology_rules(
     investigation: InvestigationViewerDep,
@@ -11052,6 +11095,7 @@ async def list_typology_rules(
     status_code=201,
     dependencies=[
         Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
         Depends(refuse_rules_in_a_drawn_case_as_author),
     ],
 )
@@ -11087,7 +11131,10 @@ async def deploy_typology_rule(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/retire",
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
+    ],
 )
 async def retire_typology_rule(
     rule_id: str,
@@ -11138,6 +11185,7 @@ def _require_rule_author(principal: Principal) -> None:
     "/v1/investigations/{investigation_id}/rules/{rule_id}/approve",
     dependencies=[
         Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
         Depends(refuse_rules_in_a_drawn_case_as_author),
     ],
 )
@@ -11174,7 +11222,10 @@ async def approve_rule_change(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/reject",
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
+    ],
 )
 async def reject_rule_change(
     rule_id: str,
@@ -11202,6 +11253,7 @@ async def reject_rule_change(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/change",
     dependencies=[
         Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
         Depends(refuse_rules_in_a_drawn_case_as_editor),
     ],
 )
@@ -11242,7 +11294,10 @@ async def change_rule_sentence(
 
 @app.get(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/versions",
-    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
 )
 async def read_rule_versions(
     rule_id: str,
@@ -11274,7 +11329,10 @@ async def read_rule_versions(
 
 @app.get(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/runs",
-    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
 )
 async def read_rule_schedule(
     rule_id: str,
@@ -11300,7 +11358,10 @@ async def read_rule_schedule(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/sentence/compile",
-    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+    dependencies=[
+        Depends(require_right(Right.INVESTIGATE)),
+        Depends(require_rules_place),
+    ],
 )
 async def compile_rule_sentence(
     investigation: InvestigationViewerDep,
@@ -11315,7 +11376,10 @@ async def compile_rule_sentence(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/sentence/read",
-    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+    dependencies=[
+        Depends(require_right(Right.INVESTIGATE)),
+        Depends(require_rules_place),
+    ],
 )
 async def read_rule_sentence(
     investigation: InvestigationViewerDep,
@@ -11331,7 +11395,10 @@ async def read_rule_sentence(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/preview",
-    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+    dependencies=[
+        Depends(require_right(Right.INVESTIGATE)),
+        Depends(require_rules_place),
+    ],
 )
 async def preview_rule_sentence(
     investigation: InvestigationViewerDep,
@@ -11397,6 +11464,7 @@ async def preview_rule_sentence(
     status_code=201,
     dependencies=[
         Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
         Depends(refuse_rules_in_a_drawn_case_as_editor),
     ],
 )
@@ -11473,7 +11541,10 @@ async def _compiled_rule(
 
 @app.get(
     "/v1/investigations/{investigation_id}/rules/audit",
-    dependencies=[Depends(require_right(Right.READ_RULE_AUDIT))],
+    dependencies=[
+        Depends(require_right(Right.READ_RULE_AUDIT)),
+        Depends(require_rules_place),
+    ],
 )
 async def read_rule_audit(
     investigation: InvestigationAccessManagerDep,
@@ -11538,7 +11609,11 @@ async def list_held_rows(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
+    dependencies=[
+        Depends(require_right(Right.DECIDE_HELD_ROWS)),
+        Depends(require_rules_place),
+        NoHeldRowsInACompositeCase,
+    ],
 )
 async def release_held_rows_route(
     investigation: InvestigationAuthorDep,
@@ -11674,7 +11749,11 @@ async def release_held_rows_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/held-rows/reject",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
+    dependencies=[
+        Depends(require_right(Right.DECIDE_HELD_ROWS)),
+        Depends(require_rules_place),
+        NoHeldRowsInACompositeCase,
+    ],
 )
 async def reject_held_rows(
     investigation: InvestigationAuthorDep,
@@ -12727,7 +12806,13 @@ async def data_feeds_route(
 # --- screening lists as managed sources (ADR-133 decision 4, stage (c)) --------------------------
 
 
-@app.get("/v1/screening-lists", dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))])
+@app.get(
+    "/v1/screening-lists",
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
+)
 async def list_screening_lists(
     principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
 ) -> ScreeningListsOverview:
@@ -12745,7 +12830,10 @@ async def list_screening_lists(
 
 @app.get(
     "/v1/admin/screening-lists",
-    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+    dependencies=[
+        Depends(require_right(Right.LOAD_SCREENING_LISTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def manage_screening_lists(
     principal: PrincipalDep, screening_lists: ScreeningListsDep, audit: AuditDep
@@ -12764,7 +12852,10 @@ async def manage_screening_lists(
 @app.post(
     "/v1/admin/screening-lists",
     status_code=201,
-    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+    dependencies=[
+        Depends(require_right(Right.LOAD_SCREENING_LISTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def subscribe_screening_list(
     principal: PrincipalDep,
@@ -12789,7 +12880,10 @@ async def subscribe_screening_list(
 
 @app.put(
     "/v1/admin/screening-lists/{list_name}/schedule",
-    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+    dependencies=[
+        Depends(require_right(Right.LOAD_SCREENING_LISTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def set_screening_list_schedule(
     list_name: str,
@@ -12822,7 +12916,10 @@ async def set_screening_list_schedule(
 
 @app.post(
     "/v1/admin/screening-lists/{list_name}/refresh",
-    dependencies=[Depends(require_right(Right.LOAD_SCREENING_LISTS))],
+    dependencies=[
+        Depends(require_right(Right.LOAD_SCREENING_LISTS)),
+        Depends(require_rules_place),
+    ],
 )
 async def refresh_screening_list_route(
     list_name: str,
@@ -13439,7 +13536,13 @@ async def read_pack(
     """The draft as this reader may see it: the items withheld from them are counted, not named."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        packs,
+        pack.id,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
         analytics=analytics,
     )
     served = [i.served() for i in shown]
@@ -13587,7 +13690,13 @@ async def remove_pack_item(
 ) -> None:
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, _ = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        packs,
+        pack.id,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
         analytics=analytics,
     )
     if item_id not in {i.id for i in shown} or not await packs.remove_item(pack.id, item_id):
@@ -13621,7 +13730,13 @@ async def reorder_pack(
     """Only the reader's own items move; each item withheld from them keeps its place."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        packs,
+        pack.id,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
         analytics=analytics,
     )
     if sorted(body.item_ids) != sorted(i.id for i in shown):
@@ -13679,7 +13794,13 @@ async def refresh_pack_item(
     the history (decision 4)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, _ = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        packs,
+        pack.id,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
         analytics=analytics,
     )
     old = next((i for i in shown if i.id == item_id), None)
@@ -13739,8 +13860,14 @@ async def pack_history(
     )
     earlier, in_store = await packs.readable_earlier(pack.id, principal, scheme)
     shown, withheld = await readable(
-        earlier, principal, scheme, graph, investigation.id, alerts=alerts_store,
-        analytics=analytics, withheld_in_store=in_store,
+        earlier,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
+        analytics=analytics,
+        withheld_in_store=in_store,
     )
     return PackHistory(
         earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
@@ -13768,7 +13895,13 @@ async def publish_pack(
     nobody publishes what they cannot read (Amendment 1)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        packs,
+        pack.id,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
         analytics=analytics,
     )
     if withheld:
@@ -13887,8 +14020,14 @@ async def read_published_pack(
         raise HTTPException(status_code=404, detail="this pack has no publication")
     version, items, in_store = found
     shown, withheld = await readable(
-        items, principal, scheme, graph, investigation.id, alerts=alerts_store,
-        analytics=analytics, withheld_in_store=in_store,
+        items,
+        principal,
+        scheme,
+        graph,
+        investigation.id,
+        alerts=alerts_store,
+        analytics=analytics,
+        withheld_in_store=in_store,
     )
     served = [i.served() for i in shown]
     await audit.record(
@@ -14528,9 +14667,7 @@ async def change_dataset_owners_route(
         )
 
     # One transaction: the grants, their history and the audit entry commit or fail together.
-    await investigations.replace_authors(
-        home.investigation_id, owners, by=principal, audit=audited
-    )
+    await investigations.replace_authors(home.investigation_id, owners, by=principal, audit=audited)
     return await admin_dataset_authors_route(dataset_id, request, datasets, investigations)
 
 

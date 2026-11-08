@@ -33,7 +33,8 @@
     "triage_alerts"
    ],
    "places": [
-    "glass"
+    "glass",
+    "rules"
    ],
    "answered_hidden": []
   },
@@ -192,18 +193,14 @@
    "rights": [
     "decide_held_rows"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:deploy_rules": {
    "rights": [
     "deploy_rules"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:draw_on_boards": {
@@ -284,18 +281,14 @@
    "rights": [
     "keep_watches"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:load_screening_lists": {
    "rights": [
     "load_screening_lists"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:manage_dashboards": {
@@ -442,9 +435,7 @@
    "rights": [
     "read_held_rows"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:read_report_feed": {
@@ -469,9 +460,7 @@
    "rights": [
     "read_rule_audit"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:record_assessment": {
@@ -563,10 +552,17 @@
    "rights": [
     "triage_alerts"
    ],
-   "places": [
-    "glass"
-   ],
-   "answered_hidden": []
+   "places": [],
+   "answered_hidden": [
+    "alert_canvas",
+    "approve_alert_close",
+    "assign_alert",
+    "claim_alert",
+    "dispose_alert",
+    "read_alert_assignees",
+    "release_alert",
+    "send_back_alert_close"
+   ]
   },
   "right:verify_pipelines": {
    "rights": [
@@ -583,10 +579,17 @@
     "author_rules",
     "triage_alerts"
    ],
-   "places": [
-    "glass"
-   ],
-   "answered_hidden": []
+   "places": [],
+   "answered_hidden": [
+    "alert_canvas",
+    "approve_alert_close",
+    "assign_alert",
+    "claim_alert",
+    "dispose_alert",
+    "read_alert_assignees",
+    "release_alert",
+    "send_back_alert_close"
+   ]
   },
   "source_approver": {
    "rights": [
@@ -660,6 +663,7 @@
    "places": [
     "glass",
     "ingest",
+    "rules",
     "admin"
    ],
    "answered_hidden": []

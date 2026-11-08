@@ -150,7 +150,6 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/monitors"): V,
     ("GET", P + "/alerts"): V,
     ("GET", P + "/alerts/{alert_id}"): V,
-    ("POST", P + "/alerts/{alert_id}/jump"): E,
     # ADR-099 Amendment 3: the Ingest Studio's recipes and source files are the dataset's.
     ("GET", P + "/ingest/source-files"): V,
     ("POST", P + "/ingest/source-files"): E,
