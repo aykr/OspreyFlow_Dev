@@ -549,6 +549,10 @@ async def _pending(stores: dict[str, Any], *old_links: str) -> list[tuple[str, s
     return sorted(pairs)
 
 
+#: Seconds a concurrent settle may take before its test fails rather than stalls the run.
+SETTLE_TIMEOUT = 90
+
+
 async def _plant_record(stores: dict[str, Any], links: dict[str, str], *, recorded_at: Any = None) -> str:
     """A record as `AlertStore.repointing` writes one."""
     from datetime import UTC, datetime
@@ -620,6 +624,50 @@ async def test_a_graph_failure_leaves_every_alert_on_the_live_link(
         # The writer never drops its record (its commit might yet land): it waits, unapplied, for
         # the stale threshold, and changes nothing while the old link is live.
         assert await _listed(stores, graph, analytics, case, SECRET_LOADER) == sorted([first.id, second.id])
+        for queued in await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER):
+            assert queued.alert.edge_ids == [link]
+
+
+async def test_a_close_refused_whole_before_its_commit_leaves_no_record(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A true positive whose link the graph refuses inside the close's transaction (a stand-in for
+    L1.2d's `ports.graph.AmbiguousLinkId`, raised by `supersede_edge`), after the close's node was
+    confirmed and recorded: the close is refused whole, rolled back before any commit was sent, so
+    its record is closed with it, none left waiting for the stale threshold; both alerts still cite
+    the live link. Red with the record settled as for a commit reported failed: the record, holding
+    the node's pair, was left."""
+    from datetime import UTC, datetime
+
+    class Refused(LookupError):
+        """Studio's `AmbiguousLinkId`, until L1.2d is in this branch."""
+
+    case = f"case-{new_id()}"
+    started = datetime.now(UTC)
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+        node_supersedes: list[str] = []
+        supersede_node = graph.supersede_node
+
+        async def counted(node_id: str, replacement: Any, tx: Any) -> str:
+            node_supersedes.append(node_id)
+            return await supersede_node(node_id, replacement, tx)
+
+        async def refuses(*_a: Any, **_k: Any) -> str:
+            raise Refused("that link id names more than one stored link")
+
+        monkeypatch.setattr(graph, "supersede_node", counted)
+        monkeypatch.setattr(graph, "supersede_edge", refuses)
+        with pytest.raises(Refused):
+            await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                      disposition="true_positive", reason="matches")  # fmt: skip
+        monkeypatch.undo()
+        assert node_supersedes, "the close confirmed its node (a pair recorded) before the refusal"
+        async with stores["alerts"]._pool.acquire() as conn:
+            left = await conn.fetchval(
+                "SELECT count(*) FROM alert_repoint_records WHERE recorded_at >= $1", started
+            )
+        assert left == 0
         for queued in await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER):
             assert queued.alert.edge_ids == [link]
 
@@ -1346,19 +1394,45 @@ async def test_two_settles_of_one_record_at_once_leave_one_live_alert_node(
 ) -> None:
     """Round 3, item 3: two reads settle the same record at once. The record is settled under a lock
     (a settle another holds is skipped), so its re-mark runs once: one live revision of the alert's
-    node, the alert naming it. Red with no lock: both re-marked, two live Alert revisions (or the
-    second refused after its graph commit)."""
+    node, the alert naming it. Red with the lock released as soon as it is taken (the settles
+    overlapping, neither waiting on the other): both re-marked, two live Alert revisions. A hang
+    fails at `SETTLE_TIMEOUT` rather than stalling the run."""
     import asyncio
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         alert, old, raised = await _link_above_node(stores, graph, analytics, case, "LK")
         await _plant_record(stores, {old: raised})
-        await asyncio.gather(*(stores["alerts"].settle_pending(graph) for _ in range(4)))
-        await stores["alerts"].settle_pending(graph)
+        await asyncio.wait_for(
+            asyncio.gather(*(stores["alerts"].settle_pending(graph) for _ in range(4))), SETTLE_TIMEOUT
+        )
+        await asyncio.wait_for(stores["alerts"].settle_pending(graph), SETTLE_TIMEOUT)
         live = await _live_alert_nodes(graph, alert.id, alert.rule_id.removeprefix("typology:"))
         (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
         assert live == [row.alert_node_id], f"one live revision, named by the alert: {live}"
+
+
+async def test_more_records_settled_at_once_than_the_store_holds_connections_all_finish(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 3, item 3, found by the hang of its first red: a settle holds its record's lock while
+    its steps take connections from the store's pool. Six reads settling six records at once each
+    hold a lock and finish, every alert moved to its link's newest revision, within
+    `SETTLE_TIMEOUT`. Red with the locks drawn from the store's own pool (four connections): four
+    settles each held one for a lock and waited for another, for ever, so the run timed out."""
+    import asyncio
+
+    cases = [f"case-{new_id()}" for _ in range(6)]
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        moved = [await _link_above_node(stores, graph, analytics, case, f"MR{i}") for i, case in enumerate(cases)]
+        for _, old, raised in moved:
+            await _plant_record(stores, {old: raised})
+        await asyncio.wait_for(
+            asyncio.gather(*(stores["alerts"].settle_pending(graph) for _ in range(6))), SETTLE_TIMEOUT
+        )
+        for case, (alert, _, raised) in zip(cases, moved, strict=True):
+            (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+            assert row.edge_ids == [raised]
 
 
 async def test_a_record_follows_what_the_graph_committed_not_what_it_recorded(

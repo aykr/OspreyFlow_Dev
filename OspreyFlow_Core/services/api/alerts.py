@@ -377,6 +377,15 @@ class LinkRepoint:
         self.pairs: dict[str, str] = {}
         self.nodes: dict[str, str] = {}
         self.remarked_nodes: list[str] = []
+        #: Set by `never_committed`: the write was rolled back before its commit was sent.
+        self.abandoned = False
+
+    def never_committed(self) -> None:
+        """Said by the writer as it rolls back a write whose commit it never sent (a close refused
+        whole, `ports.graph.AmbiguousLinkId`): nothing it recorded can land, so leaving the
+        repointing closes the record. Never said once `commit_transaction` has been called, since
+        a commit reported failed can still land (B3)."""
+        self.abandoned = True
 
     async def record(self, old: str, new: str) -> None:
         await self._store._add_to_record(self.id, links=[(old, new)])
@@ -415,8 +424,14 @@ def _pairs(raw: Any) -> list[tuple[str, str]]:
 
 
 class AlertStore:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, lock_pool: asyncpg.Pool) -> None:
         self._pool = pool
+        #: The repoint records' advisory locks are held on these connections, never the store's own
+        #: pool: a settle holds its lock while its steps take connections from `_pool`, so locks
+        #: drawn from `_pool` itself would let as many concurrent settles as it holds connections
+        #: each wait for another, for ever (found when four reads settled at once). A settle waiting
+        #: here holds nothing in `_pool`, so the two pools can never wait on each other.
+        self._lock_pool = lock_pool
         #: Where each written alert is kept for alert trends (ADR-134 decision 3): the analytics
         #: store's `load_alert_facts`, attached by `build_run_resources`. `None` keeps nothing.
         self.fact_sink: FactSink | None = None
@@ -429,15 +444,18 @@ class AlertStore:
         # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
         # reasoning (the Stage 6c connection-ceiling finding).
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
+        # Two at most, opened only when a record is settled (`_settle_record`).
+        lock_pool = await asyncpg.create_pool(dsn=dsn, min_size=0, max_size=2)
         async with pool.acquire() as conn:
             # The queue's scope reads a hotlist's audience (`_SHARED_SQL`), so the table it reads
             # exists whichever store connects first — made by the hotlist store's own statement,
             # never a second copy of it.
             await conn.execute(_HOTLISTS_BOOTSTRAP_SQL)
             await conn.execute(_BOOTSTRAP_SQL)
-        return cls(pool)
+        return cls(pool, lock_pool)
 
     async def close(self) -> None:
+        await self._lock_pool.close()
         await self._pool.close()
 
     async def publish_facts(self, alert_ids: Sequence[str]) -> None:
@@ -677,8 +695,13 @@ class AlertStore:
         `old → new` once the graph has returned it and before the commit. Left normally, the
         record is settled. Left by an exception (an `Exception`: a cancellation stays one, and its
         record waits for the next settle), it is settled too, applied if the graph shows the write
-        committed, else left; the writer never drops a record, since a commit can land after any
-        check of it. Only the stale threshold drops one (`settle_pending`)."""
+        committed, else left; the writer never drops a record holding a pair once it has sent the
+        write's commit, since a commit can land after any check of it. Only the stale threshold drops one (`settle_pending`). A record
+        left empty is closed by its writer on either path: each pair is recorded before the write's
+        commit, so a write that recorded nothing never reached its commit (a close refused whole,
+        `ports.graph.AmbiguousLinkId`, leaves no record), as is one whose writer rolled back before
+        sending its commit (`LinkRepoint.never_committed`). A settle failing on the exception path
+        is logged, never raised in place of the write's own exception; the record waits."""
         record_id = new_id()
         async with self._pool.acquire() as conn:
             await conn.execute("INSERT INTO alert_repoint_records (id) VALUES ($1)", record_id)
@@ -686,7 +709,13 @@ class AlertStore:
         try:
             yield repoint
         except Exception:
-            await self._settle_record(graph, record_id)
+            try:
+                if repoint.abandoned:
+                    await self._close_record(record_id)
+                else:
+                    await self._settle_record(graph, record_id, writer=True)
+            except Exception:  # noqa: BLE001 - the write's own exception is the one raised
+                _log.exception("repoint record %s left for a later settle", record_id)
             raise
         repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
 
@@ -790,12 +819,12 @@ class AlertStore:
         moved to it; the alerts naming a recorded node renamed to its newest; the moved alerts'
         nodes re-marked (each supersede recorded first); then the record marked applied with the
         nodes to purge. Returns those nodes; `None` while the write has not committed."""
-        # A session-level advisory lock, held on its own pooled connection across the whole settle
+        # A session-level advisory lock, held on a `_lock_pool` connection across the whole settle
         # and released in `finally`; should the release fail, that connection is closed, not
         # returned to the pool holding it, and the server frees a session lock when its connection
         # ends, so a crashed settle never holds one for good. `hashtext` can map two ids to one key:
         # harmless, since a collision only makes a reader skip a record, which a later read settles.
-        async with self._pool.acquire() as lock:
+        async with self._lock_pool.acquire() as lock:
             if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
                 return None
             try:
