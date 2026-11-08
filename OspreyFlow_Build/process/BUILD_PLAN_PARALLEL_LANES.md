@@ -232,6 +232,14 @@ orchestrator ends that session's process itself and opens a fresh one on the lan
 brief (`lanes_launch.sh open <lane>`). A fresh session carries the brief and the reports, not a long
 history, so it costs fewer tokens.
 
+**Speed-ups (the owner's ruling, 8 November 2026, evening).** (1) Lanes never stop on a question: they
+build the recommended option and log it under "Decisions taken" in REPORT.md; only a question that would
+loosen access, admit real data or contradict an accepted ADR stops the piece it touches. (2) A step's
+`packages/schemas` change rides with the step (merge order 2 applies only when another lane needs the change
+first). (3) Two review rounds, the lane's own and the orchestrator's independent one, only for a step that
+touches access control, credentials or the data model; any other step gets the lane's own review and the
+orchestrator's check of its diff. (4) Ready-to-merge once, at the end of a step.
+
 **Ratified changes (the owner's ruling, 7 November 2026, "Ratify if needed").** A change outside a lane's
 map that the brief's work needs is ratified by the orchestrator at review when the lane-reviewer finds
 no conflict with another lane's work, and is recorded in the merge's friction row. Shared files

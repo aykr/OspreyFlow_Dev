@@ -7,9 +7,16 @@ Your brief is process/lanes/<lane>/BRIEF.md (or the text I paste below). Read th
 sections it names. Change only the files your lane owns; anything else is a request to the orchestrator,
 in your report. Do only the brief's step; do not start the next.
 
-Before changing code, write me a short plan: the files you will touch, the tests you will write first
-(rules 1, 4, 12, 13), and any question as multiple choice (at most four, recommendation first). Wait if
-you asked one; otherwise proceed.
+Before changing code, write a short plan: the files you will touch and the tests you will write first
+(rules 1, 4, 12, 13). **Never stop on a question** (the owner, 8 November 2026): take your recommended
+option, build it, and log it in REPORT.md under "Decisions taken" (the question, the options, what you
+chose and why), so the owner can overrule it afterwards. Only three kinds of question stop the piece they
+touch, and go to the orchestrator first: one that would loosen access control (rules 3 and 4), one that
+would admit real data (rule 9), and one that would contradict an accepted ADR. Even then, carry on with
+everything the question does not block.
+
+A `packages/schemas` change rides with your step, in its own commit at the head of the branch, unless the
+orchestrator has said another lane needs it first. Report ready-to-merge once, at the end of the step.
 
 The test stacks are shared: take one with OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>"
 (it gives you stack a or b, whichever is free, and prints the export line for its ports: pin exactly
