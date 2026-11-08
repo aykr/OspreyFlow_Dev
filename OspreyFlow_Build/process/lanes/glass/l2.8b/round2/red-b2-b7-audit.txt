@@ -1,0 +1,24 @@
+lease glass; 2026-11-08T01:48:34Z; red at bd9143e: audit entries about an alert checked by the ids they named
+diff --git a/OspreyFlow_Core/services/api/rule_holds.py b/OspreyFlow_Core/services/api/rule_holds.py
+index b30fdaa..e317821 100644
+--- a/OspreyFlow_Core/services/api/rule_holds.py
++++ b/OspreyFlow_Core/services/api/rule_holds.py
+@@ -73,7 +73,7 @@ async def readable_rule_audit(
+     current = await alerts.cited_by_ids(about)
+ 
+     def cites(entry: RuleAuditEntry) -> tuple[list[str], list[str], list[str]] | None:
+-        if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
++        if False and entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
+             alert = current.get(str(entry.detail["alert_id"]))
+             if alert is None:
+                 return None
+>           assert all(e.detail.get("alert_id") != raised.id for e in page.entries)
+E           assert False
+E            +  where False = all(<generator object test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert.<locals>.<genexpr> at 0x127e65ee0>)
+>           assert [e.detail["alert_id"] for e in page.entries if e.action == "rule_fired"] == [alert.id]
+E           AssertionError: assert [] == ['01M6WDFZNDK0HMSRP8NW6Z7N22']
+E             Right contains one more item: '01M6WDFZNDK0HMSRP8NW6Z7N22'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor
+2 failed, 26 deselected in 12.18s

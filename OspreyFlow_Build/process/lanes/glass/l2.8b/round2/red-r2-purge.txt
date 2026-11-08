@@ -1,0 +1,18 @@
+lease glass; 2026-11-08T01:48:25Z; red at bd9143e: the working-set read's purge left out
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index cbb170a..b365bcf 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -1267,6 +1267,7 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
+     working sets) leave every working set that stored a copy at the old marking
+     (`WorkingSetService.remove_reverted`), and their records are closed (ADR-109 Amendment 10;
+     L2.8b's R2). A stored copy is served from the store, not read again from the graph."""
++    return  # red: no purge
+     async with alerts._pool.acquire() as conn:
+         rows = await conn.fetch(
+             "SELECT id, purge FROM alert_repoint_writes WHERE applied AND purge <> '[]'::jsonb"
+>           assert alert.alert_node_id not in await working.node_ids(case)
+E           AssertionError: assert '01M6WDFJDX4Y9J6VWCP5M7ESJK' not in {'01M6WDFJA8G41QMYYABE3W7BN6', '01M6WDFJASY1C58HD5QV7N3VKV', '01M6WDFJDX4Y9J6VWCP5M7ESJK'}
+E            +  where '01M6WDFJDX4Y9J6VWCP5M7ESJK' = Alert(id='01M6WDFJH3YNBQEHRRYCKYSGE1', rule_id='typology:01M6WDFJ5D4RRR358BXQ9FP7T4', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read
+1 failed, 27 deselected in 8.43s

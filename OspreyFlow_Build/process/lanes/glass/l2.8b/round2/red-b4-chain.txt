@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T01:47:50Z; red at bd9143e: one-level renames, no successor followed
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index cbb170a..671bc95 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -804,7 +804,7 @@ class AlertStore:
+                 return None  # the write has not committed (or never will: the stale threshold)
+         finals: dict[str, str] = {}
+         for old, new in links.items():
+-            newest = await self._newest(graph, new)
++            newest = new  # red: one level
+             if newest is None:
+                 return None
+             finals[old] = newest
+>           assert alert.id in listed and listed[alert.id].edge_ids == [second.edge.id]
+E           AssertionError: assert ('01M6WDEH7JVT82SZ3SXSJDRSQ5' in {})
+E            +  where '01M6WDEH7JVT82SZ3SXSJDRSQ5' = Alert(id='01M6WDEH7JVT82SZ3SXSJDRSQ5', rule_id='typology:01M6WDEGVY2HWYFGSTTF06384T', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision
+1 failed, 27 deselected in 8.77s

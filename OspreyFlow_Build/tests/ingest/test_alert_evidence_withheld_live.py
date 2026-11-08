@@ -600,8 +600,9 @@ async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
 async def test_a_graph_failure_leaves_every_alert_on_the_live_link(
     stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The other side: the graph's commit fails, so the match was never superseded. The record is
-    dropped (the old link is live), and both alerts still cite it and are listed."""
+    """The other side: the graph's commit fails, so the match was never superseded. The record
+    waits, unapplied (the writer never drops one; only the stale threshold does), and both alerts
+    still cite the live link and are listed."""
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
@@ -616,7 +617,8 @@ async def test_a_graph_failure_leaves_every_alert_on_the_live_link(
             await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
                                       disposition="true_positive", reason="matches")  # fmt: skip
         monkeypatch.undo()
-        assert await _pending(stores, link) == []
+        # The writer never drops its record (its commit might yet land): it waits, unapplied, for
+        # the stale threshold, and changes nothing while the old link is live.
         assert await _listed(stores, graph, analytics, case, SECRET_LOADER) == sorted([first.id, second.id])
         for queued in await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER):
             assert queued.alert.edge_ids == [link]

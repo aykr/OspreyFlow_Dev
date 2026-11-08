@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T01:48:09Z; red at bd9143e: the close not recording its Alert node's rename
+diff --git a/OspreyFlow_Core/services/api/alert_queue.py b/OspreyFlow_Core/services/api/alert_queue.py
+index b648d72..1becfd5 100644
+--- a/OspreyFlow_Core/services/api/alert_queue.py
++++ b/OspreyFlow_Core/services/api/alert_queue.py
+@@ -481,7 +481,7 @@ async def _close(
+                         confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
+                         # The alert's own node is renamed in the same record, so a triage refused
+                         # after the commit cannot leave it naming a superseded node (B6).
+-                        await repoint.record_node(node.id, confirmed_node)
++                        pass  # red: the node rename not recorded
+                     for e in matches:
+                         await repoint.record(e.id, await confirm_edge(graph, e, member, tx=tx))
+                 except Exception:
+>           assert row.alert_node_id != petrov.alert_node_id, "the alert names its confirmed node"
+E           AssertionError: the alert names its confirmed node
+E           assert '01M6WDF9Q04FK973WQ5ESPGCRT' != '01M6WDF9Q04FK973WQ5ESPGCRT'
+E            +  where '01M6WDF9Q04FK973WQ5ESPGCRT' = Alert(id='01M6WDFA3D7TD8D33Z85373KMP', rule_id='typology:01M6WDEYA1FR1867XXDXY91FCQ', owner_id='kyc-officer', mode=<Al...e_proposed_at=datetime.datetime(2026, 11, 8, 1, 48, 24, 25685, tzinfo=datetime.timezone.utc), severity=None, team=None).alert_
+E            +  and   '01M6WDF9Q04FK973WQ5ESPGCRT' = Alert(id='01M6WDFA3D7TD8D33Z85373KMP', rule_id='typology:01M6WDEYA1FR1867XXDXY91FCQ', owner_id='kyc-officer', mode=<Al...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+1 failed, 14 deselected in 14.58s

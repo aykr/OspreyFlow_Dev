@@ -1,0 +1,10 @@
+lease glass; 2026-11-08T02:03:01Z; green re-run after the fakes model stored_link_states and my red runs' 5 journal rows are removed
+>           assert row.edge_ids == [result.edge.id] != [link_id]
+E           AssertionError: assert ['e-01M6WECY9...Z20523CGNN5W'] == ['01M6WECYA8HXXB2MN51WKJQB04']
+E             At index 0 diff: 'e-01M6WECY9WTT3YZ20523CGNN5W' != '01M6WECYA8HXXB2MN51WKJQB04'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_citing_a_changed_link_follows_it_to_its_successor
+1 failed, 27 passed in 136.23s (0:02:16)
+76 passed in 1.82s
+1 passed, 1 warning in 8.34s
+end 2026-11-08T02:05:29Z
