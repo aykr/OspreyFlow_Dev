@@ -975,8 +975,9 @@ by dragging it, or by keyboard: **Choose** on the column, then **Bind ‹column�
 
 **Building chapter 4's pipeline from scratch** (ADR-140 Amendment 10, 8 November 2026).
 The seeded draft above stays the demo's path: building the map takes about eighty bindings, far too
-long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training,
-and it ends exactly where the seeded draft starts. `keyboard/ingest-studio.spec.ts` walks these steps
+long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training.
+It makes the seeded draft's map, but not its pipeline: a new pipeline has no domain-model step, so its
+Deploy pins no pack where the seeded draft pins NIEM v3 (Amendment 10 records the difference). `keyboard/ingest-studio.spec.ts` walks these steps
 by keys alone and checks the saved map equals `pid_intel_reports_recipe.yaml`'s; they were walked
 live on 8 November (`apps/workspace/live/studio-reports-walk.spec.ts`, Amendment 10 has the figures).
 1. On the **2 Sources** tab, **Register a source**, **Next**, choose `pid_intel_reports.csv` under
@@ -995,7 +996,10 @@ live on 8 November (`apps/workspace/live/studio-reports-walk.spec.ts`, Amendment
    **Save** and **Close the drawer**.
 4. **Map: Map**, then **Open map editor**. Add each of the map's eleven entities with **+ entity**, in
    the committed file's order: the report (`Document`), three areas (`Location`), three prisoners and
-   three outside people (`Person`), and the number (`Endpoint`). For each:
+   three outside people (`Person`), and the number (`Endpoint`). Each entity's ref, its match-on and the
+   column each property takes are `pid_intel_reports_recipe.yaml`'s `row_template`: for instance the
+   report's `message_id` takes `report_ref`, `sent_at` takes `submitted_at` and `document_kind` takes
+   `category`, and the number's `value_raw` takes `phone_mentioned`. For each:
    - set **Entity ref**, **POLE class**, **Entity type** and **Match on**, then *reference existing*;
    - add each property under **Add a property** and bind its column (**Choose** the column, then
      **Bind ‹column› here**). The number's `value_normalised` and `e164` take the `msisdn` **Transform**,
