@@ -196,7 +196,7 @@ test("Ctrl+Shift+Arrow reaches a node arrow-walk cannot, and Space pairs the two
   await page.keyboard.press(" ");
 
   // 3. A two-node selection over two nodes that share no edge — the thing that had no keyboard
-  //    route at all before this branch existed.
+  //    route at all before this case existed.
   const selection = await page.evaluate(() => window.__KEYBOARD__?.selection);
   expect(new Set(selection)).toEqual(new Set(["n0", "n5"]));
 
@@ -385,7 +385,7 @@ test("an expansion leaves the view and the settled nodes where they were (ADR-06
 test("Ctrl+ArrowRight cycles the focused node forward through an existing ring", async ({
   page,
 }) => {
-  // This is the ring-cycling branch itself (`onKeyDown`'s "ctrlKey/metaKey + ArrowRight/Left &&
+  // This is the ring-cycling case itself (`onKeyDown`'s "ctrlKey/metaKey + ArrowRight/Left &&
   // selected.size > 0"), moved off Tab in Phase 7 Stage 4 once Tab itself was freed to leave the
   // canvas natively (see this file's own header comment).
   await page.goto("/keyboard/harness.html");
@@ -594,14 +594,14 @@ test("the radial list reaches Explain cluster, and the explanation actually rend
   await canvas.focus(); // establishes n0
   await page.keyboard.press("ArrowRight"); // focus n1
   await page.keyboard.press("ArrowLeft"); // focus n2 — n1's *last* neighbour
-  // (`onKeyDown`'s `ArrowLeft`/`ArrowUp` branch picks `neighbours[neighbours.length - 1]`; n1's
+  // (`onKeyDown`'s `ArrowLeft`/`ArrowUp` case picks `neighbours[neighbours.length - 1]`; n1's
   // own neighbour order is `[n0, n2]`, edge-insertion order, so `ArrowRight`'s `neighbours[0]`
   // would walk back to n0 instead).
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__?.focused))
     .toBe("n2");
-  registerCovered("CANVAS_ACTIONS", "arrow-walk-backward"); // the `ArrowLeft`/`ArrowUp` branch itself, distinct from
-  // `arrow-walk-forward`'s own `ArrowRight`/`ArrowDown` branch above
+  registerCovered("CANVAS_ACTIONS", "arrow-walk-backward"); // the `ArrowLeft`/`ArrowUp` case itself, distinct from
+  // `arrow-walk-forward`'s own `ArrowRight`/`ArrowDown` case above
 
   await page.keyboard.press("\\"); // opens the list menu on n2, the focused node
   const menu = page.locator(".radial-menu__list[role='menu']");
@@ -1099,48 +1099,55 @@ test("Clear view asks first, and clears only after Enter on the confirmation", a
   registerCovered("CANVAS_ACTIONS", "clear-view-by-keyboard");
 });
 
-test("Branch selected sends the selected nodes to a new case, by keyboard, and says which", async ({
+test("Save as a view saves the selected nodes as a private view of the case, by keyboard, and says which", async ({
   page,
 }) => {
   await page.goto("/keyboard/harness.html");
-  let body: unknown = null;
-  await page.route("**/*/investigations/*/branch", async (route) => {
+  let body: { name?: string; node_ids?: string[]; layout?: Record<string, unknown> } | null = null;
+  await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-1", name: "Keyboard fixture · 1 selected" }),
+      body: JSON.stringify({ id: "view-1", case_id: "keyboard-fixture", name: "Selection of 1 node", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus(); // n0 selected
-  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
+  await page.keyboard.press("Enter");
+  // The form takes focus on its name, offered as how many nodes it holds; Enter saves.
+  await expect(page.getByLabel("View name")).toBeFocused();
+  await expect(page.getByLabel("View name")).toHaveValue("Selection of 1 node");
   await page.keyboard.press("Enter");
 
-  await expect.poll(() => body).toEqual({ node_ids: ["n0"] });
+  await expect.poll(() => body).not.toBeNull();
+  expect(body!.name).toBe("Selection of 1 node");
+  expect(body!.node_ids).toEqual(["n0"]);
+  expect(Object.keys(body!.layout ?? {})).toEqual(["n0"]);
   await expect
     .poll(() =>
       page.evaluate(
         () =>
-          (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
-            ?.branchedTo,
+          (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
+            ?.savedView,
       ),
     )
-    .toBe("branch-1");
-  registerCovered("CANVAS_ACTIONS", "branch-selected-opens-a-new-tab");
+    .toBe("view-1");
+  registerCovered("CANVAS_ACTIONS", "save-selected-as-a-view-from-the-selection-bar");
 });
 
-test("a selected node's own menu offers Branch selected for the whole selection (ADR-084 Amendment 1)", async ({
+test("a selected node's own menu offers Save selected as a view for the whole selection (ADR-144 decision 4)", async ({
   page,
 }) => {
   await page.goto("/keyboard/harness.html");
-  let body: unknown = null;
-  await page.route("**/*/investigations/*/branch", async (route) => {
+  let body: { node_ids: string[] } | null = null;
+  await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-2", name: "Keyboard fixture · 2 selected" }),
+      body: JSON.stringify({ id: "view-2", case_id: "keyboard-fixture", name: "Selection of 2 nodes", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
@@ -1149,13 +1156,16 @@ test("a selected node's own menu offers Branch selected for the whole selection 
   await page.keyboard.press("Space"); // add it to the selection: two selected, the focused one among them
   await expect.poll(() => page.evaluate(() => window.__KEYBOARD__?.selection?.length)).toBe(2);
   await page.keyboard.press("\\");
-  const item = page.getByRole("menuitem", { name: /^Branch selected \(2\)/ });
+  const item = page.getByRole("menuitem", { name: /^Save selected \(2\) as a view/ });
   await expect(item).toBeVisible();
   await item.focus();
   await page.keyboard.press("Enter");
-  await expect.poll(() => body).toEqual({ node_ids: expect.arrayContaining(["n0"]) });
-  expect((body as { node_ids: string[] }).node_ids).toHaveLength(2);
-  registerCovered("CANVAS_ACTIONS", "branch-selected-from-a-selected-nodes-menu");
+  await expect(page.getByLabel("View name")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => body).not.toBeNull();
+  expect(body!.node_ids).toEqual(expect.arrayContaining(["n0"]));
+  expect(body!.node_ids).toHaveLength(2);
+  registerCovered("CANVAS_ACTIONS", "save-selected-as-a-view-from-a-selected-nodes-menu");
 });
 
 // --- Select what is lit (ADR-128 decision 2, B3) ----------------------------------------------
@@ -1163,7 +1173,7 @@ test("a selected node's own menu offers Branch selected for the whole selection 
 // `harness.tsx?fixture=lit` puts the real timeline under the chain n0—n1—n2—n3—n4. The spec answers
 // the timeline's two reads: the density strip, and which links have an event in the window (e0 and
 // e1 do; e2 and e3 have none, as an undated link has none). Every step is a key: the window by Set
-// exact dates, the selection by Select what is lit, the branch by Branch selected.
+// exact dates, the selection by Select what is lit, the view by Save as a view.
 
 const LIT_HISTOGRAM = {
   bucketing: "fixed_interval",
@@ -1215,17 +1225,17 @@ async function selectWhatIsLitByKeyboard(page: Page): Promise<void> {
 
 const LIT_LINKS = { e0: "2026-02-01T10:00:00Z", e1: "2026-03-01T10:00:00Z" };
 
-test("Set exact dates, Select what is lit, then Branch selected opens a tab holding the lit slice", async ({
+test("Set exact dates, Select what is lit, then Save as a view keeps the lit slice and its window", async ({
   page,
 }) => {
   await stubTheTimelineReads(page, LIT_LINKS);
   let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
-  await page.route("**/*/investigations/*/branch", async (route) => {
+  await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-lit-1", name: "5 Jan – 1 May 2026, selected" }),
+      body: JSON.stringify({ id: "view-lit-1", case_id: "keyboard-fixture", name: "5 Jan – 1 May 2026, selected", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=lit");
@@ -1244,7 +1254,10 @@ test("Set exact dates, Select what is lit, then Branch selected opens a tab hold
   await expect(page.getByRole("toolbar", { name: "Selection" })).toContainText("Lit in 5 Jan – 1 May 2026");
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
-  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
+  await page.keyboard.press("Enter");
+  // Offered under the window's name.
+  await expect(page.getByLabel("View name")).toHaveValue("5 Jan – 1 May 2026, selected");
   await page.keyboard.press("Enter");
 
   await expect.poll(() => body).not.toBeNull();
@@ -1258,12 +1271,12 @@ test("Set exact dates, Select what is lit, then Branch selected opens a tab hold
     .poll(() =>
       page.evaluate(
         () =>
-          (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
-            ?.branchedTo,
+          (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
+            ?.savedView,
       ),
     )
-    .toBe("branch-lit-1");
-  registerCovered("CANVAS_ACTIONS", "select-what-is-lit-then-branch-selected-by-keyboard");
+    .toBe("view-lit-1");
+  registerCovered("CANVAS_ACTIONS", "select-what-is-lit-then-save-as-a-view-by-keyboard");
 });
 
 test("Undo select what is lit gives back the selection that was there before, once", async ({ page }) => {
@@ -1299,15 +1312,15 @@ test("a window that lights nothing says so and leaves the selection as it was", 
   expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
 });
 
-test("a window changed after Select what is lit is not sent: the branch is a plain one", async ({ page }) => {
+test("a window changed after Select what is lit names the view plainly and keeps the window now", async ({ page }) => {
   await stubTheTimelineReads(page, LIT_LINKS);
   let body: { node_ids: string[]; name?: string; window?: unknown } | null = null;
-  await page.route("**/*/investigations/*/branch", async (route) => {
+  await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-lit-2", name: "Branch" }),
+      body: JSON.stringify({ id: "view-lit-2", case_id: "keyboard-fixture", name: "Selection of 3 nodes", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=lit");
@@ -1323,35 +1336,36 @@ test("a window changed after Select what is lit is not sent: the branch is a pla
   await page.keyboard.press("Tab");
 
   await page.getByRole("application", { name: "Network canvas" }).focus();
-  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("View name")).toHaveValue("Selection of 3 nodes");
   await page.keyboard.press("Enter");
 
   await expect.poll(() => body).not.toBeNull();
   expect(body!.node_ids.slice().sort()).toEqual(["n0", "n1", "n2"]);
-  expect(body!.window).toBeUndefined();
-  expect(body!.name).toBeUndefined();
+  expect(body!.name).toBe("Selection of 3 nodes");
+  expect(body!.window).toEqual({ valid_from: "2026-01-05T00:00:00Z", valid_to: "2026-04-01T00:00:00Z" });
 });
 
-test("Branch selected says so when nothing could be branched, and opens no tab", async ({ page }) => {
+test("Save as a view says a refusal on the form, and saves nothing", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
-  await page.route("**/*/investigations/*/branch", async (route) => {
-    await route.fulfill({
-      status: 422,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "nothing_to_branch" }),
-    });
+  await page.route("**/*/investigations/*/views", async (route) => {
+    await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ detail: "forbidden" }) });
   });
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
-  await tabTo(page, page.getByRole("button", { name: "Branch to a new case" }));
+  await tabTo(page, page.getByRole("button", { name: "Save as a view" }));
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("dialog")).toContainText("None of the selected nodes could be branched.");
+  await expect(page.getByRole("dialog", { name: "Save as a view" })).toContainText(
+    "Saving a view needs the right to work this case.",
+  );
   expect(
     await page.evaluate(
       () =>
-        (window as unknown as { __KEYBOARD__?: { branchedTo?: string | null } }).__KEYBOARD__
-          ?.branchedTo,
+        (window as unknown as { __KEYBOARD__?: { savedView?: string | null } }).__KEYBOARD__
+            ?.savedView,
     ),
   ).toBeNull();
 });

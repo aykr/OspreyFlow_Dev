@@ -112,10 +112,12 @@ function Harness() {
         app="glass"
         places={<PlaceSwitcher places={["glass", "ingest", "admin"]} current="glass" onChoose={() => undefined} />}
         search={
-          <div className="global-search" style={{ display: "flex", gap: "var(--sp-4)" }}>
-            <input role="combobox" aria-expanded="false" aria-label="Search entities (stand-in)" className="input" placeholder="Search…  /" />
-            <button type="button" className="btn btn--ghost" aria-label="Filters">⚲</button>
-            <button type="button" className="btn btn--ghost">Add many from a list</button>
+          // The stand-in's field gives way, never its buttons: on CI's fonts the buttons' text ran past
+          // the search slot and lay over the Graph/Map switch (axe's target-size, partially obscured).
+          <div className="global-search" style={{ display: "flex", gap: "var(--sp-4)", minWidth: 0 }}>
+            <input role="combobox" aria-expanded="false" aria-label="Search entities (stand-in)" className="input" placeholder="Search…  /" style={{ flex: "1 1 auto", minWidth: 0 }} />
+            <button type="button" className="btn btn--ghost" aria-label="Filters" style={{ flex: "none" }}>⚲</button>
+            <button type="button" className="btn btn--ghost" style={{ flex: "none", whiteSpace: "nowrap" }}>Add many from a list</button>
           </div>
         }
         views={views}

@@ -1,0 +1,94 @@
+// Case views by keyboard alone (ADR-144; rule 13): a view opened from *Views in this case*, shared
+// with the case, deleted after asking once, opened from another case's row in the cases list, saved
+// from its form, and left for the case from the banner over an opened view. Saving from the canvas
+// (the selection bar and a node's menu) is in `keyboard.spec.ts`, asking the model in a view in
+// `selection.spec.ts`, and saving a smaller view from the over-cap dialog in `view-over-cap.spec.ts`.
+// No `page.mouse`, no `.click()`.
+import { expect, test, type Page } from "@playwright/test";
+
+import { VIEW_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+
+async function open(page: Page, query = ""): Promise<void> {
+  await page.goto(`/keyboard/views-harness.html${query}`);
+  await expect(page.getByRole("list", { name: "Views in this case" })).toBeVisible();
+}
+
+const state = (page: Page) => page.evaluate(() => window.__VIEWS__!);
+
+async function press(page: Page, name: string): Promise<void> {
+  const button = page.getByRole("button", { name, exact: true });
+  await button.focus();
+  await expect(button).toBeFocused();
+  await page.keyboard.press("Enter");
+}
+
+test("a view is opened from Views in this case by keyboard", async ({ page }) => {
+  await open(page);
+  await press(page, "Open Payments in March");
+  await expect.poll(async () => (await state(page)).opened).toBe("v-shared");
+  registerCovered("VIEW_ACTIONS", "open-a-view-from-views-in-this-case-by-keyboard");
+});
+
+test("a private view is shared with the case by keyboard, by its creator", async ({ page }) => {
+  await open(page);
+  await press(page, "Share with the case: Alice's own");
+  await expect(page.getByRole("button", { name: "Share with the case: Alice's own" })).toHaveCount(0);
+  const sent = (await state(page)).sent;
+  expect(sent.some((s) => s.method === "POST" && s.path === "/v1/investigations/c1/views/v-private/share")).toBe(true);
+  registerCovered("VIEW_ACTIONS", "share-a-view-with-the-case-by-keyboard");
+});
+
+test("a view is deleted by keyboard after asking once, and nothing else is", async ({ page }) => {
+  await open(page);
+  await press(page, "Delete Alice's own");
+  await expect(page.getByText("Delete this view? Nothing on the case is deleted with it.")).toBeVisible();
+  expect((await state(page)).sent.some((s) => s.method === "DELETE")).toBe(false);
+  await press(page, "Delete view");
+  await expect(page.getByRole("button", { name: "Open Alice's own" })).toHaveCount(0);
+  const deletes = (await state(page)).sent.filter((s) => s.method === "DELETE");
+  expect(deletes).toEqual([{ method: "DELETE", path: "/v1/investigations/c1/views/v-private" }]);
+  registerCovered("VIEW_ACTIONS", "delete-a-view-after-asking-once-by-keyboard");
+});
+
+test("a view of another case is opened from the cases list by keyboard", async ({ page }) => {
+  await open(page);
+  await press(page, "Open the view Visits this week of HMP (synthetic demo)");
+  await expect.poll(async () => (await state(page)).openedView).toEqual({ caseId: "c2", viewId: "v-hmp" });
+  registerCovered("VIEW_ACTIONS", "open-a-view-of-another-case-from-the-cases-list-by-keyboard");
+});
+
+test("a view is named and saved from its form by keyboard", async ({ page }) => {
+  await open(page, "?show=form");
+  const name = page.getByLabel("View name");
+  await expect(name).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("Kestrel's contacts");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await state(page)).saved).toBe("Kestrel's contacts");
+  registerCovered("VIEW_ACTIONS", "save-a-view-from-its-form-by-keyboard");
+});
+
+test("Back to the case is reached from the banner over an opened view by keyboard", async ({ page }) => {
+  await open(page, "?show=lens");
+  await expect(page.getByRole("region", { name: "Open view" })).toContainText("2 items in this view could not be shown");
+  await press(page, "Back to the case");
+  await expect.poll(async () => (await state(page)).back).toBe(true);
+  registerCovered("VIEW_ACTIONS", "go-back-to-the-case-from-an-open-view-by-keyboard");
+});
+
+test("another member of the case is shown nothing of a private view, and no share or delete", async ({ page }) => {
+  await open(page, "?as=bob");
+  const panel = page.getByRole("list", { name: "Views in this case" });
+  await expect(panel.getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByText("Alice's own")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Share / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Delete / })).toHaveCount(0);
+  // Tab from the panel's one Open reaches nothing that changes Alice's view.
+  await page.getByRole("button", { name: "Open Payments in March" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(":focus")).not.toHaveText(/Share|Delete/);
+});
+
+test("every registered case view action has its own proving test case above", () => {
+  assertAllCovered("VIEW_ACTIONS", VIEW_ACTIONS);
+});

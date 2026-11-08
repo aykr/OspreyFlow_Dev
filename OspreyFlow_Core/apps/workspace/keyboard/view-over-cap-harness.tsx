@@ -1,7 +1,7 @@
 // The view-over-the-cap dialog's keyboard harness (ADR-124 decision 2, `CLAUDE.md` rule 13): the real
 // delta client, the real working-set store and `ViewOverCapGate`, the one component `App.tsx` renders
-// too; the socket is a stand-in that `view-over-cap.spec.ts` speaks for the server, and the branch
-// route is answered by the spec. What the client sent and which case was opened are on
+// too; the socket is a stand-in that `view-over-cap.spec.ts` speaks for the server, and the view
+// routes are answered by the spec. What the client sent and which view was opened are on
 // `window.__OVERCAP__`. The only line here that is not the Glass's is the ready marker.
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand/react";
@@ -52,7 +52,7 @@ function Harness() {
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"
         investigationId="c1"
-        onBranchOpened={(id) => window.__OVERCAP__!.opened.push(id)}
+        onViewOpened={(opened) => window.__OVERCAP__!.opened.push(opened.view.id)}
       />
     </>
   );

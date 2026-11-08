@@ -128,14 +128,14 @@ test("the selection bar's degrees ask for the routes within them, by keyboard", 
   registerCovered("SELECTION_ACTIONS", "show-links-within-degrees-from-the-selection-bar");
 });
 
-test("the selection bar's Ask the model about these… branches the selection, named for its documents, and opens it (ADR-098)", async ({ page }) => {
+test("the selection bar's Ask the model about these… saves the selection as a private view, named for its documents, and asks in it (ADR-098, ADR-144)", async ({ page }) => {
   let body: { node_ids: string[]; name?: string } | null = null;
-  await page.route("**/*/investigations/*/branch", async (route) => {
+  await page.route("**/*/investigations/*/views", async (route) => {
     body = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ id: "branch-q", name: "Questions on 1 document" }),
+      body: JSON.stringify({ id: "view-q", case_id: "keyboard-fixture", name: "Questions on 1 document", created_by: "k", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: 1 }),
     });
   });
   await page.goto("/keyboard/harness.html?fixture=emails");
@@ -157,7 +157,7 @@ test("the selection bar's Ask the model about these… branches the selection, n
   expect(body!.node_ids).toContain("email:ev-1");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __KEYBOARD__?: { askedIn?: string | null } }).__KEYBOARD__?.askedIn))
-    .toBe("branch-q");
+    .toBe("view-q");
   registerCovered("SELECTION_ACTIONS", "ask-the-model-about-the-selected-documents-from-the-selection-bar");
 });
 

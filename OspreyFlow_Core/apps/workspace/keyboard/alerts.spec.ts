@@ -295,8 +295,8 @@ test("the watches and their alert inbox are reached from Monitoring's Watches ta
     }] })),
   );  // prettier-ignore
   await page.route("**/*/v1/investigations/inv-1/alerts/w1/jump", (route) =>
-    route.fulfill(fulfil({ investigation: { id: "inv-branch-1", created_at: "2026-09-22T00:00:00Z", created_by: "analyst-1",
-      owning_unit: "unit-1", branched_from: "inv-1" }, seeded_count: 1 }, 201)),
+    route.fulfill(fulfil({ investigation: { id: "inv-alert-1", created_at: "2026-09-22T00:00:00Z", created_by: "analyst-1",
+      owning_unit: "unit-1" }, seeded_count: 1 }, 201)),
   );  // prettier-ignore
   await page.goto("/keyboard/alerts-harness.html");
   await press(page, page.getByRole("tab", { name: "Watches" }));
@@ -304,7 +304,7 @@ test("the watches and their alert inbox are reached from Monitoring's Watches ta
   await expect(page.getByRole("heading", { name: "Alert inbox" })).toBeVisible();
   await press(page, page.getByRole("button", { name: "Jump into investigation" }));
   await press(page, page.getByRole("button", { name: "Open investigation" }));
-  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.openedInvestigationId)).toBe("inv-branch-1");
+  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.openedInvestigationId)).toBe("inv-alert-1");
   registerCovered(REGISTRY, "reach-the-watches-and-alert-inbox-by-keyboard");
 });
 
