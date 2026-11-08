@@ -400,10 +400,10 @@ function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDat
                     </div>
                   )}
                   {row.state === "removed" && row.through && (
-                    <span className="label">{`Merged or deleted under ${row.through}`}</span>
+                    <span className="label">{`Read through ${row.through}: deleted there, never merged`}</span>
                   )}
                   {row.state === "removed" && !row.through && dataset.kind === "composite" && (
-                    <span className="label">A composite holds none of its members&apos; data: nothing merges into it</span>
+                    <span className="label">A composite case&apos;s layer cannot be merged: delete it, or leave it</span>
                   )}
                 </td>
               </tr>

@@ -106,12 +106,6 @@ class _Cases:
     async def list_grants(self, case_id: str) -> dict[str, AccessLevel]:
         return dict(self.grants.get(case_id, {}))
 
-    async def set_grant(self, case_id: str, account: str, level: AccessLevel, *, by: Any) -> None:
-        self.grants[case_id][account] = level
-
-    async def remove_grant(self, case_id: str, account: str, *, by: Any) -> None:
-        self.grants[case_id].pop(account, None)
-
     async def replace_authors(
         self, case_id: str, owners: Sequence[str], *, by: Any, audit: Any
     ) -> list[str]:
@@ -131,12 +125,10 @@ class _Cases:
 
 
 class _Graph:
-    """The graph store's footprint read: numbers per dataset, and a note of what it was asked.
-    The items' labels are held here, as the store holds them, to prove they never come out."""
+    """The graph store's footprint read: numbers per dataset, and a note of what it was asked."""
 
     def __init__(self) -> None:
         self.held: dict[str, DatasetFootprint] = {}
-        self.items: dict[str, list[str]] = {}
         self.asked: list[tuple[list[str], Principal]] = []
 
     async def dataset_footprints(
@@ -195,7 +187,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     graph.held[layers["gone-1"]] = DatasetFootprint(
         nodes=5, edges=4, properties_bytes=2000, picture_bytes=48_000
     )
-    graph.items = {layers["open-1"]: list(CONTENTS[:2]), layers["gone-1"]: [CONTENTS[2]]}
     audit = _Audit()
     state = {
         "principal_resolver": _Resolver(), "investigations": cases, "datasets": datasets,
@@ -239,7 +230,9 @@ def test_every_datasets_route_refuses_without_the_right(
     world: SimpleNamespace, person: str, method: str, path: str, body: Any
 ) -> None:
     answer = _call(world, person, method, path, body)
+    # The gate's own refusal, not another check's 403 (rule 15: a merge by a non-Author is 403 too).
     assert answer.status_code == 403, answer.text
+    assert answer.json()["detail"] == {"error": "right_required", "right": "administer_system"}
     assert not [e for e in world.audit.entries if e["principal"].id == PEOPLE[person].id]
 
 
@@ -259,8 +252,6 @@ def test_a_holder_of_the_right_alone_is_answered(
 def _every_answer(world: SimpleNamespace) -> list[str]:
     texts = []
     for method, path, body in ROUTES:
-        if method == "PUT":
-            continue
         for person in ("admin", "author_admin"):
             texts.append(_call(world, person, method, path, body).text)
     return texts
@@ -458,7 +449,7 @@ def test_a_dry_run_refuses_a_case_not_linked_directly(world: SimpleNamespace, ca
 def test_a_dry_run_merge_is_an_authors_and_says_who_they_are(world: SimpleNamespace) -> None:
     answer = _dry(world, "admin", "gone-1", "merge")
     assert answer.status_code == 403 and answer.json()["error"] == "not_an_author"
-    assert "adm-2, eng-1" in answer.json()["detail"]
+    assert "Name of adm-2, Name of eng-1" in answer.json()["detail"]
     assert not [e for e in world.audit.entries if e["action"].startswith("dry_run")]
 
 

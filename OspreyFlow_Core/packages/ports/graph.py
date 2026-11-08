@@ -463,7 +463,8 @@ class GraphPort(Protocol):
         Admin › Datasets reads each case's analyst layer this way, for cases the administrator is
         no member of: the dataset is the one asked, in place of the principal's own, and
         **everything else is the access step every read uses** (classification, handling code and
-        unit, reverted and superseded; a link counts only with both ends readable), so a hidden
+        unit, reverted and superseded; a link counts only with both ends readable by those, its
+        ends in whichever dataset, so a link drawn from a loaded node counts), so a hidden
         item is in no count and no size (rule 3; ADR-124 decision 10). Counted in the store's own
         query: no element, id, label, property or object ref leaves it. Every id asked is answered,
         zeros for one with nothing readable, so the answer says nothing of which exist."""

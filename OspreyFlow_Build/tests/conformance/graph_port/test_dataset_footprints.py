@@ -9,6 +9,8 @@ What a mistake would do, and the case that catches it:
 - a SECRET item counted, or its size added, for a reader below SECRET; a restricted code's item
   counted for a reader outside its unit; a link counted whose end the reader cannot read:
   `test_what_the_reader_may_not_read_is_in_no_count_and_no_size`;
+- a link counted whose own marking or code the reader may not read, its ends readable:
+  `test_a_links_own_handling_is_held`;
 - another layer's or the source's elements counted: `test_each_layer_is_counted_alone`;
 - a reverted element counted, a superseded node counted beside its replacement, or the links
   `supersede_node` clones counted twice: `test_only_live_elements_count_and_cloned_links_once`;
@@ -87,6 +89,29 @@ async def test_what_the_reader_may_not_read_is_in_no_count_and_no_size(
     assert (elsewhere.nodes, elsewhere.edges) == (2, 1)
     assert (cleared.nodes, cleared.edges) == (3, 1)
     assert cleared.properties_bytes - elsewhere.properties_bytes >= 300
+
+
+@_each
+async def test_a_links_own_handling_is_held(factory: GraphAdapterFactory) -> None:
+    """Both ends readable to every reader below; the links themselves are SECRET and `R`."""
+    async with factory.context() as adapter:
+        (one, two), _ = await _write(adapter, [_person(LAYER_A), _person(LAYER_A)], [])
+        baseline = (await adapter.dataset_footprints([LAYER_A], OFFICIAL_ADMIN))[LAYER_A]
+        await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", one, two, classification="SECRET", datasets=[LAYER_A]),
+                _edge("ASSOCIATE_OF", two, one, classification="OFFICIAL", handling_code="R",
+                      datasets=[LAYER_A]),
+            ],
+        )  # fmt: skip
+        official = (await adapter.dataset_footprints([LAYER_A], OFFICIAL_ADMIN))[LAYER_A]
+        elsewhere = (await adapter.dataset_footprints([LAYER_A], ELSEWHERE_ADMIN))[LAYER_A]
+        cleared = (await adapter.dataset_footprints([LAYER_A], SECRET_ADMIN))[LAYER_A]
+    assert official == baseline and official.edges == 0
+    assert elsewhere.edges == 1 and elsewhere.properties_bytes > baseline.properties_bytes
+    assert cleared.edges == 2 and cleared.properties_bytes > elsewhere.properties_bytes
 
 
 @_each

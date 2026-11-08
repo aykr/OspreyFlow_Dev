@@ -13593,6 +13593,7 @@ async def layer_action_dry_run_route(
     dataset_id: str,
     investigation_id: str,
     action: LayerAction,
+    request: Request,
     principal: PrincipalDep,
     datasets: DatasetsDep,
     investigations: InvestigationsDep,
@@ -13627,11 +13628,12 @@ async def layer_action_dry_run_route(
         home = await datasets.home_case_of(dataset_id)
         authors = await _authors_of(investigations, home.investigation_id) if home else []
         if principal.id not in authors:
+            names = await get_principal_names(request).display_names(authors) if authors else {}
             raise LayerActionRefused(
                 403, "not_an_author",
                 "Only one of the dataset's Authors may merge a removed case's layer into it. "
-                + ("Its Authors: " + ", ".join(authors) + "." if authors
-                   else "It has no Authors yet: they are named at its first Make live."),
+                + ("Its Authors: " + ", ".join(names.get(a, a) for a in authors) + "."
+                   if authors else "It has no Authors yet: they are named at its first Make live."),
             )  # fmt: skip
     counts = f"{row.items} items and {row.links} links ({_size_words(row.size_bytes)})"
     policy = "the Author promotes" if dataset.promotion_policy == "author_promotes" else (
