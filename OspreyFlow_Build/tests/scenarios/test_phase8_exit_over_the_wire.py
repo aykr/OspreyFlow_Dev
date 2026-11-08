@@ -1922,6 +1922,10 @@ def test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities(
     assert result["investigation_id"] == alert["investigation_id"], result
     # ADR-124: no figure for what the reader may not read.
     assert "unreadable_count" not in result
+    # Its refusal (rule 3): an id that never existed is answered in the address's one refusal, which
+    # an alert the reader may not see is answered in too (`test_alert_address.py`, in process).
+    missing = analyst.get(f"/v1/alerts/no-such-alert-{secrets.token_hex(8)}")
+    assert missing.status_code == 404 and missing.json() == {"error": "alert_not_found"}, missing.text
 
 
 def _synthetic_site_png(width: int, height: int) -> bytes:

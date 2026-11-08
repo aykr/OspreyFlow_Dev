@@ -1039,6 +1039,13 @@ def test_phase8_exit_criterion_end_to_end(
         opened = client.get(f"/v1/alerts/{newest_hotlist_alert.id}", headers=headers)
         assert opened.status_code == 200, opened.text
         assert opened.json()["explanation"]["nodes"]
+        # Its refusal (rule 3): a stranger to its case asking for the same alert is answered byte for
+        # byte as for an id that never existed.
+        stranger = _bearer(private_key, sub=f"b14-stranger-{new_id()}", roles=["analyst"],
+                           exp=int(_time.time()) + 3600)  # fmt: skip
+        refused = client.get(f"/v1/alerts/{newest_hotlist_alert.id}", headers=stranger)
+        missing = client.get(f"/v1/alerts/no-such-alert-{new_id()}", headers=stranger)
+        assert (refused.status_code, refused.content) == (404, missing.content), refused.text
 
         # === B15: pivot on the handset identifier — both SIMs link to one device, one traversal.
         # depth=3: msisdn --SAME_AS--> sim_b (1) --PAIRED_WITH--> handset (2)
