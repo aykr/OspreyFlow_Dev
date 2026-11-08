@@ -169,7 +169,7 @@ const EXTRA_STATES: Record<string, string[]> = {
   // every section in the side list, a coming placeholder open.
   "admin-harness.html": [
     "open=connections&rights=administer_system",
-    "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Audit%20(coming)",
+    "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Uploads%20(coming)",
     // L2.4 part 2: Datasets' details (policy with its warning, Authors, linked cases), Change
     // owner… open, a removed case's dry run shown, and System's Dataset owners may be.
     "rights=administer_system&serve=datasets&show=details",
@@ -185,6 +185,11 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=manage_people&serve=people&open=Roles&show=team",
     "rights=manage_people&serve=people&open=Roles&show=versions",
     "rights=manage_people&serve=people&show=refused",
+    // L2.6: Audit's stream (withheld and shown words, paging) and its rule audit asked without a
+    // case; Operations' What ages with an overdue promotion waiting, above the schedules.
+    "rights=read_audit,read_rule_audit&serve=audit",
+    "rights=read_audit,read_rule_audit&serve=audit&show=rules",
+    "rights=operate_schedules&serve=operations",
   ],
 };
 

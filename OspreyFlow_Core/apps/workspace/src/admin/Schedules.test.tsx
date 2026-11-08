@@ -121,7 +121,7 @@ describe("Schedules and runs", () => {
   it("runs a schedule now, as its owner, and says a refusal in the Conduit's words", async () => {
     const sent = serve();
     place(["operate_schedules"]);
-    fireEvent.click(await screen.findByRole("button", { name: "Run Daily custody export now" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run now: Daily custody export" }));
     await waitFor(() => expect(sent).toContain("POST schedules/feed/run"));
     expect(await screen.findByText(/runs as approver-1/)).toBeTruthy();
     cleanup();
@@ -131,7 +131,7 @@ describe("Schedules and runs", () => {
         : null,
     );
     place(["operate_schedules"]);
-    fireEvent.click(await screen.findByRole("button", { name: "Run Daily custody export now" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run now: Daily custody export" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
       "Not run: the schedule's owner, approver-1, can no longer sign in",
     );

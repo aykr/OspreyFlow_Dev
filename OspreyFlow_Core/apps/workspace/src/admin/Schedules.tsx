@@ -200,7 +200,7 @@ export function Schedules({ api }: { api: AdminApi }) {
                     </Button>
                   )}{" "}
                   <Button
-                    aria-label={`Run ${s.label} now`}
+                    aria-label={`Run now: ${s.label}`}
                     onClick={() =>
                       act(runScheduleNow(api, s.recipe_id), (ran) => `${ran.label} was run now; it runs as ${ran.owner ?? "its owner"}.`)
                     }

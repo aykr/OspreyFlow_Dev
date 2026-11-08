@@ -48,6 +48,13 @@ const PLAN = { person: "u1", not_yet_listed: ["boards"],
                items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" }] };  // prettier-ignore
 const COLLEAGUE = { ...PERSON, id: "u3", username: "bea", name: "Bea Engineer", roles: ["data_engineer"] };
 
+// L2.6: an audit page of the stream (one entry's words withheld), a rule audit, and Operations' ageing.
+const AUDIT_ENTRY = { recorded_at: "2026-11-08T09:00:00Z", principal_id: "u1", principal_name: "Demo Analyst",
+                      action: "confirm_node", kind: "assertions", held_in: "case_and_admin", investigation_id: "c1",
+                      case_name: "Op Kestrel", detail: null, words_withheld: true, result_cardinality: null };  // prettier-ignore
+const AGEING = { alert_after_days: 3, promotions_recorded: false, waiting: [],
+                 rules: [{ what: "A promotion waiting for review", after_days: 3, then: "After 3 days it is flagged overdue." }] };  // prettier-ignore
+
 async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
@@ -57,6 +64,17 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
     asked.push(`${request.method()} ${path}`);
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "audit") {
+      const q = new URL(request.url()).searchParams;
+      asked.push(`AUDIT ${q.toString()}`);
+      const offset = Number(q.get("offset") ?? 0);
+      const rules = q.get("held_in") === "rules";
+      const entry = rules ? { ...AUDIT_ENTRY, action: "rule_deployed", kind: "rules", held_in: "rules",
+                              detail: { rule_id: "r1" }, words_withheld: false, result_cardinality: 1 } : AUDIT_ENTRY;  // prettier-ignore
+      return json(200, { entries: [entry], total: rules ? 1 : 120, offset, limit: 50, note: null });
+    }
+    if (path === "operations/ageing") return json(200, AGEING);
+    if (path === "settings/promotion-alert-days" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "people" && request.method() === "POST") {
       const sent = request.postDataJSON() as { username: string };
       return json(201, { person: { ...PERSON, id: "u2", username: sent.username, name: sent.username, must_set_password: true },
@@ -432,7 +450,7 @@ test("a schedule's runs are shown by keyboard", async ({ page }) => {
 test("a schedule is run now by keyboard, as its owner", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
-  await press(page, "Run Daily custody export now");
+  await press(page, "Run now: Daily custody export");
   await expect(page.getByRole("status")).toContainText("runs as approver-1");
   expect(asked).toContain("POST schedules/feed/run");
   registerCovered(REGISTRY, "run-a-schedule-now-by-keyboard");
@@ -492,14 +510,14 @@ test("Admin's sections are moved between by keyboard", async ({ page }) => {
 // Conduit nothing.
 test("a coming section is opened by keyboard, and calls nothing", async ({ page }) => {
   const asked = await serve(page);
-  await page.goto("/keyboard/admin-harness.html?rights=administer_system,read_audit");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
   await expect(page.getByRole("heading", { name: "Datasets" })).toBeVisible();
   await expect.poll(() => asked).toContain("GET datasets");
   const before = asked.length;
-  await open(page, "Audit (coming)");
-  await expect(page.getByRole("heading", { name: "Audit" })).toBeFocused();
-  await expect(page.getByText(/^Coming: One view over the records/)).toBeVisible();
-  await expect(section(page, "Audit (coming)")).toHaveAttribute("aria-current", "page");
+  await open(page, "Uploads (coming)");
+  await expect(page.getByRole("heading", { name: "Uploads" })).toBeFocused();
+  await expect(page.getByText(/^Coming: The largest picture/)).toBeVisible();
+  await expect(section(page, "Uploads (coming)")).toHaveAttribute("aria-current", "page");
   expect(asked.length).toBe(before);
   registerCovered(REGISTRY, "open-a-coming-admin-section-by-keyboard");
 });
@@ -646,6 +664,69 @@ test("a role's team is saved, its lead handed over and a cover named by keyboard
   expect((await ended).postDataJSON()).toEqual({ cover: null, until: null });
   await expect(page.getByText("Cover ended.")).toBeVisible();
   registerCovered(REGISTRY, "end-a-teams-cover-by-keyboard");
+});
+
+// L2.6 (ADR-145 decisions 9 and 10; rule 13): Audit's filters, its rule audit and its paging, and
+// Operations' N days, by keyboard alone, each proving its call reached the server with what it says.
+test("the audit is read by kind and person by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=read_audit");
+  await expect(page.getByRole("heading", { name: "Audit" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Audit entries" })).toContainText("Withheld");
+  const kind = page.getByLabel("Kind");
+  await kind.focus();
+  await page.keyboard.type("Analyst");
+  await expect(kind).toHaveValue("assertions");
+  await page.getByLabel("Person (account id)").focus();
+  await page.keyboard.type("u1");
+  await press(page, "Show entries");
+  await expect.poll(() => asked.filter((a) => a.startsWith("AUDIT"))).toContainEqual(
+    expect.stringContaining("held_in=case_and_admin&kind=assertions&who=u1"),
+  );
+  registerCovered(REGISTRY, "read-the-audit-by-kind-and-person-by-keyboard");
+});
+
+test("a case's rule audit is read in Audit by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=read_audit,read_rule_audit");
+  await expect(page.getByRole("table", { name: "Audit entries" })).toBeVisible();
+  const record = page.getByLabel("Record");
+  await record.focus();
+  await page.keyboard.type("Rule");
+  await expect(record).toHaveValue("rules");
+  await page.getByLabel("Case (id, required)").focus();
+  await page.keyboard.type("c1");
+  await press(page, "Show entries");
+  await expect.poll(() => asked).toContainEqual(expect.stringContaining("held_in=rules&case=c1"));
+  await expect(page.getByRole("table", { name: "Audit entries" })).toContainText("rule deployed");
+  registerCovered(REGISTRY, "read-a-cases-rule-audit-by-keyboard");
+});
+
+test("the audit is paged by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=read_audit");
+  await expect(page.getByText("Entries 1–1 of 120, newest first.")).toBeVisible();
+  await press(page, "Older entries");
+  await expect(page.getByText("Entries 51–51 of 120, newest first.")).toBeVisible();
+  expect(asked).toContainEqual(expect.stringContaining("offset=50"));
+  await press(page, "Newer entries");
+  await expect(page.getByText("Entries 1–1 of 120, newest first.")).toBeVisible();
+  registerCovered(REGISTRY, "page-through-the-audit-by-keyboard");
+});
+
+test("when promotions are overdue is set in Operations by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
+  await expect(page.getByText("After 3 days it is flagged overdue.")).toBeVisible();
+  const days = page.getByLabel("Alert the reviewers and administrators after N days");
+  await days.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(days).toHaveValue("4");
+  const sent = page.waitForRequest((r) => r.url().endsWith("/settings/promotion-alert-days") && r.method() === "PUT");
+  await press(page, "Save when promotions are overdue");
+  expect((await sent).postDataJSON()).toEqual({ alert_after_days: 4 });
+  expect(asked).toContain("PUT settings/promotion-alert-days");
+  registerCovered(REGISTRY, "set-when-promotions-are-overdue-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {
