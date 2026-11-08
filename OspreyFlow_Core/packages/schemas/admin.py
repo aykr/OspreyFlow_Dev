@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .ingest import RunMetering
 
@@ -182,6 +182,13 @@ class EngineStatus(BaseModel):
 #: provider. The handling code must still be sendable.
 DatasetEgress = Literal["none", "contracted", "any"]
 
+#: ADR-145 Amendment 4 decision 6: the kinds Admin › Datasets shows (*Source*, *Composite*,
+#: *Drawn*).
+AdminDatasetKind = Literal["source", "composite", "drawn"]
+
+#: ADR-145 decision 8: *Author promotes*, or *Second person reviews*.
+PromotionPolicy = Literal["author_promotes", "second_person_reviews"]
+
 
 class AdminDataset(BaseModel):
     """One dataset as the Admin area's Datasets screen shows it (ADR-136 decision 2): its name, the
@@ -198,6 +205,91 @@ class AdminDataset(BaseModel):
     #: Datasets column *Highest marking it may hold* (L2.4 part 2); enforced on what is written
     #: into the dataset and its cases' layers by L3.3.
     highest_marking: str | None = None
+    #: ADR-145 Amendment 4 decision 6: what kind of dataset this is. An analyst layer is never a
+    #: row of its own; it is counted under the case it belongs to (`AdminLinkedCase`).
+    kind: AdminDatasetKind = "source"
+    #: ADR-145 decision 8: how a drawn item is promoted into the dataset. Enforced by the
+    #: promotion itself (L3.4); set here, audited.
+    promotion_policy: PromotionPolicy = "author_promotes"
+
+
+class DatasetPromotionPolicyInput(BaseModel):
+    """`PUT /v1/admin/datasets/{dataset_id}/promotion-policy`: an administrator's change,
+    audited."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    promotion_policy: PromotionPolicy
+
+
+class DatasetAuthor(BaseModel):
+    """One of a dataset's Authors, as Admin › Datasets shows them: the account and its name."""
+
+    id: str
+    #: The directory's name for the account; `None` when the directory has none to give.
+    name: str | None = None
+    #: Holds `review_promotions` (ADR-112 Amendment 4), so may approve another's promotion when
+    #: the policy is *Second person reviews*.
+    approves: bool = False
+
+
+class AdminDatasetAuthors(BaseModel):
+    """A dataset's Authors (ADR-145 Amendment 4 decision 3): its home case's Authors. Names and
+    accounts only, never the home case's contents."""
+
+    dataset_id: str
+    #: `False` until the dataset's first *Make live* made its home case, which names the first
+    #: Authors; *Change owner…* changes them after that.
+    has_home_case: bool
+    people: list[DatasetAuthor] = Field(default_factory=list)
+    #: A team (ADR-112 Amendment 5), when teams are built; `None` until then.
+    team: str | None = None
+
+
+class AdminLinkedCase(BaseModel):
+    """One case linked to a dataset, as an administrator sees it (ADR-143 Amendment 2 decision 2):
+    its name, its state and its layer as counts. Never the layer's contents: no item, label or
+    property (rule 7). An open and a removed case carry exactly the same fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    investigation_id: str
+    name: str
+    state: Literal["open", "removed"]
+    #: The dataset's own home case (ADR-145 Amendment 4 decision 2).
+    home_case: bool = False
+    #: The composite the case reads this dataset through; `None` when it chose this dataset.
+    through: str | None = None
+    #: The layer's live items and links, counted by the graph store.
+    items: int = Field(ge=0)
+    links: int = Field(ge=0)
+    #: The bytes the layer holds: its items' and links' stored properties and their pictures,
+    #: counted by the stores (the owner's ruling of 8 November 2026, Q1 (a)).
+    size_bytes: int = Field(ge=0)
+
+
+class AdminDatasetCases(BaseModel):
+    dataset_id: str
+    cases: list[AdminLinkedCase]
+
+
+#: ADR-143 Amendment 2 decision 1: what may happen to a removed case's layer.
+LayerAction = Literal["merge", "delete"]
+
+
+class LayerDryRun(BaseModel):
+    """A removed case's *Merge into the dataset* or *Delete*, run dry: what it would touch, in
+    counts, and nothing written. The action itself is the promotion's (L3.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    investigation_id: str
+    action: LayerAction
+    items: int = Field(ge=0)
+    links: int = Field(ge=0)
+    size_bytes: int = Field(ge=0)
+    #: What the action would do, in words.
+    would: str
 
 
 class DatasetEgressInput(BaseModel):
@@ -353,5 +445,6 @@ ALL_MODELS: list[type[BaseModel]] = [
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, EngineStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
     ChangeScheduleInput, AdminDataset, DatasetEgressInput, OrganisationArrival,
-    OrganisationLinkInput,
+    OrganisationLinkInput, DatasetPromotionPolicyInput, DatasetAuthor, AdminDatasetAuthors,
+    AdminLinkedCase, AdminDatasetCases, LayerDryRun,
 ]  # fmt: skip

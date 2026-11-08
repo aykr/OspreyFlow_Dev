@@ -61,6 +61,7 @@
     "read_reports",
     "read_rule_audit",
     "revert_loads",
+    "review_promotions",
     "run_analysis",
     "run_pipelines",
     "schedule_pipelines",
@@ -450,6 +451,13 @@
    "places": [],
    "answered_hidden": []
   },
+  "right:review_promotions": {
+   "rights": [
+    "review_promotions"
+   ],
+   "places": [],
+   "answered_hidden": []
+  },
   "right:run_analysis": {
    "rights": [
     "run_analysis"
@@ -568,6 +576,7 @@
     "remove_case",
     "resolve_entities",
     "revert_loads",
+    "review_promotions",
     "run_analysis",
     "run_pipelines",
     "schedule_pipelines",

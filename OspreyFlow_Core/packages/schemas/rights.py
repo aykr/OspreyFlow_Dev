@@ -62,6 +62,10 @@ class Right(StrEnum):
     REVERT_LOADS = "revert_loads"  # D7, Editor
     # ADR-140 decision 4: edit a dataset's domain model (its draft, impact, *Make live*, revert).
     EDIT_TARGET_MODEL = "edit_target_model"  # D8, behind the dataset's own gate
+    # ADR-112 Amendment 4: review an analyst's promotion into a dataset, as its second person (the
+    # dataset's promotion policy, ADR-145 decision 8). Held by the Data Engineer; the other four
+    # rights that amendment names arrive with their own steps.
+    REVIEW_PROMOTIONS = "review_promotions"  # D9
     # Reporting
     READ_REPORTS = "read_reports"  # R1, Viewer
     READ_REPORT_FEED = "read_report_feed"  # R2, Viewer
@@ -92,7 +96,7 @@ DATA_ENGINEER = frozenset({
     R.LOAD_SCREENING_LISTS,
     R.EDIT_PIPELINES, R.VERIFY_PIPELINES, R.PUBLISH_PIPELINES, R.RUN_PIPELINES,
     R.SCHEDULE_PIPELINES, R.ADD_INGEST_FILES, R.REVERT_LOADS, R.EDIT_TARGET_MODEL,
-    R.READ_REPORTS, R.READ_DATA_FEEDS, R.OPERATE_SCHEDULES,
+    R.REVIEW_PROMOTIONS, R.READ_REPORTS, R.READ_DATA_FEEDS, R.OPERATE_SCHEDULES,
 })  # fmt: skip
 ADMIN = frozenset({
     R.SHARE_CASE, R.REMOVE_CASE, R.READ_RULE_AUDIT, R.LOAD_SCREENING_LISTS, R.SCHEDULE_PIPELINES,

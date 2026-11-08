@@ -34,6 +34,7 @@ export type Right =
   | "add_ingest_files"
   | "revert_loads"
   | "edit_target_model"
+  | "review_promotions"
   | "read_reports"
   | "read_report_feed"
   | "read_data_feeds"

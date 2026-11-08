@@ -387,9 +387,11 @@ def test_every_right_guards_at_least_one_route() -> None:
     """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
     two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
     area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
-    lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b."""
+    lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
+    promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
+    dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4)."""
     not_yet = {"revert_loads", "read_audit",
-               "export_override"}  # fmt: skip
+               "export_override", "review_promotions"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet
 

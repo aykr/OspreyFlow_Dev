@@ -26,6 +26,8 @@ TABLE: dict[str, set[str]] = {
     "schedule_pipelines": {D, M}, "add_ingest_files": {A, D}, "revert_loads": {D, M},
     # ADR-140 decision 4 (D8): the domain model's editor, the developer.
     "edit_target_model": {D},
+    # ADR-112 Amendment 4 (D9): a promotion's second person, the developer.
+    "review_promotions": {D},
     "read_reports": {A, D, R}, "read_report_feed": {R}, "read_data_feeds": {A, D, R},
     "administer_system": {M}, "manage_people": {M}, "manage_dashboards": {M},
     "operate_schedules": {D, M}, "manage_ontology": {M}, "manage_geospatial": {M},
@@ -33,8 +35,8 @@ TABLE: dict[str, set[str]] = {
 }  # fmt: skip
 
 
-def test_there_are_forty_four_rights_and_the_table_names_each_once() -> None:
-    assert len(Right) == 44
+def test_there_are_forty_five_rights_and_the_table_names_each_once() -> None:
+    assert len(Right) == 45
     assert set(TABLE) == {r.value for r in Right}
 
 
