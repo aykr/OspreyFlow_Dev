@@ -1786,3 +1786,13 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_reading_publis
 FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_assembling_and_publishing_need_editor_and_record_assessment
 16 failed, 595 passed, 191 deselected, 1 warning in 1143.98s (0:19:03)
 # lease rules, stack a, 2026-11-08 16:46:28Z to 17:05:33Z, at a1bfc9e (rebased on main 222b667), no working-tree changes
+# The 16 failures, each explained:
+# - 13 in test_packs.py and 1 in test_pack_alert_item.py (the trend case, which uses test_packs' fixture): the
+#   fixture gave the alert store as None, refused by settle_repoints since L2.8c (Amendment 11 point 6); the
+#   files are live-only, so neither L2.8c's offline make test nor its leased run included them. Fixed at ba6f903;
+#   leased-run-packs.txt: 40/40 at ba6f903.
+# - test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not:
+#   fails on main (L2.8c's gates/47435fa.live.txt); not this branch's.
+# - test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses: a fresh case lists 25
+#   rules other live files left on stack a's database (fails alone too); O-hyg's open finding (live files
+#   that create deployment-wide rules do not clean up), not this branch's.
