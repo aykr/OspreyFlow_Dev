@@ -53,14 +53,14 @@ export function ViewActions({
           </button>
         )}
         {onClearAll && (
-        <button
-          type="button"
-          className="radial-menu__item"
-          disabled={nodeCount === 0}
-          onClick={() => setConfirming(true)}
-        >
-          Clear view
-        </button>
+          <button
+            type="button"
+            className="radial-menu__item"
+            disabled={nodeCount === 0}
+            onClick={() => setConfirming(true)}
+          >
+            Clear view
+          </button>
         )}
       {onAddFiles && (
         <button type="button" className="radial-menu__item" onClick={onAddFiles}>

@@ -883,6 +883,8 @@ export function App() {
   const lensAskedRef = useRef(0);
 
   function showLens(opened: CaseViewOpened): void {
+    // Whatever opened this view, an earlier `openLens` still in flight no longer replaces it.
+    lensAskedRef.current += 1;
     setViewProblem(null);
     const timeline = crossFilterRef.current?.store.getState();
     if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
@@ -934,6 +936,11 @@ export function App() {
     if (caseViewTaken.current || !investigationId || !bearerToken) return;
     caseViewTaken.current = true;
     const viewId = takeCaseView(investigationId, window.location.search);
+    // Taken once: the address no longer names it, so a reload opens the case, and a view that could
+    // not be opened is not asked for again.
+    if (new URL(window.location.href).searchParams.has("case_view")) {
+      window.history.replaceState(window.history.state, "", withoutCaseView(window.location.href));
+    }
     if (viewId) void openLens(viewId);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per case load, by design
   }, [investigationId, bearerToken]);
@@ -2176,7 +2183,8 @@ export function App() {
             setViewsRead((n) => n + 1);
             showLens(opened);
           }}
-          lensOpen={lens !== null}
+          // The lens is the Graph's: on the Map or the Matrix the case is on screen, and so is its cap.
+          lensOpen={lens !== null && view === "graph"}
         />
       )}
       <Drawer open={exploreOpen} onClose={() => setExploreOpen(false)} title="Explore">

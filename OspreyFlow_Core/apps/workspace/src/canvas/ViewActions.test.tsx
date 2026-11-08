@@ -19,8 +19,6 @@ describe("ViewActions", () => {
     expect(screen.queryByRole("button", { name: /Remove selected|Save as a view/ })).toBeNull();
   });
 
-
-
   it("does not clear the view on the first click; it asks, with the number", () => {
     const h = setup();
     fireEvent.click(screen.getByRole("button", { name: "Clear view" }));
@@ -74,7 +72,5 @@ describe("ViewActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show hidden links (3)" }));
     expect(h.onShowHiddenLinks).toHaveBeenCalledOnce();
   });
-
-
 
 });

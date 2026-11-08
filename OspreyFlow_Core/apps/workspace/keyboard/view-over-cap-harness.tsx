@@ -2,7 +2,8 @@
 // delta client, the real working-set store and `ViewOverCapGate`, the one component `App.tsx` renders
 // too; the socket is a stand-in that `view-over-cap.spec.ts` speaks for the server, and the view
 // routes are answered by the spec. What the client sent and which view was opened are on
-// `window.__OVERCAP__`. The only line here that is not the Glass's is the ready marker.
+// `window.__OVERCAP__`. The view opened is held as `App.tsx` holds it, with the Glass's own banner
+// over it; the only other line that is not the Glass's is the ready marker.
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand/react";
@@ -12,6 +13,7 @@ import "../src/design/primitives.css";
 import { connectDeltaClient, type SocketLike } from "../src/workingset/deltaClient";
 import { createWorkingSet } from "../src/workingset/store";
 import { ViewOverCapGate } from "../src/workingset/ViewOverCapGate";
+import { ViewLensBanner } from "../src/views/ViewLensBanner";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
@@ -70,14 +72,7 @@ function Harness() {
   return (
     <>
       {within && <p>The view is within the limit.</p>}
-      {lens && (
-        <p>
-          View open: {lens}{" "}
-          <button type="button" className="btn" onClick={() => setLens(null)}>
-            Back to the case
-          </button>
-        </p>
-      )}
+      {lens && <ViewLensBanner name={lens} shared={false} missing={0} onBack={() => setLens(null)} />}
       <ViewOverCapGate
         store={workingSet.store}
         requestResync={(last) => client.requestResync(last)}

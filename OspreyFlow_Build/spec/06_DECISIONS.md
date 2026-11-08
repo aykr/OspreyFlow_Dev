@@ -29438,7 +29438,7 @@ Conduit half) and L3.2b (the Glass half). ADR-144 and Amendment 1 are unchanged 
    never joins two shown ones (rule 3) and a manual split holds however loose the view
    (`test_a_view_opens_collapsed_at_its_threshold`,
    `test_a_view_collapses_only_through_what_its_reader_may_see`,
-   `test_the_reader_check_fails_with_the_matches_read_unscoped`). The **Glass** applies the window: it
+   `test_a_match_the_reader_may_not_see_does_not_collapse_what_they_see`, each with its plant). The **Glass** applies the window: it
    sets the timeline to the view's `window`, as it does for the case. A view saved from the canvas keeps
    the chosen nodes, their positions and the timeline's window, and leaves its threshold unset.
 4. **An opened view is a read-only lens (the owner's ruling of 8 November 2026, the option recommended to
@@ -29448,9 +29448,13 @@ Conduit half) and L3.2b (the Glass half). ADR-144 and Amendment 1 are unchanged 
    *Back to the case*. Nothing in a view changes the case's working set: no expand, links among, paths or
    messages put on, remove, or manual same-as or split. The selection bar offers *Save as a view*, *Ask
    the model about these…* and *Clear*; a node's menu offers only an allowlist of actions that change
-   nothing. Asked another way, such an action is said, not done. The rejected options were an editable lens, dimming the rest
+   nothing, and a link's menu likewise (no confirm, mark as not the same, explain or change: the
+   case's explanation is of clusters at the case's threshold). Asked another way, such an action is
+   said, not done. The case's over-cap dialog steps aside while the view is open on the Graph. The rejected options were an editable lens, dimming the rest
    of the case's canvas, and adding the view's items to the case (what a branch used to do). Proved by
-   `SelectionBar.test.tsx` (in a view, nothing that changes the case) and `keyboard/views.spec.ts`.
+   `keyboard/keyboard.spec.ts` ("in an opened view the canvas offers nothing that changes the case"),
+   `keyboard/view-over-cap.spec.ts` (the dialog steps aside and focus lands on *Back to the case*) and
+   `keyboard/views.spec.ts`.
 5. **The cap's and the questions' options.** The working set's typed `limit_exceeded` names
    `save_as_view`, `filter` and `promote_to_batch`. The over-cap dialog's way out is *Save as a view*:
    entity types, a date window or both, saved as a private filtered view and opened as the lens. A view

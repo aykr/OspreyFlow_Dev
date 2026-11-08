@@ -105,6 +105,22 @@ describe("ViewsPanel", () => {
     expect(screen.getByRole("button", { name: "Share with the case: Alice's own" }).className).toContain("govuk-button");
   });
 
+  it("says a failed list as a failure, not as no views, and clears it when a later read succeeds", async () => {
+    let fail = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => (fail ? new Response("{}", { status: 500 }) : new Response(JSON.stringify([ALICES_SHARED]), { status: 200 }))),
+    );
+    const onOpen = vi.fn();
+    const { rerender } = render(<ViewsPanel apiBaseUrl={API} bearerToken="t" caseId="c1" me="bob" onOpen={onOpen} refreshKey={0} />);
+    expect((await screen.findByRole("alert")).textContent).toBe("The views could not be loaded (500).");
+    expect(screen.queryByText(/No views yet/)).toBeNull();
+    fail = false;
+    rerender(<ViewsPanel apiBaseUrl={API} bearerToken="t" caseId="c1" me="bob" onOpen={onOpen} refreshKey={1} />);
+    await screen.findByText("Kestrel's contacts");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("says when the case has no views yet", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
     panel("alice");

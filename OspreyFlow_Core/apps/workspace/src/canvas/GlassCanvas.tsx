@@ -420,6 +420,17 @@ const LENS_MENU_ITEMS: ReadonlySet<string> = new Set([
   "save-selected-as-view",
 ]);
 
+/** What a link's menu offers in a view: folding, notes, hiding, history and the events read, each
+ * changing nothing in the case's working set. */
+const LENS_LINK_MENU_ITEMS: ReadonlySet<string> = new Set([
+  "link-expand",
+  "link-collapse",
+  "link-note",
+  "link-hide",
+  "link-history",
+  "link-events",
+]);
+
 /** Said when something that would change the case's working set is asked for in a view. */
 const LENS_NOTICE = "This is a view: nothing in it changes the case. Go back to the case to change it.";
 
@@ -645,10 +656,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `pathError`'s own distinct-outcomes shape.
     // ADR-144 decision 4: the *Save as a view* form, open over the canvas.
     const [savingView, setSavingView] = useState(false);
-    // The form belongs to the selection it was opened for: cleared with it, it closes, and does not
-    // come back by itself at the next selection.
+    // The form belongs to the selection it was opened for: when the selection changes or is cleared,
+    // it closes, and does not come back by itself.
     useEffect(() => {
-      if (selected.size === 0) setSavingView(false);
+      setSavingView(false);
     }, [selected]);
     const [actionError, setActionError] = useState<{
       x: number;
@@ -2538,6 +2549,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       x: number,
       y: number,
     ): Promise<void> {
+      if (refusedInLens()) return;
       let response: Response;
       try {
         response = await fetch(
@@ -3010,7 +3022,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         : undefined;
       const noun = eventsNoun(edge.type, sourceNode);
       const eventsLabel = eventsEntryLabel(noun, edge.occurrences ?? 1);
-      return linkMenuItems(edge, collapsed.has(group.id), {
+      const offered = linkMenuItems(edge, collapsed.has(group.id), {
         onCollapse: () => {
           const view = foldedViewRef.current;
           if (group.members.some((id) => view?.hidden.has(id) || view?.groups.has(id))) {
@@ -3063,6 +3075,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             : undefined,
         eventsToCanvasLabel: mayCarryText(noun) ? `Put the ${noun} on the canvas` : undefined,
       });
+      // In a view (a read-only lens) a link's menu leaves out what would change the case or ask the
+      // case about clusters the view worked out at its own threshold: an allowlist, as a node's is.
+      return lens ? offered.filter((item) => LENS_LINK_MENU_ITEMS.has(item.id)) : offered;
     }
 
     // Selecting a link clears the node selection (and the other way round, in the effect above), and

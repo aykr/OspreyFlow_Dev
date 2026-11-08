@@ -66,9 +66,8 @@ test("the dialog appears on a view_over_cap; Try again resyncs from nothing; a s
   // The view is open as the lens: with no snapshot (the case is still past the cap), the dialog is
   // gone and holds no focus, so the view can be worked by keyboard.
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  const back = page.getByRole("button", { name: "Back to the case" });
-  await back.focus();
-  await expect(back).toBeFocused();
+  // Focus is on the open view's own Back to the case, never left on the page body.
+  await expect(page.getByRole("button", { name: "Back to the case" })).toBeFocused();
   registerCovered("VIEW_OVER_CAP_ACTIONS", "choose-a-type-and-save-a-view-by-keyboard");
 
   // Back to the case, which is still past the cap: the dialog shows again.

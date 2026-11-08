@@ -39,7 +39,11 @@ export function ViewsPanel({ apiBaseUrl, bearerToken, caseId, me, openViewId = n
   const load = useCallback(() => {
     let cancelled = false;
     listViews(apiBaseUrl, bearerToken, caseId)
-      .then((listed) => !cancelled && setViews(listed))
+      .then((listed) => {
+        if (cancelled) return;
+        setViews(listed);
+        setProblem(null);
+      })
       .catch((failure: unknown) => {
         if (cancelled) return;
         setViews([]);

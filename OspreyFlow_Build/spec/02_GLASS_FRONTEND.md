@@ -959,14 +959,19 @@ the view keeps them, and the timeline set to its window. A banner above the canv
 its *Private* or *Shared* tag, "n items in this view could not be shown" when the Conduit counted any
 (never which, nor why), "Nothing in a view changes the case." and **Back to the case**. Nothing in a view
 changes the case's working set: the selection bar offers *Save as a view*, *Ask the model about these…*
-and *Clear* only, and a node's menu only what changes nothing (read, view messages, open a group,
-explain a cluster, save the selection as a view); an action that would change the working set asked for
-another way is said ("This is a view: nothing in it changes the case. Go back to the case to change
-it."), not done. A view past the working set's cap is refused with its own figures, never cut to fit
+and *Clear* only; the toolbar offers no *Clear view*, *Add files* or *Show links among all*; a node's
+menu offers only what changes nothing (read full screen, view messages, expand a group, save the
+selection as a view); and a link's menu only folding, a note, hiding, its history and its events (no
+*Confirm as the same*, *Mark as not the same*, *Explain this link*, *Change* or *Put the emails on the
+canvas*: explaining asks the case about clusters worked out at the case's threshold, not the view's).
+An action that would change the working set asked for another way is said ("This is a view: nothing in
+it changes the case. Go back to the case to change it."), not done. When the view opens, focus moves to
+its *Back to the case*. A view past the working set's cap is refused with its own figures, never cut to fit
 (rule 2). The lens is the Graph's: the Map, the Matrix and the status bar go on showing the
 case while a view is open. A view with no window clears the timeline's window while it is open, and
 *Back to the case* gives the case's window back and takes `case_view` out of the address. The over-cap
-dialog, the case's, steps aside while a view is open and comes back with the case if it is still past
+dialog, the case's, steps aside while a view is open on the Graph, and shows on the Map and the Matrix,
+which show the case, and again on the Graph once the analyst is back on the case, if it is still past
 the cap.
 
 **Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open

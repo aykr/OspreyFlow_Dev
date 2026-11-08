@@ -1052,7 +1052,7 @@ test("CAP-A2-C7", async ({ page }) => {
   await expect(name).toHaveValue(/, selected$/);
   const called = await name.inputValue();
   await page.getByRole("button", { name: "Save view" }).click();
-  await page.getByRole("button", { name: "Cases", exact: true }).click();
+  await rail(page, "Cases").click();
   await page.getByRole("button", { name: `Open ${called}` }).click();
   await expect(page.getByRole("region", { name: "Open view" })).toContainText(called, { timeout: 60_000 });
   await page.waitForTimeout(6000);

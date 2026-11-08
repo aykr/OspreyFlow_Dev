@@ -42,6 +42,25 @@ const DIALOG = { name: "Your view of this case is too large" };
 const REOPEN = { name: "Your view of this case is too large. Choose what to do" };
 
 describe("the gate", () => {
+  it("draws nothing while a view is open over the case, and shows again when it is closed", () => {
+    const { store } = createWorkingSet();
+    const props = {
+      store,
+      requestResync: vi.fn(),
+      entityTypes: ["Person"],
+      apiBaseUrl: "http://api.invalid",
+      bearerToken: "token",
+      investigationId: "c1",
+      onViewOpened: vi.fn(),
+    };
+    const { rerender } = render(<ViewOverCapGate {...props} lensOpen />);
+    act(() => store.getState().setViewOverCap(wouldBe));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    rerender(<ViewOverCapGate {...props} lensOpen={false} />);
+    expect(screen.getByRole("dialog", DIALOG)).toBeTruthy();
+    cleanup();
+  });
+
   it("shows nothing until the server says the view is over the cap", () => {
     mount();
     expect(screen.queryByRole("dialog")).toBeNull();
