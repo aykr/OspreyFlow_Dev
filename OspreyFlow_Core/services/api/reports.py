@@ -28,6 +28,7 @@ from ports.graph import GraphPort
 from schemas.domain import (
     CLOSING_REASONS,
     POLE_CLASS_ORDER,
+    AgeCount,
     Alert,
     ExpandRequest,
     HeldFigures,
@@ -45,6 +46,7 @@ from schemas.domain import (
     ReportCount,
     ReportFigures,
     ReportLimitExceeded,
+    TeamCount,
     WeekCount,
 )
 from schemas.explore import TypeCounts
@@ -133,10 +135,51 @@ def _weeks(counts: Counter[tuple[date, str, str]]) -> list[LabelledWeekCount]:
 #: name, where a rule's own name is analyst-written text the feed never carries), hotlists together,
 #: monitors together (ADR-134 decision 2).
 _RULE_GROUP = {"typology": "typology", "hotlist": "hotlists", "monitor": "monitors"}
+#: Still in the queue: open, claimed, or proposed for closing (ADR-146 decision 6, G9: a proposed
+#: close counts as open everywhere).
+_IN_QUEUE = ("open", "claimed", "closing")
+#: ADR-145 Amendment 4 decision 9's "closed as not of interest": the two closing reasons that say
+#: the alert found nothing to act on (ADR-133 decision 7's list).
+NOT_OF_INTEREST = ("false_positive", "no_further_action")
+
+
+def _group(q: QueuedAlert) -> tuple[str, str]:
+    """The rule group an alert is counted under, as `raised_by_rule` labels it."""
+    return _RULE_GROUP[q.kind], (q.alert.typology or "") if q.kind == "typology" else ""
+
+
+def _panel_figures(
+    visible: Sequence[QueuedAlert], *, start: date, now: datetime, reader_id: str
+) -> tuple[list[AgeCount], list[TeamCount]]:
+    """The *Alerts* panel's open by source and age (ADR-146 decision 9) and the board's team view
+    (ADR-145 Amendment 4 decision 9), by rule group, over the same rows as every other figure."""
+    ages: Counter[tuple[str, str, str]] = Counter()
+    team: dict[tuple[str, str], TeamCount] = {}
+    for q in visible:
+        label, typology = _group(q)
+        row = team.setdefault((label, typology), TeamCount(label=label, typology=typology))
+        alert = q.alert
+        if alert.status in _IN_QUEUE:
+            ages[(label, typology, _age_label(alert.created_at, now))] += 1
+            if alert.assignee is None:
+                row.unassigned += 1
+            elif alert.assignee == reader_id:
+                row.mine += 1
+            if now - alert.created_at > timedelta(days=7):
+                row.older_than_week += 1
+        elif alert.status == "closed" and (alert.decided_at or alert.created_at).date() >= start:
+            row.closed += 1
+            if alert.disposition in NOT_OF_INTEREST:
+                row.not_of_interest += 1
+    by_age = [
+        AgeCount(label=label, typology=typology, age=age, count=n)
+        for (label, typology, age), n in sorted(ages.items())
+    ]
+    return by_age, [team[k] for k in sorted(team)]
 
 
 def _monitoring_figures(
-    visible: Sequence[QueuedAlert], *, start: date, now: datetime
+    visible: Sequence[QueuedAlert], *, start: date, now: datetime, reader_id: str
 ) -> MonitoringFigures:
     """ADR-134 decision 2, over every alert the reader's queue holds whole (any kind)."""
     raised: Counter[tuple[date, str, str]] = Counter()
@@ -163,7 +206,10 @@ def _monitoring_figures(
         outcome = q.alert.disposition or "closed"
         closed[(_week_of(decided), outcome, "")] += 1
         took[_age_label(q.alert.created_at, decided)] += 1
+    open_by_source, team = _panel_figures(visible, start=start, now=now, reader_id=reader_id)
     return MonitoringFigures(
+        open_by_source=open_by_source,
+        team=team,
         raised_by_rule=_weeks(raised),
         closed_by_outcome=_weeks(closed),
         time_to_close=[ReportCount(label=label, value=took[label]) for label in AGE_LABELS],
@@ -198,7 +244,7 @@ async def alert_report(
         alerts_by_week=by_week,
         open_by_age=by_age,
         outcomes=outcomes,
-        monitoring=_monitoring_figures(every_kind, start=start, now=now),
+        monitoring=_monitoring_figures(every_kind, start=start, now=now, reader_id=reader.id),
     )
 
 
@@ -357,6 +403,16 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     rows += [("time_to_close", c.label, "", "", c.value) for c in m.time_to_close]
     rows += [("hotlist_matches", w.label, "", w.week_start.isoformat(), w.count)
              for w in m.hotlist_matches]  # fmt: skip
+    # ADR-146 decision 9 and ADR-145 Amendment 4 decision 9: the Alerts panel's and the team view's
+    # figures. The age band joins the rule group in the label, as `pole_type` joins its class: the
+    # week column holds a date or nothing.
+    rows += [("open_by_source", f"{c.label}:{c.age}", c.typology, "", c.count)
+             for c in m.open_by_source]  # fmt: skip
+    team_figures = ("unassigned", "mine", "older_than_week", "closed", "not_of_interest")
+    for t in m.team:
+        rows += [
+            (f"team_{name}", t.label, t.typology, "", getattr(t, name)) for name in team_figures
+        ]
     if figures.held is not None:
         rows += [("held_rows", label, "", "", getattr(figures.held, label))
                  for label in ("held", "released", "rejected")]  # fmt: skip
