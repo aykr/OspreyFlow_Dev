@@ -30002,8 +30002,10 @@ on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where t
    status line are not drawn.
 10. **Open the evidence (R5).** The alert's detail offers *Open the evidence* to any reader of it. It saves
     a private view of the alert's own case (`POST …/views`, ADR-144 decision 4, behind `investigate`)
-    holding the nodes the reader was just shown, named "From alert: ‹title›", leaves the alert's
-    address, and opens the view as the Glass's read-only lens. The lens's banner says "Opened from an
+    holding the nodes the reader was just shown, named "From alert: ‹title›" — into the case the alert
+    was read in, and refused in words when that is not the case open or the alert's address names
+    another (`alerts/address.ts`'s `evidenceCase`, the orchestrator's independent review) — leaves the
+    alert's address, and opens the view as the Glass's read-only lens. The lens's banner says "Opened from an
     alert" and offers *← Back to the alert* (focused when it opens) before *Back to the case*; it
     returns to the alert's address, the alert still open in the queue. A view opened any other way has
     no way back to an alert. It replaces the jump's case of its own, and so ends L3.2's interim Q1.

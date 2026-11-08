@@ -44,11 +44,13 @@ export interface AlertQueueProps extends AlertsApi {
   onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
 }
 
-/** What *Open the evidence* opens: the nodes the reader was shown, under the alert's name. */
+/** What *Open the evidence* opens: the nodes the reader was shown, under the alert's name, from the
+ * case the alert was read in (its view is saved there and nowhere else). */
 export interface AlertEvidence {
   alertId: string;
   title: string;
   nodeIds: string[];
+  caseId: string;
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closing: "Closing", closed: "Closed" };
@@ -356,6 +358,7 @@ function AlertDetail(props: AlertDetailProps) {
                   alertId,
                   title: alertTitle(alert, f.kind),
                   nodeIds: nodes.map((n) => n.id),
+                  caseId: props.investigationId,
                 });
                 if (refused) setProblem(refused);
                 setBusy(false);

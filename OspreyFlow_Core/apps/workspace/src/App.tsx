@@ -120,7 +120,7 @@ import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } f
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
 import { RulesPlace } from "./alerts/RulesPlace";
-import { openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./alerts/address";
+import { evidenceCase, openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./alerts/address";
 import { StrengthPanel } from "./strength/StrengthPanel";
 import { alertPath, navigate, noteAddress, takeNotedAddress, useAddress } from "./shell/router";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
@@ -1703,9 +1703,15 @@ export function App() {
             onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
             // ADR-146 decision 6 (R5): the alert's evidence as a private view of its case (ADR-144
             // decision 4), opened as the Glass's read-only lens, with the way back to the alert.
-            onOpenEvidence={async ({ alertId, title, nodeIds }) => {
-              if (!investigationId) return "Open the alert's case first.";
-              const saved = await saveView(API_BASE_URL, bearerToken, investigationId, {
+            onOpenEvidence={async ({ alertId, title, nodeIds, caseId }) => {
+              // Saved into the alert's own case, and refused in words if that is not the case open.
+              const into = evidenceCase(
+                { alertId, caseId },
+                investigationId,
+                addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null,
+              );
+              if ("refused" in into) return into.refused;
+              const saved = await saveView(API_BASE_URL, bearerToken, into.caseId, {
                 name: `From alert: ${title}`.slice(0, 200),
                 nodeIds,
               });

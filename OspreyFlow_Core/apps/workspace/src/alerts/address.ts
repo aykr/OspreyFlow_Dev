@@ -61,3 +61,24 @@ export function openRulesOnCase(caseId: string, go: (url: string) => void = (url
   sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, caseId);
   go(`${RULES_PATH}?investigation=${encodeURIComponent(caseId)}&from=case`);
 }
+
+/** What *Open the evidence* saves from (`AlertQueue`'s `AlertEvidence`): the alert's nodes, and the
+ * case it was read in. */
+export interface EvidenceOf {
+  alertId: string;
+  caseId: string;
+}
+
+/** The case *Open the evidence* saves its private view into (ADR-146 decision 6): the alert's own,
+ * as it was read, and only while that is the case open and the alert's address names no other
+ * (the orchestrator's independent review of L2.9, item 6). Otherwise refused, in words. */
+export function evidenceCase(
+  evidence: EvidenceOf,
+  openCase: string | null,
+  address: { alertId: string; state: AlertAtAddressState } | null,
+): { caseId: string } | { refused: string } {
+  const refused = { refused: "This alert is worked in another case than the one open. Open the alert again, then its evidence." };
+  if (evidence.caseId !== openCase) return refused;
+  if (address?.alertId === evidence.alertId && address.state.status === "found" && address.state.caseId !== evidence.caseId) return refused;
+  return { caseId: evidence.caseId };
+}

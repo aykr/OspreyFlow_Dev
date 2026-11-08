@@ -5,7 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "../investigation/investigationId";
-import { alertInItsCaseUrl, openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./address";
+import { alertInItsCaseUrl, evidenceCase, openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./address";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -52,5 +52,28 @@ describe("an alert at its address", () => {
     expect(sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY)).toBe("c 2");
     openRulesOnCase("c3", go);
     expect(go).toHaveBeenLastCalledWith("/rules?investigation=c3&from=case");
+  });
+});
+
+// The orchestrator's independent review of L2.9, item 6: *Open the evidence* saves into the alert's own
+// case, never whichever case happens to be open.
+describe("the case Open the evidence saves into", () => {
+  const evidence = { alertId: "a1", title: "Structuring", nodeIds: ["n1"], caseId: "c1" };
+  const found = (caseId: string) => ({ status: "found" as const, caseId, explanation: { alert: { id: "a1" } } as never });
+
+  it("is the alert's own case, when it is the one open", () => {
+    expect(evidenceCase(evidence, "c1", null)).toEqual({ caseId: "c1" });
+    expect(evidenceCase(evidence, "c1", { alertId: "a1", state: found("c1") })).toEqual({ caseId: "c1" });
+  });
+
+  it("is refused when the alert was read in another case than the one open", () => {
+    expect(evidenceCase(evidence, "c2", null)).toEqual({ refused: expect.stringMatching(/another case/) });
+    expect(evidenceCase(evidence, null, null)).toEqual({ refused: expect.stringMatching(/another case/) });
+  });
+
+  it("is refused when the address says the alert is worked in another case", () => {
+    expect(evidenceCase(evidence, "c1", { alertId: "a1", state: found("c2") })).toEqual({ refused: expect.stringMatching(/another case/) });
+    // Another alert's address says nothing of this one.
+    expect(evidenceCase(evidence, "c1", { alertId: "a9", state: found("c2") })).toEqual({ caseId: "c1" });
   });
 });
