@@ -339,3 +339,35 @@ def test_each_copy_check_holds_alone(
     assert (len(_readers(world)) > 1) == copied, answer.text
     if not copied:
         assert answer.json() == NOT_COPIED
+
+
+# --- The case routes' loading refusal (the round-1 review's must-fix 3) ------------------------
+
+CASE_LOADING = ["ingest/extract", "held-rows/reject"]
+
+
+@pytest.mark.parametrize("path", CASE_LOADING)
+@pytest.mark.parametrize("planted_out", [False, True], ids=["held", "the-drawn-check-removed"])
+def test_nothing_is_loaded_through_its_case(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    planted_out: bool,
+) -> None:
+    """A case route that loads, or decides held rows, refuses in the drawing's home case
+    (`refuse_loading_in_a_composite_case`, `refuse_deciding_held_rows_in_a_composite_case`).
+    Rule 15, red: with the drawn check alone planted out (the composite check kept), the route
+    goes on past it."""
+    from fastapi.testclient import TestClient
+
+    home = _draw(world).json()["investigation_id"]
+
+    async def no_drawn_check(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    if planted_out:
+        monkeypatch.setattr(app_module, "_refuse_in_a_drawn_case", no_drawn_check)
+    client = TestClient(app_module.app, raise_server_exceptions=False)
+    answer = client.post(f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst"))
+    refused = answer.status_code == 409 and answer.json().get("error") == "drawn_not_loaded"
+    assert refused is not planted_out, answer.text
