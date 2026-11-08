@@ -265,7 +265,7 @@ async def test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_sti
                           subject=loaded.referent_node_ids[0], refs=("finding",), words="In the load",
                           node_ids=list(loaded.referent_node_ids), edge_ids=list(loaded.edge_ids))  # fmt: skip
         tx = await graph.begin_transaction()
-        node_id, why = await gate._alert_node_in_load(finding, tx, unseen=None, load_id=new_id(),
+        node_id, why, _ = await gate._alert_node_in_load(finding, tx, unseen=None, load_id=new_id(),
                                                       known={}, writes=RuleWrites())  # fmt: skip
         await graph.commit_transaction(tx)
         assert (node_id, why) == (None, "unreadable_link")
@@ -844,6 +844,8 @@ async def test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withh
         working = FakeWorkingSetStore()
         await working.add_nodes(case, await graph.get_nodes(alert.referent_node_ids, ANALYST))
         await working.add_edges(case, [link])
+        # The case has the alert's node on its canvas, at its OFFICIAL marking.
+        await working.add_nodes(case, [await graph.get_node(alert.alert_node_id, ANALYST)])  # type: ignore[arg-type, list-item]
         service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME), graph,
                                     ONTOLOGY, MovedNotes(), scheme=SCHEME, alerts=stores["alerts"])  # fmt: skip
         secret = link.handling.model_copy(update={"classification": "SECRET"})
@@ -864,6 +866,9 @@ async def test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withh
         assert [n.id for n in around.nodes if n.type == "Alert"] == []
         listed_nodes = await graph.list_nodes("Alert", TEAMMATE)
         assert {alert.alert_node_id, row.alert_node_id}.isdisjoint(n.id for n in listed_nodes.nodes)
+        # And the case's canvas no longer holds the weaker copy, which the store would serve as it
+        # is (red without the purge: the OFFICIAL copy was still stored).
+        assert alert.alert_node_id not in await working.node_ids(case)
         revision = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
         assert revision is not None and revision.handling.classification == "SECRET"
 

@@ -369,6 +369,9 @@ class LinkRepoint:
     def __init__(self, store: AlertStore) -> None:
         self._store = store
         self.pairs: dict[str, str] = {}
+        #: The moved alerts' nodes re-marked into revisions once the repoint is applied: the
+        #: caller removes their copies from every working set (ADR-109 Amendment 10).
+        self.remarked_nodes: list[str] = []
 
     async def record(self, old: str, new: str) -> None:
         await self._store._record_repoints({old: new})
@@ -660,7 +663,9 @@ class AlertStore:
         except BaseException:
             await self._settle(graph, repoint.pairs, drop_unsettled=True)
             raise
-        await self._remark_moved(graph, await self.apply_repoints(repoint.pairs))
+        repoint.remarked_nodes = await self._remark_moved(
+            graph, await self.apply_repoints(repoint.pairs)
+        )
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
         """Before every read of alerts: any recorded repoint whose graph write has committed is
@@ -695,13 +700,14 @@ class AlertStore:
         await self.publish_facts(moved)
         return moved
 
-    async def _remark_moved(self, graph: GraphPort, moved: Sequence[str]) -> None:
+    async def _remark_moved(self, graph: GraphPort, moved: Sequence[str]) -> list[str]:
         """A repointed alert's node raised to its new evidence's marking (ADR-109 Amendment 10): a
         link re-marked above the node it was cited by would otherwise leave the node, and the words
         it carries, readable by expand and `list_nodes` to a reader who may not see the link."""
-        if moved:
-            rows = list((await self.cited_by_ids(moved)).values())
-            await remark_alerts(graph, self, self.scheme, rows)
+        if not moved:
+            return []
+        rows = list((await self.cited_by_ids(moved)).values())
+        return (await remark_alerts(graph, self, self.scheme, rows)).superseded_nodes
 
     async def _record_repoints(self, pairs: Mapping[str, str]) -> None:
         async with self._pool.acquire() as conn:
@@ -1014,6 +1020,9 @@ class RemarkReport:
         self.checked = 0
         #: The script's purge (`scripts.remark_alert_nodes`): working sets that lost a stale copy.
         self.cases_purged = 0
+        #: The nodes re-marked into revisions: what a caller holding the working sets removes
+        #: from every case that stores a copy (`WorkingSetService.remove_reverted`).
+        self.superseded_nodes: list[str] = []
 
 
 async def remark_alerts(
@@ -1076,6 +1085,7 @@ async def remark_alerts(
             raise
         await graph.commit_transaction(tx)
         await alerts.set_alert_node(alert.id, revision, was=node.id)
+        report.superseded_nodes.append(node.id)
     return report
 
 
@@ -1083,6 +1093,7 @@ class _NoRepoint:
     """Where no alert store is given (a service built for a test of its own), nothing to repoint."""
 
     pairs: dict[str, str] = {}
+    remarked_nodes: list[str] = []
 
     async def record(self, old: str, new: str) -> None:
         return None

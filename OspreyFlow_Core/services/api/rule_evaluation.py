@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -560,16 +560,19 @@ async def write_alert_node(
     load_id: str | None = None,
     known: Mapping[str, Handling] | None = None,
     writes: RuleWrites | None = None,
-) -> str | None:
+) -> tuple[str | None, Finding]:
     """The `Alert` node and its `ALERTED_ON` links, in `tx` — at the highest marking of what it
     references, `inferred`, attributed to the rule (ruling 2; rules 3 and 5) — after anything the
     finding writes alongside (`pending`). `None` when no single marking is safe
-    (`alert_handling`): the node is withheld, the queue row still raised."""
+    (`alert_handling`): the node is withheld, the queue row still raised. Returned with the finding
+    as stored: a pending write the store merged into one it already held (a second screening hit
+    on the same match) is cited by the stored id, never the write's own, which no link holds and
+    which the queue's check would read as hidden from every reader (L2.8b)."""
     record = writes if writes is not None else RuleWrites()
     from .sentence_rules import is_just_me
 
     if is_just_me(finding.rule):
-        return None  # an alert for its author alone puts nothing in the case's graph
+        return None, finding  # an alert for its author alone puts nothing in the case's graph
     into = await _alert_datasets(graph, scheme, finding)  # `_AlertInAReadOnlyLayer`: no node
     if finding.pending:
         # What the finding writes alongside (a screening hit's listed party, as the list asserts
@@ -580,14 +583,33 @@ async def write_alert_node(
         pending = [w if w.datasets or not into else w.model_copy(update={"datasets": into})
                    for w in finding.pending]  # fmt: skip
         pending_nodes = [w for w in pending if isinstance(w, NodeWrite)]
-        pending_edges = [w for w in pending if isinstance(w, EdgeWrite)]
-        record.node_ids.extend(await graph.upsert_nodes(pending_nodes, tx))
-        record.edges(pending_edges, await graph.upsert_edges(pending_edges, tx))
+        stored_nodes = list(await graph.upsert_nodes(pending_nodes, tx))
+        record.node_ids.extend(stored_nodes)
+        renamed = {w.id: i for w, i in zip(pending_nodes, stored_nodes, strict=True) if w.id != i}
+        pending_edges = [
+            w.model_copy(update={"source": renamed.get(w.source, w.source),
+                                 "target": renamed.get(w.target, w.target)})  # fmt: skip
+            for w in pending
+            if isinstance(w, EdgeWrite)
+        ]
+        stored_edges = list(await graph.upsert_edges(pending_edges, tx))
+        record.edges(pending_edges, stored_edges)
+        renamed.update(
+            {w.id: i for w, i in zip(pending_edges, stored_edges, strict=True) if w.id != i}
+        )
+        if renamed:
+            finding = replace(
+                finding,
+                subject=renamed.get(finding.subject, finding.subject),
+                node_ids=[renamed.get(i, i) for i in finding.node_ids],
+                edge_ids=[renamed.get(i, i) for i in finding.edge_ids],
+                pending=(),
+            )
     marking = alert_handling(
         scheme, await _referent_handlings(graph, scheme, finding, unseen, known or {})
     )
     if marking is None:
-        return None
+        return None, finding
     now = datetime.now(UTC)
     provenance = Provenance(
         state=ProvenanceState.INFERRED,
@@ -633,7 +655,7 @@ async def write_alert_node(
         for target in finding.node_ids
     ]
     record.edges(alerted, await graph.upsert_edges(alerted, tx))
-    return node_id
+    return node_id, finding
 
 
 def alert_row(finding: Finding, alert_node_id: str | None, investigation_id: str) -> Alert:
@@ -975,12 +997,12 @@ class RuleGate:
                     )
                 continue
             for finding in fresh:
-                node_id, why = await self._alert_node_in_load(
+                node_id, why, stored = await self._alert_node_in_load(
                     finding, tx, unseen=unseen, load_id=load_id, known=known, writes=verdict.writes
                 )
                 if why is not None:
                     verdict.withheld[len(verdict.findings)] = why
-                verdict.findings.append((finding, node_id))
+                verdict.findings.append((stored, node_id))
             if fresh:
                 verdict.notes.append(f"Rule “{rule.name}” raised {len(fresh)} alert(s).")
         return verdict
@@ -994,21 +1016,22 @@ class RuleGate:
         load_id: str | None,
         known: Mapping[str, Handling],
         writes: RuleWrites,
-    ) -> tuple[str | None, NodeWithheld | None]:
-        """The finding's `Alert` node in the load's transaction, or why there is none."""
+    ) -> tuple[str | None, NodeWithheld | None, Finding]:
+        """The finding's `Alert` node in the load's transaction, or why there is none, and the
+        finding as stored (`write_alert_node`)."""
         try:
-            node_id = await write_alert_node(
+            node_id, stored = await write_alert_node(
                 self.graph, self.scheme, finding, tx, unseen=unseen, load_id=load_id, known=known,
                 writes=writes,
             )  # fmt: skip
         except UnreadableAlertLink:
-            return None, "unreadable_link"
+            return None, "unreadable_link", finding
         except _AlertInAReadOnlyLayer:
-            return None, "originals_layer"
+            return None, "originals_layer", finding
         except RuntimeError:
             # A referent's marking cannot be known: no node rather than a guessed one.
-            return None, "unseen_referent"
-        return node_id, ("units" if node_id is None else None)
+            return None, "unseen_referent", finding
+        return node_id, ("units" if node_id is None else None), stored
 
     async def after_commit(self, verdict: PreCommitVerdict) -> list[Alert]:
         """The queue rows for what `pre_commit` wrote into the committed graph."""
@@ -1073,7 +1096,7 @@ class RuleGate:
             return await self._raise_row(finding, None)  # nothing goes into the case's graph
         tx = await self.graph.begin_transaction()
         try:
-            node_id = await write_alert_node(
+            node_id, stored = await write_alert_node(
                 self.graph, self.scheme, finding, tx, load_id=load_id, writes=writes
             )
         except UnreadableAlertLink:
@@ -1090,7 +1113,7 @@ class RuleGate:
             raise
         await self.graph.commit_transaction(tx)
         return await self._raise_row(
-            finding, node_id, withheld="units" if node_id is None else None
+            stored, node_id, withheld="units" if node_id is None else None
         )
 
     async def seen(self, finding: Finding) -> bool:

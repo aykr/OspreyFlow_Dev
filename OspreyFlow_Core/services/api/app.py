@@ -9753,6 +9753,8 @@ async def dispose_alert(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     analytics: AnalyticsDep,
+
+    working_set: WorkingSetDep,
 ) -> Alert:
     """Closes the alert with its disposition and reason. A true positive confirms its node
     (rule 5's human confirmation); a false positive leaves it `inferred`."""
@@ -9765,6 +9767,7 @@ async def dispose_alert(
         principal,
         disposition=body.disposition,
         reason=body.reason,
+        working_set=working_set,
     )
     action = "alert_close_proposed" if alert.status == "closing" else "alert_disposed"
     await _triage_audit(audit, principal, investigation.id, action, alert)
@@ -9783,12 +9786,15 @@ async def approve_alert_close(
     alerts_store: AlertsStoreDep,
     audit: AuditDep,
     analytics: AnalyticsDep,
+
+    working_set: WorkingSetDep,
 ) -> Alert:
     """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
     alert — never the member who proposed it."""
     try:
         alert = await alert_queue.approve_close(
-            alerts_store, graph, analytics, investigation.id, alert_id, principal
+            alerts_store, graph, analytics, investigation.id, alert_id, principal,
+            working_set=working_set,
         )
     except alert_queue.CloseRefused as refused:
         raise HTTPException(

@@ -24,6 +24,7 @@ the alert and leaves the node `inferred` — a suggestion nobody confirmed, whic
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from services.extract.writer import confirm_edge, confirm_node
 
@@ -54,6 +55,9 @@ from .alerts import (
     settle_repoints,
 )
 from .dataset_scope import refuse_unless_in_the_layer
+
+if TYPE_CHECKING:
+    from .working_set.service import WorkingSetService
 
 #: The properties that name an entity, most telling first.
 _NAME_PROPERTIES = (
@@ -371,6 +375,7 @@ async def dispose(
     *,
     disposition: str,
     reason: str,
+    working_set: WorkingSetService | None = None,
 ) -> Alert:
     """Closes the alert with its disposition and reason — or, for a high-severity alert a second
     person may read, proposes the close: the alert waits as `closing`, its disposition and reason
@@ -387,7 +392,7 @@ async def dispose(
         )  # fmt: skip
     return await _close(
         store, graph, investigation_id, alert, nodes, member, disposition=disposition,
-        reason=reason, expect=["open", "claimed"],
+        reason=reason, expect=["open", "claimed"], working_set=working_set,
     )  # fmt: skip
 
 
@@ -398,6 +403,8 @@ async def approve_close(
     investigation_id: str,
     alert_id: str,
     member: Principal,
+    *,
+    working_set: WorkingSetService | None = None,
 ) -> Alert:
     """The second person approves a proposed close: the alert closes with the proposer's
     disposition and reason, decided by `member`, the proposer kept beside it."""
@@ -411,7 +418,7 @@ async def approve_close(
     return await _close(
         store, graph, investigation_id, alert, nodes, member, disposition=alert.disposition,
         reason=alert.disposition_reason or "", expect=["closing"],
-        proposed_by=alert.close_proposed_by,
+        proposed_by=alert.close_proposed_by, working_set=working_set,
     )  # fmt: skip
 
 
@@ -446,6 +453,7 @@ async def _close(
     reason: str,
     expect: list[str],
     proposed_by: str | None = None,
+    working_set: WorkingSetService | None = None,
 ) -> Alert:
     alert_id = alert.id
     confirmed_node: str | None = None
@@ -489,6 +497,10 @@ async def _close(
                     await graph.rollback_transaction(tx)
                     raise
                 await graph.commit_transaction(tx)
+            # The moved alerts' re-marked nodes leave every working set that stored a copy at the
+            # old marking (ADR-109 Amendment 10).
+            if working_set is not None and repoint.remarked_nodes:
+                await working_set.remove_reverted(repoint.remarked_nodes, [])
     return await store.set_queue_triage(
         alert_id,
         investigation_id,

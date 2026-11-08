@@ -479,6 +479,10 @@ class LinkChangeService:
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)
+        # The moved alerts' re-marked nodes leave every working set that stored a copy at the old
+        # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
+        if repoint.remarked_nodes:
+            await self._working_set.remove_reverted(repoint.remarked_nodes, [])
 
         new = old.model_copy(
             update={
