@@ -45,3 +45,44 @@ derives the same key (an HMAC of the engine's name). So the check passes on a fi
 later one, as a deployment would after its first engine removal or revocation (rule 15: the plant must meet
 the dependency in the state the real call site meets it). The table is now left out of every backup; live
 again at 21:09:25–21:10:42 on the same gateway, the deleted keys present: 1 passed.
+
+## Part 2, maps administration (ADR-147), offline, closed ports
+
+Each plant applied to the file under test, the named tests run, the file restored
+(`scratchpad/plant.py`); a Glass plant restored by copy.
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_tile_proxy.py` (new WMTS-key cases) | `MissingMapKeyError` not yet defined | collection error |
+| `test_tile_proxy.py` | the key not appended to the WMTS request; the Admin key not used first | 3 failed each |
+| `test_map_admin.py::test_an_area_over_the_tile_cap_is_refused_with_its_count` | the cap check removed | 1 failed |
+| `…::test_a_changed_address_drops_the_key_held_for_the_old_one` | the address check never true | 1 failed |
+| `…::test_a_failed_run_is_said_in_fixed_words_without_the_key_or_the_address` | `str(error)` for the words | 3 failed |
+| `…::test_a_run_fetches_each_missing_tile_once_with_the_admin_key` | the cache read skipped; the key not given | 1 failed each |
+| `test_map_admin.py` (both 600 cases) | `fchmod(0o644)` | 2 failed |
+| `…::test_a_provider_that_takes_no_key_refuses_one` | the `needs_key` check removed | 1 failed |
+| `…::test_the_schedule_is_due_every_so_many_hours_and_the_scheduler_runs_it` | the scheduler never runs a due area | 1 failed |
+| `…::test_each_provider_s_tier` | every local file tier 1 | 1 failed |
+| `…::test_a_build_on_a_small_synthetic_region_registers_a_tier_1_provider` | the provider not registered | 1 failed |
+| `test_map_admin_routes.py::test_every_maps_route_refuses…` | `manage_geospatial` removed from the areas route | 1 failed |
+| `…::test_a_planted_key_is_in_no_response_log_audit_or_maps_file` | the refusal's words `str(invalid)` | 1 failed |
+| `…::test_the_tile_proxy_carries_the_admin_key_upstream_and_nowhere_else` | the route not given the Admin key | 1 failed |
+| `…::test_the_map_follows_a_change_in_admin_with_no_restart` | `get_map_config` reading the start-up config | 1 failed |
+| `test_geospatial_admin_routes.py::test_build_basemap_route_takes_no_server_path_from_the_glass` | the body read leniently (extra fields dropped) | 1 failed |
+| `tests/harness/test_map_settings_render.py` | (written before the renderer change) | 2 failed |
+| `tests/harness/test_map_settings_backup.py` | (written before the backup and restore code) | 3 failed |
+| `tests/test_conduit_image_carries_java.py` | the Java runtime's `COPY` removed | 1 failed |
+| `tests/cli/test_map_verb.py` | `built/` not made; the verb run on the host; a non-jar taken | 1 failed each |
+| `tests/harness/test_webapp_geospatial.py` | (written before the change; the 501s); the region check removed; the before-Launch check removed | 4 failed; 1 failed each |
+| `apps/harness/keyboard/setup-screens.spec.ts` › Build and Verify | the region dropped from the build's body | 1 failed |
+| `tests/test_demo_osprey_config_is_tier_1_only.py::test_no_maps_file_is_committed…` | a `maps.yaml` planted in the index (`git add -N`) | 1 failed |
+| `keyboard/admin-maps.spec.ts` | one case's `registerCovered` removed; the schedule's change doing nothing | 1 failed each |
+| `src/admin/AdminSections.test.tsx` | (Maps added to `sections.json` before the expected list) | 1 failed |
+| `tests/services/api/test_admin_sections.py::test_every_admin_route_is_some_section_s` | (the geospatial routes' "no screen" exemption, now untrue, still listed) | 1 failed |
+
+**Greens first, then a red at the real call site (rule 15).** `test_map_admin.py`'s sixteen cases and
+the routes' seven passed on their first run, so each was then shown red by the plants above, each at the
+line the real caller reaches. **Measured offline:** the Conduit image's Java stage (`docker build --network
+none --target java`, the cached `eclipse-temurin:21-jdk`): `jlink` first failed (`/opt/java` already exists
+in the JDK image), then built a runtime of 100 MB whose `java -version` answers 21.0.12.1. The full image
+was not built: its other stages fetch packages.

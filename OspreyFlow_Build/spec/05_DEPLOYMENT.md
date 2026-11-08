@@ -297,6 +297,17 @@ Moving up a tier is the same screen:
 - **Anything else** — pick from the shipped profiles, or upload a profile YAML, which is
   validated against the schema in `00_ARCHITECTURE.md` §1.2 on upload.
 
+**Since ADR-147 (P3), Build and Verify run in the Conduit**, which holds the graph the gazetteer
+loads into and the code both need: the set-up console's buttons, *Admin › Maps* and `ospreyflow map
+build|verify` all run `services.api.map_admin` there, the set-up console and the command line
+through `docker compose exec api` (the console holds no Conduit token before sign-in), the Glass
+through `/v1/admin/geospatial/*`. Before Launch the console says so in words. Build takes a named
+region only; the tiles are written to the tiles folder's one writable door (`built/`, laid over the
+read-only mount as ADR-067's upload door is), with planetiler's jar placed there once by
+`ospreyflow map build --planetiler-jar`, and the provider is registered in the maps file. After
+Launch, providers, keys, the default and prefetch areas (named boxes, at most 5,000 tiles each, run
+on a schedule by the Conduit) are managed in *Admin › Maps*.
+
 **Verify** runs after any provider change and renders its result rather than printing it: sample
 tiles at three zoom levels, the coordinate reference system and zoom range asserted, and a
 fixture graph drawn over the basemap so the contrast floor is checked by eye as well as by
@@ -535,9 +546,8 @@ docker run --rm -p 127.0.0.1:7100:7100 \
 
 Then open `http://localhost:7100` and work through the six screens. For a laptop: choose
 **local-lite** on Profile, accept the defaults on Components, Models and Governance, press
-**Register a local provider** (or **Build local basemap**, once §2.2's own pipeline reaches a
-machine with Java/planetiler — `harness/geospatial.py`'s own docstring has the current, disclosed
-limit: this button is not yet reachable from inside the harness image) on Geospatial, generate and
+**Register a local provider** on Geospatial (**Build local basemap** runs in the Conduit, so it is
+offered once the deployment is launched: §2.2, ADR-147), generate and
 confirm the artefacts, and let Preflight run. Click Launch, then **Seed demo data** on the screen
 that follows.
 
@@ -1104,6 +1114,11 @@ encryption key, so `ospreyflow backup` leaves out the rows of its tables that ho
 value (the schema kept), and every restore names the engines whose key must be entered again (in
 *Admin › Models* or with `ospreyflow models key`); their engines, models and defaults come back
 from the models file.
+
+**Map provider keys** (ADR-147, the owner's ruling that they follow the model keys' rule) are kept
+in the Conduit's map key file, which no backup reads: the set takes the maps file beside it (the
+providers, the default, the prefetch areas and the ids of the providers whose key was set), and
+every restore names each provider whose key must be entered again in *Admin › Maps*.
 
 **For `cluster`, the answer is different and not yet built.** Holding secrets outside the
 deployment, in a secret manager the restored deployment is pointed at, is recorded as the cluster

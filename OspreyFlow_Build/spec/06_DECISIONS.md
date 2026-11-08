@@ -30105,3 +30105,123 @@ and with the evidence saved short; each red); `keyboard/shell.spec.ts`,
 `keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
 new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
 address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.
+
+## ADR-147 — Maps administration: providers and their keys in Admin under ADR-135 Amendment 2's rule, the local basemap built and verified in the Conduit, prefetch areas on a schedule — ACCEPTED (design)
+
+Status: accepted 8 November 2026; the owner's ruling of 8 November (map provider keys follow the model
+keys' rule: managed in Admin, write-only, never returned, logged or echoed, every change audited, behind
+`manage_geospatial`) and the orchestrator's settlement of the same day (the `osprey-admin` role check on
+`/v1/admin/geospatial/*` is kept beside the right); every other choice the platform lane's, under Prompt
+L's rule that a lane builds its recommended option and logs it (`process/lanes/platform/REPORT.md`,
+"Decisions taken"). Written by the platform lane in P3 (`07_BUILD_PLAN.md`'s lane table, row P3). The
+analyst's basemap switch and place search are P4's, under a later amendment. ADR-014, ADR-015, ADR-016,
+ADR-049 Stage 2 §6, ADR-054 Amendment 4 and ADR-067 are otherwise unchanged.
+
+**Context.** Maps had no Admin section. Providers were set only in `osprey.yaml`'s `map:`, read once at
+start; a hosted provider's key only as `credential: env:VAR` in the Conduit's environment; the set-up
+console's **Build local basemap** and **Verify** answered 501 (`harness/geospatial.py`: both need
+`services`/`adapters` modules the harness image does not carry, and the build a live graph);
+`/v1/admin/geospatial/*` existed with no screen calling it and asked for server paths in its body; prefetch
+ran only as `python -m services.api.prefetch` from an outside scheduler; and a WMTS provider with a key
+raised `NotImplementedError`, since a KVP `GetTile` request has no template to put one in
+(`07_BUILD_PLAN.md`, Phase 5's known gaps: the `endpoint` conflict, whose first half — `endpoint` a bare
+base URL — was already closed in `tile_proxy.py`).
+
+**Decision.**
+
+1. **Where things are kept.** `osprey.yaml`'s `map:` is where a deployment starts. The first change made
+   in *Admin › Maps* writes the **maps file** (`maps.yaml`), which then replaces `map:` whole, with the
+   prefetch areas, their schedule, each area's last run and the ids of the providers whose key is set.
+   A key typed in Admin goes to the **map key file** beside it (`map-keys.yaml`). Both are `600`, written
+   atomically, in a named volume of the Conduit's own (`map-settings`, at `/run/osprey/map-settings`,
+   made by `services/api/Dockerfile` for its user; `harness/render.py`, `harness/cluster.py`), read again
+   by every replica when they change, one change at a time under an advisory lock (`_Exclusive`, as
+   *Models*). **Never `osprey.yaml`, never a backup**: `ospreyflow backup` takes the maps file by its name
+   alone and never reads the key file; a restore puts the maps file back and names each provider whose
+   key must be entered again (`05_DEPLOYMENT.md` §6.1). The map serves the maps file's providers from the
+   next request, with no restart (`get_map_config`).
+2. **The key, under ADR-135 Amendment 2's rule.** `PUT /v1/admin/maps/providers/{id}/key` takes it once
+   (`SecretStr`), and no response, log record, audit row, maps file or backup carries it; each route reads
+   its own body so a validation refusal never echoes what was sent; a provider's record says only where a
+   key is (`set`, `env` for the installer's reference, `none`). A provider that takes no key refuses one;
+   an edit that changes a provider's address removes its key, which is never sent to an address it was
+   not entered for. The tile proxy uses the Admin key before the `env:` reference; a provider that needs a
+   key and holds neither answers its tiles 503 in words naming Admin › Maps, never its address.
+3. **The local basemap is built and verified in the Conduit.** One code (`services/api/map_admin.py`):
+   *Admin › Maps* calls `/v1/admin/geospatial/build-basemap` and `/verify`; the set-up console and
+   `ospreyflow map build|verify` run `python -m services.api.map_admin` in the Conduit's container
+   (`docker compose exec`; the console holds no Conduit token before sign-in, and says so in words before
+   Launch). The build takes **a named region only** — no path from the Glass — and writes into the tiles
+   folder's **one writable door, `built/`**, laid over the read-only tiles mount as ADR-067's upload door
+   is, so the rest of the folder stays read-only to the Conduit. **Java 21 is in the Conduit's image** (a
+   `jlink` runtime of every module, about 100 MB, from `eclipse-temurin:21-jdk` pinned by digest);
+   **planetiler's jar is not**: `ospreyflow map build <region> --planetiler-jar <path>` copies the owner's
+   jar into `<tiles>/planetiler/planetiler.jar` and makes `built/` before the build, so Docker does not
+   make it as root. The built provider (`osm-local-<region>`, ODbL, open) is registered in the maps file,
+   since `osprey.yaml` is read-only in the Conduit. The section shows each local file's state, the glyph
+   fonts' (`scripts/fetch_basemap_glyphs.py`) and whether the builder can run, in words.
+4. **The WMTS `endpoint` conflict, settled.** `MapProvider.credential_param` names the query parameter a
+   WMTS KVP request carries its key in (`key`, `apikey`, …): required beside a WMTS `credential`, refused
+   off a WMTS service; a template address keeps `{credential}`. `_build_wmts_kvp_url` no longer raises.
+5. **Prefetch areas** are named boxes (WGS84 degrees, zooms inclusive) for a provider the Conduit fetches
+   and caches (`proxy` not `none`, a `cache`), **at most 5,000 tiles an area** over its zooms, a larger
+   one refused in words with its count, never cut to fit (rule 2). They run by hand
+   (`POST /v1/admin/maps/prefetch`, `ospreyflow map prefetch`) or **on a schedule in the Conduit**
+   (every 6 hours, a day or a week; `PrefetchScheduler`, checked each minute), each tile fetched once and
+   kept; a run's failure is said on its own area in fixed words that carry neither the key nor the
+   address. Two replicas may both run an area; the second's fetches are cache hits. The `geometry_ref`
+   areas `osprey.yaml` may name stay `python -m services.api.prefetch`'s.
+6. **`ospreyflow map list|verify|prefetch|build`** for headless use, each the Conduit's own code in its
+   container, recorded in the maps' history as `cli:<user>`.
+7. **Attribution** is shown on every provider's row with its licence and note, as the map shows it.
+8. **Routes**, each behind `manage_geospatial` (rule 4): `GET /v1/admin/maps`, `GET …/history`,
+   `POST …/providers`, `PUT|DELETE …/providers/{id}`, `PUT|DELETE …/providers/{id}/key`,
+   `PUT …/default`, `PUT …/areas`, `PUT …/schedule`, `POST …/prefetch`; and the two geospatial routes,
+   which also keep the `osprey-admin` role check (the orchestrator's settlement; dropping it would loosen
+   access). Every change is audited in `map_admin_audit` (who, when, what, the provider, each changed
+   field's old and new value; never a key).
+
+**Tiers** are read off a provider (`map_admin.tier_of`): an OGC service is 4; a local file under ODbL is
+1, any other local file 2; anything hosted or from a profile 3.
+
+**Left, and why:**
+- **A real planetiler run in the Conduit was not seen**: this machine has no planetiler jar (a download,
+  the owner's call), and the full Conduit image was not rebuilt (its build fetches packages); the Java
+  stage alone was built and its `java -version` run. The build's own path was run end to end through the
+  real route on a small synthetic region with planetiler's run stood in.
+- **On Linux, `built/` must be writable by the Conduit's user** (uid 10001), as ADR-067 names for the
+  upload door; `ospreyflow map build` makes it, not `chown`s it.
+- **Registering a tier-4 service by its capabilities from the Glass** (`register_tier4_provider`) is not
+  in the section: the form takes the fields the registration discovers. A later amendment.
+- **Drawn or uploaded boundaries** for prefetch (`05_DEPLOYMENT.md` §2.2) are boxes here; a polygon is the
+  `geometry_ref` path's.
+
+**Tests that would fail if it were broken** (rule 12; each shown red by a plant at its real call site,
+`process/lanes/platform/P3_RED_RECORD.md`):
+- **Access (rule 4)**: every `/v1/admin/maps` and `/v1/admin/geospatial` route, found by walking the app's
+  routes, refuses an administrator holding every right but `manage_geospatial` and changes nothing
+  (`tests/services/api/test_map_admin_routes.py`); `test_route_rights.py` names each; the section's routes
+  are the section's (`test_admin_sections.py`).
+- **The key in nothing**: a planted key through the real key route, a malformed body, an unknown provider,
+  a provider that takes none and a refused provider is in no response, log record, audit row or maps file,
+  and reaches the tile proxy's upstream request alone (`test_map_admin_routes.py`, `test_map_admin.py`);
+  in no backup (`tests/harness/test_map_settings_backup.py`); never on the page after it is sent
+  (`Maps.test.tsx`, `keyboard/admin-maps.spec.ts`).
+- **The tile proxy**: the WMTS key in its parameter, the Admin key first, a missing key in words
+  (`test_tile_proxy.py`).
+- **Build and verify on a small synthetic region**: through the real route (`test_geospatial_admin_routes.py`)
+  and the service (`test_map_admin.py`), no server path accepted from the Glass; the set-up console and
+  the command line run the Conduit's code in its container (`test_webapp_geospatial.py`,
+  `tests/cli/test_map_verb.py`, `apps/harness/keyboard/setup-screens.spec.ts`).
+- **Prefetch**: the cap, a provider not cached, each tile fetched once with the key, failures in fixed
+  words, the schedule due and run (`test_map_admin.py`).
+- **Tier 1 in the demo and CI (rule 9)**: no maps file committed anywhere, and a Conduit with none serves
+  exactly the committed tier-1 map (`tests/test_demo_osprey_config_is_tier_1_only.py`).
+- **The deployment**: the volume, its variable, `built/` the one writable door (`test_map_settings_render.py`);
+  Java in the image (`tests/test_conduit_image_carries_java.py`).
+- **Keyboard (rule 13)**: every Maps action by keyboard, each red when it does nothing
+  (`keyboard/admin-maps.spec.ts`, `MAPS_ACTIONS`); **axe** in the dark, light and GOV.UK themes on
+  `maps-harness.html` with each form open and the basemap built.
+
+**Cost.** A second settings file and volume beside the models file; a 100 MB Java runtime in the Conduit's
+image; one asyncio task per replica for the schedule.
