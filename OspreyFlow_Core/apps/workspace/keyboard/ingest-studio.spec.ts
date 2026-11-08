@@ -2,12 +2,10 @@
 // 2; `CLAUDE.md` rule 13): the tabs, the dataset switcher, the Runs tab's grid, held rows and Run now,
 // Sources' Add files, and Deploy as vN with Deploy and run now — no `page.mouse`, no `.click()`. The
 // harness serves itself and records every request, so each case proves its action reached its route.
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import { expect, test, type Page } from "@playwright/test";
 
 import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { REPORTS_MAP, mapTheReports, meaning } from "./reportsMap";
 
 const REGISTRY = "INGEST_STUDIO_ACTIONS";
 const HARNESS = "/keyboard/ingest-studio-harness.html";
@@ -408,124 +406,6 @@ test("a column is bound in the Map editor by choosing it and the binding, then E
 // entity, link, condition, content binding, handling part, transform, literal, optional binding,
 // ignored column and the row key is set through the controls a person uses. The saved map must equal
 // the committed one, not merely contain it.
-type Binding = { field?: string; literal?: string; transform?: string; optional?: boolean };
-type MapEntity = { ref: string; pole_class: string; type: string; match_on?: string; on_match?: string;
-  when?: { field: string; is: string }; properties: Record<string, Binding>; content?: { kind: string; field: string };
-  handling: Record<string, { field: string }> };  // prettier-ignore
-type MapEdge = { type: string; from: string; to: string; when?: { field: string; is: string }; handling: Record<string, { field: string }> };
-type ReportsMap = { row_template: { entities: MapEntity[]; edges: MapEdge[] };
-  unmapped_fields: { field: string; action: string; note?: string }[]; deduplicate: { key: Binding[] } };  // prettier-ignore
-const REPORTS_MAP = JSON.parse(
-  readFileSync(fileURLToPath(new URL("./fixtures/pid_intel_reports_map.json", import.meta.url)), "utf8"),
-) as ReportsMap;
-
-/** What a saved map means, as the server reads it: a key holding `null` is absent, and a link with
- * `properties: {}` has none (`RecipeEdge.properties` defaults to `{}`). Nothing else is forgiven. */
-function meaning(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(meaning);
-  if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key, v]) => v !== null && v !== undefined && !(key === "properties" && Object.keys(v as object).length === 0))
-      .map(([key, v]) => [key, meaning(v)]),
-  );
-}
-
-async function choose(page: Page, label: string, value: string) {
-  const select = page.getByRole("combobox", { name: label, exact: true });
-  await select.focus();
-  await select.selectOption(value);
-}
-
-async function tick(page: Page, name: string) {
-  const box = page.getByRole("checkbox", { name, exact: true });
-  await box.focus();
-  await page.keyboard.press("Space");
-  await expect(box).toBeChecked();
-}
-
-/** The keyboard bind: Choose on the column (unless it is already chosen), then Bind here. */
-async function bind(page: Page, column: string, target: string) {
-  if (await page.getByRole("button", { name: `Choose column ${column}`, exact: true }).isVisible()) {
-    await press(page, `Choose column ${column}`);
-  }
-  await press(page, `Bind ${column} here: ${target}`);
-}
-
-/** One property's own controls: the inspector shows each under its name. */
-const propertyRow = (page: Page, name: string) =>
-  page.locator("strong").filter({ hasText: new RegExp(`^${name}$`) }).locator("xpath=..");
-
-async function bindHandling(page: Page, handling: Record<string, { field: string }>) {
-  await tick(page, "Override handling for this element");
-  const labels: Record<string, string> = { classification: "Classification", handling_code: "Handling code",
-    action_code: "Action code", sanitisation_code: "Sanitisation code", originator: "Originator", owning_unit: "Owning unit" };  // prettier-ignore
-  for (const part of Object.keys(handling)) {
-    const select = page.getByRole("combobox", { name: `${labels[part]} for this element`, exact: true });
-    await select.focus();
-    await select.selectOption({ label: `From column ${handling[part]!.field}` });
-  }
-}
-
-async function setCondition(page: Page, when: { field: string; is: string }) {
-  await tick(page, "Conditional element");
-  await choose(page, "Condition column", when.field);
-  await choose(page, "Condition test", when.is);
-}
-
-async function buildEntity(page: Page, entity: MapEntity) {
-  await press(page, "+ entity");
-  const ref = page.getByRole("textbox", { name: "Entity ref", exact: true });
-  await ref.focus();
-  await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type(entity.ref);
-  await choose(page, "POLE class", entity.pole_class);
-  await choose(page, "Entity type", entity.type);
-  const matchOn = page.getByRole("textbox", { name: "Match on", exact: true });
-  await matchOn.focus();
-  await page.keyboard.type(entity.match_on ?? "");
-  if (entity.on_match === "reference") {
-    await page.getByRole("radio", { name: "reference existing" }).focus();
-    await page.keyboard.press("Space");
-  }
-  for (const [name, binding] of Object.entries(entity.properties)) {
-    await choose(page, "Add a property", name);
-    const row = propertyRow(page, name);
-    if (binding.literal !== undefined) {
-      await row.getByRole("combobox", { name: "Binding kind" }).focus();
-      await row.getByRole("combobox", { name: "Binding kind" }).selectOption("literal");
-      await row.getByRole("textbox", { name: "Literal value" }).focus();
-      await page.keyboard.type(binding.literal);
-      continue;
-    }
-    await bind(page, binding.field!, name);
-    if (binding.transform) {
-      await row.getByRole("combobox", { name: "Transform" }).focus();
-      await row.getByRole("combobox", { name: "Transform" }).selectOption(binding.transform);
-    }
-    if (binding.optional) {
-      await row.getByRole("checkbox", { name: /^Optional/ }).focus();
-      await page.keyboard.press("Space");
-    }
-  }
-  if (entity.when) await setCondition(page, entity.when);
-  if (entity.content) {
-    await choose(page, "Its own text", entity.content.kind);
-    await choose(page, "Column holding its text", entity.content.field);
-  }
-  await bindHandling(page, entity.handling);
-  await expect(page.getByRole("button", { name: `Entity ${REPORTS_MAP.row_template.entities.indexOf(entity) + 1}: ${entity.ref} (${entity.type})` })).toBeVisible();
-}
-
-async function buildLink(page: Page, edge: MapEdge) {
-  await choose(page, "From entity", edge.from);
-  await choose(page, "To entity", edge.to);
-  await choose(page, "Link type", edge.type);
-  await press(page, "Add link");
-  if (edge.when) await setCondition(page, edge.when);
-  await bindHandling(page, edge.handling);
-}
-
 /** Chapter 4's from-scratch walk up to the map's save: name, source, Preview, the row key, every
  * element and link, the ignored columns. Asserts the saved map is the committed one. */
 async function buildTheReportsMap(page: Page) {
@@ -557,13 +437,7 @@ async function buildTheReportsMap(page: Page) {
   expect((JSON.parse(patch.body!) as { deduplicate: unknown }).deduplicate).toEqual(REPORTS_MAP.deduplicate);
   await press(page, "Close the drawer");
   await openTheMapEditor(page);
-  for (const entity of REPORTS_MAP.row_template.entities) await buildEntity(page, entity);
-  for (const edge of REPORTS_MAP.row_template.edges) await buildLink(page, edge);
-  for (const ignored of REPORTS_MAP.unmapped_fields) {
-    await page.getByRole("textbox", { name: `Note for ignoring ${ignored.field}` }).focus();
-    await page.keyboard.type(ignored.note ?? "");
-    await press(page, `Ignore ${ignored.field}`);
-  }
+  await mapTheReports(page);
   await press(page, "Save draft");
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template"))).toBe(true);
   const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).at(-1)!;
