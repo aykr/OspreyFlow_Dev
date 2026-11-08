@@ -287,3 +287,69 @@ Green with `onOpenEvidence` clearing `viewProblem` when it says the failure on t
 
 The keyboard case at `keyboard/shell.spec.ts:291` (§3, "home row") is renamed "an alert on Home, focused, is
 opened at its address by Enter": it focuses the row, it does not Tab to it. Its registry id is unchanged.
+
+## 9. The orchestrator's independent review, round 2 (8 November 2026)
+
+Each red taken on the branch as it stood before the item's fix, at the real call site, then green with it.
+
+### Blocker 1: the address timed (`test_alert_address.py`'s `test_every_refusal_is_answered_on_the_same_quantum`)
+
+A clock the fakes advance as they read (the level check 2 ms, each graph and analytics read 5 ms). With
+`rules_place.refusal_wait` written but not yet waited on in the route:
+
+    E   AssertionError: [0.002, 0.002, 0.017]
+
+The missing id and the other case's alert answered at 2 ms, the alert over a hidden link at 17 ms. Green with
+the route waiting each refusal out to the end of its quantum: all three at 0.25. The live figures are in
+`address-timing.txt`.
+
+### Blocker 2: the read-only layer (`test_an_alert_in_the_case_s_read_only_layer_is_answered_only_to_a_reader_of_the_original`)
+
+With the address scoping its reader without `holds_a_level` (`holds_a_level=None` at its `scope_to_case`):
+
+    E   AssertionError: (404, '{"error":"alert_not_found"}')
+    FAILED …[True]   1 failed, 1 passed
+
+A reader holding a level on the original was refused the alert in its layer. Green restored.
+
+### Item 3: the gate wider than the offer (`test_place_routes.py`)
+
+On the gate asking for an opening right alone, `test_a_gate_right_without_the_queue_read_is_refused_at_the_gate`
+failed for both grants (`directly`, `through_a_custom_role`): each of the eight triage routes answered past its
+checks (a 500 from the missing store, not a 403), and `test_the_gate_asks_for_the_place_s_needs` failed on
+`opens_rules_place(["right:triage_alerts"])`. Green with `NEEDS` asked too; `placesByRole.json`'s
+`right:triage_alerts` lost exactly those eight `answered_hidden` routes.
+
+### Item 4: full rows to whom the place is not offered (`test_alert_queue_counts.py`)
+
+Before `require_queue_rows`, `test_the_data_engineer_gets_counts_and_no_rows` failed:
+
+    E   AssertionError: (200, [{'alert': {'id': 'v1', …}, 'summary': 'Finding v1 over Name of n-a', …}])
+
+The Data Engineer was answered every row, words and all. Green with the check. Home
+(`homeData.test.ts`, "reads the counts when the rows are refused"): red with the counts fallback removed
+(1 failed), green restored.
+
+### Item 6: the evidence saved into the open case (`alerts/address.test.tsx`)
+
+With `evidenceCase`'s two checks removed: "is refused when the alert was read in another case than the one
+open" and "is refused when the address says the alert is worked in another case" failed (2 failed, 6 passed).
+Green restored.
+
+### Minor: a team-shared alert (`test_another_member_s_alert_shared_with_the_reader_s_team_is_answered`)
+
+A positive case. The fake admits a team alert as `_SHARED_SQL` does; with that admission removed:
+
+    E   AssertionError: (404, '{"error":"alert_not_found"}')    1 failed
+
+so the case shows the address answers what the queue's scope admits and nothing narrower. Green restored.
+
+### The live run's own reds (rules lease, stack c, at 7be2b1c)
+
+`test_route_rights` and `test_investigation_levels` failed on the new counts route missing from their tables
+(the gates doing their work); the live address test failed at its seed, a real case reading more than one
+dataset, then refused its readable alert, the adapter fixture having written a database of its own. Each
+fixed in a test commit, and re-taken: the address test passed (`address-timing.txt`). The Phase 8
+walkthrough (`test_phase8_exit_criterion_end_to_end.py`) is red on main before B14: its `loader` token holds
+no `create_case` since ADR-112 (fixed here, an analyst who loads), and then B4 seeds no node into a case of
+one dataset (`assert 0 == 4`, ADR-099 Amendment 12's one dataset per case), which is not this step's.
