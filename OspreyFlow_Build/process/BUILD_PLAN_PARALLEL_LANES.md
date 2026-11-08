@@ -217,8 +217,12 @@ merges).** A lane reports ready-to-merge at a commit rebased onto current `main`
 and `<sha>.test.txt` (failures listed, each explained). If `main` is still an ancestor of that commit, the
 `--no-ff` merge's tree is the tested tree (the orchestrator checks `git rev-parse <sha>^{tree}` against
 the merge result's), and the merge is kept on the lane's run; only what the orchestrator adds at the merge
-(registry ids, reservation rows, allowlist lines) is checked by its own targeted gates. If `main` has moved,
-the lane rebases and runs again, or the orchestrator gates the merge as before. Several ready lanes are
+(registry ids, reservation rows, allowlist lines) is checked by its own targeted gates. If `main` has moved
+only by the orchestrator's records (`OspreyFlow_Build/process/**` and `spec/ADR_RESERVATIONS.md`, which no
+code test reads), the orchestrator runs the document gates on the merge (`citation-check`,
+`provenance-annotation-check`, `decision-log-publication-check`, `lanes-check`) instead of the full set.
+If `main` has moved otherwise, the lane rebases and runs again, or the orchestrator gates the merge as
+before. Several ready lanes are
 gated in one run, split only if red. Gates run in a merge worktree, so `main` stays free. The seven trivy
 image scans, refused locally by Docker Hub's pull limit, are left to GitHub's CI.
 
