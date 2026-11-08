@@ -97,7 +97,7 @@ BoardStart = Literal["blank", "view", "selection"]
 
 class BoardInput(BaseModel):
     """*New drawing board* in a case: blank, from a view (its loaded items as live references),
-    or from a selection (replacing *Branch selected*)."""
+    or from a selection on the canvas."""
 
     model_config = ConfigDict(extra="forbid")
 

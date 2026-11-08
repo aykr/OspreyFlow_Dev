@@ -8,7 +8,7 @@ export type NodeId = string;
 
 /**
  * *New drawing board* in a case: blank, from a view (its loaded items as live references),
- * or from a selection (replacing *Branch selected*).
+ * or from a selection on the canvas.
  */
 export interface BoardInput {
   name: Name;
