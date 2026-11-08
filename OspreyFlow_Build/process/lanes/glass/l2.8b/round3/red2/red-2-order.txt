@@ -1,0 +1,25 @@
+lease glass; 2026-11-08T04:22:18Z; red at 579d8f2: the recorded node successor trusted over the graph's chain
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 07a1487..2390553 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -862,12 +862,7 @@ class AlertStore:
+             if newest is None or newest == old:
+                 return None  # not committed (or never: the stale threshold)
+             finals[old] = newest
+-        renamed: dict[str, str] = {}
+-        for old, _ in nodes:
+-            newest = await self._newest(graph.stored_writes, old)
+-            if newest is None or newest == old:
+-                return None
+-            renamed[old] = newest
++        renamed = {old: new for old, new in reversed(nodes)}  # red: as recorded, last first
+         await self.apply_repoints(finals)
+         if renamed:
+             async with self._pool.acquire() as conn, conn.transaction():
+>           assert row.alert_node_id == r != c
+E           AssertionError: assert '01M6WPA1Q6326ZPVB03KQZ1Y76' == '01M6WPA1V088A1F3HGHNRYNFW4'
+E             - 01M6WPA1V088A1F3HGHNRYNFW4
+E             + 01M6WPA1Q6326ZPVB03KQZ1Y76
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds
+1 failed, 33 deselected in 30.05s

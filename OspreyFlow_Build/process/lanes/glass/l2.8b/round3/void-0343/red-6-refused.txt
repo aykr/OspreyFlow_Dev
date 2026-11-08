@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T03:46:07Z; red at 7e24025: a close rolled back before its commit settled as one reported failed
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 468b787..2f6ba7b 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -710,7 +710,7 @@ class AlertStore:
+             yield repoint
+         except Exception:
+             try:
+-                if repoint.abandoned:
++                if False:  # red: settled as for a commit reported failed
+                     await self._close_record(record_id)
+                 else:
+                     await self._settle_record(graph, record_id, writer=True)
+>           assert node_supersedes, "the close confirmed its node (a pair recorded) before the refusal"
+E           AssertionError: the close confirmed its node (a pair recorded) before the refusal
+E           assert []
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_refused_whole_before_its_commit_leaves_no_record
+1 failed, 34 deselected in 5.84s

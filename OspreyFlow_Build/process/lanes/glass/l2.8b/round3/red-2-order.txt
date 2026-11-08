@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T03:58:21Z; red at bf28fcd: node pairs applied as recorded, last first, not followed on the graph
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 07a1487..2390553 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -862,12 +862,7 @@ class AlertStore:
+             if newest is None or newest == old:
+                 return None  # not committed (or never: the stale threshold)
+             finals[old] = newest
+-        renamed: dict[str, str] = {}
+-        for old, _ in nodes:
+-            newest = await self._newest(graph.stored_writes, old)
+-            if newest is None or newest == old:
+-                return None
+-            renamed[old] = newest
++        renamed = {old: new for old, new in reversed(nodes)}  # red: as recorded, last first
+         await self.apply_repoints(finals)
+         if renamed:
+             async with self._pool.acquire() as conn, conn.transaction():
+1 passed, 33 deselected in 9.41s

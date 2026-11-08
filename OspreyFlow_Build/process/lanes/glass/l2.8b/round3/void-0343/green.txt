@@ -1,0 +1,193 @@
+lease glass; 2026-11-08T03:46:17Z; green at 7e24025
+>           assert node_supersedes, "the close confirmed its node (a pair recorded) before the refusal"
+E           AssertionError: the close confirmed its node (a pair recorded) before the refusal
+E           assert []
+>           assert row.edge_ids == [result.edge.id] != [link_id]
+E           AssertionError: assert ['e-01M6WMAAT...0HF10TMBVRWR'] == ['01M6WMAATZ04KEAS167GGE8YH5']
+E             At index 0 diff: 'e-01M6WMAATN23270HF10TMBVRWR' != '01M6WMAATZ04KEAS167GGE8YH5'
+E             Use -v to get more diff
+>           assert node.handling.classification == "SECRET"
+E           AssertionError: assert 'OFFICIAL' == 'SECRET'
+E             - SECRET
+E             + OFFICIAL
+>           with pytest.raises(ConnectionError):
+E           Failed: DID NOT RAISE ConnectionError
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_refused_whole_before_its_commit_leaves_no_record
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_citing_a_changed_link_follows_it_to_its_successor
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_re_mark_fails_is_finished_on_the_graphs_chain_in_any_order
+4 failed, 31 passed in 182.31s (0:03:02)
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 3, 50, 41, 958304, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=No
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 3, 50, 41, 958304, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6WMF8HAQ3CSX952WFTAMG
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 33 passed in 144.91s (0:02:24)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>       admin = await asyncpg.connect(base.dsn)
+>                       raise OSError('Multiple exceptions: {}'.format(
+E                           OSError: Multiple exceptions: [Errno 61] Connect call failed ('::1', 55433, 0, 0), [Errno 61] Connect call failed ('127.0.0.1', 55433)
+>           yield
+>                   raise to_exc(exc) from exc
+E                   httpcore.ReadError
+>       with TestClient(app) as client:
+>           raise mapped_exc(message) from exc
+E           httpx.ReadError
+>           yield
+>                   raise to_exc(exc) from exc
+E                   httpcore.ReadError
+>       with TestClient(app) as client:
+>           raise mapped_exc(message) from exc
+E           httpx.ReadError
+>           yield
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+>       fixture = _run(_arrange_graph())
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+>           yield
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: All connection attempts failed
+>       fixture = _run(_arrange_graph())
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: All connection attempts failed
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_seed_expand_disconnect_reconnect_audit_cap_and_no_withheld_count
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_a_principal_in_a_different_org_unit_is_denied
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_a_lower_clearance_principal_sharing_an_investigation_sees_the_filtered_subset
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_a_node_a_settle_re_marked_is_purged_before_the_socket_sends_a_snapshot
+4 failed, 1 passed, 1 warning, 46 errors in 7.24s

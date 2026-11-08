@@ -1,0 +1,23 @@
+lease glass; 2026-11-08T03:43:33Z; red at 7e24025: node pairs applied as recorded, last first, not followed on the graph
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 468b787..4a30ad2 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -862,12 +862,7 @@ class AlertStore:
+             if newest is None or newest == old:
+                 return None  # not committed (or never: the stale threshold)
+             finals[old] = newest
+-        renamed: dict[str, str] = {}
+-        for old, _ in nodes:
+-            newest = await self._newest(graph.stored_writes, old)
+-            if newest is None or newest == old:
+-                return None
+-            renamed[old] = newest
++        renamed = {old: new for old, new in reversed(nodes)}  # red: as recorded, last first
+         await self.apply_repoints(finals)
+         if renamed:
+             async with self._pool.acquire() as conn, conn.transaction():
+>           with pytest.raises(ConnectionError):
+E           Failed: DID NOT RAISE ConnectionError
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_re_mark_fails_is_finished_on_the_graphs_chain_in_any_order
+1 failed, 34 deselected in 9.69s

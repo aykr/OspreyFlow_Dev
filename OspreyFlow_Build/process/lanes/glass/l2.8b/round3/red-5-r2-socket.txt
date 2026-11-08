@@ -1,0 +1,17 @@
+lease glass; 2026-11-08T04:00:40Z; red at bf28fcd: the purge before the socket's first sync removed
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index f8fdad2..0fbb868 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -13057,7 +13057,6 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
+         return
+     # ADR-109 Amendment 10 (L2.8b's R2): a node a settle re-marked leaves every working set's
+     # stored copy before a canvas is sent one.
+-    await purge_remarked_copies(websocket.app.state.alerts_store, working_set)
+     initial_deltas: list[WorkingSetDeltaSent] = await working_set.sync(
+         investigation_id, principal, last_acknowledged_seq=init.get("last_acknowledged_seq")
+     )
+>           assert visible_id not in {n["id"] for n in snapshot["nodes"]}
+E           AssertionError: assert '01M6WN1HYQHS2FDR5VCB0NE2Q0' not in {'01M6WN1HYQHS2FDR5VCB0NE2PZ', '01M6WN1HYQHS2FDR5VCB0NE2Q0'}
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_a_node_a_settle_re_marked_is_purged_before_the_socket_sends_a_snapshot
+1 failed, 3 deselected, 1 warning in 7.22s
