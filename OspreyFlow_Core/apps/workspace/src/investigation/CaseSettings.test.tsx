@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // The Cases drawer's two settings of the open case, "Data this case reads" and "Domain models", read
-// the case's listing entry once between them (not once each), and read it again after either is
-// changed, so what is shown afterwards is what the server now says.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+// the case's listing entry once between them (not once each). The domain models are read-only
+// (ADR-126 Amendment 2): no change of them is offered, and nothing is sent.
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { FROM_THE_DATASET } from "./CaseDomains";
 import { CaseSettings } from "./CaseSettings";
 
 afterEach(() => {
@@ -16,7 +17,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 
 function serve(level = "author") {
   const calls: string[] = [];
-  let domains: string[] = [];
+  const domains: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -25,10 +26,6 @@ function serve(level = "author") {
       if (key === "GET /v1/investigations")
         return json(200, [{ id: "c1", name: "C", level, created_at: "", created_by: "", domains }]);
       if (key === "GET /v1/investigations/c1/datasets") return json(200, [{ id: "enron", name: "Enron corpus", owning_unit: "u" }]);
-      if (key === "PATCH /v1/investigations/c1") {
-        domains = (JSON.parse(String(init?.body)) as { domains: string[] }).domains;
-        return json(200, { id: "c1", name: "C", domains });
-      }
       throw new Error(`unexpected ${key}`);
     }),
   );
@@ -41,7 +38,7 @@ describe("CaseSettings", () => {
   it("reads the case's listing once for both settings", async () => {
     const calls = serve();
     render(<CaseSettings apiBaseUrl="http://api" bearerToken="t" investigationId="c1" rights={new Set(["share_case"])} />);
-    await screen.findByRole("button", { name: "Change domain models" });
+    await screen.findByText(FROM_THE_DATASET);
     await screen.findByRole("button", { name: "Change what this case reads" });
     expect(listingReads(calls)).toBe(1);
   });
@@ -51,21 +48,15 @@ describe("CaseSettings", () => {
     render(<CaseSettings apiBaseUrl="http://api" bearerToken="t" investigationId="c1" rights={new Set(["investigate"])} />);
     expect(await screen.findByText("Enron corpus · enron")).toBeTruthy();
     expect(screen.getByText("Bespoke POLE (the core model)")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Change domain models" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Change what this case reads" })).toBeNull();
   });
 
-  it("reads the listing again after the packs are changed, and shows what that read says", async () => {
+  it("offers no change of the domain models, even to an Author with share_case", async () => {
     const calls = serve();
-    const onChanged = vi.fn();
-    render(<CaseSettings apiBaseUrl="http://api" bearerToken="t" investigationId="c1" rights={null} onChanged={onChanged} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Change domain models" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Crime case analysis (NIEM)" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(onChanged).toHaveBeenCalled());
-    expect(listingReads(calls)).toBe(2);
-    expect(calls.lastIndexOf("GET /v1/investigations")).toBeGreaterThan(calls.indexOf("PATCH /v1/investigations/c1"));
-    const section = screen.getByRole("region", { name: "Domain models" });
-    expect(within(section).getByText("Crime case analysis (NIEM)")).toBeTruthy();
+    render(<CaseSettings apiBaseUrl="http://api" bearerToken="t" investigationId="c1" rights={null} />);
+    const section = await screen.findByRole("region", { name: "Domain models" });
+    expect(await within(section).findByText(FROM_THE_DATASET)).toBeTruthy();
+    expect(within(section).queryByRole("button")).toBeNull();
+    expect(calls.some((c) => c.startsWith("PATCH"))).toBe(false);
   });
 });

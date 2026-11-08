@@ -111,28 +111,9 @@ test("a new case's domain models are ticked with Space and sent when it is made 
   registerCovered("CASE_DATASETS_ACTIONS", "choose-a-cases-domain-models-when-creating-it-by-keyboard");
 });
 
-test("the Author changes a case's domain models by keyboard", async ({ page }) => {
-  const sent = await serve(page);
-  const section = page.getByRole("region", { name: "Domain models" });
-  await expect(section.getByText("Bespoke POLE (the core model)")).toBeVisible();
-  await section.getByRole("button", { name: "Change domain models" }).focus();
-  await page.keyboard.press("Enter");
-  await section.getByRole("checkbox", { name: "Financial fraud and AML (FIBO)" }).focus();
-  await page.keyboard.press(" ");
-  await section.getByRole("checkbox", { name: "Crime case analysis (NIEM)" }).focus();
-  await page.keyboard.press(" ");
-  await section.getByRole("button", { name: "Save" }).focus();
-  await page.keyboard.press("Enter");
-  await expect.poll(() => sent.some((s) => s.method === "PATCH" && s.url === "/v1/investigations/c1")).toBe(true);
-  expect(sent.find((s) => s.method === "PATCH")?.body).toEqual({ domains: ["fibo", "niem"] });
-  // As the Cases drawer does after a change: the listing is read again, and what is shown
-  // afterwards is what that read says, not what the save answered.
-  const patched = sent.findIndex((s) => s.method === "PATCH");
-  await expect.poll(() => sent.findIndex((s, i) => i > patched && s.method === "GET" && s.url === "/v1/investigations")).toBeGreaterThan(patched);
-  await expect(section.getByText("Financial fraud and AML (FIBO), Crime case analysis (NIEM)")).toBeVisible();
-  await expect(section.getByRole("button", { name: "Save" })).toHaveCount(0);
-  registerCovered("CASE_DATASETS_ACTIONS", "change-a-cases-domain-models-by-keyboard");
-});
+// ADR-126 Amendment 2: a case's domain models come from its dataset's domain model and are not
+// changed here, so no action of the case's settings changes them (`CaseDomains.test.tsx` proves the
+// read-only state); "change-a-cases-domain-models-by-keyboard" leaves the registry.
 
 test("every registered case datasets action has its own proving test case above", () => {
   assertAllCovered("CASE_DATASETS_ACTIONS", CASE_DATASETS_ACTIONS);

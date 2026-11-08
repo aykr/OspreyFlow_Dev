@@ -1,7 +1,9 @@
 // The open case's own settings in the Cases drawer: "Data this case reads" (ADR-099) and "Domain
 // models" (ADR-126). One read of the case's listing entry serves both, and it is read again after
-// either is changed, so what the drawer shows afterwards is what the server now says. Who may change
-// them is the entry's level and the person's rights; the Conduit refuses anyone else regardless.
+// what the case reads is changed, so what the drawer shows afterwards is what the server now says.
+// Who may change that is the entry's level and the person's rights; the Conduit refuses anyone else
+// regardless. The domain models are read-only: they come from the dataset's domain model
+// (ADR-126 Amendment 2).
 import { useCallback, useEffect, useState } from "react";
 
 import type { Rights } from "../rights/visibility";
@@ -59,14 +61,7 @@ export function CaseSettings({ apiBaseUrl, bearerToken, investigationId, rights 
             entry={entry}
             onChanged={() => void changed()}
           />
-          <CaseDomains
-            apiBaseUrl={apiBaseUrl}
-            bearerToken={bearerToken}
-            investigationId={investigationId}
-            rights={rights}
-            entry={entry}
-            onChanged={() => void changed()}
-          />
+          <CaseDomains apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} entry={entry} />
         </>
       )}
     </>
