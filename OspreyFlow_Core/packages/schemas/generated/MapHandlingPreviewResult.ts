@@ -11,7 +11,6 @@ export type ProvenanceState = "asserted" | "inferred" | "unresolved";
 export type DocumentId = string;
 export type Locator = string;
 export type ExcerptHash = string;
-export type SourceRowKey = string | null;
 export type SourceLoadId = string | null;
 export type Sources = SourceRef[];
 export type SourcesWithheld = boolean;
@@ -52,7 +51,6 @@ export interface SourceRef {
   document_id: DocumentId;
   locator: Locator;
   excerpt_hash: ExcerptHash;
-  row_key?: SourceRowKey;
   load_id?: SourceLoadId;
   [k: string]: unknown;
 }

@@ -894,7 +894,8 @@ class Recipe(BaseModel):
     #: the last one the table Map reads (`schemas/staging.py`). `None` on every recipe without
     #: them, and left out of the YAML (`exclude_none`), so a recipe published before stays
     #: byte-for-byte what it was (`tests/schemas/test_recipe_staging.py`).
-    staging: list[StagingStep] | None = None
+    #: At least one step: an empty list is not "no staging" and would be written as `staging: []`.
+    staging: list[StagingStep] | None = Field(default=None, min_length=1)
 
 
 # --- Rejections and the load report (09_INGEST_STUDIO.md §5) -------------

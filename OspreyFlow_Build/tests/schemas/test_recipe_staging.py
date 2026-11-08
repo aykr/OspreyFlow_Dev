@@ -76,11 +76,29 @@ def test_a_source_ref_without_staging_identity_is_stored_as_before() -> None:
         "excerpt_hash": "",
     }
     staged = SourceRef(
-        document_id="number_owners", locator="row 2", excerpt_hash="", row_key="k1", load_id="ld-2"
+        document_id="number_owners", locator="row 2", excerpt_hash="", load_id="ld-2"
     )
     dumped = staged.model_dump(mode="json")
-    assert dumped["row_key"] == "k1" and dumped["load_id"] == "ld-2"
+    assert dumped["load_id"] == "ld-2"
     assert SourceRef.model_validate(dumped) == staged
+
+
+def test_a_source_ref_carries_no_row_key() -> None:
+    """Rule 7 (the orchestrator's settlement, 8 November, review round 1): a row's key, raw or
+    hashed, never travels in provenance; a key is low-entropy, so its hash is reversible."""
+    assert "row_key" not in SourceRef.model_fields
+    given = SourceRef.model_validate(
+        {"document_id": "d", "locator": "row 1", "excerpt_hash": "", "row_key": "07700900731"}
+    )
+    assert "row_key" not in given.model_dump(mode="json")
+    assert "07700900731" not in given.model_dump_json()
+
+
+def test_an_empty_staging_list_is_refused() -> None:
+    """`staging: []` is not "no staging" (`None`), and `exclude_none` would write it."""
+    recipe = _committed_recipes()[0].model_dump(mode="json", by_alias=True)
+    with pytest.raises(ValidationError, match="at least 1 item"):
+        Recipe.model_validate({**recipe, "staging": []})
 
 
 VISITS: list[dict[str, Any]] = [

@@ -68,7 +68,12 @@ export type Nodes = PipelineNode[];
 export type Source = string;
 export type Target = string;
 export type Edges1 = PipelineEdge[];
-export type Staging = (LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep)[] | null;
+export type Staging =
+  | [
+      LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep,
+      ...(LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep)[]
+    ]
+  | null;
 export type Id2 = string;
 export type Label2 = string | null;
 export type Kind1 = "lookup";

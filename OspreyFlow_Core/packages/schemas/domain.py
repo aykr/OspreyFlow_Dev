@@ -258,19 +258,19 @@ class SourceRef(BaseModel):
     document_id: DocumentId
     locator: str
     excerpt_hash: str
-    #: ADR-140 decision 11 (`source_refs` through staging): the source row's identity — its
-    #: dedupe key, or its row hash when the source declares none — and the load that read it. Set
-    #: on an element a staged row made (a Join gives two refs, one per side); `None` otherwise,
-    #: and then left out of what is stored, so an element written before stays what it was.
-    row_key: str | None = Field(default=None, title="SourceRowKey")
+    #: ADR-140 decision 11 (`source_refs` through staging; Amendment 11): the load that read the
+    #: row, set on an element a staged row made (a Join gives one ref per side), so `document_id`,
+    #: `locator` and `load_id` name the source row, which the load's `raw.parquet` resolves on the
+    #: server. No row key, raw or hashed, is ever carried here (rule 7: a key is low-entropy, so a
+    #: hash of it is reversible). `None` otherwise, and then left out of what is stored, so an
+    #: element written outside staging is stored exactly as before.
     load_id: str | None = Field(default=None, title="SourceLoadId")
 
     @model_serializer(mode="wrap")
-    def _leave_out_unset_staging_identity(self, handler: Any) -> dict[str, Any]:
+    def _leave_out_unset_load(self, handler: Any) -> dict[str, Any]:
         data: dict[str, Any] = handler(self)
-        for name in ("row_key", "load_id"):
-            if data.get(name) is None:
-                data.pop(name, None)
+        if data.get("load_id") is None:
+            data.pop("load_id", None)
         return data
 
 
