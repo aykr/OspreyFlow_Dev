@@ -9,6 +9,7 @@ above this port may see it.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
@@ -88,6 +89,35 @@ class RestoredElements:
 
     node_ids: tuple[NodeId, ...] = ()
     edge_ids: tuple[EdgeId, ...] = ()
+
+
+@dataclass(frozen=True)
+class DatasetFootprint:
+    """What `GraphPort.dataset_footprints` says of one dataset: how many live nodes and links carry
+    it, the bytes of their stored properties (`stored_properties_size`) and their pictures' files
+    (`picture_size`). Numbers only."""
+
+    nodes: int = 0
+    edges: int = 0
+    properties_bytes: int = 0
+    #: The pictures' file sizes: each live image Document's `size_bytes` (a picture attached before
+    #: it was written counts 0).
+    picture_bytes: int = 0
+
+
+def picture_size(properties: Mapping[str, object]) -> int:
+    """An image Document's file size as stored with it (`size_bytes`); 0 for anything else, or a
+    picture attached before the size was written."""
+    size = properties.get("size_bytes")
+    if properties.get("media_kind") != "image" or not isinstance(size, int) or size < 0:
+        return 0
+    return size
+
+
+def stored_properties_size(properties: Mapping[str, object]) -> int:
+    """The bytes an element's properties take as stored: their compact, key-sorted JSON in UTF-8.
+    One definition, so every adapter measures alike (ADR-143 Amendment 2 decision 2)."""
+    return len(json.dumps(properties, sort_keys=True, separators=(",", ":"), default=str).encode())
 
 
 @dataclass(frozen=True)
@@ -440,6 +470,19 @@ class GraphPort(Protocol):
     async def neighbourhood_stats(
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats: ...
+
+    async def dataset_footprints(self, dataset_ids: Sequence[str]) -> dict[str, DatasetFootprint]:
+        """ADR-143 Amendment 2 decision 2: for each dataset asked, how many live (neither reverted
+        nor superseded) nodes and links carry it, the bytes of their stored properties, and the file
+        sizes of its pictures (image Documents' `size_bytes`). Every
+        id asked is answered, a dataset with nothing in it as zeros, so the answer says nothing of
+        which ids exist.
+
+        It takes **no principal and returns numbers only**: no id, type, label or property leaves
+        the adapter. It is the administrator's read of each case's analyst layer as counts (Admin ›
+        Datasets), which is all that decision shows them; the route's right is the gate. Counted in
+        the store (rule 3), never by reading the elements out to the Conduit."""
+        ...
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         """`06_DECISIONS.md` ADR-100: how many nodes of each entity type and links of each link

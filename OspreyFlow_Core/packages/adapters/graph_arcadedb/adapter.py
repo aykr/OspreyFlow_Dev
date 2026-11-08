@@ -38,6 +38,7 @@ from ports.graph import (
     RARITY_PAIR_CAP,
     AmbiguousElementId,
     BulkEdgeResult,
+    DatasetFootprint,
     FindLimitExceeded,
     NodeSuggestions,
     RarityTooLarge,
@@ -46,6 +47,8 @@ from ports.graph import (
     StoredNode,
     SubgraphTooLarge,
     SuggestOptions,
+    picture_size,
+    stored_properties_size,
 )
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
@@ -1124,6 +1127,32 @@ class GraphArcadeDBAdapter:
             degree=sum(degree_by_type.values()),
             degree_by_type=degree_by_type,
         )
+
+    async def dataset_footprints(self, dataset_ids: Sequence[str]) -> dict[str, DatasetFootprint]:
+        """`GraphPort.dataset_footprints`: the structural step alone (no principal), narrowed to the
+        datasets asked. Each element's datasets and properties are read inside the adapter to be
+        counted and measured; only the totals are returned."""
+        asked = sorted(set(dataset_ids))
+        if not asked:
+            return {}
+        totals = {d: [0, 0, 0, 0] for d in asked}
+        live = self._access.gremlin_structural_step(datasets=asked)
+        for slot, step in ((0, "V"), (1, "E")):
+            rows = await self._client.gremlin(
+                f'g.{step}().{live}.elementMap("datasets","properties")'
+            )
+            for row in rows:
+                properties = row.get("properties") or {}
+                size = stored_properties_size(properties)
+                picture = picture_size(properties) if slot == 0 else 0
+                for dataset in set(row.get("datasets") or []) & totals.keys():
+                    totals[dataset][slot] += 1
+                    totals[dataset][2] += size
+                    totals[dataset][3] += picture
+        return {
+            d: DatasetFootprint(nodes=n, edges=e, properties_bytes=b, picture_bytes=pic)
+            for d, (n, e, b, pic) in totals.items()
+        }
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         nodes_query, edges_query = render_type_counts_gremlin(self._access, principal)
