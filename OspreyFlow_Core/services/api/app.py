@@ -16327,9 +16327,15 @@ async def read_audit_section(
     if held_in == "case_and_admin":
         if filters.kind is not None and filters.kind not in audit_section_module.STREAM_KINDS:
             raise AuditFiltersRefused(f"{filters.kind!r} is not a kind of this record")
-        rows, total = await reader.stream(principal, filters, offset=offset, limit=limit)
+        # ADR-052 §4: only the unit's administrator sees its cases without a level on them.
+        cases = ADMIN_ROLE in principal.roles
+        rows, total = await reader.stream(
+            principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
+        )
         entries = audit_section_module.stream_entries(rows, rights)
-        note = audit_section_module.STREAM_NOTE
+        note = (
+            audit_section_module.STREAM_NOTE if cases else audit_section_module.STREAM_NOTE_NO_CASES
+        )
     elif held_in == "rules":
         if filters.investigation_id is None:
             raise AuditFiltersRefused("the rule audit is read for one case: choose the case")

@@ -92,9 +92,11 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "screening_list_refreshed",
         "screening_list_subscribed",
         "screening_list_schedule_set",
-        "add_by_identifiers",
-        "seed",
         "set_promotion_alert_days",
+        "load_reverted",
+        "resume_recipe_schedule",
+        "resume_source_refresh",
+        "create_studio_recipe_version",
     ),
     "types": (
         "link_type_propose",
@@ -123,8 +125,6 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "grant_access",
         "revoke_access",
         "set_unit_level",
-        "register_dashboard",
-        "remove_dashboard",
     ),
     "datasets": (
         "create_dataset",
@@ -152,10 +152,36 @@ STREAM_KINDS = (*KIND_ACTIONS, "reads_and_other")
 
 #: Said with every page of the stream, so nothing left out is left out silently (rule 2).
 STREAM_NOTE = (
-    "Entries about another unit's cases are not shown. Entries written before 8 November 2026 "
-    "that name no case recorded no unit, so they are not shown either. The rule audit is read "
-    "for one case at a time, under Rules."
+    "Entries about another unit's cases are not shown. An entry that names no case is shown by "
+    "the unit of the account that wrote it: one written before 8 November 2026, or by the system "
+    "itself (a reverted load, a map prefetch), recorded no unit of yours and is not shown. "
+    "The rule audit is read for one case at a time: choose Rule audit of one case."
 )
+#: Said instead to a reader of `read_audit` who is not the unit's administrator: ADR-052 §4 lets
+#: only `osprey-admin` see the unit's cases without a level on them, so no case's entry is sent.
+STREAM_NOTE_NO_CASES = (
+    "You hold read_audit but are not your unit's administrator, so entries about cases are not "
+    "shown to you: only entries that name no case, written by your unit's accounts. An entry that "
+    "names no case and recorded no unit (written before 8 November 2026, or by the system) is not "
+    "shown either."
+)
+
+
+def dataset_ids_of(detail: dict[str, Any]) -> set[str]:
+    """The datasets an entry's words name (`dataset_id`, or a list under `dataset_ids`)."""
+    out = {str(detail["dataset_id"])} if detail.get("dataset_id") else set()
+    many = detail.get("dataset_ids")
+    if isinstance(many, list):
+        out |= {str(d) for d in many}
+    return out
+
+
+def shown_actions(rights: frozenset[Right] | set[Right]) -> list[str]:
+    """The actions whose words this reader is shown: the only entries a dataset filter may look
+    into, since it reads those words (a filter must not answer about words it withholds)."""
+    return [
+        a for kind, actions in KIND_ACTIONS.items() if words_shown(kind, rights) for a in actions
+    ]
 
 
 def kind_of(action: str) -> AuditKind:
@@ -216,26 +242,40 @@ class AuditSectionReader:
         await self._pool.close()
 
     async def stream(
-        self, reader: Principal, filters: StreamFilters, *, offset: int, limit: int
+        self,
+        reader: Principal,
+        filters: StreamFilters,
+        *,
+        offset: int,
+        limit: int,
+        rights: frozenset[Right] | set[Right] = frozenset(),
+        cases: bool = False,
     ) -> tuple[list[StreamRow], int]:
-        """The reader's unit's entries of the audit stream, newest first, and their total."""
+        """The reader's unit's entries of the audit stream, newest first, and their total.
+
+        `cases`: whether entries about the unit's cases are read at all — only for the unit's
+        administrator (ADR-052 §4's safety net), whom the route names. `rights`: the dataset filter
+        looks only into entries whose words these rights show (`shown_actions`), so filtering by a
+        dataset never tells which withheld entries name it."""
         where = (
             "FROM audit_log a LEFT JOIN investigations i ON i.id = a.investigation_id "
             # The unit filter (rule 3): a case's entry by its case's unit, any other by its
             # writer's.
-            "WHERE ((a.investigation_id IS NOT NULL AND i.owning_unit = $1) "
+            "WHERE ((a.investigation_id IS NOT NULL AND $8::boolean AND i.owning_unit = $1) "
             "    OR (a.investigation_id IS NULL AND a.org_unit = $1)) "
             # The rule audit is read only through its own read (`readable_rule_audit`).
             "AND NOT (a.action = ANY($2::text[])) "
             "AND ($3::text IS NULL OR a.principal_id = $3) "
             "AND ($4::text IS NULL OR a.investigation_id = $4) "
-            "AND ($5::text IS NULL OR a.resolved_query->>'dataset_id' = $5) "
+            "AND ($5::text IS NULL OR (a.action = ANY($9::text[]) AND ("
+            "    a.resolved_query->>'dataset_id' = $5 "
+            "    OR coalesce(a.resolved_query->'dataset_ids', '[]'::jsonb) ? $5))) "
             "AND ($6::timestamptz IS NULL OR a.recorded_at >= $6) "
             "AND ($7::timestamptz IS NULL OR a.recorded_at < $7)"
         )
         args: list[Any] = [
             reader.org_unit, list(RULE_AUDIT_ACTIONS), filters.who, filters.investigation_id,
-            filters.dataset_id, filters.since, filters.until,
+            filters.dataset_id, filters.since, filters.until, cases, shown_actions(rights),
         ]  # fmt: skip
         clause, extra = _kind_clause(filters.kind, len(args) + 1)
         where += clause

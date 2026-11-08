@@ -52,10 +52,13 @@ class _Reader:
     def __init__(self) -> None:
         self.rows: list[StreamRow] = []
         self.asked: list[tuple[Principal, StreamFilters]] = []
+        self.cases: list[bool] = []
 
     async def stream(self, reader: Principal, filters: StreamFilters, *, offset: int,
-                     limit: int) -> tuple[list[StreamRow], int]:  # fmt: skip
+                     limit: int, rights: Any = frozenset(),
+                     cases: bool = False) -> tuple[list[StreamRow], int]:  # fmt: skip
         self.asked.append((reader, filters))
+        self.cases.append(cases)
         return self.rows[offset : offset + limit], len(self.rows)
 
     async def model_history(self, filters: StreamFilters, *, offset: int, limit: int) -> Any:
@@ -319,3 +322,27 @@ def test_operations_ageing_says_what_ages_and_lists_promotions_as_the_reader(
         assert world.client.put("/v1/admin/settings/promotion-alert-days",
                                 json={"alert_after_days": days},
                                 headers=_as("ops-1")).status_code == 422  # fmt: skip
+
+
+def test_case_entries_are_read_only_for_the_units_administrator(world: SimpleNamespace) -> None:
+    """ADR-052 §4: only `osprey-admin` sees the unit's cases without a level; a holder of
+    `read_audit` alone is read no case's entry, and told so."""
+    admin = world.client.get("/v1/admin/audit", headers=_as("adm-1")).json()
+    alone = world.client.get("/v1/admin/audit", headers=_as("aud-1")).json()
+    assert world.reader.cases == [True, False]
+    assert alone["note"].startswith("You hold read_audit but are not your unit's administrator")
+    assert admin["note"] != alone["note"]
+
+
+def test_every_kinds_action_is_one_the_conduit_records() -> None:
+    """Each action a kind lists is written somewhere by the Conduit or the Studio (its own lists in
+    `audit_section.py` left out), so a kind's filter matches what is recorded (red with one
+    misspelt)."""
+    import pathlib
+
+    from services.api.audit_section import KIND_ACTIONS
+
+    core = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core/services"
+    source = "\n".join(p.read_text() for p in core.rglob("*.py") if p.name != "audit_section.py")
+    missing = [a for actions in KIND_ACTIONS.values() for a in actions if f'"{a}"' not in source]
+    assert missing == []

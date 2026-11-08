@@ -119,7 +119,7 @@ if (serving === "audit" || serving === "operations") {
                   case_name: "Op Kestrel", detail: null, words_withheld: true, result_cardinality: null };  // prettier-ignore
   const served: Record<string, unknown> = {
     "/v1/admin/audit": { total: 120, offset: 0, limit: 50,
-      note: "Entries about another unit's cases are not shown. Entries written before 8 November 2026 that name no case recorded no unit, so they are not shown either. The rule audit is read for one case at a time, under Rules.",
+      note: "Entries about another unit's cases are not shown. Entries written before 8 November 2026 that name no case recorded no unit, so they are not shown either. The rule audit is read for one case at a time: choose Rule audit of one case.",
       entries: [ENTRY, { ...ENTRY, action: "set_person_roles", kind: "people_and_roles", investigation_id: null, case_name: null,
                          detail: { user_id: "u2", roles: ["analyst"] }, words_withheld: false, result_cardinality: 1 }] },
     "/v1/admin/operations/ageing": { alert_after_days: 3, promotions_recorded: true,
