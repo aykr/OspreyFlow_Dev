@@ -724,7 +724,7 @@ A view holds **no data**. The Conduit keeps it as `StoredCaseView` (`services/ap
 - `layout`: node positions;
 - `window`: a timeline range;
 - `threshold`: *Match strictness*, 0 to 1;
-- `drawing`: a board (L3.3);
+- `drawing`: a board (§2.2d);
 - `converted_from_case`: the retired case the upgrade converted it from (ADR-144 decision 6),
   whose audit stays readable from the view.
 
@@ -777,6 +777,69 @@ become a view.
 layout. The Conduit has never stored a canvas layout (the Glass keeps it in the browser), so a view
 the upgrade makes holds none, and the migration's report says so. A view saved from the Glass after
 L3.2b carries the layout the Glass sends.
+
+### 2.2d Drawing boards and drawn items (ADR-143 decisions 4 to 7; Amendments 2 and 3; L3.3)
+
+A **board** is a view with `drawing` on (`case_views.py`), private to its creator until shared, and
+listed apart from the case's views. It holds no data of its own: its `node_ids` are the loaded
+items it started from, as live references, and its `layout` is where its items sit. Only its
+creator draws on it, moves its items or adds to it (the lane's decision of 8 November 2026, logged
+for the owner); another member opens a shared board read-only, each item at their own level.
+
+A **drawn item** is data: a node or a link written into the graph **into the case's analyst layer**,
+or, in the home case of a drawn dataset, **into that dataset** (Amendment 3 decision 1), and never into
+a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`), the provenance class
+`analyst_drawn`, kept for good, promoted or not:
+- `item_id`, the board's own id for it, kept when it is edited;
+- `asserted_by`, `board_id` and `case_id`;
+- `label`, what the analyst calls it (a type of the model may declare no name of its own, so the
+  type's required properties are given beside it; the Glass fills a required name from the label
+  until the analyst changes it);
+- `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade;
+  `5x5x5` until L3.7 makes the scheme a deployment setting, the grade always kept with its scheme);
+- `source_note`, `source_document`, or both, never neither;
+- `icon`, a display choice only (C17 c).
+
+Its provenance is `asserted` (decision 4: rule 5's `inferred` is for the matches it raises), its
+handling the marking the analyst chose, of their own unit. Absent `drawn`, a provenance is stored
+exactly as before (`test_an_undrawn_provenance_is_stored_exactly_as_before`). It is drawn dashed in
+amber wherever it appears, on a board and on the analysis canvas.
+
+The board's registry (`board_items`, `services/api/board_store.py`) holds ids only: which element was
+drawn on which board of which case, by whom, into which dataset, a link's ends, and whether it was
+withdrawn. Every read of it names its case.
+
+The invariants, each with the test that fails if it is broken (rule 12):
+- **Never readable outside its case** (rule 3; ADR-143 decision 3). Another case reading the same
+  source reads none of it, nor its link from a loaded node.
+  - `test_a_drawn_item_is_never_readable_outside_its_case`, red with case K's layer in case B's read
+    set; the graph port's own case is `test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b`.
+- **In the layer, attributed and graded** (decision 4).
+  - `test_a_drawn_item_is_attributed_graded_and_in_the_layer`, red with the writer aimed at the source.
+- **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
+  marking its datasets set, nor above the drawer's clearance, refused in words naming it.
+  - `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling bypassed.
+- **A drawing with no case** (Amendment 2 decision 5) makes a drawn dataset, its home case and its
+  board in one step; what is drawn there is written to the drawn dataset and to no layer.
+  - `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aimed at a layer.
+- **Watched** (Amendment 2 decision 8): drawing an item sets one watch (`DrawnWatch`, kind
+  `drawn_watch`) on the case's dataset, owned by its author; withdrawing it ends the watch; a watch on
+  an item the reader may not see is withheld whole. Its alerts' queue is L3.6's with L2.10.
+  - `test_drawing_sets_a_watch_and_withdrawing_ends_it`;
+    `test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole`, red with every watch listed.
+- **Matching never merges** (decision 6; rule 6): *Same* writes one `SAME_AS` (1.0) in the layer,
+  *Not the same* one `NOT_SAME_AS`, marked as the stricter of the two ends; no node is written.
+  - `test_same_writes_one_link_and_merges_nothing`, red with the writer merging.
+- **Pictures in the layer** (decision 7; ADR-105 Amendment 3): an uploaded picture's Document (its id
+  the layer's own) and its `DEPICTS`, each with the picture's marking; a picture the case holds is
+  linked there and stays in its dataset.
+  - `test_a_pictures_document_and_link_are_in_the_layer_with_its_marking`.
+- **Withdrawn, never deleted** (decision 5): out of every read, kept in the store, with every drawn
+  link and picture resting on it; a marking is never lowered by an edit.
+  - `test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store`;
+    `test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking`.
+- **Restored in its own case's layer** (Amendment 2 decision 4).
+  - `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer`, red with the layer lost.
 
 ### 2.3 Resolution state
 

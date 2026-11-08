@@ -396,7 +396,7 @@ outside it, and when keyboard focus moves outside it, so it never traps a keyboa
 This replaces "there is no application switch" (ADR-097 step 1), which this section said until
 7 November 2026.
 
-**The places.** *The Glass* (analysis: Case · Boards; *Boards* arrives with Lane 3's board screens),
+**The places.** *The Glass* (analysis: Case · Boards; *Boards* the drawing boards, §2.0b),
 *Ingest Studio* (data: 1 Model · 2 Sources · 3 Pipelines · 4 Runs), *Rules and Monitoring* (alerts:
 Alerts · What raises alerts · Held rows · Changes, the owner's M1) and *Admin*. One table,
 `apps/workspace/src/shell/places.json`, names them, the single rights that open each, and what a place's
@@ -460,8 +460,8 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
 - in the Glass: "You are in the Glass · Case · Boards · ‹case menu› · reads ‹the case's datasets›", the
-  sections a navigation named *In the Glass* (*Case* the case's views, *Boards* drawn as "Boards
-  (coming)", `aria-disabled`, until Lane 3 builds it);
+  sections a navigation named *In the Glass* (*Case* the case's views, *Boards* the case's drawing
+  boards, §2.0b);
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
@@ -518,6 +518,41 @@ the alert's case and opens it as the read-only lens (§3.1h); its banner says "O
 offers *← Back to the alert*, which returns to the alert's address with the alert still open.
 `keyboard/rules-place.spec.ts` proves the place's tabs and the address by keyboard; axe scans
 `keyboard/rules-place-harness.html` and `keyboard/monitoring-harness.html` (the tabs) in the three themes.
+
+### 2.0b Boards: drawing on a case (ADR-143 decisions 4 to 7 and 13; Amendment 2 decision 5; L3.3)
+
+*Boards* (`apps/workspace/src/boards/`) lists the open case's boards this person may see, with *New
+board* (blank, or from the selection on the canvas, its loaded items kept as live references) and
+*New drawing as a case of its own* (a name, the highest marking it may hold, a starter model: a drawn
+dataset, its home case with the maker as its Author, and its board, in one step; the Glass then opens
+that case on its board). A board opens to:
+- **the surface**: each item a button placed where the board keeps it, a drawn item dashed amber and
+  a loaded one solid grey, and the links between them as lines with their words;
+- **Type of item to declare**, the case's model's node types as radios (C14, "Need another type? Ask
+  a data engineer"), and *Declare a ‹type›*;
+- **the item form**: *What do you call it?*, the type's required properties (a required name filled
+  from the label until changed), *Handling marking* (only the markings up to the case's ceiling and
+  the person's clearance), the three grading selects of the scheme, *Source note*; *Add to board*;
+- **the link form**, opened from the selected item by *Draw a link…*, from an item's menu, by the
+  item's ⟶ handle dragged onto another item, or by Alt-drag (C7): *Links to*, *What links them?* as
+  radios, what the link says, the marking, the grading and the source;
+- **the inspector** of the selected item: who drew it, its grading, marking and source; for one's own
+  drawn item *Edit*, *Withdraw* (asked once: it is kept in the audit) and a picture with its own
+  marking; a loaded item is a live reference, not editable here;
+- ***Looks like a loaded item***: each suggestion with *Same* and *Not the same*; a suggestion does
+  nothing by itself, and *Same* merges nothing.
+
+Moving: drag an item, or press the arrow keys on it (Shift for a larger step); the board keeps the
+place. An item's menu opens on right-click or Shift+F10 (and the menu key): *Draw a link from here*,
+*Inspect*, and for one's own drawn item *Edit* and *Withdraw*. Another member opens a shared board
+read-only. A refusal (the case's ceiling, a type outside the model) is said in the Conduit's words.
+Under the GOV.UK brand the forms are GOV.UK fields and an error summary, statuses GOV.UK tags, the
+type choice and the link's type radios (decision 13). On the analysis canvas a drawn node and a
+drawn link are dashed amber too (decision 4).
+
+Every action is proved by keyboard in `keyboard/boards.spec.ts` (`BOARD_ACTIONS`); the pointer
+gestures are cases of their own there. `a11y/every-harness.spec.ts` scans the board, its forms and its
+question in dark, light and GOV.UK.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
