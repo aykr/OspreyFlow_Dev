@@ -1245,8 +1245,8 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
             placed = map_verbs.place_jar(args.planetiler_jar, tiles)
             print(f"The map builder is in the tiles folder: {placed}")
         print(
-            f"The {args.region} basemap is built by the Conduit, in its container: it downloads the "
-            "region's extract, runs planetiler and loads the place names."
+            f"The {args.region} basemap is built by the Conduit, in its container: it downloads "
+            "the region's extract, runs planetiler and loads the place names."
         )
         ctx.step(
             f"build the {args.region} basemap", [*in_conduit, "build", args.region, "--by", who]

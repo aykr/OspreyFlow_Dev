@@ -30259,7 +30259,7 @@ base URL — was already closed in `tile_proxy.py`).
 - **Tier 1 in the demo and CI (rule 9)**: no maps file committed anywhere, and a Conduit with none serves
   exactly the committed tier-1 map (`tests/test_demo_osprey_config_is_tier_1_only.py`).
 - **The deployment**: the volume, its variable, `built/` the one writable door (`test_map_settings_render.py`);
-  Java in the image (`tests/test_conduit_image_carries_java.py`).
+  no Java in the image while the owner rules on its licence (`tests/test_conduit_image_java_licence.py`).
 - **Keyboard (rule 13)**: every Maps action by keyboard, each red when it does nothing
   (`keyboard/admin-maps.spec.ts`, `MAPS_ACTIONS`); **axe** in the dark, light and GOV.UK themes on
   `maps-harness.html` with each form open and the basemap built.

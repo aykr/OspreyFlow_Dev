@@ -71,7 +71,7 @@ Each plant applied to the file under test, the named tests run, the file restore
 | `test_geospatial_admin_routes.py::test_build_basemap_route_takes_no_server_path_from_the_glass` | the body read leniently (extra fields dropped) | 1 failed |
 | `tests/harness/test_map_settings_render.py` | (written before the renderer change) | 2 failed |
 | `tests/harness/test_map_settings_backup.py` | (written before the backup and restore code) | 3 failed |
-| `tests/test_conduit_image_carries_java.py` | the Java runtime's `COPY` removed | 1 failed |
+| `tests/test_conduit_image_java_licence.py` (then asserting the Java runtime was in the image; renamed and inverted after the review, below) | the Java runtime's `COPY` removed | 1 failed |
 | `tests/cli/test_map_verb.py` | `built/` not made; the verb run on the host; a non-jar taken | 1 failed each |
 | `tests/harness/test_webapp_geospatial.py` | (written before the change; the 501s); the region check removed; the before-Launch check removed | 4 failed; 1 failed each |
 | `apps/harness/keyboard/setup-screens.spec.ts` › Build and Verify | the region dropped from the build's body | 1 failed |
