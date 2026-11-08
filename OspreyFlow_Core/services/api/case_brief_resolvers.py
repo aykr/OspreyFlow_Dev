@@ -14,7 +14,7 @@ one answer for both so that nothing the brief does can tell a reader that a hidd
   hide-in-full rule, which `judgement_visible_to` applies (one `get_node` per supporting citation,
   as the reader). Ownership alone is not enough: a judgement resting on a node the reader cannot see
   is not theirs to see either.
-* **view:** a canvas tab is a case (ADR-084; ADR-128 decision 2 names the branch "the tab");
+* **view:** a canvas tab is a case (ADR-084; ADR-128 decision 2 names it "the tab");
   readable when the reader holds any level on it.
 """
 

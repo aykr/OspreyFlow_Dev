@@ -200,7 +200,6 @@ class EmailExtractionService:
         )
         page = await self._analytics.list_events(
             EventListRequest(
-                # On a branch the email was loaded under the case it came from (ADR-084 Am. 2).
                 filter=await link_event_filter(self._investigations, own, edge.id, principal),
                 offset=0,
                 limit=1,

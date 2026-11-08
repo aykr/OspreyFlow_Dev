@@ -47,7 +47,7 @@ decision.
 `02_GLASS_FRONTEND.md` line 206 ("Betweenness (exact to 20k nodes, Brandes-sampled above)") implies
 betweenness should switch to an approximation above the same 20k boundary this route uses for its
 sync/job split — but neither `CentralityRequest` (Stage 2) nor `adapters/compute_rustworkx`'s own
-`centrality` method (Stage 3) carries a sampling parameter or branch at all; the job-mode path
+`centrality` method (Stage 3) carries a sampling parameter or second path at all; the job-mode path
 below runs the identical exact `rustworkx.betweenness_centrality` call regardless of population
 size — real algorithmic work, disclosed as its own gap, not this route's own scope to invent
 unprompted.

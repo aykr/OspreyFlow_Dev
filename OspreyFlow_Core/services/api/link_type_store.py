@@ -106,7 +106,7 @@ class LinkTypeProposalStore:
         return [_row(r) for r in rows]
 
     async def pending_for_cases(self, investigation_ids: Sequence[str]) -> list[LinkTypeProposal]:
-        """Pending proposals made in these cases (a case and the cases it was branched from)."""
+        """Pending proposals made in these cases."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM link_type_proposals "

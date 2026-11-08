@@ -1,79 +1,31 @@
-"""Which cases' events a read in a case may count — `06_DECISIONS.md` ADR-084 Amendment 2.
+"""Which events a read in a case may count: the case's own, and nothing else (ADR-144 Amendment 1).
 
-A branch is a case of its own holding copies of some of its parent's links (ADR-084); the events
-behind those links were loaded under the parent and stay there. Without this, a branch's timeline
-and its *Show emails* read nothing. With it, a read in a branch also counts the events of each case
-it came from, up the branch family, **on the links the branch holds only**, and only from a parent
-the caller may see at Viewer level: a parent the caller cannot see contributes nothing, and nothing
-about it is said. The adapter applies its own access filter to every inherited event as to the
-case's own (`EventFilter.inherited`, the conformance suite's `test_*inherited*` cases).
+Before L3.2 a case made from another also counted, on the links it held, the events of the cases it
+came from (ADR-084 Amendment 2). No case is made from another now, and the upgrade turns every such
+case into a view of its original (ADR-144 decision 6), so a read counts its own case's events
+alone.
 
-`inherited` is always set here, from the case's own record and working set, and whatever a caller
-sent in it is discarded, so a request body cannot name another case's events into a read.
+`EventFilter.inherited` stays a field the analytics port understands, so this module still sets
+it on every read, to nothing, and whatever a caller sent in it is discarded: a request body can
+never name another case's events into a read.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from schemas.analytics import EventFilter
+from schemas.domain import Principal
 
-from schemas.analytics import EventFilter, InheritedEvents
-from schemas.domain import Interval, Principal
+from .investigations import InvestigationStore
 
-from .investigations import (
-    AccessLevel,
-    InsufficientAccessError,
-    Investigation,
-    InvestigationNotFoundError,
-    InvestigationStore,
-)
-
-#: A branch family deeper than this is a loop in the data, not a real lineage.
-MAX_LINEAGE = 64
-
-
-#: The case store this reads lineage from. An alias rather than a `Protocol` restating
+#: The case store a reader of events is given. An alias rather than a `Protocol` restating
 #: `get_authorized`: a body-less `*authorized*` method in `services/api` reads, to
 #: `tools/authorized_query_check.py`, as a fetch-then-check, and the gate is right to ask.
 CaseRecords = InvestigationStore
 
 
-async def visible_ancestors(
-    investigations: CaseRecords, case: Investigation, principal: Principal
-) -> list[str]:
-    """The cases `case` was branched from, nearest first, that `principal` may see at Viewer."""
-    found: list[str] = []
-    seen = {case.id}
-    parent_id = case.branched_from
-    while parent_id is not None and parent_id not in seen and len(seen) <= MAX_LINEAGE:
-        seen.add(parent_id)
-        try:
-            await investigations.get_authorized(parent_id, principal, need=AccessLevel.VIEWER)
-            found.append(parent_id)
-        except (InvestigationNotFoundError, InsufficientAccessError):
-            pass
-        try:
-            parent_id = (await investigations.get(parent_id)).branched_from
-        except InvestigationNotFoundError:
-            break
-    return found
-
-
-def with_inherited(
-    event_filter: EventFilter,
-    ancestors: Sequence[str],
-    edge_ids: Sequence[str],
-    *,
-    window: Interval | None,
-) -> EventFilter:
-    """`event_filter` for the case alone, widened to `ancestors`' events on `edge_ids`. `window` is
-    the case's own `branch_window` (ADR-128 decision 2): a branch made from what is lit reads its
-    ancestors' events only inside it. Required, with no default, so a reader cannot forget it."""
-    inherited = (
-        InheritedEvents(scopes=list(ancestors), edge_ids=list(edge_ids), window=window)
-        if ancestors and edge_ids
-        else None
-    )
-    return event_filter.model_copy(update={"inherited": inherited})
+def own_events_only(event_filter: EventFilter) -> EventFilter:
+    """`event_filter` for its case alone: anything a caller put in `inherited` is dropped."""
+    return event_filter.model_copy(update={"inherited": None})
 
 
 async def link_event_filter(
@@ -82,13 +34,5 @@ async def link_event_filter(
     edge_id: str,
     principal: Principal,
 ) -> EventFilter:
-    """The events behind one link the caller can see in the case: the case's own and, on a
-    branch, its visible parents' on that link."""
-    if investigations is None:
-        return with_inherited(event_filter, [], [], window=None)
-    try:
-        case = await investigations.get(event_filter.investigation_scope)
-    except InvestigationNotFoundError:
-        return with_inherited(event_filter, [], [], window=None)
-    ancestors = await visible_ancestors(investigations, case, principal)
-    return with_inherited(event_filter, ancestors, [edge_id], window=case.branch_window)
+    """The events behind one link the caller can see in the case: the case's own."""
+    return own_events_only(event_filter)

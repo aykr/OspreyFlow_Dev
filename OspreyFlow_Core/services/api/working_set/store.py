@@ -206,7 +206,7 @@ class WorkingSetStorage(Protocol):
         ...
 
     async def clear(self, investigation_id: str) -> None:
-        """Test/branch support — drops every key for `investigation_id`.
+        """Test support — drops every key for `investigation_id`.
         Never called from the ordinary read/expand path."""
         ...
 
@@ -315,7 +315,7 @@ def _index_keys(investigation_id: str) -> list[str]:
     ]
 
 
-#: The most elements one script takes. A branch or a restore writes tens of thousands; each chunk is
+#: The most elements one script takes. A restore writes tens of thousands; each chunk is
 #: its own script and leaves the bodies and the index consistent, so none holds Valkey for the
 #: length of the whole.
 _SCRIPT_CHUNK = 1_000

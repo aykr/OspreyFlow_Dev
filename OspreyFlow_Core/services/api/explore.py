@@ -187,7 +187,7 @@ class ExploreService:
     ) -> BusiestDays:
         """The case's days by events (ADR-100 decision 5), from its daily histogram. Events belong
         to a case, not a dataset (ADR-099 decision 7), so what is kept is keyed by the case's own
-        filter too (its scope and, on a branch, the parents' links it reads)."""
+        filter too (its scope)."""
         scope = hashlib.sha256(case_events.model_dump_json().encode()).hexdigest()[:16]
         signature = f"explore:{_VERSION}:busiest-days:{scope}:{limit}:{offset}"
         if self._cache is not None and (held := await self._cache.get(signature, principal)):

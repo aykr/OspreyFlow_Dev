@@ -37,9 +37,11 @@ MAX_EDGES = 250_000
 LINKS_AMONG_MAX_DEGREE = 6
 LINKS_AMONG_ROUTE_NODES = 8
 
-LimitOption = Literal["branch", "filter", "promote_to_batch"]
+#: The cap breach's three options (`03_CONDUIT_MIDDLEWARE.md` §4). The first is to save what is
+#: needed as a case view (ADR-144 decision 4).
+LimitOption = Literal["save_as_view", "filter", "promote_to_batch"]
 _ALL_LIMIT_OPTIONS: tuple[LimitOption, LimitOption, LimitOption] = (
-    "branch",
+    "save_as_view",
     "filter",
     "promote_to_batch",
 )
@@ -73,8 +75,8 @@ class LimitExceededError(Exception):
         self.detail = detail
 
 
-class BranchFilter(BaseModel):
-    """What a reader chooses to narrow their own view to, to branch it when it is past the cap
+class NarrowingFilter(BaseModel):
+    """What a reader chooses to narrow their own view to, when it is past the cap
     (ADR-124 decision 2, "the filter"): entity types, a date window, or both. Entity types select
     nodes. The window selects links whose `interval` overlaps it (a link with no interval is kept).
     A link is kept only when both its ends are kept. Applied to the reader's own projected view
@@ -86,7 +88,7 @@ class BranchFilter(BaseModel):
     valid_to: datetime | None = None
 
     @model_validator(mode="after")
-    def _a_choice_is_made(self) -> BranchFilter:
+    def _a_choice_is_made(self) -> NarrowingFilter:
         if self.entity_types is None and self.valid_from is None and self.valid_to is None:
             raise ValueError("choose entity types, a date window, or both")
         if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
@@ -108,13 +110,6 @@ class BranchFilter(BaseModel):
             or edge.interval.valid_to >= self.valid_from
         )
         return starts_in_time and ends_in_time
-
-
-class NothingToBranchError(Exception):
-    """A branch of a chosen set of nodes (ADR-084) found nothing to copy: every id asked for is
-    absent, hidden from the branching principal, or the choice was empty. One error for all three,
-    on purpose, so the answer cannot be used to tell a hidden node from one that does not exist
-    (`CLAUDE.md` rules 3 and 4). Raised before any case is created, so none is left behind empty."""
 
 
 class DeltaAdd(BaseModel):
@@ -282,7 +277,7 @@ class DeltaSnapshot(BaseModel):
     #: ADR-124 decision 5, the standing sentence: `True` when the case's stored set holds any node
     #: or link the reader may not view, `False` when it holds none. Set only in the full snapshot
     #: that `sync` returns to a reader; `None` on every other delta (stored, replayed, pushed live,
-    #: restore's and a branch's included), and on a stored entry from before the field existed. A
+    #: a restore's included), and on a stored entry from before the field existed. A
     #: bool and never a number: nothing here says how many or which.
     withheld: bool | None = None
 
@@ -454,7 +449,7 @@ class ResolutionOutcome(BaseModel):
 __all__ = [
     "MAX_EDGES",
     "MAX_NODES",
-    "BranchFilter",
+    "NarrowingFilter",
     "CardinalityPreview",
     "ClusterExplanation",
     "ClusterNotFoundError",

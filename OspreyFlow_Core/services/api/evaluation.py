@@ -21,7 +21,7 @@ privileged code path, nothing the existing silent-truncation and access-control 
 not already require of every
 other read"). `GraphPort.match` is already principal-filtered, so a monitor's own query can never
 return a match its owner cannot see — there is no out-of-access case for `record_match`'s
-`strict`/`notify` branch to ever take for a monitor, and this module does not pretend one exists;
+`strict`/`notify` path to ever take for a monitor, and this module does not pretend one exists;
 every monitor alert reaches `record_match` already proven visible by the match query itself.
 
 **Deduplication, disclosed as coarse rather than assumed precise.** `GraphPort.match` returns one
@@ -167,7 +167,7 @@ async def evaluate_hotlists_for_entry(
     `matcher` below is deliberately unscoped — `06_DECISIONS.md` ADR-038's own addendum records
     why this is a justified exemption rather than an oversight `authorized-query-check` missed
     (it cannot see this shape at all: a module function, not a `*_authorized` store method), what
-    the only barrier to disclosure is (`record_match`'s own `policy` branch, called below with
+    the only barrier to disclosure is (`record_match`'s own `policy` path, called below with
     `recipient` — the owner's principal — never with `matcher`), and names the test that pins it."""
     if not entry.node_ids:
         return []
@@ -251,7 +251,7 @@ async def evaluate_monitors_for_entry(
     (Phase 8 Stage 1) — see `evaluate_hotlists_for_entry`'s own docstring above for the full
     reasoning, identical here. `policy` is not a parameter here — a
     monitor's own match is always principal-filtered by construction (this module's own docstring
-    has the full reasoning), so `record_match` always takes its "visible" branch and the
+    has the full reasoning), so `record_match` always takes its "visible" path and the
     `strict`/`notify` switch is never reached for a monitor alert, not merely defaulted to one
     side of it."""
     # The change stream entry gates *when* an evaluation runs and carries `investigation_id`

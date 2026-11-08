@@ -280,11 +280,22 @@ async def _datasets_by_id(
     return found
 
 
+async def origin_column(conn: asyncpg.Connection) -> str:
+    """The case origin column as databases made before L3.2 hold it; one made after has none
+    (ADR-144 Amendment 1), and every case there reads as made from no other."""
+    held = await conn.fetchval(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = "
+        "'investigations' AND column_name = 'branched_from' AND table_schema = current_schema())"
+    )
+    return "branched_from" if held else "NULL::text AS branched_from"
+
+
 async def _cases(dsn: str) -> list[CaseRow]:
     conn = await asyncpg.connect(dsn)
     try:
+        origin = await origin_column(conn)
         rows = await conn.fetch(
-            "SELECT id, name, owning_unit, branched_from FROM investigations "
+            f"SELECT id, name, owning_unit, {origin} FROM investigations "
             "WHERE removed_at IS NULL ORDER BY created_at"
         )
     finally:

@@ -248,7 +248,7 @@ async def jumpable_alert(
     analytics: AnalyticsPort,
     case: str,
 ) -> Alert:
-    """The alert a jump branches from: the principal's own, and every node, link and transaction it
+    """The alert a jump opens a case from: the principal's own, and every node, link and transaction it
     cites readable to them now, or refused exactly as a missing alert, before anything is created
     (ADR-124 Amendment 17; rule 3, and ADR-146's tests: "`/alerts/<id>` for a reader who may not
     see the alert is refused exactly as a missing alert"). Seeding the readable referents of such an
@@ -262,10 +262,9 @@ async def jumpable_alert(
 async def fetch_jumpable_referents(
     alert: Alert, *, principal: Principal, graph: GraphPort
 ) -> list[Node]:
-    """The node-fetch half of the jump — `app.py`'s own route does the investigation-branch and
-    working-set-seed calls, since both are already-established app.py-local orchestration
-    (`branch_investigation`'s own `investigations.create`/`working_set.seed`/`publish_delta`/
-    `_record_history_step` sequence, reused exactly, not reinvented here). This function is only
+    """The node-fetch half of the jump — `app.py`'s own route makes the case and seeds its working
+    set, since both are already-established app.py-local orchestration (the
+    `investigations.create`/`working_set.seed`/`publish_delta`/`_record_history_step` sequence). This function is only
     the part specific to an alert: re-fetching each referent fresh, as `principal` — the viewer at
     jump time, never trusted from whatever `evidence_available` found true when the alert was
     listed moments earlier, the same "re-verify from the authoritative source" discipline every

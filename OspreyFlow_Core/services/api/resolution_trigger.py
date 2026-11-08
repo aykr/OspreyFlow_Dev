@@ -10,7 +10,7 @@ correctly stay nested under `/v1/investigations/{id}/...`; this is deliberately 
 not an addition to that one, matching that file's own "per-investigation working-set concept" test.
 
 **Always submits a job, never runs synchronously.** `submit_supersede_node`'s own sync/job split
-picks its branch from a cheap, already-available signal — `neighbourhood_stats`' degree. Nothing
+picks its path from a cheap, already-available signal — `neighbourhood_stats`' degree. Nothing
 comparably cheap exists for `resolve_entity_type`: learning a type's population size means paging
 `list_nodes` to exhaustion, which costs as much as simply running the resolution — there is no
 free peek. Given the same absence of a real measurement this module's own trigger docstring already

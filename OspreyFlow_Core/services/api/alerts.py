@@ -144,7 +144,7 @@ ALTER TABLE alert_repoint_records
 def disclosure_policy_from_value(raw: str | None) -> DisclosurePolicy:
     """`06_DECISIONS.md` ADR-038: deployment-level, read once, fails closed. Every value other
     than exactly `"notify"` — unset, empty, misspelled, or genuinely something else — resolves to
-    `"strict"`; there is no second branch that could accidentally treat an unrecognised value as
+    `"strict"`; there is no second path that could accidentally treat an unrecognised value as
     `"notify"`."""
     return "notify" if raw == _NOTIFY_VALUE else "strict"
 

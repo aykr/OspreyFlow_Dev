@@ -12,8 +12,7 @@ events themselves are then read through `AnalyticsPort.list_events`, whose acces
 the adapter's own query: an event the principal may not see is neither listed nor counted. The
 case-level Viewer level is checked by the route before this runs.
 
-On a branch, the emails were loaded under the case it came from; `link_event_filter` widens the
-read to those parents' events on this one link (ADR-084 Amendment 2).
+A case reads its own events alone (`event_scope.py`).
 """
 
 from __future__ import annotations
