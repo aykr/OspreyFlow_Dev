@@ -117,3 +117,73 @@ async def test_two_runs_at_once_give_each_dataset_one_home_case(
     finally:
         await datasets.close()
         await cases.close()
+
+
+@pytest.mark.parametrize("planted_out", [False, True], ids=["held", "the-finish-planted-out"])
+async def test_a_run_cut_short_leaves_nothing_a_re_run_doubles(
+    dsn: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    planted_out: bool,
+) -> None:
+    """The round-1 review's must-fix 8. One run was cut after making a case (before the claim):
+    that case reads nothing and only the script's own principal holds a level in it. Another was
+    cut after the claim: that home case reads nothing yet. The re-run makes one home case for the
+    first and finishes the second's, so each dataset has one, read by its Author. Rule 15, red:
+    with the finish planted out of `read_tables`, the second's home case stays reading nothing."""
+    from datetime import UTC, datetime
+
+    import scripts.make_home_cases as homes
+
+    from schemas.dataset_model import HomeCase
+
+    datasets = await PostgresDatasetStore.connect(dsn)
+    cases = await InvestigationStore.connect(dsn)
+    engineer = Principal(id="d.engineer", clearance="OFFICIAL", org_unit="u", roles=["analyst"])
+    actor = Principal(id=homes.ACTOR, clearance="OFFICIAL", org_unit="u")
+    try:
+        before_claim = await datasets.create(engineer, "Cut before the claim")
+        after_claim = await datasets.create(engineer, "Cut after the claim")
+        await cases.create(actor, name=before_claim.name)  # cut here: no claim
+        claimed = await cases.create(actor, name=after_claim.name)
+        await datasets.set_home_case(
+            HomeCase(
+                dataset_id=after_claim.id,
+                investigation_id=claimed.id,
+                made_at=datetime.now(UTC),
+                made_by=homes.ACTOR,
+            )
+        )  # fmt: skip
+        # Cut here: the home case reads nothing and has no Author.
+        if planted_out:
+            real = homes.read_tables
+
+            async def no_finish(conn: Any) -> Any:
+                found, with_a_home, _unfinished = await real(conn)
+                return found, with_a_home, {}
+
+            monkeypatch.setattr(homes, "read_tables", no_finish)
+        assert await homes._main([], dsn=dsn, names=_Names()) == 0  # noqa: SLF001
+        capsys.readouterr()
+        home = await datasets.home_case_of(after_claim.id)
+        assert home is not None and home.investigation_id == claimed.id
+        reads = [d.id for d in await datasets.chosen_of_case(claimed.id)]
+        if planted_out:
+            assert reads == []
+            return
+        assert reads == [after_claim.id]
+        assert await cases.list_grants(claimed.id) == {"d.engineer": "author"}
+        first = await datasets.home_case_of(before_claim.id)
+        assert first is not None
+        assert await cases.list_grants(first.investigation_id) == {"d.engineer": "author"}
+        # Seen by the engineer: exactly one case reading each dataset.
+        theirs = [c.id for c, _ in await cases.list_for(engineer)]
+        for dataset in (before_claim, after_claim):
+            readers = [c for c in theirs if dataset.id in
+                       [d.id for d in await datasets.chosen_of_case(c)]]  # fmt: skip
+            assert len(readers) == 1, (dataset.name, readers)
+        assert await homes._main([], dsn=dsn, names=_Names()) == 0  # noqa: SLF001
+        assert "0 writes made" in capsys.readouterr().out
+    finally:
+        await datasets.close()
+        await cases.close()

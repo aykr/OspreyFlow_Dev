@@ -43,6 +43,9 @@ class _Made:
         self.made[dataset.id] = author
         return True
 
+    async def finish(self, dataset: DatasetRow, home_id: str, author: str | None) -> None:
+        self.made[dataset.id] = author
+
 
 async def _run(persons: Any = PERSONS, with_a_home: Any = ()) -> tuple[_Made, Report]:
     made = _Made()
@@ -104,3 +107,16 @@ async def test_a_dataset_claimed_meanwhile_is_kept_not_counted_as_made() -> None
     assert sorted(report.kept) == ["Bank records (ds-bank)", "Prison records (ds-prison)"]
     assert report.needs_an_owner == ["Old records (ds-gone)"]
     assert report.owned == [("Bank + Prison (comp-both)", "d.engineer")]
+
+
+async def test_a_home_case_a_run_cut_short_claimed_is_finished_not_made_again() -> None:
+    """The round-1 review's must-fix 8: a run cut short after the claim left ds-prison's home case
+    reading nothing; the re-run finishes that one, its Author the maker, and makes no other."""
+    made = _Made()
+    report = await make_homes(
+        DATASETS, {"ds-prison"}, PERSONS, through=made, say=lambda _: None,
+        unfinished={"ds-prison": "case-cut-short"},
+    )  # fmt: skip
+    assert made.made["ds-prison"] == "d.engineer"
+    assert report.finished == ["Prison records (ds-prison)"]
+    assert "Prison records (ds-prison)" not in report.kept
