@@ -180,7 +180,15 @@ Follows merges, never runs ahead of them for the guides:
     (`spec/10_ADMINISTRATION_GUIDE.md` lacks §9.5 and §9.6).
   - **The welcome pages, the website and the GOV.UK theme's wording**, brought into line with one
     another and with the guides (the owner, 8 November: they diverge in places).
-  - **The deck**, the next draft after `Draft1l`. The website marks unbuilt features *coming*.
+  - The website marks unbuilt features *coming*. This is **D2a**.
+- **D2b, the decks** (the owner, 8 November 2026): once the rule editor (L2.11) and drawing boards (L3.3) are
+  merged and captured in the default and GOV.UK themes, every deck in `OspreyFlow_presentations/` updated for
+  the rules engine (the Rules place and its editor), drawing boards and the one alert queue: the Product
+  Overview (Draft1m, after Draft1l), the Administration and Architecture deck (Draft4), the three Prison
+  Intelligence demo decks (rev5, built by `prison_intelligence_demo/decks/build_decks.py`) with the HMP demo
+  script and the PID demo setup guide, the AML Opportunity deck (Draft3), the Pitch Deck (after Draft3b) and
+  the AE Enablement deck (Draft2); screenshots from the deck-capture harnesses. What a deck claims is
+  published, so the owner approves each draft.
   Exit: `make ci`'s spec and link gates; `make docs-pdf`; no "three places" and no "branch" outside the
   pipeline DAG.
 

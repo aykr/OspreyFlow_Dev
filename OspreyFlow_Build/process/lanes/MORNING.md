@@ -264,6 +264,12 @@ New ones are added at the bottom as they happen.
     admin routes drop their extra osprey-admin role check and rely on manage_geospatial alone? Kept both
     (dropping one would loosen access).
 
+57. **Sister lanes (your ruling):** case-b (L3.5, L3.7, then L3.8), studio-b (L1.6, then L1.8) and rules-b (L2.12
+    after L2.9) on sol; the parents and everything heavy on the default account; a third test stack, c
+    (ADR-142 Amendment 4). case-b and studio-b open at 22:00. **Docs split into D2a** (README, guides, welcome,
+    website, GOV.UK) **and D2b, every deck** (your ruling: the overview, architecture, Prison Intelligence demos
+    and script, AML, pitch and AE decks) after the rule editor and drawing boards are merged.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

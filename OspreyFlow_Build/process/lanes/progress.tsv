@@ -46,4 +46,5 @@ platform	P2	M	done	Model usage and limits
 platform	P3	L	building	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
 platform	P4	M	todo	The analyst's map: basemap switch, place search, contrast in three themes
 docs	D1	M	done	The website: drawing boards and three places, marked coming
-docs	D2	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, L2.5, P1, P3 run deployed)
+docs	D2a	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
+docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
