@@ -18,6 +18,8 @@ New ones are added at the bottom as they happen.
 8. **The port guard now reaches every Python process a test starts, and turns uvloop off** (`b232abf`), after the fourth rule 14 breach of the day.
 9. **L3.1 not merged at its final review (00:05):** two blockers. First, a monitor in a case could stamp an alert naming a subject from the case's own layer into the shared source (a rule 3 leak). Second, the migration fails outright once any branch reads its original's layer. My rulings: an alert any of whose referents or links is in the layer is written into the layer, and the migration counts and names a branch as reading its original's layer. Case is fixing both, with tests red first, before merge; your conditional approval still applies to the fixed branch.
 10. **A branch member with no level on the original case does not read the original's layer** (the same reasoning as the alert-jump exception). ADR-144 Amendment 1 decision 2 didn't address members who exist only in the branch.
+11. **An alert in a branch that rests on the original case's layer has its node withheld and its queue row raised** (case's call within my ruling): it can go neither to the source (a leak) nor into the read-only layer.
+12. **ADR-110 Amendment 17** carries studio's Part A2 findings, because Amendment 15 had been rewritten in place on a branch. It was restored, since decisions are amended, never edited.
 
 ## Evening, 7 November: your records of 7 November applied
 
