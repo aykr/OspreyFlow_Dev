@@ -753,6 +753,29 @@ def backup_models_file(compose_file: Path, destination: Path) -> Path | None:
     return destination
 
 
+MAPS_FILE_IN_CONDUIT = "/run/osprey/map-settings/maps.yaml"
+
+
+def backup_maps_file(compose_file: Path, destination: Path) -> Path | None:
+    """The maps file (ADR-147 decision 1), from the Conduit's own volume: the providers, the
+    default, the prefetch areas and the ids of the providers whose key is set, never a key. The map
+    key file beside it is never read: only this file is named. Read as the models file is."""
+    read = f"cat {MAPS_FILE_IN_CONDUIT} 2>/dev/null || true"
+    compose = _compose(compose_file)
+    try:
+        text = _run([*compose, "exec", "-T", "api", "sh", "-c", read], item="maps")
+    except BackupFailed:
+        text = _run(
+            [*compose, "run", "--rm", "--no-deps", "-T", "--entrypoint", "sh", "api", "-c", read],
+            item="maps",
+        )
+    if not text.strip():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    return destination
+
+
 def _take_set(
     compose_file: Path,
     target: Path,
@@ -803,6 +826,9 @@ def _take_set(
     models_file = backup_models_file(compose_file, target / "config" / "models.yaml")
     if models_file is not None:
         written.append(("models", models_file))
+    maps_file = backup_maps_file(compose_file, target / "config" / "maps.yaml")
+    if maps_file is not None:
+        written.append(("maps", maps_file))
 
     entries = []
     for item, path in written:
