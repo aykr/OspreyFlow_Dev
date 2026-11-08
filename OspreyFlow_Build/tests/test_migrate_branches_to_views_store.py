@@ -102,7 +102,8 @@ async def _seeded(dsn: str, graph: Any) -> dict[str, str]:
     conn = await asyncpg.connect(dsn)
     try:
         await conn.execute(
-            "ALTER TABLE investigations ADD COLUMN branched_from TEXT REFERENCES investigations (id)"
+            "ALTER TABLE investigations "
+            "ADD COLUMN branched_from TEXT REFERENCES investigations (id)"
         )
         await conn.execute(
             "UPDATE investigations SET branched_from = $1 WHERE id = ANY($2::text[])",
@@ -187,4 +188,43 @@ async def test_the_dry_run_changes_nothing_and_the_real_run_converts_in_both_sto
             await migrate(reads, DryRun(reads, again.writes), again)
             assert again.converted == [] and again.writes == []
         finally:
+            await conn.close()
+
+
+async def test_a_crash_between_the_view_and_the_retiring_leaves_neither(
+    dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review's round 2, item 4: the view is saved and the case retired in one transaction. A
+    failure after the view's insert leaves no view and the case as it was, and a re-run converts it
+    once."""
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        ids = await _seeded(dsn, graph)
+        sql = _Sql(graph._client)  # noqa: SLF001 - the script's own SQL, on the test database
+        types = _type_names(ONTOLOGY)
+        working = FakeWorkingSetStore()
+        conn = await asyncpg.connect(dsn)
+        views = await PostgresCaseViewStore.connect(dsn)
+        try:
+            reads = DeploymentReads(conn, working, sql, types)  # type: ignore[arg-type]
+
+            async def crashed(self: DeploymentWrites, case: Any) -> None:
+                raise RuntimeError("the process died between the view and the retiring")
+
+            monkeypatch.setattr(DeploymentWrites, "_retire_in", crashed)
+            with pytest.raises(RuntimeError):
+                await migrate(reads, DeploymentWrites(conn, views, sql, types, []), Report())
+            assert await conn.fetchval("SELECT count(*) FROM case_views") == 0
+            cases, links, _ = await _rows(conn)
+            assert all(c["removed_at"] is None for c in cases)
+            assert links  # the made case's link is still there
+
+            monkeypatch.undo()
+            again = Report()
+            await migrate(reads, DeploymentWrites(conn, views, sql, types, again.writes), again)
+            assert await conn.fetchval("SELECT count(*) FROM case_views") == 2
+            assert {c.case for c in again.converted} == {
+                f"Branch of Kestrel ({ids['copied']})", f"Old branch ({ids['old']})"
+            }
+        finally:
+            await views.close()
             await conn.close()

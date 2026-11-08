@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 import asyncpg
-from services.api.case_views import PostgresCaseViewStore
+from services.api.case_views import PostgresCaseViewStore, insert_view, new_view
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
@@ -102,9 +102,10 @@ class Reads(Protocol):
 class Writes(Protocol):
     """Everything the migration writes."""
 
-    async def save_view(self, case: CaseRecord, original: str, given: CaseViewInput) -> str: ...
+    #: Saves the view and retires the case in one transaction: a crash leaves neither, and a re-run
+    #: converts it once.
+    async def convert(self, case: CaseRecord, original: str, given: CaseViewInput) -> str: ...
     async def move_layer(self, from_layer: str, to_layer: str, tag: str) -> int: ...
-    async def retire(self, case: CaseRecord) -> None: ...
     async def drop_origin(self, case: CaseRecord) -> None: ...
 
 
@@ -136,16 +137,15 @@ class DryRun:
         self._reads = reads
         self._writes = writes
 
-    async def save_view(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
-        self._writes.append(f"save a view of case {original} from case {case.id}")
+    async def convert(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
+        self._writes.append(
+            f"save a view of case {original} from case {case.id}, and remove case {case.id}"
+        )
         return f"(new view of {original})"
 
     async def move_layer(self, from_layer: str, to_layer: str, tag: str) -> int:
         self._writes.append(f"move layer {from_layer} into {to_layer}, tagged {TAG}: {tag}")
         return await self._reads.elements_in(from_layer)
-
-    async def retire(self, case: CaseRecord) -> None:
-        self._writes.append(f"remove case {case.id}, its origin and layer links dropped")
 
     async def drop_origin(self, case: CaseRecord) -> None:
         self._writes.append(f"drop case {case.id}'s origin link")
@@ -244,8 +244,7 @@ async def migrate(reads: Reads, writes: Writes, report: Report | None = None) ->
         moved = 0
         if own is not None and target is not None:
             moved = await writes.move_layer(own[0], target[0], case.name or case.id)
-        view = await writes.save_view(case, original.id, given)
-        await writes.retire(case)
+        view = await writes.convert(case, original.id, given)
         report.converted.append(
             Converted(
                 case=case.label,
@@ -405,9 +404,13 @@ class DeploymentWrites:
         self._types = types
         self._writes = writes
 
-    async def save_view(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
-        view = await self._views.save(original, given, case.created_by, converted_from_case=case.id)
-        self._writes.append(f"saved view {view.id} of case {original} from case {case.id}")
+    async def convert(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
+        """The view saved and the case retired in one transaction."""
+        view = new_view(original, given, case.created_by, converted_from_case=case.id)
+        async with self._conn.transaction():
+            await insert_view(self._conn, view)
+            await self._retire_in(case)
+        self._writes.append(f"saved view {view.id} of case {original}, removed case {case.id}")
         return view.id
 
     async def move_layer(self, from_layer: str, to_layer: str, tag: str) -> int:
@@ -430,19 +433,18 @@ class DeploymentWrites:
         self._writes.append(f"moved {moved} from layer {from_layer} into {to_layer}")
         return moved
 
-    async def retire(self, case: CaseRecord) -> None:
-        async with self._conn.transaction():
+    async def _retire_in(self, case: CaseRecord) -> None:
+        """Inside `convert`'s transaction: the case removed softly, its links dropped."""
+        await self._conn.execute(
+            "UPDATE investigations SET removed_at = COALESCE(removed_at, now()), "
+            "removed_by = COALESCE(removed_by, $2), branched_from = NULL WHERE id = $1",
+            case.id,
+            ACTOR,
+        )
+        if await self._conn.fetchval("SELECT to_regclass('case_layer_reads') IS NOT NULL"):
             await self._conn.execute(
-                "UPDATE investigations SET removed_at = COALESCE(removed_at, now()), "
-                "removed_by = COALESCE(removed_by, $2), branched_from = NULL WHERE id = $1",
-                case.id,
-                ACTOR,
+                "DELETE FROM case_layer_reads WHERE investigation_id = $1", case.id
             )
-            if await self._conn.fetchval("SELECT to_regclass('case_layer_reads') IS NOT NULL"):
-                await self._conn.execute(
-                    "DELETE FROM case_layer_reads WHERE investigation_id = $1", case.id
-                )
-        self._writes.append(f"removed case {case.id}")
 
     async def drop_origin(self, case: CaseRecord) -> None:
         await self._conn.execute(

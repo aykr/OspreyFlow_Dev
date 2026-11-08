@@ -113,7 +113,7 @@ class Writes:
         self.w = world
         self.writes = writes
 
-    async def save_view(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
+    async def convert(self, case: CaseRecord, original: str, given: CaseViewInput) -> str:
         view_id = f"view-{len(self.w.views) + 1}"
         self.w.views.append(
             {"id": view_id, "case_id": original, "created_by": case.created_by, "shared": False,
@@ -121,7 +121,15 @@ class Writes:
              "converted_from_case": case.id, "name": given.name}
         )  # fmt: skip
         self.writes.append(view_id)
+        await self._retire(case)
         return view_id
+
+    async def _retire(self, case: CaseRecord) -> None:
+        self.w.cases[case.id] = CaseRecord(
+            id=case.id, name=case.name, created_by=case.created_by,
+            owning_unit=case.owning_unit, made_from=None, removed=True,
+        )  # fmt: skip
+        self.w.links.pop(case.id, None)
 
     async def move_layer(self, from_layer: str, to_layer: str, tag: str) -> int:
         moved = 0
@@ -133,14 +141,6 @@ class Writes:
                 moved += 1
         self.writes.append(f"move {from_layer}")
         return moved
-
-    async def retire(self, case: CaseRecord) -> None:
-        self.w.cases[case.id] = CaseRecord(
-            id=case.id, name=case.name, created_by=case.created_by,
-            owning_unit=case.owning_unit, made_from=None, removed=True,
-        )  # fmt: skip
-        self.w.links.pop(case.id, None)
-        self.writes.append(f"retire {case.id}")
 
     async def drop_origin(self, case: CaseRecord) -> None:
         self.w.cases[case.id] = CaseRecord(

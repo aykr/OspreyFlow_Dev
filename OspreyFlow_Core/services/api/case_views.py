@@ -194,6 +194,24 @@ def _row(row: Any) -> StoredCaseView:
     )  # fmt: skip
 
 
+def new_view(
+    case_id: str, given: CaseViewInput, creator: str, *, converted_from_case: str | None = None
+) -> StoredCaseView:
+    """A view as it will be stored, not yet written (for a writer holding its own transaction)."""
+    return _made(case_id, given, creator, converted_from_case)
+
+
+async def insert_view(conn: Any, view: StoredCaseView) -> None:
+    """Writes `view` on `conn`, inside whatever transaction the caller holds (the upgrade's
+    migration saves a view and retires its case in one)."""
+    await conn.execute(
+        f"INSERT INTO case_views ({_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        view.id, view.case_id, view.name, view.created_by, view.created_at, view.shared,
+        json.dumps(view.model_dump(mode="json", include=_LENS)), view.drawing,
+        view.converted_from_case,
+    )  # fmt: skip
+
+
 class PostgresCaseViewStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -218,12 +236,7 @@ class PostgresCaseViewStore:
     ) -> StoredCaseView:
         view = _made(case_id, given, creator, converted_from_case)
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                f"INSERT INTO case_views ({_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-                view.id, view.case_id, view.name, view.created_by, view.created_at, view.shared,
-                json.dumps(view.model_dump(mode="json", include=_LENS)), view.drawing,
-                view.converted_from_case,
-            )  # fmt: skip
+            await insert_view(conn, view)
         return view
 
     async def visible_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
