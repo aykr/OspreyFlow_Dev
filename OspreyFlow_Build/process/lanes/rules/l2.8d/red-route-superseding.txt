@@ -1,4 +1,4 @@
-# red: route-superseding
+# red: route-superseding — offline, at 6459633 + working tree, 2026-11-08T16:45:15Z
 # plant in services/api/alerts.py:
 # - '                await repoint.superseded(superseding, str(result))'
 # + '                pass'
@@ -32,4 +32,4 @@ E         Use -v to get more diff
 ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py:71: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py::test_a_routes_correction_records_the_corrected_node_and_its_revision
-1 failed in 0.52s
+1 failed in 0.33s

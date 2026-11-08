@@ -52,6 +52,7 @@ from .alerts import (
     QueueRow,
     evidence_node_ids,
     purge_copies,
+    raiser_reads_admitting,
     read_evidence,
     settle_repoints,
 )
@@ -136,9 +137,10 @@ async def monitoring_queue(
     readable = await read_evidence(
         [row.alert for row in rows], reader, graph, analytics, scope=lambda _: investigation_id
     )
+    admitted = await raiser_reads_admitting(store, [row.alert for row in rows], reader)
     shown: list[QueuedAlert] = []
     for row in rows:
-        if not readable.whole(row.alert):
+        if not readable.whole(row.alert) or row.alert.id not in admitted:
             continue
         ids = evidence_node_ids(row.alert)
         shown.append(_queued(row, summary_of(row.alert, {i: readable.nodes[i] for i in ids})))
@@ -184,7 +186,9 @@ async def _visible_row(
     readable = await read_evidence(
         [row.alert], reader, graph, analytics, scope=lambda _: investigation_id
     )
-    if not readable.whole(row.alert):
+    if not readable.whole(row.alert) or not await raiser_reads_admitting(
+        store, [row.alert], reader
+    ):
         raise AlertNotFoundError(alert_id)
     return row, {i: readable.nodes[i] for i in evidence_node_ids(row.alert)}
 

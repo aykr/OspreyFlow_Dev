@@ -30,7 +30,7 @@ class _Service:
         ]
 
 
-async def test_every_store_is_cleared_before_anything_is_published_and_each_case_on_its_channel(
+async def test_each_cases_removal_is_published_on_its_own_channel_after_the_removal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The removal's order and channels: `remove_reverted` clears every case's store before it
@@ -51,7 +51,8 @@ async def test_every_store_is_cleared_before_anything_is_published_and_each_case
 async def test_a_service_built_without_a_client_publishes_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A test's service has no client: the stores are cleared and nothing is published."""
+    """A test's service has no client: the stores are cleared and nothing is published. Red with
+    the publish made whatever the client: a removal was published to no client."""
     events: list[str] = []
 
     async def publish(client: Any, case: str, delta: Any) -> None:

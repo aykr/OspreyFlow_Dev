@@ -27,8 +27,8 @@ from services.api import alert_queue
 from services.api.alerts import QueueRow, default_severity
 from services.ingest.load_revert import RevertDeps, revert
 
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import Alert, AlertMode, Principal
-from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.ingest.test_revert_load import (
     Analytics,
     Audit,
@@ -39,6 +39,7 @@ from tests.ingest.test_revert_load import (
     _record,
     no_caches,
 )
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 T0 = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -103,6 +104,15 @@ class Store:
     async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
         """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
         read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
+    #: What each alert's raiser read (`AlertStore.save(handlings=)`), none recorded unless a test
+    #: says so; read by the queue's `raiser_reads_admitting` as the real store answers it.
+    recorded_handlings: dict[str, Any] = {}
+    scheme = load_uk_le_scheme()
+
+    async def handlings_by_id(self, alert_ids: Any) -> dict[str, Any]:
+        """`AlertStore.handlings_by_id`: `None` for an alert whose handlings were not recorded."""
+        return {i: self.recorded_handlings.get(i) for i in alert_ids}
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]

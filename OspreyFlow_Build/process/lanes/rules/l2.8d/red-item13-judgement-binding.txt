@@ -1,4 +1,4 @@
-# red: item13-judgement-binding
+# red: item13-judgement-binding — offline, at 6459633 + working tree, 2026-11-08T16:45:18Z
 # plant in services/api/worker_main.py:
 # - '"supersede_node": {"alerts": alerts, "judgement_store": judgement_store},'
 # + '"supersede_node": {"alerts": alerts},'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 __ test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with ___
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x12b427110>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11314b620>
 
     async def test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with(
         monkeypatch: pytest.MonkeyPatch,
@@ -37,4 +37,4 @@ E       KeyError: 'judgement_store'
 ../OspreyFlow_Build/tests/services/api/test_worker_registration.py:145: KeyError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with
-1 failed in 2.16s
+1 failed in 1.51s

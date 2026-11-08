@@ -1,4 +1,4 @@
-# red: item13-app-alerts
+# red: item13-app-alerts — offline, at 6459633 + working tree, 2026-11-08T16:45:20Z
 # plant in services/api/app.py:
 # - '        alerts=alerts_store,\n        judgement_store=judgements_store,\n    )'
 # + '        judgement_store=judgements_store,\n    )'
@@ -33,4 +33,4 @@ E            +    where <class 'ast.Name'> = <module 'ast' from '/Users/ayankar/
 ../OspreyFlow_Build/tests/services/api/test_worker_registration.py:189: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store
-1 failed in 1.89s
+1 failed in 1.78s

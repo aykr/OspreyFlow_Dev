@@ -15,7 +15,7 @@ import services.api.pipeline_run as pipeline_run
 from services.api.alert_queue import dispose
 from services.api.alerts import AlertNotFoundError, AlertTriageConflict, QueueRow
 
-from ontology.handling import withhold_sources
+from ontology.handling import load_uk_le_scheme, withhold_sources
 from schemas.domain import (
     Alert,
     AlertMode,
@@ -27,7 +27,6 @@ from schemas.domain import (
     ProvenanceState,
     Subgraph,
 )
-
 from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.services.api.repoint_journal_fakes import Journal
 
@@ -141,6 +140,15 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
         async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
             """A journal holding no alert: nothing to settle before the close's read."""
             await self.journal.settle_pending(graph, now=now)
+
+        #: What each alert's raiser read (`AlertStore.save(handlings=)`), none recorded unless a test
+        #: says so; read by the queue's `raiser_reads_admitting` as the real store answers it.
+        recorded_handlings: dict[str, Any] = {}
+        scheme = load_uk_le_scheme()
+
+        async def handlings_by_id(self, alert_ids: Any) -> dict[str, Any]:
+            """`AlertStore.handlings_by_id`: `None` for an alert whose handlings were not recorded."""
+            return {i: self.recorded_handlings.get(i) for i in alert_ids}
 
         #: The shared stand-in (`repoint_journal_fakes.Journal`, L2.8c's carry (d)): what the close
         #: confirmed is recorded, and it refuses what the real journal refuses.

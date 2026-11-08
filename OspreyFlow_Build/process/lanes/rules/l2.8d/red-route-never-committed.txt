@@ -1,4 +1,4 @@
-# red: route-never-committed
+# red: route-never-committed — offline, at 6459633 + working tree, 2026-11-08T16:45:16Z
 # plant in services/api/alerts.py:
 # - '            # Its commit never sent, nothing recorded can land: the record goes with it.\n            repoint.never_committed()'
 # + '            pass'
@@ -30,4 +30,4 @@ E         Use -v to get more diff)
 ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py:89: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py::test_a_correction_the_graph_refuses_before_its_commit_records_nothing
-1 failed in 0.58s
+1 failed in 0.33s

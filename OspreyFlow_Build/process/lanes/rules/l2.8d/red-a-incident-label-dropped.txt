@@ -1,0 +1,55 @@
+# red: a-incident-label-dropped — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:43:37Z
+# plant in packages/adapters/graph_arcadedb/adapter.py:
+# - '            f\'g.V().has("id",{old_node_lit}).bothE({label_lit}).has("reverted",false)\''
+# + '            f\'g.V().has("id",{old_node_lit}).bothE().has("reverted",false)\''
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x109d16ca0>)
+
+    async def test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """ADR-109 Amendment 11 point 1, over ADR-110 Amendment 18 (the L2.8d review's item 2): two types
+        hold one id and both are links of the corrected node. Each is cloned, and each original is
+        marked `superseded_by` its own clone, found by its own type as well as its id, so the settle
+        follows each type to its own successor. Red with the type left out of the marking (the label
+        dropped from `bothE`): the second clone's marking overwrote the first type's, and both
+        originals named the second clone."""
+        async with factory.context() as adapter:
+            a, b = await _two_endpoints(adapter)
+            _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+            other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
+            _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+            assert also == link, "two types hold the one id"
+            reported: dict[str, str] = {}
+    
+            async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+                assert old == link
+                reported[old_type] = new
+    
+            tx = await adapter.begin_transaction()
+            await adapter.supersede_node(
+                a, _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"), tx,
+                on_link_cloned=on_link_cloned,
+            )  # fmt: skip
+            await adapter.commit_transaction(tx)
+    
+            assert set(reported) == {"COMMUNICATED_WITH", "TRANSACTED"}
+            assert reported["COMMUNICATED_WITH"] != reported["TRANSACTED"]
+            for edge_type, clone in reported.items():
+                state = (await adapter.stored_link_states([link], edge_type=edge_type))[link]
+>               assert (state.superseded, state.superseded_by) == (True, clone), edge_type
+E               AssertionError: TRANSACTED
+E               assert (True, '01M6Y...MHCQCBM7NF9P') == (True, '01M6Y...5CQEF7AAB121')
+E                 
+E                 At index 1 diff: '01M6Y0PH0VJWQMMHCQCBM7NF9P' != '01M6Y0PH0KF2JR5CQEF7AAB121'
+E                 Use -v to get more diff
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:6978: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone[graph_arcadedb[gremlin]]
+1 failed in 3.08s

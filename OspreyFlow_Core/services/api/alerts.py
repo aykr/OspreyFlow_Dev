@@ -43,7 +43,7 @@ from typing import Any, Literal, Protocol
 import asyncpg
 
 from conduit_common.identity import new_id, new_node_id
-from ontology.handling import HandlingScheme, load_uk_le_scheme
+from ontology.handling import HandlingScheme, load_uk_le_scheme, principal_may_view
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort, StoredLink
 from schemas.analytics import (
@@ -70,6 +70,7 @@ from schemas.domain import (
 from .audit import AuditWriter
 from .dataset_scope import reach_clause
 from .hotlists import BOOTSTRAP_SQL as _HOTLISTS_BOOTSTRAP_SQL
+from .hotlists import take_bootstrap_lock
 
 DisclosurePolicy = Literal["strict", "notify"]
 
@@ -144,15 +145,6 @@ ALTER TABLE alert_repoint_records
 ALTER TABLE alert_repoint_records
     ADD COLUMN IF NOT EXISTS referents JSONB NOT NULL DEFAULT '[]'::jsonb;
 """
-
-#: The start-up DDL's own lock (ADR-109 Amendment 12, L2.8c's carry (e)): every Conduit replica and
-#: every worker replica runs `_BOOTSTRAP_SQL` as its store connects, and Postgres's `IF NOT EXISTS`
-#: is not safe against itself: two sessions creating one table at once both pass the check and one
-#: fails on the catalogue's unique index. The DDL runs in one transaction under this
-#: transaction-scoped advisory lock (two-key space, `REPOINT_LOCK_SPACE` and 0), so replicas
-#: starting together take turns. A record whose `hashtext` is 0 shares the key: its settle then
-#: waits for, or skips over, a store starting up, which a later read finishes.
-_BOOTSTRAP_LOCK_KEY = 0
 
 
 def disclosure_policy_from_value(raw: str | None) -> DisclosurePolicy:
@@ -372,8 +364,12 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
 
 #: The alerts citing any of `$1`'s links: an alert stores the links it cites as a JSON list.
 _CITES_ANY_SQL = "COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $1::text[]"
-#: An alert naming any of `$2` among its `referent_node_ids` (ADR-109 Amendment 12).
-_NAMES_ANY_SQL = "COALESCE(NULLIF(referent_node_ids, ''), '[]')::jsonb ?| $2::text[]"
+
+
+def _names_any_sql(param: int) -> str:
+    """An alert naming any of the ids in parameter `$param` among its `referent_node_ids` (ADR-109
+    Amendment 12)."""
+    return f"COALESCE(NULLIF(referent_node_ids, ''), '[]')::jsonb ?| ${param}::text[]"
 
 
 async def _lock_for_repoint(conn: asyncpg.Connection, old: Sequence[str]) -> None:
@@ -557,9 +553,7 @@ class AlertStore:
         # Two at most, opened only when a record is settled (`_settle_record`).
         lock_pool = await asyncpg.create_pool(dsn=dsn, min_size=0, max_size=2)
         async with pool.acquire() as conn, conn.transaction():
-            await conn.execute(
-                "SELECT pg_advisory_xact_lock($1, $2)", REPOINT_LOCK_SPACE, _BOOTSTRAP_LOCK_KEY
-            )
+            await take_bootstrap_lock(conn)  # replicas starting together take turns
             # The queue's scope reads a hotlist's audience (`_SHARED_SQL`), so the table it reads
             # exists whichever store connects first — made by the hotlist store's own statement,
             # never a second copy of it.
@@ -661,6 +655,22 @@ class AlertStore:
         async with self._pool.acquire() as conn:
             raw = await conn.fetchval("SELECT handlings FROM alerts WHERE id = $1", alert_id)
         return None if raw is None else [Handling(**h) for h in json.loads(raw)]
+
+    async def handlings_by_id(self, alert_ids: Sequence[str]) -> dict[str, list[Handling] | None]:
+        """`handlings_of` for many alerts in one query, fixed by the ids asked (rule 7)."""
+        if not alert_ids:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, handlings FROM alerts WHERE id = ANY($1::text[])",
+                sorted(set(alert_ids)),
+            )
+        return {
+            r["id"]: None
+            if r["handlings"] is None
+            else [Handling(**h) for h in json.loads(r["handlings"])]
+            for r in rows
+        }
 
     async def set_alert_node(self, alert_id: str, node_id: str, *, was: str) -> bool:
         """The alert's `Alert` node is now `node_id`, a re-marked revision of `was`; only if it is
@@ -952,39 +962,45 @@ class AlertStore:
 
     async def rename_alert_nodes(
         self, renamed: Mapping[str, str], *, referents: Mapping[str, str] | None = None
-    ) -> list[str]:
-        """Every alert naming an old node in `renamed` as its own node, and every alert naming an
-        old node in `renamed` or `referents` among its `referent_node_ids`, made to name the node
-        it maps to, in one transaction, under the id-ordered lock `apply_repoints` takes: the rows
-        locked together in id order first, so a rename and a repoint of the same alerts never take
-        them in opposite orders and deadlock (L2.8c, D9). A referent is renamed in SQL as the row
-        stands, each id in place, never written back from a list read earlier (ADR-109 Amendment
-        12). Returns the alerts whose referents were renamed."""
+    ) -> tuple[list[str], list[str]]:
+        """Every alert naming an old node in `renamed` or `referents`, as its own node or among its
+        `referent_node_ids`, made to name the node it maps to, in one transaction, under the
+        id-ordered lock `apply_repoints` takes: the rows locked together in id order first, so a
+        rename and a repoint of the same alerts never take them in opposite orders and deadlock
+        (L2.8c, D9). A referent pair renames an alert's own node too: a node a route corrects may
+        be an alert's own `Alert` node (an editor confirming it from the canvas), and its alert
+        must follow it as a referent's does (ADR-109 Amendment 12). A referent is renamed in SQL as
+        the row stands, each id in place, never written back from a list read earlier. Returns the
+        alerts whose referents were renamed, and the old nodes of `referents` that were an alert's
+        own node (their copies are purged as an alert node's are)."""
         named = {**renamed, **(referents or {})}
         if not named:
-            return []
+            return [], []
+        own: list[str] = []
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
-                f"SELECT id FROM alerts WHERE alert_node_id = ANY($1::text[]) OR {_NAMES_ANY_SQL} "
-                "ORDER BY id FOR UPDATE",
-                sorted(renamed),
+                "SELECT id FROM alerts WHERE alert_node_id = ANY($1::text[]) "
+                f"OR {_names_any_sql(2)} ORDER BY id FOR UPDATE",
+                sorted(named),
                 sorted(named),
             )
-            for old, newest in renamed.items():
-                await conn.execute(
+            for old, newest in named.items():
+                done = await conn.execute(
                     "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
                 )
+                if old not in renamed and done != "UPDATE 0":
+                    own.append(old)
             rows = await conn.fetch(
                 "UPDATE alerts SET referent_node_ids = (SELECT jsonb_agg(COALESCE("
                 "$1::jsonb ->> t.e, t.e) ORDER BY t.n)::text "
                 "FROM jsonb_array_elements_text(referent_node_ids::jsonb) "
-                f"WITH ORDINALITY AS t(e, n)) WHERE {_NAMES_ANY_SQL} RETURNING id",
+                f"WITH ORDINALITY AS t(e, n)) WHERE {_names_any_sql(2)} RETURNING id",
                 json.dumps(named),
                 sorted(named),
             )
         moved = [r["id"] for r in rows]
         await self.publish_facts(moved)
-        return moved
+        return moved, sorted(own)
 
     async def _add_to_record(
         self,
@@ -1167,16 +1183,23 @@ class AlertStore:
             else:
                 renamed[old] = newest
         await self.apply_repoints(finals)
-        await self.rename_alert_nodes(renamed, referents=named)
+        _, own = await self.rename_alert_nodes(renamed, referents=named)
         remarked = await self._remark_citing(
             graph,
             record_id,
             sorted(set(finals.values())),
-            sorted({*renamed.values(), *(old for old in rerun if old not in renamed)}),
+            sorted(
+                {
+                    *renamed.values(),
+                    *(named[old] for old in own),
+                    *(old for old in rerun if old not in renamed),
+                }
+            ),
             sorted(set(named.values())),
         )
-        # Every node renamed or re-marked here is superseded: its working-set copies are stale.
-        purge = sorted({*renamed, *remarked})
+        # Every alert node renamed or re-marked here is superseded: its working-set copies are
+        # stale. A corrected entity's are not purged (it is no alert's own node).
+        purge = sorted({*renamed, *own, *remarked})
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE alert_repoint_records SET applied = true, purge = $2::jsonb WHERE id = $1",
@@ -1206,7 +1229,7 @@ class AlertStore:
         async with self._pool.acquire() as conn:
             found = await conn.fetch(
                 f"SELECT id FROM alerts WHERE {_CITES_ANY_SQL} OR alert_node_id = ANY($3::text[]) "
-                f"OR {_NAMES_ANY_SQL} ORDER BY id",
+                f"OR {_names_any_sql(2)} ORDER BY id",
                 list(links),
                 list(referents),
                 list(nodes),
@@ -1376,6 +1399,36 @@ class AlertStore:
             )
         await self.publish_facts([r["id"] for r in rows])
         return len(rows)
+
+
+def raiser_read_admits(
+    alert: Alert, handlings: Sequence[Handling] | None, reader: Principal, scheme: HandlingScheme
+) -> bool:
+    """Whether a correction may lower who reads an alert with no `Alert` node (ADR-109 Amendment
+    12, the orchestrator's interim ruling (b), the owner's question open): such an alert's words
+    are guarded only by the queue's check of its evidence, and were written over what its raiser
+    read (`save(handlings=)`). A correction that lowers a named node's or a cited link's marking
+    does not make the words lower, since they may describe the revision the correction replaced,
+    so the queue also refuses a reader below any marking the raiser read. An alert with its own
+    node is guarded by the node, which a re-mark never lowers. Handlings not recorded (`None`)
+    refuse no one. Should the owner rule that a lowered marking admits its readers (option (a)),
+    this returns `True`."""
+    if alert.alert_node_id is not None:
+        return True
+    return all(principal_may_view(h, reader, scheme) for h in handlings or [])
+
+
+async def raiser_reads_admitting(
+    store: AlertStore, alerts: Sequence[Alert], reader: Principal
+) -> set[str]:
+    """The ids of `alerts` that `raiser_read_admits` lets `reader` read, the handlings read in one
+    query for every alert asked (rule 7: the read follows the ids, never what is hidden)."""
+    handlings = await store.handlings_by_id([a.id for a in alerts if a.alert_node_id is None])
+    return {
+        a.id
+        for a in alerts
+        if raiser_read_admits(a, handlings.get(a.id), reader, store.scheme)
+    }
 
 
 class AlertTriageConflict(Exception):
@@ -1898,6 +1951,8 @@ __all__ = [
     "QueueRow",
     "default_severity",
     "distinct_handlings",
+    "raiser_read_admits",
+    "raiser_reads_admitting",
     "queue_scope",
     "DisclosurePolicy",
     "disclosure_policy_from_value",

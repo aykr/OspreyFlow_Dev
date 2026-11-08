@@ -29245,7 +29245,8 @@ Status: accepted 8 November 2026, the orchestrator's settlement of Amendment 11 
 gap as its own step (L2.8d), and its and the owner's answers of the same day to the rules lane's
 four questions (Q1: each caller records the node, no port change; Q2: the L2.8c review's items 11
 and 13 built here; Q3: this number, reserved in `ADR_RESERVATIONS.md`; Q4: the start-up DDL under an
-advisory lock, the connection ceilings recorded). Built by the rules lane in L2.8d. Amendments 10
+advisory lock, the connection ceilings recorded), and the orchestrator's interim ruling (b) on the
+lane reviewer's item 4 (point 10), the owner's question open. Built by the rules lane in L2.8d. Amendments 10
 and 11 are unchanged except where this says so; this closes Amendment 11 point 8's second gap.
 
 **Why.** The journal renamed only an alert's own `Alert` node (`alert_nodes`). A node among an
@@ -29262,7 +29263,10 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
    `supersede.py`'s synchronous path and its job, and the enrich stage's online point
    (`_persist_online_point`). The close's confirm already records the confirmed node as its alert's
    own (`record_node`); every node an `alert_nodes` pair renames is now renamed among referents too,
-   so an alert naming another alert's confirmed node follows it. `remark_alerts`' supersede of an
+   so an alert naming another alert's confirmed node follows it. And every node a referent pair
+   renames is renamed as an alert's own node too, its old copies purged as an alert node's are: an
+   editor can confirm an alert's own inferred node from the canvas through the route (the lane
+   reviewer's item 1), and the alert must follow it. `remark_alerts`' supersede of an
    `Alert` node records nothing new: no alert names an `Alert` node among its referents (a finding
    names what it concerns). The record keeps referent pairs in their own column (`referents`),
    apart from `alert_nodes`, because a corrected entity is no alert's own node: its working-set
@@ -29276,9 +29280,10 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
    under one lock (D9), then renames each id in place in SQL as the row stands. The alerts whose
    referents were renamed are re-marked to their evidence (`_remark_citing`'s `referents`), since a
    correction can raise a referent above the alert's own node (a correction to SECRET), as Amendment
-   11 point 4 re-marks over a cited link's ends. Nothing a reader is answered changes beyond which
-   revision an alert names and its node's marking: the queue still checks every referent as the
-   reader, so a reader who may not read the new revision is still refused (rule 3).
+   11 point 4 re-marks over a cited link's ends. The queue still checks every referent as the
+   reader, so a reader who may not read the new revision is still refused (rule 3); and a
+   correction that lowers a referent never admits a reader the alert's raiser's read would not
+   (point 10).
 3. **A record opens at its first pair** (L2.8c's carry (f)). `repointing` and `supersede_journalled`
    open no record until the write records its first pair, still before its commit, and start the
    record's keep-alive then. A write that replaces nothing (an enrich stage whose geocoder finds no
@@ -29289,8 +29294,11 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
    it connects. Postgres's `CREATE ... IF NOT EXISTS` is not safe against itself: eight stores
    connecting at once to an empty schema failed on the catalogue's unique index
    (`pg_type_typname_nsp_index`). The DDL now runs in one transaction under a transaction-scoped
-   advisory lock (two-key space, `REPOINT_LOCK_SPACE` and 0); a record whose `hashtext` is 0 shares
-   the key and only waits for, or is skipped past, a store starting up. **Connection ceilings,
+   advisory lock (`hotlists.BOOTSTRAP_LOCK`: two-key space, `REPOINT_LOCK_SPACE` and 0), and so does
+   `HotlistStore.connect`, which runs the hotlists' DDL the alert store also runs (a Conduit replica
+   connects its hotlist store just before its alert store: the reviewer's item 3). A record whose
+   `hashtext` is 0 shares the key: a store starting up waits for that record's settle (the settle's
+   `pg_try_advisory_lock` never waits), or the settle skips the record for a later read. **Connection ceilings,
    recorded:** each store opens a pool of at most four connections and a lock pool of at most two,
    six per replica (Conduit or worker). Against Postgres's default `max_connections` of 100, which
    every other store's pool on the same server also draws on, ten replicas of the Conduit and the
@@ -29318,11 +29326,28 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
    refusal of a pair recorded after its write left (`RepointRecordGone`, as `_add_to_record` refuses
    one in a record already applied) had no test; it has one, and the stages test of the close's
    confirm uses the shared stand-in rather than its own (carry (d)).
-9. **Another type holding a cloned link's id is never marked** (carry (a)): a graph-port
-   conformance case of Amendment 11 point 1's sentence.
+9. **Another type holding a cloned link's id is never marked** (carry (a)): two graph-port
+   conformance cases of Amendment 11 point 1's sentence, one for a link of that type elsewhere in
+   the graph, one for both types at the corrected node (each original marked by its own clone).
+10. **A correction never lowers who reads an alert with no node** (the orchestrator's interim
+   ruling (b), 8 November, on the reviewer's item 4; **the owner's question is open**). An alert with
+   no `Alert` node (no single safe marking when it was raised) is guarded only by the queue's check
+   of its evidence. Once the journal follows a correction that lowers a named node's or a cited
+   link's marking, a reader the lower marking admits would be listed words written while the
+   evidence was marked higher, which may describe the revision the correction replaced. So the
+   queue's two read paths (`alert_queue.monitoring_queue` and `_visible_row`, the list and every
+   action on one alert) also refuse a reader below any marking the raiser read (`save(handlings=)`,
+   `alerts.raiser_read_admits`). Handlings not recorded refuse no one. This tightens Amendment 10's
+   lowered-link case too: an analyst lowering a cited link no longer lowers who reads a no-node
+   alert. An alert with its own node needs nothing new: the node, which a re-mark never lowers (its
+   own marking is among what it rests on), keeps the reader out. Should the owner rule that a
+   lowered marking admits its readers (option (a)), `raiser_read_admits` returns `True`, one line.
+   The inbox and watch reads (`get_authorized`, `list_authorized`, `evidence_available`) are an
+   owner's own alerts, read by their raiser, and are unchanged.
 
 **Contention, recorded (rule 14).** While the rules lane held stack a (lease from 15:54:19Z), another
-lane reached its Postgres without a lease for about a minute between 15:54 and 16:00Z (a database
+lane reached its Postgres without a lease for about a minute between 15:54 and 16:00Z (the
+orchestrator's notice; the lane re-took everything it ran up to 16:01:21Z) (a database
 `litellm_probe` made and dropped, the container attached to and detached from a network; nothing of
 this lane's touched). One red run in that window failed on a refused connection rather than its
 assertion and was re-run; every live red and green taken in the window was re-taken after it
@@ -29333,8 +29358,9 @@ assertion and was re-run; every live red and green taken in the window was re-ta
 enrich stage's online point), `test_an_alert_naming_..._stays_listed`: an alert naming the node the
 caller corrects stays listed for its reader, naming the newest revision, and is refused to the case's
 OFFICIAL reader of the SECRET revision and to the cleared reader of another case; each red with that
-caller's record of the node removed at its call site, all red with the settle's referent rename
-removed, the OFFICIAL reader's refusal red with the revision written at OFFICIAL, the other case's
+caller's record of the node removed at its call site, all but the close's red with the settle's
+referent rename removed (the close's renames through its `alert_nodes` pair, red with that pair
+renaming the alert's own node alone), the OFFICIAL reader's refusal red with the revision written at OFFICIAL, the other case's
 with the queue's case scope made true.
 `test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node` (red with the
 referents left out of the re-mark); `test_an_enrich_stage_that_writes_no_point_opens_no_record` (red
@@ -29342,13 +29368,26 @@ with the record opened before the write);
 `test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites` (red with the writer also
 linking the node to a document by `MENTIONED_IN`);
 `test_stores_starting_together_create_the_alert_tables_without_failing` (red without the lock:
-`UniqueViolationError`). The graph-port case
+`UniqueViolationError`). The lane reviewer's round:
+`test_an_alert_whose_own_node_a_route_confirms_stays_listed_and_its_old_copy_leaves` (red with a
+referent pair renaming referents alone),
+`test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node` (red with the
+node's own marking left out of the re-mark),
+`test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_no_node` and
+`test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_with_no_node` (each red with
+option (a)), `test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing`
+(red with the hotlist store's DDL outside the lock),
+`test_a_writer_that_has_recorded_nothing_holds_no_record` (red with the record opened before the
+write) and `test_a_stale_record_whose_referent_landed_is_kept` (red with the referent pairs left
+out of the stale check). The graph-port cases
 `test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id` (red with the marking
-made by the id alone). Offline: `tests/services/api/test_repoint_journal_stand_in.py` (the stand-in's
-refusal, red without it; a route's correction recorded, red without `superseding`; a refused
+made by the id alone) and
+`test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone` (red with
+the type left out of the marking). Offline: `tests/services/api/test_repoint_journal_stand_in.py` (the stand-in's
+refusal, red without it, the stand-in stricter than the real store; a route's correction recorded, red without `superseding`; a refused
 correction recording nothing, red without `never_committed`), `test_remove_and_publish.py` (each
-case's removal on its own channel, red on one channel; both callers through the helper, red with the
-purge's own copy), `test_worker_registration.py`'s
+case's removal on its own channel, red on one channel; nothing published without a client, red
+publishing anyway; both callers through the helper, red with the purge's own copy), `test_worker_registration.py`'s
 `test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store` (red with
 `app.py`'s `alerts=` removed, and with the supersede job registered by hand again) and
 `test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with` (red without the

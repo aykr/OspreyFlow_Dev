@@ -9,6 +9,7 @@ record (`process/lanes/rules/l2.8c/`)."""
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -190,7 +191,10 @@ async def _cited_link(stores: dict[str, Any], graph: Any, case: str, *, p_state:
                   referent_node_ids=[q], edge_ids=[link], investigation_id=case, created_at=T0,
                   typology="structuring", words=f"A finding over {tag}", severity="medium",
                   alert_node_id=alert_node)  # fmt: skip
-    await stores["alerts"].save(alert, handlings=[OFFICIAL, link_handling])
+    # No raiser's handlings recorded: what each case proves is the refusal by the link's own
+    # marking, which a recorded SECRET read would also give for an alert with no node (ADR-109
+    # Amendment 12's interim ruling (b)), so each case's red would no longer show the link's.
+    await stores["alerts"].save(alert)
     return p, link, alert
 
 
@@ -877,3 +881,208 @@ async def test_stores_starting_together_create_the_alert_tables_without_failing(
     finally:
         await admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
         await admin.close()
+
+
+# ---- L2.8d, its review: an alert's own node through a route, lowered markings, start-up, records --
+
+
+async def test_an_alert_whose_own_node_a_route_confirms_stays_listed_and_its_old_copy_leaves(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """The review's item 1. An editor confirms an alert's own inferred node from the canvas
+    (`confirm_node_route`): the route records it as the node it corrects, and the settle renames it
+    wherever an alert names it, as its own node too, so the alert stays listed for its reader,
+    is refused to the OFFICIAL reader of the SECRET revision, and the old node's copies leave the
+    working sets. Red with a referent pair renaming referents alone: the alert went on naming the
+    superseded node as its own and was withheld from every reader."""
+    from services.api import alert_queue
+    from services.api import app as conduit
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        (node,) = await graph.upsert_nodes(
+            [_person(f"Alert node {new_id()}", ProvenanceState.INFERRED).model_copy(update={"handling": SECRET})], tx)  # fmt: skip
+        await graph.commit_transaction(tx)
+        alert = _alert(case, node=node)
+        await stores["alerts"].save(alert)
+        working = _WorkingSets()
+        await conduit.confirm_node_route(investigation=None, node_id=node, principal=READER, graph=graph,
+                                         audit=stores["audit"], judgements=_Judgements(),  # type: ignore[arg-type]
+                                         alerts_store=stores["alerts"], working_set=working)  # type: ignore[arg-type]  # fmt: skip
+
+        async def listed(reader: Principal, in_case: str = case) -> dict[str, Alert]:
+            return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, in_case, reader)}
+
+        rows = await listed(READER)
+        assert alert.id in rows, "the alert whose own node was confirmed is withheld from its reader"
+        now = rows[alert.id].alert_node_id
+        assert now is not None and now != node and not (await graph.stored_writes([now]))[now].superseded
+        assert alert.id not in await listed(LOW)
+        assert alert.id not in await listed(READER, f"case-{new_id()}")
+        assert any(node in nodes for nodes, _ in working.removed), "the old node's copies were purged"
+
+
+async def _listed(stores: dict[str, Any], graph: Any, analytics: Any, case: str, reader: Principal) -> dict[str, Alert]:
+    from services.api import alert_queue
+
+    return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, case, reader)}
+
+
+async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """The review's item 4, an alert with its own node. Its node is SECRET and so is the node it
+    names; `supersede.py`'s job corrects the named node to OFFICIAL. The alert follows it, still
+    listed for its reader, and is still refused to the case's OFFICIAL reader: a re-mark never
+    lowers an alert's node (its own marking is among what it rests on). Red with the node's own
+    marking left out of the re-mark: the node was lowered to OFFICIAL and the OFFICIAL reader
+    was given the alert."""
+    from services.api.supersede import run_supersede_node_job
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        (node,) = await graph.upsert_nodes([_person(f"Alert node {new_id()}").model_copy(update={"handling": SECRET})], tx)
+        await graph.commit_transaction(tx)
+        p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED, alert_node=node)
+        lowered = _person(f"N lowered {new_id()}")  # OFFICIAL
+        tx = await graph.begin_transaction()
+        await run_supersede_node_job({"node_id": p, "replacement": lowered.model_dump(mode="json")},
+                                     graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+        await graph.commit_transaction(tx)
+        row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+        assert row.referent_node_ids != [p]
+        assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
+
+
+async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_no_node(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """The review's item 4, an alert with no node (no single safe marking when it was raised), the
+    orchestrator's interim ruling (b) of Amendment 12, the owner's question open. It names a SECRET
+    node, read so by its raiser; `supersede.py`'s job corrects the node to OFFICIAL. The alert
+    follows it, still listed for its reader, and is still refused to the case's OFFICIAL reader,
+    who is below what the raiser read (`raiser_read_admits`). Red with option (a), the lowered
+    marking admitting its readers: the OFFICIAL reader was given words written over SECRET."""
+    from services.api.supersede import run_supersede_node_job
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED)
+        async with stores["alerts"]._pool.acquire() as conn:
+            await conn.execute("UPDATE alerts SET handlings = $2 WHERE id = $1", alert.id,
+                               json.dumps([SECRET.model_dump()]))  # fmt: skip
+        tx = await graph.begin_transaction()
+        await run_supersede_node_job({"node_id": p, "replacement": _person(f"N lowered {new_id()}").model_dump(mode="json")},
+                                     graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+        await graph.commit_transaction(tx)
+        row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+        assert row.referent_node_ids != [p]
+        assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
+
+
+async def test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_with_no_node(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """The same for a cited link (Amendment 10's lowered-link case, tightened by Amendment 12's
+    interim ruling (b)): an analyst lowers the SECRET link an alert with no node cites to OFFICIAL
+    through the link change service. The alert follows the link, still listed for its reader, and
+    is still refused to the case's OFFICIAL reader, below the SECRET its raiser read. Red with
+    option (a): the OFFICIAL reader was given it."""
+    from services.api.link_changes import LinkChangeRequest, LinkChangeService
+    from services.api.working_set.service import WorkingSetService
+
+    from tests.ingest.test_typology_rules import SECRET_LOADER
+    from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+    from tests.services.api.working_set.fakes import FakeWorkingSetStore
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        _, link, alert = await _cited_link(stores, graph, case, p_state=ProvenanceState.ASSERTED)
+        async with stores["alerts"]._pool.acquire() as conn:
+            await conn.execute("UPDATE alerts SET handlings = $2 WHERE id = $1", alert.id,
+                               json.dumps([OFFICIAL.model_dump(), SECRET.model_dump()]))  # fmt: skip
+        working = FakeWorkingSetStore()  # the link change reads the link from the case's canvas
+        (body,) = await graph.get_edges([link], READER)
+        await working.add_nodes(case, await graph.get_nodes([body.source, body.target], READER))
+        await working.add_edges(case, [body])
+        service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME),
+                                    graph, ONTOLOGY, MovedNotes(), scheme=SCHEME, alerts=stores["alerts"])  # fmt: skip
+        await service.change(case, link, SECRET_LOADER, LinkChangeRequest(reason="lowered", handling=OFFICIAL, confirm_lower=True),
+                             is_author=True)  # lowering needs Author access
+        row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+        assert row.edge_ids != [link]
+        assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered change lowered the alert"
+
+
+async def test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing(
+    stores: dict[str, Any],
+) -> None:
+    """The review's item 3. A Conduit replica connects its hotlist store just before its alert
+    store, and both run the hotlists' start-up DDL; four of each connect at once to an empty
+    schema, and none fails. Red with the hotlist store's DDL outside the shared lock: a store
+    failed on the catalogue's unique index."""
+    from services.api.alerts import AlertStore
+    from services.api.hotlists import HotlistStore
+
+    dsn = PostgresConfig.from_env().dsn
+    schema = f"l28d_{new_id().replace('-', '')[:12].lower()}"
+    admin = await asyncpg.connect(dsn)
+    try:
+        await admin.execute(f'CREATE SCHEMA "{schema}"')
+        scoped = f"{dsn}{'&' if '?' in dsn else '?'}search_path={schema}"
+        connects = [HotlistStore.connect(scoped) if i % 2 else AlertStore.connect(scoped) for i in range(8)]
+        results = await asyncio.wait_for(asyncio.gather(*connects, return_exceptions=True), BOUND)
+        failed = [r for r in results if isinstance(r, BaseException)]
+        for store in results:
+            if not isinstance(store, BaseException):
+                await store.close()
+        assert failed == [], failed
+    finally:
+        await admin.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        await admin.close()
+
+
+async def test_a_writer_that_has_recorded_nothing_holds_no_record(stores: dict[str, Any]) -> None:
+    """The review's item 12, Amendment 12 point 3: inside `repointing`, before its first pair, a
+    writer holds no record, so one that leaves by an exception having recorded nothing leaves
+    none to settle or close. Red with the record opened before the write: one stood open."""
+    alerts = stores["alerts"]
+
+    async def count() -> int:
+        async with alerts._pool.acquire() as conn:
+            return int(await conn.fetchval("SELECT count(*) FROM alert_repoint_records"))
+
+    before = await count()
+    seen: list[int] = []
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        with pytest.raises(RuntimeError, match="refused"):
+            async with alerts.repointing(graph) as repoint:
+                seen.append(await count())
+                assert repoint.id is None
+                raise RuntimeError("the write was refused")
+    assert seen == [before] and await count() == before
+
+
+async def test_a_stale_record_whose_referent_landed_is_kept(stores: dict[str, Any]) -> None:
+    """The review's item 12, Amendment 12 point 2: the stale check counts a record's referent
+    pairs. A record past the stale limit whose referent's node the graph shows superseded (its
+    write committed) is not dropped as a write that never happened, even where another of its
+    pairs cannot be settled yet. Red with the referent pairs left out of the stale check: the
+    record was dropped, and the alert naming the node with it."""
+    from datetime import UTC, datetime
+
+    alerts = stores["alerts"]
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        p, _ = await _named_node(stores, graph, f"case-{new_id()}", p_state=ProvenanceState.INFERRED)
+        tx = await graph.begin_transaction()
+        new = await graph.supersede_node(p, _person(f"N {new_id()}"), tx)
+        await graph.commit_transaction(tx)
+        record = await _record(stores)
+        await alerts._add_to_record(record, links=[(f"edge-{new_id()}", f"edge-{new_id()}", "ASSOCIATE_OF")],
+                                    referents=[(p, new)])  # fmt: skip
+        await alerts.settle_pending(graph, now=datetime.now(UTC) + timedelta(hours=2))
+    async with alerts._pool.acquire() as conn:
+        kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", record)
+    assert kept == 1, "a record whose referent's write committed was dropped as stale"

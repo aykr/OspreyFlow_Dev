@@ -1,4 +1,4 @@
-# red: c-wrong-channel — offline, at ea0a129 + working tree, 2026-11-08T16:03:34Z
+# red: c-wrong-channel — offline, at 6459633 + working tree, 2026-11-08T16:45:13Z
 # plant in services/api/working_set_revert.py:
 # - '            await publish_delta(publisher, removal.investigation_id, removal.delta)\n    return list(removals)'
 # + '            await publish_delta(publisher, removals[0].investigation_id, removal.delta)\n    return list(removals)'
@@ -6,11 +6,11 @@
 
 F                                                                        [100%]
 =================================== FAILURES ===================================
-_ test_every_store_is_cleared_before_anything_is_published_and_each_case_on_its_channel _
+__ test_each_cases_removal_is_published_on_its_own_channel_after_the_removal ___
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x112d0bfb0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10da40410>
 
-    async def test_every_store_is_cleared_before_anything_is_published_and_each_case_on_its_channel(
+    async def test_each_cases_removal_is_published_on_its_own_channel_after_the_removal(
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """The removal's order and channels: `remove_reverted` clears every case's store before it
@@ -32,5 +32,5 @@ E         Use -v to get more diff
 
 ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:47: AssertionError
 =========================== short test summary info ============================
-FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_every_store_is_cleared_before_anything_is_published_and_each_case_on_its_channel
-1 failed in 0.51s
+FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_each_cases_removal_is_published_on_its_own_channel_after_the_removal
+1 failed in 0.50s

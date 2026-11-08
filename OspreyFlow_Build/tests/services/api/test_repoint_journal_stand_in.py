@@ -34,11 +34,11 @@ class _Graph:
 
 async def test_a_pair_recorded_after_its_write_left_is_refused_by_the_stand_in() -> None:
     """The L2.8c review's item 11. The real store refuses a pair recorded in a record already applied
-    (`AlertStore._add_to_record` raises `RepointRecordGone`: a pair recorded there would never be
-    applied, so its writer must not commit; `test_alert_evidence_withheld_live.py`'s held-open case
-    shows the real refusal). A writer that keeps its journal past leaving the repointing and
-    records into it is refused the same way by the stand-in, for a link, a node and a corrected node
-    alike, and nothing it tried is kept. Red with the stand-in's refusal removed: each pair was
+    or closed (`AlertStore._add_to_record` raises `RepointRecordGone`: a pair recorded there would
+    never be applied, so its writer must not commit; `test_alert_evidence_withheld_live.py`'s
+    held-open case shows the real refusal). The stand-in is stricter: it takes every record its
+    writer has left to be applied, so it refuses any later pair, for a link, a node and a corrected
+    node alike, and keeps nothing it tried. It refuses at least what the real one refuses. Red with the stand-in's refusal removed: each pair was
     accepted into a record its settle had already passed."""
     journal = Journal()
     async with journal.repointing(_Graph()) as record:
