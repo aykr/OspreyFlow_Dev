@@ -658,3 +658,33 @@ async def test_an_item_citing_an_alert_whose_link_was_taken_back_is_not_shown(sc
     await graph.commit_transaction(tx)
     assert all(n in graph.nodes for n in item.alert.node_ids)  # type: ignore[union-attr]
     assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, **readable) == ([], True)
+
+
+async def test_the_export_gate_withholds_an_alert_item_whose_link_was_taken_back(scene: Scene) -> None:
+    """L2.8b (the reviewer's finding 12): the pack export gate rechecks an alert item by what its
+    alert cites now, as the pack's reads do. With R1's link taken back, an export of the pack that
+    holds only R1's item has nothing within the exporter's reach, and is refused, writing no ledger
+    entry. Red with the gate rechecking by the item's nodes alone: R1's item left the Conduit."""
+    from services.api.packs import PackExportRefused, PackVersion, export_pack
+
+    from schemas.packs import PackExportRequest, ReportPack
+    from tests.services.api.test_pack_export_withheld import _Ledger
+
+    await story(scene)
+    item = await _r1_item(scene)
+    graph = scene.world.graph
+    (r1,) = [a for a in await scene.stores.alerts.list_case_queue(scene.case, scene.analyst)
+             if a.id == item.alert.alert_id]  # type: ignore[union-attr]  # fmt: skip
+    tx = await graph.begin_transaction()
+    await graph.revert_elements([], r1.edge_ids[:1], tx)
+    await graph.commit_transaction(tx)
+    now = datetime.now(UTC)
+    pack = ReportPack(id="p-r1", investigation_id=scene.case, title="R1", created_by="ed", created_at=now,
+                      updated_at=now)  # fmt: skip
+    version = PackVersion(pack_id="p-r1", version=1, published_at=now, published_by="ed", items=[item])
+    ledger = _Ledger()
+    with pytest.raises(PackExportRefused):
+        await export_pack(pack=pack, version=version, request=PackExportRequest(), exporter=scene.analyst,
+                          scheme=SCHEME, graph=graph, ledger=ledger, policy="disclose",  # type: ignore[arg-type]
+                          alerts=scene.stores.alerts, analytics=scene.stores.analytics)  # fmt: skip
+    assert ledger.entries == [], "nothing was exported, so nothing is in the ledger"
