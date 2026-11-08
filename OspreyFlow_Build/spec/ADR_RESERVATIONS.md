@@ -73,6 +73,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-146 Amendment 2 | Rules and Monitoring as built: the place gate and its two shared reads, the alert's address route, the router, the jump replaced, the Rule author question open (L2.9) | rules | 2026-11-08 | reserved |
 | ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
 | ADR-142 Amendment 4 | Sister lanes: case-b, studio-b and rules-b take the steps that do not wait on their parent's current one, on the sol account; a third test stack (the owner's ruling, 8 November) | orchestrator | 2026-11-08 | reserved |
+| ADR-140 Amendment 13 | Phase 9 as built: connectors (SQL, API, JSON) and the screening-list connector, its templates, deployment-wide import, subscription by list id, schedule and Refresh now (L1.6) | studio-b | 2026-11-08 | reserved |
 
 ## Baseline
 
