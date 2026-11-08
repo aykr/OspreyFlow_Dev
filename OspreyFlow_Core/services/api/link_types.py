@@ -1,10 +1,12 @@
 """Analyst-proposed relationship types, and the ontology they make — `06_DECISIONS.md` ADR-090 and
 its Amendment 1 (step C of ADR-081).
 
-An Editor proposes a type from the change form when none fits. It is usable at once in that case
-(and any case where one of its links is in view), is probabilistic, and is kept
-here, never in `default.yaml`. An `osprey-admin` holder of the proposing unit promotes it (choosing
-its basis), rejects it, or later retires it; the proposer or an Author of the case may withdraw it.
+An Editor proposes a type from the change form when none fits. It is usable at once in that case,
+is probabilistic, and is kept here, never in `default.yaml`. Since ADR-143 decision 9 it is decided
+on its dataset's Model tab (below); one made before ADR-099 Amendment 3, which names no dataset, is
+still promoted (its basis chosen), rejected or retired by an `osprey-admin` holder of the proposing
+unit, and is also offered where one of its links is in view. The proposer or an Author of the case
+may withdraw a pending one.
 
 **Nothing is ever rewritten.** Each proposal's links are stored under a label of its own,
 `<name>__<proposal id>` (its `storage_name`), declared as a hidden type so the graph store accepts
@@ -41,10 +43,9 @@ from pydantic import BaseModel, Field, ValidationError
 
 from adapters.graph_arcadedb.naming import STORAGE_SEPARATOR
 from conduit_common.identity import new_id
-from schemas.dataset_model import ModelExtension, TargetModelDraftInput
 from schemas.domain import EdgeTypeDef, OntologySchema, Principal
 
-from .dataset_scope import analyst_layer
+from .dataset_scope import analyst_layer, refuse_in_a_composite_case
 from .investigations import InvestigationStore
 
 if TYPE_CHECKING:
@@ -90,8 +91,9 @@ class LinkTypeProposal(BaseModel):
     #: The name it was promoted, merged or renamed under.
     promoted_name: str | None = None
     direct_since: datetime | None = None
-    #: ADR-099 Amendment 3: the dataset it belongs to, the first of its case's at proposal; usable
-    #: in every case reading it. `None` for one made before, which keeps ADR-090's case rule.
+    #: The source dataset of its case at proposal (ADR-099 Amendment 3; never the case's layer).
+    #: Offered in that case alone until a data engineer of the dataset accepts it and its version
+    #: is live (ADR-143 decision 9). `None` for one made before, which keeps ADR-090's case rule.
     dataset_id: str | None = None
 
     @property
@@ -105,6 +107,16 @@ class LinkTypeProposal(BaseModel):
         if self.status in (ProposalStatus.PROMOTED, ProposalStatus.MERGED, ProposalStatus.RETIRED):
             return self.promoted_name or self.name
         return self.name
+
+    def in_force(self) -> EdgeTypeDef:
+        """An accepted type as its dataset's live model has it: with the basis the data engineer
+        chose, Direct only from `direct_since` (ADR-090 Amendment 4, decision 6 standing)."""
+        return self.definition().model_copy(
+            update={
+                "basis": self.basis or "probabilistic",
+                "direct_since": self.direct_since if self.basis == "direct" else None,
+            }
+        )
 
     def definition(self, name: str | None = None) -> EdgeTypeDef:
         """The type this proposal declares, under `name` (its own by default), probabilistic."""
@@ -196,14 +208,15 @@ def _fits(proposal: LinkTypeProposal, definition: EdgeTypeDef) -> bool:
 
 
 class LinkTypeService:
-    """Proposals, the types a case may use, and the administrator's decisions (ADR-090).
+    """Proposals, the types a case may use, and the decisions on them (ADR-090; ADR-143 decision 9).
 
     `ontology` is the one shared `OntologySchema` every service holds; `refresh` rewrites it in
     place to `compose_ontology` of the authored types and every proposal, and applies it to the
     graph store, so the store accepts a proposal's label and reads it under its name. Routes check
-    the case access level (Editor to propose, Author or the proposer to withdraw) and `osprey-admin`
-    for decisions; a decision reads the proposal through `get_authorized`, so another unit's is not
-    found."""
+    the case access level (Editor to propose, Author or the proposer to withdraw); a dataset's
+    proposals are decided past the dataset's gate with `accept_types`, by its store reads that name
+    the dataset; one with no dataset by `osprey-admin` through `get_authorized`, so another unit's
+    is not found."""
 
     def __init__(
         self,
@@ -303,13 +316,13 @@ class LinkTypeService:
         for accepted in await self._accepted_in_force(principal):
             offered.setdefault(
                 accepted.name,
-                CaseType(definition=accepted.definition(), storage_name=accepted.storage_name),
+                CaseType(definition=accepted.in_force(), storage_name=accepted.storage_name),
             )
         pending = list(await self._store.pending_for_cases([investigation_id]))
         pending += [
             p
             for p in await self._store.named_in_case(investigation_id, None)
-            if p.status is ProposalStatus.ACCEPTED
+            if p.status in _ACCEPTED_STATES and p.dataset_id is not None
         ]
         _, edges = await self._working_set.visible_membership(investigation_id, principal)
         in_view = sorted({e.type for e in edges} - set(offered))
@@ -365,8 +378,18 @@ class LinkTypeService:
         if name in await self.case_types(case.id, principal):
             raise ProposalRefusedError(f"{name} is already offered in this case: use it instead.")
         dataset_id = next(iter(_sources_of(principal)), None)
-        live, drafted, _ = await self._model_link_types(dataset_id)
-        if name in live | drafted:
+        if principal.datasets is not None and dataset_id is None:
+            # A case that reads nothing has no dataset to decide it (ADR-143 Amendment 4).
+            raise ProposalRefusedError(
+                "This case reads no dataset, so a type proposed here has no data engineer to "
+                "decide it: choose the case's dataset first."
+            )
+        await refuse_in_a_composite_case()
+        # The live model alone: a draft is the data engineers' (`edit_target_model`), and naming
+        # what it holds would tell this case of another's accepted proposal. A name only in the
+        # draft is caught at acceptance instead.
+        live, _, _ = await self._model_link_types(dataset_id)
+        if name in live:
             raise ProposalRefusedError(
                 f"{name} is already in this dataset's domain model: use it instead."
             )
@@ -444,19 +467,20 @@ class LinkTypeService:
         reason: str,
         **fields: object,
     ) -> None:
-        reason = reason.strip()
-        if not reason or len(reason) > MAX_REASON_CHARS:
-            raise ProposalRefusedError(
-                f"Say why: a reason of at most {MAX_REASON_CHARS} characters is required."
-            )
-        await self._store.decide(
+        """Records a decision, only from the status `proposal` was read with, so a decision made
+        meanwhile by someone else is never overwritten."""
+        _check_reason(reason)
+        written = await self._store.decide(
             proposal.id,
             status=status,
             by=principal.id,
             at=datetime.now(UTC),
-            reason=reason,
+            reason=reason.strip(),
+            only_from=proposal.status,
             **fields,  # type: ignore[arg-type]
         )
+        if not written:
+            raise ProposalRefusedError("Someone decided this proposal a moment ago: read it again.")
 
     async def promote(
         self,
@@ -500,7 +524,12 @@ class LinkTypeService:
             )
             promoted = proposal.definition(name)
             for other in await self._store.pending_named([proposal.name]):
-                if other.owning_unit == principal.org_unit and _fits(other, promoted):
+                # A proposal naming a dataset is its Model tab's alone (ADR-090 Amendment 4).
+                if (
+                    other.dataset_id is None
+                    and other.owning_unit == principal.org_unit
+                    and _fits(other, promoted)
+                ):
                     await self._decide(
                         other,
                         ProposalStatus.MERGED,
@@ -546,22 +575,51 @@ class LinkTypeService:
         passed the dataset's own gate; the store's query names the dataset (rule 3)."""
         return await self._store.for_dataset(dataset_id)
 
-    async def _pending_of_dataset(self, dataset_id: str, proposal_id: str) -> LinkTypeProposal:
+    async def dataset_proposal_views(self, dataset_id: str) -> list[ModelProposalView]:
+        """The Model tab's list, each proposal with where its type stands in the dataset's model."""
+        live, drafted, _ = await self._model_link_types(dataset_id)
+        views = []
+        for proposal in await self._store.for_dataset(dataset_id):
+            where: Literal["live", "draft"] | None = (
+                "live" if proposal.name in live else "draft" if proposal.name in drafted else None
+            )
+            views.append(ModelProposalView.of(proposal, in_model=where))
+        return views
+
+    async def _decidable(self, dataset_id: str, proposal_id: str) -> LinkTypeProposal:
+        """A proposal of this dataset still to decide: pending, or accepted and then lost from
+        both the live model and the draft (the draft discarded, or saved without it), which may be
+        added again rather than left stuck."""
         proposal = await self._store.get_for_dataset(proposal_id, dataset_id)
-        if proposal.status is not ProposalStatus.PENDING:
-            word = _STATUS_WORDS.get(proposal.status, proposal.status.value)
-            raise ProposalRefusedError(f"This proposal is already {word}.")
-        return proposal
+        if proposal.status is ProposalStatus.PENDING:
+            return proposal
+        live, drafted, _ = await self._model_link_types(dataset_id)
+        if proposal.status is ProposalStatus.ACCEPTED and proposal.name not in live | drafted:
+            return proposal
+        word = _STATUS_WORDS.get(proposal.status, proposal.status.value)
+        raise ProposalRefusedError(f"This proposal is already {word}.")
 
     async def accept(
-        self, dataset_id: str, proposal_id: str, principal: Principal, *, reason: str
-    ) -> LinkTypeProposal:
-        """*Add it to the draft model*: a `link_type` extension in the dataset's draft (opened if
-        there is none), made live with the next model version (ADR-140 R12). Never by its own
-        proposer (ADR-145 decision 7). Pending proposals of the dataset of the same name whose
-        links fit are merged into it."""
+        self,
+        dataset_id: str,
+        proposal_id: str,
+        principal: Principal,
+        *,
+        basis: Literal["direct", "probabilistic"],
+        reason: str,
+    ) -> tuple[LinkTypeProposal, int]:
+        """*Add it to the draft model*, with the basis the data engineer chooses (ADR-090
+        Amendment 4, decision 6 standing): a `link_type` extension in the dataset's draft (opened
+        if there is none), made live with the next model version (ADR-140 R12). Never by its own
+        proposer (ADR-145 decision 7). The proposal is claimed first, by a write that succeeds only
+        from the status read, so an acceptance racing a decline or a withdrawal loses cleanly; the
+        extension is then appended under the dataset's model lock (`add_extension`), so two
+        acceptances at once both land; if that is refused, the claim is given back. Pending
+        proposals of the dataset of the same name whose links fit are merged into it. Answers the
+        proposal and the draft's version."""
         await self._current()
-        proposal = await self._pending_of_dataset(dataset_id, proposal_id)
+        _check_reason(reason)
+        proposal = await self._decidable(dataset_id, proposal_id)
         if proposal.proposed_by == principal.id:
             raise ProposalRefusedError(
                 "You proposed this type, so another data engineer of the dataset decides it."
@@ -575,23 +633,34 @@ class LinkTypeService:
                 f"{proposal.name} is already in this dataset's domain model: decline this one, "
                 "saying which type to use."
             )
-        _check_reason(reason)
-        draft = await self._models.draft(dataset_id) or await self._models.open_draft(
-            dataset_id, principal
+        now = datetime.now(UTC)
+        claimed = await self._store.decide(
+            proposal.id,
+            status=ProposalStatus.ACCEPTED,
+            by=principal.id,
+            at=now,
+            reason=reason.strip(),
+            basis=basis,
+            promoted_name=proposal.name,
+            direct_since=now if basis == "direct" else None,
+            only_from=proposal.status,
         )
-        added = ModelExtension(name=proposal.name, kind="link_type", added_in=draft.version)
-        await self._models.save_draft(
-            dataset_id,
-            TargetModelDraftInput(
-                packs=dict(draft.packs),
-                extensions=[*draft.extensions, added],
-                reference_lists=list(draft.reference_lists),
-            ),
-            principal,
-        )
-        await self._decide(
-            proposal, ProposalStatus.ACCEPTED, principal, reason, promoted_name=proposal.name
-        )
+        if not claimed:
+            raise ProposalRefusedError("Someone decided this proposal a moment ago: read it again.")
+        try:
+            draft = await self._models.add_extension(
+                dataset_id, proposal.name, "link_type", principal
+            )
+        except BaseException:
+            await self._store.decide(
+                proposal.id,
+                status=proposal.status,
+                by=proposal.decided_by or principal.id,
+                at=now,
+                reason=proposal.decision_reason or "",
+                only_from=ProposalStatus.ACCEPTED,
+            )
+            raise
         accepted = proposal.definition()
         for other in await self._store.for_dataset(dataset_id):
             if (
@@ -600,23 +669,36 @@ class LinkTypeService:
                 and other.status is ProposalStatus.PENDING
                 and _fits(other, accepted)
             ):
-                await self._decide(
-                    other,
-                    ProposalStatus.MERGED,
-                    principal,
-                    f"Merged into {proposal.name}: {reason}",
+                await self._store.decide(
+                    other.id,
+                    status=ProposalStatus.MERGED,
+                    by=principal.id,
+                    at=now,
+                    reason=f"Merged into {proposal.name}: {reason.strip()}",
                     promoted_name=proposal.name,
+                    only_from=ProposalStatus.PENDING,
                 )
         await self.refresh()
-        return await self._store.get(proposal_id)
+        return await self._store.get(proposal_id), draft.version
 
     async def decline(
         self, dataset_id: str, proposal_id: str, principal: Principal, *, reason: str
     ) -> LinkTypeProposal:
         """*Decline*, with a reason: no longer offered; its links stay in its case's layer for
-        good and keep reading as its name."""
-        proposal = await self._pending_of_dataset(dataset_id, proposal_id)
-        await self._decide(proposal, ProposalStatus.REJECTED, principal, reason)
+        good and keep reading as its name. Only from pending, by a write that checks it."""
+        _check_reason(reason)
+        proposal = await self._store.get_for_dataset(proposal_id, dataset_id)
+        decided = proposal.status is ProposalStatus.PENDING and await self._store.decide(
+            proposal.id,
+            status=ProposalStatus.REJECTED,
+            by=principal.id,
+            at=datetime.now(UTC),
+            reason=reason.strip(),
+            only_from=ProposalStatus.PENDING,
+        )
+        if not decided:
+            word = _STATUS_WORDS.get(proposal.status, proposal.status.value)
+            raise ProposalRefusedError(f"This proposal is already {word}.")
         await self.refresh()
         return await self._store.get(proposal_id)
 
@@ -630,8 +712,9 @@ class LinkTypeService:
         another case is answered exactly as a name that is no type at all (rule 3)."""
         await self._current()
         dataset_id = next(iter(_sources_of(principal)), None)
-        live, _, draft_version = await self._model_link_types(dataset_id)
+        live, drafted, draft_version = await self._model_link_types(dataset_id)
         mine = await self._store.named_in_case(investigation_id, list(names))
+        in_force = {p.name for p in await self._accepted_in_force(principal)}
         answers: dict[str, str | None] = {}
         for name in names:
             found = self._ontology.edge_type(name)
@@ -639,15 +722,22 @@ class LinkTypeService:
                 answers[name] = None
                 continue
             own = [p for p in mine if p.reads_as == name]
-            if name in live and (
-                any(p.status in _ACCEPTED_STATES for p in own)
-                or name in {p.name for p in await self._accepted_in_force(principal)}
-            ):
+            accepted_here = any(p.status in _ACCEPTED_STATES for p in own)
+            if name in live and (accepted_here or name in in_force):
                 answers[name] = None
             elif not own:
                 answers[name] = f"{name} is not a link type of this case."
+            elif accepted_here:
+                answers[name] = (
+                    f"{name} is accepted into the draft domain model, version {draft_version}: "
+                    "its links can be promoted once that version is made live."
+                    if name in drafted
+                    else f"{name} is accepted but is not in the dataset's domain model in force "
+                    "or in its draft: a data engineer of the dataset adds it again on the Model "
+                    "tab before its links can be promoted."
+                )
             else:
-                answers[name] = _why_not(name, own[-1].status, draft_version)
+                answers[name] = _why_not(name, own[-1].status)
         return answers
 
 
@@ -655,17 +745,11 @@ _STATUS_WORDS = {ProposalStatus.REJECTED: "declined", ProposalStatus.ACCEPTED: "
 _ACCEPTED_STATES = (ProposalStatus.ACCEPTED, ProposalStatus.MERGED)
 
 
-def _why_not(name: str, status: ProposalStatus, draft_version: int) -> str:
+def _why_not(name: str, status: ProposalStatus) -> str:
     if status is ProposalStatus.PENDING:
         return (
             f"{name} is proposed, not yet accepted by a data engineer of the dataset: its links "
             "stay in the case's layer until it is."
-        )
-    if status in _ACCEPTED_STATES:
-        version = f"version {draft_version}" if draft_version else "a version not yet live"
-        return (
-            f"{name} is accepted into the draft domain model, {version}: its links can be "
-            "promoted once that version is made live."
         )
     if status is ProposalStatus.REJECTED:
         return f"{name} was declined: its links stay in the case's layer for good."
@@ -731,6 +815,14 @@ class RetireLinkTypeRequest(BaseModel):
     reason: str
 
 
+class AcceptLinkTypeRequest(BaseModel):
+    """*Add it to the draft model*: what stands behind its links, no default (ADR-090 decision 6,
+    standing for the accepting data engineer), and why."""
+
+    basis: Literal["direct", "probabilistic"]
+    reason: str
+
+
 class LinkTypeProposalList(BaseModel):
     proposals: list[LinkTypeProposal]
 
@@ -753,10 +845,17 @@ class ModelProposalView(BaseModel):
     decided_by: str | None = None
     decided_at: datetime | None = None
     decision_reason: str | None = None
+    basis: Literal["direct", "probabilistic"] | None = None
+    #: Where its type stands in the dataset's model: `live`, in the `draft`, or neither (`None`:
+    #: never added, or an accepted one lost from the draft, which may be added again).
+    in_model: Literal["live", "draft"] | None = None
 
     @classmethod
-    def of(cls, proposal: LinkTypeProposal) -> ModelProposalView:
-        return cls.model_validate(proposal.model_dump(include=set(cls.model_fields)))
+    def of(
+        cls, proposal: LinkTypeProposal, in_model: Literal["live", "draft"] | None = None
+    ) -> ModelProposalView:
+        fields = proposal.model_dump(include=set(cls.model_fields) - {"in_model"})
+        return cls.model_validate({**fields, "in_model": in_model})
 
 
 class ModelProposalList(BaseModel):

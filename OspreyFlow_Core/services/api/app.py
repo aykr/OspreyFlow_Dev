@@ -657,6 +657,7 @@ from .link_notes import (
 )
 from .link_type_store import LinkTypeProposalStore
 from .link_types import (
+    AcceptLinkTypeRequest,
     CaseLinkTypesResponse,
     LinkTypeDecisionRequest,
     LinkTypeOption,
@@ -5945,9 +5946,9 @@ async def change_link_route(
 async def case_link_types_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, link_types: LinkTypesDep
 ) -> CaseLinkTypesResponse:
-    """The types a link in this case may take: the ontology's, and those proposed in the case or
-    for a link the caller can see in it. Not audited, like the
-    ontology itself."""
+    """The types a link in this case may take: the ontology's, those accepted into the model of a
+    dataset the case reads once live, and those proposed in this case alone (ADR-143 decision 9).
+    Not audited, like the ontology itself."""
     offered = await link_types.case_types(investigation.id, principal)
     return CaseLinkTypesResponse(
         types=[
@@ -5968,8 +5969,9 @@ async def propose_link_type_route(
     link_types: LinkTypesDep,
     audit: AuditDep,
 ) -> LinkTypeProposal:
-    """Propose a type when none fits (ADR-090): usable at once in this case, probabilistic, until an
-    administrator of the unit decides."""
+    """Propose a type when none fits (ADR-090): usable at once in this case alone, probabilistic,
+    until a data engineer of its dataset decides it on the Studio's Model tab (ADR-143 decision
+    9)."""
     proposal = await link_types.propose(
         investigation.id,
         principal,
@@ -9175,17 +9177,24 @@ async def list_model_proposals(
     dataset_id: StudioDatasetDep, link_types: LinkTypesDep
 ) -> ModelProposalList:
     """The link types analysts proposed for this dataset, newest first, without their cases."""
-    found = await link_types.dataset_proposals(dataset_id)
-    return ModelProposalList(proposals=[ModelProposalView.of(p) for p in found])
+    return ModelProposalList(proposals=await link_types.dataset_proposal_views(dataset_id))
 
 
 async def _audit_type_decision(
-    audit: AuditWriter, principal: Principal, action: str, dataset_id: str, found: Any, why: str
+    audit: AuditWriter,
+    principal: Principal,
+    action: str,
+    dataset_id: str,
+    found: Any,
+    why: str,
+    **more: object,
 ) -> None:
     await audit.record(
         principal=principal,
         action=action,
-        resolved_query={"dataset_id": dataset_id, "proposal_id": found.id, "name": found.name},
+        resolved_query={
+            "dataset_id": dataset_id, "proposal_id": found.id, "name": found.name, **more
+        },
         result_cardinality=1,
         justification=why,
     )
@@ -9198,16 +9207,22 @@ async def _audit_type_decision(
 async def accept_model_proposal(
     dataset_id: StudioDatasetDep,
     proposal_id: str,
-    body: LinkTypeDecisionRequest,
+    body: AcceptLinkTypeRequest,
     principal: PrincipalDep,
     link_types: LinkTypesDep,
     audit: AuditDep,
 ) -> ModelProposalView:
-    """*Add it to the draft model*: made live with the next model version; never by its
-    proposer."""
-    found = await link_types.accept(dataset_id, proposal_id, principal, reason=body.reason)
-    await _audit_type_decision(audit, principal, "link_type_accept", dataset_id, found, body.reason)
-    return ModelProposalView.of(found)
+    """*Add it to the draft model*, Direct or Probabilistic: made live with the next model
+    version; never by its proposer. The draft it was written into is named in the audit, as the
+    Studio's own draft routes name theirs."""
+    found, version = await link_types.accept(
+        dataset_id, proposal_id, principal, basis=body.basis, reason=body.reason
+    )
+    await _audit_type_decision(
+        audit, principal, "link_type_accept", dataset_id, found, body.reason,
+        basis=body.basis, model_version=version,
+    )  # fmt: skip
+    return ModelProposalView.of(found, in_model="draft")
 
 
 @app.post(

@@ -53,13 +53,6 @@ class MemoryStore:
             if p.investigation_id in ids and p.status is ProposalStatus.PENDING
         ]
 
-    async def pending_for_datasets(self, ids: list[str]) -> list[LinkTypeProposal]:
-        return [
-            p
-            for p in await self.all()
-            if p.dataset_id in ids and p.status is ProposalStatus.PENDING
-        ]
-
     async def pending_named(self, names: list[str]) -> list[LinkTypeProposal]:
         return [
             p for p in await self.all() if p.name in names and p.status is ProposalStatus.PENDING
@@ -102,8 +95,10 @@ class MemoryStore:
     async def list_authorized(self, principal: Principal) -> list[LinkTypeProposal]:
         return [p for p in await self.all() if p.owning_unit == principal.org_unit]
 
-    async def decide(self, pid: str, **kw: Any) -> None:
+    async def decide(self, pid: str, **kw: Any) -> bool:
         p = self.rows[pid]
+        if kw.get("only_from") is not None and p.status is not kw["only_from"]:
+            return False  # as the store's `AND status = $9`
         update = {
             "status": kw["status"],
             "decided_by": kw["by"],
@@ -114,6 +109,7 @@ class MemoryStore:
             if kw.get(k) is not None:
                 update[k] = kw[k]
         self.rows[pid] = p.model_copy(update=update)
+        return True
 
     async def bump_revision(self) -> int:
         self.revision_value += 1
@@ -454,7 +450,7 @@ async def test_a_proposal_is_offered_in_its_own_case_alone_not_every_case_of_its
     assert "KNOWN_TO" not in names(await service.case_types("inv-2", _in("fixture-corp")))
     assert "KNOWN_TO" not in names(await service.case_types("inv-3", _in("enron", "fixture-corp")))
     assert "KNOWN_TO" not in names(await service.case_types("inv-3", _in("enron")))
-    # Its own branch reads the same datasets, so it has it; not because it is a branch.
+    # A case made from it before L3.2 is another case: it is not offered there either.
     assert "KNOWN_TO" not in names(await service.case_types("branch-1", _in("enron")))
 
 

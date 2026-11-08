@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import asyncpg
 import pytest
 from services.api.config import PostgresConfig
 from services.api.link_type_store import LinkTypeProposalStore, ProposalNotFoundError
@@ -106,7 +107,9 @@ async def test_a_proposal_keeps_its_dataset_and_is_found_for_it_and_no_other(
     store: LinkTypeProposalStore,
 ) -> None:
     """ADR-099 Amendment 3, in the database itself: the dataset round-trips, and a dataset's
-    pending proposals are its own (a proposal of no dataset, made before, is not among them)."""
+    proposals are its own (a proposal of no dataset, made before, is not among them). The read of
+    every pending proposal of a dataset, which offered them in every case reading it, is gone with
+    ADR-143 decision 9 (rule 3)."""
     mine = new_id()
     p = _proposal().model_copy(update={"dataset_id": mine})
     older = _proposal(name="KNOWN_FROM")  # made before the amendment: no dataset
@@ -114,9 +117,10 @@ async def test_a_proposal_keeps_its_dataset_and_is_found_for_it_and_no_other(
     for proposal in (p, older, other):
         await store.create(proposal)
     assert (await store.get(p.id)).dataset_id == mine
-    assert [q.id for q in await store.pending_for_datasets([mine])] == [p.id]
+    # Read by the Model tab's query, which names the dataset (ADR-143 decision 9).
+    assert [q.id for q in await store.for_dataset(mine)] == [p.id]
     await store.decide(p.id, status=ProposalStatus.WITHDRAWN, by="x", at=p.proposed_at, reason="r")
-    assert await store.pending_for_datasets([mine]) == []
+    assert [q.status for q in await store.for_dataset(mine)] == [ProposalStatus.WITHDRAWN]
 
 
 async def test_the_model_tab_reads_its_own_datasets_proposals_and_no_other(
@@ -146,3 +150,46 @@ async def test_the_model_tab_reads_its_own_datasets_proposals_and_no_other(
     assert [q.id for q in await store.named_in_case(case, ["BRIBED"])] == [p.id]
     assert [q.id for q in await store.named_in_case(case, None)] == [p.id]
     assert await store.named_in_case(case, ["OTHER"]) == []
+
+
+async def test_a_table_made_before_accepted_takes_it_after_connect() -> None:
+    """ADR-143 decision 9: a deployment's table made with the old status check (no `accepted`) is
+    upgraded by `connect`, which replaces the check whole (red with the replacement removed: the
+    accepted decision is refused by the old check). In a schema of its own, so the shared table's
+    check is never touched."""
+    base = PostgresConfig.from_env().dsn
+    schema = f"link_types_{new_id().lower()}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE SCHEMA "{schema}"')
+    try:
+        await admin.execute(
+            f'CREATE TABLE "{schema}".link_type_proposals (id TEXT PRIMARY KEY, name TEXT NOT NULL, '
+            "label TEXT, from_types TEXT[] NOT NULL, to_types TEXT[] NOT NULL, directed BOOLEAN "
+            "NOT NULL, colour TEXT, thickness INTEGER, investigation_id TEXT NOT NULL, owning_unit "
+            "TEXT NOT NULL, proposed_by TEXT NOT NULL, proposed_at TIMESTAMPTZ NOT NULL, reason "
+            "TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'promoted', "
+            "'rejected', 'withdrawn', 'merged', 'retired')), decided_by TEXT, decided_at "
+            "TIMESTAMPTZ, decision_reason TEXT, basis TEXT, promoted_name TEXT, direct_since "
+            "TIMESTAMPTZ)"
+        )
+        dsn = f"{base}{'&' if '?' in base else '?'}search_path={schema}"
+        old = await LinkTypeProposalStore.connect(dsn)
+        try:
+            p = _proposal(name="BRIBED").model_copy(update={"dataset_id": new_id()})
+            await old.create(p)
+            assert await old.decide(
+                p.id, status=ProposalStatus.ACCEPTED, by="dan", at=p.proposed_at, reason="r",
+                only_from=ProposalStatus.PENDING,
+            )  # fmt: skip
+            assert (await old.get(p.id)).status is ProposalStatus.ACCEPTED
+            # Only from the status read: a second decision from pending is not written.
+            assert not await old.decide(
+                p.id, status=ProposalStatus.REJECTED, by="erin", at=p.proposed_at, reason="r",
+                only_from=ProposalStatus.PENDING,
+            )  # fmt: skip
+            assert (await old.get(p.id)).status is ProposalStatus.ACCEPTED
+        finally:
+            await old.close()
+    finally:
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()

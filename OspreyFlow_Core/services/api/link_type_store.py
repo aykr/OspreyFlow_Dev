@@ -121,17 +121,6 @@ class LinkTypeProposalStore:
             )
         return [_row(r) for r in rows]
 
-    async def pending_for_datasets(self, dataset_ids: Sequence[str]) -> list[LinkTypeProposal]:
-        """ADR-099 Amendment 3: the pending proposals of these datasets."""
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                f"SELECT {_COLUMNS} FROM link_type_proposals "
-                "WHERE dataset_id = ANY($1::text[]) AND status = 'pending' "
-                "ORDER BY proposed_at, id",
-                list(dataset_ids),
-            )
-        return [_row(r) for r in rows]
-
     async def named_in_case(
         self, investigation_id: str, names: Sequence[str] | None
     ) -> list[LinkTypeProposal]:
@@ -238,13 +227,18 @@ class LinkTypeProposalStore:
         basis: str | None = None,
         promoted_name: str | None = None,
         direct_since: datetime | None = None,
-    ) -> None:
+        only_from: ProposalStatus | None = None,
+    ) -> bool:
+        """Records a decision. With `only_from`, only while the proposal still has that status, so
+        of two decisions at once one wins and the other is told (ADR-143 decision 9); answers
+        whether it was written."""
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            done = await conn.execute(
                 "UPDATE link_type_proposals SET status = $2, decided_by = $3, decided_at = $4, "
                 "decision_reason = $5, basis = COALESCE($6, basis), "
                 "promoted_name = COALESCE($7, promoted_name), "
-                "direct_since = COALESCE($8, direct_since) WHERE id = $1",
+                "direct_since = COALESCE($8, direct_since) "
+                "WHERE id = $1 AND ($9::text IS NULL OR status = $9::text)",
                 proposal_id,
                 status.value,
                 by,
@@ -253,7 +247,9 @@ class LinkTypeProposalStore:
                 basis,
                 promoted_name,
                 direct_since,
+                only_from.value if only_from is not None else None,
             )
+        return str(done).endswith(" 1")
 
     async def bump_revision(self) -> int:
         async with self._pool.acquire() as conn:

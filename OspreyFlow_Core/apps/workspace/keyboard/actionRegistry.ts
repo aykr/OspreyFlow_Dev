@@ -737,15 +737,6 @@ export const PROPOSED_TYPES_ACTIONS = defineActionRegistry("PROPOSED_TYPES_ACTIO
   "retire-by-keyboard",
 ] as const);
 
-/** The Studio's *1 Model* tab's proposed link types (ADR-143 decision 9, ADR-090 Amendment 4; L3.5): each
- * added to the draft model or declined, with a reason. `keyboard/model-proposals.spec.ts`. */
-export const MODEL_PROPOSALS_ACTIONS = defineActionRegistry("MODEL_PROPOSALS_ACTIONS", [
-  "add-a-proposed-type-to-the-draft-model-by-keyboard",
-  "decline-a-proposed-type-by-keyboard",
-  "escape-closes-the-decision-form-and-returns-focus",
-  "a-refusal-is-shown-in-the-conduits-words-by-keyboard",
-] as const);
-
 /** The Inspector's parts (ADR-096): each folds under its header, opening *Change this link* lands in
  * the form, and a link-menu hand-over opens its part. `keyboard/inspector.spec.ts`. */
 export const INSPECTOR_ACTIONS = defineActionRegistry("INSPECTOR_ACTIONS", [

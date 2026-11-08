@@ -49,7 +49,11 @@ from services.api.link_types import (
     ProposalRefusedError,
     ProposalStatus,
 )
-from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModelStore
+from services.api.target_models import (
+    CORE_TYPES_FOR_TESTS,
+    InMemoryTargetModelStore,
+    TargetModelRefused,
+)
 
 from ontology.loader import load_default_ontology
 from schemas.domain import Principal
@@ -147,19 +151,28 @@ async def _refusal(service: LinkTypeService, case: str, name: str = "BRIBED") ->
 
 
 async def test_a_proposal_names_its_cases_source_dataset_never_its_layer() -> None:
-    """The request's read set may hold the layer first: the layer `dataset_scope` holds for the
-    request is left out whatever its place."""
+    """In the order `datasets.read_set` gives a case's read set (its source, then its layer last)
+    and with the layer `dataset_scope` holds for the request, as `app.get_principal` sets both."""
     service, _, _, _ = await _service()
-    set_case_datasets(["layer-1", "ds-1"], layer="layer-1")
+    set_case_datasets(["ds-1", "layer-1"], layer="layer-1")
     try:
-        p = await service.propose(
-            "inv-1", _analyst("inv-1").model_copy(update={"datasets": ["layer-1", "ds-1"]}),
-            name="BRIBED", from_types=["Person"], to_types=["Person"], directed=True, colour=None,
-            thickness=None, label=None, reason="x",
-        )  # fmt: skip
+        p = await _propose(service)
     finally:
         set_case_datasets(None)
     assert p.dataset_id == "ds-1"
+
+
+async def test_a_case_reading_no_dataset_cannot_propose() -> None:
+    """With no dataset there is no data engineer to decide it, and a proposal naming none would
+    fall back to ADR-090's deployment-wide rule (ADR-143 Amendment 4)."""
+    service, store, _, _ = await _service()
+    nothing = _analyst("inv-1").model_copy(update={"datasets": []})
+    with pytest.raises(ProposalRefusedError, match="reads no dataset"):
+        await service.propose(
+            "inv-1", nothing, name="BRIBED", from_types=["Person"], to_types=["Person"],
+            directed=True, colour=None, thickness=None, label=None, reason="x",
+        )  # fmt: skip
+    assert store.rows == {}
 
 
 async def test_a_proposed_type_is_visible_only_in_its_own_case() -> None:
@@ -180,14 +193,14 @@ async def test_a_proposed_type_is_visible_only_in_its_own_case() -> None:
     assert again.id != p.id and store.rows[p.id].status is ProposalStatus.PENDING
 
 
-async def test_a_proposed_types_links_are_refused_promotion_until_accepted_and_live() -> (
-    None
-):
+async def test_a_proposed_types_links_are_refused_promotion_until_accepted_and_live() -> None:
     service, _, models, _ = await _service()
     p = await _propose(service)
     pending = await _refusal(service, "inv-1")
     assert pending is not None and "not yet accepted" in pending
-    accepted = await service.accept("ds-1", p.id, _engineer(), reason="Seen in three cases")
+    accepted, _ = await service.accept(
+        "ds-1", p.id, _engineer(), basis="probabilistic", reason="Seen in three cases"
+    )
     assert accepted.status is ProposalStatus.ACCEPTED
     draft = await models.draft("ds-1")
     assert draft is not None
@@ -202,7 +215,7 @@ async def test_a_proposed_types_links_are_refused_promotion_until_accepted_and_l
 async def test_an_accepted_type_once_live_is_offered_in_every_case_of_its_dataset() -> None:
     service, _, models, _ = await _service()
     p = await _propose(service)
-    await service.accept("ds-1", p.id, _engineer(), reason="Useful")
+    await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
     assert "BRIBED" not in await service.case_types("inv-2", _analyst("inv-2"))
     draft = await models.draft("ds-1")
     assert draft is not None
@@ -222,7 +235,9 @@ async def test_a_declined_types_links_stay_in_the_layer_for_good() -> None:
     refused = await _refusal(service, "inv-1")
     assert refused is not None and "declined" in refused
     with pytest.raises(ProposalRefusedError):
-        await service.accept("ds-1", p.id, _engineer(), reason="Changed my mind")
+        await service.accept(
+            "ds-1", p.id, _engineer(), basis="probabilistic", reason="Changed my mind"
+        )
 
 
 async def test_the_proposer_cannot_accept_their_own() -> None:
@@ -231,7 +246,7 @@ async def test_the_proposer_cannot_accept_their_own() -> None:
     p = await _propose(service)
     both = _engineer(pid="alice")
     with pytest.raises(ProposalRefusedError):
-        await service.accept("ds-1", p.id, both, reason="Mine")
+        await service.accept("ds-1", p.id, both, basis="probabilistic", reason="Mine")
     assert store.rows[p.id].status is ProposalStatus.PENDING
 
 
@@ -239,7 +254,7 @@ async def test_another_datasets_proposal_is_not_found_on_this_datasets_tab() -> 
     service, store, models, _ = await _service()
     p = await _propose(service, case="inv-3")
     with pytest.raises(ProposalNotFoundError):
-        await service.accept("ds-1", p.id, _engineer(), reason="x")
+        await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="x")
     with pytest.raises(ProposalNotFoundError):
         await service.decline("ds-1", p.id, _engineer(), reason="x")
     assert [x.id for x in await service.dataset_proposals("ds-1")] == []
@@ -257,19 +272,37 @@ async def test_accepting_merges_a_same_name_proposal_that_fits_and_leaves_one_th
         to_types=["Organisation"], directed=True, colour=None, thickness=None, label=None,
         reason="x",
     )  # fmt: skip
-    await service.accept("ds-1", first.id, _engineer(), reason="Useful")
+    await service.accept("ds-1", first.id, _engineer(), basis="probabilistic", reason="Useful")
     assert store.rows[fits.id].status is ProposalStatus.MERGED
     assert store.rows[misfit.id].status is ProposalStatus.PENDING
     with pytest.raises(ProposalRefusedError):  # the name is in the model now
-        await service.accept("ds-1", misfit.id, _engineer(), reason="x")
+        await service.accept("ds-1", misfit.id, _engineer(), basis="probabilistic", reason="x")
 
 
-async def test_a_name_already_in_the_datasets_model_is_refused_at_proposal() -> None:
-    service, _, _, _ = await _service()
+async def test_a_name_already_in_the_datasets_live_model_is_refused_at_proposal() -> None:
+    """Only the live model: a name in the draft alone is not refused at proposal, since saying so
+    would tell another case of an accepted proposal (rule 3); acceptance refuses it instead."""
+    service, _, models, _ = await _service()
     p = await _propose(service)
-    await service.accept("ds-1", p.id, _engineer(), reason="Useful")
-    with pytest.raises(ProposalRefusedError):
-        await _propose(service, case="inv-2")
+    await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
+    in_draft_only = await service.propose(
+        "inv-4", _analyst("inv-4", "bob"), name="BRIBED", from_types=["Person"],
+        to_types=["Organisation"], directed=True, colour=None, thickness=None, label=None,
+        reason="x",
+    )  # fmt: skip
+    with pytest.raises(ProposalRefusedError, match="already in this dataset's domain model"):
+        await service.accept(
+            "ds-1", in_draft_only.id, _engineer(), basis="probabilistic", reason="x"
+        )
+    await service.decline("ds-1", in_draft_only.id, _engineer(), reason="Use the accepted one")
+    # A link type the data engineers added to the model themselves, in the model editor, has no
+    # proposal to offer it: the live model's own check is what refuses its name.
+    await models.add_extension("ds-1", "PAID", "link_type", _engineer())
+    draft = await models.draft("ds-1")
+    assert draft is not None
+    await models.make_live("ds-1", draft.version, _engineer())
+    with pytest.raises(ProposalRefusedError, match="already in this dataset's domain model"):
+        await _propose(service, case="inv-2", name="PAID")
 
 
 async def test_the_administrators_route_refuses_a_proposal_of_a_dataset() -> None:
@@ -339,8 +372,12 @@ def test_the_promotable_route_refuses_then_allows(world: _World) -> None:
     assert before["promotable"] is False and "not yet accepted" in before["reason"]
     tab = world.client(_engineer())
     pid = made.json()["id"]
-    done = tab.post(f"/v1/datasets/ds-1/model/proposals/{pid}/accept", json={"reason": "Useful"})
-    assert done.status_code == 200, done.text and done.json()["status"] == "accepted"
+    done = tab.post(
+        f"/v1/datasets/ds-1/model/proposals/{pid}/accept",
+        json={"basis": "probabilistic", "reason": "Useful"},
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "accepted" and done.json()["in_model"] == "draft"
     assert _promotable(world, "inv-1")["promotable"] is False  # in the draft, not yet live
     draft = asyncio.run(world.models.draft("ds-1"))
     assert draft is not None
@@ -407,3 +444,124 @@ def test_the_model_tabs_proposals_are_the_datasets_alone_and_need_accept_types(
         == "SMUGGLED_FOR"
     )
     assert world.store.rows[pid].status is ProposalStatus.PENDING
+
+
+# --- the lane review's findings (L3.5 round 1), each with its own test -------------------------
+
+
+async def test_the_administrators_promotion_never_merges_a_datasets_proposal() -> None:
+    """An old proposal naming no dataset, promoted by an administrator, must not sweep a same-name
+    proposal of a dataset into the ontology: that would make its links promotable without any
+    data engineer accepting it (ADR-090 Amendment 4)."""
+    service, store, _, _ = await _service()
+    old = await service.propose(
+        "inv-1", _analyst("inv-1").model_copy(update={"datasets": None}), name="BRIBED",
+        from_types=["Person"], to_types=["Person"], directed=True, colour=None, thickness=None,
+        label=None, reason="Before ADR-099 Amendment 3",
+    )  # fmt: skip
+    assert old.dataset_id is None
+    mine = await _propose(service, case="inv-2")
+    admin = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-1", roles=["osprey-admin"])
+    await service.promote(old.id, admin, basis="probabilistic", reason="Seen often")
+    assert store.rows[mine.id].status is ProposalStatus.PENDING
+    assert store.rows[mine.id].promoted_name is None
+
+
+async def test_two_acceptances_at_once_both_land_in_the_draft() -> None:
+    """`add_extension` reads and writes the draft in one step: the second acceptance appends to
+    what the first wrote, never to a copy read before it."""
+    service, _, models, _ = await _service()
+    a = await _propose(service, name="BRIBED")
+    b = await _propose(service, case="inv-2", name="SMUGGLED_FOR")
+    await asyncio.gather(
+        service.accept("ds-1", a.id, _engineer(), basis="probabilistic", reason="x"),
+        service.accept("ds-1", b.id, _engineer(), basis="probabilistic", reason="y"),
+    )
+    draft = await models.draft("ds-1")
+    assert draft is not None
+    assert sorted(e.name for e in draft.extensions) == ["BRIBED", "SMUGGLED_FOR"]
+
+
+class _DeclinedMeanwhile(MemoryStore):
+    """Another data engineer declines the proposal just after this acceptance has read it."""
+
+    async def get_for_dataset(self, pid: str, dataset_id: str) -> Any:
+        found = await super().get_for_dataset(pid, dataset_id)
+        if found.status is ProposalStatus.PENDING:
+            self.rows[pid] = found.model_copy(update={"status": ProposalStatus.REJECTED})
+        return found
+
+
+async def test_an_acceptance_racing_a_decline_loses_and_writes_nothing() -> None:
+    service, store, models, _ = await _service()
+    p = await _propose(service)
+    racing = _DeclinedMeanwhile()
+    racing.rows = store.rows
+    service._store = racing  # type: ignore[assignment]  # noqa: SLF001 - the same rows, racing
+    with pytest.raises(ProposalRefusedError, match="a moment ago"):
+        await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="x")
+    assert racing.rows[p.id].status is ProposalStatus.REJECTED
+    assert await models.draft("ds-1") is None
+
+
+async def test_a_refused_draft_write_gives_the_claim_back() -> None:
+    service, store, models, _ = await _service()
+    p = await _propose(service)
+
+    async def refused(*_: Any) -> Any:
+        raise TargetModelRefused("this dataset already has a draft, version 2")
+
+    models.add_extension = refused  # type: ignore[method-assign]
+    with pytest.raises(TargetModelRefused):
+        await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="x")
+    assert store.rows[p.id].status is ProposalStatus.PENDING
+
+
+async def test_an_accepted_type_lost_from_the_draft_is_said_and_may_be_added_again() -> None:
+    service, _, models, _ = await _service()
+    p = await _propose(service)
+    await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
+    await models.discard_draft("ds-1")
+    lost = await _refusal(service, "inv-1")
+    assert lost is not None and "adds it again" in lost
+    views = await service.dataset_proposal_views("ds-1")
+    assert [(v.status, v.in_model) for v in views] == [(ProposalStatus.ACCEPTED, None)]
+    again, _ = await service.accept(
+        "ds-1", p.id, _engineer(), basis="probabilistic", reason="Added again"
+    )
+    assert again.status is ProposalStatus.ACCEPTED
+    draft = await models.draft("ds-1")
+    assert draft is not None and [e.name for e in draft.extensions] == ["BRIBED"]
+
+
+async def test_a_merged_proposal_is_still_offered_in_its_own_case_before_live() -> None:
+    service, store, _, _ = await _service()
+    first = await _propose(service)
+    merged = await _propose(service, case="inv-2")
+    await service.accept("ds-1", first.id, _engineer(), basis="probabilistic", reason="Useful")
+    assert store.rows[merged.id].status is ProposalStatus.MERGED
+    assert "BRIBED" in await service.case_types("inv-2", _analyst("inv-2"))
+    assert "BRIBED" not in await service.case_types("inv-4", _analyst("inv-4"))
+
+
+async def test_the_accepting_data_engineer_chooses_direct_and_it_holds_from_then() -> None:
+    service, store, models, _ = await _service()
+    p = await _propose(service)
+    await service.accept("ds-1", p.id, _engineer(), basis="direct", reason="A loader backs it")
+    draft = await models.draft("ds-1")
+    assert draft is not None
+    await models.make_live("ds-1", draft.version, _engineer())
+    offered = (await service.case_types("inv-2", _analyst("inv-2")))["BRIBED"].definition
+    assert offered.basis == "direct" and offered.direct_since == store.rows[p.id].direct_since
+
+
+def test_a_stranger_to_the_case_is_told_the_promotable_check_does_not_exist(
+    world: _World,
+) -> None:
+    """Rule 4: the new read path refuses a principal with no level on the case as a missing case."""
+    world.client(_analyst("inv-1")).post("/v1/investigations/inv-1/link-types", json=PROPOSAL)
+    stranger = _analyst("inv-1", "eve")
+    answer = world.client(stranger).post(
+        "/v1/investigations/inv-1/link-types/promotable", json={"types": ["BRIBED"]}
+    )
+    assert answer.status_code == 404

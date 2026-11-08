@@ -198,3 +198,23 @@ async def test_the_index_check_fails_with_the_indexes_dropped(
         ) == 2  # fmt: skip
     finally:
         await conn.close()
+
+
+async def test_two_link_types_added_at_once_both_land_in_the_draft(
+    store: PostgresTargetModelStore,
+) -> None:
+    """ADR-143 decision 9 (L3.5): two data engineers accepting two proposed link types at once. Each
+    `add_extension` reads and writes the draft under the dataset's lock, so neither is lost and only
+    one draft is opened (red with the lock removed: both open a draft, and the one-draft index
+    refuses the second)."""
+    dataset = f"ds-{new_id()}"
+    await asyncio.gather(
+        store.add_extension(dataset, "BRIBED", "link_type", ENGINEER),
+        store.add_extension(dataset, "SMUGGLED_FOR", "link_type", ENGINEER),
+    )
+    draft = await store.draft(dataset)
+    assert draft is not None and draft.version == 1
+    assert sorted(e.name for e in draft.extensions) == ["BRIBED", "SMUGGLED_FOR"]
+    assert all(e.added_in == 1 and e.kind == "link_type" for e in draft.extensions)
+    with pytest.raises(TargetModelRefused, match="already in the draft"):
+        await store.add_extension(dataset, "BRIBED", "link_type", ENGINEER)
