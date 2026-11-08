@@ -685,8 +685,8 @@ class Boards:
         # (L3.4) is changed only by reverting its promotion, so the withdrawal is refused.
         held_in = {i.element_id: i.dataset_id for i in case_items}
         # One the reader may not see is not read here (an unfiltered read is confined away from
-        # routes): L3.4 records a promotion in the board's registry, so that its check reads the
-        # registry, never the element, and refuses in the same words for both.
+        # routes), and refusing over it would tell them it exists (rule 3): how L3.4 treats it is
+        # for L3.4 to settle with the orchestrator. Until L3.4 nothing drawn is promoted.
         if any(set(e.datasets) != {held_in.get(e.id, item.dataset_id)} for e in seen_links):
             raise DrawingRefused(
                 "promoted",

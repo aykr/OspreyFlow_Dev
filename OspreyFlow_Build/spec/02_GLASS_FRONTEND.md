@@ -540,8 +540,10 @@ that case on its board). A board opens to:
   item's ⟶ handle dragged onto another item, or by Alt-drag (C7): *Links to*, *What links them?* as
   radios, what the link says, the marking, the grading and the source;
 - **the inspector** of the selected item: who drew it, its grading, marking and source; for one's own
-  drawn item *Edit*, *Withdraw* (asked once, naming the drawn links that go with it: it is kept in
-  the audit), a picture uploaded with its own marking and *Where the picture comes from*, or *Or a
+  drawn item (drawn by this person on their own board, not another member's placed there) *Edit*,
+  *Withdraw* (asked once, naming the drawn links on this board that go with it and saying that any
+  on another board and its picture go too; afterwards it says what the Conduit named: it is kept
+  in the audit), a picture uploaded with its own marking and *Where the picture comes from*, or *Or a
   picture on the board* (an image Document there) with the link's marking; a loaded item is a live
   reference, not editable here;
 - ***Looks like a loaded item***: each suggestion with *Same* and *Not the same*; a suggestion does

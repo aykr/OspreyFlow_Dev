@@ -844,7 +844,8 @@ The invariants, each with the test that fails if it is broken (rule 12):
   - `test_a_drawn_links_marking_is_kept_and_no_second_link_is_left`.
 - **Changed only on its board** (decision 5; C15): on the analysis canvas a drawn item is read-only;
   ADR-105's picture route, a link's change and a retract refuse it (409 `drawn_on_its_board`).
-  - `test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`;
+  - `test_a_drawn_nodes_picture_is_neither_set_nor_removed_through_adr_105s_routes` (the real
+    `PUT` and `DELETE`); `test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`;
     `test_a_drawn_link_is_not_changed_from_the_canvas`.
 - **Decisions only about this board's drawn items**: a match decision names a drawn item of this
   board and a loaded item the reader may see, within the ceiling.
@@ -854,6 +855,17 @@ The invariants, each with the test that fails if it is broken (rule 12):
   promotion first); a marking is never lowered by an edit.
   - `test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store`;
     `test_withdrawing_with_a_promoted_link_resting_on_it_is_refused`;
+    `test_a_withdrawal_names_its_picture_apart_from_its_links`;
+- **A withdrawal tells nothing of what the withdrawer may not see** (rule 3): a link they may not
+  see goes with the node, named in the audit, but is neither named nor counted to them, not even
+  among the watches ended.
+  - `test_a_withdrawal_tells_nothing_of_a_link_the_withdrawer_may_not_see`.
+- **Audited before written**: every picture, chosen or uploaded, and every withdrawal.
+  - `test_every_picture_and_withdrawal_is_audited_before_anything_is_written`.
+- **One ceiling for every path**: a declaration, a link, an edit, an upload, a choice and a match.
+  - `test_an_edit_an_upload_and_a_choice_above_the_ceiling_are_refused_in_words`.
+- **A board from a view** holds only what its maker may see of a view they may open.
+  - `test_a_board_from_a_view_keeps_only_what_its_maker_may_see_of_a_view_they_may_open`.
     `test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking`.
 - **Restored in its own case's layer** (Amendment 2 decision 4).
   - `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer`, red with the layer lost.

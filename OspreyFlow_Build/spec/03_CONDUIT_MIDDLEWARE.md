@@ -149,7 +149,7 @@ needs `investigate`; drawing needs Editor and `draw_on_boards`, and only a board
 it, moves its items or adds to it (403 `not_the_boards_creator` for a member who can see it).
 
 ```
-GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn items the caller may see)
+GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `blank` or, for one made from a view or a selection, `selection`, since the store keeps only the nodes)
 POST   /v1/investigations/{id}/boards                         a board (`BoardInput`: blank, from a view, or from a selection; only the loaded nodes the caller may see are kept, as live references)
 GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` a count naming none, the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_draw`
 POST   /v1/investigations/{id}/boards/{board}/share           share it with the case (its creator only)
@@ -158,11 +158,11 @@ POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`D
 POST   /v1/investigations/{id}/boards/{board}/links           draw a link between two items on the board, drawn or loaded (`DrawnLinkInput`); a loaded end is untouched; audited as draw_link
 PUT    /v1/investigations/{id}/boards/{board}/layout          move items (`BoardMove`): the board's own layout, not data
 PATCH  /v1/investigations/{id}/board-items/{item}             the author edits their own item (`DrawnItemEdit`), in place; a marking is never lowered (409 `marking_never_lowered`)
-POST   /v1/investigations/{id}/board-items/{item}/withdraw    the author withdraws their own item (`Withdrawn`): out of every read, never deleted; each drawn link and picture resting on it goes with it; its watch ends
+POST   /v1/investigations/{id}/board-items/{item}/withdraw    the author withdraws their own item (`Withdrawn`): out of every read, never deleted; each drawn link and picture resting on it goes with it, those the caller may see named (`links`, `pictures`), one they may not see named only in the audit and counted nowhere, not even in `watches_ended`; audited before it is written
 GET    /v1/investigations/{id}/boards/{board}/matches         *Looks like a loaded item* (`MatchSuggestions`): `inferred`, acting on nothing
 POST   /v1/investigations/{id}/boards/{board}/matches         *Same* (one `SAME_AS`, score 1.0) or *Not the same* (one `NOT_SAME_AS`) in the layer (`MatchDecision`); no node is written
 PUT    /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   upload a picture of a drawn node (`?name`, `?marking`, `?source_note`, all required): an image Document and its DEPICTS in the layer; a later picture supersedes it; audited before the file or the graph is written
-POST   /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   link a picture the case holds (`PictureChoice`: an image Document the caller may see) by a DEPICTS in the layer, marked at least as the image is; the image stays in its dataset
+POST   /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   link a picture the case holds (`PictureChoice`: an image Document the caller may see) by a DEPICTS in the layer, marked at least as the image is; the image stays in its dataset; audited, with that marking, before the link is written
 GET    /v1/investigations/{id}/boards/{board}/pictures        each drawn node's picture the caller may see
 GET    /v1/investigations/{id}/boards/{board}/nodes/{node}/picture   that picture's file
 GET    /v1/investigations/{id}/drawn-watches                  the watches drawing set in the case (`DrawnWatch`), each withheld whole from a caller who may not see its item
@@ -180,7 +180,11 @@ set, the deployment's highest where none is set; Amendment 2 decision 3), `above
 `ends_not_on_the_board` (422), `wrong_ends` (422), `already_drawn` (409: the same link already
 drawn between the two), `not_your_item` (403), `promoted` (409: changed only by reverting its
 promotion, L3.4; a withdrawal is refused the same way while a promoted link rests on the item),
-`not_a_marking` (422), `no_source` (422: an edit, or a picture, with no source left),
+`not_a_marking` (422), `no_source` (422: an edit, or a picture, with no source left). A promoted
+link the withdrawer may not see is not read to check it (an unfiltered read is confined away from
+routes), and refusing would tell them the link exists (rule 3). How a withdrawal treats one is for
+L3.4 to settle with the orchestrator (a promotion recorded in `board_items` lets the check read the
+registry, not the element); until L3.4 nothing drawn is promoted. Further refusals:
 `marking_never_lowered` (409), `link_marking_kept` (409: a drawn link's marking is not changed by
 an edit, since the store would leave a second link for the other audience), `no_such_document`
 (422), `not_a_picture` (422), `no_picture_for_this_type` (422, before the file is kept). Edits,
