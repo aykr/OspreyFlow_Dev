@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 
 import asyncpg
 import pytest
+from conduit_common.identity import new_id
+from schemas.case_views import NodePosition
 from services.api import board_store as board_store_module
 from services.api.board_store import (
     BoardItem,
@@ -28,9 +30,6 @@ from services.api.case_views import (
     ViewNotFound,
 )
 from services.api.config import PostgresConfig
-
-from conduit_common.identity import new_id
-from schemas.case_views import NodePosition
 
 K, B = "case-k", "case-b"
 

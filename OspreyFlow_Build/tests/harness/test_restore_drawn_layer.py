@@ -33,19 +33,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from adapters.graph_arcadedb.testing import arcadedb_adapter
+from adapters.media_objectstore.testing import InMemoryMediaStore
 from harness.backup import arcadedb_request
+from ontology.handling import load_uk_le_scheme
+from ontology.packs import load_deployment_ontology
+from schemas.boards import DrawnItemInput
+from schemas.domain import Grading, Node, Principal
 from services.api.board_store import InMemoryBoardItemStore
 from services.api.boards import Boards
 from services.api.case_views import InMemoryCaseViewStore
 from services.api.dataset_scope import scope_to_case, stamping
 from services.api.datasets import Dataset, InMemoryDatasetStore
-
-from adapters.graph_arcadedb.testing import arcadedb_adapter
-from adapters.media_objectstore.testing import InMemoryMediaStore
-from ontology.handling import load_uk_le_scheme
-from ontology.packs import load_deployment_ontology
-from schemas.boards import DrawnItemInput
-from schemas.domain import Grading, Node, Principal
 
 STACKS = Path(__file__).resolve().parents[2] / "scripts" / "lane_stacks.tsv"
 UNIT = "unit-1"
@@ -80,8 +79,8 @@ def _container() -> str:
 
 
 def _in_container(command: str) -> str:
-    done = subprocess.run(  # noqa: S603
-        ["docker", "exec", _container(), "sh", "-c", command],  # noqa: S607
+    done = subprocess.run(
+        ["docker", "exec", _container(), "sh", "-c", command],
         capture_output=True, text=True, check=False,
     )  # fmt: skip
     assert done.returncode == 0, done.stderr or done.stdout
@@ -148,7 +147,7 @@ async def drawn() -> AsyncIterator[SimpleNamespace]:
             marking="OFFICIAL",
         )  # fmt: skip
         yield SimpleNamespace(
-            adapter=adapter, database=adapter._client.database,  # noqa: SLF001
+            adapter=adapter, database=adapter._client.database,
             node=made.element_id, depicts=picture.element_id,
             in_k=scoped,
             in_b=ALICE.model_copy(update={"datasets": ["src", layer_b]}),
@@ -200,8 +199,8 @@ async def test_the_restore_check_fails_with_the_layer_lost(drawn: SimpleNamespac
     back_up_and_restore(drawn.database)
     # The node's stored type, found as the adapter finds it (`_holders`), then its datasets set.
     adapter = drawn.adapter
-    for type_name, _ in await adapter._holders("vertex", [drawn.node]):  # noqa: SLF001
-        await adapter._client.sql(  # noqa: SLF001
+    for type_name, _ in await adapter._holders("vertex", [drawn.node]):
+        await adapter._client.sql(
             f"UPDATE `{type_name}` SET datasets = ['src'] WHERE id = :id",
             params={"id": drawn.node},
         )

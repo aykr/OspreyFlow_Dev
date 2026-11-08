@@ -19,7 +19,6 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError, model_serializer
-
 from schemas.boards import BoardInput, DrawnItemInput
 from schemas.domain import (
     DrawnAssertion,

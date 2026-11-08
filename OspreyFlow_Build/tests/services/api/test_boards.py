@@ -48,7 +48,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from adapters.media_objectstore import reference_for
+from adapters.media_objectstore.testing import InMemoryMediaStore
 from fastapi.testclient import TestClient
+from ontology.handling import load_uk_le_scheme
+from ontology.packs import load_deployment_ontology
+from schemas.domain import SAME_AS, Node, NodeWrite, Principal
 from services.api import boards as boards_module
 from services.api.app import app
 from services.api.board_store import InMemoryBoardItemStore
@@ -63,12 +68,6 @@ from services.api.investigations import (
 )
 from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModelStore
 from services.api.working_set.service import WorkingSetService
-
-from adapters.media_objectstore import reference_for
-from adapters.media_objectstore.testing import InMemoryMediaStore
-from ontology.handling import load_uk_le_scheme
-from ontology.packs import load_deployment_ontology
-from schemas.domain import SAME_AS, Node, NodeWrite, Principal
 
 from .board_fakes import BoardGraph
 from .working_set.fakes import FakeWorkingSetStore
