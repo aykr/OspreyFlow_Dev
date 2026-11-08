@@ -100,6 +100,8 @@ class StoredLink:
     #: The link that replaced it, as the store holds it (ADR-109 Amendment 10). Not part of
     #: equality, so what the revert compares is unchanged.
     superseded_by: str | None = field(default=None, compare=False)
+    #: How many link types hold the id (ADR-110 Amendment 18: two may). Not part of equality.
+    held_by: int = field(default=1, compare=False)
 
 
 class RarityTooLarge(Exception):
@@ -739,17 +741,24 @@ class GraphPort(Protocol):
         another load or by an upload, and a fresh create over a reverted node), so this is how the
         revert tells that a node it created has since been written by someone else, and whether an
         earlier attempt already reverted it, and whether a correction has superseded it (its
-        successor is in no load's record). For the revert alone. No ids give `{}`; a bare `str` is
+        successor is in no load's record), and the node that superseded it (`superseded_by`, which
+        the alert store's repoint settle follows, ADR-109 Amendment 10). Graph data for the revert
+        and that settle alone (rule 3): never passed to a reader. No ids give `{}`; a bare `str` is
         a `TypeError`."""
         ...
 
-    async def stored_link_states(self, edge_ids: Sequence[EdgeId]) -> dict[EdgeId, StoredLink]:
-        """As `stored_writes`, for links: each stored link's `reverted` and `superseded` flags,
-        whatever the caller may read, each id found through its type's unique `id` index, over every
-        edge type. An id no link holds is absent. An id two types hold is answered as the worst of
-        them (superseded if either is, reverted only if both are). For the revert alone, which
-        refuses a load whose created link an analyst has changed. No ids give `{}`; a bare `str`
-        is a `TypeError`."""
+    async def stored_link_states(
+        self, edge_ids: Sequence[EdgeId], *, edge_type: str | None = None
+    ) -> dict[EdgeId, StoredLink]:
+        """As `stored_writes`, for links: each stored link's `reverted` and `superseded` flags and
+        its successor (`superseded_by`), whatever the caller may read, each id found through its
+        type's unique `id` index, over every edge type, or `edge_type`'s alone when given (another
+        type holding the id is then never reached). An id no link holds is absent. Over every type,
+        an id two types hold is answered as the worst of them (superseded if either is, reverted
+        only if both are), with `held_by` the number of types holding it. For the revert, which
+        refuses a load whose created link an analyst has changed, and the alert store's repoint
+        settle (ADR-109 Amendment 10) alone: never passed to a reader (rule 3). No ids give `{}`;
+        a bare `str` is a `TypeError`."""
         ...
 
     async def read_link_state(

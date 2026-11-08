@@ -6745,6 +6745,33 @@ async def test_a_correction_marks_only_its_own_types_link_superseded(
         assert paid is not None and "superseded_by" not in paid.stored, "and unmarked"
 
 
+async def test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 10 (L2.8b's D3), over ADR-110 Amendment 18: where two types hold one id and
+    one is superseded, `stored_link_states` given `edge_type` answers for that type alone, its
+    successor named or none; over every type it says two types hold the id (`held_by`), so the
+    repoint settle can tell a bare id it must not move alerts by."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
+        await _write(adapter, [], [other.model_copy(update={"id": link})])
+
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_edge(
+            link, _call_on(a, b, day=2, load_id="analyst"), tx, old_type="COMMUNICATED_WITH"
+        )
+        await adapter.commit_transaction(tx)
+
+        called = (await adapter.stored_link_states([link], edge_type="COMMUNICATED_WITH"))[link]
+        assert (called.superseded, called.superseded_by, called.held_by) == (True, successor, 1)
+        paid = (await adapter.stored_link_states([link], edge_type="TRANSACTED"))[link]
+        assert (paid.superseded, paid.superseded_by) == (False, None), "the other type's own state"
+        assert (await adapter.stored_link_states([link]))[link].held_by == 2
+        assert (await adapter.stored_link_states([successor]))[successor].held_by == 1
+
+
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
     """ADR-110 Amendment 16, rule 3: a SECRET link put back is SECRET, read by a cleared reader and
     by no one below; the restore never writes a weaker marking than the one it read."""
