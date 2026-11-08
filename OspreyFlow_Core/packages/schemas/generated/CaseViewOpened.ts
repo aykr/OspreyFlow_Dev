@@ -6,18 +6,16 @@ export type Name = string;
 export type PrincipalId = string;
 export type CreatedAt = string;
 export type Shared = boolean;
-export type NodeIds = NodeId[] | null;
-export type NodeId = string;
+export type Chosen = number | null;
 export type EntityTypes = string[] | null;
 export type ValidFrom = string | null;
 export type ValidTo = string | null;
-export type X = number;
-export type Y = number;
 export type ValidFrom1 = string;
 export type ValidTo1 = string | null;
 export type Threshold = number | null;
 export type Drawing = boolean;
 export type ConvertedFromCase = string | null;
+export type NodeId = string;
 export type Type = string;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
 export type DocumentId = string;
@@ -65,21 +63,31 @@ export type ComputedAt = string;
 export type Basis = ("direct" | "probabilistic") | null;
 export type Datasets1 = string[];
 export type Edges = Edge[];
+export type X = number;
+export type Y = number;
 export type Missing = number;
 
 /**
- * A view opened now (decision 2): what the reader may see of it, live. `missing` counts the
- * chosen nodes it could not show, for whatever reason, and names none of them.
+ * A view opened now (decision 2): what the reader may see of it, live, and the saved positions
+ * of those items alone. `missing` counts the chosen nodes it could not show, for whatever reason,
+ * and names none of them.
  */
 export interface CaseViewOpened {
   view: CaseView;
   nodes: Nodes;
   edges: Edges;
+  layout?: Layout;
   missing: Missing;
 }
 /**
- * A view as stored and listed (ADR-144 decisions 1 and 3). Private to `created_by` until
+ * A view as listed and answered (ADR-144 decisions 1 and 3). Private to `created_by` until
  * shared; deleted only by its creator; deleting it deletes nothing else.
+ *
+ * **What it never carries:** the chosen nodes' ids or their positions. Those are kept by the
+ * Conduit alone (`services/api/case_views.py`'s stored view), because a shared view's selection is
+ * its creator's, and naming an id the reader may not see would tell them it exists (rules 3
+ * and 7). `chosen` counts the selection; opening the view (`CaseViewOpened`) gives the items and
+ * positions the reader may see now.
  */
 export interface CaseView {
   id: Id;
@@ -88,9 +96,8 @@ export interface CaseView {
   created_by: PrincipalId;
   created_at: CreatedAt;
   shared?: Shared;
-  node_ids?: NodeIds;
+  chosen?: Chosen;
   filter?: ViewFilter | null;
-  layout?: Layout;
   window?: Interval | null;
   threshold?: Threshold;
   drawing?: Drawing;
@@ -104,16 +111,6 @@ export interface ViewFilter {
   entity_types?: EntityTypes;
   valid_from?: ValidFrom;
   valid_to?: ValidTo;
-}
-export interface Layout {
-  [k: string]: NodePosition;
-}
-/**
- * Where a node sits on the view's canvas.
- */
-export interface NodePosition {
-  x: X;
-  y: Y;
 }
 export interface Interval {
   valid_from: ValidFrom1;
@@ -219,4 +216,14 @@ export interface WeightComponents {
   parameter_set?: ParameterSet;
   computed_at: ComputedAt;
   [k: string]: unknown;
+}
+export interface Layout {
+  [k: string]: NodePosition;
+}
+/**
+ * Where a node sits on the view's canvas.
+ */
+export interface NodePosition {
+  x: X;
+  y: Y;
 }

@@ -6,7 +6,7 @@ layout, a timeline range and a resolution threshold (*Match strictness*), and, f
 (ADR-143 decision 5, L3.3), `drawing`. It re-reads the case each time it opens (decision 2), through
 the reader's own principal, so it never widens what its reader may see (ADR-099).
 
-- **`CaseView`**: the view as stored and listed.
+- **`CaseView`**: the view as listed, never naming its chosen nodes.
 - **`CaseViewInput`**: what *Save what I see as a view* sends.
 - **`CaseViewOpened`**: the view opened now: the items the reader may see, and how many of its
   chosen items it could not show, **never which** (decision 2; rule 3).
@@ -70,8 +70,14 @@ class CaseViewInput(BaseModel):
 
 
 class CaseView(BaseModel):
-    """A view as stored and listed (ADR-144 decisions 1 and 3). Private to `created_by` until
-    shared; deleted only by its creator; deleting it deletes nothing else."""
+    """A view as listed and answered (ADR-144 decisions 1 and 3). Private to `created_by` until
+    shared; deleted only by its creator; deleting it deletes nothing else.
+
+    **What it never carries:** the chosen nodes' ids or their positions. Those are kept by the
+    Conduit alone (`services/api/case_views.py`'s stored view), because a shared view's selection is
+    its creator's, and naming an id the reader may not see would tell them it exists (rules 3
+    and 7). `chosen` counts the selection; opening the view (`CaseViewOpened`) gives the items and
+    positions the reader may see now."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,9 +87,9 @@ class CaseView(BaseModel):
     created_by: PrincipalId
     created_at: datetime
     shared: bool = False
-    node_ids: list[NodeId] | None = None
+    #: How many nodes were chosen, for a view of chosen nodes; `None` for a filtered view.
+    chosen: int | None = Field(default=None, ge=0)
     filter: ViewFilter | None = None
-    layout: dict[NodeId, NodePosition] = Field(default_factory=dict)
     window: Interval | None = None
     threshold: float | None = None
     #: A drawing board (ADR-143 decision 5); boards are built in L3.3.
@@ -94,14 +100,16 @@ class CaseView(BaseModel):
 
 
 class CaseViewOpened(BaseModel):
-    """A view opened now (decision 2): what the reader may see of it, live. `missing` counts the
-    chosen nodes it could not show, for whatever reason, and names none of them."""
+    """A view opened now (decision 2): what the reader may see of it, live, and the saved positions
+    of those items alone. `missing` counts the chosen nodes it could not show, for whatever reason,
+    and names none of them."""
 
     model_config = ConfigDict(extra="forbid")
 
     view: CaseView
     nodes: list[Node]
     edges: list[Edge]
+    layout: dict[NodeId, NodePosition] = Field(default_factory=dict)
     missing: int = Field(ge=0)
 
 
