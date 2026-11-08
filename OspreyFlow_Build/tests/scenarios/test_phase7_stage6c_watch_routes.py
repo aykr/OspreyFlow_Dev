@@ -999,3 +999,67 @@ def test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundr
     alert = by_rule.get(f"hotlist:{hotlist_id}")
     assert alert is not None, "the hotlisted number, the 250th of the run, raised nothing"
     assert alert.referent_node_ids == [preloaded[last]]
+
+
+async def _write_secret_link(source: str, target: str) -> str:
+    """A SECRET call between two numbers the principal may read, in the app's own database."""
+    from conduit_common.identity import new_edge_id
+    from schemas.domain import EdgeWrite, Handling, Provenance, ProvenanceState, SourceRef
+
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
+        await graph.apply_schema(load_default_ontology())
+        tx = await graph.begin_transaction()
+        (edge_id,) = await graph.upsert_edges([EdgeWrite(
+            id=new_edge_id(), type="COMMUNICATED_WITH", source=source, target=target,
+            provenance=Provenance(state=ProvenanceState.ASSERTED, first_seen=datetime.now(UTC),
+                                  sources=[SourceRef(document_id="fixture", locator="r", excerpt_hash="")]),
+            handling=Handling(classification="SECRET", handling_code="P", originator="unit-1",
+                              owning_unit="unit-1"),
+            created_by="test", created_at=datetime.now(UTC), datasets=[dataset_for(PRINCIPAL)],
+        )], tx)  # fmt: skip
+        await graph.commit_transaction(tx)
+        return edge_id
+    finally:
+        await client.aclose()
+
+
+def test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-146 decision 10, gap map G3, at the route (L2.8b item 5): the owner's hotlist alert over
+    two numbers they may read and the SECRET call between them, which they may not, read from a
+    second case reaching the same dataset. The list and the alert's own read give it with its
+    evidence unavailable and neither its words nor its referents; the same alert citing no hidden
+    link gives its words. Red with the words shown whatever the evidence (`alert_to_view`): the
+    numbers it names came through."""
+    private_key, _ = keypair
+    headers = _bearer(private_key)
+    first = asyncio.run(_write_node(f"+44-{new_id()}", owning_unit=PRINCIPAL.org_unit, classification="OFFICIAL"))
+    second = asyncio.run(_write_node(f"+44-{new_id()}", owning_unit=PRINCIPAL.org_unit, classification="OFFICIAL"))
+    link = asyncio.run(_write_secret_link(first, second))
+
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        origin = _case(client, headers)
+        words = "+447700900111 called +447700900222, both on your hotlist"
+        base = Alert(id=new_id(), rule_id=f"hotlist:{new_id()}", owner_id=PRINCIPAL.id, mode=AlertMode.FULL,
+                     referent_node_ids=[first, second], investigation_id=origin,
+                     dataset_id=dataset_for(PRINCIPAL), created_at=datetime.now(UTC), words=words)  # fmt: skip
+        hidden = base.model_copy(update={"edge_ids": [link]})
+        readable = base.model_copy(update={"id": new_id()})
+        for alert in (hidden, readable):
+            asyncio.run(_write_alert(alert))
+        other = _case(client, headers)
+
+        listed = client.get(f"/v1/investigations/{other}/alerts", headers=headers)
+        assert listed.status_code == 200, listed.text
+        by_id = {a["id"]: a for a in listed.json()["alerts"]}
+        assert by_id[readable.id]["words"] == words, "the route gives words when all is readable"
+        assert by_id[hidden.id]["evidence_available"] is False
+        assert by_id[hidden.id]["words"] is None and by_id[hidden.id]["referent_node_ids"] == []
+        one = client.get(f"/v1/investigations/{other}/alerts/{hidden.id}", headers=headers)
+        assert one.status_code == 200, one.text
+        assert one.json()["words"] is None and "+4477009001" not in one.text

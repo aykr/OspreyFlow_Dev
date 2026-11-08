@@ -53,6 +53,7 @@ from schemas.domain import (
     SourceRef,
 )
 
+from .alerts import AlertStore, repointing_alerts
 from .change_provenance import PICTURE_MARKER, without_link_ids
 from .dataset_scope import refuse_in_a_composite_case
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
@@ -167,7 +168,11 @@ class EntityPictureService:
         *,
         scheme: HandlingScheme | None = None,
         audit: PictureAudit | None = None,
+        alerts: AlertStore | None = None,
     ) -> None:
+        #: The alerts that may cite a picture link this replaces: each is repointed to its
+        #: successor (ADR-109 Amendment 10). `None` only for a test of the service's own.
+        self._alerts = alerts
         self._audit = audit
         self._working_set = working_set
         self._graph = graph
@@ -352,20 +357,22 @@ class EntityPictureService:
                 },
                 result_cardinality=1,
             )
-        tx = await self._graph.begin_transaction()
-        try:
-            await self._graph.upsert_nodes([document], tx)
-            if before is None:
-                (link,) = as_stored([link], await self._graph.upsert_edges([link], tx))
-            else:
-                replaced = await self._graph.supersede_edge(
-                    before[0].id, link, tx, old_type=before[0].type
-                )
-                (link,) = as_stored([link], [replaced])
-        except Exception:
-            await self._graph.rollback_transaction(tx)
-            raise
-        await self._graph.commit_transaction(tx)
+        async with repointing_alerts(self._alerts, self._graph) as repoint:
+            tx = await self._graph.begin_transaction()
+            try:
+                await self._graph.upsert_nodes([document], tx)
+                if before is None:
+                    (link,) = as_stored([link], await self._graph.upsert_edges([link], tx))
+                else:
+                    replaced = await self._graph.supersede_edge(
+                        before[0].id, link, tx, old_type=before[0].type
+                    )
+                    await repoint.record(before[0].id, replaced)
+                    (link,) = as_stored([link], [replaced])
+            except Exception:
+                await self._graph.rollback_transaction(tx)
+                raise
+            await self._graph.commit_transaction(tx)
         return _Attached(document=document, link=link, before=before)
 
     async def set(
@@ -520,13 +527,16 @@ class EntityPictureService:
             created_by=principal.id,
             created_at=now,
         )
-        tx = await self._graph.begin_transaction()
-        try:
-            await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
-        except Exception:
-            await self._graph.rollback_transaction(tx)
-            raise
-        await self._graph.commit_transaction(tx)
+        async with repointing_alerts(self._alerts, self._graph) as repoint:
+            tx = await self._graph.begin_transaction()
+            try:
+                await repoint.record(
+                    old.id, await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
+                )
+            except Exception:
+                await self._graph.rollback_transaction(tx)
+                raise
+            await self._graph.commit_transaction(tx)
         # The successor belongs to every dataset the link did (the store merges them), so what it
         # is sent as is judged against all of them (ADR-130 Amendment 2).
         return await self._working_set.replace_edge(

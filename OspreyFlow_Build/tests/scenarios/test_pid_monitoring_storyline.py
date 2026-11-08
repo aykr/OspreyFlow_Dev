@@ -422,7 +422,7 @@ async def test_chapter_nines_alert_goes_into_the_pack_open_and_inferred(scene: S
     assert snapshot.hotlist_entry == COORDINATOR_NUMBER
     number = scene.world.graph.node_by_value(COORDINATOR_NUMBER)
     assert item.handlings == [number.handling]
-    shown, withheld = await packs.readable([item], scene.analyst, SCHEME, scene.world.graph, scene.case)
+    shown, withheld = await packs.readable([item], scene.analyst, SCHEME, scene.world.graph, scene.case, alerts=scene.stores.alerts, analytics=scene.analytics)
     assert shown == [item] and withheld is False
 
 
@@ -431,7 +431,7 @@ async def test_the_alert_item_is_withheld_from_a_reader_who_may_not_see_the_numb
     item = await _h1_item(scene)
     public = scene.colleague.model_copy(update={"clearance": "PUBLIC"})
     for reader in (scene.stranger, public):
-        shown, withheld = await packs.readable([item], reader, SCHEME, scene.world.graph, scene.case)
+        shown, withheld = await packs.readable([item], reader, SCHEME, scene.world.graph, scene.case, alerts=scene.stores.alerts, analytics=scene.analytics)
         assert shown == [] and withheld is True  # a yes, never a count or a name
 
 

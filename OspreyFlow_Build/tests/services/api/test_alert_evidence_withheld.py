@@ -105,12 +105,18 @@ class Graph:
             raise TypeError("edge_ids must be a sequence of ids")
         ids = sorted(set(edge_ids))
         self.recorder.calls.append(("get_edges", len(ids), tuple(ids)))
-        return [_edge(i) for i in ids if i not in self.hidden]
+        # As the port: a link is read only with both its ends (the access step on each end).
+        links = [_edge(i) for i in ids if i not in self.hidden]
+        return [e for e in links if e.source not in self.hidden and e.target not in self.hidden]
 
 
 class Analytics:
+    """Answers as `list_events` does: an event only in the case it was loaded in (`scoped`, else
+    the test's `CASE`), and none the reader may not read (`hidden`)."""
+
     def __init__(self, recorder: Recorder, hidden: set[str] | None = None) -> None:
         self.recorder, self.hidden = recorder, hidden or set()
+        self.scoped: dict[str, str] = {}
 
     async def list_events(self, req: EventListRequest, principal: Principal) -> EventListResult:
         ids = sorted(set(req.filter.event_ids))
@@ -132,7 +138,7 @@ class Analytics:
                 handling=_HANDLING,
             )  # type: ignore[arg-type]  # fmt: skip
             for i in ids
-            if i not in self.hidden
+            if i not in self.hidden and self.scoped.get(i, CASE) == req.filter.investigation_scope
         ]
         return EventListResult(
             total=len(events), events=events[req.offset : req.offset + req.limit]
@@ -255,6 +261,48 @@ async def test_an_alert_listed_over_a_link_with_an_end_it_does_not_name_is_expla
     assert [e.id for e in why.edges] == ["e-1"]
 
 
+async def test_a_link_with_a_hidden_end_is_hidden_as_the_port_hides_it() -> None:
+    """L2.8b item 8: the fake's `get_edges` reads a link only with both its ends, as the port does,
+    so an alert naming only the readable end of a link whose other end is hidden is withheld. Red
+    with the fake returning the link whatever its ends: it was listed."""
+    alert = _alert("one-end-hidden", nodes=["n-a"], edges=["e-1"])
+    store, graph, analytics, _ = _world({"n-b"}, [alert, V1])
+    assert await _shown(store, graph, analytics) == []
+
+
+async def test_the_queue_reads_an_alerts_transactions_in_its_own_case_as_the_inbox_does() -> None:
+    """L2.8b item 8: one scope for the queue and the inbox, the alert's own case. An alert listed in
+    this case's queue (a team's monitor alert, raised in another case) cites a transaction loaded
+    in its own case; read in the queue's case it was not found, and the alert withheld from every
+    reader. Red with the queue's case as the scope."""
+    alert = _alert("elsewhere", nodes=["n-a"], edges=["e-1"], events=["t-c2"]).model_copy(
+        update={"investigation_id": "case-2"}
+    )
+    store, graph, analytics, _ = _world(set(), [alert])
+    analytics.scoped["t-c2"] = "case-2"
+    assert await _shown(store, graph, analytics) == ["elsewhere"]
+
+    class TeamQueue(TriageStore):
+        """`get_queue_alert` as the queue's scope answers for a team's alert raised elsewhere."""
+
+        async def get_queue_alert(self, alert_id: str, investigation_id: str, reader: Principal) -> QueueRow:
+            return QueueRow(alert, "monitor", "medium", "team")
+
+    why = await alert_queue.explain(TeamQueue([alert]), graph, analytics, CASE, "elsewhere", READER)  # type: ignore[arg-type]
+    assert [t.event_id for t in why.transactions] == ["t-c2"]
+
+
+async def test_the_canvas_draws_a_cited_link_whose_other_end_the_alert_does_not_name() -> None:
+    """L2.8b item 8: the canvas reads the links an alert cites by their ids, as the queue's check
+    does, not only those among the nodes it names. Red with `edges_among` alone: the cited link was
+    left off the canvas of an alert the queue listed."""
+    alert = _alert("canvas-one-end", nodes=["n-a"], edges=["e-1"])
+    _, graph, analytics, _ = _world(set(), [alert])
+    _, _, edges = await alert_queue.canvas_elements(TriageStore([alert]), graph, analytics, CASE,  # type: ignore[arg-type]
+                                                    "canvas-one-end", READER)  # fmt: skip
+    assert [e.id for e in edges] == ["e-1"]
+
+
 async def test_the_case_queue_inherits_the_check() -> None:
     """`queue` (the Reports figures, the reporting feed and neighbourhood risk count through it)."""
     store, graph, analytics, _ = _world({"t-secret"}, [V1, OVER_TRANSACTION, V2])
@@ -326,6 +374,9 @@ class TriageStore(Store):
     async def set_queue_triage(self, alert_id: str, *_: Any, **__: Any) -> Alert:
         self.writes.append(f"triage {alert_id}")
         return next(a for a in self.alerts if a.id == alert_id)
+
+    async def settle_pending(self, graph: Any) -> None:
+        """A store with no repoint journal has nothing to settle (`AlertStore.settle_pending`)."""
 
     def __getattr__(self, name: str) -> Any:  # any other write
         if name.startswith("__"):
@@ -509,7 +560,7 @@ def test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one
         def __init__(self, alert: Alert) -> None:
             self.alert = alert
 
-        async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
+        async def get_authorized(self, alert_id: str, principal: Principal, **_: Any) -> Alert:
             if alert_id != self.alert.id:
                 raise AlertNotFoundError(alert_id)
             return self.alert

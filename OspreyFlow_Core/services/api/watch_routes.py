@@ -250,7 +250,7 @@ async def jumpable_alert(
     (ADR-124 Amendment 17; rule 3, and ADR-146's tests: "`/alerts/<id>` for a reader who may not
     see the alert is refused exactly as a missing alert"). Seeding the readable referents of such an
     alert would give the jumper the entities the hidden link or transactions tie together."""
-    alert = await alerts.get_authorized(alert_id, principal)
+    alert = await alerts.get_authorized(alert_id, principal, graph=graph)
     if not await evidence_available(alert, principal, graph, analytics):
         raise AlertNotFoundError(alert_id)
     return alert

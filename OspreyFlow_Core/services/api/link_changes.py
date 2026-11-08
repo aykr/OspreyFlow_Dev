@@ -77,6 +77,7 @@ from schemas.domain import (
     effective_basis,
 )
 
+from .alerts import AlertStore, repointing_alerts
 from .change_provenance import CHANGE_MARKER, without_link_ids
 from .dataset_scope import refuse_in_a_composite_case
 from .link_notes import LinkNotFoundError
@@ -304,7 +305,11 @@ class LinkChangeService:
         types: LinkTypeService | None = None,
         *,
         scheme: HandlingScheme | None = None,
+        alerts: AlertStore | None = None,
     ) -> None:
+        #: The alerts that may cite a link this changes: each is repointed to its successor
+        #: (ADR-109 Amendment 10). `None` only for a test of the service's own.
+        self._alerts = alerts
         self._scheme = scheme
         self._store = store
         self._working_set = working_set
@@ -464,13 +469,16 @@ class LinkChangeService:
             created_at=now,
         )
 
-        tx = await self._graph.begin_transaction()
-        try:
-            await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
-        except Exception:
-            await self._graph.rollback_transaction(tx)
-            raise
-        await self._graph.commit_transaction(tx)
+        async with repointing_alerts(self._alerts, self._graph) as repoint:
+            tx = await self._graph.begin_transaction()
+            try:
+                await repoint.record(
+                    old.id, await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
+                )
+            except Exception:
+                await self._graph.rollback_transaction(tx)
+                raise
+            await self._graph.commit_transaction(tx)
 
         new = old.model_copy(
             update={

@@ -488,3 +488,37 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         words = [f.words for f in seen.factors if f.factor == "owner_listed"]
         assert any("Elena Petrov" in w and "confirmed on a sanctions list" in w for w in words), words
         assert any("Priya Nair" in w and "possibly" in w for w in words), words
+
+
+async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(stores: dict[str, Any]) -> None:
+    """ADR-109 Amendments 9 and 10 through the real screening path (L2.8b item 8, replacing the
+    hand-written SAME_AS): two applicants owned through the same trust by Elena Petrov, onboarded one
+    after the other, each raise a screening alert citing the one match the screening wrote between
+    Petrov and the listed PETROVA (a pair of one audience is one link). A true positive on the first
+    confirms the match into a new revision; the second alert cites that revision and stays in the
+    queue. Red without the repoint: the second alert cited the superseded match and was withheld."""
+    from services.api import alert_queue
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        await _onboard(graph, gate, [_application("Halcyon Two Ltd")])
+        petrov = [a for a in await _alerts(stores, case) if "Petrov" in (a.words or "")]
+        assert len(petrov) == 2, [a.words for a in petrov]
+        matches = [set(a.edge_ids) for a in petrov]
+        shared = matches[0] & matches[1]
+        same_as = [e for e in await graph.get_edges(sorted(shared), OFFICER) if e.type == "SAME_AS"]
+        assert len(same_as) == 1, "both alerts cite the one match"
+        first, second = petrov
+        proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, first.id, OFFICER,
+                                             disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        if proposed.status == "closing":  # a sanctions match is high: a second person closes it
+            colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, first.id, colleague)
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == second.id]
+        assert same_as[0].id not in row.edge_ids, "the second alert follows the confirmed match"
+        listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
+        assert second.id in listed

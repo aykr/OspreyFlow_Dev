@@ -477,3 +477,74 @@ async def test_a_service_without_a_scheme_refuses_on_both_paths(sx: _SeedFixture
             "inv-1", "seed-car-1", WORKER, name="car.png", data=PNG_A, legal_basis=BASIS
         )
     assert await _live_links(sx) == []
+
+
+# ---- L2.8b item 7: a picture link an alert cites is repointed when superseded --------------------
+
+from services.api.alerts import AlertStore  # noqa: E402
+from services.api.config import PostgresConfig  # noqa: E402
+
+from conduit_common.identity import new_id  # noqa: E402
+from schemas.domain import Alert, AlertMode  # noqa: E402
+
+
+@pytest.fixture
+async def fx_alerts() -> AsyncIterator[tuple[_Fixture, AlertStore]]:
+    """`fx`, with the service given the real alert store, as the app gives it (ADR-109
+    Amendment 10)."""
+    alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(ENTITIES, tx)
+        await graph.commit_transaction(tx)
+        store = FakeWorkingSetStore()
+        await store.add_nodes("inv-1", [_node(w) for w in ENTITIES])
+        media = InMemoryMediaStore()
+        service = EntityPictureService(WorkingSetService(graph, store, SCHEME), graph, media, ONTOLOGY,
+                                       scheme=SCHEME, alerts=alerts)  # fmt: skip
+        yield _Fixture(service, graph, media), alerts
+    await alerts.close()
+
+
+async def _picture_link(fx: _Fixture) -> str:
+    found = await fx.graph.expand(  # type: ignore[attr-defined]
+        ExpandRequest(node_ids=["car-1"], edge_types=[DEPICTS], direction="in"), SECRET_READER
+    )
+    (link,) = found.edges
+    return link.id
+
+
+async def _citing(alerts: AlertStore, link: str) -> Alert:
+    alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=OFFICIAL_READER.id,
+                  mode=AlertMode.FULL, referent_node_ids=["car-1"], edge_ids=[link],
+                  investigation_id=f"case-{new_id()}", created_at=datetime.now(UTC),
+                  typology="structuring", words="the car's picture")  # fmt: skip
+    await alerts.save(alert)
+    return alert
+
+
+async def _cites(alerts: AlertStore, alert: Alert) -> list[str]:
+    (row,) = [a for a in await alerts.list_case_queue(alert.investigation_id, OFFICIAL_READER) if a.id == alert.id]
+    return row.edge_ids
+
+
+@pytest.mark.parametrize("change", ["replace", "remove"])
+async def test_an_alert_citing_a_picture_link_follows_it_when_it_is_replaced_or_removed(
+    fx_alerts: tuple[_Fixture, AlertStore], change: str
+) -> None:
+    """`entity_pictures.py`'s two supersedes (a new picture over the old, `_attach`; a removal,
+    `remove`): an alert citing the picture link cites its successor, so the queue's link check
+    (ADR-146 decision 10) never withholds it for a link that only moved. Red with the repoint
+    recording nothing (`repointing_alerts` a no-op): the alert still cited the superseded link."""
+    fx, alerts = fx_alerts
+    await _set(fx)
+    old = await _picture_link(fx)
+    alert = await _citing(alerts, old)
+    if change == "replace":
+        await _set(fx, data=PNG_B, name="car-side.png")
+        new = await _picture_link(fx)
+    else:
+        delta = await fx.service.remove("inv-1", "car-1", OFFICIAL_READER)
+        new = delta.edge.id
+    assert new != old
+    assert await _cites(alerts, alert) == [new]

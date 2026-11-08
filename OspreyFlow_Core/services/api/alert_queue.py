@@ -51,6 +51,7 @@ from .alerts import (
     QueueRow,
     evidence_node_ids,
     read_evidence,
+    settle_repoints,
 )
 from .dataset_scope import refuse_unless_in_the_layer
 
@@ -123,11 +124,12 @@ async def monitoring_queue(
     whether it is hidden or not — so no count, order or timing says a hidden alert is there. Its
     explanation refuses it the same way (`explain_with_evidence`), so the list and the explanation
     agree."""
+    await settle_repoints(store, graph)
     rows = await store.list_queue(
         investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses
     )
     readable = await read_evidence(
-        [row.alert for row in rows], reader, graph, analytics, scope=lambda _: investigation_id
+        [row.alert for row in rows], reader, graph, analytics, scope=lambda a: a.investigation_id
     )
     shown: list[QueuedAlert] = []
     for row in rows:
@@ -172,9 +174,10 @@ async def _visible_row(
     path that acts on or draws an alert refuses exactly what the queue withholds; until it, this
     read nodes alone, and a triage path acted on, and returned the words of, an alert the reader
     could not wholly see)."""
+    await settle_repoints(store, graph)
     row = await store.get_queue_alert(alert_id, investigation_id, reader)
     readable = await read_evidence(
-        [row.alert], reader, graph, analytics, scope=lambda _: investigation_id
+        [row.alert], reader, graph, analytics, scope=lambda a: a.investigation_id
     )
     if not readable.whole(row.alert):
         raise AlertNotFoundError(alert_id)
@@ -220,23 +223,22 @@ async def explain_with_evidence(
     row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, reader)
     alert = row.alert
     # Read as the queue reads them (`read_evidence`): the cited links by their ids, whatever their
-    # ends, and every cited transaction, in chunks cut from the ids. Anything gone since the check
-    # (a revert in between) refuses the whole alert, as the check would have.
-    cited_ids = sorted(set(alert.edge_ids))
-    cited_links = await graph.get_edges(cited_ids, reader) if cited_ids else []
-    if len(cited_links) < len(cited_ids):
+    # ends, and every cited transaction, in chunks cut from the ids, in the alert's own case.
+    # Anything gone since the check (a revert in between) refuses the whole alert, as it would.
+    edges = await _cited_edges(alert, graph, reader, list(nodes))
+    if len({e.id for e in edges} & set(alert.edge_ids)) < len(set(alert.edge_ids)):
         raise AlertNotFoundError(alert_id)
-    edges = [*cited_links, *(e for e in await _cited_edges(alert, graph, reader, list(nodes))
-                            if e.type == "ALERTED_ON")]  # fmt: skip
     transactions: list[ExplainedTransaction] = []
     cited_events: list[EventRecord] = []
     if alert.event_ids:
+        if (where := alert.investigation_id) is None:
+            raise AlertNotFoundError(alert_id)  # nowhere to read them: hidden, as the check says
         ids = sorted(set(alert.event_ids))
         for start in range(0, len(ids), EVENT_CHUNK):
             chunk = ids[start : start + EVENT_CHUNK]
             page = await analytics.list_events(
                 EventListRequest(
-                    filter=EventFilter(investigation_scope=investigation_id, event_ids=chunk),
+                    filter=EventFilter(investigation_scope=where, event_ids=chunk),
                     limit=EVENT_CHUNK,
                 ),
                 reader,
@@ -287,14 +289,17 @@ def _number(value: object) -> float | None:
 async def _cited_edges(
     alert: Alert, graph: GraphPort, reader: Principal, node_ids: list[str]
 ) -> list[Edge]:
-    """The links the alert cites, and its own `ALERTED_ON` links, among its nodes, as the reader
-    reads them."""
-    cited = set(alert.edge_ids)
-    return [
+    """The links the alert cites, read by their ids whatever their ends, as the queue's check reads
+    them (`read_evidence`; L2.8b item 8), and its own `ALERTED_ON` links among its nodes, as the
+    reader reads them."""
+    cited = sorted(set(alert.edge_ids))
+    links = await graph.get_edges(cited, reader) if cited else []
+    alerted = [
         e
         for e in await graph.edges_among(node_ids, reader)
-        if e.id in cited or (e.type == "ALERTED_ON" and e.source == alert.alert_node_id)
+        if e.type == "ALERTED_ON" and e.source == alert.alert_node_id and e.id not in cited
     ]
+    return [*links, *alerted]
 
 
 async def canvas_elements(
@@ -444,7 +449,6 @@ async def _close(
 ) -> Alert:
     alert_id = alert.id
     confirmed_node: str | None = None
-    renamed: dict[str, str] = {}
     if disposition == "true_positive":
         node = nodes.get(alert.alert_node_id) if alert.alert_node_id is not None else None
         # ADR-109 Amendment 7 (owner ruling, 11 October 2026): a true positive on a screening alert
@@ -470,15 +474,21 @@ async def _close(
                 else []
             )
             await refuse_unless_in_the_layer([*confirming, *matches])
-            tx = await graph.begin_transaction()
-            try:
-                if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
-                    confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
-                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}
-            except Exception:
-                await graph.rollback_transaction(tx)
-                raise
-            await graph.commit_transaction(tx)
+            # ADR-109 Amendments 9 and 10: each confirmed link's repoint is recorded before the
+            # graph's commit and applied after it, whatever the triage write below then does, so a
+            # refused triage (another member's at the same moment) or any failure between the two
+            # stores leaves no alert citing the superseded link.
+            async with store.repointing(graph) as repoint:
+                tx = await graph.begin_transaction()
+                try:
+                    if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
+                        confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
+                    for e in matches:
+                        await repoint.record(e.id, await confirm_edge(graph, e, member, tx=tx))
+                except Exception:
+                    await graph.rollback_transaction(tx)
+                    raise
+                await graph.commit_transaction(tx)
     return await store.set_queue_triage(
         alert_id,
         investigation_id,
@@ -491,7 +501,6 @@ async def _close(
         decided_by=member.id,
         alert_node_id=confirmed_node,
         close_proposed_by=proposed_by,
-        repoint=renamed or None,
     )
 
 

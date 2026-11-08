@@ -962,6 +962,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         link_notes_store,
         app.state.link_types,
         scheme=handling_scheme,
+        alerts=alerts_store,
     )
     app.state.link_events = LinkEventsService(app.state.working_set, analytics, investigations)
     # ADR-108 phase C: the pipeline runner's recogniser lookup and the online geocoding
@@ -986,7 +987,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         recogniser=recogniser,
     )
     app.state.entity_pictures = EntityPictureService(
-        app.state.working_set, graph, media, ontology, scheme=handling_scheme, audit=app.state.audit
+        app.state.working_set,
+        graph,
+        media,
+        ontology,
+        scheme=handling_scheme,
+        audit=app.state.audit,
+        alerts=alerts_store,
     )
     app.state.email_extraction = EmailExtractionService(
         app.state.working_set,
@@ -6426,7 +6433,7 @@ async def list_alerts_route(
     clause), newest first. Not the case's alerts: another member's are not listed here; the case's
     rule-raised alerts are the one queue's (`/alert-queue`). Corrected by ADR-134 decision 5: this
     said "the alerts of the case's datasets", which the store never read."""
-    rows = await alerts_store.list_authorized(principal)
+    rows = await alerts_store.list_authorized(principal, graph=graph)
     return AlertList(
         alerts=[await alert_to_view(a, principal, graph, analytics, hotlists_store) for a in rows]
     )
@@ -6445,7 +6452,7 @@ async def get_alert_route(
     hotlists_store: HotlistsStoreDep,
     analytics: AnalyticsDep,
 ) -> AlertView:
-    alert = await alerts_store.get_authorized(alert_id, principal)
+    alert = await alerts_store.get_authorized(alert_id, principal, graph=graph)
     return await alert_to_view(alert, principal, graph, analytics, hotlists_store)
 
 
@@ -10601,6 +10608,7 @@ async def read_rule_audit(
     graph: GraphDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    analytics: AnalyticsDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> RuleAuditPage:
@@ -10608,7 +10616,7 @@ async def read_rule_audit(
     through ADR-052 §4's safety net. An entry naming a node the reader cannot see is withheld whole,
     from the page and the total (rule 3)."""
     page = await readable_rule_audit(
-        audit, graph, investigation.id, principal, offset=offset, limit=limit
+        audit, graph, investigation.id, principal, analytics=analytics, offset=offset, limit=limit
     )
     # Who acted, by name — only for the entries this reader is served (ADR-106 decision 3).
     names = await principal_names.display_names(e.principal_id for e in page.entries)
@@ -11917,12 +11925,18 @@ async def _readable_draft(
     scheme: HandlingScheme,
     graph: GraphPort,
     case_id: str,
+    *,
+    alerts: AlertStore,
+    analytics: AnalyticsPort,
 ) -> tuple[list[StoredPackItem], bool]:
     """The draft's items this reader may see, in order, and whether any are withheld from them:
     filtered in the store's query as the reader, then checked again against the graph now (ADR-134
     decision 4). No item withheld from the reader reaches this function."""
     items, in_store = await packs.readable_items(pack_id, reader, scheme)
-    return await readable(items, reader, scheme, graph, case_id, withheld_in_store=in_store)
+    return await readable(
+        items, reader, scheme, graph, case_id, alerts=alerts, analytics=analytics,
+        withheld_in_store=in_store,
+    )  # fmt: skip
 
 
 @app.post(
@@ -11971,11 +11985,14 @@ async def read_pack(
     scheme: HandlingSchemeDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PackDraft:
     """The draft as this reader may see it: the items withheld from them are counted, not named."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id
+        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics,
     )
     served = [i.served() for i in shown]
     await audit.record(
@@ -12115,9 +12132,14 @@ async def remove_pack_item(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     audit: AuditDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> None:
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(
+        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics,
+    )
     if item_id not in {i.id for i in shown} or not await packs.remove_item(pack.id, item_id):
         raise HTTPException(status_code=404, detail="no such item in this pack")
     await audit.record(
@@ -12143,11 +12165,14 @@ async def reorder_pack(
     scheme: HandlingSchemeDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PackDraft:
     """Only the reader's own items move; each item withheld from them keeps its place."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id
+        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics,
     )
     if sorted(body.item_ids) != sorted(i.id for i in shown):
         raise PackItemRefused("the new order must name each item you can see exactly once")
@@ -12203,7 +12228,10 @@ async def refresh_pack_item(
     added while open can say how it was closed), now, as the refresher; the earlier one stays in
     the history (decision 4)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
-    shown, _ = await _readable_draft(packs, pack.id, principal, scheme, graph, investigation.id)
+    shown, _ = await _readable_draft(
+        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics,
+    )
     old = next((i for i in shown if i.id == item_id), None)
     if old is None:
         raise HTTPException(status_code=404, detail="no such item in this pack")
@@ -12253,13 +12281,16 @@ async def pack_history(
     graph: GraphDep,
     scheme: HandlingSchemeDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PackHistory:
     (pack,) = await _named_packs(
         [await _pack_or_404(packs, investigation.id, pack_id)], principal_names
     )
     earlier, in_store = await packs.readable_earlier(pack.id, principal, scheme)
     shown, withheld = await readable(
-        earlier, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+        earlier, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics, withheld_in_store=in_store,
     )
     return PackHistory(
         earlier_snapshots=[i.served() for i in shown], withheld=withheld, versions=pack.versions
@@ -12280,12 +12311,15 @@ async def publish_pack(
     scheme: HandlingSchemeDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PublishedPack:
     """A new immutable version. Refused while the draft holds an item the publisher may not see:
     nobody publishes what they cannot read (Amendment 1)."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
     shown, withheld = await _readable_draft(
-        packs, pack.id, principal, scheme, graph, investigation.id
+        packs, pack.id, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics,
     )
     if withheld:
         raise PackHasWithheldItems()
@@ -12393,6 +12427,8 @@ async def read_published_pack(
     scheme: HandlingSchemeDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    alerts_store: AlertsStoreDep,
+    analytics: AnalyticsDep,
 ) -> PublishedPack:
     """The newest published version as this reader may see it (decision 5): every read audited."""
     pack = await _pack_or_404(packs, investigation.id, pack_id)
@@ -12401,7 +12437,8 @@ async def read_published_pack(
         raise HTTPException(status_code=404, detail="this pack has no publication")
     version, items, in_store = found
     shown, withheld = await readable(
-        items, principal, scheme, graph, investigation.id, withheld_in_store=in_store
+        items, principal, scheme, graph, investigation.id, alerts=alerts_store,
+        analytics=analytics, withheld_in_store=in_store,
     )
     served = [i.served() for i in shown]
     await audit.record(

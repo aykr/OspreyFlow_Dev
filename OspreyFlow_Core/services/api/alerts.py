@@ -34,8 +34,9 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from datetime import UTC, datetime
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 import asyncpg
@@ -113,6 +114,16 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_by TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
+-- ADR-109 Amendment 10 (L2.8b items 6 and 7): a link superseded while alerts cite it, recorded
+-- before the graph's commit and cleared once every citing alert cites the new revision, so a
+-- failure between the two stores is settled from the graph's own stored states.
+CREATE TABLE IF NOT EXISTS alert_link_repoints (
+    old_edge_id TEXT NOT NULL,
+    new_edge_id TEXT NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (old_edge_id, new_edge_id)
+);
+CREATE INDEX IF NOT EXISTS alert_link_repoints_recorded_idx ON alert_link_repoints (recorded_at);
 """
 
 
@@ -335,15 +346,31 @@ def distinct_handlings(handlings: Sequence[Handling]) -> list[Handling]:
 _CITES_ANY_SQL = "COALESCE(NULLIF(edge_ids, ''), '[]')::jsonb ?| $1::text[]"
 
 
-async def _lock_for_repoint(conn: asyncpg.Connection, alert_id: str, old: Sequence[str]) -> None:
-    """The closing alert and every alert citing an old revision, locked in one statement in id
-    order, so two closes confirming the same link lock the same rows in the same order and never
-    deadlock (the closing row is never locked ahead of the rest)."""
+async def _lock_for_repoint(conn: asyncpg.Connection, old: Sequence[str]) -> None:
+    """Every alert citing an old revision, locked in one statement in id order, so two repoints of
+    the same link lock the same rows in the same order and never deadlock."""
     await conn.execute(
-        f"SELECT id FROM alerts WHERE id = $2 OR {_CITES_ANY_SQL} ORDER BY id FOR UPDATE",
-        list(old),
-        alert_id,
+        f"SELECT id FROM alerts WHERE {_CITES_ANY_SQL} ORDER BY id FOR UPDATE", list(old)
     )
+
+
+#: How long a recorded repoint may wait for its writer before a settle may drop it. A writer holds
+#: it for one graph transaction, seconds; one still unsettled after this has lost its writer.
+STALE_REPOINT_AFTER = timedelta(hours=1)
+
+
+class LinkRepoint:
+    """The repoints of one write that supersedes links alerts may cite (`AlertStore.repointing`):
+    each recorded, committed, after the graph returns the new revision's id and before the graph's
+    commit."""
+
+    def __init__(self, store: AlertStore) -> None:
+        self._store = store
+        self.pairs: dict[str, str] = {}
+
+    async def record(self, old: str, new: str) -> None:
+        await self._store._record_repoints({old: new})
+        self.pairs[old] = new
 
 
 async def _repoint_cited_links(conn: asyncpg.Connection, repoint: Mapping[str, str]) -> list[str]:
@@ -456,11 +483,59 @@ class AlertStore:
             )
         await self.publish_facts([alert.id])
 
-    async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
+    async def with_alert_nodes(self, *, investigation_id: str | None = None) -> list[Alert]:
+        """Every alert with an `Alert` node (of one case, if named), unscoped, for the operator's
+        one-off re-marking (`scripts.remark_alert_nodes`): never returned to a reader."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM alerts WHERE alert_node_id IS NOT NULL "
+                "AND ($1::text IS NULL OR investigation_id = $1) ORDER BY id",
+                investigation_id,
+            )
+        return [_row_to_alert(r) for r in rows]
+
+    async def handlings_of(self, alert_id: str) -> list[Handling] | None:
+        """What the alert rests on, as its raiser read it (`save(handlings=)`), or `None` where not
+        known."""
+        async with self._pool.acquire() as conn:
+            raw = await conn.fetchval("SELECT handlings FROM alerts WHERE id = $1", alert_id)
+        return None if raw is None else [Handling(**h) for h in json.loads(raw)]
+
+    async def set_alert_node(self, alert_id: str, node_id: str, *, was: str) -> bool:
+        """The alert's `Alert` node is now `node_id`, a re-marked revision of `was`; only if it is
+        still `was`, so a re-run, or a triage that confirmed the node in between, is not undone."""
+        async with self._pool.acquire() as conn:
+            done = await conn.fetchval(
+                "UPDATE alerts SET alert_node_id = $2 WHERE id = $1 AND alert_node_id = $3 "
+                "RETURNING id",
+                alert_id,
+                node_id,
+                was,
+            )
+        return done is not None
+
+    async def cited_by_ids(self, alert_ids: Sequence[str]) -> dict[str, Alert]:
+        """The alerts with these ids, unscoped, for a check of what each cites, read as the reader
+        by the caller (a pack's alert items, `packs.readable`): never returned to a reader."""
+        if not alert_ids:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM alerts WHERE id = ANY($1::text[])", sorted(set(alert_ids))
+            )
+        return {r["id"]: _row_to_alert(r) for r in rows}
+
+    async def get_authorized(
+        self, alert_id: str, principal: Principal, *, graph: GraphPort | None = None
+    ) -> Alert:
         """`owner_id` filtered in the query itself — `06_DECISIONS.md` ADR-041, proven (not
         merely claimed) by `tools/authorized_query_check.py`, which this store must pass on
         first write. This is the *ownership* check only; a caller reading evidence still needs
-        `evidence_available` below for the *referent* recheck ADR-039 separately requires."""
+        `evidence_available` below for the *referent* recheck ADR-039 separately requires.
+        Given the `graph`, pending repoints are settled first (`settle_pending`), as before every
+        read of alerts whose evidence is then checked."""
+        if graph is not None:
+            await self.settle_pending(graph)
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -473,7 +548,12 @@ class AlertStore:
             raise AlertNotFoundError(alert_id)
         return _row_to_alert(row)
 
-    async def list_authorized(self, principal: Principal) -> list[Alert]:
+    async def list_authorized(
+        self, principal: Principal, *, graph: GraphPort | None = None
+    ) -> list[Alert]:
+        """The principal's own alerts. Given the `graph`, pending repoints are settled first."""
+        if graph is not None:
+            await self.settle_pending(graph)
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
@@ -560,6 +640,88 @@ class AlertStore:
             raise AlertNotFoundError(alert_id)
         return _row_to_queue_row(row)
 
+    @asynccontextmanager
+    async def repointing(self, graph: GraphPort) -> AsyncIterator[LinkRepoint]:
+        """Around a write that supersedes links alerts may cite (ADR-109 Amendments 9 and 10): the
+        caller records each `old → new` (`LinkRepoint.record`) once the graph has returned the new
+        id and before its commit. Left normally, every citing alert is repointed and the records
+        cleared. Left by an exception (the graph's commit included, which may have committed or
+        not), each record is settled from the graph's own stored states: the old link superseded
+        and the new one stored, it is applied; else the write did not happen and it is dropped. So
+        a failure between the two stores leaves no alert citing a superseded link."""
+        repoint = LinkRepoint(self)
+        try:
+            yield repoint
+        except BaseException:
+            await self._settle(graph, repoint.pairs, drop_unsettled=True)
+            raise
+        await self.apply_repoints(repoint.pairs)
+
+    async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
+        """Before every read of alerts: any recorded repoint whose graph write has committed is
+        applied, so no reader is answered from an alert still citing the superseded link. Run as a
+        writer: the stored states are the graph's unfiltered lookup (no reader, nothing returned),
+        the repoint its own transaction under the id-ordered lock, and it changes nothing a reader
+        is answered beyond which revision an alert cites (the queue still checks that revision as
+        the reader). A record older than `STALE_REPOINT_AFTER` whose old link is still live has lost
+        its writer and is dropped. One indexed read of an almost always empty table."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT old_edge_id, new_edge_id, recorded_at FROM alert_link_repoints"
+            )
+        if not rows:
+            return
+        cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
+        fresh = {r["old_edge_id"]: r["new_edge_id"] for r in rows if r["recorded_at"] >= cutoff}
+        stale = {r["old_edge_id"]: r["new_edge_id"] for r in rows if r["recorded_at"] < cutoff}
+        await self._settle(graph, fresh, drop_unsettled=False)
+        await self._settle(graph, stale, drop_unsettled=True)
+
+    async def apply_repoints(self, pairs: Mapping[str, str]) -> list[str]:
+        """Every alert citing an old revision in `pairs` made to cite the new one, and their records
+        cleared, in one transaction: the rows locked together in id order, then renamed in SQL as
+        they stand (never written back from a list read earlier). Returns the alerts changed."""
+        if not pairs:
+            return []
+        async with self._pool.acquire() as conn, conn.transaction():
+            await _lock_for_repoint(conn, sorted(pairs))
+            moved = await _repoint_cited_links(conn, pairs)
+            await self._clear_repoints(conn, pairs)
+        await self.publish_facts(moved)
+        return moved
+
+    async def _record_repoints(self, pairs: Mapping[str, str]) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.executemany(
+                "INSERT INTO alert_link_repoints (old_edge_id, new_edge_id) VALUES ($1, $2) "
+                "ON CONFLICT DO NOTHING",
+                sorted(pairs.items()),
+            )
+
+    @staticmethod
+    async def _clear_repoints(conn: asyncpg.Connection, pairs: Mapping[str, str]) -> None:
+        await conn.executemany(
+            "DELETE FROM alert_link_repoints WHERE old_edge_id = $1 AND new_edge_id = $2",
+            sorted(pairs.items()),
+        )
+
+    async def _settle(
+        self, graph: GraphPort, pairs: Mapping[str, str], *, drop_unsettled: bool
+    ) -> None:
+        if not pairs:
+            return
+        states = await graph.stored_link_states(sorted({*pairs, *pairs.values()}))
+        done = {
+            old: new
+            for old, new in pairs.items()
+            if old in states and states[old].superseded and new in states
+        }
+        await self.apply_repoints(done)
+        gone = {old: new for old, new in pairs.items() if old not in done}
+        if drop_unsettled and gone:
+            async with self._pool.acquire() as conn:
+                await self._clear_repoints(conn, gone)
+
     async def set_queue_triage(
         self,
         alert_id: str,
@@ -574,26 +736,14 @@ class AlertStore:
         decided_by: str | None = None,
         alert_node_id: str | None = None,
         close_proposed_by: str | None = None,
-        repoint: Mapping[str, str] | None = None,
     ) -> Alert:
         """`set_triage` for the one queue: the same single statement, and the alert must still be
         in the reader's queue scope as it is written, so a triage can reach no alert the queue
         would not show them. `close_proposed_by` (ADR-133 decision 7): who proposed closing a
         high-severity alert; kept, with when, while the same person stays named, and cleared with
-        `None`.
-
-        `repoint` (old link id → its new revision): links this close confirmed. Every alert citing
-        an old revision, this one included, is repointed to the new one in the same transaction, so
-        none is withheld for citing a link that only moved (ADR-109 Amendment 9; the queue reads a
-        link by its id and checks the new revision for every reader). The rows are locked together
-        first, in id order, and renamed in SQL as they stand. Not scoped to the reader: it changes
-        which revision an alert cites, never what anyone may read, and returns nothing of the
-        alerts it touched."""
+        `None`."""
         scope, extra = queue_scope(principal, investigation_id, 10)
-        moved: list[str] = []
-        async with self._pool.acquire() as conn, conn.transaction():
-            if repoint:
-                await _lock_for_repoint(conn, alert_id, sorted(repoint))
+        async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $2, assignee = $3, disposition = $4, "
                 "disposition_reason = $5, decided_by = $6, "
@@ -615,12 +765,9 @@ class AlertStore:
                 close_proposed_by,
                 *extra,
             )
-            if row is None:
-                raise AlertTriageConflict(alert_id)
-            if repoint:
-                moved = await _repoint_cited_links(conn, repoint)
-                row = await conn.fetchrow(f"SELECT {_COLUMNS} FROM alerts WHERE id = $1", alert_id)
-        await self.publish_facts(sorted({alert_id, *moved}))
+        if row is None:
+            raise AlertTriageConflict(alert_id)
+        await self.publish_facts([alert_id])
         return _row_to_alert(row)
 
     async def set_triage(
@@ -759,6 +906,16 @@ class ReadableEvidence:
     ) -> None:
         self.nodes, self.edge_ids, self.event_ids = nodes, edge_ids, event_ids
 
+    def covers(
+        self, node_ids: Iterable[str], edge_ids: Iterable[str], event_ids: Iterable[str]
+    ) -> bool:
+        """Every one of these nodes, links and transactions is readable."""
+        return (
+            all(i in self.nodes for i in node_ids)
+            and set(edge_ids) <= self.edge_ids
+            and set(event_ids) <= self.event_ids
+        )
+
     def whole(self, alert: Alert) -> bool:
         """ADR-039's all-or-nothing: every node, link and transaction the alert cites is
         readable."""
@@ -783,22 +940,44 @@ async def read_evidence(
     back: transactions are asked in chunks of `EVENT_CHUNK` cut from the ids, in each alert's
     `scope` (an alert with none has its transactions read as hidden), so neither the number nor the
     size of the reads can follow what the reader may not see (rule 7)."""
-    node_ids = sorted({i for a in alerts for i in evidence_node_ids(a)})
-    edge_ids = sorted({i for a in alerts for i in a.edge_ids})
     by_scope: dict[str, set[str]] = {}
     for a in alerts:
         where = scope(a)
         if a.event_ids and where is not None:
             by_scope.setdefault(where, set()).update(a.event_ids)
-    nodes = {n.id: n for n in await graph.get_nodes(node_ids, reader)} if node_ids else {}
+    return await read_evidence_ids(
+        reader,
+        graph,
+        analytics,
+        node_ids={i for a in alerts for i in evidence_node_ids(a)},
+        edge_ids={i for a in alerts for i in a.edge_ids},
+        event_ids_by_scope=by_scope,
+    )
+
+
+async def read_evidence_ids(
+    reader: Principal,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    *,
+    node_ids: Iterable[str],
+    edge_ids: Iterable[str],
+    event_ids_by_scope: Mapping[str, Iterable[str]],
+) -> ReadableEvidence:
+    """`read_evidence` over bare ids, for a record that cites them without being an alert (a rule
+    audit entry): one batched read per kind as the reader, transactions in chunks of `EVENT_CHUNK`
+    cut from the ids, per case."""
+    nodes_wanted = sorted(set(node_ids))
+    edges_wanted = sorted(set(edge_ids))
+    nodes = {n.id: n for n in await graph.get_nodes(nodes_wanted, reader)} if nodes_wanted else {}
     edges = (
-        frozenset(e.id for e in await graph.get_edges(edge_ids, reader))
-        if edge_ids
+        frozenset(e.id for e in await graph.get_edges(edges_wanted, reader))
+        if edges_wanted
         else frozenset()
     )
     events: set[str] = set()
-    for where in sorted(by_scope):
-        ids = sorted(by_scope[where])
+    for where in sorted(event_ids_by_scope):
+        ids = sorted(set(event_ids_by_scope[where]))
         for start in range(0, len(ids), EVENT_CHUNK):
             chunk = ids[start : start + EVENT_CHUNK]
             page = await analytics.list_events(
@@ -810,6 +989,37 @@ async def read_evidence(
             )
             events.update(e.event_id for e in page.events if e.event_id in chunk)
     return ReadableEvidence(nodes, edges, frozenset(events))
+
+
+class _NoRepoint:
+    """Where no alert store is given (a service built for a test of its own), nothing to repoint."""
+
+    pairs: dict[str, str] = {}
+
+    async def record(self, old: str, new: str) -> None:
+        return None
+
+
+@asynccontextmanager
+async def repointing_alerts(
+    alerts: AlertStore | None, graph: GraphPort
+) -> AsyncIterator[LinkRepoint | _NoRepoint]:
+    """`AlertStore.repointing` for a service that supersedes links (ADR-109 Amendment 10): every
+    `supersede_edge` of a link alerts may cite runs inside it, recording `old → new` before the
+    graph's commit."""
+    if alerts is None:
+        yield _NoRepoint()
+        return
+    async with alerts.repointing(graph) as repoint:
+        yield repoint
+
+
+async def settle_repoints(store: object, graph: GraphPort) -> None:
+    """`AlertStore.settle_pending`, before a read of alerts. A store with no journal (a test's
+    stand-in for the queue's reads) has nothing to settle."""
+    settle = getattr(store, "settle_pending", None)
+    if settle is not None:
+        await settle(graph)
 
 
 async def evidence_available(

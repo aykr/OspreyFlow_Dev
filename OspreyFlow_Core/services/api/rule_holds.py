@@ -22,14 +22,23 @@ from ports.media import MediaStore
 from schemas.domain import HeldRow, OntologySchema, Principal, RuleAuditEntry, RuleAuditPage
 from schemas.ingest import LoadReport, Recipe
 
+from .alerts import read_evidence_ids
 from .audit import AuditWriter
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
 
 
-def _named_nodes(entry: RuleAuditEntry) -> list[str]:
-    raw = entry.detail.get("node_ids") or []
+def _ids(entry: RuleAuditEntry, key: str) -> list[str]:
+    raw = entry.detail.get(key) or []
     return [str(n) for n in raw] if isinstance(raw, list) else []
+
+
+def _old_firing(entry: RuleAuditEntry) -> bool:
+    """A `rule_fired` entry written before L2.8b names its alert and its nodes but not the links and
+    transactions it cites, so whether the reader may see them cannot be known from it."""
+    return entry.action == "rule_fired" and "alert_id" in entry.detail and (
+        "edge_ids" not in entry.detail or "event_ids" not in entry.detail
+    )
 
 
 async def readable_rule_audit(
@@ -38,20 +47,35 @@ async def readable_rule_audit(
     investigation_id: str,
     reader: Principal,
     *,
+    analytics: AnalyticsPort,
     offset: int = 0,
     limit: int = 100,
 ) -> RuleAuditPage:
-    visible: dict[str, bool] = {}
-
-    async def sees(node_id: str) -> bool:
-        if node_id not in visible:
-            visible[node_id] = await graph.get_node(node_id, reader) is not None
-        return visible[node_id]
-
+    """The case's rule audit as `reader` may read it (ADR-109 ruling 1; ADR-146 decision 10). Every
+    node, link and transaction the entries name is read in one batched read per kind as the reader
+    (`read_evidence_ids`, the queue's check), and an entry naming any the reader cannot see is
+    withheld whole, before paging, so the total never counts it. A firing written before its links
+    and transactions were recorded keeps its entry, with its words withheld: whether the reader may
+    see what it cites cannot be known (fail closed; the orchestrator's call, for the owner)."""
+    entries = await audit.list_for_case(investigation_id, RULE_AUDIT_ACTIONS)
+    readable = await read_evidence_ids(
+        reader,
+        graph,
+        analytics,
+        node_ids={n for e in entries for n in _ids(e, "node_ids")},
+        edge_ids={n for e in entries for n in _ids(e, "edge_ids")},
+        event_ids_by_scope={investigation_id: {n for e in entries for n in _ids(e, "event_ids")}},
+    )
     kept: list[RuleAuditEntry] = []
-    for entry in await audit.list_for_case(investigation_id, RULE_AUDIT_ACTIONS):
-        if all([await sees(n) for n in _named_nodes(entry)]):
-            kept.append(entry)
+    for entry in entries:
+        cited = (_ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids"))
+        if not readable.covers(*cited):
+            continue
+        if _old_firing(entry) and "words" in entry.detail:
+            entry = entry.model_copy(
+                update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
+            )
+        kept.append(entry)
     return RuleAuditPage(entries=kept[offset : offset + limit], total=len(kept))
 
 
