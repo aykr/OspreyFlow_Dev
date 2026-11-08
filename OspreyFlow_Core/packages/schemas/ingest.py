@@ -12,7 +12,10 @@ without re-deriving what belongs to it.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -901,6 +904,32 @@ class LinkPriorState(BaseModel):
     load_id: str | None = None
     handling: Handling
     stored: dict[str, Any] = Field(default_factory=dict)
+    #: `stored_digest` of the link as the load left it, read again inside its transaction after
+    #: its write. Its revert goes ahead only while the link still reads back to it (or to `stored`,
+    #: once an earlier attempt put it back): anything else written since, by any writer (a later
+    #: load, an analyst's correction, a re-stamp of its datasets, a provenance strip), refuses it.
+    left_digest: str | None = None
+
+
+def stored_digest(stored: Mapping[str, Any]) -> str:
+    """ADR-110 Amendment 16: a digest of a link's stored record, stable across reads. Keys sorted
+    at every depth; a float that is a whole number read as that integer (a store may return
+    `1.0` for `1`); lists kept in order; anything else as its JSON text. The same function at
+    the load and at the revert, so a link nobody wrote since reads back to the same digest."""
+
+    def canonical(value: Any) -> Any:
+        if isinstance(value, Mapping):
+            return {
+                str(k): canonical(v) for k, v in sorted(value.items(), key=lambda kv: str(kv[0]))
+            }
+        if isinstance(value, (list, tuple)):
+            return [canonical(v) for v in value]
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        return value
+
+    text = json.dumps(canonical(stored), sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 class RowElements(BaseModel):

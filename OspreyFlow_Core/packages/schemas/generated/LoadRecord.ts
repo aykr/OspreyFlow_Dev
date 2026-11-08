@@ -36,6 +36,7 @@ export type SanitisationCode = string | null;
 export type OrgUnitId = string;
 export type ReviewDate = string | null;
 export type LegalBasis = string | null;
+export type LeftDigest = string | null;
 export type OwnKeyMerges = LinkPriorState[];
 export type SourceId = string;
 export type Column = string;
@@ -107,6 +108,7 @@ export interface LinkPriorState {
   load_id?: LoadId1;
   handling: Handling;
   stored?: Stored;
+  left_digest?: LeftDigest;
   [k: string]: unknown;
 }
 export interface Handling {
