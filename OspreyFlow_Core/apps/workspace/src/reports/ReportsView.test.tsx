@@ -205,3 +205,45 @@ describe("the Reports view", () => {
     await waitFor(() => expect(asked).toContain("reports/feed?weeks=12&format=csv"));
   });
 });
+
+describe("the case's Figures (ADR-145 Amendment 4 decisions 8 and 10)", () => {
+  const queue = (url: URL) => (url.pathname.endsWith("/alert-queue") ? json(200, []) : null);
+
+  it("is named Figures, and carries the Alerts panel, counted by the Conduit", async () => {
+    serve((url) => queue(url) ?? json(200, { ...FIGURES, monitoring: {
+      open_by_source: [{ label: "typology", typology: "kyc_screening", age: "under a day", count: 2 }] } }));  // prettier-ignore
+    place();
+    expect(await screen.findByRole("heading", { name: "Figures" })).toBeTruthy();
+    const panel = screen.getByRole("region", { name: "Alerts" });
+    expect(panel.textContent).toContain("2 alerts open");
+    expect(panel.getAttribute("data-outlined")).toBeNull();
+  });
+
+  it("draws no Drawing panel until the Conduit serves drawing figures, then each of the four", async () => {
+    serve(queue);
+    place();
+    await screen.findByText("3 alerts in the last 12 weeks");
+    expect(screen.queryByRole("region", { name: "Drawing" })).toBeNull();
+    cleanup();
+    serve((url) => queue(url) ?? json(200, { ...FIGURES, drawing: { drawn: 9, promoted: 4, awaiting_review: 2, withdrawn: 1 } }));
+    place();
+    const drawing = await screen.findByRole("region", { name: "Drawing" });
+    expect(within(drawing).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Drawn: 9", "Promoted: 4", "Awaiting review: 2", "Withdrawn: 1"]);  // prettier-ignore
+  });
+
+  it("opened from an alert, says so, outlines the Alerts panel, focuses the way back, and goes back", async () => {
+    const asked = serve(queue);
+    const back = vi.fn();
+    render(<ReportsView apiBaseUrl="http://x" bearerToken="t" investigationId="c1" canDownload={false} initialWeeks={4}
+                        fromAlert={{ words: "the structuring alert", onBack: back }} />);  // prettier-ignore
+    const note = await screen.findByRole("note", { name: "Opened from an alert" });
+    expect(note.textContent).toBe("From the structuring alert·← Back to your alerts");
+    await waitFor(() => expect(asked).toContain("reports?weeks=4"));
+    expect(screen.getByRole("region", { name: "Alerts" }).getAttribute("data-outlined")).toBe("true");
+    const button = within(note).getByRole("button", { name: "← Back to your alerts" });
+    expect(document.activeElement).toBe(button);
+    fireEvent.click(button);
+    expect(back).toHaveBeenCalledOnce();
+  });
+});

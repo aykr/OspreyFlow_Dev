@@ -1,6 +1,6 @@
 // The Reports view's calls (`06_DECISIONS.md` ADR-111): the case's figures and the feed. The shape
 // is the generated one, so a change on the server is a type error here, never a silent drift.
-import type { ReportFigures, ReportLimitExceeded } from "../../../../packages/schemas/generated";
+import type { QueuedAlert, ReportFigures, ReportLimitExceeded } from "../../../../packages/schemas/generated";
 
 export interface ReportsApi {
   apiBaseUrl: string;
@@ -43,4 +43,21 @@ export async function fetchFeedCsv(api: ReportsApi, weeks: number): Promise<Blob
   });
   if (!response.ok) throw await failure(response);
   return response.blob();
+}
+
+/** The newest alerts still in the case's queue, for the *Alerts* panel (ADR-146 decision 9): the
+ * queue's own rows, which the Conduit gives only to a reader Rules and Monitoring is offered to and
+ * to the Reports Viewer (ADR-146 Amendment 2 point 3). Refused them (403), the panel shows the
+ * counts alone: `null`, never an error. */
+export async function fetchNewestAlerts(api: ReportsApi, few: number): Promise<QueuedAlert[] | null> {
+  const response = await fetch(caseUrl(api, "alert-queue"), {
+    headers: { Authorization: `Bearer ${api.bearerToken}` },
+  });
+  if (response.status === 403) return null;
+  if (!response.ok) throw new Error(`The newest alerts could not be read (${response.status}).`);
+  const rows = (await response.json()) as QueuedAlert[];
+  return rows
+    .filter((r) => r.alert.status === "open" || r.alert.status === "claimed" || r.alert.status === "closing")
+    .sort((a, b) => b.alert.created_at.localeCompare(a.alert.created_at))
+    .slice(0, few);
 }

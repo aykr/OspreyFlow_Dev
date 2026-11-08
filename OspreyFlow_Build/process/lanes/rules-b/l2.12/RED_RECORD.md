@@ -16,3 +16,20 @@ closed ports (59991–59994), no lease.
   `test_a_reports_viewer_is_refused_every_way_into_an_alert` FAILED
   (`{'open_alert_at_address': 500}`: past its checks to the missing store).
 - Restored: 4 passed.
+
+## 3. The Alerts panel (`reports/AlertsPanel.test.tsx`), green first, so each red by a plant
+- Plant: the open total taken from the queue's rows (`newest.length`), not the Conduit's figures →
+  `counts only what the Conduit counted …` and `shows only the rule group …` FAILED (rule 7).
+- Plant: every row a button whatever the reader → `opens an alert at its address only for a reader
+  Rules and Monitoring is offered to` FAILED.
+- Plant in `api.ts`: a 403 on the queue's rows taken as a failure, not as counts-only →
+  `shows a reader refused the queue's rows the counts alone` FAILED.
+- Restored: 5 passed.
+
+## 4. The case's Figures and the second door (`ReportsPlace.test.tsx`, `ReportsView.test.tsx`, `EmbeddedDashboards.test.tsx`)
+- Plant in `ReportsPlace.tsx`: a *Dashboards* tab put back → `is gone: … no Dashboards tab` and
+  `has one door, the Glass's rail` FAILED.
+- Plant in `ReportsView.tsx`: the Alerts panel not outlined when opened from an alert → `opened from an
+  alert, says so, outlines …` FAILED.
+- Plant: the way back not focused on opening → the same case FAILED.
+- Restored: 108 passed (reports/).
