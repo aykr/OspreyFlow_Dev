@@ -14,16 +14,16 @@ npm run typecheck
 > tsc --noEmit
 
 trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
-2026-11-08T14:52:16Z	INFO	[vuln] Vulnerability scanning is enabled
-2026-11-08T14:52:16Z	INFO	[secret] Secret scanning is enabled
-2026-11-08T14:52:16Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
-2026-11-08T14:52:16Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
-2026-11-08T14:52:20Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
-2026-11-08T14:52:20Z	INFO	Number of language-specific files	num=3
-2026-11-08T14:52:21Z	INFO	[npm] Detecting vulnerabilities...
-2026-11-08T14:52:21Z	INFO	[pip] Detecting vulnerabilities...
-2026-11-08T14:52:21Z	INFO	[uv] Detecting vulnerabilities...
-2026-11-08T14:52:21Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+2026-11-08T16:16:24Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-08T16:16:24Z	INFO	[secret] Secret scanning is enabled
+2026-11-08T16:16:24Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-08T16:16:24Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-08T16:16:27Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
+2026-11-08T16:16:27Z	INFO	Number of language-specific files	num=3
+2026-11-08T16:16:27Z	INFO	[npm] Detecting vulnerabilities...
+2026-11-08T16:16:27Z	INFO	[pip] Detecting vulnerabilities...
+2026-11-08T16:16:27Z	INFO	[uv] Detecting vulnerabilities...
+2026-11-08T16:16:27Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
 
 Report Summary
 
@@ -50,8 +50,8 @@ docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
 #0 building with "desktop-linux" instance using docker driver
 
 #1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 2.40kB 0.0s done
-#1 DONE 0.1s
+#1 transferring dockerfile: 2.40kB done
+#1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/python:3.12-slim
 #2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
@@ -72,8 +72,8 @@ docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
 #0 building with "desktop-linux" instance using docker driver
 
 #1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 6.25kB 0.0s done
-#1 DONE 0.1s
+#1 transferring dockerfile: 6.25kB done
+#1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/python:3.12-slim
 #2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
@@ -122,7 +122,7 @@ docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
 #0 building with "desktop-linux" instance using docker driver
 
 #1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 13.79kB 0.0s done
+#1 transferring dockerfile: 13.79kB done
 #1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/node:22-slim
@@ -236,28 +236,28 @@ docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci depl
 #5 transferring context: 31.57kB done
 #5 DONE 0.0s
 
-#6 [ 8/10] COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
+#6 [ 7/10] COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
 #6 CACHED
 
-#7 [ 4/10] RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
+#7 [ 9/10] COPY osprey_entrypoint.py /app/osprey_entrypoint.py
 #7 CACHED
 
-#8 [ 7/10] COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
+#8 [ 3/10] RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6     authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.5     jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
 #8 CACHED
 
-#9 [ 9/10] COPY osprey_entrypoint.py /app/osprey_entrypoint.py
+#9 [ 6/10] COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
 #9 CACHED
 
-#10 [ 3/10] RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6     authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.5     jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
+#10 [ 4/10] RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
 #10 CACHED
 
 #11 [ 2/10] RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 #11 CACHED
 
-#12 [ 5/10] COPY superset_config.py osprey_theme.json /app/pythonpath/
+#12 [ 8/10] COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
 #12 CACHED
 
-#13 [ 6/10] COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
+#13 [ 5/10] COPY superset_config.py osprey_theme.json /app/pythonpath/
 #13 CACHED
 
 #14 [10/10] COPY osprey_setup.py osprey_palette.py /app/
@@ -269,18 +269,18 @@ docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci depl
 #15 naming to docker.io/ospreyflow/superset:ci done
 #15 DONE 0.0s
 trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
-2026-11-08T14:52:33Z	INFO	[vuln] Vulnerability scanning is enabled
-2026-11-08T14:52:33Z	INFO	[secret] Secret scanning is enabled
-2026-11-08T14:52:33Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
-2026-11-08T14:52:33Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
-2026-11-08T14:52:33Z	INFO	Detected OS	family="debian" version="12.15"
-2026-11-08T14:52:33Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
-2026-11-08T14:52:33Z	INFO	Number of language-specific files	num=4
-2026-11-08T14:52:33Z	INFO	[node-pkg] Detecting vulnerabilities...
-2026-11-08T14:52:33Z	INFO	[python-pkg] Detecting vulnerabilities...
-2026-11-08T14:52:33Z	INFO	[rustbinary] Detecting vulnerabilities...
-2026-11-08T14:52:33Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
-2026-11-08T14:52:33Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+2026-11-08T16:16:37Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-08T16:16:37Z	INFO	[secret] Secret scanning is enabled
+2026-11-08T16:16:37Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-08T16:16:37Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-08T16:16:37Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-08T16:16:37Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-08T16:16:37Z	INFO	Number of language-specific files	num=4
+2026-11-08T16:16:37Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-08T16:16:37Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-08T16:16:37Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-08T16:16:37Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-08T16:16:38Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
 
 Report Summary
 
@@ -744,49 +744,49 @@ npm run test:a11y --workspace apps/harness
 > @ospreyflow/harness@0.0.0 test:a11y
 > playwright test --config a11y/playwright.config.ts
 
-[WebServer] INFO:     Started server process [49339]
+[WebServer] INFO:     Started server process [97404]
 [WebServer] INFO:     Waiting for application startup.
 [WebServer] INFO:     Application startup complete.
 [WebServer] INFO:     Uvicorn running on http://127.0.0.1:7219 (Press CTRL+C to quit)
 
 Running 34 tests using 2 workers
 
-  ✓   2 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (1.1s)
-  ✓   1 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (1.2s)
-  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (634ms)
-  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (664ms)
-  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (664ms)
-  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (659ms)
-  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (675ms)
-  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (686ms)
-  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (601ms)
-  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (687ms)
-  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (594ms)
-  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (581ms)
-  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (506ms)
-  ✓  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (672ms)
-  ✓  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (581ms)
-  ✓  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (674ms)
-  ✓  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (637ms)
-  ✓  18 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (867ms)
-  ✓  19 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (765ms)
-  ✓  20 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (524ms)
-  ✓  21 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (484ms)
-  ✓  22 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (610ms)
-  ✓  23 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (602ms)
-  ✓  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (563ms)
-  ✓  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (556ms)
-  ✓  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (539ms)
-  ✓  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (565ms)
-  ✓  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (511ms)
-  ✓  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (494ms)
-  ✓  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (548ms)
-  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (543ms)
-  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (499ms)
-  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (459ms)
-  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (496ms)
+  ✓   1 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (1.0s)
+  ✓   2 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (612ms)
+  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (641ms)
+  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (467ms)
+  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (530ms)
+  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (487ms)
+  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (613ms)
+  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (517ms)
+  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (522ms)
+  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (503ms)
+  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (519ms)
+  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (454ms)
+  ✓  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (543ms)
+  ✓  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (490ms)
+  ✓  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (575ms)
+  ✓  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (481ms)
+  ✓  19 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (540ms)
+  ✓  18 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (569ms)
+  ✓  20 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (498ms)
+  ✓  21 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (559ms)
+  ✓  22 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (514ms)
+  ✓  23 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (523ms)
+  ✓  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (512ms)
+  ✓  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (502ms)
+  ✓  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (503ms)
+  ✓  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (561ms)
+  ✓  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (505ms)
+  ✓  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (521ms)
+  ✓  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (522ms)
+  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (515ms)
+  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (491ms)
+  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (471ms)
+  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (472ms)
 
-  34 passed (19.4s)
+  34 passed (16.8s)
 make[1]: Target `check' not remade because of errors.
 make: *** [core-check] Error 2
 ../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
@@ -795,18 +795,18 @@ licence-check: 74 packages, all allowed (8 demo data licence(s) checked, all all
 cd ../OspreyFlow_Core && node /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tools/licence_check.mjs
 licence-check: 354 packages, all allowed.
 cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tests/licence_check/*.test.mjs
-✔ a GPL-3.0 licence is rejected (1.139541ms)
-✔ a GNU General Public License, spelled out, is rejected (0.179584ms)
-✔ an MIT licence is allowed (0.069959ms)
-✔ an Apache-2.0 licence is allowed (0.075042ms)
-✔ LGPL-3.0 is refused for a package with no recorded exception (0.064ms)
-✔ an LGPL term never carries an AGPL one through (0.066417ms)
-✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.101875ms)
-✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.423917ms)
-✔ the four licences added on 19 October 2026 pass (0.079959ms)
-✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.091625ms)
-✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.051584ms)
-✔ OFL-1.1 beside GPL is still rejected (0.04275ms)
+✔ a GPL-3.0 licence is rejected (1.077ms)
+✔ a GNU General Public License, spelled out, is rejected (0.168917ms)
+✔ an MIT licence is allowed (0.06875ms)
+✔ an Apache-2.0 licence is allowed (0.072625ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.060042ms)
+✔ an LGPL term never carries an AGPL one through (0.057958ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.105541ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.392583ms)
+✔ the four licences added on 19 October 2026 pass (0.069875ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.089291ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.048917ms)
+✔ OFL-1.1 beside GPL is still rejected (0.045458ms)
 ℹ tests 12
 ℹ suites 0
 ℹ pass 12
@@ -814,37 +814,37 @@ cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/Ospre
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 63.306125
+ℹ duration_ms 71.97275
 licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.design_check
 design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
 colour-drift-check: every colour in the Glass is one DESIGN.md holds
 cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
-✔ under GOV.UK the page is light whatever was chosen, with no theme button (66.591917ms)
-✔ without a brand the saved choice and the button are as before (16.946667ms)
-✔ the GOV.UK header, skip link and footer are added in reading order (18.930084ms)
-✔ no service-name band is drawn, and the page title names the service (9.869292ms)
-✔ without a service name the title falls back as the Glass's does (10.836833ms)
-✔ the skip link's target is the page's main content, focusable (7.437334ms)
-✔ a service name is text, never markup (16.046834ms)
-✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (14.445084ms)
-✔ the sign-in page is marked English (ospreyflow brand) (7.547041ms)
-✔ the sign-in page is marked English (govuk brand) (6.020166ms)
-✔ a lang Keycloak wrote is kept (4.749709ms)
-﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.366625ms) # needs throwaway Keycloaks (see the file's header)
-﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.053917ms) # needs throwaway Keycloaks (see the file's header)
-✔ an empty form says what each field needs, and is not sent (76.9775ms)
-✔ an address that is not one, and a username with a space, are named as such (9.2895ms)
-✔ a well-formed address or username and a password are sent, and earlier errors cleared (10.268708ms)
-✔ nothing is said while typing, only on submit (6.746084ms)
-✔ with no mail server, the way back is the administrator, said where the link would be (14.004625ms)
-✔ the card ends with how accounts are made (7.162292ms)
-✔ the reset page checks the address or username, and its button says what it sends (8.130583ms)
-✔ after a reset is sent, the card says to check your email, with a way back to sign in (17.358791ms)
-✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (9.625041ms)
-✔ a field's error sits directly under the field, before any help beneath it (9.329125ms)
-✔ the reset page's instruction leads the card, under its title, as the handoff has it (6.525125ms)
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (66.327583ms)
+✔ without a brand the saved choice and the button are as before (12.3965ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (23.638416ms)
+✔ no service-name band is drawn, and the page title names the service (13.389375ms)
+✔ without a service name the title falls back as the Glass's does (9.384667ms)
+✔ the skip link's target is the page's main content, focusable (7.479167ms)
+✔ a service name is text, never markup (8.476583ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (23.7ms)
+✔ the sign-in page is marked English (ospreyflow brand) (5.989458ms)
+✔ the sign-in page is marked English (govuk brand) (4.921708ms)
+✔ a lang Keycloak wrote is kept (4.088208ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.361542ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.053292ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (77.8425ms)
+✔ an address that is not one, and a username with a space, are named as such (10.661208ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (10.685917ms)
+✔ nothing is said while typing, only on submit (6.028042ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (14.319917ms)
+✔ the card ends with how accounts are made (6.643541ms)
+✔ the reset page checks the address or username, and its button says what it sends (8.51675ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (7.189541ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (7.634167ms)
+✔ a field's error sits directly under the field, before any help beneath it (17.045708ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (4.631584ms)
 ℹ tests 24
 ℹ suites 0
 ℹ pass 22
@@ -852,7 +852,7 @@ cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/platform/Ospre
 ℹ cancelled 0
 ℹ skipped 2
 ℹ todo 0
-ℹ duration_ms 851.909291
+ℹ duration_ms 880.83375
 docker run --rm -v "/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/../OspreyFlow_Core/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6 -chdir=/w fmt -check -recursive
 Success! The configuration is valid.
 tests/small.tftest.hcl... pass
@@ -935,7 +935,7 @@ collected 52 items
 ../OspreyFlow_Build/tests/harness/test_release_matrix.py ....            [ 96%]
 ../OspreyFlow_Build/tests/harness/test_proxy_health.py ..                [100%]
 
-============================= 52 passed in 10.51s ==============================
+============================= 52 passed in 11.73s ==============================
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
 schemas-check: 409 generated types match committed output.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
@@ -945,7 +945,7 @@ demo-guide-check: 12 registered demo(s), all documented.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
 domain-model-coverage-check: 86 class(es), 0 allowlisted, no new drift.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
-route-coverage-check: 295 route(s), 0 allowlisted, no new drift.
+route-coverage-check: 300 route(s), 0 allowlisted, no new drift.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
 product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
@@ -953,9 +953,13 @@ decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allow
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
 provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
-test-file-coverage-check: 782 test file(s), 0 allowlisted, no new drift.
+test-file-coverage-check: 788 test file(s), 0 allowlisted, no new drift.
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
-doc-citations-check: 1871 file(s) scanned, every cited path exists.
+doc-citations-check: 1 citation(s) name a file that does not exist. A named test that is not there reads as a guarantee and is worse than no name:
+  process/lanes/platform/gates/README.md:10: cites 'services/api/test_admin_sections.py', which does not exist
+
+Either correct the path, write the file, or add it to tests/fixtures/citation_allowlist.txt with a stated reason.
+make: *** [citation-check] Error 1
 cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
 ============================= test session starts ==============================
 platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
@@ -964,7 +968,7 @@ rootdir: /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build
 configfile: pytest.ini
 plugins: asyncio-1.4.0, anyio-4.15.1
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 683 items / 669 deselected / 14 selected
+collected 694 items / 680 deselected / 14 selected
 
 ../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 14%]
 ../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 28%]
@@ -973,7 +977,7 @@ collected 683 items / 669 deselected / 14 selected
 ../OspreyFlow_Build/tests/conformance/model_port/test_guard.py ..        [ 78%]
 ../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
 
-====================== 14 passed, 669 deselected in 0.81s ======================
+====================== 14 passed, 680 deselected in 1.28s ======================
 cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
 ============================= test session starts ==============================
 platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
@@ -993,7 +997,7 @@ collected 79 items
 ../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
 ../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
 
-============================= 79 passed in 32.09s ==============================
+============================= 79 passed in 34.26s ==============================
 cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
 adr-reservations-check: every heading above the baseline is reserved.
 cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
@@ -1009,7 +1013,7 @@ collected 8 items
 ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 75%]
 ..                                                                       [100%]
 
-============================== 8 passed in 7.27s ===============================
+============================== 8 passed in 9.41s ===============================
 cd ../OspreyFlow_Core && PYTHONPATH=packages:/Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/dist
 osprey bundle: 79 file(s) -> /Users/ayankar/dev/osprey-wt/platform/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
 make: Target `ci' not remade because of errors.
