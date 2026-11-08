@@ -493,10 +493,12 @@ class DatasetStampingGraph:
         await self._written()
         return new_id
 
-    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any) -> str:
+    async def supersede_edge(
+        self, edge_id: str, replacement: EdgeWrite, tx: Any, *, old_type: str
+    ) -> str:
         held = await self._held_for(lambda reader: self._inner.get_edges([edge_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
-        new_id = await self._inner.supersede_edge(edge_id, replacement, tx)
+        new_id = await self._inner.supersede_edge(edge_id, replacement, tx, old_type=old_type)
         await self._written()
         return new_id
 

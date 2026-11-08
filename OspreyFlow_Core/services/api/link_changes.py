@@ -466,7 +466,7 @@ class LinkChangeService:
 
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.supersede_edge(old.id, write, tx)
+            await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise

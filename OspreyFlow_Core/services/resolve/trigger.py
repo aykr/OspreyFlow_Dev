@@ -47,7 +47,7 @@ disclosed as a guess, not a measurement.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Collection
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from services.api.change_stream import ChangeStreamWriter
@@ -110,10 +110,6 @@ class ResolutionRunResult:
     nodes_processed: int = 0
     same_as_written: int = 0
     conflicts_recorded: int = 0
-    #: ADR-110 Amendment 18: the split links a conflict could not be recorded on because two edge
-    #: types hold their id; skipped, the rest recorded, and named here in the run's own result
-    #: (the job's stored result) by id alone, never by type.
-    links_skipped: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -122,7 +118,6 @@ class ResolutionRunResult:
             "nodes_processed": self.nodes_processed,
             "same_as_written": self.same_as_written,
             "conflicts_recorded": self.conflicts_recorded,
-            "links_skipped": list(self.links_skipped),
         }
 
 
@@ -232,14 +227,12 @@ async def run_resolution_for_entity_type(
         scheme=scheme,
     )
     not_same_as_by_id = {e.id: e for e in every_split}
-    links_skipped: list[str] = []
     conflict_ids = await record_conflicts(
         graph,
         [*conflicts, *layer_conflicts],
         not_same_as_by_id,
         created_by=SERVICE_PRINCIPAL_ID,
         tx=tx,
-        skipped=links_skipped,
     )
 
     if valkey is not None and same_as_ids:
@@ -250,7 +243,6 @@ async def run_resolution_for_entity_type(
         nodes_processed=len(nodes),
         same_as_written=len(same_as_ids),
         conflicts_recorded=len(conflict_ids),
-        links_skipped=links_skipped,
     )
 
 

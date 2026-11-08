@@ -358,7 +358,9 @@ class EntityPictureService:
             if before is None:
                 (link,) = as_stored([link], await self._graph.upsert_edges([link], tx))
             else:
-                replaced = await self._graph.supersede_edge(before[0].id, link, tx)
+                replaced = await self._graph.supersede_edge(
+                    before[0].id, link, tx, old_type=before[0].type
+                )
                 (link,) = as_stored([link], [replaced])
         except Exception:
             await self._graph.rollback_transaction(tx)
@@ -520,7 +522,7 @@ class EntityPictureService:
         )
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.supersede_edge(old.id, write, tx)
+            await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise

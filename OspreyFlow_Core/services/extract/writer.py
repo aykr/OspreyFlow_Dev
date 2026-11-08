@@ -182,7 +182,7 @@ async def confirm_edge(graph: GraphPort, edge: Edge, principal: Principal, *, tx
         basis=edge.basis, provenance=provenance, handling=edge.handling,
         created_by=principal.id, created_at=now,
     )  # fmt: skip
-    return await graph.supersede_edge(edge.id, replacement, tx)
+    return await graph.supersede_edge(edge.id, replacement, tx, old_type=edge.type)
 
 
 async def retract_node(
