@@ -1,0 +1,8 @@
+# harness-a11y re-run alone at 04bf23e, 2026-11-08T16:29:41Z (make -k ci's run was refused a connection on 5193 and 5194)
+  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (489ms)
+  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (478ms)
+  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (430ms)
+  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (455ms)
+
+  34 passed (14.3s)
+# exit , 2026-11-08T16:29:56Z

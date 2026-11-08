@@ -9,7 +9,7 @@ Split by the orchestrator: A–D, F and E's Conduit half here; the rest is L3.2b
 - **D:** `migrate_branches_to_views`: the dry run writes nothing; the real run, live on Postgres and ArcadeDB, leaves views and no case made from another; removed, oversized and ambiguous cases are reported; Q1, Q3 and Q4 applied.
 - **E, the Conduit half:** no `…/branch*` route (`test_no_route_under_a_case_makes_a_branch`); none in services/api (`test_the_conduit_names_no_branch`).
 - **F:** the gate flags every planted shape. Its tree test is strict xfail on 305 lines in 54 Glass files, for L3.2b.
-**Live:** lease `case`, stack b, 15:00–15:06Z, at 346b679: 439 passed. The 3 failures were stale tests, fixed and re-run green.
+**Live:** lease `case`, stack b, at 04bf23e: 419 passed; the one failure is main's (admin's five routes missing from route rights). **Round 2:** an unconverted case writes nothing (the merge hole closed, red at the real adapter); the migration's convert is atomic; spec 03 corrected; `Right.BRANCH_CASE` removed (70e7ac0, schemas-only); the gate scans packages/schemas.
 **Left for L3.2b:** the Glass, which still calls the removed routes; the spec wording, with B14; the target-size carry; the gate in make ci.
 **Commits:** `git log main..lane/case`, from 0679ae9; lane review round 1's fixes are 2853ff8, 0da2907, f5e4225.
 **For the orchestrator:** apply `ci-wiring-L3.2.patch` at the merge; amend ADR-144 Am 1 for `original_layer_read_only`; drop `Right.BRANCH_CASE` in a shared commit; ratify datasets, questions, email_extraction, document_content, review, event_scope, the alert jump in app.py, places.json and placesByRole.json, stamp_datasets, the bench script, spec 01 and 03, and other lanes' tests.

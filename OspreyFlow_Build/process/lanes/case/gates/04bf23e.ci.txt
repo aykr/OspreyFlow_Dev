@@ -1,0 +1,1429 @@
+# make -k ci at 04bf23e, 2026-11-08T16:19:22Z, closed ports, no lane, ci-wiring-L3.2.patch applied
+/Applications/Xcode.app/Contents/Developer/usr/bin/make -C ../OspreyFlow_Core check
+.venv/bin/ruff check .
+All checks passed!
+npm run lint
+
+> ospreyflow@0.0.0 lint
+> eslint .
+
+.venv/bin/mypy packages services harness
+Success: no issues found in 380 source files
+npm run typecheck
+
+> ospreyflow@0.0.0 typecheck
+> tsc --noEmit
+
+trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
+2026-11-08T16:19:38Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-08T16:19:38Z	INFO	[secret] Secret scanning is enabled
+2026-11-08T16:19:38Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-08T16:19:38Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-08T16:19:42Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
+2026-11-08T16:19:42Z	INFO	Number of language-specific files	num=3
+2026-11-08T16:19:42Z	INFO	[npm] Detecting vulnerabilities...
+2026-11-08T16:19:42Z	INFO	[pip] Detecting vulnerabilities...
+2026-11-08T16:19:42Z	INFO	[uv] Detecting vulnerabilities...
+2026-11-08T16:19:42Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌───────────────────────────────┬──────┬─────────────────┬─────────┐
+│            Target             │ Type │ Vulnerabilities │ Secrets │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ package-lock.json             │ npm  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ services/ner/requirements.txt │ pip  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ uv.lock                       │  uv  │        0        │    -    │
+└───────────────────────────────┴──────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.40kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:20
+--------------------
+  18 |     COPY services ./services
+  19 |     
+  20 | >>> FROM python:3.12-slim
+  21 |     
+  22 |     # Base-image OS packages lag the upstream image's own last-published point
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-ingest] Error 1
+docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 5.93kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:38
+--------------------
+  36 |     COPY recipes ./recipes
+  37 |     
+  38 | >>> FROM python:3.12-slim
+  39 |     
+  40 |     # Base-image OS packages lag the upstream image's own last-published point
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-api] Error 1
+docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.96kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/nginx:1.30-alpine
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/node:22-slim
+#3 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/node/manifests/22-slim: 429 Too Many Requests
+
+#2 [internal] load metadata for docker.io/library/nginx:1.30-alpine
+#2 CANCELED
+------
+ > [internal] load metadata for docker.io/library/node:22-slim:
+------
+Dockerfile:18
+--------------------
+  16 |     # to the image for nothing.
+  17 |     
+  18 | >>> FROM node:22-slim AS builder
+  19 |     
+  20 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: node:22-slim: failed to resolve source metadata for docker.io/library/node:22-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/node/manifests/22-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-workspace] Error 1
+docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 13.79kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/node/manifests/22-slim: 429 Too Many Requests
+
+#3 [internal] load metadata for docker.io/library/docker:29-cli
+#3 CANCELED
+
+#4 [internal] load metadata for docker.io/library/python:3.12-slim
+#4 CANCELED
+------
+ > [internal] load metadata for docker.io/library/node:22-slim:
+------
+Dockerfile:90
+--------------------
+  88 |     # `Kind.LIBRARY` in `harness/service_inventory.py`, not `Kind.DEPLOYABLE` — its built output ships
+  89 |     # inside this image rather than running as its own process.
+  90 | >>> FROM node:22-slim AS frontend-builder
+  91 |     
+  92 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: node:22-slim: failed to resolve source metadata for docker.io/library/node:22-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/node/manifests/22-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-harness] Error 1
+docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.39kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:3
+--------------------
+   1 |     # The fast recogniser (ADR-098 decision 2): Stanza's English named-entity recogniser on the CPU.
+   2 |     # The model is downloaded here, at build, so a deployment recognises without network access.
+   3 | >>> FROM python:3.12-slim
+   4 |     
+   5 |     ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 STANZA_RESOURCES_DIR=/models
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-ner] Error 1
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.56kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:7
+--------------------
+   5 |     # connector profiles, no recipes, no `git`. Replicas are safe: each takes its consumer name from its
+   6 |     # own hostname (`worker_main.consumer_name`).
+   7 | >>> FROM python:3.12-slim AS builder
+   8 |     
+   9 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-worker] Error 1
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.47kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:5
+--------------------
+   3 |     # reporting mart. It reads the Conduit's settings (`services.api.config`), so it carries `packages`
+   4 |     # and `services`; nothing the Conduit needs only for its routes.
+   5 | >>> FROM python:3.12-slim AS builder
+   6 |     
+   7 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-report-sync] Error 1
+docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.00kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/10] FROM docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 31.57kB done
+#5 DONE 0.0s
+
+#6 [ 2/10] RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [ 4/10] RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
+#7 CACHED
+
+#8 [ 3/10] RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6     authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.5     jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
+#8 CACHED
+
+#9 [ 5/10] COPY superset_config.py osprey_theme.json /app/pythonpath/
+#9 CACHED
+
+#10 [ 9/10] COPY osprey_entrypoint.py /app/osprey_entrypoint.py
+#10 CACHED
+
+#11 [ 7/10] COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
+#11 CACHED
+
+#12 [ 8/10] COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
+#12 CACHED
+
+#13 [ 6/10] COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
+#13 CACHED
+
+#14 [10/10] COPY osprey_setup.py osprey_palette.py /app/
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 writing image sha256:19bc179996936c95a88c3ce899c0e9cacd62826dc9a0c33b1528ae70145f6254 done
+#15 naming to docker.io/ospreyflow/superset:ci done
+#15 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
+2026-11-08T16:19:49Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-08T16:19:49Z	INFO	[secret] Secret scanning is enabled
+2026-11-08T16:19:49Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-08T16:19:49Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-08T16:19:50Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-08T16:19:50Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-08T16:19:50Z	INFO	Number of language-specific files	num=4
+2026-11-08T16:19:50Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-08T16:19:50Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-08T16:19:50Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-08T16:19:50Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-08T16:19:50Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/superset:ci (debian 12.15)                                            │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-frontend/package.json                                               │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/mcp_service/package.json                                            │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/static/assets/package.json                                          │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Deprecated-1.2.18.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Caching-2.3.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Compress-1.17.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_JWT_Extended-4.7.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Login-0.6.3.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Migrate-3.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_SQLAlchemy-2.5.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/MarkupSafe-3.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PySocks-1.7.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PyYAML-6.0.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/SQLAlchemy-1.4.54.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/XlsxWriter-3.0.9.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/alembic-1.15.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/amqp-5.3.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/annotated_types-0.7.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset-6.1.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset_core-0.1.0rc3.dist-info/- │ python-pkg │        0        │    -    │
+│ METADATA                                                                         │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apispec-6.6.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apsw-3.50.1.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/async_timeout-4.0.3.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/attrs-25.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/authlib-1.9.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/babel-2.17.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backoff-2.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backports.tarfile-1.2.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bcrypt-4.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/billiard-4.2.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bottleneck-1.5.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/brotli-1.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachelib-0.13.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachetools-6.2.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cattrs-25.1.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/celery-5.5.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/certifi-2026.10.18.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cffi-2.0.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/charset_normalizer-3.4.2.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click-8.2.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_didyoumean-0.3.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_option_group-0.5.7.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_plugins-1.1.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_repl-0.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/colorama-0.4.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cron_descriptor-1.4.5.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/croniter-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cryptography-46.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/deprecation-2.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/dnspython-2.7.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/email_validator-2.2.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/et_xmlfile-2.0.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/exceptiongroup-1.3.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/filelock-3.20.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask-2.3.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_appbuilder-5.0.2.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_babel-3.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_cors-6.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_limiter-3.12.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_session-0.8.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_talisman-1.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_wtf-1.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geographiclib-2.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geopy-2.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/google_auth-2.43.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/greenlet-3.1.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/gunicorn-23.0.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/hashids-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/holidays-0.82.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/humanize-4.12.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/idna-3.10.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/isodate-0.7.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jaraco_context-6.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/joserfc-1.7.7.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonpath_ng-1.7.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema-4.23.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema_specifications-2025.4.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/kombu-5.5.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/limits-5.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mako-1.3.12.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown-3.8.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown_it_py-3.0.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow-3.26.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_sqlalchemy-1.4.0.dist-info/M- │ python-pkg │        0        │    -    │
+│ ETADATA                                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_union-0.1.15.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mdurl-0.1.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgpack-1.0.8.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgspec-0.19.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/nh3-0.2.21.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numexpr-2.10.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numpy-1.26.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/odfpy-1.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openapi_schema_validator-0.6.3.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openpyxl-3.1.5.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ordered_set-4.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/outcome-1.3.0.post0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/packaging-25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pandas-2.1.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/paramiko-3.5.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/parsedatetime-2.6.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pgsanity-0.2.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pillow-12.3.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/platformdirs-4.3.8.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ply-3.11.dist-info/METADATA               │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/polyline-2.0.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prison-0.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prompt_toolkit-3.0.51.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/psycopg2_binary-2.9.6.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyarrow-16.1.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1-0.6.5.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1_modules-0.4.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pycparser-2.22.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic-2.11.7.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic_core-2.33.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygeohash-3.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygments-2.19.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyjwt-2.14.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pynacl-1.6.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyopenssl-25.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyparsing-3.2.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dotenv-1.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pytz-2025.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyxlsb-1.0.10.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/redis-5.3.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/referencing-0.36.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests-2.32.4.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests_cache-1.2.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rfc3339_validator-0.1.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rich-13.9.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rpds_py-0.25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rsa-4.9.1.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/selenium-4.32.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/shillelagh-1.4.3.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/simplejson-3.20.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/slack_sdk-3.35.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sniffio-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sortedcontainers-2.4.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlalchemy_utils-0.42.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlglot-28.10.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sshtunnel-0.4.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tabulate-0.9.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio-0.30.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio_websocket-0.12.2.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_extensions-4.15.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_inspection-0.4.1.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tzdata-2025.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/url_normalize-2.2.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/urllib3-2.8.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/vine-5.1.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/watchdog-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wcwidth-0.2.13.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/websocket_client-1.8.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/werkzeug-3.1.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wheel-0.46.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wrapt-1.17.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wsproto-1.2.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms-3.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms_json-0.3.5.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/xlrd-2.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/zstandard-0.23.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/apache_superset.egg-info/PKG-INFO                                            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-core/src/apache_superset_core.egg-info/PKG-INFO                     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/pip-23.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/uv-0.13.4.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/wheel-0.46.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uv                                                                 │ rustbinary │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uvx                                                                │ rustbinary │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+
+Running 34 tests using 2 workers
+
+  ✓   1 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (653ms)
+  ✓   2 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (673ms)
+  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (589ms)
+  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (595ms)
+  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (592ms)
+  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (631ms)
+  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (536ms)
+  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (668ms)
+  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (501ms)
+  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (598ms)
+  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (535ms)
+  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (516ms)
+  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (438ms)
+  ✘  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (1.1s)
+  ✘  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (1.1s)
+  ✘  18 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  19 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (1.1s)
+  ✘  20 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  21 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (1.1s)
+  ✘  22 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  23 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (1.1s)
+  ✘  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+  ✘  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (1.1s)
+
+
+  1) a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations ────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5193/keyboard/setup-harness.html
+    Call log:
+      - navigating to "http://localhost:5193/keyboard/setup-harness.html", waiting until "load"
+
+
+      38 |     }) => {
+      39 |       await page.emulateMedia({ reducedMotion: "reduce" });
+    > 40 |       await page.goto("/keyboard/setup-harness.html");
+         |                  ^
+      41 |       if (theme === "light") {
+      42 |         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      43 |       }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:40:18
+
+    Error Context: test-results/a11y-light-theme-Component-6b8c9-utomated-wcag2aa-violations/error-context.md
+
+  2) a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations ────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5193/keyboard/setup-harness.html
+    Call log:
+      - navigating to "http://localhost:5193/keyboard/setup-harness.html", waiting until "load"
+
+
+      38 |     }) => {
+      39 |       await page.emulateMedia({ reducedMotion: "reduce" });
+    > 40 |       await page.goto("/keyboard/setup-harness.html");
+         |                  ^
+      41 |       if (theme === "light") {
+      42 |         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      43 |       }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:40:18
+
+    Error Context: test-results/a11y-light-theme-Models-sc-ef83f-utomated-wcag2aa-violations/error-context.md
+
+  3) a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations ────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5193/keyboard/setup-harness.html
+    Call log:
+      - navigating to "http://localhost:5193/keyboard/setup-harness.html", waiting until "load"
+
+
+      38 |     }) => {
+      39 |       await page.emulateMedia({ reducedMotion: "reduce" });
+    > 40 |       await page.goto("/keyboard/setup-harness.html");
+         |                  ^
+      41 |       if (theme === "light") {
+      42 |         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      43 |       }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:40:18
+
+    Error Context: test-results/a11y-light-theme-Governanc-23fc0-utomated-wcag2aa-violations/error-context.md
+
+  4) a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations ────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5193/keyboard/setup-harness.html
+    Call log:
+      - navigating to "http://localhost:5193/keyboard/setup-harness.html", waiting until "load"
+
+
+      38 |     }) => {
+      39 |       await page.emulateMedia({ reducedMotion: "reduce" });
+    > 40 |       await page.goto("/keyboard/setup-harness.html");
+         |                  ^
+      41 |       if (theme === "light") {
+      42 |         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      43 |       }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:40:18
+
+    Error Context: test-results/a11y-light-theme-Geospatia-63b81-utomated-wcag2aa-violations/error-context.md
+
+  5) a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations ─────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5193/keyboard/setup-harness.html
+    Call log:
+      - navigating to "http://localhost:5193/keyboard/setup-harness.html", waiting until "load"
+
+
+      38 |     }) => {
+      39 |       await page.emulateMedia({ reducedMotion: "reduce" });
+    > 40 |       await page.goto("/keyboard/setup-harness.html");
+         |                  ^
+      41 |       if (theme === "light") {
+      42 |         await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+      43 |       }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/a11y.spec.ts:40:18
+
+    Error Context: test-results/a11y-light-theme-Preflight-b9041-utomated-wcag2aa-violations/error-context.md
+
+  6) a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--41941-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  7) a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--07614-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  8) a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--6281f-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  9) a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:75:7
+
+    Error Context: test-results/install-page-install-page--4665b-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  10) a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:75:7
+
+    Error Context: test-results/install-page-install-page--823d5-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  11) a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--2bd43-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  12) a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--201d6-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  13) a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--ce1ac-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  14) a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--d90e2-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  15) a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--38005-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  16) a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--1b2a7-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  17) a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--af372-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  18) a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--d97ef-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  19) a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:58:7
+
+    Error Context: test-results/install-page-install-page--63fcd-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  20) a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:75:7
+
+    Error Context: test-results/install-page-install-page--9a269-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  21) a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5194/keyboard/install-harness.html
+    Call log:
+      - navigating to "http://localhost:5194/keyboard/install-harness.html", waiting until "load"
+
+
+      38 |     .context()
+      39 |     .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    > 40 |   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
+         |              ^
+      41 |   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
+      42 |   if (theme === "light") {
+      43 |     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+        at openInstallPage (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:40:14)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness/a11y/install-page.spec.ts:75:7
+
+    Error Context: test-results/install-page-install-page--2fc0f-WCAG-2-2-A-or-AA-violations/error-context.md
+
+  21 failed
+    a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations ─────
+    a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations ─────────
+    a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations ─────
+    a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations ─────
+    a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations ──────
+    a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations 
+    a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations 
+  13 passed (30.1s)
+npm error Lifecycle script `test:a11y` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness
+npm error workspace @ospreyflow/harness@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness
+npm error command failed
+npm error command sh -c playwright test --config a11y/playwright.config.ts
+make[1]: *** [harness-a11y] Error 1
+make[1]: Target `check' not remade because of errors.
+make: *** [core-check] Error 2
+../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: 74 packages, all allowed (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (0.95525ms)
+✔ a GNU General Public License, spelled out, is rejected (0.142709ms)
+✔ an MIT licence is allowed (0.066834ms)
+✔ an Apache-2.0 licence is allowed (0.074834ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.1115ms)
+✔ an LGPL term never carries an AGPL one through (0.056916ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.093458ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.419584ms)
+✔ the four licences added on 19 October 2026 pass (0.113125ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.101875ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.057458ms)
+✔ OFL-1.1 beside GPL is still rejected (0.045667ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53.701125
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.design_check
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (59.860834ms)
+✔ without a brand the saved choice and the button are as before (13.522333ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (21.143875ms)
+✔ no service-name band is drawn, and the page title names the service (10.544625ms)
+✔ without a service name the title falls back as the Glass's does (8.602125ms)
+✔ the skip link's target is the page's main content, focusable (7.8085ms)
+✔ a service name is text, never markup (13.765208ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (11.898167ms)
+✔ the sign-in page is marked English (ospreyflow brand) (5.557583ms)
+✔ the sign-in page is marked English (govuk brand) (4.676584ms)
+✔ a lang Keycloak wrote is kept (4.881833ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.603708ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.059041ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (67.78225ms)
+✔ an address that is not one, and a username with a space, are named as such (9.0345ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (8.443666ms)
+✔ nothing is said while typing, only on submit (8.39675ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (18.095417ms)
+✔ the card ends with how accounts are made (6.662917ms)
+✔ the reset page checks the address or username, and its button says what it sends (7.582166ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (9.945125ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (8.183625ms)
+✔ a field's error sits directly under the field, before any help beneath it (6.886542ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (4.647916ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 802.776083
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/../OspreyFlow_Core/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6 -chdir=/w fmt -check -recursive
+Success! The configuration is valid.
+tests/small.tftest.hcl... pass
+  run "only_the_web_ports_are_open_to_the_world"... pass
+  run "the_database_is_private_encrypted_backed_up_and_guarded"... pass
+  run "the_object_store_is_private_and_encrypted"... pass
+  run "the_first_boot_installs_onto_rds_and_s3_with_no_secret_in_it"... pass
+  run "without_a_zone_no_name_is_made"... pass
+  run "with_a_zone_the_name_and_its_id_and_bi_names_are_made"... pass
+  run "the_server_recovers_itself_and_is_backed_up"... pass
+  run "an_unknown_size_is_refused"... pass
+  run "a_domain_that_is_not_a_name_is_refused"... pass
+
+Success! 9 passed, 0 failed.
+Success! The configuration is valid.
+tests/small.tftest.hcl... pass
+  run "only_the_web_ports_are_open_to_the_world"... pass
+  run "the_database_is_private_backed_up_and_guarded"... pass
+  run "the_object_store_is_private_and_encrypted_in_transit"... pass
+  run "secrets_are_kept_in_a_vault_that_cannot_be_purged_early"... pass
+  run "the_server_is_backed_up"... pass
+  run "an_unknown_size_is_refused"... pass
+  run "a_domain_that_is_not_a_name_is_refused"... pass
+  run "the_first_boot_installs_onto_the_managed_database_and_blob_with_no_secret_in_it"... pass
+  run "the_server_may_write_the_first_administrators_code_and_no_other_secret"... pass
+  run "with_a_zone_the_name_and_its_id_and_bi_names_are_made"... pass
+  run "without_a_zone_no_name_is_made"... pass
+
+Success! 11 passed, 0 failed.
+Success! The configuration is valid.
+tests/cluster.tftest.hcl... pass
+  run "the_api_answers_only_the_operators_addresses"... pass
+  run "the_whole_internet_is_refused_as_an_api_address"... pass
+  run "the_nodes_are_private_and_pods_reach_s3_as_the_node"... pass
+  run "the_charts_network_policies_are_enforced"... pass
+  run "kubernetes_secrets_are_encrypted_with_a_key_of_their_own"... pass
+  run "the_database_is_private_encrypted_replicated_backed_up_and_guarded"... pass
+  run "valkey_is_reached_over_tls_with_a_token_and_fails_over"... pass
+  run "the_stores_take_only_the_clusters_traffic"... pass
+  run "the_buckets_are_private_and_encrypted"... pass
+  run "the_chart_finds_both_storage_classes"... pass
+  run "the_install_answers_name_everything_and_hold_no_secret"... pass
+  run "without_search_there_is_no_domain_and_no_search_answer"... pass
+
+Success! 12 passed, 0 failed.
+Success! The configuration is valid.
+tests/cluster.tftest.hcl... pass
+  run "the_api_answers_only_the_operators_addresses"... pass
+  run "the_whole_internet_is_refused_as_an_api_address"... pass
+  run "every_sign_in_to_the_cluster_is_an_entra_id_one"... pass
+  run "the_nodes_have_no_public_addresses_and_the_deployment_has_its_own_pool"... pass
+  run "the_charts_network_policies_are_enforced"... pass
+  run "the_database_is_private_replicated_backed_up_and_guarded"... pass
+  run "the_cache_is_reached_only_over_tls_and_only_through_the_network"... pass
+  run "media_is_private"... pass
+  run "the_secrets_are_read_from_the_operators_network_only"... pass
+  run "the_chart_finds_both_storage_classes"... pass
+  run "the_install_answers_name_everything_and_hold_no_secret"... pass
+
+Success! 11 passed, 0 failed.
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/../OspreyFlow_Core/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3 lint /chart
+==> Linting /chart
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 51 items
+
+../OspreyFlow_Build/tests/harness/test_helm_chart.py ................... [ 37%]
+                                                                         [ 37%]
+../OspreyFlow_Build/tests/harness/test_cluster_render.py ............... [ 66%]
+...........                                                              [ 88%]
+../OspreyFlow_Build/tests/harness/test_release_matrix.py ....            [ 96%]
+../OspreyFlow_Build/tests/harness/test_proxy_health.py ..                [100%]
+
+============================== 51 passed in 8.58s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 409 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
+authorized-query-check: 125 files under services/api, no offenders.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
+domain-model-coverage-check: 86 class(es), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
+route-coverage-check: 294 route(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 783 test file(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 1894 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 694 items / 680 deselected / 14 selected
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 14%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 28%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 50%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [ 64%]
+../OspreyFlow_Build/tests/conformance/model_port/test_guard.py ..        [ 78%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
+
+====================== 14 passed, 680 deselected in 1.30s ======================
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 79 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py ................           [ 20%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 48%]
+                                                                         [ 48%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 79%]
+                                                                         [ 79%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 87%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+============================= 79 passed in 45.66s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 75%]
+..                                                                       [100%]
+
+============================== 8 passed in 7.30s ===============================
+cd ../OspreyFlow_Core && PYTHONPATH=packages:/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/dist
+osprey bundle: 79 file(s) -> /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+make: Target `ci' not remade because of errors.
+# exit 2, 2026-11-08T16:23:54Z
