@@ -28402,7 +28402,10 @@ expand and `list_nodes`, the gap `7fac778` closed for new nodes, made after the 
 6. **Not yet covered** (L2.8c): `supersede_node`'s clones of a node's incident links (under new
    ids, the originals reverted), whose callers include `confirm_node` and `retract_node` outside the
    close, `supersede.py` and `pipeline_run.py`; and `same_as_writer.py`'s supersede of `NOT_SAME_AS`
-   links. An alert citing such a link is withheld the same way until L2.8c wraps them.
+   links. An alert citing such a link is withheld the same way until L2.8c wraps them. Nor is the
+   removal `remove_reverted` returns published to a connected canvas: it learns of a purge at its
+   next resynchronisation (the copies are what it was allowed to see when sent; the store no longer
+   serves them).
 7. **Rule 7.** The settle's work depends on whether any write anywhere is mid-supersede, never on
    what the reader may see, and it returns nothing: a timing that says only that someone,
    somewhere, is changing a link. Recorded as a property of the design, not measured.
