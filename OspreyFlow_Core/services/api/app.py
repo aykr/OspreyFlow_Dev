@@ -13380,7 +13380,14 @@ async def set_dataset_promotion_policy_route(
     audit: AuditDep,
 ) -> AdminDataset:
     """ADR-145 decision 8: *Author promotes* or *Second person reviews*, set by an administrator
-    and audited (who, when, from what to what). The promotion enforces it (L3.4)."""
+    and audited (who, when, from what to what). The promotion enforces it (L3.4). A composite
+    holds no drawn items of its own, so it has none: 409 `composite_read_only`."""
+    if (await _admin_dataset_of(datasets, dataset_id)).kind == "composite":
+        raise LayerActionRefused(
+            409, "composite_read_only",
+            "A composite holds none of its members' data, so nothing is promoted into it: set "
+            "each member's promotion policy instead.",
+        )  # fmt: skip
     before, changed = await datasets.set_promotion_policy(dataset_id, body.promotion_policy)
     await audit.record(
         principal=principal,
@@ -13395,8 +13402,8 @@ async def set_dataset_promotion_policy_route(
 
 async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
     """A dataset Admin › Datasets lists (never a layer), or the egress route's 404."""
-    found = next((d for d in await datasets.list_all() if d.id == dataset_id), None)
-    if found is None:
+    found = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    if found is None or found.kind == "analyst_layer":
         raise UnknownDatasetEgressError(dataset_id)
     return found
 
@@ -13465,34 +13472,44 @@ async def change_dataset_owners_route(
             "this dataset is not live yet: who answers for it is asked at its first Make live"
         )
     owners = await _owners_allowed(request, datasets, body)
-    before = await _authors_of(investigations, home.investigation_id)
-    for owner in owners:
-        await investigations.set_grant(
-            home.investigation_id, owner, AccessLevel.AUTHOR, by=principal
+
+    async def audited(conn: Any, before: list[str]) -> None:
+        await audit.record(
+            principal=principal,
+            action="change_dataset_owners",
+            investigation_id=home.investigation_id,
+            resolved_query={"dataset_id": dataset_id, "before": before, "after": owners},
+            result_cardinality=len(owners),
+            conn=conn,
         )
-    for gone in sorted(set(before) - set(owners)):
-        await investigations.remove_grant(home.investigation_id, gone, by=principal)
-    await audit.record(
-        principal=principal,
-        action="change_dataset_owners",
-        investigation_id=home.investigation_id,
-        resolved_query={"dataset_id": dataset_id, "before": before, "after": owners},
-        result_cardinality=len(owners),
+
+    # One transaction: the grants, their history and the audit entry commit or fail together.
+    await investigations.replace_authors(
+        home.investigation_id, owners, by=principal, audit=audited
     )
     return await admin_dataset_authors_route(dataset_id, request, datasets, investigations)
 
 
 async def _linked_cases(
-    dataset: Dataset, datasets: DatasetStore, investigations: InvestigationStore, graph: GraphPort
+    dataset: Dataset,
+    datasets: DatasetStore,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+    reader: Principal,
+    *,
+    only: str | None = None,
 ) -> list[AdminLinkedCase]:
-    """ADR-143 Amendment 2 decision 2: every case linked to `dataset`, its state and its layer as
-    counts, the counts taken by the graph store (rule 3: `dataset_footprints` returns numbers
-    only). A removed case's row carries exactly an open one's fields."""
-    case_ids = await datasets.cases_reading(dataset.id)
+    """ADR-143 Amendment 2 decision 2: every case linked to `dataset` (or `only` that one), its
+    state and its layer as counts, taken by the graph store under the reader's own handling (rule
+    3: `dataset_footprints` counts only what `reader` may read, and returns numbers only). A
+    removed case's row carries exactly an open one's fields."""
+    case_ids = [c for c in await datasets.cases_reading(dataset.id) if only in (None, c)]
     states = await investigations.admin_states(case_ids)
     home = await datasets.home_case_of(dataset.id)
     layers = {c: await datasets.layer_of_case(c) for c in case_ids}
-    held = await graph.dataset_footprints([lay for lay in layers.values() if lay is not None])
+    held = await graph.dataset_footprints(
+        [lay for lay in layers.values() if lay is not None], reader
+    )
     rows: list[AdminLinkedCase] = []
     for case_id in case_ids:
         if case_id not in states:
@@ -13536,7 +13553,7 @@ async def admin_dataset_cases_route(
     no item, label or property (`test_admin_dataset_cases.py`). Audited, since it reads across
     cases."""
     dataset = await _admin_dataset_of(datasets, dataset_id)
-    cases = await _linked_cases(dataset, datasets, investigations, graph)
+    cases = await _linked_cases(dataset, datasets, investigations, graph, principal)
     await audit.record(
         principal=principal,
         action="list_dataset_cases",
@@ -13589,8 +13606,9 @@ async def layer_action_dry_run_route(
     actions themselves are the promotion's (L3.4)."""
     dataset = await _admin_dataset_of(datasets, dataset_id)
     row = next(
-        (c for c in await _linked_cases(dataset, datasets, investigations, graph)
-         if c.investigation_id == investigation_id and c.through is None),
+        (c for c in await _linked_cases(dataset, datasets, investigations, graph, principal,
+                                        only=investigation_id)
+         if c.through is None),
         None,
     )  # fmt: skip
     if row is None:

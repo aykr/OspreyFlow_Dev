@@ -21,7 +21,7 @@ separately by the handling filter on every read
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import cast, get_args
@@ -640,6 +640,49 @@ class InvestigationStore:
             if removed is None:
                 raise InvestigationNotFoundError(investigation_id)
             await self._record(conn, investigation_id, by.id, "remove", investigation_id, None)
+
+    async def replace_authors(
+        self,
+        investigation_id: str,
+        owners: Sequence[str],
+        *,
+        by: Principal,
+        audit: Callable[[asyncpg.Connection, list[str]], Awaitable[None]],
+    ) -> list[str]:
+        """Admin › Datasets' *Change owner…* (ADR-145 Amendment 4 decision 6): `owners` become the
+        case's Authors and every other Author's grant ends, each recorded in the access history,
+        and `audit` writes its entry on the same connection, all in one transaction: a failure
+        part-way leaves nothing changed. Returns the Authors before."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            rows = await conn.fetch(
+                "SELECT account_id FROM investigation_grants WHERE investigation_id = $1 "
+                "AND level = $2 ORDER BY account_id FOR UPDATE",
+                investigation_id,
+                AccessLevel.AUTHOR.value,
+            )
+            before = [r["account_id"] for r in rows]
+            for owner in owners:
+                await conn.execute(
+                    "INSERT INTO investigation_grants (investigation_id, account_id, level) "
+                    "VALUES ($1, $2, $3) ON CONFLICT (investigation_id, account_id) "
+                    "DO UPDATE SET level = EXCLUDED.level",
+                    investigation_id,
+                    owner,
+                    AccessLevel.AUTHOR.value,
+                )
+                await self._record(
+                    conn, investigation_id, by.id, "grant", owner, AccessLevel.AUTHOR
+                )
+            for gone in sorted(set(before) - set(owners)):
+                await conn.execute(
+                    "DELETE FROM investigation_grants WHERE investigation_id = $1 "
+                    "AND account_id = $2",
+                    investigation_id,
+                    gone,
+                )
+                await self._record(conn, investigation_id, by.id, "revoke", gone, None)
+            await audit(conn, before)
+        return before
 
     async def admin_states(self, investigation_ids: Sequence[str]) -> dict[str, tuple[str, bool]]:
         """Admin › Datasets' linked cases (ADR-143 Amendment 2 decision 2): each case's name and

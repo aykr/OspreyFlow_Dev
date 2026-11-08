@@ -112,6 +112,23 @@ class _Cases:
     async def remove_grant(self, case_id: str, account: str, *, by: Any) -> None:
         self.grants[case_id].pop(account, None)
 
+    async def replace_authors(
+        self, case_id: str, owners: Sequence[str], *, by: Any, audit: Any
+    ) -> list[str]:
+        """As the real store does, in one transaction: the audit runs inside it, and if it fails
+        the grants are as they were."""
+        held = dict(self.grants[case_id])
+        before = sorted(a for a, lvl in held.items() if lvl == AccessLevel.AUTHOR)
+        changed = {a: lvl for a, lvl in held.items() if a not in before or a in owners}
+        changed.update({o: AccessLevel.AUTHOR for o in owners})
+        self.grants[case_id] = changed
+        try:
+            await audit("the-transaction", before)
+        except BaseException:
+            self.grants[case_id] = held
+            raise
+        return before
+
 
 class _Graph:
     """The graph store's footprint read: numbers per dataset, and a note of what it was asked.
@@ -120,10 +137,12 @@ class _Graph:
     def __init__(self) -> None:
         self.held: dict[str, DatasetFootprint] = {}
         self.items: dict[str, list[str]] = {}
-        self.asked: list[list[str]] = []
+        self.asked: list[tuple[list[str], Principal]] = []
 
-    async def dataset_footprints(self, dataset_ids: Sequence[str]) -> dict[str, DatasetFootprint]:
-        self.asked.append(list(dataset_ids))
+    async def dataset_footprints(
+        self, dataset_ids: Sequence[str], principal: Principal
+    ) -> dict[str, DatasetFootprint]:
+        self.asked.append((list(dataset_ids), principal))
         return {d: self.held.get(d, DatasetFootprint()) for d in dataset_ids}
 
 
@@ -269,8 +288,8 @@ def test_the_contents_check_fails_with_a_label_planted(
     """Rule 15, red: one item's label added to the response, in the shape the route builds."""
     real = app_module._linked_cases
 
-    async def planted(dataset: Any, *args: Any) -> Any:
-        rows = await real(dataset, *args)
+    async def planted(dataset: Any, *args: Any, **kwargs: Any) -> Any:
+        rows = await real(dataset, *args, **kwargs)
         return [r.model_copy(update={"name": f"{r.name}: {CONTENTS[0]}"}) for r in rows]
 
     monkeypatch.setattr(app_module, "_linked_cases", planted)
@@ -290,8 +309,11 @@ def test_an_administrator_sees_every_cases_counts_taken_by_the_store(
     assert rows["home-a"]["home_case"] and not rows["open-1"]["home_case"]
     assert rows["via-1"]["through"] == "Both" and rows["open-1"]["through"] is None
     # Taken by the store, for every case's layer, the administrator a member of none of them.
-    (asked,) = world.graph.asked
+    # Under the administrator's own handling: the store counts only what adm-1 may read.
+    ((asked, reader),) = world.graph.asked
     assert set(asked) == set(world.layers.values())
+    assert (reader.id, reader.clearance, reader.org_unit) == ("adm-1", "SECRET", "unit-1")
+    assert reader.receivable_handling_codes == PEOPLE["admin"].receivable_handling_codes
     assert all("adm-1" not in world.cases.grants[c] for c in rows)
     (entry,) = [e for e in world.audit.entries if e["action"] == "list_dataset_cases"]
     assert entry["result_cardinality"] == 4
@@ -396,15 +418,8 @@ def _dry(world: SimpleNamespace, person: str, case: str, action: str, ds: str = 
                  None)  # fmt: skip
 
 
-def _nothing_written(world: SimpleNamespace, before: str) -> None:
-    after = json.dumps(
-        {"grants": world.cases.grants, "removed": sorted(world.cases.removed),
-         "cases": world.datasets.cases}, default=str, sort_keys=True,
-    )  # fmt: skip
-    assert after == before
-
-
 def _state(world: SimpleNamespace) -> str:
+    """Everything a dry run must leave as it was."""
     return json.dumps(
         {"grants": world.cases.grants, "removed": sorted(world.cases.removed),
          "cases": world.datasets.cases}, default=str, sort_keys=True,
@@ -420,7 +435,9 @@ def test_a_dry_run_counts_and_writes_nothing(world: SimpleNamespace) -> None:
     assert "into Prison records" in body["would"] and "Nothing has been written" in body["would"]
     deleted = _dry(world, "admin", "gone-1", "delete")
     assert deleted.status_code == 200 and "never touched" in deleted.json()["would"]
-    _nothing_written(world, before)
+    assert _state(world) == before
+    # Each dry run counts the one layer it is about, not every case's.
+    assert [asked for asked, _ in world.graph.asked] == [[world.layers["gone-1"]]] * 2
     actions = [e["action"] for e in world.audit.entries]
     assert actions.count("dry_run_layer_merge") == actions.count("dry_run_layer_delete") == 1
 
@@ -449,3 +466,25 @@ def test_a_dry_run_merge_into_a_composite_is_refused(world: SimpleNamespace) -> 
     world.cases.removed.add("via-1")
     answer = _dry(world, "author_admin", "via-1", "merge", ds="cmp-1")
     assert answer.status_code == 409 and answer.json()["error"] == "composite_read_only"
+
+
+def test_change_owner_is_one_transaction_with_its_audit(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An audit that fails leaves the Authors as they were: the change and its entry are one."""
+    before = dict(world.cases.grants["home-a"])
+
+    async def broken(**kwargs: Any) -> None:
+        raise RuntimeError("the audit stream is down")
+
+    monkeypatch.setattr(world.audit, "record", broken)
+    with pytest.raises(RuntimeError):
+        _call(world, "admin", "PUT", "/v1/admin/datasets/ds-a/owners", {"people": ["per-2"]})
+    assert world.cases.grants["home-a"] == before
+
+
+def test_a_composite_takes_no_promotion_policy_and_no_merge(world: SimpleNamespace) -> None:
+    refused = _call(world, "admin", "PUT", "/v1/admin/datasets/cmp-1/promotion-policy",
+                    {"promotion_policy": "second_person_reviews"})  # fmt: skip
+    assert refused.status_code == 409 and refused.json()["error"] == "composite_read_only"
+    assert not [e for e in world.audit.entries if e["action"] == "set_dataset_promotion_policy"]

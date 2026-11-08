@@ -60,6 +60,19 @@ class AuditWriteError(Exception):
     `03_CONDUIT_MIDDLEWARE.md` §8 calls out, not generic server trouble."""
 
 
+class _Held:
+    """A connection already held, entered as the pool's `acquire()` is."""
+
+    def __init__(self, conn: asyncpg.Connection) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> asyncpg.Connection:
+        return self._conn
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+
 class AuditWriter:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -86,9 +99,12 @@ class AuditWriter:
         result_cardinality: int,
         investigation_id: str | None = None,
         justification: str | None = None,
+        conn: asyncpg.Connection | None = None,
     ) -> None:
+        """`conn`: another store's open transaction to write the entry in, so the change and its
+        audit commit or fail together (Admin › Datasets' *Change owner…*)."""
         try:
-            async with self._pool.acquire() as conn:
+            async with _Held(conn) if conn is not None else self._pool.acquire() as conn:
                 await conn.execute(
                     "INSERT INTO audit_log "
                     "(recorded_at, principal_id, action, investigation_id, "
@@ -131,4 +147,3 @@ class AuditWriter:
             )
             for r in rows
         ]
-
