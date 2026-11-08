@@ -31,14 +31,14 @@ const CASES = {
   ],
 };  // prettier-ignore
 
-function serve(posts: string[]) {
+function serve(posts: string[], dataset: object = DATASET) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(String(url)).pathname.replace("/v1/admin/", "");
       const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
       if (init?.method === "POST") posts.push(path);
-      if (path === "datasets") return ok([DATASET]);
+      if (path === "datasets") return ok([dataset]);
       if (path === "datasets/ds-a/authors") return ok(AUTHORS);
       if (path === "datasets/ds-a/cases") return ok(CASES);
       if (path === "datasets/ds-a/cases/gone-1/merge/dry-run")
@@ -69,5 +69,17 @@ describe("Datasets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
     await waitFor(() => expect(posts).toEqual(["datasets/ds-a/cases/gone-1/merge/dry-run"]));
     expect((await screen.findByRole("status")).textContent).toContain("Nothing has been written.");
+    expect(document.body.textContent).not.toMatch(/20\d\d/);
+  });
+
+  it("offers a composite neither a promotion policy nor a merge", async () => {
+    const posts: string[] = [];
+    serve(posts, { ...DATASET, kind: "composite" });
+    render(<Datasets api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details for Prison records" }));
+    await screen.findByRole("table", { name: "Cases linked to Prison records" });
+    expect(screen.queryByLabelText("Promotion policy for Prison records")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Merge Op Heron into the dataset (dry run)" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete Op Heron's layer (dry run)" })).toBeTruthy();
   });
 });

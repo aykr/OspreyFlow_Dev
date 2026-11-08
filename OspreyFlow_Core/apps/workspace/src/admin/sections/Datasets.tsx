@@ -166,7 +166,14 @@ function DatasetDetails({
     <section aria-label={`Details of ${dataset.name}`} style={{ display: "grid", gap: "var(--sp-12)" }}>
       <h4 style={{ margin: 0 }}>{dataset.name}</h4>
       {problem && <p role="alert">{problem}</p>}
-      <PromotionPolicy api={api} dataset={dataset} authors={authors} onChanged={onChanged} />
+      {dataset.kind === "composite" ? (
+        <p className="label" style={{ margin: 0 }}>
+          A composite holds none of its members&apos; data, so nothing is promoted into it: each member has its own
+          promotion policy.
+        </p>
+      ) : (
+        <PromotionPolicy api={api} dataset={dataset} authors={authors} onChanged={onChanged} />
+      )}
       {authors && <Authors api={api} dataset={dataset} authors={authors} onChanged={setAuthors} />}
       {cases && <LinkedCases api={api} dataset={dataset} cases={cases} />}
     </section>
@@ -386,12 +393,17 @@ function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDat
                 <td>
                   {row.state === "removed" && !row.through && (
                     <div style={{ display: "flex", gap: "var(--sp-6)", flexWrap: "wrap" }}>
-                      <Button onClick={() => dry(row, "merge")}>{`Merge ${row.name} into the dataset (dry run)`}</Button>
+                      {dataset.kind !== "composite" && (
+                        <Button onClick={() => dry(row, "merge")}>{`Merge ${row.name} into the dataset (dry run)`}</Button>
+                      )}
                       <Button onClick={() => dry(row, "delete")}>{`Delete ${row.name}'s layer (dry run)`}</Button>
                     </div>
                   )}
                   {row.state === "removed" && row.through && (
                     <span className="label">{`Merged or deleted under ${row.through}`}</span>
+                  )}
+                  {row.state === "removed" && !row.through && dataset.kind === "composite" && (
+                    <span className="label">A composite holds none of its members&apos; data: nothing merges into it</span>
                   )}
                 </td>
               </tr>
@@ -400,7 +412,8 @@ function LinkedCases({ api, dataset, cases }: { api: AdminApi; dataset: AdminDat
         </table>
       )}
       <p className="label" style={{ margin: 0 }}>
-        A dry run writes nothing. Pictures added before 8 November 2026 are not yet counted in a layer&apos;s size.
+        A dry run writes nothing. Pictures added before this deployment began recording sizes are not counted in a
+        layer&apos;s size, and you see the counts only of what you may read yourself.
       </p>
       {problem && <p role="alert">{problem}</p>}
       {result && (
