@@ -50,7 +50,7 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
       "# Data", "Datasets", "Connections", "Proposed types",
       "# Running", "Operations", "System", "Models", "Maps",
       "# Policies", "Grading scheme (coming)", "Approval rights (coming)", "Uploads (coming)",
-      "Audit (coming)",
+      "Audit",
       "Demo packs",
     ]); // prettier-ignore
   });
@@ -82,12 +82,23 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     expect(screen.getByRole("heading", { name: "People and roles" })).toBeTruthy();
   });
 
-  it("opens a placeholder only when it is all the person holds, and asks the Conduit nothing for it", () => {
+  it("opens a placeholder from the side list and asks the Conduit nothing for it", async () => {
+    const asked = serve();
+    const nav = place(["administer_system"]);
+    await waitFor(() => expect(asked).toContain("/v1/admin/datasets"));
+    const before = asked.length;
+    fireEvent.click(nav.getByRole("button", { name: "Uploads (coming)" }));
+    expect(screen.getByRole("heading", { name: "Uploads" })).toBeTruthy();
+    expect(screen.getByText(/^Coming: The largest picture/)).toBeTruthy();
+    expect(asked.length).toBe(before);
+  });
+
+  // ADR-145 Amendment 3 decision 3: once Audit is built, `read_audit` alone opens it, and it reads.
+  it("opens Audit for a holder of read_audit alone, which reads the audit", async () => {
     const asked = serve();
     place(["read_audit"]);
     expect(screen.getByRole("heading", { name: "Audit" })).toBeTruthy();
-    expect(screen.getByText(/^Coming: One view over the records/)).toBeTruthy();
-    expect(asked).toEqual([]);
+    await waitFor(() => expect(asked).toContain("/v1/admin/audit"));
   });
 
   it("opens a section from the side list, marks it current, and moves focus to its heading", async () => {

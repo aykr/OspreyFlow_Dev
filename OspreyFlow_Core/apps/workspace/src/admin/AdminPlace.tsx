@@ -11,16 +11,17 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { currentBrand } from "../brand/brand";
 import type { AdminApi } from "./api";
 import SECTIONS from "./sections.json";
+import { Audit } from "./sections/Audit";
 import { Connections } from "./sections/Connections";
 import { Dashboards } from "./sections/Dashboards";
 import { Datasets } from "./sections/Datasets";
 import { DemoPacks } from "./sections/DemoPacks";
 import { Maps } from "./sections/Maps";
 import { Models } from "./sections/Models";
+import { Operations } from "./sections/Operations";
 import { People } from "./sections/People";
 import { ProposedTypesSection } from "./sections/ProposedTypes";
 import { Roles } from "./sections/Roles";
-import { Schedules } from "./Schedules";
 import { System } from "./sections/System";
 import "./admin.css";
 
@@ -56,13 +57,16 @@ export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   datasets: (api) => <Datasets api={api} />,
   connections: (api) => <Connections api={api} />,
   "proposed-types": (api) => <ProposedTypesSection api={api} />,
-  operations: (api) => <Schedules api={api} />,
+  // ADR-145 decision 9 (L2.6): what ages and when, then the schedules.
+  operations: (api) => <Operations api={api} />,
   system: (api) => <System api={api} />,
   // ADR-135 Amendment 2: engines, each job's default and their keys (platform lane P1).
   models: (api) => <Models api={api} />,
   // ADR-147: the basemap providers, their keys, the local basemap and prefetch (platform lane P3).
   maps: (api) => <Maps api={api} />,
   "demo-packs": (api) => <DemoPacks api={api} />,
+  // ADR-145 decision 10 (L2.6).
+  audit: (api) => <Audit api={api} />,
 };
 
 /** The groups and sections this person's rights show, in their order; a group with none is left out. */

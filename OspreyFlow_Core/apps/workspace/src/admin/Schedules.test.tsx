@@ -46,6 +46,9 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       if (init?.body) bodies.set(`${init.method} ${path}`, JSON.parse(String(init.body)));
       const answered = handler(path, init);
       if (answered) return answered;
+      // ADR-145 decision 9: Operations opens with what ages (`sections/Operations.tsx`).
+      if (path === "operations/ageing")
+        return json(200, { alert_after_days: 3, rules: [], waiting: [], promotions_recorded: false });
       if (path === "schedules") return json(200, [SCHEDULE, SECRET]);
       if (path === "schedules/feed/pause")
         return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1", next_run: null });
