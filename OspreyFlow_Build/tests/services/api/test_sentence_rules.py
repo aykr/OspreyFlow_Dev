@@ -179,7 +179,9 @@ async def test_a_hold_sentence_holds_a_hits_rows_and_raises_no_alert() -> None:
     verdict = await gate.pre_commit([], "tx-1", load_id="load-1", unseen=None, written=written)
     assert sorted(verdict.hold) == [1]  # p1's row; p2 matches nothing
     rule, reason = verdict.hold[1]
-    assert reason.startswith("it matched: A (Person)")
+    # L2.8b's Q2: the rule and its typology, never the finding's words, which name what its deployer
+    # read and a reviewer of the row may not (red before: "it matched: A (Person) …").
+    assert reason.startswith(f"it matched “{rule.name}”") and "A (Person)" not in reason
     assert verdict.findings == [] and recorder.alerts == []
     assert "held for review" in verdict.notes[0]
 

@@ -695,6 +695,13 @@ class PreCommitVerdict:
     writes: RuleWrites = field(default_factory=RuleWrites)
 
 
+def held_because(rule: TypologyRule) -> str:
+    """Why a row a rule matched is held, in words a reviewer of the row may read: the rule and its
+    typology, never the finding's own words, which name what its deployer read (ADR-146 decision
+    10; L2.8b's Q2)."""
+    return f"it matched “{rule.name}” ({rule.params.typology.replace('_', ' ')})"
+
+
 @dataclass
 class RuleGate:
     """The case's rules, for one load: `pre_commit` inside the transaction, `after_commit` once it
@@ -961,7 +968,7 @@ class RuleGate:
                 for finding in fresh:
                     rows = rows_of_finding(finding, events, written)
                     for row in rows:
-                        verdict.hold.setdefault(row, (rule, f"it matched: {finding.words}"))
+                        verdict.hold.setdefault(row, (rule, held_because(rule)))
                     verdict.notes.append(
                         f"Rule “{rule.name}” matched {len(rows)} row(s); they are held for "
                         "review, not loaded."
@@ -1038,6 +1045,10 @@ class RuleGate:
             "trigger": finding.rule.trigger,
             "words": finding.words,
             "node_ids": finding.node_ids,
+            # Every link and transaction the finding cites, so the audit read withholds the entry,
+            # and its words, from a reader who may not see them (ADR-146 decision 10; L2.8b).
+            "edge_ids": list(alert.edge_ids),
+            "event_ids": list(alert.event_ids),
         }
         await self._audit("rule_fired", detail, 1)
         from .sentence_rules import is_just_me
