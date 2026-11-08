@@ -221,6 +221,12 @@ New ones are added at the bottom as they happen.
     and no person id sent to the gateway** (the conservative choice; recording who uses models is yours to
     turn on). The gateway's own per-model limits proved unenforced, so each engine gets its own gateway key.
 
+52. **Your permission for the docs lane's start:** when D2's condition is met, I refresh your deployment on
+    this machine: `ospreyflow backup` first (the data, Enron included, so nothing needs a long reload), then
+    `ospreyflow start --build` from the checkout, restoring the backup if the rebuild needs it. Model keys
+    must be entered again after a restore (backups carry no secrets). Still never `make dev-up` for lane
+    tests, never airbyte on 8000.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
