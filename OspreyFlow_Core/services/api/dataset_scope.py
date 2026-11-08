@@ -49,7 +49,9 @@ from schemas.domain import (
     NodeId,
     NodeWrite,
     Principal,
+    TxId,
 )
+from schemas.ingest import LinkPriorState
 
 from .datasets import COMPOSITE, BranchLayerError, Dataset, DatasetStore, reads_dataset_names
 
@@ -520,6 +522,13 @@ class DatasetStampingGraph:
         changed: int = await self._inner.strip_provenance_references(prefix)
         await self._written()
         return changed
+
+    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
+        """ADR-110 Amendment 16: a write, so the kept figures are cleared after it. It names no
+        dataset of its own: the link keeps the datasets its prior state holds."""
+        restored = await self._inner.restore_link_state(state, written_by=written_by, tx=tx)
+        await self._written()
+        return restored
 
 
 class BulkDatasetStampingGraph(DatasetStampingGraph):

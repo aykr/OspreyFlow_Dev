@@ -6368,6 +6368,145 @@ async def test_stored_link_states_says_each_links_flags_whatever_the_reader_may_
             await adapter.stored_link_states(plain)  # type: ignore[arg-type]
 
 
+async def _two_endpoints(adapter: GraphPort) -> tuple[str, str]:
+    (a, b), _ = await _write(
+        adapter,
+        [
+            _node(
+                "Endpoint", classification="OFFICIAL", value_normalised="+441111111111"
+            ),
+            _node(
+                "Endpoint", classification="OFFICIAL", value_normalised="+442222222222"
+            ),
+        ],
+        [],
+    )
+    return a, b
+
+
+def _call_on(
+    a: str, b: str, *, day: int, load_id: str, classification: str = "OFFICIAL"
+) -> EdgeWrite:
+    at = datetime(2026, 3, day, 9, tzinfo=UTC)
+    write = _edge(
+        "COMMUNICATED_WITH", a, b, classification=classification, load_id=load_id,
+        interval=Interval(valid_from=at, valid_to=at), recipe_id="calls", recipe_version=1,
+    )  # fmt: skip
+    write.provenance.sources[0].locator = f"row {day}"
+    return write.model_copy(update={"properties": {"memo": f"day {day}"}})
+
+
+async def _link_as_read(adapter: GraphPort, a: str, reader: Principal = CLEARED) -> Any:
+    edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), reader)).edges
+    return [
+        (e.occurrences, e.interval, e.properties, sorted(s.locator for s in e.provenance.sources),
+         e.handling, e.audit.revision, e.audit.load_id)
+        for e in edges
+    ]  # fmt: skip
+
+
+async def test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_read(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: by id, unfiltered (a SECRET link is read for the revert alone), with its
+    type, revision, last load and marking; an id no link holds is `None`."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1",
+                                                      classification="SECRET")])  # fmt: skip
+        state = await adapter.read_link_state(link)
+        assert state is not None
+        assert (state.edge_id, state.edge_type, state.revision, state.load_id) == (
+            link,
+            "COMMUNICATED_WITH",
+            1,
+            "load-1",
+        )
+        assert state.handling.classification == "SECRET"
+        assert await adapter.read_link_state(new_edge_id()) is None
+
+
+async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: read inside the merging load's transaction, before its write; the
+    revert of that load restores every part the merge changed (occurrences, span, properties,
+    sources, revision, last load), and reads afterwards exactly as before the merge."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        before = await _link_as_read(adapter, a)
+        tx = await adapter.begin_transaction()
+        prior = await adapter.read_link_state(link, tx)
+        assert prior is not None
+        (merged,) = await adapter.upsert_edges(
+            [_call_on(a, b, day=5, load_id="load-3")], tx
+        )
+        await adapter.commit_transaction(tx)
+        assert merged == link and await _link_as_read(adapter, a) != before
+
+        tx = await adapter.begin_transaction()
+        assert (
+            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is True
+        )
+        await adapter.commit_transaction(tx)
+
+        assert await _link_as_read(adapter, a) == before
+        assert await adapter.read_link_state(link) == prior
+
+
+async def test_restore_link_state_refuses_a_link_written_since_and_changes_nothing(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: a later write (another load merging into the same link) moves its last
+    load, so the merging load's revert can no longer put it back: `False`, and the link as it is."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        tx = await adapter.begin_transaction()
+        prior = await adapter.read_link_state(link, tx)
+        await adapter.upsert_edges([_call_on(a, b, day=5, load_id="load-3")], tx)
+        await adapter.commit_transaction(tx)
+        await _write(adapter, [], [_call_on(a, b, day=7, load_id="load-4")])
+        now = await _link_as_read(adapter, a)
+        assert prior is not None
+
+        tx = await adapter.begin_transaction()
+        assert (
+            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is False
+        )
+        await adapter.commit_transaction(tx)
+
+        assert await _link_as_read(adapter, a) == now
+
+
+async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
+    """ADR-110 Amendment 16, rule 3: a SECRET link put back is SECRET, read by a cleared reader and
+    by no one below; the restore never writes a weaker marking than the one it read."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1",
+                                                      classification="SECRET")])  # fmt: skip
+        tx = await adapter.begin_transaction()
+        prior = await adapter.read_link_state(link, tx)
+        await adapter.upsert_edges([_call_on(a, b, day=5, load_id="load-3",
+                                          classification="SECRET")], tx)  # fmt: skip
+        await adapter.commit_transaction(tx)
+        assert prior is not None
+
+        tx = await adapter.begin_transaction()
+        assert (
+            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is True
+        )
+        await adapter.commit_transaction(tx)
+
+        (seen,) = await _link_as_read(adapter, a, CLEARED)
+        assert seen[4].classification == "SECRET"
+        assert await _link_as_read(adapter, a, OFFICIAL) == []
+        restored = await adapter.read_link_state(link)
+        assert restored is not None and restored.handling.classification == "SECRET"
+
+
 async def test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_ambiguous_id(
     factory: GraphAdapterFactory,
 ) -> None:

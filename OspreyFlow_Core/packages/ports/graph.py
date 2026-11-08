@@ -42,6 +42,7 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
+from schemas.ingest import LinkPriorState
 from schemas.strength import (
     ActiveInfluencer,
     LinkStrength,
@@ -738,6 +739,23 @@ class GraphPort(Protocol):
         them (superseded if either is, reverted only if both are). For the revert alone, which
         refuses a load whose created link an analyst has changed. No ids give `{}`; a bare `str`
         is a `TypeError`."""
+        ...
+
+    async def read_link_state(
+        self, edge_id: EdgeId, tx: TxId | None = None
+    ) -> LinkPriorState | None:
+        """ADR-110 Amendment 16: the link exactly as stored, whatever the caller may read, found
+        through its type's unique `id` index; inside `tx` when given, so a load reads it before its
+        own write in the same transaction. `None` if no live or reverted link holds the id. Graph
+        data for the revert alone (rule 3): never passed to a view, report or log."""
+        ...
+
+    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
+        """ADR-110 Amendment 16: puts the link back exactly as `state` holds it, only while it is
+        still as `written_by`'s write left it (its stored `load_id` is `written_by`): `False`, and
+        nothing changed, once anything else has written it since. The link keeps `state.handling`,
+        its marking when it was read, never a weaker one. A write: the stamping wrapper's
+        after-write hooks run."""
         ...
 
     async def strip_provenance_references(self, prefix: str) -> int:

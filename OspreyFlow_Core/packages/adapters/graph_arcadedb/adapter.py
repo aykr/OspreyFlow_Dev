@@ -86,6 +86,7 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
+from schemas.ingest import LinkPriorState
 from schemas.merge import merge_datasets, merge_interval, merge_properties, merge_provenance
 from schemas.strength import (
     SHARED_VALUE,
@@ -1913,6 +1914,93 @@ class GraphArcadeDBAdapter:
             )
             for edge_id, states in gathered.items()
         }
+
+    # --- a link's prior state (ADR-110 Amendment 16) ---------------------------------
+
+    #: What a stored link holds beside its properties that its prior state leaves out: ArcadeDB's
+    #: own record fields, and the flattened span, which a restore derives from `interval` exactly
+    #: as `upsert_edges` writes it (epoch milliseconds wrapped in `Date`).
+    _NOT_PRIOR_STATE = frozenset({"valid_from", "valid_to"})
+
+    async def read_link_state(
+        self, edge_id: EdgeId, tx: TxId | None = None
+    ) -> LinkPriorState | None:
+        for type_name in await self._types_with_unique_id("edge"):
+            rows = await self._client.sql(
+                f"SELECT FROM `{groovy_identifier(type_name)}` WHERE id = :id",
+                params={"id": edge_id},
+                session_id=tx,
+            )
+            if rows:
+                row = rows[0]
+                stored = {
+                    k: v
+                    for k, v in row.items()
+                    if not k.startswith("@") and k not in self._NOT_PRIOR_STATE
+                }
+                audit = AuditStub.model_validate(row["audit"])
+                return LinkPriorState(
+                    edge_id=edge_id,
+                    edge_type=type_name,
+                    revision=audit.revision,
+                    load_id=audit.load_id,
+                    handling=Handling.model_validate(row["handling"]),
+                    stored=stored,
+                )
+        return None
+
+    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
+        type_name = groovy_identifier(state.edge_type)
+        rows = await self._client.sql(
+            f"SELECT FROM `{type_name}` WHERE id = :id",
+            params={"id": state.edge_id},
+            session_id=tx,
+        )
+        if not rows or AuditStub.model_validate(rows[0]["audit"]).load_id != written_by:
+            return False
+        current = rows[0]
+        props = {k: v for k, v in state.stored.items() if k != "id"}
+        # Rule 3: the marking the state was read at, written back whole, never a weaker one.
+        marking = state.handling
+        props.update(
+            {
+                "handling_classification": marking.classification,
+                "handling_code": marking.handling_code,
+                "owning_unit": marking.owning_unit,
+                "originator": marking.originator,
+                "handling": marking.model_dump(mode="json"),
+            }
+        )
+        interval = Interval.model_validate(props["interval"]) if props.get("interval") else None
+        if interval is not None:
+            props["valid_from"] = int(interval.valid_from.timestamp() * 1000)
+            if interval.valid_to is not None:
+                props["valid_to"] = int(interval.valid_to.timestamp() * 1000)
+        bound = {f"prop_{key}": value for key, value in props.items()}
+        steps = "".join(
+            f".property({key!r}, new Date(prop_{key}))"
+            if key in self._NOT_PRIOR_STATE
+            else f".property({key!r}, prop_{key})"
+            for key in props
+        )
+        await self._client.gremlin(
+            f'g.E().has("id",{groovy_string_literal(state.edge_id)}){steps}',
+            params=bound,
+            session_id=tx,
+        )
+        # What the later write added and the prior state never held (a closed span's end, a
+        # property of its own) goes, so the link reads exactly as it did.
+        added = sorted(
+            k for k in current
+            if not k.startswith("@") and k != "id" and k not in props
+        )  # fmt: skip
+        for key in added:
+            await self._client.sql(
+                f"UPDATE `{type_name}` REMOVE `{groovy_identifier(key)}` WHERE id = :id",
+                params={"id": state.edge_id},
+                session_id=tx,
+            )
+        return True
 
     # --- one-off provenance rewrite -------------------------------------------
 
