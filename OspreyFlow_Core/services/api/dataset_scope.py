@@ -68,6 +68,10 @@ _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
 #: The original case's layer an unconverted case reads and never writes (ADR-144 Amendment 1
 #: decision 2): set by `scope_to_case`, judged by the stamping graph's last word.
 _READ_ONLY_LAYER: ContextVar[str | None] = ContextVar("read_only_layer", default=None)
+#: The case view this request was let into (ADR-144; the owner's ruling of 8 November 2026 on
+#: L3.2's Q2): set by a route only after the view store let the reader see the view, so a
+#: record kept with a view (a proposal from its conversation) is read only through it.
+_READABLE_VIEW: ContextVar[str | None] = ContextVar("readable_view", default=None)
 #: The request's case, its dataset store and the principal scoped to it: so a writer may make the
 #: case's layer when it has none, inside the route after its level check (`analyst_writes_into`),
 #: and a write may be refused in a case reading a composite (`refuse_in_a_composite_case`).
@@ -110,6 +114,7 @@ def set_case_datasets(
     _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
     _CASE_SCOPE.set(scope if datasets is not None else None)
     _READ_ONLY_LAYER.set(None)
+    _READABLE_VIEW.set(None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
@@ -314,6 +319,23 @@ def reach_clause(principal: Principal, position: int) -> tuple[str, list[object]
     )
 
 
+def read_in_view(view_id: str) -> None:
+    """A route lets this request read what is kept with `view_id`, after the view store let the
+    reader see the view (`CaseViewStore.get`). Cleared with every request's scope."""
+    _READABLE_VIEW.set(view_id)
+
+
+def view_clause(position: int) -> tuple[str, list[object]]:
+    """The SQL that keeps a read to records kept with no view, or with the view this request was
+    let into (`read_in_view`), as `AND (...)` with its parameter at `$position`: a proposal from a
+    private view's conversation is never read through the case's own routes (rule 3)."""
+    return f" AND (view_id IS NULL OR view_id = ${position})", [_READABLE_VIEW.get()]
+
+
+def readable_view() -> str | None:
+    return _READABLE_VIEW.get()
+
+
 def made_in(principal: Principal) -> str | None:
     """The dataset a record made by `principal` now belongs to: the first of its case's."""
     return principal.datasets[0] if principal.datasets else None
@@ -357,21 +379,30 @@ def _named(writes: Sequence[NodeWrite] | Sequence[EdgeWrite]) -> set[str]:
     return {d for w in writes for d in w.datasets}
 
 
-async def refuse_touching_a_read_only_layer(graph: GraphPort, node_ids: Iterable[str]) -> None:
+async def refuse_touching_a_read_only_layer(
+    graph: GraphPort, node_ids: Iterable[str], *, links_to: bool = True
+) -> None:
     """L3.2 item 3: in a case the upgrade has not yet turned into a view (one made from another
     before L3.2, which reads its original's layer), no write links to, or merges into, a node of
     the original case's layer (`TouchesTheOriginalsWorkError`). The stamping graph asks it of every
     write as its last word; a service whose acceptance writes in two steps (a node, then its link
-    to a Document) asks it first, so nothing is written at all. The layer is looked up as the
-    writer may read it, at their own clearance and in that layer alone, so the check reads nothing
-    they could not."""
+    to a Document) asks it first, so nothing is written at all.
+
+    Decided only by what the writer reads, as their own scoped principal: a node they read only
+    through the original's layer is refused, and, for a link, so is an end they cannot read at all,
+    which they could not have chosen from what they see, whether it is hidden or does not exist.
+    A member holding no level on the original reads none of its layer (`scope_to_case`), so the
+    answer they get says nothing about it (rule 3). A node they cannot read is not refused as a
+    merge (`links_to=False`): new nodes have ids nobody reads yet."""
     read_only = _READ_ONLY_LAYER.get()
     scope = _CASE_SCOPE.get()
     wanted = sorted(set(node_ids))
     if read_only is None or scope is None or not wanted:
         return
-    in_the_layer = scope[2].model_copy(update={"datasets": [read_only]})
-    if await graph.get_nodes(wanted, in_the_layer):
+    seen = {n.id: n for n in await graph.get_nodes(wanted, scope[2])}
+    if links_to and len(seen) < len(wanted):
+        raise TouchesTheOriginalsWorkError
+    if any(set(node.datasets) <= {read_only} for node in seen.values()):
         raise TouchesTheOriginalsWorkError
 
 
@@ -397,6 +428,9 @@ class DatasetStampingGraph:
         self._confirmed: set[str] = set()
         #: Called after every write the store accepted (ADR-100 Amendment 3: kept figures cleared).
         self._after_write: list[Callable[[], Awaitable[None]]] = []
+        #: The nodes each open transaction has written, so a link to one of them in the same
+        #: transaction is not taken for a link to a node its writer cannot read (L3.2 item 3).
+        self._written_in: dict[Any, set[str]] = {}
 
     def after_write(self, hook: Callable[[], Awaitable[None]]) -> None:
         self._after_write.append(hook)
@@ -451,9 +485,19 @@ class DatasetStampingGraph:
         if read_only is not None and read_only in datasets:
             raise ReadOnlyLayerError
 
-    async def _refuse_touching_a_read_only_layer(self, node_ids: set[str]) -> None:
+    async def _refuse_touching_a_read_only_layer(
+        self, node_ids: set[str], *, links_to: bool = True
+    ) -> None:
         if self._dataset is None:
-            await refuse_touching_a_read_only_layer(self._inner, node_ids)
+            await refuse_touching_a_read_only_layer(self._inner, node_ids, links_to=links_to)
+
+    async def commit_transaction(self, tx: Any) -> None:
+        self._written_in.pop(tx, None)
+        await self._inner.commit_transaction(tx)
+
+    async def rollback_transaction(self, tx: Any) -> None:
+        self._written_in.pop(tx, None)
+        await self._inner.rollback_transaction(tx)
 
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
@@ -474,7 +518,10 @@ class DatasetStampingGraph:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
-            await self._refuse_touching_a_read_only_layer({n.id for n in stamped})
+            await self._refuse_touching_a_read_only_layer(
+                {n.id for n in stamped}, links_to=False
+            )
+            self._written_in.setdefault(tx, set()).update(n.id for n in stamped)
         await self._checked(stamped)
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
@@ -486,6 +533,7 @@ class DatasetStampingGraph:
         if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
             await self._refuse_touching_a_read_only_layer(
                 {end for e in stamped for end in (e.source, e.target)}
+                - self._written_in.get(tx, set())
             )
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
@@ -596,8 +644,10 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
+            # A bulk load's nodes are written outside any transaction this graph sees, so only a
+            # node read through the original's layer alone is refused here.
             await self._refuse_touching_a_read_only_layer(
-                {end for e in stamped for end in (e.source, e.target)}
+                {end for e in stamped for end in (e.source, e.target)}, links_to=False
             )
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)

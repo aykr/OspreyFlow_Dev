@@ -164,9 +164,11 @@ dataset it chose, never its analyst layer). `POST /v1/investigations` takes eith
 one source or composite dataset of the caller's unit, or `new_dataset_name`, an empty dataset of the
 caller's unit made first; neither, both, or two ids is 422 `dataset_refused` and no case is made (ADR-099
 Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). The case's analyst layer
-is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). A branch reads its parent's chosen
-dataset and its parent's layer, read-only, holding none of its own: a mark or link made in it is 409
-`branch_layer_read_only` (ADR-144 Amendment 1 decision 2). A case opened from an alert reads the
+is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). No case is made from another
+since L3.2; one made so since L3.1, until the upgrade turns it into a view, reads its original's chosen
+dataset and layer, read-only, holding none of its own: a mark or link made in it is 409
+`original_layer_read_only` (ADR-144 Amendment 1 decision 2; the code was `branch_layer_read_only`
+before L3.2). A case opened from an alert reads the
 dataset and gets an empty layer of its own (ADR-143 Amendment 1 item 3). Under a case, what is written joins its source; an entity marked
 by hand and a manual link or split join its layer (ADR-143 Amendment 1). A case reading a composite
 writes nothing but into its layer: every other write is 409 `composite_read_only` ("do this in a

@@ -317,8 +317,9 @@ class TouchesTheOriginalsWorkError(ReadOnlyLayerError):
     def __init__(self) -> None:
         Exception.__init__(
             self,
-            "This case is waiting to become a view of the case it was made from, and nothing "
-            "written here may touch that case's own work. Make the change in that case.",
+            "This case is waiting to become a view of the case it was made from. Nothing written "
+            "here may link to an item it cannot show you, or touch that case's own work: make the "
+            "change in that case.",
         )
 
 

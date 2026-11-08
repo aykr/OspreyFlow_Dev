@@ -46,6 +46,7 @@ from services.api.working_set.service import WorkingSetService
 
 from conduit_common.identity import new_edge_id
 from schemas.domain import (
+    AuditStub,
     EdgeWrite,
     Node,
     NodeWrite,
@@ -87,7 +88,13 @@ async def _holds(principal: Principal, investigation_id: str) -> bool:
     return True  # the analyst holds a level on the original, so reads its layer
 
 
-async def _a_case_made_from_another() -> tuple[InMemoryDatasetStore, str, Principal]:
+async def _nobody_holds(principal: Principal, investigation_id: str) -> bool:
+    return False  # a member of the made case alone, holding no level on the original
+
+
+async def _a_case_made_from_another(
+    holds: Any = _holds,
+) -> tuple[InMemoryDatasetStore, str, Principal]:
     """The original reads `src` and has its layer; `made` was made from it before L3.2 and is
     scoped as a request under it is. Returns the store, the original's layer and the principal."""
     store = InMemoryDatasetStore()
@@ -103,9 +110,25 @@ async def _a_case_made_from_another() -> tuple[InMemoryDatasetStore, str, Princi
     await store.set_for_case("original", ["src"], ANALYST, case_name="Original")
     layer = await made_before_l3_2(store, "original", "made")
     assert layer is not None
-    principal = await scope_to_case(ANALYST, "made", store, holds_a_level=_holds)
-    assert layer in (principal.datasets or [])
+    principal = await scope_to_case(ANALYST, "made", store, holds_a_level=holds)
+    assert (layer in (principal.datasets or [])) == (holds is _holds)
     return store, layer, principal
+
+
+class _ReadsBack(WritingGraph):
+    """`WritingGraph`, reading back what it committed as the adapter does: a node written and
+    committed is then found by `get_nodes`, judged by its body for the reader."""
+
+    def _world_nodes(self) -> dict[str, Node]:
+        committed = {
+            w.id: Node(
+                id=w.id, type=w.type, properties=w.properties, provenance=w.provenance,
+                handling=w.handling, datasets=w.datasets,
+                audit=AuditStub(created_at=w.created_at, created_by=w.created_by),
+            )  # fmt: skip
+            for w in self.nodes.values()
+        }
+        return {**committed, **super()._world_nodes()}
 
 
 def _held(graph: WritingGraph, *nodes: Node) -> WritingGraph:
@@ -113,18 +136,18 @@ def _held(graph: WritingGraph, *nodes: Node) -> WritingGraph:
     return graph
 
 
-async def _accept_a_proposal(document_in: str) -> tuple[WritingGraph, Any]:
+async def _accept_a_proposal(document_in: str, holds: Any = _holds) -> tuple[WritingGraph, Any]:
     """Through the real `QuestionsService.ask` and `accept`: the proposal's `MENTIONED_IN` names no
     dataset and targets its Document, here kept in `document_in` (the original's layer or the
     source). Returns the graph and the outcome (or the error raised)."""
-    store, layer, principal = await _a_case_made_from_another()
-    where = layer if document_in == "layer" else "src"
-    doc = _document(email_document_id("ev-1")).model_copy(update={"datasets": [where]})
+    store, layer, principal = await _a_case_made_from_another(holds)
+    where = {"layer": [layer], "source": ["src"], "both": ["src", layer]}[document_in]
+    doc = _document(email_document_id("ev-1")).model_copy(update={"datasets": where})
     working = FakeWorkingSetStore()
     pair = [node(n).model_copy(update={"datasets": ["src"]}) for n in ("a", "b")]
     await working.add_nodes("made", [*pair, doc])
     await working.add_edges("made", [edge("e1", "a", "b").model_copy(update={"datasets": ["src"]})])
-    inner = _held(WritingGraph(), doc)
+    inner = _held(_ReadsBack(), doc, *pair)  # the pair is in the graph, as the case's are
     graph = stamping(inner, registry=store)
     candidates = InMemoryCandidates()
     working_set = WorkingSetService(graph, working, SCHEME)
@@ -164,7 +187,7 @@ async def _accept_from_an_email(document_in: str) -> tuple[WritingGraph, Any]:
     pair = [node(n).model_copy(update={"datasets": ["src"]}) for n in ("a", "b")]
     await working.add_nodes("made", pair)
     await working.add_edges("made", [edge("e1", "a", "b").model_copy(update={"datasets": ["src"]})])
-    inner = _held(WritingGraph(), doc)
+    inner = _held(_ReadsBack(), doc, *pair)  # the pair is in the graph, as the case's are
     graph = stamping(inner, registry=store)
     service = EmailExtractionService(
         WorkingSetService(graph, working, SCHEME),
@@ -240,6 +263,8 @@ async def _write_link(to: str) -> tuple[WritingGraph, Exception | None]:
     graph = stamping(inner, registry=store)
     tx = await graph.begin_transaction()
     try:
+        # As `write_alert_node` does: the alert's own node first, in the same transaction.
+        await graph.upsert_nodes([_merging("alert-1")], tx)
         await graph.upsert_edges([_alerted_on(to)], tx)
     except TouchesTheOriginalsWorkError as refused:
         await graph.rollback_transaction(tx)
@@ -269,7 +294,7 @@ def _merging(node_id: str) -> NodeWrite:
 
 async def _write_node(node_id: str) -> tuple[WritingGraph, Exception | None]:
     store, layer, _ = await _a_case_made_from_another()
-    inner = _held(WritingGraph(), node("theirs").model_copy(update={"datasets": [layer]}))
+    inner = _held(_ReadsBack(), node("theirs").model_copy(update={"datasets": [layer]}))
     graph = stamping(inner, registry=store)
     tx = await graph.begin_transaction()
     try:
@@ -308,10 +333,10 @@ async def test_each_write_lands_with_the_check_alone_removed(
     the two accept paths ask first), each write lands in the source, touching the original's
     layer, where the original's analysts would see it."""
 
-    async def allowed(self: Any, node_ids: Any) -> None:
+    async def allowed(self: Any, node_ids: Any, **_: Any) -> None:
         return None
 
-    async def unchecked(graph: Any, node_ids: Any) -> None:
+    async def unchecked(graph: Any, node_ids: Any, **_: Any) -> None:
         return None
 
     monkeypatch.setattr(DatasetStampingGraph, "_refuse_touching_a_read_only_layer", allowed)
@@ -326,3 +351,82 @@ async def test_each_write_lands_with_the_check_alone_removed(
     assert refused is None and linked.committed_edges[0].target == "theirs"
     merged, refused = await _write_node("theirs")
     assert refused is None and merged.nodes["theirs"].datasets == ["src"]
+
+
+# --- a member holding no level on the original (the lane review's blocker 2, rule 3) -----------
+
+
+async def _a_strangers_link(to: str) -> Exception | None:
+    store, layer, _ = await _a_case_made_from_another(_nobody_holds)
+    inner = _held(
+        _ReadsBack(),
+        node("theirs").model_copy(update={"datasets": [layer]}),
+        node("loaded").model_copy(update={"datasets": ["src"]}),
+    )
+    graph = stamping(inner, registry=store)
+    tx = await graph.begin_transaction()
+    try:
+        await graph.upsert_nodes([_merging("alert-1")], tx)
+        await graph.upsert_edges([_alerted_on(to)], tx)
+    except TouchesTheOriginalsWorkError as refused:
+        await graph.rollback_transaction(tx)
+        return refused
+    await graph.rollback_transaction(tx)
+    return None
+
+
+async def test_a_stranger_is_answered_alike_for_the_originals_node_and_a_missing_one() -> None:
+    """A member of the made case alone reads none of the original's layer. A link to its node and
+    a link to an id nobody holds are refused in the same words, so the answer says nothing about
+    the layer; a link to a node they read goes ahead."""
+    theirs, missing = await _a_strangers_link("theirs"), await _a_strangers_link("never-held")
+    assert theirs is not None and missing is not None and str(theirs) == str(missing)
+    assert await _a_strangers_link("loaded") is None
+
+
+async def test_a_document_the_stranger_reads_in_the_source_is_not_refused() -> None:
+    """A Document in the source and in the original's layer is read by the stranger through the
+    source: accepting a proposal on it goes ahead, as it does on any source Document, so the
+    answer cannot tell them the original's analysts also hold it."""
+    inner, accepted = await _accept_a_proposal("both", _nobody_holds)
+    assert not isinstance(accepted, Exception)
+    assert _mention_of(inner, accepted).datasets == ["src"]
+
+
+async def test_the_stranger_check_fails_with_the_layer_read_whatever_they_hold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15, red: the check as it was, looking in the original's layer as the writer whatever
+    they hold there, refuses the stranger on the shared Document: the leak the review found."""
+    from services.api import dataset_scope
+
+    async def as_it_was(graph: Any, node_ids: Any, **_: Any) -> None:
+        scope = dataset_scope._CASE_SCOPE.get()
+        layer = dataset_scope._READ_ONLY_LAYER.get()
+        if layer is None or scope is None:
+            return
+        in_the_layer = scope[2].model_copy(update={"datasets": [layer]})
+        if await graph.get_nodes(sorted(set(node_ids)), in_the_layer):
+            raise TouchesTheOriginalsWorkError
+
+    monkeypatch.setattr(dataset_scope, "refuse_touching_a_read_only_layer", as_it_was)
+    monkeypatch.setattr(questions_module, "refuse_touching_a_read_only_layer", as_it_was)
+    _, accepted = await _accept_a_proposal("both", _nobody_holds)
+    assert isinstance(accepted, TouchesTheOriginalsWorkError)
+
+
+async def test_without_the_early_check_a_proposal_leaves_an_orphan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15 for the early check alone: with only the stamping graph's last word left, the
+    question accept commits its Person before the link is refused, an orphan in the source with
+    the candidate marked accepted, which is why the accept paths ask first."""
+
+    async def unchecked(graph: Any, node_ids: Any, **_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(questions_module, "refuse_touching_a_read_only_layer", unchecked)
+    inner, outcome = await _accept_a_proposal("layer")
+    assert isinstance(outcome, TouchesTheOriginalsWorkError)
+    assert inner.committed_edges == []
+    assert [n.datasets for n in inner.nodes.values() if n.type == "Person"] == [["src"]]
