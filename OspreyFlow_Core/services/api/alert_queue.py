@@ -496,8 +496,8 @@ async def _close(
                     for e in matches:
                         await repoint.record(e.id, await confirm_edge(graph, e, member, tx=tx))
                 except Exception:
-                    # Its commit never sent, nothing recorded can land: the record goes with it
-                    # (a close refused whole, `ports.graph.AmbiguousLinkId`, leaves no record).
+                    # Its commit never sent, nothing recorded can land: the record goes with it,
+                    # so a close the graph refused before its commit leaves no record.
                     repoint.never_committed()
                     await graph.rollback_transaction(tx)
                     raise

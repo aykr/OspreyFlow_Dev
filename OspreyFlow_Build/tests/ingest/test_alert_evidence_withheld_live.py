@@ -628,50 +628,6 @@ async def test_a_graph_failure_leaves_every_alert_on_the_live_link(
             assert queued.alert.edge_ids == [link]
 
 
-async def test_a_close_refused_whole_before_its_commit_leaves_no_record(
-    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A true positive whose link the graph refuses inside the close's transaction (a stand-in for
-    L1.2d's `ports.graph.AmbiguousLinkId`, raised by `supersede_edge`), after the close's node was
-    confirmed and recorded: the close is refused whole, rolled back before any commit was sent, so
-    its record is closed with it, none left waiting for the stale threshold; both alerts still cite
-    the live link. Red with the record settled as for a commit reported failed: the record, holding
-    the node's pair, was left."""
-    from datetime import UTC, datetime
-
-    class Refused(LookupError):
-        """Studio's `AmbiguousLinkId`, until L1.2d is in this branch."""
-
-    case = f"case-{new_id()}"
-    started = datetime.now(UTC)
-    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
-        first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
-        node_supersedes: list[str] = []
-        supersede_node = graph.supersede_node
-
-        async def counted(node_id: str, replacement: Any, tx: Any) -> str:
-            node_supersedes.append(node_id)
-            return await supersede_node(node_id, replacement, tx)
-
-        async def refuses(*_a: Any, **_k: Any) -> str:
-            raise Refused("that link id names more than one stored link")
-
-        monkeypatch.setattr(graph, "supersede_node", counted)
-        monkeypatch.setattr(graph, "supersede_edge", refuses)
-        with pytest.raises(Refused):
-            await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
-                                      disposition="true_positive", reason="matches")  # fmt: skip
-        monkeypatch.undo()
-        assert node_supersedes, "the close confirmed its node (a pair recorded) before the refusal"
-        async with stores["alerts"]._pool.acquire() as conn:
-            left = await conn.fetchval(
-                "SELECT count(*) FROM alert_repoint_records WHERE recorded_at >= $1", started
-            )
-        assert left == 0
-        for queued in await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER):
-            assert queued.alert.edge_ids == [link]
-
-
 async def test_a_triage_refused_after_the_graph_commit_still_repoints_every_citing_alert(
     stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
 ) -> None:

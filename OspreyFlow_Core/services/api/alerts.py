@@ -381,10 +381,10 @@ class LinkRepoint:
         self.abandoned = False
 
     def never_committed(self) -> None:
-        """Said by the writer as it rolls back a write whose commit it never sent (a close refused
-        whole, `ports.graph.AmbiguousLinkId`): nothing it recorded can land, so leaving the
-        repointing closes the record. Never said once `commit_transaction` has been called, since
-        a commit reported failed can still land (B3)."""
+        """Said by the writer as it rolls back a write whose commit it never sent (the graph
+        refusing a confirm inside the close's transaction): nothing it recorded can land, so
+        leaving the repointing closes the record. Never said once `commit_transaction` has been
+        called, since a commit reported failed can still land (B3)."""
         self.abandoned = True
 
     async def record(self, old: str, new: str) -> None:
@@ -696,11 +696,11 @@ class AlertStore:
         record is settled. Left by an exception (an `Exception`: a cancellation stays one, and its
         record waits for the next settle), it is settled too, applied if the graph shows the write
         committed, else left; the writer never drops a record holding a pair once it has sent the
-        write's commit, since a commit can land after any check of it. Only the stale threshold drops one (`settle_pending`). A record
-        left empty is closed by its writer on either path: each pair is recorded before the write's
-        commit, so a write that recorded nothing never reached its commit (a close refused whole,
-        `ports.graph.AmbiguousLinkId`, leaves no record), as is one whose writer rolled back before
-        sending its commit (`LinkRepoint.never_committed`). A settle failing on the exception path
+        write's commit, since a commit can land after any check of it. Only the stale threshold
+        drops one (`settle_pending`). A record left empty is closed by its writer on either path:
+        each pair is recorded before the write's commit, so a write that recorded nothing never
+        reached its commit; so is one whose writer rolled back before sending its commit
+        (`LinkRepoint.never_committed`). A settle failing on the exception path
         is logged, never raised in place of the write's own exception; the record waits."""
         record_id = new_id()
         async with self._pool.acquire() as conn:
@@ -875,7 +875,9 @@ class AlertStore:
                     await conn.execute(
                         "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
                     )
-        remarked = await self._remark_citing(graph, record_id, sorted(set(finals.values())))
+        remarked = await self._remark_citing(
+            graph, record_id, sorted(set(finals.values())), sorted(set(renamed.values()))
+        )
         # Every node renamed or re-marked here is superseded: its working-set copies are stale.
         purge = sorted({*renamed, *remarked})
         async with self._pool.acquire() as conn:
@@ -889,16 +891,21 @@ class AlertStore:
         return purge
 
     async def _remark_citing(
-        self, graph: GraphPort, record_id: str, links: Sequence[str]
+        self, graph: GraphPort, record_id: str, links: Sequence[str], nodes: Sequence[str] = ()
     ) -> list[str]:
-        """The nodes of the alerts citing `links` re-marked to their evidence now (ADR-109
-        Amendment 10), each supersede recorded in the record before its commit; returns the old
-        nodes re-marked, whose working-set copies are to be purged."""
-        if not links:
+        """The nodes of the alerts citing `links`, and of those now naming one of `nodes` (a node
+        the record renamed: a close's confirm copies its node at the marking it had, which its
+        alert's evidence may now be above), re-marked to their evidence now (ADR-109 Amendment
+        10), each supersede recorded in the record before its commit; returns the old nodes
+        re-marked, whose working-set copies are to be purged."""
+        if not links and not nodes:
             return []
         async with self._pool.acquire() as conn:
             found = await conn.fetch(
-                f"SELECT id FROM alerts WHERE {_CITES_ANY_SQL} ORDER BY id", list(links)
+                f"SELECT id FROM alerts WHERE {_CITES_ANY_SQL} OR alert_node_id = ANY($2::text[]) "
+                "ORDER BY id",
+                list(links),
+                list(nodes),
             )
         rows = list((await self.cited_by_ids([r["id"] for r in found])).values())
 

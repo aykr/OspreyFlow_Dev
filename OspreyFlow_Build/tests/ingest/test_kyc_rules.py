@@ -525,6 +525,57 @@ async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(st
         assert second.id in listed
 
 
+async def test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record(
+    stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second person approves a true positive whose match the graph refuses inside the close's
+    transaction, after the alert's node was confirmed and its pair recorded: the close is rolled
+    back before any commit was sent, so its repoint record is closed with it, none left waiting for
+    the stale threshold, and the alert is as it was (its node, its match, closing). Red with the
+    record settled as for a commit reported failed: the record, holding the node's pair, was left."""
+    from services.api import alert_queue
+
+    class Refused(LookupError):
+        """The graph refusing a confirm (as any adapter refusal inside the transaction)."""
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+        assert petrov.alert_node_id is not None, "a real screening alert has its own node"
+        await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                  disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        (before,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        node_supersedes: list[str] = []
+        supersede_node = graph.supersede_node
+
+        async def counted(node_id: str, *a: Any, **k: Any) -> Any:
+            node_supersedes.append(node_id)
+            return await supersede_node(node_id, *a, **k)
+
+        async def refuses(*_a: Any, **_k: Any) -> Any:
+            raise Refused("the graph refused the match's confirm")
+
+        started = datetime.now(UTC)
+        monkeypatch.setattr(graph, "supersede_node", counted)
+        monkeypatch.setattr(graph, "supersede_edge", refuses)
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        with pytest.raises(Refused):
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
+        monkeypatch.undo()
+        assert node_supersedes == [petrov.alert_node_id], "its node confirmed (a pair recorded) first"
+        async with stores["alerts"]._pool.acquire() as conn:
+            left = await conn.fetchval(
+                "SELECT count(*) FROM alert_repoint_records WHERE recorded_at >= $1", started
+            )
+        assert left == 0
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        assert (row.edge_ids, row.alert_node_id, row.status) == (before.edge_ids, before.alert_node_id, "closing")
+
+
 async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
     stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:

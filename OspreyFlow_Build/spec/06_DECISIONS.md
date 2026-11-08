@@ -28376,8 +28376,8 @@ expand and `list_nodes`, the gap `7fac778` closed for new nodes, made after the 
    graph has returned each new id, and before its commit, `old → new` is appended to it, links and
    nodes in two ordered lists. Once it has sent the write's commit, the writer never drops its
    record: it catches `Exception`, so a cancellation stays one, and a commit reported failed can
-   still land. A writer rolling back before sending its commit (a close refused whole,
-   `ports.graph.AmbiguousLinkId`) says so (`LinkRepoint.never_committed`) and closes its record; so
+   still land. A writer rolling back before sending its commit (the graph refusing a confirm
+   inside the close's transaction) says so (`LinkRepoint.never_committed`) and closes its record; so
    does one leaving a record empty, since every pair is recorded before the commit. The close's
    triage names no node: the record owns the node's rename, and writing the confirmed node back
    would undo a re-mark's.
