@@ -1,0 +1,769 @@
+{
+  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate); OspreyFlow_Build/tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
+  "row_template": {
+    "entities": [
+      {
+        "ref": "report",
+        "pole_class": "object",
+        "type": "Document",
+        "match_on": "message_id",
+        "on_match": "reference",
+        "properties": {
+          "message_id": {
+            "field": "report_ref"
+          },
+          "title": {
+            "field": "title"
+          },
+          "sent_at": {
+            "field": "submitted_at"
+          },
+          "document_kind": {
+            "field": "category"
+          }
+        },
+        "content": {
+          "kind": "document_text",
+          "field": "report_text"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "area_1",
+        "pole_class": "location",
+        "type": "Location",
+        "match_on": "site_ref",
+        "on_match": "reference",
+        "properties": {
+          "site_ref": {
+            "field": "area_ref"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "area_2",
+        "pole_class": "location",
+        "type": "Location",
+        "match_on": "site_ref",
+        "on_match": "reference",
+        "when": {
+          "field": "area_ref_2",
+          "is": "not_null"
+        },
+        "properties": {
+          "site_ref": {
+            "field": "area_ref_2"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "area_3",
+        "pole_class": "location",
+        "type": "Location",
+        "match_on": "site_ref",
+        "on_match": "reference",
+        "when": {
+          "field": "area_ref_3",
+          "is": "not_null"
+        },
+        "properties": {
+          "site_ref": {
+            "field": "area_ref_3"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "prisoner_1",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "prison_number",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_1",
+          "is": "not_null"
+        },
+        "properties": {
+          "prison_number": {
+            "field": "subject_1"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "prisoner_2",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "prison_number",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_2",
+          "is": "not_null"
+        },
+        "properties": {
+          "prison_number": {
+            "field": "subject_2"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "prisoner_3",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "prison_number",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_3",
+          "is": "not_null"
+        },
+        "properties": {
+          "prison_number": {
+            "field": "subject_3"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "outsider_1",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "nino",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_1_nino",
+          "is": "not_null"
+        },
+        "properties": {
+          "nino": {
+            "field": "subject_1_nino"
+          },
+          "family_name": {
+            "field": "subject_1_family_name"
+          },
+          "given_names": {
+            "field": "subject_1_given_names",
+            "optional": true
+          },
+          "date_of_birth": {
+            "field": "subject_1_date_of_birth",
+            "optional": true
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "outsider_2",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "nino",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_2_nino",
+          "is": "not_null"
+        },
+        "properties": {
+          "nino": {
+            "field": "subject_2_nino"
+          },
+          "family_name": {
+            "field": "subject_2_family_name"
+          },
+          "given_names": {
+            "field": "subject_2_given_names",
+            "optional": true
+          },
+          "date_of_birth": {
+            "field": "subject_2_date_of_birth",
+            "optional": true
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "outsider_3",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "nino",
+        "on_match": "reference",
+        "when": {
+          "field": "subject_3_nino",
+          "is": "not_null"
+        },
+        "properties": {
+          "nino": {
+            "field": "subject_3_nino"
+          },
+          "family_name": {
+            "field": "subject_3_family_name"
+          },
+          "given_names": {
+            "field": "subject_3_given_names",
+            "optional": true
+          },
+          "date_of_birth": {
+            "field": "subject_3_date_of_birth",
+            "optional": true
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "ref": "number",
+        "pole_class": "object",
+        "type": "Endpoint",
+        "match_on": "value_normalised",
+        "on_match": "reference",
+        "when": {
+          "field": "phone_mentioned",
+          "is": "not_null"
+        },
+        "properties": {
+          "value_raw": {
+            "field": "phone_mentioned"
+          },
+          "value_normalised": {
+            "field": "phone_mentioned",
+            "transform": "msisdn"
+          },
+          "e164": {
+            "field": "phone_mentioned",
+            "transform": "msisdn"
+          },
+          "endpoint_kind": {
+            "literal": "msisdn"
+          }
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "type": "MENTIONED_IN",
+        "from": "area_1",
+        "to": "report",
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "area_2",
+        "to": "report",
+        "when": {
+          "field": "area_ref_2",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "area_3",
+        "to": "report",
+        "when": {
+          "field": "area_ref_3",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "prisoner_1",
+        "to": "report",
+        "when": {
+          "field": "subject_1",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "prisoner_2",
+        "to": "report",
+        "when": {
+          "field": "subject_2",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "prisoner_3",
+        "to": "report",
+        "when": {
+          "field": "subject_3",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "outsider_1",
+        "to": "report",
+        "when": {
+          "field": "subject_1_nino",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "outsider_2",
+        "to": "report",
+        "when": {
+          "field": "subject_2_nino",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "outsider_3",
+        "to": "report",
+        "when": {
+          "field": "subject_3_nino",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      },
+      {
+        "type": "MENTIONED_IN",
+        "from": "number",
+        "to": "report",
+        "when": {
+          "field": "phone_mentioned",
+          "is": "not_null"
+        },
+        "handling": {
+          "classification": {
+            "field": "classification"
+          },
+          "handling_code": {
+            "field": "handling_code"
+          },
+          "action_code": {
+            "field": "action_code"
+          },
+          "sanitisation_code": {
+            "field": "sanitisation_code"
+          },
+          "originator": {
+            "field": "originator"
+          },
+          "owning_unit": {
+            "field": "owning_unit"
+          }
+        }
+      }
+    ]
+  },
+  "unmapped_fields": [
+    {
+      "field": "subject_1_role",
+      "action": "ignore",
+      "note": "Empty in every row: the plan holds no role for a person a report names, and MENTIONED_IN has no role property. Bind it when a link is to carry a role."
+    },
+    {
+      "field": "subject_2_role",
+      "action": "ignore",
+      "note": "Empty in every row: the plan holds no role for a person a report names, and MENTIONED_IN has no role property. Bind it when a link is to carry a role."
+    },
+    {
+      "field": "subject_3_role",
+      "action": "ignore",
+      "note": "Empty in every row: the plan holds no role for a person a report names, and MENTIONED_IN has no role property. Bind it when a link is to carry a role."
+    },
+    {
+      "field": "reviewer_initials",
+      "action": "ignore",
+      "note": "Brief 2 section 5's teaching extra column: the reviewer's initials are no part of the report or what it names, so the load ignores them."
+    }
+  ],
+  "deduplicate": {
+    "key": [
+      {
+        "field": "report_ref"
+      }
+    ]
+  }
+}
