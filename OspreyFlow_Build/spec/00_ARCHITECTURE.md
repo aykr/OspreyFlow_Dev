@@ -656,13 +656,15 @@ Later reads, each with the access step on the element and on both ends of every 
 (the links among a set of nodes, ADR-098 decision 1), and `type_counts` and `most_connected` (the
 Explore panel's counts and degree ranking, ADR-100 Amendment 1), and `get_nodes` and `get_edges`
 (the given ids alone, ADR-124 decision 6). `expand_candidate_count` was withdrawn (ADR-124
-decision 10): no `GraphPort` read returns a figure about what the principal may not see. **One read
-takes no principal at all:** `dataset_footprints(dataset_ids)`, each dataset's live nodes and links and
-the bytes of their properties and pictures, numbers only (no id, type, label, property or object ref
-leaves the adapter), every id asked answered so the answer says nothing of which exist. It is Admin ›
-Datasets' read of each case's analyst layer as counts, which ADR-143 Amendment 2 decision 2 shows an
-administrator for cases they are not a member of, and behind that section's right
-(`tests/conformance/graph_port/test_dataset_footprints.py`).
+decision 10): no `GraphPort` read returns a figure about what the principal may not see.
+`dataset_footprints(dataset_ids, principal)` is Admin › Datasets' read of each case's analyst layer as counts, for cases the
+administrator is no member of (ADR-143 Amendment 2 decision 2, which lifts case membership and
+nothing else): the dataset asked stands in for the principal's own, and every other part of the
+access step applies (classification, handling code and unit, reverted and superseded; a link counts
+only with both ends readable), so a hidden item is in no count and no size. It is counted in the
+store's own query (`count`, `asString().length()` over the properties, the image Documents'
+`size_bytes`): no element, id, label, property or object ref leaves it, and every id asked is
+answered (`tests/conformance/graph_port/test_dataset_footprints.py`).
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 

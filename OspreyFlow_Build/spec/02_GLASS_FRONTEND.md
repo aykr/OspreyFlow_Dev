@@ -1289,14 +1289,17 @@ step is: the System setting, a team before teams exist, a service account or an 
 directory does not hold as a person; a dataset not yet live says its owners are asked at its first
 *Make live*. **Linked cases** (ADR-143 Amendment 2 decision 2): every case reading the dataset,
 member or not, open or removed, the home case and a case reading it through a composite marked, its
-layer as items, links and size — the bytes of its stored properties and its pictures' files (the
-owner's rulings of 8 November 2026), counted by the graph store, so a picture attached before its
-size was stored counts nothing and the screen says so — and never a layer's item, label or property:
+layer as items, links and size — its stored properties' length as the store renders them and its
+pictures' file sizes (the owner's rulings of 8 November 2026), counted by the graph store under the
+administrator's own handling, so what they may not read is in no count or size, and a picture
+attached before its size was stored counts nothing; the screen says both — and never a layer's
+item, label or property:
 `test_admin_dataset_cases.py` holds every Datasets route to it, red with one label planted. A
 removed case read directly (not through a composite) offers *Merge … into the dataset (dry run)* and
 *Delete …'s layer (dry run)*: each says what it would touch and writes nothing but its audit entry;
 the merge is refused, in words naming them, to anyone not one of the dataset's Authors, and into a
-composite; the actions themselves are the promotion's, L3.4), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
+composite, which is offered no *Merge* and no promotion policy; *Change owner…*'s grants and its
+audit entry are one transaction; the actions themselves are the promotion's, L3.4), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
 the administrator can open, and its `ospreyflow demo add` command with *Copy* — the page runs nothing).
 Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).
 
