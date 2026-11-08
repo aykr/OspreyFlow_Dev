@@ -56,7 +56,7 @@ test("Admin is chosen from Start with no case, and Start is back by keyboard", a
   const asked = await serve(page);
   await page.goto("/keyboard/start-harness.html");
   await press(page, /^Open Admin/);
-  await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "People and roles" })).toBeVisible();
   await expect.poll(() => asked).toContain("/v1/admin/people");
   expect(await opened(page)).toBeNull();
   registerCovered(REGISTRY, "choose-admin-from-start-by-keyboard");
@@ -83,7 +83,7 @@ test("a place opens with its key from anywhere on Home, and one the rights do no
   await page.keyboard.press("i");
   await expect(page.getByRole("heading", { level: 1, name: /^Good/ })).toBeVisible();
   await page.keyboard.press("a");
-  await expect(page.getByRole("tab", { name: "People and roles" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Admin sections" }).getByRole("button", { name: "People and roles" })).toBeVisible();
   await press(page, "Osprey, go to Home");
   await page.keyboard.press("g");
   await expect(page.getByRole("heading", { name: "Choose a case" })).toBeVisible();
