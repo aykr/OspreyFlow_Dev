@@ -1,20 +1,21 @@
-# studio lane · report · L1.2b (Part B, phase 6's exit; ADR-140 Amendment 10), with review round 1, 8 November 2026
-1. **From scratch, guided, keys alone: met.** `keyboard/ingest-studio.spec.ts` builds the whole committed reports map, and the saved map must **equal** the YAML's (a JSON copy held to it by `tests/demo_fixtures/test_reports_map_fixture.py`). That covers 11 elements, 10 links, conditions, content, six handling parts each, the transform, literal and optional bindings, the ignored columns, the row key, and the marking columns on the draft's own settings.
-2. **Expert edit of it: met.** An Extract fed by Map on the canvas; the map isn't saved again; Test, then Deploy.
-3. **Live walk: met.** Lease studio "L1.2b live walk", 06:30:25Z–07:12:44Z, with `stack_lease.sh up`/`down`. It used a fresh Postgres database (dropped after), scratch repository, ingest root and analytics, and a Conduit on 127.0.0.1:18001; osprey-local-lite was untouched.
-4. **The walk's figures** (`live/studio-reports-walk.spec.ts`, run 6, 07:10:13Z):
-   - asserted: the stored map equals the committed one, and the run read 350 and rejected 1;
-   - checked by script afterwards: the deployed YAML matches;
-   - observed only: Test rejected row 17, the teaching row. Timings are indicative, as two offline runs shared the machine.
-5. **Found and fixed:**
-   - live only (B8): the Map editor could make no `MENTIONED_IN` link; it now judges ends as the load does;
-   - ignore controls are named with their column (B2), and link buttons meet WCAG 2.5.3 (B7);
-   - harness fakes that differed from the product (rule 15): B5 and B9.
-6. **Review round 1: items 1–5 fixed.** Amendment 10 separates asserted, checked and observed figures, and names the non-fresh graph and the concurrent runs. `meaning()` forgives only nullable fields (B11). Wildcard mixed-list and system cases added (B10). The guide names the bindings and the pack-pin difference. The heading is as reserved, and your reservations file is reverted.
-7. **Recorded, not resolved:** a new pipeline pins no pack (`{}`), where the seeded draft pins `niem: 3`, because it has no domain-model step; phase 5 settles it.
-8. **Red on record:** B1–B11 and the walk, in `L1.2a_RED_RECORD.md`.
-9. **Green:** `make ci` exit 0 at `51e3e07`. Studio vitest 391/391, keyboard 76/76, axe 76/76, `tsc` clean.
-10. **`make test`:** 8,100 passed and 3 failed, none mine: the machine's `osprey.yaml`, `graphify-out` at the root, and the phone extraction (needs the leased object store on 9000).
-11. **Requests:** land `process/lanes/studio/L1.2b_action_registry.diff` (one id) with the merge, and mark the Amendment 10 reservation written.
-12. **Slips, mine:** the harness's first reports source carried marking columns no person can register; the first JSON copy named the Build folder; I edited your reservations file (reverted).
-13. **Next:** paused at the end of L1.2b, as the owner asked. Nothing is running and no lease is held.
+# studio lane · report · L1.3 (phase 7a: the staging catalogue's engine; ADR-140 Amendment 11), 8 November 2026
+1. **Golden files per step: met.** `tests/ingest/test_staging_golden.py` covers all six kinds, with the left Join normalised by `msisdn` and the inner one exact. Derive's seven operations are in `tests/knowledge_adapters/test_derive.py`; each golden file shows its refusals.
+2. **Provenance survives a Join: met.** `test_staged_run.py::test_a_join_s_provenance_survives_to_the_link_it_makes`, red with `source_refs` dropped at the join (P1). It is also read back live from ArcadeDB (`test_staged_provenance_live.py`), red twice (L1, L2).
+3. **A screening list round-trips through the catalogue: met.** `test_staging_catalogue.py`: the OFAC golden goes through staged Parquet and comes back as kind `screening`, entries equal, then serves a subscribed Lookup (P3–P5, P8).
+4. **Rule 8: met.** No expression is accepted under any key (`tests/schemas/test_recipe_staging.py`, S3). Every key adapter and Derive operation is a Knowledge Adapter with golden tests (P6).
+5. **Phase 7a's exit: met, offline and live.** The synthetic Visits and contacts pipeline without its expert steps (Lookup → Join → Derive → Map) runs end to end; every element names its source rows, and Test and the load reject the same rows (P7). Fixtures are in `tests/ingest/fixtures/visits_and_contacts/`.
+6. **Live case:** lease studio, stack a, 13:12:40Z–13:13:37Z, with `stack_lease.sh up`/`down`. ArcadeDB only; the Parquet went to a temporary directory.
+7. **Orchestrator's settlement, 8 November** (Q1–Q3, all (a)):
+   - the schemas-only commit is `cded186`;
+   - refs go in `provenance.sources`;
+   - spec 09 §4/§9 and Amendment 11.
+8. **Red record:** S1–S3, D0, G1–G3, P1–P8, L1–L2 in `L1.3_RED_RECORD.md`.
+9. **Slip, mine:** at about 10:35, three synthetic Parquet files went to the object store on host 9000 without a lease (the import bypassed the fixture). Fixed, reported, and in the friction row.
+10. **Left for L1.4 (7b):**
+    - the drawers and the profiler on staged tables;
+    - the Studio's run route feeding a pipeline's sources;
+    - per-step counts and refs on the run report, which needs a schemas change.
+11. **Recorded, not resolved:** in a staged run, a Map rejection's `row_index` is its staged-table position (Amendment 11).
+12. **Commits:** `cded186` (schemas, merge first), `b901a08`, `342bb05`, `18e3b54`, `345aa7a`, `a834f23`.
+13. **Requests:** merge `cded186` alone first (queued); mark the Amendment 11 reservation written.
+14. **Running:** nothing; no lease held.
