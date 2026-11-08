@@ -1,11 +1,11 @@
 """Named-step history — `spec/03_CONDUIT_MIDDLEWARE.md` §3.1's two routes,
 pulled forward as the "named-step history with
 restore" capability (the generic mechanism only — the rest of §3.1's "Network
-analysis" table, Search Around/Pathfinder/Branch-to-new-tab, stays out of
+analysis" table, Search Around/Pathfinder/open-in-a-new-tab, stays out of
 scope for this phase).
 
 **A step is a full membership snapshot, not a diff.** After every
-working-set mutation that changes membership (seed, expand, remove, branch,
+working-set mutation that changes membership (seed, expand, remove,
 a future reproject), `app.py` records one row here holding the *complete*
 source-fidelity (unfiltered) node/edge bodies at that moment — not just
 ids, and not a delta to replay. Two reasons neither of those simpler shapes

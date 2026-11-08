@@ -10,15 +10,17 @@ import pytest
 from services.api.config import PostgresConfig
 from services.api.datasets import (
     ANALYST_LAYER,
-    BranchLayerError,
     DatasetRefusedError,
     PostgresDatasetStore,
+    ReadOnlyLayerError,
     UnknownDatasetEgressError,
     index_one_dataset_per_case,
 )
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
+
+from .unconverted import made_before_l3_2_on_postgres
 
 
 def _analyst() -> Principal:
@@ -116,47 +118,20 @@ async def test_a_case_reads_one_dataset_and_a_composite_reads_its_own_id_first(s
     assert [d.id for d in await store.of_case(case, alice)] == [both.id]
 
 
-async def test_a_branch_holds_no_layer_and_reads_its_originals(store) -> None:
-    """ADR-144 Amendment 1 decision 2 (the owner, 7 November 2026), on Postgres: a branch, a branch
-    of a branch included, holds no layer of its own and reads its original's, read-only."""
+async def test_a_case_made_from_another_holds_no_layer_and_reads_its_originals(store) -> None:
+    """ADR-144 Amendment 1 decision 2, on Postgres: a case made from another since L3.1, until the
+    upgrade turns it into a view, holds no layer of its own and reads its original's, read-only."""
     alice = _analyst()
     source = await store.create(alice, "Source")
-    parent, branch, twig = new_id(), new_id(), new_id()
+    parent, made = new_id(), new_id()
     await store.set_for_case(parent, [source.id], alice)
-    layer = await store.layer_of_case(parent)
-    await store.copy_case(parent, branch)
-    await store.copy_case(branch, twig)
-    for case in (branch, twig):
-        assert await store.layer_of_case(case) is None
-        assert await store.read_only_layer_of(case) == layer
-        assert await store.ids_of_case(case) == [source.id, layer]
-    with pytest.raises(BranchLayerError):
-        await store.ensure_layer(branch, unit=alice.org_unit, created_by=alice.id)
-
-
-async def test_a_branch_of_an_original_with_no_layer_yet_links_to_one_made_for_it(store) -> None:
-    """The final L3.1 review's 3b, on Postgres: an original the migration has not reached has no
-    layer, so a branch of it got no link and later a layer of its own at its first mark, which
-    ADR-144 Amendment 1 decision 2 forbids. Now the original's layer is made at branch time and
-    the branch is linked to it."""
-    alice = _analyst()
-    source = await store.create(alice, "Source")
-    parent, branch = new_id(), new_id()
-    async with store._pool.acquire() as conn:  # noqa: SLF001 — a case the migration has not reached
-        await conn.execute(
-            "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
-            "VALUES ($1, $2, 0)",
-            parent,
-            source.id,
-        )
-    assert await store.layer_of_case(parent) is None
-    await store.copy_case(parent, branch)
-    layer = await store.layer_of_case(parent)
-    assert layer is not None
-    assert await store.read_only_layer_of(branch) == layer
-    assert await store.layer_of_case(branch) is None
-    with pytest.raises(BranchLayerError):
-        await store.ensure_layer(branch, unit=alice.org_unit, created_by=alice.id)
+    layer = await made_before_l3_2_on_postgres(store, parent, made)
+    assert layer == await store.layer_of_case(parent)
+    assert await store.layer_of_case(made) is None
+    assert await store.read_only_layer_of(made) == layer
+    assert await store.ids_of_case(made) == [source.id, layer]
+    with pytest.raises(ReadOnlyLayerError):
+        await store.ensure_layer(made, unit=alice.org_unit, created_by=alice.id)
 
 
 async def test_a_case_opened_from_an_alert_keeps_a_layer_of_its_own(store) -> None:
@@ -165,7 +140,7 @@ async def test_a_case_opened_from_an_alert_keeps_a_layer_of_its_own(store) -> No
     source = await store.create(alice, "Source")
     parent, jump = new_id(), new_id()
     await store.set_for_case(parent, [source.id], alice)
-    await store.copy_case(parent, jump, created_by="bob", as_a_branch=False)
+    await store.read_the_same_dataset(parent, jump, created_by="bob")
     own = await store.layer_of_case(jump)
     assert own not in (None, await store.layer_of_case(parent))
     assert await store.read_only_layer_of(jump) is None

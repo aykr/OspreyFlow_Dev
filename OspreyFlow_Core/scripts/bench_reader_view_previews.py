@@ -18,8 +18,7 @@ and a link from each, through the store's script on Valkey), and then:
                 and the whole menu again (warm);
   --concurrent  the same sixteen previews started at once, as `GlassCanvas` sends them, after a
                 change (cold) and again (warm);
-  --branch      `WorkingSetService.branch` of the whole case into a new one, and --restore
-                `WorkingSetService.restore` of its whole membership over itself: each writes tens
+  --restore     `WorkingSetService.restore` of the whole membership over itself: it writes tens
                 of thousands of elements, in scripts of at most 1,000, and the figure is the
                 longest single script (how long Valkey is held at once);
   --forward     what the live forward adds to each pushed delta (ADR-124 decision 2, "the cost
@@ -303,14 +302,13 @@ async def run(args: argparse.Namespace) -> int:
     else:
         store = _MemoryStore()
     case = f"{PREFIX}{uuid.uuid4().hex[:8]}"
-    branched = f"{case}-branch"
     if args.forward:
         # Each delta adds a node: stay under the node cap, or the recount measured is a refusal's.
         room = MAX_NODES - args.deltas - 10
         if args.nodes > room:
             args.nodes = room
             print(f"loading {args.nodes:,} nodes, to stay under the cap")
-    if args.expand or args.branch or args.restore:
+    if args.expand or args.restore:
         # The write-cost step adds 500 nodes and 500 links first, and each expansion 500 more; leave
         # room under the caps for all of them, or the first refusal ends the run (it would be the
         # measurement of a refusal, not of what was asked for).
@@ -332,7 +330,7 @@ async def run(args: argparse.Namespace) -> int:
                 inner = getattr(store, name)
 
                 async def call(investigation_id: str, *rest: Any) -> Any:
-                    # A case this run made (a branch's) is its own; everything else is `case`.
+                    # A case this run made is its own; everything else is `case`.
                     own = investigation_id if investigation_id.startswith(PREFIX) else case
                     return await inner(own, *rest)
 
@@ -418,28 +416,19 @@ async def run(args: argparse.Namespace) -> int:
             )
             return 0
 
-        if args.branch or args.restore:
-            # What the working set does in bulk: a branch writes the whole visible case into a new
-            # one; a restore writes a step's whole membership over the current one. Each is chunked,
-            # and the point is the longest single script, which is how long Valkey is held.
+        if args.restore:
+            # What the working set does in bulk: a restore writes a step's whole membership over
+            # the current one, chunked, and the point is the longest single script, which is how
+            # long Valkey is held.
+            held_nodes = list((await scoped.source_fidelity_nodes(case)).values())
+            held_edges = list((await scoped.source_fidelity_edges(case)).values())
+            graph.vault_nodes = {n.id: n for n in held_nodes}
+            graph.vault_edges = {e.id: e for e in held_edges}
             if hasattr(store, "script_runs"):
                 store.script_runs.clear()
             started = time.monotonic()
-            if args.branch:
-                outcome = await service.branch(case, branched, READER)
-                label = (
-                    f"branch of the whole case into a new one ({len(outcome.delta.nodes):,} nodes)"
-                )
-            else:
-                held_nodes = list((await scoped.source_fidelity_nodes(case)).values())
-                held_edges = list((await scoped.source_fidelity_edges(case)).values())
-                graph.vault_nodes = {n.id: n for n in held_nodes}
-                graph.vault_edges = {e.id: e for e in held_edges}
-                if hasattr(store, "script_runs"):
-                    store.script_runs.clear()
-                started = time.monotonic()
-                snapshot = (await service.restore(case, held_nodes, held_edges, READER)).response
-                label = f"restore of the whole case over itself ({len(snapshot.nodes):,} nodes)"
+            snapshot = (await service.restore(case, held_nodes, held_edges, READER)).response
+            label = f"restore of the whole case over itself ({len(snapshot.nodes):,} nodes)"
             elapsed = time.monotonic() - started
             print(f"{label}: {elapsed:,.1f} s; {longest_script()}")
             return 0
@@ -512,7 +501,6 @@ async def run(args: argparse.Namespace) -> int:
         )
     finally:
         await store.clear(case)
-        await store.clear(branched)
         if client is not None:
             await client.aclose()
     return 0
@@ -529,11 +517,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--expand", action="store_true", help="time a 500-node expansion end to end"
-    )
-    parser.add_argument(
-        "--branch",
-        action="store_true",
-        help="time a branch of the whole case, and its longest script",
     )
     parser.add_argument(
         "--restore",

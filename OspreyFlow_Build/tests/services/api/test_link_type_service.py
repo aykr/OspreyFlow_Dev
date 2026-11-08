@@ -169,11 +169,12 @@ def names(table: dict[str, Any]) -> set[str]:
     return set(table)
 
 
-async def test_a_proposal_is_usable_at_once_in_its_case_and_its_branch_and_nowhere_else() -> None:
+async def test_a_proposal_is_usable_at_once_in_its_case_and_nowhere_else() -> None:
+    """Not in a case made from it before L3.2 either: no case reads another's (ADR-144 Amendment 1)."""
     service, _, graph, _, _ = await _service()
     p = await _propose(service)
     assert "KNOWN_TO" in names(await service.case_types("inv-1", EDITOR))
-    assert "KNOWN_TO" in names(await service.case_types("branch-1", EDITOR))  # a branch inherits
+    assert "KNOWN_TO" not in names(await service.case_types("branch-1", EDITOR))
     assert "KNOWN_TO" not in names(await service.case_types("inv-2", EDITOR))
     entry = (await service.case_types("inv-1", EDITOR))["KNOWN_TO"]
     assert entry.storage_name == p.storage_name and entry.definition.basis == "probabilistic"
@@ -207,7 +208,7 @@ async def test_a_name_already_offered_in_the_case_is_refused() -> None:
     service, _, _, _, _ = await _service()
     await _propose(service)
     with pytest.raises(ProposalRefusedError):
-        await _propose(service, case="branch-1")  # inherited from inv-1
+        await _propose(service, case="inv-1")
 
 
 async def test_a_promoted_name_is_refused_to_a_new_proposal() -> None:

@@ -2,9 +2,8 @@
 
 Neither the graph itself (the Vault's job) nor ephemeral working-set state
 (Valkey's job, `working_set/store.py`) — an investigation record is small,
-relational, control-plane metadata: who created it, when, and (for a
-branch) what it was forked from. Postgres already exists in this phase for
-the audit stream, so investigation metadata lives in the same database
+relational, control-plane metadata: who created it and when. Postgres already
+exists in this phase for the audit stream, so investigation metadata lives in the same database
 rather than inventing a fourth store for a handful of columns.
 
 **`owning_unit` is the investigation-level authorization boundary** —
@@ -30,7 +29,7 @@ import asyncpg
 from pydantic import BaseModel, Field, field_validator
 
 from conduit_common.identity import new_id
-from schemas.domain import DomainPack, Interval, Principal
+from schemas.domain import DomainPack, Principal
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +41,7 @@ CREATE TABLE IF NOT EXISTS investigations (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL,
     created_by TEXT NOT NULL,
-    owning_unit TEXT NOT NULL,
-    branched_from TEXT REFERENCES investigations (id)
+    owning_unit TEXT NOT NULL
 );
 """
 
@@ -89,14 +87,6 @@ CREATE TABLE IF NOT EXISTS investigation_tab_state (
 #: constraint change; an unknown value is refused on the way in and dropped on the way out.
 _DOMAIN_SQL = "ALTER TABLE investigations ADD COLUMN IF NOT EXISTS domains TEXT[]"
 
-#: ADR-128 decision 2 (B3). A branch made from what is lit records its window, and the events it
-#: inherits from its parents are held to it. NULL for every case that has none, which is every
-#: case from before the change. Run on every start, as the domains column is.
-_BRANCH_WINDOW_SQL = """
-ALTER TABLE investigations ADD COLUMN IF NOT EXISTS branch_valid_from TIMESTAMPTZ;
-ALTER TABLE investigations ADD COLUMN IF NOT EXISTS branch_valid_to TIMESTAMPTZ;
-"""
-
 _MIGRATE_EXISTING_SQL = """
 UPDATE investigations SET unit_level = 'viewer';
 INSERT INTO investigation_grants (investigation_id, account_id, level)
@@ -105,7 +95,7 @@ INSERT INTO investigation_grants (investigation_id, account_id, level)
 
 _LEVEL_SQL = (
     "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-    "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+    "i.domains, "
     "g.level AS grant_level, i.unit_level "
     "FROM investigations i "
     "LEFT JOIN investigation_grants g "
@@ -148,22 +138,19 @@ class Investigation(BaseModel):
     created_at: datetime
     created_by: str
     owning_unit: str
-    branched_from: str | None = None
     #: ADR-126: the domain packs the case carries, sorted and without repeats. Empty means the POLE
     #: core model alone. An unknown value is refused here, so no write can take one; a stored one is
     #: dropped on the way out by `_known_domains`, before it reaches this model.
     domains: list[DomainPack] = Field(default_factory=list)
     #: ADR-126 decision 2: someone has chosen (the column is not NULL), `{}` included. Not on the
-    #: wire (`exclude`): it is for a branch, which inherits the stored value exactly, so a branch of
-    #: a never-chosen case is never chosen too. See `domains_to_inherit`.
+    #: wire (`exclude`): it is for a case opened from this one's alert, which takes the stored value
+    #: exactly, so one opened from a never-chosen case is never chosen too. See
+    #: `domains_to_inherit`.
     domains_chosen: bool = Field(default=False, exclude=True)
-    #: ADR-128 decision 2: the window a branch made from what is lit was made with, both ends
-    #: included; its inherited events are held to it. `None` for every other case. Not on the wire.
-    branch_window: Interval | None = Field(default=None, exclude=True)
 
     def domains_to_inherit(self) -> list[DomainPack] | None:
-        """What a branch of this case is created with: the stored value, NULL (None) included, not
-        the read-side list, which cannot tell "never chosen" from "chosen POLE"."""
+        """What a case opened from this one's alert is created with: the stored value, NULL (None)
+        included, not the read-side list, which cannot tell "never chosen" from "chosen POLE"."""
         return self.domains if self.domains_chosen else None
 
     @field_validator("domains")
@@ -190,16 +177,10 @@ def _known_domains(stored: Sequence[str] | None, investigation_id: str) -> list[
 
 
 def _domain_fields(row: asyncpg.Record) -> dict[str, object]:
-    """The `domains`, `domains_chosen` and `branch_window` fields of a case row, as stored."""
-    window = (
-        Interval(valid_from=row["branch_valid_from"], valid_to=row["branch_valid_to"])
-        if row["branch_valid_from"] is not None
-        else None
-    )
+    """The `domains` and `domains_chosen` fields of a case row, as stored."""
     return {
         "domains": _known_domains(row["domains"], row["id"]),
         "domains_chosen": row["domains"] is not None,
-        "branch_window": window,
     }
 
 
@@ -246,7 +227,6 @@ class InvestigationStore:
                 await conn.execute(_ACCESS_SQL)
                 await conn.execute(_TAB_SQL)
                 await conn.execute(_DOMAIN_SQL)
-                await conn.execute(_BRANCH_WINDOW_SQL)
                 if first_time:
                     await conn.execute(_MIGRATE_EXISTING_SQL)
         return cls(pool)
@@ -259,15 +239,10 @@ class InvestigationStore:
         principal: Principal,
         *,
         name: str,
-        branched_from: str | None = None,
         domains: Sequence[str] | None = None,
-        branch_window: Interval | None = None,
     ) -> Investigation:
-        """`owning_unit` is always the *acting* principal's own `org_unit`
-        — for a branch, that is the branching principal, never inherited
-        from the source investigation (`app.py`'s `branch_investigation`
-        already authorised the branching principal against the source
-        before calling this). The creator is the case's first Author, and a new case is
+        """`owning_unit` is always the *acting* principal's own `org_unit`, never another case's.
+        The creator is the case's first Author, and a new case is
         visible to nobody else until an Author shares it (ADR-052 §2, §4).
 
         `domains` (ADR-126): None leaves the column NULL, "never chosen"; a list, empty included,
@@ -282,26 +257,20 @@ class InvestigationStore:
             created_at=datetime.now(UTC),
             created_by=principal.id,
             owning_unit=principal.org_unit,
-            branched_from=branched_from,
             domains=chosen or [],
             domains_chosen=chosen is not None,
-            branch_window=branch_window,
         )
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO investigations "
-                "(id, name, created_at, created_by, owning_unit, branched_from, domains, "
-                "branch_valid_from, branch_valid_to) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                "(id, name, created_at, created_by, owning_unit, domains) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 investigation.id,
                 investigation.name,
                 investigation.created_at,
                 investigation.created_by,
                 investigation.owning_unit,
-                investigation.branched_from,
                 chosen,
-                branch_window.valid_from if branch_window else None,
-                branch_window.valid_to if branch_window else None,
             )
             await conn.execute(
                 "INSERT INTO investigation_grants (investigation_id, account_id, level) "
@@ -319,8 +288,7 @@ class InvestigationStore:
         `get_authorized` is what every route actually uses."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from, "
-                "branch_valid_from, branch_valid_to, domains "
+                "SELECT id, name, created_at, created_by, owning_unit, domains "
                 "FROM investigations WHERE id = $1 AND removed_at IS NULL",
                 investigation_id,
             )
@@ -340,7 +308,7 @@ class InvestigationStore:
         level = max(held, key=lambda held_level: held_level.rank) if held else None
         fields = {
             k: row[k]
-            for k in ("id", "name", "created_at", "created_by", "owning_unit", "branched_from")
+            for k in ("id", "name", "created_at", "created_by", "owning_unit")
         }
         fields.update(_domain_fields(row))
         return Investigation(**fields), level
@@ -375,7 +343,7 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+                "i.domains, "
                 "g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
@@ -475,7 +443,7 @@ class InvestigationStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
-                "i.branched_from, i.branch_valid_from, i.branch_valid_to, i.domains, "
+                "i.domains, "
                 "g.level AS grant_level, i.unit_level "
                 "FROM investigations i "
                 "LEFT JOIN investigation_grants g "
@@ -724,8 +692,7 @@ class InvestigationStore:
         administrator finds nothing."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, name, created_at, created_by, owning_unit, branched_from, "
-                "branch_valid_from, branch_valid_to, domains "
+                "SELECT id, name, created_at, created_by, owning_unit, domains "
                 "FROM investigations WHERE id = $1 AND owning_unit = $2 AND removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,

@@ -54,7 +54,7 @@ from ports.recognise import RecognisePort
 from schemas.domain import Handling, NodeId, OntologySchema, Principal
 from schemas.model import ExtractionRequest
 
-from .dataset_scope import reach_clause, refuse_in_a_composite_case
+from .dataset_scope import reach_clause, refuse_in_a_composite_case, view_clause
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS extraction_candidates (
@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS extraction_candidates (
 -- ADR-143 Amendment 1: a candidate kept for a mark made by hand belongs to the case's analyst
 -- layer, and is read only under a case that reads it. NULL: the unit's, as before.
 ALTER TABLE extraction_candidates ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+-- ADR-144 decision 4 (L3.2's Q2): a proposal from a case view's conversation, read only through
+-- that view. NULL: read as before.
+ALTER TABLE extraction_candidates ADD COLUMN IF NOT EXISTS view_id TEXT;
 """
 
 # Phase 6a Stage 4 (B6, the Dossier): `run_extraction`'s own `text` argument was discarded once
@@ -184,6 +187,9 @@ class ExtractionCandidateRecord(ExtractionCandidate):
     #: ADR-143 Amendment 1: set for a mark made by hand (the case's analyst layer); `None` for a
     #: model's candidate, read by the unit as before.
     dataset_id: str | None = None
+    #: The case view whose conversation proposed it (ADR-144 decision 4); read only through that
+    #: view (`dataset_scope.view_clause`). `None` for every other candidate.
+    view_id: str | None = None
 
 
 def _row_to_record(row: asyncpg.Record) -> ExtractionCandidateRecord:
@@ -206,6 +212,7 @@ def _row_to_record(row: asyncpg.Record) -> ExtractionCandidateRecord:
         reviewed_at=data["reviewed_at"],
         node_id=data["node_id"],
         dataset_id=data.get("dataset_id"),
+        view_id=data.get("view_id"),
     )
 
 
@@ -232,6 +239,7 @@ class ExtractionCandidateStore:
         principal: Principal,
         *,
         dataset_id: str | None = None,
+        view_id: str | None = None,
     ) -> list[ExtractionCandidateRecord]:
         now = datetime.now(UTC)
         records = [
@@ -242,6 +250,7 @@ class ExtractionCandidateStore:
                 created_by=principal.id,
                 created_at=now,
                 dataset_id=dataset_id,
+                view_id=view_id,
             )
             for candidate in candidates
         ]
@@ -251,8 +260,8 @@ class ExtractionCandidateStore:
             await conn.executemany(
                 "INSERT INTO extraction_candidates (id, document_id, entity_type, properties, "
                 "confidence, model, locator, excerpt_hash, handling, status, owning_unit, "
-                "created_by, created_at, dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, "
-                "$10, $11, $12, $13, $14)",
+                "created_by, created_at, dataset_id, view_id) VALUES ($1, $2, $3, $4, $5, $6, $7, "
+                "$8, $9, $10, $11, $12, $13, $14, $15)",
                 [
                     (
                         r.id,
@@ -269,6 +278,7 @@ class ExtractionCandidateStore:
                         r.created_by,
                         r.created_at,
                         r.dataset_id,
+                        r.view_id,
                     )
                     for r in records
                 ],
@@ -284,13 +294,15 @@ class ExtractionCandidateStore:
         hand is kept in its case's analyst layer, and read only under a case that reads it
         (ADR-143 Amendment 1, `reach_clause`)."""
         reach, params = reach_clause(principal, 3)
+        in_view, view_params = view_clause(3 + len(params))
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM extraction_candidates WHERE document_id = $1 AND owning_unit = $2"
-                f"{reach} ORDER BY created_at",
+                f"{reach}{in_view} ORDER BY created_at",
                 document_id,
                 principal.org_unit,
                 *params,
+                *view_params,
             )
         return [_row_to_record(row) for row in rows]
 
@@ -308,12 +320,15 @@ class ExtractionCandidateStore:
         query, not a query followed by a Python-side check that already holds what it's about to
         reject. The same case limit as `list_for_document`."""
         reach, params = reach_clause(principal, 3)
+        in_view, view_params = view_clause(3 + len(params))
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT * FROM extraction_candidates WHERE id = $1 AND owning_unit = $2{reach}",
+                "SELECT * FROM extraction_candidates WHERE id = $1 AND owning_unit = $2"
+                f"{reach}{in_view}",
                 candidate_id,
                 principal.org_unit,
                 *params,
+                *view_params,
             )
         if row is None:
             raise ExtractionCandidateNotFoundError(candidate_id)

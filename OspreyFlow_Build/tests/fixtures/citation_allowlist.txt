@@ -35,7 +35,5 @@ apps/workspace/src/help/roles.ts
 
 # Shared schemas merged ahead of their lanes (ADR-142's merge order 2, 8 November 2026): each file below
 # is on its lane's branch and arrives with that lane's merge, whose orchestrator removes the line here.
-# case's L3.2: the views store and routes.
-services/api/case_views.py
 # studio's L1.3: the Derive Knowledge Adapters' tests.
 tests/knowledge_adapters/test_derive.py

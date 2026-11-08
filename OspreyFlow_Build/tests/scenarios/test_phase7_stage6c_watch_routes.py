@@ -427,9 +427,7 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
     from services.api.app import app
 
     with TestClient(app) as client:
-        # `investigations.branched_from` is a real foreign key (confirmed directly, not assumed —
-        # a synthetic id with no backing row was rejected the first time this test was written) —
-        # "the investigation the triggering ingest was in" needs a real `Investigation` row, so one
+        # "The investigation the triggering ingest was in" needs a real `Investigation` row, so one
         # is created here exactly as an ingest route would, not synthesised.
         origin_investigation_id = _case(client, headers)
 
@@ -464,7 +462,8 @@ def test_jump_branches_a_new_investigation_seeded_with_the_alerts_entities(
         assert result["seeded_count"] == 1
         # ADR-124: no figure for what the jumper may not read.
         assert "unreadable_count" not in result
-        assert result["investigation"]["branched_from"] == origin_investigation_id
+        # ADR-144 Amendment 1 (L3.2's Q1): the case opened records no case it came from.
+        assert "branched_from" not in result["investigation"]
 
         membership = client.get(
             f"/v1/investigations/{result['investigation']['id']}", headers=headers

@@ -36,7 +36,7 @@ from datetime import datetime
 
 from schemas.domain import Edge, Handling, Node, ProvenanceState
 
-from .working_set.models import BranchFilter
+from .working_set.models import NarrowingFilter
 
 #: The properties that name an entity, most telling first. The same order the alert queue reads,
 #: restated here because its fallback (`type` plus the end of the id) would put a fragment of an id
@@ -115,7 +115,7 @@ def scope_of(
     *,
     selected_node_ids: Collection[str] = (),
     selected_link_ids: Collection[str] = (),
-    window: BranchFilter | None = None,
+    window: NarrowingFilter | None = None,
 ) -> EvidenceScope:
     """The scope of a question, from the nodes and links `nodes` and `edges` hold (the reader's own
     view): the selection and everything one link from it, or the whole view when nothing is

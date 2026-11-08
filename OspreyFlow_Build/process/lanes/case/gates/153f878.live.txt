@@ -1,0 +1,60 @@
+# live suites at 153f878 under lease case, stack b (2492, 55434, 6380), 2026-11-08T16:49:28Z
+.................F...................................................... [ 17%]
+........................................................................ [ 34%]
+........................................................................ [ 51%]
+........................................................................ [ 68%]
+........................................................................ [ 85%]
+............................................................             [100%]
+=================================== FAILURES ===================================
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x12d642970>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x12d6425b0>)
+
+    def test_each_right_is_refused_without_it_and_needs_the_case_level_too(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        """For each right, one route it guards: a person holding every other right, and Author on the
+        case, is refused (403) — the right is necessary; a person holding only that right and no level
+        on the case is refused too (403 or 404) — the right is not sufficient. A case route only, since
+        a system route has no case level to withhold."""
+        key, _ = keypair
+        case = asyncio.run(_case("rights-member"))
+        routes = _routes()
+        everything = [f"right:{r.value}" for r in Right]
+        checked = set()
+        with TestClient(__import__("services.api.app", fromlist=["app"]).app) as client:
+            for name, right in sorted(ROUTE_RIGHTS.items()):
+                route = routes[name]
+                if right is None or right in checked or "{investigation_id}" not in route.path:
+                    continue
+                checked.add(right)
+                without = [r for r in everything if r != f"right:{right}"]
+                assert _call(client, route, case, _token(key, "rights-member", without)) == 403, (
+                    name,
+                    right,
+                )
+>               assert _call(
+                    client, route, case, _token(key, "rights-outsider", [f"right:{right}"])
+                ) in (403, 404), (name, right)
+E               AssertionError: ('layer_action_dry_run_route', 'administer_system')
+E               assert 422 in (403, 404)
+E                +  where 422 = _call(<starlette.testclient.TestClient object at 0x12c9467b0>, APIRoute(path='/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run', name='layer_action_dry_run_route', methods=['POST']), '01M6Y11VW66T49204KC8Z184DQ', {'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qtc2lnbmluZy1rZXktMSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyaWdodHM...PARGyqsIt3_fdtKRDg50YznltNc555nJqG7fBiNKoCFJ3k1586UsbwCvluZ7X0GpIHU5fD5lGEAepo6BiwQHMIBD3wjUHaDQMFTbw4uskxn48SxthQ71A'})
+E                +    where {'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qtc2lnbmluZy1rZXktMSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyaWdodHM...PARGyqsIt3_fdtKRDg50YznltNc555nJqG7fBiNKoCFJ3k1586UsbwCvluZ7X0GpIHU5fD5lGEAepo6BiwQHMIBD3wjUHaDQMFTbw4uskxn48SxthQ71A'} = _token(<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x12d642970>, 'rights-outsider', ['right:administer_system'])
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:460: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [08/Nov/2026 16:49:55] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+1 failed, 419 passed, 1 warning in 232.24s (0:03:52)
+# exit 1, 2026-11-08T16:53:22Z
+# lease released 2026-11-08T16:53:25Z

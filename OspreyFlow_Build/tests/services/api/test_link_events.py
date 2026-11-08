@@ -157,7 +157,6 @@ class _Cases:
                 created_at=datetime(2026, 1, 2, tzinfo=UTC),
                 created_by="alice",
                 owning_unit="unit-1",
-                branched_from="inv-1",
             ),
         }
         self.visible = visible
@@ -175,22 +174,12 @@ class _Cases:
         return await self.get(investigation_id)
 
 
-async def test_a_branch_lists_the_emails_its_parent_holds_on_that_link() -> None:
-    """The defect the owner hit: on a branch tab, *Show emails (1)* listed nothing, because the
-    emails were loaded under the original case and the branch asked only for its own."""
+async def test_a_case_made_from_another_lists_none_of_its_originals_emails() -> None:
+    """ADR-144 Amendment 1: a case reads its own events alone. A case made from `inv-1` before
+    L3.2 lists none of the emails loaded under it, whoever may see `inv-1`, and the read names no
+    other case's events."""
     events = [_event("e1", 9, "From the original", scope="inv-1")]
     service, analytics = await _service(events, _Cases({"inv-1", "branch-1"}))
-    page = await service.list("branch-1", "e1", ANALYST)
-    assert [e.properties["subject"] for e in page.events] == ["From the original"]
-    assert analytics.last is not None and analytics.last.filter.inherited is not None
-    assert analytics.last.filter.inherited.scopes == ["inv-1"]
-    # Only the link asked about, not every link the branch holds.
-    assert analytics.last.filter.inherited.edge_ids == ["e1"]
-
-
-async def test_a_branch_reads_nothing_from_a_parent_the_analyst_cannot_see() -> None:
-    events = [_event("e1", 9, "From the original", scope="inv-1")]
-    service, analytics = await _service(events, _Cases({"branch-1"}))
     page = await service.list("branch-1", "e1", ANALYST)
     assert page.total == 0
     assert analytics.last is not None and analytics.last.filter.inherited is None

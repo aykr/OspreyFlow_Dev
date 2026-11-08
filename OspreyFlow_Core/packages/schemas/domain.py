@@ -541,7 +541,7 @@ class PathRequest(BaseModel):
     source: NodeId
     target: NodeId
     #: `le=8` — a real, small margin over `01_DOMAIN_MODEL.md` §6.3's own domain-modelled default
-    #: of 6, not a multiplier: a `repeat().until()` traversal's cost scales with branching factor
+    #: of 6, not a multiplier: a `repeat().until()` traversal's cost scales with its fan-out
     #: raised to `max_hops`, not linearly, so this is a disclosed, reasoned-but-unmeasured ceiling
     #: (Phase 7 Stage 5) in the same spirit as `01_DOMAIN_MODEL.md` §8.2's `supersede_node` figure
     #: and ADR-025's `LOCK_TTL_SECONDS` — a real number retires the guess; none exists yet.
@@ -707,11 +707,9 @@ class Alert(BaseModel):
     investigation_scope`. Threaded from `ChangeStreamEntry.investigation_id`, itself threaded from
     whichever producer route was investigation-scoped at the point the triggering write happened
     (ingest); `None` for a producer that genuinely has no single investigation in scope (the
-    corpus-wide resolution trigger). B14's "jump" branches a new investigation from this field via
-    `InvestigationStore.create(principal, branched_from=...)` — the identical mechanism
-    `branch_investigation` already uses, not new investigation-linking infrastructure. `None` here
-    means the jump starts an unbranched investigation instead of one carrying that link, disclosed
-    to the analyst rather than silently omitted."""
+    corpus-wide resolution trigger). B14's "jump" opens a case of the jumper's own from the
+    alert; since L3.2 that case records no case it came from (ADR-144 Amendment 1), and the jump's
+    audit row names this one."""
 
     id: str
     rule_id: str
@@ -783,7 +781,7 @@ class Hotlist(BaseModel):
     (`06_DECISIONS.md` ADR-038's option (c), recorded there as not selected, not built here).
 
     `status` (Stage 6c): `06_DECISIONS.md` ADR-036's own "the monitor stops" requirement, extended
-    here — see `WatchStatus`'s own docstring. The investigation a jumped-to alert branches into
+    here — see `WatchStatus`'s own docstring. The case a jump from an alert is told of
     comes from `Alert.investigation_id` (the *triggering* event's own investigation, threaded
     through `ChangeStreamEntry`), not from this row — a hotlist is not investigation-scoped and
     outlives any one investigation it happened to be set from."""

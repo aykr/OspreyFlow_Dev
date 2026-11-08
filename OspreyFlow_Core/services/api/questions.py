@@ -1,11 +1,13 @@
 """Questions to the model about a case's documents (`06_DECISIONS.md` ADR-098 decision 4).
 
-An analyst branches the Documents they chose into a case of their own and asks the model about
-them there. The model reads every Document in the case's view that the analyst can see, whole, and
-answers from them only, saying which it draws on; anything it proposes (an entity, with the words
-that name it) is a pending finding in the same review queue as an extraction's, inferred until a
-person accepts it (rule 5), and placed in the Document where its words are, or left out and
-counted when they are not there. The conversation is kept with the case.
+An analyst asks the model about the case's Documents, or about the Documents they chose, opened as a
+private case view (*Ask the model about these*, ADR-144 decision 4). The model reads every Document
+in the case's view that the analyst can see, whole, and answers from them only, saying which it
+draws on; anything it proposes (an entity, with the words that name it) is a pending finding in
+the same review queue as an extraction's, inferred until a person accepts it (rule 5), and placed
+in the Document where its words are, or left out and counted when they are not there. The
+conversation is kept with the case, or with the view it was asked in, read then only by those who
+may see the view (the owner's ruling of 8 November 2026).
 
 **Who may ask, and what the model is shown.** The case level is the route's (Editor to ask, since a
 question writes findings; Viewer to read the conversation). What the model reads is
@@ -55,10 +57,11 @@ from schemas.domain import (
 )
 from schemas.model import ExtractionRequest
 
+from .dataset_scope import refuse_writing_in_an_unconverted_case
 from .datasets import DatasetStore
 from .document_reader import DocumentReaderService
 from .email_extraction import _edge_from_write
-from .event_scope import CaseRecords, visible_ancestors, with_inherited
+from .event_scope import CaseRecords, own_events_only
 from .evidence_brief import (
     EvidenceBrief,
     cited_numbers,
@@ -66,7 +69,6 @@ from .evidence_brief import (
     strip_unheld,
     write_brief,
 )
-from .investigations import InvestigationNotFoundError
 from .link_ids import as_stored
 from .review import (
     DocumentNotFoundError,
@@ -76,7 +78,7 @@ from .review import (
     accept_candidate,
     reject_candidate,
 )
-from .working_set.models import BranchFilter, DeltaAdd
+from .working_set.models import DeltaAdd, NarrowingFilter
 from .working_set.service import WorkingSetService
 
 #: How much document text one question may send the model: the extraction model is served with a
@@ -189,6 +191,10 @@ class QuestionEntry(BaseModel):
     #: `[]` is recorded, and no ancestor was read. It also marks `event_handlings` as recorded,
     #: since the column's earlier default of '[]' cannot be told from a real empty list.
     event_scopes: list[str] | None = None
+    #: The case view the question was asked in (ADR-144 decision 4; the owner's ruling of 8
+    #: November 2026 on L3.2's Q2): its conversation is kept with the view, read only by those who
+    #: may see the view. `None` for the case's own conversation.
+    view_id: str | None = None
 
 
 class QuestionAnswer(BaseModel):
@@ -232,6 +238,9 @@ class AskRequest(BaseModel):
     #: ADR-135 decision 4: the engine the analyst chose (`local` or an enabled provider's name,
     #: from `GET /v1/models/engines`); none is the role's default. The route still decides.
     engine: str | None = Field(default=None, min_length=1, max_length=64)
+    #: The case view asked in (*Ask the model about these*, ADR-144 decision 4): the model reads its
+    #: Documents alone, and the conversation is kept with it.
+    view_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def _window_runs_forward(self) -> AskRequest:
@@ -256,11 +265,12 @@ class NoDocumentsError(Exception):
     """The case holds no Document the analyst can see, so there is nothing to ask about."""
 
 
-QuestionsOption = Literal["narrow_selection", "narrow_timeline_window", "branch"]
+#: The third option: ask in a case view of fewer Documents (ADR-144 decision 4).
+QuestionsOption = Literal["narrow_selection", "narrow_timeline_window", "ask_in_a_view"]
 _QUESTIONS_OPTIONS: tuple[QuestionsOption, ...] = (
     "narrow_selection",
     "narrow_timeline_window",
-    "branch",
+    "ask_in_a_view",
 )
 
 
@@ -315,7 +325,9 @@ def _fits(documents_chars: int, brief_chars: int) -> None:
 
 class QuestionStore(Protocol):
     async def add(self, entry: QuestionEntry) -> None: ...
-    async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]: ...
+    async def list_for_case(
+        self, investigation_id: str, view_id: str | None = None
+    ) -> list[QuestionEntry]: ...
 
 
 class InMemoryQuestionStore:
@@ -327,9 +339,16 @@ class InMemoryQuestionStore:
     async def add(self, entry: QuestionEntry) -> None:
         self.entries.append(entry)
 
-    async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
+    async def list_for_case(
+        self, investigation_id: str, view_id: str | None = None
+    ) -> list[QuestionEntry]:
+        """The case's own conversation, or one view's (`view_id`): never the two mixed."""
         return sorted(
-            (e for e in self.entries if e.investigation_id == investigation_id),
+            (
+                e
+                for e in self.entries
+                if e.investigation_id == investigation_id and e.view_id == view_id
+            ),
             key=lambda e: e.created_at,
         )
 
@@ -358,6 +377,8 @@ ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_handlings JSONB NOT NU
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS event_scopes JSONB;
 -- ADR-135: the engine that answered; NULL for an answer kept before engines were recorded.
 ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS engine TEXT;
+-- ADR-144 decision 4: the view a question was asked in; NULL for the case's own conversation.
+ALTER TABLE case_questions ADD COLUMN IF NOT EXISTS view_id TEXT;
 """
 
 
@@ -384,9 +405,9 @@ class PostgresQuestionStore:
                 "INSERT INTO case_questions (id, investigation_id, author, question, answer, "
                 "document_ids, read_ids, candidate_ids, unplaced, model, created_at, "
                 "graph_node_ids, graph_link_ids, graph_citations, event_handlings, event_scopes, "
-                "engine) "
+                "engine, view_id) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17)",
+                "$17, $18)",
                 entry.id,
                 entry.investigation_id,
                 entry.author,
@@ -404,13 +425,19 @@ class PostgresQuestionStore:
                 json.dumps([h.model_dump(mode="json") for h in entry.event_handlings]),
                 None if entry.event_scopes is None else json.dumps(entry.event_scopes),
                 entry.engine,
+                entry.view_id,
             )
 
-    async def list_for_case(self, investigation_id: str) -> list[QuestionEntry]:
+    async def list_for_case(
+        self, investigation_id: str, view_id: str | None = None
+    ) -> list[QuestionEntry]:
+        """The case's own conversation, or one view's (`view_id`): never the two mixed."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM case_questions WHERE investigation_id = $1 ORDER BY created_at",
+                "SELECT * FROM case_questions WHERE investigation_id = $1 "
+                "AND view_id IS NOT DISTINCT FROM $2 ORDER BY created_at",
                 investigation_id,
+                view_id,
             )
         return [
             QuestionEntry(
@@ -494,26 +521,16 @@ class QuestionsService:
         not see moves no figure (the store applies the access filter in its own query). Asked only
         by link, never by node: an event on a link the analyst may not see is not theirs to count,
         and an empty list of links would not restrict the store at all, so no link, no question.
-        Returns, with the counts and the handlings counted, the ancestor cases whose events were
-        read (the asker's own visible ancestors), so history can ask the same of a later reader."""
+        Returns, with the counts and the handlings counted, the other cases whose events were read:
+        none, since a case counts its own events alone (`event_scope.py`)."""
         if not link_ids:
             return [], [], []
         base = EventFilter(
             investigation_scope=investigation_id, edge_ids=list(link_ids), window=window
         )
-        ancestors: list[str] = []
-        branch_window: Interval | None = None
-        if self._investigations is not None:
-            try:
-                case = await self._investigations.get(investigation_id)
-            except InvestigationNotFoundError:
-                case = None
-            if case is not None:
-                ancestors = await visible_ancestors(self._investigations, case, principal)
-                branch_window = case.branch_window
         trend = await self._analytics.trend(
             TrendRequest(
-                filter=with_inherited(base, ancestors, link_ids, window=branch_window),
+                filter=own_events_only(base),
                 interval=TrendInterval.MONTH,
                 max_periods=MAX_BRIEF_MONTHS,
             ),
@@ -533,18 +550,7 @@ class QuestionsService:
             )
             for h in trend.handlings
         ]
-        return months, handlings, list(ancestors)
-
-    async def _visible_ancestors(self, investigation_id: str, principal: Principal) -> list[str]:
-        """The cases `investigation_id` was branched from that `principal` may see at Viewer:
-        what `_events_per_month` reads for an asker, computed for a reader."""
-        if self._investigations is None:
-            return []
-        try:
-            case = await self._investigations.get(investigation_id)
-        except InvestigationNotFoundError:
-            return []
-        return await visible_ancestors(self._investigations, case, principal)
+        return months, handlings, []
 
     async def _evidence_brief(
         self,
@@ -569,7 +575,7 @@ class QuestionsService:
             selected_node_ids=selected_node_ids,
             selected_link_ids=selected_link_ids,
             window=(
-                BranchFilter(valid_from=window.valid_from, valid_to=window.valid_to)
+                NarrowingFilter(valid_from=window.valid_from, valid_to=window.valid_to)
                 if window is not None
                 else None
             ),
@@ -601,8 +607,17 @@ class QuestionsService:
         selected_link_ids: Sequence[str] = (),
         window: Interval | None = None,
         engine: str | None = None,
+        view_id: str | None = None,
+        view_node_ids: Sequence[str] | None = None,
     ) -> QuestionAnswer:
+        """`view_id` and `view_node_ids`: asked in a case view the route has let the asker see
+        (ADR-144 decision 4). The model reads only what the view holds of the case as the asker
+        sees it, and the entry is kept with the view."""
         nodes, edges = await self._working_set.visible_membership(investigation_id, principal)
+        if view_node_ids is not None:
+            in_view = set(view_node_ids)
+            nodes = [n for n in nodes if n.id in in_view]
+            edges = [e for e in edges if e.source in in_view and e.target in in_view]
         documents = await self._documents(investigation_id, principal, nodes)
         if not documents:
             raise NoDocumentsError(investigation_id)
@@ -699,7 +714,13 @@ class QuestionsService:
                     await self._candidates.get_document_text(document_id, principal)
                 except DocumentNotFoundError:
                     await self._candidates.store_document_text(document_id, text, principal)
-        records = await self._candidates.store(proposals, principal) if proposals else []
+        records = (
+            await self._candidates.store(
+                proposals, principal, **({"view_id": view_id} if view_id is not None else {})
+            )
+            if proposals
+            else []
+        )
         entry = QuestionEntry(
             id=new_id(),
             investigation_id=investigation_id,
@@ -718,6 +739,7 @@ class QuestionsService:
             graph_citations=graph_citations,
             event_handlings=event_handlings,
             event_scopes=event_scopes,
+            view_id=view_id,
         )
         await self._store.add(entry)
         titles = {d: t for d, t, _, _ in documents}
@@ -743,12 +765,14 @@ class QuestionsService:
             raise DocumentNotFoundError(document_id)
         return node.handling
 
-    async def history(self, investigation_id: str, principal: Principal) -> list[QuestionAnswer]:
+    async def history(
+        self, investigation_id: str, principal: Principal, *, view_id: str | None = None
+    ) -> list[QuestionAnswer]:
         """The case's conversation for `principal`: the answers asked over Documents they can all
         see, with the proposals their unit owns, each in its present state. An answer read from a
         Document above them is left out, without a word to say so (rule 3)."""
         out: list[QuestionAnswer] = []
-        entries = await self._store.list_for_case(investigation_id)
+        entries = await self._store.list_for_case(investigation_id, view_id)
         seen_nodes: set[str] = set()
         seen_links: set[str] = set()
         if any(e.graph_node_ids or e.graph_link_ids for e in entries):
@@ -758,7 +782,6 @@ class QuestionsService:
             )
             seen_nodes = {n.id for n in visible_nodes}
             seen_links = {e.id for e in visible_links}
-        reader_scopes: set[str] | None = None
         for entry in entries:
             if not await self._sees_all(investigation_id, entry.read_ids, principal):
                 continue
@@ -777,15 +800,11 @@ class QuestionsService:
             else:
                 if not self._working_set.may_view_all(entry.event_handlings, principal):
                     continue
-                # The events were read from cases the asker could see as well as this one: a reader
-                # who cannot see each of them could not have counted those events by asking.
+                # Counted from other cases' events as well as this one's, before a case counted its
+                # own alone (ADR-144 Amendment 1): no reader now reads those cases' events here, so
+                # none is shown it (rule 3).
                 if entry.event_scopes:
-                    if reader_scopes is None:
-                        reader_scopes = set(
-                            await self._visible_ancestors(investigation_id, principal)
-                        )
-                    if not reader_scopes.issuperset(entry.event_scopes):
-                        continue
+                    continue
             citations = []
             for document_id in entry.document_ids:
                 node = await self._working_set.visible_node(
@@ -853,6 +872,8 @@ class QuestionsService:
             [f"accepting:{candidate_id}:mention"],
             principal,
         )
+        # L3.2 item 3: a case not yet converted writes nothing; refused before the node.
+        await refuse_writing_in_an_unconverted_case()
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
         mention = EdgeWrite(

@@ -61,11 +61,9 @@ export interface QueuedAlert {
  * investigation_scope`. Threaded from `ChangeStreamEntry.investigation_id`, itself threaded from
  * whichever producer route was investigation-scoped at the point the triggering write happened
  * (ingest); `None` for a producer that genuinely has no single investigation in scope (the
- * corpus-wide resolution trigger). B14's "jump" branches a new investigation from this field via
- * `InvestigationStore.create(principal, branched_from=...)` — the identical mechanism
- * `branch_investigation` already uses, not new investigation-linking infrastructure. `None` here
- * means the jump starts an unbranched investigation instead of one carrying that link, disclosed
- * to the analyst rather than silently omitted.
+ * corpus-wide resolution trigger). B14's "jump" opens a case of the jumper's own from the
+ * alert; since L3.2 that case records no case it came from (ADR-144 Amendment 1), and the jump's
+ * audit row names this one.
  */
 export interface Alert {
   id: Id;

@@ -458,8 +458,9 @@ WITHHELD_WORDS: dict[str, str] = {
     "written rather than one marked by a guess",
     "unreadable_link": "a link it cites could not be read (taken back or replaced since it was "
     "found), so no node was written rather than one marked by a guess",
-    "originals_layer": "it rests on the original case's layer, which a branch reads and writes "
-    "nothing into, so no node was written rather than one that names its subject elsewhere",
+    "originals_layer": "it rests on the layer of the case this one was made from, which it reads "
+    "and writes nothing into, so no node was written rather than one that names its subject "
+    "elsewhere",
 }
 
 
@@ -513,9 +514,9 @@ async def _referent_handlings(
 
 
 class _AlertInAReadOnlyLayer(Exception):
-    """An alert resting on what a branch reads of its original case's layer: its node would carry
-    the layer's subjects' names, and the branch writes into no layer (ADR-144 Amendment 1 decision
-    2), so the node is withheld and the queue row still raised."""
+    """An alert resting on what an unconverted case reads of its original's layer: its node would
+    carry the layer's subjects' names, and such a case writes into no layer (ADR-144 Amendment 1
+    decision 2), so the node is withheld and the queue row still raised."""
 
 
 async def _alert_datasets(graph: GraphPort, scheme: HandlingScheme, finding: Finding) -> list[str]:
@@ -528,11 +529,16 @@ async def _alert_datasets(graph: GraphPort, scheme: HandlingScheme, finding: Fin
       goes into that layer too, its node and `ALERTED_ON` included (rule 3, the orchestrator's
       ruling of 7 November 2026): the node's words begin with a subject's name, and in the source
       they would put a name drawn or marked in this case, and one more `Alert` in the counts, in
-      front of every other case reading that source. In a branch, resting on its original's layer,
-      it is withheld (`_AlertInAReadOnlyLayer`).
+      front of every other case reading that source. In a case not yet converted, resting on its
+      original's layer, it is withheld (`_AlertInAReadOnlyLayer`).
     - Otherwise nothing is named, and the stamping graph places them in the case's dataset."""
     if await reads_a_composite():
         return await analyst_writes_into()
+    if read_only_layer() is not None:
+        # A case made from another and not yet converted writes nothing (L3.2 item 3, the
+        # review's round 2): its alert is withheld, its queue row raised, as for its original's
+        # layer before.
+        raise _AlertInAReadOnlyLayer
     layers = {layer for layer in (analyst_layer(), read_only_layer()) if layer is not None}
     if not layers:
         return []

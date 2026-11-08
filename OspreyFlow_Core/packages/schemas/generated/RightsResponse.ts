@@ -4,7 +4,6 @@ export type Right =
   | "create_case"
   | "share_case"
   | "remove_case"
-  | "branch_case"
   | "export"
   | "export_override"
   | "investigate"

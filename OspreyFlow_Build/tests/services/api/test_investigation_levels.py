@@ -27,11 +27,16 @@ V, E, A = AccessLevel.VIEWER, AccessLevel.EDITOR, AccessLevel.AUTHOR
 P = "/v1/investigations/{investigation_id}"
 
 #: (method, path) -> the level the route needs. Reads, queries and previews need Viewer; anything
-#: that changes the case needs Editor; branching and export need Editor (owner's rulings P1, P2).
+#: that changes the case needs Editor; export needs Editor (owner's rulings P1, P2).
 NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P): V,
-    ("POST", P + "/branch"): E,
-    ("POST", P + "/branch-by-filter"): E,
+    # ADR-144: a view holds no data, so each view route needs only a level; saving, sharing and
+    # deleting also need `investigate`, and only a view's creator shares or deletes it.
+    ("GET", P + "/views"): V,
+    ("POST", P + "/views"): V,
+    ("GET", P + "/views/{view_id}"): V,
+    ("POST", P + "/views/{view_id}/share"): V,
+    ("DELETE", P + "/views/{view_id}"): V,
     # Closing or reopening a tab (ADR-084) changes only the caller's own strip, so Viewer suffices.
     ("PUT", P + "/tab"): V,
     ("POST", P + "/seed"): E,
@@ -417,7 +422,7 @@ def test_a_viewer_is_refused_a_route_that_changes_the_case_with_a_403_and_an_aud
 ) -> None:
     client, store = _client(AccessLevel.VIEWER, audit)
 
-    response = client.post("/v1/investigations/inv-1/branch")
+    response = client.post("/v1/investigations/inv-1/link-types/p-1/withdraw")
 
     assert response.status_code == 403
     assert store.asked == [AccessLevel.EDITOR]

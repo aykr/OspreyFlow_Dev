@@ -153,7 +153,7 @@ async def test_expand_past_the_node_cap_raises_limit_exceeded_with_all_three_opt
     assert detail.cap_kind == "nodes"
     assert detail.cap == MAX_NODES
     assert detail.would_be == MAX_NODES + 1
-    assert set(detail.options) == {"branch", "filter", "promote_to_batch"}
+    assert set(detail.options) == {"save_as_view", "filter", "promote_to_batch"}
     # Never a partial write: the rejected expansion leaves nothing behind.
     assert await store.node_count("inv-1") == 0
 

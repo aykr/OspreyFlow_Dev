@@ -14,6 +14,7 @@ from services.api.datasets import COMPOSITE, PostgresDatasetStore, index_one_dat
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
+from tests.services.api.unconverted import made_before_l3_2_on_postgres
 
 
 async def test_the_migration_places_cases_naming_two_and_the_store_then_holds_the_rule() -> None:
@@ -193,7 +194,7 @@ async def test_a_branch_reading_its_originals_layer_is_given_none_and_a_rerun_ch
 ) -> None:
     """The final L3.1 review's second blocker, at `_main`: once a branch made since L3.1 holds a
     `case_layer_reads` row, the migration called `ensure_layer` for it, which refuses a branch
-    (`BranchLayerError`): the run stopped there, the one-row index was never built, and every
+    (`ReadOnlyLayerError`): the run stopped there, the one-row index was never built, and every
     re-run stopped at the same case. The dry run could not foresee it, reading no links. Now the
     branch is named and given none; the dry run says exactly the writes the real run makes; and a
     second run changes nothing. Red with the links unread (below)."""
@@ -211,7 +212,7 @@ async def test_a_branch_reading_its_originals_layer_is_given_none_and_a_rerun_ch
         )
         store = await PostgresDatasetStore.connect(dsn)
         try:
-            await store.copy_case("one", "twig", case_name="Twig")
+            await made_before_l3_2_on_postgres(store, "one", "twig")
             assert await store.read_only_layer_of("twig") == await store.layer_of_case("one")
         finally:
             await store.close()
@@ -243,7 +244,7 @@ async def test_the_branch_stops_the_migration_with_its_link_unread(
     """Rule 15, red: the migration as it was, reading no link, asks `ensure_layer` for the branch
     and is refused."""
     import scripts.migrate_cases_to_one_dataset as migration
-    from services.api.datasets import BranchLayerError
+    from services.api.datasets import ReadOnlyLayerError
 
     class _LinksUnread:
         """The store as the migration read it before this fix: no link seen; every write still
@@ -269,7 +270,7 @@ async def test_the_branch_stops_the_migration_with_its_link_unread(
         )
         store = await PostgresDatasetStore.connect(dsn)
         try:
-            await store.copy_case("one", "twig", case_name="Twig")
+            await made_before_l3_2_on_postgres(store, "one", "twig")
         finally:
             await store.close()
         await conn.close()
@@ -279,7 +280,7 @@ async def test_the_branch_stops_the_migration_with_its_link_unread(
             return await real(_LinksUnread(store), cases, **kwargs)  # type: ignore[arg-type]
 
         monkeypatch.setattr(migration, "migrate", unread)
-        with pytest.raises(BranchLayerError):
+        with pytest.raises(ReadOnlyLayerError):
             await migration._main([], dsn=dsn)
     finally:
         await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')

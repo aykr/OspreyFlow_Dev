@@ -621,6 +621,7 @@ NON_JSON_ROUTES: dict[str, str] = {
     "PUT /v1/investigations/{investigation_id}/access": "204, no body",
     "PUT /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
+    "DELETE /v1/investigations/{investigation_id}/views/{view_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}": "204, no body",
     "DELETE /v1/admin/dashboards/{client_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/trends/{trend_id}": "204, no body",

@@ -74,7 +74,7 @@ def _bbox_from_wkb(geometry_wkb: bytes) -> tuple[float, float, float, float]:
         load_spatial_extension(con)
         # A one-row-literal subquery with no WHERE/JOIN to filter it out always produces exactly
         # one row — `fetchone()`'s `| None` in DuckDB's own stub is for the general case, not
-        # this query; the `cast` says so rather than adding an `if row is None: raise` branch
+        # this query; the `cast` says so rather than adding an `if row is None: raise` path
         # that can never run.
         row = cast(
             "tuple[float, float, float, float]",

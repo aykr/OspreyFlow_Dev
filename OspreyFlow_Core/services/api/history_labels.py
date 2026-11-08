@@ -11,7 +11,6 @@ label that matches no pattern.
 
 from __future__ import annotations
 
-BRANCHED = "Branched"
 SEEDED = "Seeded"
 EXPANDED = "Expanded"
 LINKS_AMONG = "Showed links among the view"
@@ -32,7 +31,6 @@ CHANGED = "Changed"
 #: The labels a write site may use.
 FIXED_LABELS = frozenset(
     {
-        BRANCHED,
         SEEDED,
         EXPANDED,
         LINKS_AMONG,

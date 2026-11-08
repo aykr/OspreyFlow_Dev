@@ -21,7 +21,7 @@ export type Audience = "only_me" | "team";
  * (`06_DECISIONS.md` ADR-038's option (c), recorded there as not selected, not built here).
  *
  * `status` (Stage 6c): `06_DECISIONS.md` ADR-036's own "the monitor stops" requirement, extended
- * here — see `WatchStatus`'s own docstring. The investigation a jumped-to alert branches into
+ * here — see `WatchStatus`'s own docstring. The case a jump from an alert is told of
  * comes from `Alert.investigation_id` (the *triggering* event's own investigation, threaded
  * through `ChangeStreamEntry`), not from this row — a hotlist is not investigation-scoped and
  * outlives any one investigation it happened to be set from.

@@ -2,7 +2,7 @@
 its Amendment 1 (step C of ADR-081).
 
 An Editor proposes a type from the change form when none fits. It is usable at once in that case
-(and its branches, and any case where one of its links is in view), is probabilistic, and is kept
+(and any case where one of its links is in view), is probabilistic, and is kept
 here, never in `default.yaml`. An `osprey-admin` holder of the proposing unit promotes it (choosing
 its basis), rejects it, or later retires it; the proposer or an Author of the case may withdraw it.
 
@@ -33,7 +33,6 @@ from adapters.graph_arcadedb.naming import STORAGE_SEPARATOR
 from conduit_common.identity import new_id
 from schemas.domain import EdgeTypeDef, OntologySchema, Principal
 
-from .event_scope import visible_ancestors
 from .investigations import InvestigationStore
 
 if TYPE_CHECKING:
@@ -241,8 +240,8 @@ class LinkTypeService:
         """Every type a link in this case may take: the ontology's (the OspreyFlow default
         dataset's), then the pending proposals of the datasets the case reads (ADR-099 Amendment
         3). A proposal made before that amendment names no dataset and keeps ADR-090's rule: the
-        case and the cases it was branched from that `principal` may see, then a case where one of
-        its links is in view; `scripts.stamp_datasets` gives it its case's dataset."""
+        case it was made in, then a case where one of its links is in view;
+        `scripts.stamp_datasets` gives it its case's dataset."""
         await self._current()
         offered = {
             t.name: CaseType(definition=t, storage_name=t.name)
@@ -252,9 +251,8 @@ class LinkTypeService:
         pending: list[LinkTypeProposal] = []
         if principal.datasets:
             pending += await self._store.pending_for_datasets(principal.datasets)
-        case = await self._investigations.get(investigation_id)
-        lineage = [case.id, *await visible_ancestors(self._investigations, case, principal)]
-        pending += [p for p in await self._store.pending_for_cases(lineage) if p.dataset_id is None]
+        made_here = await self._store.pending_for_cases([investigation_id])
+        pending += [p for p in made_here if p.dataset_id is None]
         _, edges = await self._working_set.visible_membership(investigation_id, principal)
         in_view = sorted({e.type for e in edges} - set(offered))
         if in_view:

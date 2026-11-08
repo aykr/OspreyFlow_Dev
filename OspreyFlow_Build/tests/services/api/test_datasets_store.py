@@ -37,7 +37,7 @@ async def fresh_dsn():
     await conn.close()
 
 
-async def test_a_case_reads_one_dataset_and_a_branch_takes_it(store) -> None:
+async def test_a_case_reads_one_dataset_and_a_case_opened_from_it_takes_it(store) -> None:
     """ADR-099 Amendment 12: one dataset per case; the read set adds the case's own layer
     (`test_analyst_layer_store.py` has the layer's own cases)."""
     first = await store.create(ALICE, "Fixture Corp")
@@ -46,7 +46,7 @@ async def test_a_case_reads_one_dataset_and_a_branch_takes_it(store) -> None:
     await store.set_for_case(case, [second.id], ALICE)
     assert (await store.ids_of_case(case))[0] == second.id
     assert [d.name for d in await store.of_case(case, ALICE)] == ["Enron corpus"]
-    await store.copy_case(case, branch)
+    await store.read_the_same_dataset(case, branch)
     assert [d.id for d in await store.of_case(branch, ALICE)] == [second.id]
     await store.set_for_case(case, [first.id], ALICE)
     assert [d.id for d in await store.of_case(case, ALICE)] == [first.id]
@@ -213,9 +213,9 @@ async def test_postgres_holds_a_drawn_dataset_for_its_home_case_alone(store) -> 
 async def test_postgres_never_copies_a_drawn_dataset(
     store, monkeypatch: pytest.MonkeyPatch, planted_out: bool
 ) -> None:
-    """The round-1 review's blocker 1: `copy_case` refuses a case reading a drawn dataset before
-    it writes, whether as a branch or as the alert jump's copy; red with the kind check removed,
-    when the copy reads the drawing from a second case."""
+    """The round-1 review's blocker 1: `read_the_same_dataset` (the alert jump's copy) refuses a
+    case reading a drawn dataset before it writes; red with the kind check removed, when the copy
+    reads the drawing from a second case."""
     from services.api import datasets as datasets_module
     from services.api.datasets import DrawnNotCopied
 
@@ -225,20 +225,15 @@ async def test_postgres_never_copies_a_drawn_dataset(
     drawn = await store.create_drawn(
         ALICE, f"Drawing {new_id()}", highest_marking="OFFICIAL", home_case=home
     )
-    for as_a_branch in (True, False):
-        copy = new_id()
-        if planted_out:
-            await store.copy_case(
-                home, copy, case_name="Copy", created_by=ALICE.id, as_a_branch=as_a_branch
-            )
-            assert drawn.id in [d.id for d in await store.chosen_of_case(copy)]
-        else:
-            with pytest.raises(DrawnNotCopied):
-                await store.copy_case(
-                    home, copy, case_name="Copy", created_by=ALICE.id, as_a_branch=as_a_branch
-                )
-            assert await store.chosen_of_case(copy) == []
-            assert await store.layer_of_case(copy) is None
+    copy = new_id()
+    if planted_out:
+        await store.read_the_same_dataset(home, copy, case_name="Copy", created_by=ALICE.id)
+        assert drawn.id in [d.id for d in await store.chosen_of_case(copy)]
+    else:
+        with pytest.raises(DrawnNotCopied):
+            await store.read_the_same_dataset(home, copy, case_name="Copy", created_by=ALICE.id)
+        assert await store.chosen_of_case(copy) == []
+        assert await store.layer_of_case(copy) is None
 
 
 async def test_postgres_widens_an_old_kind_check_to_take_drawn(fresh_dsn: str) -> None:

@@ -675,6 +675,9 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_target_models_store.py
           ../OspreyFlow_Build/tests/test_seed_target_models_store.py
           ../OspreyFlow_Build/tests/test_make_home_cases_store.py
+          ../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+          ../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
+          ../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py
           ../OspreyFlow_Build/tests/resolve/test_trigger_layers.py
           ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py
           ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py
@@ -1034,6 +1037,9 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_target_models_store.py
           --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py
           --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+          --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py
           --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py
           --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py

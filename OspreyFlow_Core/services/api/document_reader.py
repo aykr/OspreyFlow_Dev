@@ -4,7 +4,7 @@ A Document opens to read with its title, its full text and the entities already 
 marked in place. The text is the document's stored extraction text where there is one (the
 Dossier's source, `dossier.get_document_view`, which also gives the marked spans); otherwise, for
 an email, the event it was made from, read through the analytics port under the case's scope rules
-(on a branch, the visible parents' events too, ADR-084 Amendment 2) and its handling filter.
+(its own events alone, `event_scope.py`) and its handling filter.
 
 **Who may read it: whoever can see the Document in the case.** A Document above the caller, one not
 in the case, and a node that is not a Document all answer `DocumentNotFoundError`, one refusal for
@@ -43,7 +43,7 @@ from schemas.domain import (
 from .dataset_scope import analyst_writes_into, with_the_layer
 from .dossier import MessageSpan, get_document_view
 from .email_extraction import _edge_from_write, _node_from_write
-from .event_scope import CaseRecords, visible_ancestors, with_inherited
+from .event_scope import CaseRecords, own_events_only
 from .link_ids import as_stored
 from .review import CandidateStatus, DocumentNotFoundError, ExtractionCandidateStore
 from .working_set.models import DeltaAdd
@@ -251,16 +251,9 @@ class DocumentReaderService:
     async def _event(
         self, investigation_id: str, event_id: str, principal: Principal
     ) -> EventRecord | None:
-        own = EventFilter(investigation_scope=investigation_id, event_ids=[event_id])
-        event_filter = own
-        if self._investigations is not None:
-            case = await self._investigations.get(investigation_id)
-            ancestors = await visible_ancestors(self._investigations, case, principal)
-            if ancestors:
-                _, edges = await self._working_set.current_membership(investigation_id)
-                event_filter = with_inherited(
-                    own, ancestors, [e.id for e in edges], window=case.branch_window
-                )
+        event_filter = own_events_only(
+            EventFilter(investigation_scope=investigation_id, event_ids=[event_id])
+        )
         page = await self._analytics.list_events(
             EventListRequest(filter=event_filter, offset=0, limit=1), principal
         )

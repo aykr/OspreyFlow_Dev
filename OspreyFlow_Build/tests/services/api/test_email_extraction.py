@@ -185,18 +185,23 @@ class WritingGraph(FakeGraphPort):
 
 
 def _in_reach(record: ExtractionCandidateRecord, principal: Principal) -> bool:
-    """`dataset_scope.reach_clause`, as the Postgres store applies it."""
-    return (
+    """`dataset_scope.reach_clause` and `view_clause`, as the Postgres store applies them: a
+    candidate kept with a case view is read only through that view (L3.2's Q2)."""
+    from services.api.dataset_scope import readable_view
+
+    in_case = (
         principal.datasets is None
         or record.dataset_id is None
         or record.dataset_id in principal.datasets
     )
+    return in_case and (record.view_id is None or record.view_id == readable_view())
 
 
 class InMemoryCandidates:
     """Refuses what the Postgres store refuses: a candidate or a text is read only by its owning
     unit, a candidate kept in a dataset (a mark made by hand, ADR-143 Amendment 1) only under a case
-    that reads it, and a candidate is reviewed once."""
+    that reads it, one kept with a case view only through that view, and a candidate is reviewed
+    once."""
 
     def __init__(self) -> None:
         self.records: dict[str, ExtractionCandidateRecord] = {}
@@ -208,6 +213,7 @@ class InMemoryCandidates:
         principal: Principal,
         *,
         dataset_id: str | None = None,
+        view_id: str | None = None,
     ) -> list[ExtractionCandidateRecord]:
         out = []
         for c in candidates:
@@ -218,6 +224,7 @@ class InMemoryCandidates:
                 created_by=principal.id,
                 created_at=datetime.now(UTC),
                 dataset_id=dataset_id,
+                view_id=view_id,
             )
             self.records[record.id] = record
             out.append(record)
@@ -464,13 +471,12 @@ async def test_an_analyst_of_another_unit_cannot_reject_a_finding_they_cannot_se
     assert candidates.records[extracted.candidates[0].id].status is CandidateStatus.PENDING
 
 
-async def test_an_email_loaded_under_the_original_case_can_be_extracted_from_a_branch() -> None:
-    """ADR-084 Amendment 2: the emails behind a branch's link were loaded under the case it came
-    from; extracting from one on the branch finds it there, and the Document joins the branch."""
-    service, graph, working, _, _ = await _build(investigations=_Cases({"inv-1", "branch-1"}))
-    result = await service.extract("branch-1", "e1", "ev-1", ANALYST)
-    assert result.document_id == email_document_id("ev-1")
-    assert await working.get_node("branch-1", result.document_id) is not None
+async def test_an_email_loaded_under_the_original_case_is_not_read_from_another_case() -> None:
+    """ADR-144 Amendment 1: a case reads its own events alone. An email loaded under `inv-1` is
+    not found from a case made from it, whoever may see `inv-1`."""
+    service, _, _, _, _ = await _build(investigations=_Cases({"inv-1", "branch-1"}))
+    with pytest.raises(EmailNotFoundError):
+        await service.extract("branch-1", "e1", "ev-1", ANALYST)
 
 
 async def test_a_branch_cannot_extract_an_email_from_a_parent_the_analyst_cannot_see() -> None:

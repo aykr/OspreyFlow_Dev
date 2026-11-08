@@ -8,7 +8,7 @@ docstring already accepts for `DeltaSnapshot` ("a real shape belongs in code, no
 docstring"): τ, manual link/split and `explain` are all per-investigation working-set concepts in
 this build (`WorkingSetService.set_resolution_threshold`'s own docstring has the full reasoning
 for τ; `manual_link`/`manual_split`/`explain_cluster` extend the same rationale), and every other
-working-set mutation in `app.py` (`/branch`, `/seed`, `/expand`, `/nodes`) is already nested the
+working-set mutation in `app.py` (`/seed`, `/expand`, `/nodes`) is already nested the
 same way.
 
 Request/response models plus the pure business-logic call live here, matching `search.py`'s own

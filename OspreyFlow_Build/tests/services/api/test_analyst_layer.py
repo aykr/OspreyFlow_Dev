@@ -16,11 +16,12 @@ What a mistake here would do, and the case that catches it:
   `test_the_one_dataset_check_fails_with_the_check_removed`;
 - a principal outside the case told more than of a missing case:
   `test_a_principal_outside_the_case_is_refused_as_for_a_missing_case`;
-- a branch holding a layer of its own, or a case opened from an alert reading the original's:
-  `test_a_branch_holds_no_layer_of_its_own` and
-  `test_a_case_opened_from_an_alert_keeps_an_empty_layer_of_its_own`, each red with the other's
-  copy swapped in (the jump's real route is in `test_case_writes.py`; a branch's writes into the
-  layer it reads are refused in `test_dataset_scope.py`);
+- a case made from another holding a layer of its own, or one opened from an alert reading the
+  original's: `test_a_case_made_from_another_holds_no_layer_of_its_own` and
+  `test_a_case_opened_from_an_alert_keeps_an_empty_layer_of_its_own`, the second red with the
+  original's layer linked (`test_the_jump_check_fails_with_the_originals_layer_linked`; the jump's
+  real route is in `test_case_writes.py`, and writes into a layer read so are refused in
+  `test_unconverted_case_layer.py`);
 - a layer stopping its case asking a hosted model, or going further than its sources:
   `test_a_layers_egress_is_its_sources` and
   `test_a_composite_cases_layer_takes_the_strictest_of_members_that_differ`, shown red in
@@ -48,6 +49,8 @@ from services.api.datasets import (
 from services.api.investigations import AccessLevel, Investigation, InvestigationNotFoundError
 
 from schemas.domain import Principal
+
+from .unconverted import made_before_l3_2
 
 ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
@@ -150,23 +153,23 @@ async def test_a_case_that_chose_nothing_reads_nothing(store: InMemoryDatasetSto
     assert await store.ids_of_case("orphan") == []
 
 
-async def _a_branch_and_a_jump(store: InMemoryDatasetStore) -> tuple[str | None, ...]:
+async def _an_unconverted_case_and_a_jump(store: InMemoryDatasetStore) -> tuple[str | None, ...]:
     await store.set_for_case("parent", ["enron"], ALICE)
-    await store.copy_case("parent", "branch")
-    await store.copy_case("branch", "twig")
-    await store.copy_case("parent", "jump", created_by=BOB.id, as_a_branch=False)
-    return tuple([await store.layer_of_case(c) for c in ("parent", "branch", "twig", "jump")])
+    await made_before_l3_2(store, "parent", "made")
+    await store.read_the_same_dataset("parent", "jump", created_by=BOB.id)
+    return tuple([await store.layer_of_case(c) for c in ("parent", "made", "jump")])
 
 
-async def test_a_branch_holds_no_layer_of_its_own(store: InMemoryDatasetStore) -> None:
-    """ADR-144 Amendment 1 decision 2 (the owner, 7 November 2026: no branches anywhere): a branch,
-    a branch of a branch included, holds no layer; it reads its original case's dataset and layer,
-    the layer read-only, until L3.2 removes branches."""
-    parent, branch, twig, _jump = await _a_branch_and_a_jump(store)
-    assert parent is not None and branch is None and twig is None
-    for case in ("branch", "twig"):
-        assert await store.read_only_layer_of(case) == parent
-        assert_read_set(await store.ids_of_case(case), source=["enron"], layer=parent)
+async def test_a_case_made_from_another_holds_no_layer_of_its_own(
+    store: InMemoryDatasetStore,
+) -> None:
+    """ADR-144 Amendment 1 decision 2: a case made from another since L3.1, until the upgrade turns
+    it into a view, holds no layer; it reads its original case's dataset and layer, the layer
+    read-only."""
+    parent, made, _jump = await _an_unconverted_case_and_a_jump(store)
+    assert parent is not None and made is None
+    assert await store.read_only_layer_of("made") == parent
+    assert_read_set(await store.ids_of_case("made"), source=["enron"], layer=parent)
 
 
 async def test_a_case_opened_from_an_alert_keeps_an_empty_layer_of_its_own(
@@ -174,38 +177,24 @@ async def test_a_case_opened_from_an_alert_keeps_an_empty_layer_of_its_own(
 ) -> None:
     """The exception (ADR-143 Amendment 1 item 3): the jumper may hold no level on the alert's
     case, so the case opened from it reads the dataset alone and has a layer of its own."""
-    parent, _branch, _twig, jump = await _a_branch_and_a_jump(store)
+    parent, _made, jump = await _an_unconverted_case_and_a_jump(store)
     assert jump is not None and jump != parent
     assert await store.read_only_layer_of("jump") is None
     assert_read_set(await store.ids_of_case("jump"), source=["enron"], layer=jump)
     assert store.datasets[jump].created_by == BOB.id
 
 
-def _every_copy(monkeypatch: pytest.MonkeyPatch, *, as_a_branch: bool) -> None:
-    copy = InMemoryDatasetStore.copy_case
-
-    async def swapped(self: InMemoryDatasetStore, *args: object, **kwargs: object) -> None:
-        await copy(self, *args, **{**kwargs, "as_a_branch": as_a_branch})  # type: ignore[arg-type]
-
-    monkeypatch.setattr(InMemoryDatasetStore, "copy_case", swapped)
-
-
-async def test_the_branch_check_fails_with_the_jumps_copy_swapped_in(
+async def test_the_jump_check_fails_with_the_originals_layer_linked(
     store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rule 15, red: with the old copy (a layer of its own) given to a branch, it holds one."""
-    _every_copy(monkeypatch, as_a_branch=False)
-    _parent, branch, twig, _jump = await _a_branch_and_a_jump(store)
-    assert branch is not None and twig is not None
+    """Rule 15, red: `read_the_same_dataset` planted to link the new case to the original's layer,
+    as the old copy did, and the alert's case reads a layer its maker may hold no level on."""
 
+    async def linked(self: InMemoryDatasetStore, original: str, made: str, **_: object) -> None:
+        await made_before_l3_2(self, original, made)
 
-async def test_the_jump_check_fails_with_the_branchs_copy_swapped_in(
-    store: InMemoryDatasetStore, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Red the other way: given a branch's copy, the alert's case would read the original's layer,
-    which its maker may hold no level on."""
-    _every_copy(monkeypatch, as_a_branch=True)
-    parent, _branch, _twig, jump = await _a_branch_and_a_jump(store)
+    monkeypatch.setattr(InMemoryDatasetStore, "read_the_same_dataset", linked)
+    parent, _made, jump = await _an_unconverted_case_and_a_jump(store)
     assert jump is None and await store.read_only_layer_of("jump") == parent
 
 
@@ -342,7 +331,6 @@ class _Investigations:
         principal: Principal,
         *,
         name: str,
-        branched_from: str | None = None,
         domains: list[str] | None = None,
     ) -> Investigation:
         case = Investigation(
@@ -351,7 +339,6 @@ class _Investigations:
             created_at=datetime.now(UTC),
             created_by=principal.id,
             owning_unit=principal.org_unit,
-            branched_from=branched_from,
         )
         self.made.append(case)
         self.members[case.id] = {principal.id}

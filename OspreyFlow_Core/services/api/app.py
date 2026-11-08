@@ -161,6 +161,7 @@ from schemas.analytics import (
     Sighting,
     SightingRequest,
 )
+from schemas.case_views import CaseView, CaseViewInput, CaseViewOpened
 from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.dataset_model import (
     DatasetModelView,
@@ -396,6 +397,14 @@ from .case_brief import (
     CaseBriefStore,
 )
 from .case_brief_resolvers import title_resolvers
+from .case_views import (
+    CaseViewStore,
+    InMemoryCaseViewStore,
+    NotTheViewsCreator,
+    PostgresCaseViewStore,
+    ViewNotFound,
+    open_view,
+)
 from .compute_routes import (
     JOB_TYPE_COMPUTE_METRIC,
     ComputeMetricAccepted,
@@ -411,6 +420,7 @@ from .dataset_scope import (
     UnknownDatasetError,
     made_in,
     outside_any_case,
+    read_in_view,
     refuse_in_a_composite_case,
     refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
@@ -419,7 +429,6 @@ from .dataset_scope import (
 from .datasets import (
     DRAWN,
     MAX_DATASET_NAME,
-    BranchLayerError,
     CaseDatasetsRequest,
     CreateCompositeRequest,
     CreateDatasetRequest,
@@ -429,6 +438,7 @@ from .datasets import (
     DrawnNotCopied,
     HomeCaseHeld,
     InMemoryDatasetStore,
+    ReadOnlyLayerError,
     UnknownDatasetEgressError,
 )
 from .document_content import (
@@ -465,7 +475,7 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .event_scope import visible_ancestors, with_inherited
+from .event_scope import own_events_only
 from .explore import (
     ExploreService,
     StarterNotOffered,
@@ -491,7 +501,6 @@ from .history import (
 )
 from .history_labels import (
     ALERT_CANVAS,
-    BRANCHED,
     BRIEF_EDITED,
     EXPANDED,
     LINKS_AMONG,
@@ -826,7 +835,6 @@ from .watch_routes import (
 from .worker import JobWorker
 from .working_set.models import (
     MAX_NODES,
-    BranchFilter,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
@@ -839,14 +847,13 @@ from .working_set.models import (
     LinksAmongOutcome,
     LinksAmongRequest,
     NodeNotInWorkingSetError,
-    NothingToBranchError,
     ResolutionOutcome,
     SameNodeAssertionError,
     WorkingSetDeltaSent,
     decode_delta,
     lacks_record,
 )
-from .working_set.service import WorkingSetService
+from .working_set.service import WorkingSetService, _cap_breach
 from .working_set.store import DELTA_STREAM_MAXLEN, ValkeyWorkingSetStore
 from .ws_ticket import WsTicketResponse, mint_ws_ticket, redeem_ws_ticket
 
@@ -908,6 +915,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         config.postgres.dsn, core_types=_core_types()
     )
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
+    # ADR-144: the saved views of each case, holding no data.
+    case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
@@ -1078,6 +1087,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.studio_recipes = studio_recipes
     app.state.sources = source_store
     app.state.target_models = target_model_store
+    app.state.case_views = case_view_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = resources.recipe_repo_root
@@ -1185,6 +1195,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await history.close()
         await source_store.close()
         await target_model_store.close()
+        await case_view_store.close()
+        app.state.case_views = None
         # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
         # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
         app.state.target_models = None
@@ -1331,6 +1343,19 @@ def get_target_models(request: Request) -> TargetModelStore:
 
 
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
+
+
+def get_case_views(request: Request) -> CaseViewStore:
+    """ADR-144. The lifespan sets the Postgres store; a test app with no lifespan gets an in-memory
+    one."""
+    store = getattr(request.app.state, "case_views", None)
+    if store is None:
+        store = InMemoryCaseViewStore()
+        request.app.state.case_views = store
+    return store
+
+
+CaseViewsDep = Annotated[CaseViewStore, Depends(get_case_views)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -1521,9 +1546,9 @@ async def get_principal(
 def holds_a_level_in(
     investigations: InvestigationStore | Callable[[], InvestigationStore],
 ) -> Callable[[Principal, str], Any]:
-    """Whether a principal holds any level on a case, by the case's own Viewer check: what a branch
-    asks before its reader reads its original's layer (`scope_to_case`). Given as a getter, the
-    store is looked up only when a branch asks."""
+    """Whether a principal holds any level on a case, by the case's own Viewer check: what a case
+    made from another and not yet converted asks before its reader reads its original's layer
+    (`scope_to_case`). Given as a getter, the store is looked up only when such a case asks."""
 
     async def holds(principal: Principal, investigation_id: str) -> bool:
         store = investigations() if callable(investigations) else investigations
@@ -2076,10 +2101,22 @@ async def _too_many_identifiers_handler(
     )
 
 
-@app.exception_handler(NothingToBranchError)
-async def _nothing_to_branch_handler(request: Request, exc: NothingToBranchError) -> JSONResponse:
-    """One answer whether the chosen nodes are hidden from the caller or do not exist (ADR-084)."""
-    return JSONResponse(status_code=422, content={"error": "nothing_to_branch"})
+@app.exception_handler(ViewNotFound)
+async def _view_not_found_handler(request: Request, exc: ViewNotFound) -> JSONResponse:
+    """ADR-144 decision 3: someone else's private view, another case's, and none at all alike."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "view_not_found"})
+
+
+@app.exception_handler(NotTheViewsCreator)
+async def _not_the_views_creator_handler(request: Request, exc: NotTheViewsCreator) -> JSONResponse:
+    """ADR-144 decision 3: a shared view is shared or deleted only by the person who saved it."""
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "not_the_views_creator",
+            "detail": "Only the person who saved this view can share or delete it.",
+        },
+    )
 
 
 @app.exception_handler(TypologyRuleNotFoundError)
@@ -2564,12 +2601,12 @@ async def _model_refused_handler(request: Request, exc: TargetModelRefused) -> J
     return JSONResponse(status_code=409, content={"error": "model_refused", "detail": str(exc)})
 
 
-@app.exception_handler(BranchLayerError)
-async def _branch_layer_handler(request: Request, exc: BranchLayerError) -> JSONResponse:
-    """ADR-144 Amendment 1 decision 2: a branch reads its original case's layer and writes none;
+@app.exception_handler(ReadOnlyLayerError)
+async def _read_only_layer_handler(request: Request, exc: ReadOnlyLayerError) -> JSONResponse:
+    """ADR-144 Amendment 1 decision 2: an unconverted case reads its original's layer, writes none;
     refused before anything was written."""
     return JSONResponse(
-        status_code=409, content={"error": "branch_layer_read_only", "detail": str(exc)}
+        status_code=409, content={"error": "original_layer_read_only", "detail": str(exc)}
     )
 
 
@@ -3072,7 +3109,6 @@ class InvestigationListing(BaseModel):
     level: AccessLevel
     created_at: datetime
     created_by: str
-    branched_from: str | None = None
     #: ADR-126: the case's domain packs, which every reader of the case may see: it says what kind
     #: of case it is, never what it holds.
     domains: list[DomainPack] = Field(default_factory=list)
@@ -3104,7 +3140,6 @@ async def list_investigations(
             level=level,
             created_at=case.created_at,
             created_by=case.created_by,
-            branched_from=case.branched_from,
             domains=case.domains,
             tab_hidden=case.id in hidden,
             datasets=[d.name for d in reads],
@@ -3405,225 +3440,108 @@ async def get_investigation(
     return investigation
 
 
-def _narrowed(parent: Interval | None, asked: Interval | None) -> Interval | None:
-    """The window a new branch records: the one asked for, held inside the parent branch's own
-    (both ends included; an end of `None` runs on without end). Neither: none."""
-    if parent is None or asked is None:
-        return parent if asked is None else asked
-    ends = [t for t in (parent.valid_to, asked.valid_to) if t is not None]
-    return Interval(
-        valid_from=max(parent.valid_from, asked.valid_from),
-        valid_to=min(ends) if ends else None,
-    )
+# --- case views (ADR-144; spec 03 §3.1b) -----------------------------------------------------
+#
+# A view holds no data: every route stands behind the case's own level check first, so a reader
+# with no level on the case is refused each one as for a case that does not exist, and the store
+# answers only with views the reader may see (rule 3). Saving, sharing and deleting need
+# `investigate`, the Viewer's right to work the case; listing and opening need only the level.
 
 
-class BranchRequest(BaseModel):
-    """ADR-084. `node_ids` absent: fork the whole working set, as the cap breach's "branch" option
-    always did. Present: fork only those nodes and the links between them (an empty list is a
-    choice of nothing, and is refused). `name` is the new case's name; blank means a default."""
-
-    node_ids: list[NodeId] | None = Field(default=None, max_length=50_000)
-    name: str | None = None
-    #: ADR-128 decision 2 (B3, select what is lit): the brushed window, both ends inside it. With
-    #: it, the branch holds only the links with an event in the window and the nodes they touch,
-    #: derived here on the server and kept only where `node_ids` names a node. It needs a choice of
-    #: nodes: the Glass sends the window with the lit selection, never alone.
-    window: Interval | None = None
-
-    @model_validator(mode="after")
-    def _a_window_comes_with_a_choice_and_runs_forwards(self) -> BranchRequest:
-        if self.window is None:
-            return self
-        if self.node_ids is None:
-            raise ValueError("a window is sent with the nodes chosen, not alone")
-        if self.window.valid_to is not None and self.window.valid_from > self.window.valid_to:
-            raise ValueError("the window ends before it starts")
-        return self
+@app.get("/v1/investigations/{investigation_id}/views")
+async def list_case_views(
+    investigation: InvestigationViewerDep, principal: PrincipalDep, views: CaseViewsDep
+) -> list[CaseView]:
+    """The case's views this reader may see: their own, and those shared with the case."""
+    return [v.wire() for v in await views.visible_in(investigation.id, principal.id)]
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/branch",
+    "/v1/investigations/{investigation_id}/views",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.BRANCH_CASE))],
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
-async def branch_investigation(
-    investigation: InvestigationEditorDep,
+async def save_case_view(
+    investigation: InvestigationViewerDep,
+    body: CaseViewInput,
     principal: PrincipalDep,
-    investigations: InvestigationsDep,
-    working_set: WorkingSetDep,
-    history: HistoryDep,
+    views: CaseViewsDep,
     audit: AuditDep,
-    valkey: Annotated[Valkey, Depends(get_valkey)],
-    datasets: DatasetsDep,
-    analytics: AnalyticsDep,
-    body: BranchRequest | None = None,
-) -> Investigation:
-    # `03_CONDUIT_MIDDLEWARE.md` §3.1: "fork the working set into a new
-    # investigation" — one of the cap breach's three options, made real.
-    # `AuthorizedInvestigationDep` has already checked the branching
-    # principal against the *source* investigation's `owning_unit`; the
-    # new investigation gets its own, from this principal, not inherited.
-    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
-    node_ids = body.node_ids if body is not None else None
-    window = body.window if body is not None else None
-    source_name = investigation.name or DEFAULT_CASE_NAME
-    # ADR-097 (design review item 3): a branch is named for what it is, not for a selection.
-    name = f"Branch of {source_name}"
-    lit_nodes: list[Node] = []
-    lit_links: list[Edge] = []
-    if window is not None:
-        # ADR-128 decision 2: what is lit is derived here, never taken from the request. The links
-        # with an event in the window come from the analytics port in its own access-filtered query
-        # for this principal, and the working set's own projection decides which of them, and which
-        # of the named nodes, this principal may see. Asked first, and before the case exists, so
-        # that an empty slice (`NothingToBranchError`) or one past the cap (`LimitExceededError`)
-        # leaves no case behind.
-        assert node_ids is not None  # `BranchRequest` refuses a window without a choice
-        lit = await analytics.first_seen(
-            FirstSeenRequest(
-                filter=await _case_event_filter(
-                    EventFilter(investigation_scope=investigation.id, window=window),
-                    principal,
-                    investigations,
-                    audit,
-                    working_set,
-                )
-            ),
-            principal,
-        )
-        lit_nodes, lit_links = await working_set.branch_lit_contents(
-            investigation.id, principal, node_ids, lit.edges.keys()
-        )
-        name = (
-            f"Branch of {source_name} ({len(lit_nodes)} lit "
-            f"{'node' if len(lit_nodes) == 1 else 'nodes'})"
-        )
-    elif node_ids is not None:
-        # Asked first, and before the case exists, so that a choice with nothing visible in it
-        # (`NothingToBranchError`, a 422) leaves no empty case behind.
-        chosen, _, _ = await working_set.branch_contents(investigation.id, principal, node_ids)
-        name = f"Branch of {source_name} ({len(chosen)} {'node' if len(chosen) == 1 else 'nodes'})"
-    if body is not None and body.name is not None and body.name.strip():
-        name = body.name.strip()
-    # ADR-128 decision 2: a branch made from what is lit records its window, so its timeline holds
-    # only the events inside it; a branch of a windowed case keeps that window (intersected with its
-    # own, if it has one), so it does not widen again. A branch of an ordinary case records none.
-    held_window = _narrowed(investigation.branch_window, window)
-    new_investigation = await investigations.create(
-        principal,
-        name=name,
-        branched_from=investigation.id,
-        domains=investigation.domains_to_inherit(),
-        **({"branch_window": held_window} if held_window is not None else {}),
-    )
-    # ADR-099: a branch reads what its parent reads.
-    await datasets.copy_case(
-        investigation.id,
-        new_investigation.id,
-        case_name=new_investigation.name,
-        created_by=principal.id,
-    )
-    if window is not None:
-        outcome = await working_set.branch_add(
-            new_investigation.id, lit_nodes, lit_links, principal
-        )
-    else:
-        outcome = await working_set.branch(
-            investigation.id, new_investigation.id, principal, node_ids=node_ids
-        )
-    await publish_delta(valkey, new_investigation.id, outcome.delta)
-    await _record_history_step(
-        working_set,
-        history,
-        new_investigation.id,
-        seq=outcome.delta.seq,
-        label=BRANCHED,
-        principal=principal,
-    )
+) -> CaseView:
+    """*Save what I see as a view* (ADR-144 decision 4): private to its creator until shared."""
+    view = await views.save(investigation.id, body, principal.id)
     await audit.record(
         principal=principal,
-        action="branch",
+        action="save_case_view",
         investigation_id=investigation.id,
-        resolved_query={
-            "new_investigation_id": new_investigation.id,
-            **({"node_ids": list(node_ids)} if node_ids is not None else {}),
-            **({"window": window.model_dump(mode="json")} if window is not None else {}),
-        },
-        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+        resolved_query={"view_id": view.id},
+        result_cardinality=1,
     )
-    return new_investigation
+    return view.wire()
 
 
-class BranchByFilterRequest(BranchFilter):
-    """ADR-124 decision 2, "open a filtered branch": the reader's own view, narrowed to entity
-    types, a date window, or both (`BranchFilter` has the rules). `name` is the new case's name;
-    blank means the default a branch has."""
-
-    name: str | None = None
+@app.get("/v1/investigations/{investigation_id}/views/{view_id}")
+async def open_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    graph: GraphDep,
+    working_set: WorkingSetDep,
+) -> CaseViewOpened:
+    """ADR-144 decision 2: the view re-read now, as this reader may see the case; `missing` counts
+    the chosen items it could not show and names none."""
+    view = await views.get(investigation.id, view_id, principal.id)
+    return await open_view(
+        view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
+    )
 
 
 @app.post(
-    "/v1/investigations/{investigation_id}/branch-by-filter",
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.BRANCH_CASE))],
+    "/v1/investigations/{investigation_id}/views/{view_id}/share",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
 )
-async def branch_investigation_by_filter(
-    investigation: InvestigationEditorDep,
-    body: BranchByFilterRequest,
+async def share_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
     principal: PrincipalDep,
-    investigations: InvestigationsDep,
-    working_set: WorkingSetDep,
-    history: HistoryDep,
+    views: CaseViewsDep,
     audit: AuditDep,
-    valkey: Annotated[Valkey, Depends(get_valkey)],
-    datasets: DatasetsDep,
-) -> Investigation:
-    """Builds, on the server, a new case from the reader's own projected view narrowed by the filter
-    (ADR-124 decision 2), for a reader whose view a colleague's work has pushed past the cap. It is
-    created as `branch` creates one: the reader owns it, it records its origin, it takes its
-    parent's domain packs and datasets, and it records a history step. What it holds is asked first,
-    and before the case exists, so that an empty choice (`NothingToBranchError`, a 422, the same
-    answer for a type only hidden material holds as for one that does not exist) or a result still
-    past the cap (`limit_exceeded`, with the filtered figures, the reader's own) leaves no case
-    behind."""
-    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
-    nodes, edges = await working_set.branch_filtered_contents(investigation.id, principal, body)
-    name = f"Branch of {investigation.name or DEFAULT_CASE_NAME}"
-    if body.name is not None and body.name.strip():
-        name = body.name.strip()
-    new_investigation = await investigations.create(
-        principal,
-        name=name,
-        branched_from=investigation.id,
-        domains=investigation.domains_to_inherit(),
-    )
-    await datasets.copy_case(
-        investigation.id,
-        new_investigation.id,
-        case_name=new_investigation.name,
-        created_by=principal.id,
-    )
-    outcome = await working_set.branch_add(new_investigation.id, nodes, edges, principal)
-    await publish_delta(valkey, new_investigation.id, outcome.delta)
-    await _record_history_step(
-        working_set,
-        history,
-        new_investigation.id,
-        seq=outcome.delta.seq,
-        label=BRANCHED,
-        principal=principal,
-    )
+) -> CaseView:
+    """*Share with the case* (ADR-144 decision 3): every member then sees it at their own level."""
+    view = await views.share(investigation.id, view_id, principal.id)
     await audit.record(
         principal=principal,
-        action="branch_by_filter",
+        action="share_case_view",
         investigation_id=investigation.id,
-        resolved_query={
-            "new_investigation_id": new_investigation.id,
-            "filter": body.model_dump(mode="json", exclude={"name"}),
-        },
-        result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
+        resolved_query={"view_id": view_id},
+        result_cardinality=1,
     )
-    return new_investigation
+    return view.wire()
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/views/{view_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def delete_case_view(
+    investigation: InvestigationViewerDep,
+    view_id: str,
+    principal: PrincipalDep,
+    views: CaseViewsDep,
+    audit: AuditDep,
+) -> None:
+    """Only its creator deletes a view, and deleting it deletes nothing else (ADR-144 decision 3):
+    what was drawn on it stays in the case's layer and on the case's canvas."""
+    await views.delete(investigation.id, view_id, principal.id)
+    await audit.record(
+        principal=principal,
+        action="delete_case_view",
+        investigation_id=investigation.id,
+        resolved_query={"view_id": view_id},
+        result_cardinality=1,
+    )
 
 
 async def _record_history_step(
@@ -4651,7 +4569,7 @@ async def explore_busiest_days_route(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> BusiestDays:
     """ADR-100 decision 5: the case's days with the most events, read through the same case filter
-    as the timeline (a branch reads its parents' events on the links it holds)."""
+    as the timeline."""
     case_events = await _case_event_filter(
         EventFilter(investigation_scope=investigation.id),
         principal,
@@ -5060,7 +4978,7 @@ async def patterns_load_route(
 # Owner-only, not investigation-scoped — the same reasoning `/v1/patterns/*` already gives.
 # `Alert.investigation_id` (the triggering event's own investigation, not the hotlist/monitor's
 # own creation context — `schemas.domain.Alert`'s own docstring has the full reasoning) is what
-# `POST /v1/alerts/{alert_id}/jump` branches a new investigation from.
+# `POST /v1/alerts/{alert_id}/jump` opens a new case from.
 
 
 @app.post(
@@ -5283,8 +5201,8 @@ async def change_link_route(
 async def case_link_types_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, link_types: LinkTypesDep
 ) -> CaseLinkTypesResponse:
-    """The types a link in this case may take: the ontology's, and those proposed in the case,
-    the cases it was branched from, or for a link the caller can see in it. Not audited, like the
+    """The types a link in this case may take: the ontology's, and those proposed in the case or
+    for a link the caller can see in it. Not audited, like the
     ontology itself."""
     offered = await link_types.case_types(investigation.id, principal)
     return CaseLinkTypesResponse(
@@ -5930,11 +5848,20 @@ async def ask_question_route(
     questions: QuestionsDep,
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
+    views: CaseViewsDep,
+    working_set: WorkingSetDep,
 ) -> QuestionAnswer:
     """Asks the model about the case's Documents and graph facts the analyst can see (ADR-098
     decision 4, ADR-129 decision 1): the selection and one link around it, or the whole view. What
     it proposes is pending until a person accepts it. The answer names its author as the case's
     conversation does (ADR-106; build order step 18c: it showed the identity provider's id)."""
+    # *Ask the model about these* (ADR-144 decision 4): asked in a view the asker may see (the
+    # store's answer; 404 otherwise), reading only what the view holds.
+    in_view = (
+        await _view_node_ids(views, working_set, investigation.id, body.view_id, principal)
+        if body.view_id is not None
+        else None
+    )
     answer = await questions.ask(
         investigation.id,
         body.question,
@@ -5943,6 +5870,8 @@ async def ask_question_route(
         selected_link_ids=body.selected_link_ids,
         window=body.window,
         engine=body.engine,
+        view_id=body.view_id,
+        view_node_ids=in_view,
     )
     await audit.record(
         principal=principal,
@@ -5955,6 +5884,24 @@ async def ask_question_route(
     return answer.model_copy(update={"author_name": names.get(answer.author)})
 
 
+async def _view_node_ids(
+    views: CaseViewStore,
+    working_set: WorkingSetService,
+    case_id: str,
+    view_id: str,
+    principal: Principal,
+) -> list[str]:
+    """The nodes a view shows, for a reader the store lets see it (`ViewNotFound` otherwise). The
+    request may then read what is kept with the view (`read_in_view`)."""
+    view = await views.get(case_id, view_id, principal.id)
+    read_in_view(view_id)
+    if view.node_ids is not None:
+        return list(view.node_ids)
+    assert view.filter is not None
+    nodes, _ = await working_set.filtered_view(case_id, principal, view.filter)
+    return [n.id for n in nodes]
+
+
 @app.get(
     "/v1/investigations/{investigation_id}/questions",
     dependencies=[Depends(require_right(Right.INVESTIGATE))],
@@ -5964,9 +5911,16 @@ async def list_questions_route(
     principal: PrincipalDep,
     questions: QuestionsDep,
     principal_names: PrincipalNamesDep,
+    views: CaseViewsDep,
+    view_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> list[QuestionAnswer]:
-    """The case's questions and answers, as this reader may see them (ADR-098 decision 4)."""
-    history = await questions.history(investigation.id, principal)
+    """The case's questions and answers, as this reader may see them (ADR-098 decision 4): the
+    case's own conversation, or, with `view_id`, the conversation kept with that view, only for a
+    reader who may see the view (the owner's ruling of 8 November 2026; 404 as for no view)."""
+    if view_id is not None:
+        await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)  # its proposals are read only through it
+    history = await questions.history(investigation.id, principal, view_id=view_id)
     names = await principal_names.display_names(q.author for q in history)
     return [q.model_copy(update={"author_name": names.get(q.author)}) for q in history]
 
@@ -5982,8 +5936,14 @@ async def accept_question_candidate_route(
     questions: QuestionsDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    views: CaseViewsDep,
+    view_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> QuestionAccepted:
-    """Accepts one of the model's proposals: an inferred node linked to its Document."""
+    """Accepts one of the model's proposals: an inferred node linked to its Document. A proposal
+    from a view's conversation is found only with that view named, for a reader who may see it."""
+    if view_id is not None:
+        await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)
     result = await questions.accept(investigation.id, candidate_id, principal)
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
@@ -6006,8 +5966,14 @@ async def reject_question_candidate_route(
     principal: PrincipalDep,
     questions: QuestionsDep,
     audit: AuditDep,
+    views: CaseViewsDep,
+    view_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> RejectedResponse:
-    """Rejects one of the model's proposals: nothing is written."""
+    """Rejects one of the model's proposals: nothing is written. A proposal from a view's
+    conversation is found only with that view named, for a reader who may see it."""
+    if view_id is not None:
+        await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)
     await questions.reject(investigation.id, candidate_id, principal)
     await audit.record(
         principal=principal,
@@ -6669,13 +6635,11 @@ async def jump_alert_route(
     datasets: DatasetsDep,
     analytics: AnalyticsDep,
 ) -> AlertJumpResult:
-    """`08_ACCEPTANCE_SCENARIOS.md` B14: "The new working set contains the alert's entities and a
-    link to the originating investigation." The link is `branch.branched_from` — the identical
-    mechanism `branch_investigation` already uses (`investigations.create(principal,
-    branched_from=...)`), not new investigation-linking infrastructure. `alert.investigation_id`
-    may be `None` (the resolution trigger's own producer carries no single investigation) — the
-    branch still succeeds, simply unlinked, disclosed via `Investigation.branched_from` being
-    `None` rather than silently pointed at a wrong investigation."""
+    """`08_ACCEPTANCE_SCENARIOS.md` B14: a case of its own holding the alert's entities, reading the
+    alert's dataset with an empty layer of its own. It records no case it came from (ADR-144
+    Amendment 1; the orchestrator's settlement of L3.2's Q1, 8 November 2026): the audit row names
+    the alert's case, and L2.9 replaces this route with the alert opened as a private view
+    (ADR-146 decision 6)."""
     alert = await jumpable_alert(
         alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics,
         case=investigation.id,
@@ -6688,38 +6652,32 @@ async def jump_alert_route(
     )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
-    branch = await investigations.create(
+    opened = await investigations.create(
         principal,
         name=f"Opened from alert {alert.id}",
-        branched_from=alert.investigation_id,
         domains=investigation.domains_to_inherit(),
     )
     # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
     # neither, a dataset of its own.
     if alert.dataset_id is not None:
-        await datasets.set_for_case(branch.id, [alert.dataset_id], principal, case_name=branch.name)
+        await datasets.set_for_case(opened.id, [alert.dataset_id], principal, case_name=opened.name)
     elif alert.investigation_id is not None:
-        # Not as a branch: the jumper may hold no level on the alert's case, so the new case reads
-        # its dataset and keeps an empty layer of its own, never the original's (ADR-143 Amendment
-        # 1 item 3; ADR-144 Amendment 1 decision 2 is for the branch routes).
-        await datasets.copy_case(
-            alert.investigation_id,
-            branch.id,
-            case_name=branch.name,
-            created_by=principal.id,
-            as_a_branch=False,
+        # The jumper may hold no level on the alert's case, so the new case reads its dataset and
+        # keeps an empty layer of its own, never that case's (ADR-143 Amendment 1 item 3).
+        await datasets.read_the_same_dataset(
+            alert.investigation_id, opened.id, case_name=opened.name, created_by=principal.id
         )
-    if not await datasets.ids_of_case(branch.id):
-        own = await datasets.create(principal, branch.name, suffix_if_taken=True)
-        await datasets.set_for_case(branch.id, [own.id], principal, case_name=branch.name)
-    principal = await scope_to_case(principal, branch.id, datasets)
+    if not await datasets.ids_of_case(opened.id):
+        own = await datasets.create(principal, opened.name, suffix_if_taken=True)
+        await datasets.set_for_case(opened.id, [own.id], principal, case_name=opened.name)
+    principal = await scope_to_case(principal, opened.id, datasets)
     nodes = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
-    outcome = await working_set.seed(branch.id, nodes, [], principal)
-    await publish_delta(valkey, branch.id, outcome.delta)
+    outcome = await working_set.seed(opened.id, nodes, [], principal)
+    await publish_delta(valkey, opened.id, outcome.delta)
     await _record_history_step(
         working_set,
         history,
-        branch.id,
+        opened.id,
         seq=outcome.delta.seq,
         label=OPENED_FROM_ALERT,
         principal=principal,
@@ -6727,11 +6685,11 @@ async def jump_alert_route(
     await audit.record(
         principal=principal,
         action="alerts_jump",
-        investigation_id=branch.id,
+        investigation_id=opened.id,
         resolved_query={"alert_id": alert.id, "from_investigation_id": alert.investigation_id},
         result_cardinality=len(nodes),
     )
-    return AlertJumpResult(investigation=branch, seeded_count=len(nodes))
+    return AlertJumpResult(investigation=opened, seeded_count=len(nodes))
 
 
 # --- the pathfinder (Phase 7 Stage 5) -----------------------------------------
@@ -7190,18 +7148,14 @@ async def _case_event_filter(
     audit: AuditWriter,
     working_set: WorkingSetService,
 ) -> EventFilter:
-    """The filter a body-scoped analytics read runs with (ADR-084 Amendment 2). The case in the
-    body is gated at Viewer exactly as a case in a path is, so a case the account cannot see
-    answers 404 and reads nothing. Whatever `inherited` the caller sent is discarded; on a branch it
-    is set to the visible parents' events on the links the branch holds."""
-    case = await _authorize(
+    """The filter a body-scoped analytics read runs with. The case in the body is gated at Viewer
+    exactly as a case in a path is, so a case the account cannot see answers 404 and reads
+    nothing. It counts the case's own events alone; whatever `inherited` the caller sent is
+    discarded (ADR-144 Amendment 1, `event_scope.py`)."""
+    await _authorize(
         event_filter.investigation_scope, principal, investigations, audit, AccessLevel.VIEWER
     )
-    ancestors = await visible_ancestors(investigations, case, principal)
-    if not ancestors:
-        return with_inherited(event_filter, [], [], window=None)
-    _nodes, edges = await working_set.current_membership(case.id)
-    return with_inherited(event_filter, ancestors, [e.id for e in edges], window=case.branch_window)
+    return own_events_only(event_filter)
 
 
 class GeometriesRequest(BaseModel):
@@ -7856,9 +7810,9 @@ async def _drawn_not_copied_handler(request: Request, exc: DrawnNotCopied) -> JS
 async def refuse_copying_a_drawn_dataset(
     datasets: DatasetStore, *, case_id: str | None = None, dataset_id: str | None = None
 ) -> None:
-    """Before any case is made: a case reading a drawn dataset is not branched, filtered into a
-    new case or opened from an alert (ADR-143 Amendment 2 decision 5). `copy_case` refuses it
-    too, as the last word."""
+    """Before any case is made: a case reading a drawn dataset is not opened from an alert into
+    another case (ADR-143 Amendment 2 decision 5). `read_the_same_dataset` refuses it too, as the
+    last word."""
     held = []
     if case_id is not None:
         held = await datasets.chosen_of_case(case_id)
@@ -12343,8 +12297,8 @@ async def _trend_figures(
     handling_scheme: HandlingScheme,
     typology_rules: TypologyRuleStore,
 ) -> TrendFigures:
-    """The trend counted for this reader now (rule 3): the case's own events, a branch's inherited
-    ones with them, nothing the reader may not see. An alert trend (ADR-134 decision 3) is the
+    """The trend counted for this reader now (rule 3): the case's own events, nothing the reader
+    may not see. An alert trend (ADR-134 decision 3) is the
     analytics port's `alert_trend`, filtered in its query as the reader, its rules named after."""
     validate_definition(defn, ontology)
     now = datetime.now(UTC)

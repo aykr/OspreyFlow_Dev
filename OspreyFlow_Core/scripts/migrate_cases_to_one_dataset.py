@@ -64,7 +64,7 @@ from services.api.datasets import (
 from schemas.admin import DatasetEgress
 from schemas.domain import Principal
 
-from .stamp_datasets import CaseRow
+from .stamp_datasets import CaseRow, origin_column
 
 ACTOR = "migrate-cases-to-one-dataset"
 
@@ -302,8 +302,9 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
 async def all_cases(conn: asyncpg.Connection) -> tuple[list[CaseRow], list[str]]:
     """Every case, removed ones included, oldest first; and the ids that hold rows in
     `investigation_datasets` with no case record."""
+    origin = await origin_column(conn)
     rows = await conn.fetch(
-        "SELECT id, name, owning_unit, branched_from FROM investigations ORDER BY created_at, id"
+        f"SELECT id, name, owning_unit, {origin} FROM investigations ORDER BY created_at, id"
     )
     cases = [CaseRow(r["id"], r["name"], r["owning_unit"], r["branched_from"]) for r in rows]
     orphans = await conn.fetch(

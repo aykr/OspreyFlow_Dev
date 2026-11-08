@@ -26,9 +26,10 @@ as not found), by a route dependency for the case's and the Studio's loading rou
 **The analyst's own writes** (ADR-143 Amendment 1): an entity marked by hand and a manual `SAME_AS`
 or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`). A case
 with no layer yet is given one by the writer, after the route's level check, so they never fall
-back to the source; outside a case they are refused (`NoAnalystLayerError`). A branch holds no
-layer of its own: it reads its original case's, read-only, and only for a reader holding a level on
-the original; every write into it is refused (`BranchLayerError`, ADR-144 Amendment 1 decision 2).
+back to the source; outside a case they are refused (`NoAnalystLayerError`). A case made from
+another since L3.1, until the upgrade turns it into a view, holds no layer of its own: it reads its
+original case's, read-only, and only for a reader holding a level on the original; every write into
+it is refused (`ReadOnlyLayerError`, ADR-144 Amendment 1 decision 2).
 A case opened from an alert keeps an empty layer of its own. An alert resting on a case's layer is
 written into that layer (`rule_evaluation._alert_datasets`).
 Accepted question proposals, accepted extractions and loads name nothing, and so land in the
@@ -53,13 +54,24 @@ from schemas.domain import (
 )
 from schemas.ingest import LinkPriorState
 
-from .datasets import COMPOSITE, BranchLayerError, Dataset, DatasetStore, reads_dataset_names
+from .datasets import (
+    COMPOSITE,
+    Dataset,
+    DatasetStore,
+    ReadOnlyLayerError,
+    TouchesTheOriginalsWorkError,
+    reads_dataset_names,
+)
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
-#: A branch's original case's layer, which the branch reads and never writes (ADR-144 Amendment 1
+#: The original case's layer an unconverted case reads and never writes (ADR-144 Amendment 1
 #: decision 2): set by `scope_to_case`, judged by the stamping graph's last word.
 _READ_ONLY_LAYER: ContextVar[str | None] = ContextVar("read_only_layer", default=None)
+#: The case view this request was let into (ADR-144; the owner's ruling of 8 November 2026 on
+#: L3.2's Q2): set by a route only after the view store let the reader see the view, so a
+#: record kept with a view (a proposal from its conversation) is read only through it.
+_READABLE_VIEW: ContextVar[str | None] = ContextVar("readable_view", default=None)
 #: The request's case, its dataset store and the principal scoped to it: so a writer may make the
 #: case's layer when it has none, inside the route after its level check (`analyst_writes_into`),
 #: and a write may be refused in a case reading a composite (`refuse_in_a_composite_case`).
@@ -102,6 +114,7 @@ def set_case_datasets(
     _CASE_LAYER.set(layer if datasets is not None and layer in datasets else None)
     _CASE_SCOPE.set(scope if datasets is not None else None)
     _READ_ONLY_LAYER.set(None)
+    _READABLE_VIEW.set(None)
 
 
 def case_datasets() -> tuple[str, ...] | None:
@@ -115,8 +128,8 @@ def analyst_layer() -> str | None:
 
 
 def read_only_layer() -> str | None:
-    """The original case's layer a branch reads, read-only (ADR-144 Amendment 1 decision 2); `None`
-    outside a branch. Set for every reader of the branch, so a write into it is refused for each,
+    """The original case's layer an unconverted case reads, read-only (ADR-144 Amendment 1); `None`
+    in any other case. Set for every reader of such a case, so a write into it is refused for each,
     though only a reader holding a level on the original reads it (`scope_to_case`)."""
     return _READ_ONLY_LAYER.get()
 
@@ -136,7 +149,7 @@ async def analyst_writes_into() -> list[str]:
         raise NoAnalystLayerError("there is no case's analyst layer to write into")
     investigation_id, store, asker = scope
     if _READ_ONLY_LAYER.get() is not None:
-        raise BranchLayerError  # a branch writes into no layer (ADR-144 Amendment 1 decision 2)
+        raise ReadOnlyLayerError  # an unconverted case writes into no layer (ADR-144 Amendment 1)
     chosen = await store.chosen_of_case(investigation_id)
     if not chosen:
         raise NoAnalystLayerError("the case reads no dataset")
@@ -231,10 +244,11 @@ async def scope_to_case(
     principal may open the case: that is the route's own level check, which comes after this, so
     this writes nothing (a case with no layer yet is given one by `analyst_writes_into`).
 
-    In a branch, the original case's layer is read only by a reader who holds a level on the
-    original (`holds_a_level`; the orchestrator's call of 7 November 2026, on rule 3, as for the
-    alert jump): a member of the branch alone reads no layer, and with no check to ask, no one
-    does. Either way nothing is written into it (`BranchLayerError`)."""
+    In a case made from another and not yet converted, the original case's layer is read only by
+    a reader who holds a level on the original (`holds_a_level`; the orchestrator's call of 7
+    November 2026, on rule 3, as for the alert jump): a member of that case alone reads no layer,
+    and with no check to ask, no one does. Either way nothing is written into it
+    (`ReadOnlyLayerError`)."""
     datasets = await store.ids_of_case(investigation_id)
     layer = await store.layer_of_case(investigation_id) if datasets else None
     borrowed = await store.read_only_layer_of(investigation_id) if datasets and not layer else None
@@ -249,7 +263,7 @@ async def scope_to_case(
     scoped = principal.model_copy(update={"datasets": datasets})
     set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
     if borrowed is not None:
-        _READ_ONLY_LAYER.set(borrowed)  # refused as a write for every reader of the branch
+        _READ_ONLY_LAYER.set(borrowed)  # refused as a write for every reader of the case
     return scoped
 
 
@@ -305,6 +319,23 @@ def reach_clause(principal: Principal, position: int) -> tuple[str, list[object]
     )
 
 
+def read_in_view(view_id: str) -> None:
+    """A route lets this request read what is kept with `view_id`, after the view store let the
+    reader see the view (`CaseViewStore.get`). Cleared with every request's scope."""
+    _READABLE_VIEW.set(view_id)
+
+
+def view_clause(position: int) -> tuple[str, list[object]]:
+    """The SQL that keeps a read to records kept with no view, or with the view this request was
+    let into (`read_in_view`), as `AND (...)` with its parameter at `$position`: a proposal from a
+    private view's conversation is never read through the case's own routes (rule 3)."""
+    return f" AND (view_id IS NULL OR view_id = ${position})", [_READABLE_VIEW.get()]
+
+
+def readable_view() -> str | None:
+    return _READABLE_VIEW.get()
+
+
 def made_in(principal: Principal) -> str | None:
     """The dataset a record made by `principal` now belongs to: the first of its case's."""
     return principal.datasets[0] if principal.datasets else None
@@ -346,6 +377,19 @@ class DatasetRegistry(Protocol):
 
 def _named(writes: Sequence[NodeWrite] | Sequence[EdgeWrite]) -> set[str]:
     return {d for w in writes for d in w.datasets}
+
+
+async def refuse_writing_in_an_unconverted_case() -> None:
+    """L3.2 item 3, as the lane review's round 2 settled it: a case made from another before L3.2
+    and not yet turned into a view by the upgrade writes nothing at all into the graph
+    (`TouchesTheOriginalsWorkError`). It reads its original's dataset and, for a reader holding a
+    level on the original, its layer; any write there would land in the source the original reads,
+    and a merge into a node the writer cannot read would carry the original's work into it. One
+    refusal for every write, every reader and every id, so it says nothing about the layer
+    (rule 3). The stamping graph says it as its last word; the accept paths that write in two
+    steps ask it first, so nothing is written at all."""
+    if _READ_ONLY_LAYER.get() is not None:
+        raise TouchesTheOriginalsWorkError
 
 
 class DatasetStampingGraph:
@@ -418,11 +462,13 @@ class DatasetStampingGraph:
         return getattr(self._inner, name)
 
     async def _refuse_into_a_read_only_layer(self, datasets: set[str]) -> None:
-        """The last word on ADR-144 Amendment 1 decision 2: a branch reads its original case's
-        layer and writes nothing into it, a correction of what is in it included."""
+        """The last word on ADR-144 Amendment 1 decision 2: an unconverted case reads its original
+        case's layer and writes nothing into it, a correction of what is in it included."""
         read_only = _READ_ONLY_LAYER.get()
         if read_only is not None and read_only in datasets:
-            raise BranchLayerError
+            raise ReadOnlyLayerError
+
+
 
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
@@ -430,6 +476,7 @@ class DatasetStampingGraph:
         case or not (the Studio reaches a dataset with no case). Before anything is written."""
         if self._dataset is not None:
             return
+        await refuse_writing_in_an_unconverted_case()  # L3.2 item 3: every write, before the rest
         await self._refuse_into_a_read_only_layer(datasets)
         layer = analyst_layer()
         composite = await _composite_read()

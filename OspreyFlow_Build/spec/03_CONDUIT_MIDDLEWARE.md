@@ -99,8 +99,6 @@ open-standards item O1.
 ```
 POST   /v1/investigations                      create; optional `domains`, the case's domain packs (ADR-126); NULL until chosen
 GET    /v1/investigations/{id}                 metadata, not the working set
-POST   /v1/investigations/{id}/branch          fork the working set (or a chosen set of its nodes) into a new investigation; with an optional `window` (ADR-128 decision 2, Amendment 2), which needs `node_ids`, the server derives the lit links for the principal (one event in the window, ends included; undated never), carries only them and the named nodes they touch (a hidden id ignored as a made-up one), and records the window so the events the branch inherits stay inside it
-POST   /v1/investigations/{id}/branch-by-filter  a new case from the caller's own view, narrowed by entity types and/or a date window (ADR-124 decision 2)
 PUT    /v1/investigations/{id}/tab             open or close this case's tab, for the caller only
 GET    /v1/investigations/{id}/history         addressable step history
 POST   /v1/investigations/{id}/history/{step}  restore to a step; a step marked `restorable: false` (a case-brief edit) is refused 409 `step_not_restorable` (ADR-128 Amendment 1)
@@ -114,9 +112,39 @@ DELETE /v1/investigations/{id}/access/grants/{account}     withdraw it (Author)
 GET    /v1/investigations/{id}/access/history  who was granted what, and when (Author)
 ```
 
+**Case views (ADR-144; `01_DOMAIN_MODEL.md` §2.2c).** A view holds no data, and every route below
+stands behind the case's own level check first: a reader with no level on the case is refused each
+one exactly as for a case that does not exist. Saving, sharing and deleting need `investigate`;
+listing and opening need only a level. Each answer is a `CaseView`, which counts a view's chosen
+nodes and never names them or their positions (rules 3 and 7).
+
+```
+GET    /v1/investigations/{id}/views                  the case's views the caller may see: their own, and those shared
+POST   /v1/investigations/{id}/views                  save a view, private to the caller (`CaseViewInput`: a name, exactly one of `node_ids` or `filter`, a layout, a window, a threshold)
+GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, a count naming none
+POST   /v1/investigations/{id}/views/{view}/share     share it with the case's members, at their own levels (its creator only; 403 `not_the_views_creator` for a member who can see it)
+DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing else (its creator only, as above)
+```
+
+Someone else's private view, another case's view and no view at all answer alike: 404
+`view_not_found`. A view's `window` and `threshold` are returned on the view: the window is the
+timeline's range, which the Glass applies to the timeline as it does for the case. The Conduit does
+not yet collapse resolved entities at the view's `threshold`: a view of chosen nodes returns each
+node as stored, and a filtered view returns the case's own projection, collapsed at the case's
+threshold. Collapsing at the view's threshold is carried to L3.2b, named by
+`test_a_view_opens_collapsed_at_its_threshold`.
+
+A deleted view's conversation stays in the store, read by no route: the questions are listed only
+through a view the reader may open, so they go with the view. Its pending proposals stay pending
+and read by no route either, since each candidate store read leaves out one kept with a view the
+request was not let into (`test_a_deleted_views_conversation_and_proposals_are_read_by_no_one`). A view of chosen nodes reads them by id from the graph under the caller's scoped
+principal, with the links among those it may show. A filtered view narrows the caller's own
+projection of the case's working set. Either way, a result past the working set's cap is the typed
+`limit_exceeded` (§4).
+
 **Authorization.** Every route above an investigation id checks the calling
-`Principal.org_unit` against that investigation's own `owning_unit` — set once at creation (or
-branch) from the acting principal's own unit, the same shape as `Handling.owning_unit`
+`Principal.org_unit` against that investigation's own `owning_unit` — set once at creation from
+the acting principal's own unit, the same shape as `Handling.owning_unit`
 (`01_DOMAIN_MODEL.md` §2.2), not a new concept. This is deliberately *not* `clearance`-gated: a
 shared, unit-wide investigation with analysts at different clearances is the ordinary case, not
 an edge case, and clearance still gates individual node/edge visibility separately (§4's read-time
@@ -136,29 +164,28 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 | Level | Routes under `/v1/investigations/{id}` |
 |---|---|
-| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run`, `patterns/ask` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `connection-strength`, `rarity` (POST) and `strength-influencers` (GET; ADR-139); `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules`, `alert-queue`, `alert-queue/{alert}`, `ownership/{node}`, `kyc/{node}`, `risk/{node}` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `brief` (GET, ADR-128); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); `events/holders` (GET, ADR-099 Amendment 9); `trends`, `trends/options`, `trends/{trend}/figures` (GET) and `trends/preview` (POST); `packs`, `packs/{pack}`, its `history` and `published`, and the case's `published` (GET; ADR-113); the delta stream |
-| Editor | `branch`; `seed`; `expand`; `working-set/add-by-identifiers` (ADR-128); `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `hotlists/{hotlist}/audience` (PUT, ADR-133); `held-rows` (GET, ADR-109); `alert-queue/{alert}/claim`, `release`, `disposition`, `canvas`, `assign`, `alert-assignees` (GET, ADR-133), `ownership/{node}/canvas` (ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`); `trends` (POST), `trends/{trend}` (DELETE); `packs` (POST), `packs/{pack}/items` (POST) and `items/{item}` (DELETE), its `order`, an item's `refresh`, `publish`, `versions/{v}/withdraw` and `export` (ADR-113) |
+| Viewer | `GET` the case; `access` (GET: the caller's own level); `tab` (PUT: the caller's own flag, ADR-084); `views` (GET, POST), `views/{view}` (GET, DELETE), `views/{view}/share` (POST; ADR-144: saving, sharing and deleting also need `investigate`, and only a view's creator shares or deletes it); `datasets` (GET, ADR-099); `search`, `suggest`, `paths` (POST, ADR-099); `explore/counts`, `explore/most-connected`, `explore/busiest-links`, `explore/busiest-days`, `explore/groups`, `explore/whats-new`, `explore/starter-questions`, `nodes/{node}/shared-contacts` (GET, ADR-100); `expand/preview`; `patterns/preview`, `patterns/run`, `patterns/ask` (POST), `patterns`, `patterns/{pattern}` (GET); `compute/{metric}`; `connection-strength`, `rarity` (POST) and `strength-influencers` (GET; ADR-139); `resolution/threshold` (GET); `resolution/explain/{cluster}`; `hotlists`, `monitors`, `alerts`, `alerts/{alert}` (GET, ADR-099 Amendment 3); `rules`, `alert-queue`, `alert-queue/{alert}`, `ownership/{node}`, `kyc/{node}`, `risk/{node}` (GET, ADR-109); `questions` (GET, ADR-098); `ingest/candidates` (GET); `dossier/documents/{doc}`; `documents/{doc}/reader`, `documents/{doc}/file` (GET); `history` (GET); `brief` (GET, ADR-128); `judgements`, `gaps`, `assumptions` (GET); `links/{edge}/notes`, `links/{edge}/history`, `links/{edge}/events` (GET); `link-types` (GET, ADR-090); `sites/{site}` and its `image` (GET); the Ingest Studio's reads (`ingest/source-files`, `ingest/recipes`, `ingest/recipes/{recipe}`, its `profile`, `map/sample-rows/{row}` and `map/handling-preview`, `ingest/recipe-registry`; ADR-099 Amendment 4); `events/holders` (GET, ADR-099 Amendment 9); `trends`, `trends/options`, `trends/{trend}/figures` (GET) and `trends/preview` (POST); `packs`, `packs/{pack}`, its `history` and `published`, and the case's `published` (GET; ADR-113); the delta stream |
+| Editor | `seed`; `expand`; `working-set/add-by-identifiers` (ADR-128); `nodes` (DELETE); `nodes/{node}/confirm`, `retract`, `suppression-mark` (POST, DELETE; ADR-099 Amendment 1); `links-among` (ADR-098); `explore/starter-questions/{question}/run`, `nodes/{node}/shared-contacts/{other}/canvas` (ADR-100); `resolution/threshold` (PUT), `link`, `split`; `patterns/save`; `hotlists`, `monitors` (POST), `alerts/{alert}/jump`; `hotlists/{hotlist}/audience` (PUT, ADR-133); `held-rows` (GET, ADR-109); `alert-queue/{alert}/claim`, `release`, `disposition`, `canvas`, `assign`, `alert-assignees` (GET, ADR-133), `ownership/{node}/canvas` (ADR-109); `questions` (POST) and `questions/candidates/{candidate}/accept`, `reject` (ADR-098); `documents` (POST), `documents/{doc}/extract`, `designations`, and its candidate `accept`, `reject`; `ingest/extract`, its candidate `accept` and `reject`; `links/{edge}/events/documents`, `links/{edge}/events/{event}/extract` and its candidate `accept`, `reject`; `history/{step}` (restore); `judgements`, `gaps`, `assumptions` (POST); `links/{edge}/notes` (POST), `links/{edge}/notes/{note}` (PUT, DELETE), `links/{edge}/change` (POST); `link-types` (POST), `link-types/{proposal}/withdraw` (the proposer or an Author, ADR-090); `export`; `sites` (POST), `control-points`, `grid`; the Ingest Studio's writes (`ingest/source-files` (POST), `ingest/recipes` (POST), `ingest/recipes/{recipe}` (PATCH), its `versions`, `row-template`, `verify`, `publish`, `schedule` and `run`); `trends` (POST), `trends/{trend}` (DELETE); `packs` (POST), `packs/{pack}/items` (POST) and `items/{item}` (DELETE), its `order`, an item's `refresh`, `publish`, `versions/{v}/withdraw` and `export` (ADR-113) |
 | Author | `PATCH` the case (rename); `DELETE` the case (a soft remove: it then reads as not found to everyone, nothing is deleted, ADR-052 Amendment 7; the unit's `osprey-admin` may too, through the same safety net); `datasets` (PUT: what the case reads, ADR-099 decision 3); `access` (PUT: the unit-wide level, which is none, Viewer or Editor, never Author); `access/grants/{account}` (PUT, DELETE); `access/history`; the case brief's writes (`brief/priority`, `brief/requirements` and each requirement's text, `status`, removal and `attachments`, ADR-128); `rules` (POST), `rules/{rule}/retire`, `rules/audit` (GET; the admin's safety net reaches this one too), `held-rows/reject`, `ingest/recipes/{recipe}/held-rows/release` (ADR-109); `strength-influencers` (PUT: the case's own influencers, ADR-139). An `osprey-admin` in the case's own unit may also use these without holding a level (the safety net, audited as `access_admin_override`); that gives no other access. |
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
-created by, branched from, whether the caller has closed the case's tab, and the names of the
+created by, whether the caller has closed the case's tab, and the names of the
 dataset it chose, never its analyst layer). `POST /v1/investigations` takes either `dataset_ids`, exactly
 one source or composite dataset of the caller's unit, or `new_dataset_name`, an empty dataset of the
 caller's unit made first; neither, both, or two ids is 422 `dataset_refused` and no case is made (ADR-099
 Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). The case's analyst layer
-is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). A branch reads its parent's chosen
-dataset and its parent's layer, read-only, holding none of its own: a mark or link made in it is 409
-`branch_layer_read_only` (ADR-144 Amendment 1 decision 2). A case opened from an alert reads the
+is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). No case is made from another
+since L3.2; one made so since L3.1, until the upgrade turns it into a view, reads its original's chosen
+dataset and layer, read-only, holding none of its own: a mark or link made in it is 409
+`original_layer_read_only` (ADR-144 Amendment 1 decision 2; the code was `branch_layer_read_only`
+before L3.2). A case opened from an alert reads the
 dataset and gets an empty layer of its own (ADR-143 Amendment 1 item 3). Under a case, what is written joins its source; an entity marked
 by hand and a manual link or split join its layer (ADR-143 Amendment 1). A case reading a composite
 writes nothing but into its layer: every other write is 409 `composite_read_only` ("do this in a
 case that reads that dataset"), and so is any write into a composite's id (ADR-099 Amendments 14
 and 15; the Studio's routes of a composite too). Its monitors keep working, their alerts raised into
-its layer, and its scheduled loads are refused, each slot in words. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
-among them, `name` names the new case. Without a body it forks the whole working set, as before. The
-copy is filtered for the branching principal like any read, and a choice with nothing left to copy
-(every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
-before any case is created and the same whatever the reason (rules 3 and 4). `GET .../access` shows anyone their own level, and shows an Author the
+its layer, and its scheduled loads are refused, each slot in words. No case is made from another
+(ADR-144 Amendment 1): what a branch did, a case view does (above). `GET .../access` shows anyone their own level, and shows an Author the
 unit-wide level, every grant and the grantees' display names (`names`, ADR-106: only ids already in
 the grants served). A grantee is named by account id — the token's `sub`, which the Admin area shows
 for a person or a dashboard identity; any other string grants nothing to anyone (ADR-052 P3, as
@@ -319,10 +346,10 @@ pending version changes nothing; one waits at a time (`409 influencer_change_ref
 **The analytics reads are case reads (ADR-084 Amendment 2).** `histogram`, `cross-filter`,
 `first-seen`, `geobins` and `sightings` carry their case in the body (`EventFilter.investigation_scope`)
 and take the same gate as every case route, at Viewer: a case the account holds no level on answers
-404 and reads nothing, and the refusal is audited. On a branch, the Conduit widens the read to the
-events of each case it came from that the account can see, **on the links the branch holds only**
-(`EventFilter.inherited`), and the same rule holds for the events behind one link and an email
-extracted from one. `inherited` is always set by the Conduit; a value sent by a caller is discarded.
+404 and reads nothing, and the refusal is audited. A case reads its own events alone (ADR-144
+Amendment 1 ended ADR-084 Amendment 2's widening to the cases a branch came from), and so do the
+events behind one link and an email extracted from one. `EventFilter.inherited` is always set by the
+Conduit, to nothing; a value sent by a caller is discarded.
 `geometries` is reference data, not case data, and is unchanged.
 
 **Saved patterns are private to the principal who saved them.** `GET /v1/investigations/{id}/patterns` lists only
@@ -381,7 +408,7 @@ PUT    /v1/investigations/{id}/brief/requirements/{requirement}/status   open or
 POST   /v1/investigations/{id}/brief/requirements/{requirement}/attachments   attach a trend, pattern, assessment or view the Author may read; absent and unreadable are the same 404 `attachment_not_found`
 DELETE /v1/investigations/{id}/brief/requirements/{requirement}/attachments/{kind}/{attachment}   detach
 POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080); `handling`? and `confirm_lower`? (ADR-102): a raise is an Editor's, a lower handling in any part is an Author's with `confirm_lower`, else 403 `lowering_needs_author` or 409 `confirm_lower_handling`; a handling that moves the units, is above the analyst's own, or names a code the scheme lacks is 422 `invalid_link_change`; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15)
-GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's (the OspreyFlow default dataset's), and those analysts proposed in a case reading one of this case's datasets (`proposal_id` set; a proposal made before ADR-099 Amendment 3 keeps ADR-090's case, branch and in-view rule), Viewer (ADR-090, ADR-099 Amendment 3)
+GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's (the OspreyFlow default dataset's), and those analysts proposed in a case reading one of this case's datasets (`proposal_id` set; a proposal made before ADR-099 Amendment 3 keeps ADR-090's case and in-view rule, no longer its branches since L3.2), Viewer (ADR-090, ADR-099 Amendment 3)
 POST   /v1/investigations/{investigation_id}/link-types   propose a type when none fits (`{"name", "from_types", "to_types", "directed"?, "label"?, "colour"?, "thickness"?, "reason"}`): usable at once in every case reading this case's first dataset, probabilistic (ADR-099 Amendment 3); 422 `proposal_refused` for a name the ontology has or the case already offers, or one that is not a type name, Editor (ADR-090)
 POST   /v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw   withdraw a pending proposal of a dataset the case reads (`{"reason"}`), its proposer or an Author; 404 `proposal_not_found`, Editor (ADR-090)
 GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
@@ -633,18 +660,17 @@ investigation, and an alert belongs to the principal who owns the watch that fir
 whichever investigation happens to be open when it does. Each belongs to a dataset (a hotlist to
 the first of the case it was made in, a monitor to its saved pattern's; ADR-099 Amendments 3 and 4)
 and is listed only in cases reading that dataset. A match in another dataset writes nothing, not
-even a `notify` stub, and an alert's entities are read as its case reads them. `POST .../jump` branches a fresh
-investigation from `Investigation.branched_from`, seeded with the alert's own referent nodes — the
-identical branching mechanism §3.1's `POST /v1/investigations/{id}/branch` already uses, not a
-second implementation of it. An alert any of whose cited nodes, links or transactions the jumper
+even a `notify` stub, and an alert's entities are read as its case reads them. `POST .../jump` makes
+a fresh case of the jumper's own, seeded with the alert's own referent nodes, which records no case
+it came from (ADR-144 Amendment 1; L3.2's Q1, until L2.9 opens the alert as a private view); the
+audit row names the alert's case. An alert any of whose cited nodes, links or transactions the jumper
 cannot read now is refused exactly as a missing alert, before any case is made (ADR-124
 Amendment 17, under rule 3 and ADR-146's test that `/alerts/<id>` for a reader who may not see the
 alert is refused exactly as a missing alert): seeding whatever referents are readable would give
 the jumper the entities the hidden link or transactions tie together.
 `Alert.investigation_id` (the triggering event's own investigation,
 where the underlying ingest or resolution that raised the alert happened) may be absent — a
-resolution-triggered alert carries no single investigation — and the jump still succeeds, simply
-unlinked (`Investigation.branched_from` is `None` rather than pointed at a wrong investigation). The
+resolution-triggered alert carries no single investigation — and the jump still succeeds. The
 case a jump makes reads the alert's dataset, else what the alert's case reads, else a dataset of its
 own (Amendment 4 decision 3).
 

@@ -9,8 +9,8 @@ read is: resolution collapse at the session's τ, handling filter for the
 principal, then delta computation."
 
 **Why the store can hold more than one principal legitimately fetched.**
-An investigation is not single-principal for its whole life: a branch, or
-a shared team investigation (`investigations.py`'s `owning_unit` is
+An investigation is not single-principal for its whole life: a shared
+team investigation (`investigations.py`'s `owning_unit` is
 unit-wide, not creator-only), means a later reader's own `Principal` may
 be a different, less-privileged one than whoever's `expand()`/`seed()`
 call originally populated a given node. `GraphPort`'s own access filtering
@@ -35,7 +35,7 @@ import asyncio
 import json
 import logging
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,6 +54,7 @@ from ontology.handling import (
     withhold_sources,
 )
 from ports.graph import GraphPort
+from schemas.case_views import ViewFilter
 from schemas.domain import (
     CONNECTIONS_SHOWN,
     NOT_SAME_AS,
@@ -77,7 +78,6 @@ from .access_index import ABSENT, AccessEntries, AccessSignature
 from .models import (
     MAX_EDGES,
     MAX_NODES,
-    BranchFilter,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
@@ -93,8 +93,8 @@ from .models import (
     LimitExceeded,
     LimitExceededError,
     LinksAmongOutcome,
+    NarrowingFilter,
     NodeNotInWorkingSetError,
-    NothingToBranchError,
     PairwiseExplanation,
     RemovedElement,
     RemovedRecord,
@@ -1307,99 +1307,6 @@ class WorkingSetService:
 
         return ExpansionOutcome(delta=delta)
 
-    async def branch_contents(
-        self,
-        source_investigation_id: str,
-        principal: Principal,
-        node_ids: Sequence[NodeId] | None = None,
-    ) -> tuple[list[Node], list[Edge], int]:
-        """What a branch of `source_investigation_id` would hold for `principal`: the nodes and
-        links, and the hidden count. Without `node_ids` that is the whole working set, as before.
-        With them (ADR-084) it is the chosen nodes and only the links whose two ends are both
-        chosen. Either way it is read from the source-fidelity set and then projected for the
-        branching principal, so a node they may not see is never copied, and asking for one reads
-        exactly as asking for an id that does not exist: it is simply absent, the hidden count is 0
-        and, if nothing is left, `NothingToBranchError` is the same whatever the reason. Nothing is
-        written, so a route can call this before it creates the new case."""
-        nodes = await self._store.source_fidelity_nodes(source_investigation_id)
-        edges = await self._store.source_fidelity_edges(source_investigation_id)
-        if node_ids is None:
-            visible_nodes, visible_edges, hidden = self._project(
-                list(nodes.values()), list(edges.values()), principal
-            )
-            return visible_nodes, visible_edges, hidden
-        chosen = set(node_ids)
-        picked = [n for n in nodes.values() if n.id in chosen]
-        between = [e for e in edges.values() if e.source in chosen and e.target in chosen]
-        visible_nodes, visible_edges, _ = self._project(picked, between, principal)
-        if not visible_nodes:
-            raise NothingToBranchError
-        # The hidden count is 0 on purpose: a figure here would tell the asker how many of the
-        # ids they named exist but are hidden from them.
-        return visible_nodes, visible_edges, 0
-
-    async def branch_lit_contents(
-        self,
-        source_investigation_id: str,
-        principal: Principal,
-        node_ids: Sequence[NodeId],
-        lit_edge_ids: Collection[EdgeId],
-    ) -> tuple[list[Node], list[Edge]]:
-        """What a branch of what is lit would hold for `principal` (ADR-128 decision 2): the lit
-        links and the nodes they touch, and nothing else, so the branch's own timeline lies inside
-        the window. `lit_edge_ids` is the analytics port's answer for the window, already filtered
-        for `principal` in its own query; it is intersected here with the links `principal` may see
-        in the source case, so a link they may not see, or one this case does not hold, lights
-        nothing. A node is kept only where `node_ids` names it and a lit link touches it, so an id
-        they may not see, a made-up one, and a real one no lit link touches are all simply absent,
-        and `NothingToBranchError` is the same whatever the reason. A link is kept only when both
-        its ends are kept. A slice past the cap is the typed `LimitExceededError` with the slice's
-        own figures, which are the reader's (rule 3). Nothing is written, so the route calls it
-        before it creates the case."""
-        stored_nodes = await self._store.source_fidelity_nodes(source_investigation_id)
-        stored_edges = await self._store.source_fidelity_edges(source_investigation_id)
-        visible_nodes, visible_edges, _ = self._project(
-            list(stored_nodes.values()), list(stored_edges.values()), principal
-        )
-        lit_links = [e for e in visible_edges if e.id in lit_edge_ids]
-        touched = {end for e in lit_links for end in (e.source, e.target)}
-        named = set(node_ids)
-        kept = {n.id for n in visible_nodes if n.id in touched and n.id in named}
-        nodes = [n for n in visible_nodes if n.id in kept]
-        edges = [e for e in lit_links if e.source in kept and e.target in kept]
-        if not nodes:
-            raise NothingToBranchError
-        breach = _cap_breach(len(nodes), len(edges))
-        if breach is not None:
-            raise LimitExceededError(breach)
-        return nodes, edges
-
-    async def branch(
-        self,
-        source_investigation_id: str,
-        new_investigation_id: str,
-        principal: Principal,
-        node_ids: Sequence[NodeId] | None = None,
-    ) -> ExpansionOutcome:
-        """`POST /investigations/{id}/branch` — one of the cap breach's
-        three options made real: "fork the working set into a new
-        investigation" (`03_CONDUIT_MIDDLEWARE.md` §3.1). Copies only
-        what `principal` (the branching principal) can see from the
-        source's source-fidelity set into `new_investigation_id`, filtered
-        the same way any other read is — you cannot fork what you cannot
-        see, and the source may hold content only a *different*,
-        more-privileged principal ever contributed. With `node_ids` it copies only those nodes
-        and the links between them (ADR-084; `branch_contents` has the rules). A branch is a
-        snapshot at the moment it forks, not a live link back to the
-        source, so later expansion of either side never touches the
-        other."""
-        visible_nodes, visible_edges, _ = await self.branch_contents(
-            source_investigation_id, principal, node_ids
-        )
-        return await self._add(
-            new_investigation_id, visible_nodes, visible_edges, principal, empty_on_failure=True
-        )
-
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s
         history step recording calls this right after any mutation, so a
@@ -1528,45 +1435,27 @@ class WorkingSetService:
         ADR-045's own `disclose` default already accepts the cost of."""
         return await self._holds_what_the_reader_may_not_view(investigation_id, principal)
 
-    async def branch_filtered_contents(
-        self, source_investigation_id: str, principal: Principal, filt: BranchFilter
+    async def filtered_view(
+        self, investigation_id: str, principal: Principal, keeps: ViewFilter
     ) -> tuple[list[Node], list[Edge]]:
-        """What a filtered branch of `source_investigation_id` would hold for `principal` (ADR-124
-        decision 2): their own projected view, narrowed by `filt`, and nothing else. The view is
-        projected first and the filter applied to it, so a node or link they may not read is never
-        in the result and a type only hidden material holds selects what an absent type selects.
-        An empty result is `NothingToBranchError`, as for `branch`. A result past a cap is the typed
-        `LimitExceededError` with the filtered figures, which are the reader's own (rule 3). Nothing
-        is written, so the route calls it before it creates the case."""
-        stored_nodes = await self._store.source_fidelity_nodes(source_investigation_id)
-        stored_edges = await self._store.source_fidelity_edges(source_investigation_id)
+        """A filtered case view opened now (ADR-144 decision 2): the reader's own projection of
+        the case's working set, narrowed by `keeps`, and nothing else. Projected first, so a node
+        or link they may not read is never in the result and a type only hidden material holds
+        selects what an absent type selects. Empty is an answer, not an error. Writes nothing."""
+        narrow = NarrowingFilter.model_validate(keeps.model_dump())
+        stored_nodes = await self._store.source_fidelity_nodes(investigation_id)
+        stored_edges = await self._store.source_fidelity_edges(investigation_id)
         visible_nodes, visible_edges, _ = self._project(
             list(stored_nodes.values()), list(stored_edges.values()), principal
         )
-        nodes = [n for n in visible_nodes if filt.keeps_node(n)]
+        nodes = [n for n in visible_nodes if narrow.keeps_node(n)]
         kept = {n.id for n in nodes}
         edges = [
             e
             for e in visible_edges
-            if e.source in kept and e.target in kept and filt.keeps_link_in_time(e)
+            if e.source in kept and e.target in kept and narrow.keeps_link_in_time(e)
         ]
-        if not nodes:
-            raise NothingToBranchError
-        breach = _cap_breach(len(nodes), len(edges))
-        if breach is not None:
-            raise LimitExceededError(breach)
         return nodes, edges
-
-    async def branch_add(
-        self,
-        new_investigation_id: str,
-        nodes: Sequence[Node],
-        edges: Sequence[Edge],
-        principal: Principal,
-    ) -> ExpansionOutcome:
-        """Writes what `branch_filtered_contents` chose into the new case, as `branch` writes its
-        own: cap-checked for the reader, and the new case emptied if a chunk fails part-way."""
-        return await self._add(new_investigation_id, nodes, edges, principal, empty_on_failure=True)
 
     async def restore(
         self,

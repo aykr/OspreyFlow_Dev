@@ -6,7 +6,7 @@ a body without its entry or a count that does not match the entries. `IndexState
 `access_index.py` is the same logic in Python, which the in-memory fake keeps and the tests hold
 the scripts to. The store runs a write in chunks of at most `_SCRIPT_CHUNK` elements, each a script
 that leaves the bodies and the index consistent on its own, so no script holds Valkey for the length
-of a branch or a restore.
+of a restore.
 
 The keys, in this order, for every script:
 

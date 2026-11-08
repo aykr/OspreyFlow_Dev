@@ -272,7 +272,7 @@ def test_expand_past_the_cap_returns_409_with_the_typed_body(client: TestClient)
     body = response.json()
     assert body["error"] == "limit_exceeded"
     assert body["cap_kind"] == "nodes"
-    assert set(body["options"]) == {"branch", "filter", "promote_to_batch"}
+    assert set(body["options"]) == {"save_as_view", "filter", "promote_to_batch"}
 
 
 def test_expand_answers_with_no_count_of_what_was_withheld(client: TestClient) -> None:

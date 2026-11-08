@@ -1906,10 +1906,8 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     """**B14**: "Open the alert into a pre-populated investigation … The new working set contains
     the alert's entities and a link to the originating investigation."
 
-    Both halves, because either alone is easy: a branch with no entities is a link to nothing, and
-    entities in an unlinked investigation lose the provenance of why an analyst is looking at
-    them. The link is `Investigation.branched_from`, the same mechanism `branch_investigation`
-    uses — not new infrastructure.
+    The entities half holds as written. The link half is withdrawn by ADR-144 Amendment 1 (no case
+    records another it came from); the audit row keeps the alert's case.
     """
     alert = seizure_alert["alerts"][0]
 
@@ -1922,10 +1920,10 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     assert "unreadable_count" not in result, (
         f"the jump still answers with a count of unreadable referents: {result}"
     )
-    assert result["investigation"]["branched_from"] == seizure_alert["scope"], (
-        "the new investigation is not linked back to the one the alert fired in: "
-        f"{result['investigation'].get('branched_from')!r} != {seizure_alert['scope']!r}"
-    )
+    # ADR-144 Amendment 1 (L3.2's Q1, the orchestrator's settlement on the owner's review list): the
+    # case opened records no case it came from; the audit row names the alert's case, and L2.9
+    # opens the alert as a private view instead (B14 to be amended in spec 08 with L3.2b).
+    assert "branched_from" not in result["investigation"]
 
 
 def _synthetic_site_png(width: int, height: int) -> bytes:

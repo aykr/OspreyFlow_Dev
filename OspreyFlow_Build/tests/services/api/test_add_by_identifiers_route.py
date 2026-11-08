@@ -282,7 +282,7 @@ def test_a_list_past_the_cap_gets_the_typed_limit_with_its_three_options(rig: Ri
     body = response.json()
     assert body["error"] == "limit_exceeded"
     assert (body["cap_kind"], body["cap"], body["would_be"]) == ("nodes", 50_000, 50_002)
-    assert body["options"] == ["branch", "filter", "promote_to_batch"]
+    assert body["options"] == ["save_as_view", "filter", "promote_to_batch"]
     assert rig.valkey.published == 0 and rig.history.steps == []
 
 

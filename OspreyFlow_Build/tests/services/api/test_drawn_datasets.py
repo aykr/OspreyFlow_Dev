@@ -244,9 +244,6 @@ class _Stopped(Exception):
 
 
 class _PastTheCopy:
-    async def branch_filtered_contents(self, *_args: Any) -> tuple[list[Any], list[Any]]:
-        return [], []  # what a filtered branch holds is asked before the case is made
-
     def __getattr__(self, name: str) -> Any:
         async def stopped(*_args: Any, **_kwargs: Any) -> Any:
             raise _Stopped(name)
@@ -255,9 +252,9 @@ class _PastTheCopy:
 
 
 def _copying(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:  # noqa: F811
-    """The three routes that make a case reading what another reads, each from the drawing's home
-    case: a branch, a filtered branch, and two alert jumps (an alert naming the drawn dataset, and
-    one naming only the case)."""
+    """The route that makes a case reading what another reads, from the drawing's home case: the
+    alert jump, twice (an alert naming the drawn dataset, and one naming only the case). No case is
+    made from another since L3.2 (ADR-144 Amendment 1)."""
     home = _draw(world).json()["investigation_id"]
     drawn = _the_drawn(world)
     for name in ("working_set", "history", "valkey", "analytics", "graph", "alerts_store"):
@@ -272,16 +269,12 @@ def _copying(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> dict[st
 
     monkeypatch.setattr(app_module, "jumpable_alert", the_alert)
     return {
-        "branch": (f"/v1/investigations/{home}/branch", None),
-        "branch-by-filter": (
-            f"/v1/investigations/{home}/branch-by-filter", {"entity_types": ["Person"]},
-        ),
         "jump-to-the-dataset": (f"/v1/investigations/{home}/alerts/al-drawn/jump", None),
         "jump-to-the-case": (f"/v1/investigations/{home}/alerts/al-case/jump", None),
     }  # fmt: skip
 
 
-ROUTES = ["branch", "branch-by-filter", "jump-to-the-dataset", "jump-to-the-case"]
+ROUTES = ["jump-to-the-dataset", "jump-to-the-case"]
 
 
 def _readers(world: SimpleNamespace) -> list[str]:  # noqa: F811
@@ -311,7 +304,7 @@ def test_no_case_is_made_reading_it(
     [(("route",), False), (("store",), False), (("route", "store"), True)],
     ids=["the-route-alone", "the-store-alone", "both-removed"],
 )
-@pytest.mark.parametrize("route", ["branch", "branch-by-filter", "jump-to-the-case"])
+@pytest.mark.parametrize("route", ["jump-to-the-case"])
 def test_each_copy_check_holds_alone(
     world: SimpleNamespace,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
@@ -319,7 +312,8 @@ def test_each_copy_check_holds_alone(
     planted_out: tuple[str, ...],
     copied: bool,
 ) -> None:
-    """Rule 15, red: the route refuses before the case is made and `copy_case` refuses the copy;
+    """Rule 15, red: the route refuses before the case is made and `read_the_same_dataset` refuses
+    the copy;
     each holds alone, and with both planted out, as before this check, a second case reads the
     drawing. (The jump to the dataset itself has a third guard, `set_for_case`'s choice check,
     which `test_each_choice_check_holds_alone` shows red.)"""

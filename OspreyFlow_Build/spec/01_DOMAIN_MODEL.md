@@ -716,7 +716,7 @@ A **dataset** holds data and has one domain model. A **case** reads one dataset 
 and holds its analyst layer (ADR-143 decision 1), its views and its boards. A **view** is a saved
 lens on one case. There is nothing between a case and a view, and no case is made from another.
 
-`CaseView` (`packages/schemas/case_views.py`) holds **no data**:
+A view holds **no data**. The Conduit keeps it as `StoredCaseView` (`services/api/case_views.py`):
 - `id`, `case_id`, `name`, `created_by` and `created_at`;
 - `shared`: `false` until its creator chooses *Share with the case*;
 - exactly one of `node_ids` (a chosen set) or `filter` (`ViewFilter`: entity types, a date window,
@@ -727,6 +727,16 @@ lens on one case. There is nothing between a case and a view, and no case is mad
 - `drawing`: a board (L3.3);
 - `converted_from_case`: the retired case the upgrade converted it from (ADR-144 decision 6),
   whose audit stays readable from the view.
+
+**What a reader is sent** is `CaseView` (`packages/schemas/case_views.py`): the same fields, but
+with `chosen` (how many nodes were chosen) in place of `node_ids` and `layout`. A shared view's
+selection is its creator's, so naming an id the reader may not see would tell them it exists
+(rules 3 and 7). Opening a view (`CaseViewOpened`) gives:
+- the items the reader may see now;
+- the saved positions of those items alone;
+- `missing`.
+
+`test_no_listing_names_a_chosen_node` checks that no answer names a chosen node.
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.
@@ -743,6 +753,29 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **A view never widens access.** Its case's level check comes first. A reader who holds no level
   on the case is refused every view route as the case's own routes refuse them.
   - `test_every_view_route_refuses_a_non_member` (rule 4).
+
+**Until the upgrade converts it** (L3.2 item 3), a case made from another before L3.2 still
+reads its original's dataset and, for a reader holding a level on the original, the original's
+layer. A write there that names no dataset (an accepted proposal, an accepted extraction, a rule's
+`ALERTED_ON`) is stamped into the source, which the original reads too. So no write there may link
+to, or merge into, a node of the original's layer. The refusal is 409 `original_layer_read_only`
+(`branch_layer_read_only` before L3.2), with words saying the case is waiting to become a view.
+- The stamping graph refuses it as its last word.
+- The three accept paths whose acceptance writes in two steps (a question's, an email's, a held
+  document's) ask the same helper first (`dataset_scope.refuse_touching_a_read_only_layer`), so
+  nothing at all is written.
+- It is decided only by what the writer reads, as their own scoped principal:
+  - a node they read only through the original's layer is refused;
+  - for a link, so is an end they cannot read at all, one the same transaction did not write.
+  A member holding no level on the original reads none of its layer, so a refusal tells them
+  nothing about it (rule 3).
+- Proved by `tests/services/api/test_unconverted_case_writes.py`, red with the check removed and
+  with the layer read whatever the writer holds.
+
+**What a view does not hold yet.** ADR-144 decision 6 says a converted case's view keeps its
+layout. The Conduit has never stored a canvas layout (the Glass keeps it in the browser), so a view
+the upgrade makes holds none, and the migration's report says so. A view saved from the Glass after
+L3.2b carries the layout the Glass sends.
 
 ### 2.3 Resolution state
 

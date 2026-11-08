@@ -49,7 +49,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-from .dataset_scope import refuse_in_a_composite_case
+from .dataset_scope import refuse_in_a_composite_case, refuse_writing_in_an_unconverted_case
 from .event_scope import CaseRecords, link_event_filter
 from .link_ids import as_stored
 from .link_notes import LinkNotFoundError
@@ -200,7 +200,6 @@ class EmailExtractionService:
         )
         page = await self._analytics.list_events(
             EventListRequest(
-                # On a branch the email was loaded under the case it came from (ADR-084 Am. 2).
                 filter=await link_event_filter(self._investigations, own, edge.id, principal),
                 offset=0,
                 limit=1,
@@ -440,6 +439,8 @@ class EmailExtractionService:
             [f"accepting:{candidate_id}:mention"],
             principal,
         )
+        # L3.2 item 3: a case not yet converted writes nothing; refused before the node.
+        await refuse_writing_in_an_unconverted_case()
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
         mention = EdgeWrite(
