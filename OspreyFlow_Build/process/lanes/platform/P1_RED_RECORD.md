@@ -18,3 +18,5 @@ Each plant at the real call site, run, then restored; 8 November 2026.
 | `tests/cli/test_models_verb.py::test_models_key_hands_the_key_over_by_name_and_restarts_nothing` | the key appended to the `docker compose exec` argv | 2 failed |
 | `tests/cli/test_doctor_model_keys.py::test_the_doctor_names_each_lost_key_as_a_warning` | `_doctor` passing `model_states=None` (not asking the deployment) | 1 failed |
 | `apps/workspace/src/admin/sections/Models.test.tsx` "shows the Conduit's refusal in its words and still never the key" | the key field not cleared after sending | 1 failed |
+| `keyboard/admin-models.spec.ts::every registered Models action has its own proving test case above` | one case's `registerCovered` removed | 1 failed |
+| `a11y/every-harness.spec.ts` on `models-harness.html` | none needed: the first scan found three key buttons whose names did not contain their visible text (2.5.3), fixed | 3 failed (dark, light, GOV.UK), then 16 passed |

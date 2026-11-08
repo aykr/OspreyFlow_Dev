@@ -320,14 +320,14 @@ export function Models({ api }: { api: ModelsApi }) {
                           Edit
                         </Button>
                         <Button
-                          aria-label={`${engine.key_state === "set" ? "Rotate" : "Enter"} the key for ${label}`}
+                          aria-label={`${engine.key_state === "set" ? "Rotate" : "Enter"} key for ${label}`}
                           onClick={() => setOpen({ kind: "key", name })}
                         >
                           {engine.key_state === "set" ? "Rotate key" : "Enter key"}
                         </Button>
                         {engine.key_state !== "none" && (
                           <Button
-                            aria-label={`Remove the key for ${label}`}
+                            aria-label={`Remove key for ${label}`}
                             onClick={() => act(removeKey(api, name), `${label}: the key is removed; it is offered to no analyst until one is set.`)}
                           >
                             Remove key

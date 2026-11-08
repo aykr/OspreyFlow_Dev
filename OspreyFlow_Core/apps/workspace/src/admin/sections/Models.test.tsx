@@ -47,7 +47,7 @@ describe("Models", () => {
       path === "/v1/admin/models/engines/gemini/key" && init?.method === "PUT" ? { status: 200, body: SET } : undefined,
     );
     render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Enter the key for Gemini" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Enter key for Gemini" }));
     const field = screen.getByLabelText(/Key for Gemini/) as HTMLInputElement;
     expect(field.type).toBe("password");
     expect(field.autocomplete).toBe("new-password");
@@ -69,7 +69,7 @@ describe("Models", () => {
         : undefined,
     );
     render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Enter the key for Gemini" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Enter key for Gemini" }));
     fireEvent.change(screen.getByLabelText(/Key for Gemini/), { target: { value: PLANTED } });
     fireEvent.click(screen.getByRole("button", { name: "Set the key" }));
     expect((await screen.findByRole("alert")).textContent).toContain("The model gateway refused the key");
