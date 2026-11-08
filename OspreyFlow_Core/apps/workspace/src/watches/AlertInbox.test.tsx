@@ -9,8 +9,8 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { AlertRow, JumpResultSummary } from "./AlertInbox";
-import type { AlertJumpResult, AlertView } from "./api";
+import { AlertRow } from "./AlertInbox";
+import type { AlertView } from "./api";
 
 afterEach(() => {
   cleanup();
@@ -38,7 +38,7 @@ describe("test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_re
     // lowercase-hex/uuid-ish token) appears nowhere in the rendered output if this holds.
     const { container } = render(
       <ul>
-        <AlertRow alert={NOTIFY_ALERT} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={NOTIFY_ALERT} onOpen={() => undefined} />
       </ul>,
     );
 
@@ -59,7 +59,7 @@ describe("test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_re
     const leaking: AlertView = { ...NOTIFY_ALERT, referent_node_ids: ["node-should-not-render"] };
     const { container } = render(
       <ul>
-        <AlertRow alert={leaking} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={leaking} onOpen={() => undefined} />
       </ul>,
     );
     // `AlertRow`'s own `hasReferents` guard is `alert.mode === "full" && ...` — a `notify_stub`
@@ -71,32 +71,8 @@ describe("test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_re
   });
 });
 
-// ADR-124 decision 1: the jump summary carries no count of what the reader cannot read. A server
-// that still sends `unreadable_count` has it ignored.
-const JUMP_RESULT = {
-  investigation: {
-    id: "inv-alert-1",
-    created_at: "2026-09-22T00:00:00Z",
-    created_by: "analyst-1",
-    owning_unit: "unit-1",
-  },
-  seeded_count: 3,
-  unreadable_count: 2,
-} as unknown as AlertJumpResult;
-
-describe("test_jump_result_shows_no_unreadable_count", () => {
-  test("the jump summary says how many were added and nothing of what could not be read", () => {
-    const { container, queryByTestId } = render(
-      <JumpResultSummary result={JUMP_RESULT} onOpen={() => undefined} />,
-    );
-    expect(queryByTestId("jump-unreadable-summary")).toBeNull();
-    expect(container.textContent ?? "").toContain("3 entities added to the new investigation.");
-    expect(container.textContent ?? "").not.toMatch(/referent|accessible|unreadable|\b2\b/);
-  });
-});
-
 // ADR-110 decision 10, Amendment 3: a notice that a scheduled run failed or was refused reads as
-// its words — not as a match whose evidence vanished, and with nothing to jump into.
+// its words — not as a match whose evidence vanished, and with no alert to open.
 describe("a schedule notice", () => {
   const NOTICE: AlertView = {
     id: "n1", rule_id: "schedule:recipe-1", owner_id: "approver-1", mode: "full", referent_node_ids: [],
@@ -104,17 +80,17 @@ describe("a schedule notice", () => {
     words: "The scheduled run of Daily export due 2 June 2026 at 06:00 was refused: the owner can no longer sign in",
   };  // prettier-ignore
 
-  test("reads as its words, with no evidence line and no jump", () => {
+  test("reads as its words, with no evidence line and nothing to open", () => {
     const { container, queryByRole } = render(
       <ul>
-        <AlertRow alert={NOTICE} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={NOTICE} onOpen={() => undefined} />
       </ul>,
     );
     const text = container.textContent ?? "";
     expect(text).toContain("Scheduled run");
     expect(text).toContain("was refused: the owner can no longer sign in");
     expect(text).not.toContain("Evidence no longer available");
-    expect(queryByRole("button", { name: /Jump/ })).toBeNull();
+    expect(queryByRole("button", { name: /Open the alert/ })).toBeNull();
   });
 });
 
@@ -140,7 +116,7 @@ describe("a hotlist alert that explains itself", () => {
   function text(alert: AlertView): string {
     const { container } = render(
       <ul>
-        <AlertRow alert={alert} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={alert} onOpen={() => undefined} />
       </ul>,
     );
     return container.textContent ?? "";
@@ -153,16 +129,16 @@ describe("a hotlist alert that explains itself", () => {
     expect(t).toContain("From: pid_seized_comms_batch2.csv, row 4; pid_pin_calls.csv, 2,013 rows");
   });
 
-  test("shows neither the raw rule id nor a node id, and keeps the jump", () => {
+  test("shows neither the raw rule id nor a node id, and keeps Open the alert", () => {
     const { container, getByRole } = render(
       <ul>
-        <AlertRow alert={EXPLAINED} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={EXPLAINED} onOpen={() => undefined} />
       </ul>,
     );
     const t = container.textContent ?? "";
     expect(t).not.toContain("hotlist:");
     expect(t).not.toContain("01HZX3Q9K2M5N7P8R0S1T2V3W");
-    expect(getByRole("button", { name: "Jump into investigation" })).toBeTruthy();
+    expect(getByRole("button", { name: "Open the alert" })).toBeTruthy();
   });
 
   test("says how many more files, never cutting silently", () => {
@@ -220,8 +196,7 @@ describe("the hotlist alert's fired-on text", () => {
               { type: "Endpoint", label: "+447700900918", files: [], more_files: 0, sources_withheld: true },
             ],
           }}
-          onJump={() => undefined}
-          jumping={false}
+          onOpen={() => undefined}
         />
       </ul>,
     );
@@ -251,35 +226,33 @@ describe("the hotlist alert's fired-on text", () => {
               },
             ],
           }}
-          onJump={() => undefined}
-          jumping={false}
+          onOpen={() => undefined}
         />
       </ul>,
     );
     expect(container.textContent ?? "").toContain("a.csv, 4 records; b.csv, 2 rows; c.csv, row 4");
   });
 
-  test("evidence available but nothing fired on says it is no longer available and disables Jump", () => {
+  test("evidence available but nothing fired on says it is no longer available and disables Open the alert", () => {
     const { container, getByRole } = render(
       <ul>
-        <AlertRow alert={{ ...FULL, fired_on: null }} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={{ ...FULL, fired_on: null }} onOpen={() => undefined} />
       </ul>,
     );
     expect(container.textContent ?? "").toContain("Evidence no longer available");
-    expect((getByRole("button", { name: "Jump into investigation" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((getByRole("button", { name: "Open the alert" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("an available alert with something fired on keeps Jump enabled", () => {
+  test("an available alert with something fired on keeps Open the alert enabled", () => {
     const { getByRole } = render(
       <ul>
         <AlertRow
           alert={{ ...FULL, fired_on: [{ type: "Endpoint", label: "x", files: [], more_files: 0 }] }}
-          onJump={() => undefined}
-          jumping={false}
+          onOpen={() => undefined}
         />
       </ul>,
     );
-    expect((getByRole("button", { name: "Jump into investigation" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((getByRole("button", { name: "Open the alert" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 
@@ -289,7 +262,7 @@ describe("when an alert was raised", () => {
     // Found capturing the guide's Watches screen (step 7b): "10/31/2026, 2:31:52 PM".
     const { container } = render(
       <ul>
-        <AlertRow alert={{ ...NOTIFY_ALERT, created_at: "2026-10-31T14:31:52Z" }} onJump={() => undefined} jumping={false} />
+        <AlertRow alert={{ ...NOTIFY_ALERT, created_at: "2026-10-31T14:31:52Z" }} onOpen={() => undefined} />
       </ul>,
     );
     expect(container.textContent).toContain("31 Oct 2026, 14:31");

@@ -41,12 +41,10 @@ describe("Home's figures", () => {
   const home = summariseHome(BASE);
 
   it("counts the team's queue and what is claimed by the reader, and says which cases it could not read", () => {
-    expect(home.glass.map((f) => f.text)).toEqual([
-      "3 alerts in your team's queue, 1 claimed by you",
-      "The queue of 1 case could not be read",
-      "2 cases open to you, last worked on Operation Ledger — AML review",
-    ]);
-    expect(home.glass[1]!.tone).toBe("error");
+    // ADR-146 decision 2: the alerts are Rules and Monitoring's, on its card.
+    expect(home.rules.map((f) => f.text)).toEqual(["3 alerts in your team's queue, 1 claimed by you", "The queue of 1 case could not be read"]);
+    expect(home.rules[1]!.tone).toBe("error");
+    expect(home.glass.map((f) => f.text)).toEqual(["2 cases open to you, last worked on Operation Ledger — AML review"]);
   });
 
   it("counts rows still held and recipes flagged", () => {
@@ -90,11 +88,13 @@ describe("Home's figures", () => {
   it("lists what needs the reader, newest first: their own and unclaimed alerts, held rows by case, failing pulls", () => {
     expect(home.attention.map((a) => [a.place, a.title])).toEqual([
       ["admin", "osprey-dashboard-compliance-board is not updating"],
-      ["glass", "KYC screening alert in Operation Ledger — AML review"],
+      ["rules", "KYC screening alert in Operation Ledger — AML review"],
       ["ingest", "2 rows held for review in Operation Ledger — AML review"],
-      ["glass", "KYC screening alert in Operation Ledger — AML review"],
+      ["rules", "KYC screening alert in Operation Ledger — AML review"],
     ]);
     expect(home.attention[3]!.detail).toBe("Finding a2 in words. Claimed by you.");
+    // ADR-146 decision 6: an alert's row opens the alert, so it carries the alert's id.
+    expect(home.attention.filter((a) => a.place === "rules").every((a) => a.alertId)).toBe(true);
     expect(home.attention.some((a) => a.detail.includes("a3"))).toBe(false);
   });
 
@@ -161,6 +161,6 @@ describe("the team queue's count", () => {
       ...BASE,
       perCase: { ...BASE.perCase, c1: { ...BASE.perCase.c1!, alerts: [alert("a5", "closing", "u-other", "2026-10-13T08:00:00Z")] } },
     };
-    expect(summariseHome(withClosing).glass[0]!.text).toBe("1 alert in your team's queue, 0 claimed by you");
+    expect(summariseHome(withClosing).rules[0]!.text).toBe("1 alert in your team's queue, 0 claimed by you");
   });
 });

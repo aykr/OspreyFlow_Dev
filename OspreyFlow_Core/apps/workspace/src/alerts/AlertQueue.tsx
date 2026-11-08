@@ -35,6 +35,10 @@ export interface AlertQueueProps extends AlertsApi {
   /** The signed-in account's id, to say "claimed by you". */
   accountId: string | null;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
+  /** The alert to open, from its address (ADR-146 decision 6), whatever the filters list. */
+  openAlertId?: string | null;
+  /** Told the alert opened here, so it is given its address; `null` when it is closed. */
+  onOpenAlert?: (alertId: string | null) => void;
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closing: "Closing", closed: "Closed" };
@@ -109,8 +113,16 @@ export function AlertQueue(props: AlertQueueProps) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [rows, setRows] = useState<QueuedAlert[] | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(props.openAlertId ?? null);
   const [problem, setProblem] = useState<string | null>(null);
+  // Back and Forward change the address: the alert open follows it.
+  useEffect(() => {
+    if (props.openAlertId !== undefined) setOpenId(props.openAlertId);
+  }, [props.openAlertId]);
+  const open = (alertId: string) => {
+    setOpenId(alertId);
+    props.onOpenAlert?.(alertId);
+  };
 
   const reload = useCallback(() => {
     setProblem(null);
@@ -171,7 +183,7 @@ export function AlertQueue(props: AlertQueueProps) {
                   type="button"
                   className="btn btn--quiet"
                   aria-pressed={openId === row.alert.id}
-                  onClick={() => setOpenId(row.alert.id)}
+                  onClick={() => open(row.alert.id)}
                   style={{ width: "100%", textAlign: "left", display: "block", padding: "var(--sp-8)", height: "auto", whiteSpace: "normal" }}
                 >
                   <span className="visually-hidden">Open alert: </span>

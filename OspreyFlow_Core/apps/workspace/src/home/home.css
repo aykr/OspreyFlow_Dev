@@ -82,6 +82,9 @@
 .home-pic__stage--held { border-color: var(--warning); }
 .home-pic__held { font-size: var(--fs-11); color: var(--warning); white-space: nowrap; }
 .home-pic__meta { height: var(--lh-11); }
+.home-pic--rules { flex-direction: column; gap: var(--sp-4); }
+.home-pic__figure { font-size: var(--fs-23); line-height: var(--lh-23); color: var(--text-primary); }
+.home-pic__caption { font-size: var(--fs-11); color: var(--text-secondary); }
 .home-pic__arrow { margin: 0 var(--sp-2) var(--sp-16); }
 .home-pic__arrow path { stroke: var(--border-strong); stroke-width: 1.3; }
 .home-pic__services {

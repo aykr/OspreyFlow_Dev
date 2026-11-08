@@ -1,11 +1,13 @@
 // The context banner (ADR-145 decision 2): one line under the top bar naming the place the person is
 // in and what they are working on — "You are in the Glass · Case Kestrel ▾ · reads Prison intel";
-// "You are in the Ingest Studio · for case Kestrel ▾"; "You are in Admin".
+// "You are in the Ingest Studio · for case Kestrel ▾"; "You are in Rules and Monitoring · Case Kestrel
+// ▾" (ADR-145 Amendment 4 decision 1); "You are in Admin".
 // A person who holds both the Glass and the Studio gets the cross-link between them, which keeps the
 // case they came from. Under the GOV.UK brand it is a GOV.UK notification banner (decision 3).
 //
-// In the Glass the banner carries the place's sections, Case · Boards · Monitoring (decision 1);
-// *Boards* is drawn as coming until its screens are built. Not drawn in the Studio: its dataset
+// In the Glass the banner carries the place's sections, Case · Boards (decision 1; Monitoring left
+// for Rules and Monitoring, ADR-146 decision 2); *Boards* is drawn as coming until its screens are
+// built. Not drawn in the Studio: its dataset
 // ("Dataset ‹name› ▾"), which the Studio chooses itself, in its own *Dataset* select
 // (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
 // dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
@@ -28,13 +30,13 @@ export interface BannerSection {
   current: boolean;
   /** Absent: the section is coming, drawn but not yet usable. */
   onSelect?: () => void;
-  /** How many are open there (Monitoring's alerts, ADR-115 E6); none drawn for nothing. */
+  /** How many are open there; none drawn for nothing. */
   badge?: number;
 }
 
 export interface ContextBannerProps {
   place: PlaceId;
-  /** The place's sections (the Glass's Case · Boards · Monitoring). */
+  /** The place's sections (the Glass's Case · Boards). */
   sections?: readonly BannerSection[];
   /** The case switcher, in the Glass and the Studio. */
   caseSwitcher?: ReactNode;
@@ -46,6 +48,7 @@ export interface ContextBannerProps {
 const YOU_ARE_IN: Record<PlaceId, string> = {
   glass: `You are in ${PLACE_NAME.glass.replace(/^The /, "the ")}`,
   ingest: `You are in the ${PLACE_NAME.ingest}`,
+  rules: `You are in ${PLACE_NAME.rules}`,
   admin: `You are in ${PLACE_NAME.admin}`,
 };
 
@@ -124,7 +127,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, cr
           </nav>
         </>
       )}
-      {place === "glass" && caseSwitcher && (
+      {(place === "glass" || place === "rules") && caseSwitcher && (
         <>
           {next()}
           {caseSwitcher}

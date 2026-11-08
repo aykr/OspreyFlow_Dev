@@ -8,7 +8,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AlertsPlace } from "./AlertsPlace";
+import { RulesPlace } from "./RulesPlace";
 
 afterEach(() => {
   cleanup();
@@ -55,7 +55,7 @@ function serve() {
 describe("a screening alert's detail", () => {
   it("names the customer once, and the list's entry for the listed party as the list's", async () => {
     serve();
-    render(<AlertsPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} />);
+    render(<RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: /Open alert:.*KYC screening/ }));
     const concerns = await screen.findByRole("list", { name: "What this alert concerns" });
     const lines = within(concerns).getAllByRole("listitem").map((li) => li.textContent);

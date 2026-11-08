@@ -119,7 +119,10 @@ import type { HistoryStepSummary } from "./workingset/models";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
-import { AlertsPlace } from "./alerts/AlertsPlace";
+import { RulesPlace } from "./alerts/RulesPlace";
+import { openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./alerts/address";
+import { StrengthPanel } from "./strength/StrengthPanel";
+import { alertPath, navigate, noteAddress, takeNotedAddress, useAddress } from "./shell/router";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
 import {
@@ -252,6 +255,10 @@ export function App() {
   // on without a click (the identity provider already knows the person), and open the Ingest tab
   // when the Ingest Studio tile was the one pressed. Read once. Grants nothing.
   const [handoff] = useState(() => readHandoff(window.location.search, sessionStorage));
+  // ADR-146 decision 6: an alert's address, kept over the sign-in round trip, which returns to the
+  // root (`shell/router.ts`).
+  useState(() => noteAddress());
+  const address = useAddress();
   const autoSignInStartedRef = useRef(false);
   // Distinguishes "this token was just refused outright" (wrong audience, wrong claims — show the
   // reason, do not retry) from "this token merely expired mid-session" (retry silently, preserving
@@ -291,6 +298,8 @@ export function App() {
           setPrincipal(displayPrincipalFromUser(user));
           scheduleRenewal(user.expires_at);
           restoreViewStateAfterReauth();
+          const noted = takeNotedAddress();
+          if (noted) navigate(noted, { replace: true });
           signedIn = true;
           clearHandoff(sessionStorage);
         } catch {
@@ -717,8 +726,8 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership"
-  >(handoff.view === "ingest" ? "ingest" : "graph");
+    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership" | "strength"
+  >(handoff.view === "ingest" ? "ingest" : address.kind !== "none" ? "alerts" : "graph");
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
   useEffect(() => {
@@ -735,10 +744,11 @@ export function App() {
     };
   }, [investigationId, bearerToken, counts.nodes, counts.edges]);
   // ADR-115 E6: the open-alert count, the case's queue counted as the reader (rule 3), drawn on the
-  // banner's Monitoring section since ADR-145 Amendment 2 (it left the rail).
+  // switcher's Rules and Monitoring since ADR-146 decision 2 (it left the Glass's banner).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
+  const opensRules = startPlaces(rights).includes("rules");
   useEffect(() => {
-    if (!investigationId || !bearerToken || !rights?.has("read_alert_queue")) {
+    if (!investigationId || !bearerToken || !opensRules) {
       setAlertCount(undefined);
       return;
     }
@@ -755,10 +765,24 @@ export function App() {
     return () => {
       cancelled = true;
     };
-    // The count is read again when the analyst comes back from the Alerts place.
-  }, [investigationId, bearerToken, rights, view]);
-  // Which application is open, and (so the switch can go back to it) the Glass view last open.
-  const app = view === "ingest" ? "ingest" : "glass";
+    // The count is read again when the analyst comes back from Rules and Monitoring.
+  }, [investigationId, bearerToken, opensRules, view]);
+  // ADR-146 decision 6: an alert's address opens Rules and Monitoring on it, in the case the
+  // Conduit says it is worked in; another case's is opened on the alert (a reload, as every case
+  // switch is). Leaving the address (Back, or Back to the queue) leaves the alert, not the place.
+  const addressedAlert = address.kind === "alert" ? address.alertId : null;
+  const addressed = useAlertAtAddress(API_BASE_URL, bearerToken, opensRules ? addressedAlert : null);
+  const rulesAddressed = address.kind === "rules" || addressedAlert !== null;
+  useEffect(() => {
+    if (rulesAddressed && opensRules) setView("alerts");
+  }, [rulesAddressed, opensRules]);
+  useEffect(() => {
+    if (addressed?.status === "found" && addressedAlert && addressed.caseId !== investigationId) {
+      openAlertInItsCase(addressedAlert, addressed.caseId);
+    }
+  }, [addressed, addressedAlert, investigationId]);
+  // Which place is open, and (so the switch can go back to it) the Glass view last open.
+  const app = view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
   // ADR-128 decision 3: an attachment of the case brief opens where the thing lives (`openAttachment.ts`).
   const openBriefAttachment = (kind: AttachmentKind, id: string) => {
     const place = placeOf(kind, id);
@@ -1368,6 +1392,9 @@ export function App() {
           openCase,
           browseCases: () => setBrowsingCases(true),
           openStudio: () => setView("ingest"),
+          openRules: () => setView("alerts"),
+          openAlert: (alertId) => navigate(alertPath(alertId)),
+          openCaseOnRules: (id) => openRulesOnCase(id),
         })
       : null;
   if (startScreenShown)
@@ -1424,6 +1451,8 @@ export function App() {
     { id: "questions", label: "Questions", icon: "questions" as const, onSelect: () => setQuestionsOpen(true), pressed: questionsOpen },
     // ADR-111 Amendment 3: Superset dashboards, drawn inside the Glass.
     { id: "dashboards", label: "Dashboards", icon: "dashboards" as const, onSelect: () => setView("dashboards"), pressed: view === "dashboards" },
+    // ADR-139: Connection strength, which stayed in the Glass when Monitoring left (ADR-146 decision 2).
+    { id: "strength", label: "Connection strength", icon: "strength" as const, onSelect: () => setView("strength"), pressed: view === "strength" },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   // ADR-145 Amendment 2: the view switch keeps Graph and Map; Matrix and Reports are under More views.
   // Someone offered none of Graph and Map (a Reports Viewer) has theirs in the switch itself.
@@ -1454,10 +1483,14 @@ export function App() {
           <PlaceSwitcher
             places={startPlaces(rights)}
             current={app}
+            counts={{ rules: alertCount }}
             onChoose={(place) => {
               if (place === "admin") setStartChoice("admin");
               else if (place === "ingest") setView("ingest");
+              else if (place === "rules") setView("alerts");
               else if (app !== "glass") setView(lastGlassView());
+              // Rules and Monitoring's addresses are its own: another place leaves them.
+              if (place !== "rules" && address.kind !== "none") navigate("/");
             }}
           />
         }
@@ -1520,14 +1553,12 @@ export function App() {
       <ContextBanner
         place={app}
         // ADR-145 decision 1: the Glass's sections; Boards is coming (Lane 3's board screens).
+        // Monitoring left for Rules and Monitoring (ADR-146 decision 2), its count with it.
         sections={
           app === "glass"
             ? [
-                { id: "case", label: "Case", current: view !== "alerts", onSelect: () => setView(landingView(rights)) },
+                { id: "case", label: "Case", current: true, onSelect: () => setView(landingView(rights)) },
                 { id: "boards", label: "Boards", current: false },
-                ...((railEntries(rights) as string[]).includes("alerts")
-                  ? [{ id: "monitoring", label: "Monitoring", current: view === "alerts", onSelect: () => setView("alerts"), badge: alertCount }]
-                  : []),
               ]
             : []
         }
@@ -1638,28 +1669,37 @@ export function App() {
           />
         )}
         {view === "alerts" && (
-          <AlertsPlace
+          <RulesPlace
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
             accountId={principal?.sub ?? null}
             isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             canManageLists={rights?.has("load_screening_lists") ?? false}
-            canManageInfluencers={rights?.has("manage_strength_influencers") ?? false}
-            entityTypes={ontologySchema?.entity_types ?? []}
-            edgeTypes={edgeTypes}
-            onInfluencersChanged={() => setStrengthRead((n) => n + 1)}
             onCanvas={(outcome, nodeIds) => {
               applyStarterDelta(outcome.delta);
               pendingHighlight.current = nodeIds;
               setView("graph");
             }}
-            onOpenInvestigation={(newInvestigationId) => {
-              sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
-              setInvestigationId(newInvestigationId);
-              setView("graph");
-            }}
+            address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
+            onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
           />
+        )}
+        {view === "strength" && investigationId && (
+          // ADR-139: what makes a link strong in this case, and who may change it.
+          <section aria-label="Connection strength" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", padding: "var(--sp-16)", minHeight: 0, flex: 1, overflowY: "auto" }}>
+            <h2 className="value" style={{ margin: 0 }}>Connection strength</h2>
+            <StrengthPanel
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              investigationId={investigationId}
+              accountId={principal?.sub ?? null}
+              canManage={rights?.has("manage_strength_influencers") ?? false}
+              entityTypes={ontologySchema?.entity_types ?? []}
+              edgeTypes={edgeTypes}
+              onChanged={() => setStrengthRead((n) => n + 1)}
+            />
+          </section>
         )}
         {view === "reports" && (
           <ReportsPlace key={reportsStart.opened} initialTab={reportsStart.tab} apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
@@ -1681,7 +1721,7 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
+        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "strength" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && lens && (
               <ViewLensBanner

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// ADR-133 stage (a): the Monitoring place. One queue for every kind of alert (typology, hotlist,
+// ADR-133 stage (a): the Monitoring place, Rules and Monitoring since ADR-146 decision 2. One queue for every kind of alert (typology, hotlist,
 // monitor), each row saying its kind, severity, who may see it and its age; filters by kind,
 // severity and status, applied by the server; a case alert given to a member, a shared one only
 // claimed; the seven typologies offered as templates; a hotlist's audience chosen where the
@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ageWords } from "./AlertQueue";
-import { AlertsPlace } from "./AlertsPlace";
+import { RulesPlace } from "./RulesPlace";
 import { TEMPLATES } from "./templates";
 import { HotlistPanel } from "../watches/HotlistPanel";
 
@@ -80,25 +80,34 @@ function serve(level: "viewer" | "editor" | "author", extra: (path: string, init
 }
 
 function place() {
-  render(<AlertsPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} />);
+  render(<RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} />);
 }
 
-describe("the Monitoring place", () => {
-  it("is one place, headed Monitoring, holding the queue, the rules and the watches", async () => {
-    serve("viewer");
+describe("Rules and Monitoring", () => {
+  it("is one place, headed Rules and Monitoring, with the owner's four tabs (M1)", async () => {
+    serve("author");
     place();
-    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
-    for (const tab of ["Queue", "Rules", "Watches"]) expect(screen.getByRole("tab", { name: tab })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Rules and Monitoring" })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alerts", "What raises alerts", "Held rows", "Changes"]),
+    );
+    // Connection strength is not alerts: it stayed in the Glass (ADR-139).
+    expect(screen.queryByRole("tab", { name: "Connection strength" })).toBeNull();
   });
 
-  it("holds the hotlists, the monitors and the alert inbox in its Watches tab, the rail having none", async () => {
-    // The owner's answer of 1 November 2026: the rail's Watches entry is gone, so everything it
-    // opened — the alert inbox with its jump into a new investigation included — is here.
+  it("offers a Viewer neither the held rows nor the changes, as their routes would refuse them", async () => {
     serve("viewer");
     place();
-    fireEvent.click(screen.getByRole("tab", { name: "Watches" }));
+    await waitFor(() => expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alerts", "What raises alerts"]));
+  });
+
+  it("keeps the alert inbox beside the queue, and the hotlists and watched patterns with the rules", async () => {
+    // Until L2.10 merges the inbox into the one queue (ADR-146 decision 1).
+    serve("viewer");
+    place();
     expect(await screen.findByRole("heading", { name: "Alert inbox" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /Hotlists/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "What raises alerts" }));
+    expect(await screen.findByRole("heading", { name: /Hotlists/ })).toBeTruthy();
   });
 
   it("lists every kind with its severity, who may see it and its age", async () => {
@@ -159,7 +168,7 @@ describe("the Monitoring place", () => {
   it("offers the seven typologies and stage (c)'s four AML templates, and one fills the rule form", async () => {
     serve("author");
     place();
-    fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
+    fireEvent.click(screen.getByRole("tab", { name: "What raises alerts" }));
     const list = await screen.findByRole("list", { name: "Templates" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(11);
     expect(TEMPLATES.map((t) => t.typology).sort()).toEqual(
@@ -176,7 +185,7 @@ describe("the Monitoring place", () => {
   it("shows templates to a reader who cannot deploy, without the button", async () => {
     serve("viewer");
     place();
-    fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
+    fireEvent.click(screen.getByRole("tab", { name: "What raises alerts" }));
     await screen.findByRole("list", { name: "Templates" });
     expect(screen.queryByRole("button", { name: /Use the template/ })).toBeNull();
   });
@@ -243,5 +252,55 @@ describe("a hotlist's audience", () => {
     hotlists(true, "only_me", true);
     fireEvent.change(await screen.findByRole("combobox", { name: "Who alerts from 07700 900310 reach" }), { target: { value: "team" } });
     expect(await screen.findByText(/the audience cannot be changed here/)).toBeTruthy();
+  });
+});
+
+// ADR-146 decision 6: an alert's address. The place opens the alert the address names, gives an
+// alert opened here its address, and says the same words for an alert that does not exist and for
+// one the reader may not see, which the Conduit answers alike (rule 3).
+describe("an alert at its address", () => {
+  const found = (id: string, caseId = "c1") => {
+    const row = ROWS.find((r) => r.alert.id === id)!;
+    return { status: "found" as const, caseId, explanation: { ...row, nodes: [], edges: [], transactions: [] } as never };
+  };
+
+  it("opens the alert the address names, beside the queue", async () => {
+    serve("editor");
+    render(<RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()}
+                       address={{ alertId: "h1", state: found("h1") }} />);  // prettier-ignore
+    expect(await screen.findByText("Hotlist · High severity · Shared with team unit-a")).toBeTruthy();
+    expect(screen.getByRole("button", { name: alertName("High", "Hotlist", "A hotlisted identifier appeared: 07700 900310") }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("gives an alert opened from the queue its address, and leaves it with Back to the queue", async () => {
+    serve("editor");
+    const opened = vi.fn();
+    const { rerender } = render(
+      <RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} onOpenAlert={opened} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: alertName("Medium", "Structuring", "4 movements from GB-MULE to GB-HUB") }));
+    expect(opened).toHaveBeenLastCalledWith("t1");
+    rerender(
+      <RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()} onOpenAlert={opened}
+                  address={{ alertId: "nope", state: { status: "missing" } }} />,  // prettier-ignore
+    );
+    fireEvent.click(screen.getByRole("button", { name: "← Back to the queue" }));
+    expect(opened).toHaveBeenLastCalledWith(null);
+  });
+
+  it("says the same words for an alert that does not exist and one the reader may not see", () => {
+    serve("editor");
+    render(<RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()}
+                       address={{ alertId: "hidden-or-missing", state: { status: "missing" } }} />);  // prettier-ignore
+    expect(screen.getByRole("alert").textContent).toBe("There is no alert at this address that you can see.");
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
+
+  it("draws nothing of the queue while another case is opened on the alert", () => {
+    serve("editor");
+    render(<RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={vi.fn()}
+                       address={{ alertId: "h1", state: found("h1", "c2") }} />);  // prettier-ignore
+    expect(screen.getByText("Opening the alert…")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Alert queue" })).toBeNull();
   });
 });

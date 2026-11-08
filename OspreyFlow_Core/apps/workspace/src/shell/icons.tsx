@@ -1,6 +1,6 @@
 // The shell's icons (ADR-097 step 1): 16px, one stroke in the current text colour, no fill, so
 // they take the chrome's neutral and never a data colour.
-export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "ownership" | "types" | "ingest" | "glass" | "names" | "questions" | "explore" | "admin" | "dashboards";
+export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "ownership" | "types" | "ingest" | "glass" | "names" | "questions" | "explore" | "admin" | "dashboards" | "strength";
 
 const PATHS: Record<ShellIcon, string> = {
   // Two stacked folders: the cases and their views.
@@ -28,6 +28,8 @@ const PATHS: Record<ShellIcon, string> = {
   // A gear: the deployment's administration (ADR-110 Amendment 1).
   // Three panels of a board: ADR-111 Amendment 3.
   dashboards: "M2 2.5h12v11H2z M2 6.5h12 M7 6.5v7",
+  // A thick and a thin line between two points: how strong a link is (ADR-139).
+  strength: "M3.5 4a1.5 1.5 0 1 0 0 .01 M12.5 12a1.5 1.5 0 1 0 0 .01 M4.6 5.1l6.8 5.8 M4.2 5.8l6.4 5.6 M5 4.4l6.6 5.6",
   admin: "M8 5.8a2.2 2.2 0 1 0 0 4.4a2.2 2.2 0 0 0 0-4.4z M8 1.8v2 M8 12.2v2 M1.8 8h2 M12.2 8h2 M3.6 3.6l1.4 1.4 M11 11l1.4 1.4 M3.6 12.4l1.4-1.4 M11 5l1.4-1.4",
 };
 

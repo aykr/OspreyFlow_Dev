@@ -285,9 +285,14 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // the places on it, and inside the Studio the rail leads back to the investigation. Each case below
   // keeps the point of the one it replaces.
   const rail = () => screen.getByRole("navigation", { name: "Workspace" });
-  // ADR-145 Amendment 2 (variant B): Monitoring, with its open count, is the banner's section.
-  const monitoring = async () =>
-    within(await screen.findByRole("navigation", { name: "In the Glass" })).findByRole("button", { name: /^Monitoring/ });
+  // ADR-146 decision 2: Monitoring left the Glass; Rules and Monitoring is a place of the switcher.
+  const rulesPlace = async () =>
+    within(await screen.findByRole("navigation", { name: "Places" })).findByRole("button", { name: /^Rules and Monitoring/ });
+  // ADR-139: Connection strength, which stayed in the Glass, under the rail's More.
+  const openStrength = async () => {
+    fireEvent.click(within(await screen.findByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "More" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Connection strength" }));
+  };
 
   test("after the Ingest Studio tile, the Ingest Studio is the one showing", async () => {
     sessionStorage.setItem(
@@ -370,15 +375,18 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     expect(header.getAttribute("data-app")).toBe("glass");
   });
 
-  test("the rail has no Watches entry: watches are reached from Monitoring's Watches tab", async () => {
-    holdAllRequests();
+  test("neither the rail nor the banner holds Monitoring: Rules and Monitoring is a place of the switcher", async () => {
+    withRights(["investigate", "triage_alerts", "read_alert_queue"]);
     render(<App />);
     const rail = await screen.findByRole("navigation", { name: "Workspace" });
     expect(within(rail).queryByRole("button", { name: "Watches" })).toBeNull();
-    // ADR-145 Amendment 2: Monitoring is the banner's section, not the rail's.
-    expect(within(rail).queryByRole("button", { name: /^Monitoring/ })).toBeNull();
-    fireEvent.click(await monitoring());
-    expect(await screen.findByRole("tab", { name: "Watches" })).toBeTruthy();
+    expect(within(rail).queryByRole("button", { name: /Monitoring/ })).toBeNull();
+    expect(within(await screen.findByRole("navigation", { name: "In the Glass" })).queryByRole("button", { name: /Monitoring/ })).toBeNull();
+    fireEvent.click(await rulesPlace());
+    expect(await screen.findByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
+    expect((await rulesPlace()).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("rules");
   });
 
   test("inside the Ingest Studio the bar keeps only what belongs to it", async () => {
@@ -438,9 +446,9 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // Back returns to the Glass's view that was open before, on the case now open.
   test("after a reload in the Studio, Back returns to the Glass's last view on the open case", async () => {
     withRights(["investigate", "read_alert_queue", "edit_pipelines"]);
-    // In the Glass, on Monitoring; then the page is reloaded into the Studio, as `openCase` does.
+    // In the Glass, on Connection strength; then the page is reloaded into the Studio, as `openCase` does.
     const first = render(<App />);
-    fireEvent.click(await monitoring());
+    await openStrength();
     first.unmount();
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "ingest", at: Date.now() }));
     const went: string[] = [];
@@ -450,7 +458,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     try {
       render(<App />);
       fireEvent.click(await screen.findByRole("button", { name: /^← Back to .* in the Glass$/ }));
-      expect((await monitoring()).getAttribute("aria-current")).toBe("page");
+      expect(await screen.findByRole("region", { name: "Connection strength" })).toBeTruthy();
       // The case is the open one: Back neither changes it nor reloads.
       expect(sessionStorage.getItem("ospreyflow.investigationId")).toBe("inv-1");
       expect(went).toEqual([]);
@@ -460,91 +468,56 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   });
 
   test("the switcher and the cross-link move between the places, and coming back returns to the view that was open", async () => {
-    holdAllButRights();
+    withRights(["investigate", "read_alert_queue", "triage_alerts", "edit_pipelines"]);
     render(<App />);
 
-    fireEvent.click(await monitoring());
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: "Ingest Studio" }));
+    await openStrength();
+    const places = () => within(screen.getByRole("navigation", { name: "Places" }));
+    fireEvent.click(await rulesPlace());
+    expect(await screen.findByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
+    fireEvent.click(places().getByRole("button", { name: "Ingest Studio" }));
     expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^← Back to .* in the Glass$/ }));
-    // ADR-145 decision 1 and Amendment 2: the banner's Monitoring section marks the place open.
-    expect((await monitoring()).getAttribute("aria-current")).toBe("page");
+    // The Glass's view that was open, not Rules and Monitoring, which is no view of the Glass.
+    expect(await screen.findByRole("region", { name: "Connection strength" })).toBeTruthy();
+    expect(places().getByRole("button", { name: "The Glass" }).getAttribute("aria-current")).toBe("page");
     expect(document.querySelector("header.app-header")!.getAttribute("data-app")).toBe("glass");
   });
 
-  // ADR-124 decision 5: what the open case withholds is that case's own. The sentence from case A
-  // must not stay on the bar when the analyst is taken into case B (a jump from an alert) before B
-  // has sent anything.
-  test("the standing sentence from one case is gone when another case opens, before it sends anything", async () => {
-    const sentence = "This case holds material you are not cleared to see.";
-    const sockets: { url: string; onmessage: ((e: { data: unknown }) => void) | null }[] = [];
-    class FakeSocket {
-      url: string;
-      onopen: (() => void) | null = null;
-      onclose: unknown = null;
-      onerror: unknown = null;
-      onmessage: ((e: { data: unknown }) => void) | null = null;
-      constructor(url: string) {
-        this.url = url;
-        sockets.push(this);
-      }
-      send(): void {}
-      close(): void {}
-    }
-    vi.stubGlobal("WebSocket", FakeSocket);
-    const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+  // ADR-124 decision 5: what the open case withholds is that case's own. Since ADR-146 decision 6 no
+  // alert opens a case in place (the jump's case of its own went): an alert worked in another case is
+  // opened by a reload into that case, on the alert's address, so nothing of case A carries over.
+  test("an alert of another case is opened by a reload into that case, on the alert's address", async () => {
+    const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
     vi.mocked(globalThis.fetch).mockImplementation((input) => {
-      const url = String(input);
-      if (url.endsWith("/v1/ws-ticket")) return json({ ticket: "t" });
-      if (url.endsWith("/v1/ontology")) return json({ entity_types: [], edge_types: [] });
-      if (url.endsWith("/v1/analytics/geobins")) return json([]);
-      if (url.endsWith("/v1/yardstick")) return json({ bands: [] });
-      for (const list of ["judgements", "gaps", "assumptions"]) {
-        if (url.endsWith(`/${list}`)) return json({ [list]: [] });
-      }
-      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate", "keep_watches"] });
+      const url = String(input).split("?")[0]!;
+      if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate", "keep_watches", "triage_alerts", "read_alert_queue"] });
+      if (url.endsWith("/v1/investigations")) return json([{ id: "inv-1", name: "A", level: "editor", created_at: "", created_by: "" }]);
       if (url.endsWith("/inv-1/alerts")) {
         return json({
-          alerts: [
-            {
-              id: "a1", rule_id: "rule-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
-              evidence_available: true, investigation_id: null, created_at: "2026-10-10T09:00:00Z",
-            },
-          ],
-        });
+          alerts: [{ id: "a1", rule_id: "hotlist:h1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+                     evidence_available: true, investigation_id: "inv-2", created_at: "2026-10-10T09:00:00Z",
+                     fired_on: [{ type: "Person", label: "A", files: [], more_files: 0, sources_withheld: false }] }],
+        }); // prettier-ignore
       }
-      if (url.endsWith("/alerts/a1/jump")) {
-        return json({
-          investigation: {
-            id: "inv-2", created_at: "2026-10-10T09:00:00Z", created_by: "analyst-1",
-            owning_unit: "unit-1",
-          },
-          seeded_count: 1,
-        });
-      }
-      // Anything this test does not need is refused, not answered in a shape a panel may misread.
-      return Promise.resolve(new Response("{}", { status: 500 }));
+      if (url.endsWith("/inv-1/alert-queue")) return json([]);
+      if (url.endsWith("/v1/alerts/a1")) return json({ investigation_id: "inv-2", explanation: { alert: { id: "a1" } } });
+      return new Promise<Response>(() => undefined);
     });
-
+    const went: string[] = [];
+    const realLocation = window.location;
     try {
       render(<App />);
-      await vi.waitFor(() => expect(sockets.some((x) => x.url.includes("/inv-1/stream"))).toBe(true));
-      sockets
-        .find((x) => x.url.includes("/inv-1/stream"))!
-        .onmessage?.({ data: JSON.stringify({ seq: 1, op: "snapshot", nodes: [], edges: [], withheld: true }) });
-      expect(await screen.findByText(sentence)).toBeTruthy();
-
-      // The owner's answer of 1 November 2026: the alert inbox is in Monitoring's Watches tab.
-      fireEvent.click(await monitoring());
-      fireEvent.click(await screen.findByRole("tab", { name: "Watches" }));
-      fireEvent.click(await screen.findByRole("button", { name: "Jump into investigation" }));
-      fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
-
-      await vi.waitFor(() => expect(sockets.some((x) => x.url.includes("/inv-2/stream"))).toBe(true));
-      await screen.findByRole("status");
-      expect(screen.queryByText(sentence)).toBeNull();
+      fireEvent.click(await rulesPlace());
+      fireEvent.click(await screen.findByRole("button", { name: "Open the alert" }));
+      expect(window.location.pathname).toBe("/alerts/a1");
+      Reflect.deleteProperty(window, "location");
+      (window as { location: unknown }).location = { ...realLocation, pathname: "/alerts/a1", assign: (url: string | URL) => went.push(String(url)) };
+      await vi.waitFor(() => expect(went).toEqual(["/alerts/a1?investigation=inv-2&from=case"]));
+      expect(sessionStorage.getItem("ospreyflow.investigationId")).toBe("inv-2");
     } finally {
-      vi.unstubAllGlobals();
+      (window as { location: unknown }).location = realLocation;
+      window.history.replaceState(null, "", "/");
     }
   });
 

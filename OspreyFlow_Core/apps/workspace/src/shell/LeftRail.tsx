@@ -1,7 +1,8 @@
 // The left rail (ADR-097 step 1, design review item 1): 44px of icons, each named for assistive
 // technology and on hover, and expandable to show the names. The places the analyst goes to rather
 // than works in. ADR-145 Amendment 2 (variant B): the rail keeps the ones used most (Cases, Explore)
-// and the rest are one click away under its ⋯ *More*; Monitoring is the banner's section.
+// and the rest are one click away under its ⋯ *More*. Monitoring left the Glass for Rules and
+// Monitoring, a place of its own (ADR-146 decision 2).
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Icon, type ShellIcon } from "./icons";

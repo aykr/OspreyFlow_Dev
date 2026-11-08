@@ -7,7 +7,9 @@ import { placesFor, type PlaceId } from "../shell/places";
 export type Rights = ReadonlySet<string> | null;
 // ADR-145 decision 1: the Ingest Studio, Admin and Proposed types left the rail for the place
 // switcher (`shell/places.ts`); Proposed types is an Admin tab until the Studio's Model tab holds it.
-export type RailEntry = "cases" | "alerts" | "ownership" | "history" | "explore" | "questions" | "dashboards";
+// ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, a place of its own; its
+// Connection strength (ADR-139), which is not alerts, stayed in the Glass under the rail's More.
+export type RailEntry = "cases" | "ownership" | "history" | "explore" | "questions" | "dashboards" | "strength";
 export type GlassView = "graph" | "map" | "matrix" | "reports";
 
 const has = (rights: Rights, ...any: string[]) => rights === null || any.some((r) => rights.has(r));
@@ -16,15 +18,15 @@ const known = (rights: Rights, ...any: string[]) => rights !== null && any.some(
 export function railEntries(rights: Rights): RailEntry[] {
   const entries: [RailEntry, boolean][] = [
     ["cases", true],
-    // The owner's answer of 1 November 2026: no Watches entry of its own. Watches are in the
-    // Monitoring place's Watches tab, so Monitoring is offered to whoever keeps watches too.
-    ["alerts", has(rights, "read_alert_queue", "keep_watches")],
     ["ownership", has(rights, "trace_ownership")],
     ["history", has(rights, "investigate")],
     ["explore", has(rights, "investigate")],
     ["questions", has(rights, "ask_model")],
     // ADR-111 Amendment 3: the Superset boards this person may open, drawn inside the Glass.
     ["dashboards", known(rights, "read_reports")],
+    // ADR-139: what makes a link strong in this case (`investigate`), and the installation-wide
+    // influencers (`manage_strength_influencers`).
+    ["strength", has(rights, "investigate", "manage_strength_influencers")],
   ];
   return entries.filter(([, shown]) => shown).map(([entry]) => entry);
 }

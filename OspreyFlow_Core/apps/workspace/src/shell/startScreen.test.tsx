@@ -31,6 +31,9 @@ function shown(choice: StartChoice) {
     openCase: () => undefined,
     browseCases: () => undefined,
     openStudio: () => undefined,
+    openRules: () => undefined,
+    openAlert: () => undefined,
+    openCaseOnRules: () => undefined,
   });
   render(element!);
 }

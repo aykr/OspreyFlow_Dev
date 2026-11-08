@@ -1,6 +1,7 @@
 // The alert inbox — `02_GLASS_FRONTEND.md` §3.3: "Every alert names the rule that fired and shows
 // the evidence... Alerts carry the matched identifier, the triggering document, and a one-click
-// jump into a pre-populated investigation." `watch_routes.py`'s own `AlertView` already redacts
+// jump into a pre-populated investigation." Since L2.9 the jump opens the alert at its own address
+// in the case it arose in (ADR-146 decision 6), never a case of its own. `watch_routes.py`'s own `AlertView` already redacts
 // server-side (`referent_node_ids` is authoritatively `[]` whenever a `notify_stub` alert or an
 // unavailable-evidence `full` alert is serialised) — `AlertRow` below renders exactly what the
 // wire payload says and reconstructs nothing, so the redaction the server already did cannot be
@@ -13,15 +14,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { rowNumber } from "../inspector/sourceLocator";
-import {
-  type AlertJumpResult,
-  type AlertView,
-  type FiredFile,
-  type FiredOn,
-  isScheduleNotice,
-  jumpAlert,
-  listAlerts,
-} from "./api";
+import { type AlertView, type FiredFile, type FiredOn, isScheduleNotice, listAlerts } from "./api";
 
 const COUNT = new Intl.NumberFormat("en-GB");
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -55,12 +48,12 @@ function fromText(fired: FiredOn): string {
 
 export interface AlertRowProps {
   alert: AlertView;
-  onJump: (alertId: string) => void;
-  jumping: boolean;
+  /** Opens the alert at its own address (ADR-146 decision 6). */
+  onOpen: (alertId: string) => void;
 }
 
 /** ADR-110 decision 10: a scheduled run that failed or was refused, told to its owner in words.
- * It names no entity and has no case to jump into, so it is read, not jumped. */
+ * It names no entity and is no alert of the queue, so it is read, not opened. */
 function ScheduleNoticeRow({ alert }: { alert: AlertView }) {
   return (
     <li style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", padding: "var(--sp-8) 0",
@@ -74,12 +67,12 @@ function ScheduleNoticeRow({ alert }: { alert: AlertView }) {
   );
 }
 
-export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
+export function AlertRow({ alert, onOpen }: AlertRowProps) {
   if (isScheduleNotice(alert)) return <ScheduleNoticeRow alert={alert} />;
   const hasReferents = alert.mode === "full" && alert.referent_node_ids.length > 0;
   // A hotlist alert whose evidence was readable when the list was read but whose node had gone by the
-  // time it was described (two reads, a node revoked between) is unavailable too, and nothing can
-  // be jumped into.
+  // time it was described (two reads, a node revoked between) is unavailable too, and is not
+  // offered to open.
   const vanished =
     alert.mode === "full" &&
     hasReferents &&
@@ -125,31 +118,10 @@ export function AlertRow({ alert, onJump, jumping }: AlertRowProps) {
           Evidence no longer available.
         </p>
       )}
-      <Button onClick={() => onJump(alert.id)} disabled={jumping || unavailable}>
-        {jumping ? "Jumping…" : "Jump into investigation"}
+      <Button onClick={() => onOpen(alert.id)} disabled={unavailable}>
+        Open the alert
       </Button>
     </li>
-  );
-}
-
-export interface JumpResultSummaryProps {
-  result: AlertJumpResult;
-  onOpen: (investigationId: string) => void;
-}
-
-/** ADR-124 decision 1: the summary says what was added and nothing of what could not be read — no
- * count of it, however it is framed. */
-export function JumpResultSummary({ result, onOpen }: JumpResultSummaryProps) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
-      <p className="value" data-testid="jump-seeded-summary">
-        {result.seeded_count} entit{result.seeded_count === 1 ? "y" : "ies"} added to the new
-        investigation.
-      </p>
-      <Button variant="primary" onClick={() => onOpen(result.investigation.id)}>
-        Open investigation
-      </Button>
-    </div>
   );
 }
 
@@ -158,14 +130,12 @@ export interface AlertInboxProps {
   bearerToken: string;
   /** ADR-099 Amendment 3: the case whose datasets these are. */
   investigationId: string;
-  onOpenInvestigation: (investigationId: string) => void;
+  /** Opens an alert at its own address (ADR-146 decision 6). */
+  onOpenAlert: (alertId: string) => void;
 }
 
-export function AlertInbox({ apiBaseUrl, bearerToken, investigationId, onOpenInvestigation }: AlertInboxProps) {
+export function AlertInbox({ apiBaseUrl, bearerToken, investigationId, onOpenAlert }: AlertInboxProps) {
   const [alerts, setAlerts] = useState<AlertView[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [jumpingId, setJumpingId] = useState<string | null>(null);
-  const [jumpResult, setJumpResult] = useState<AlertJumpResult | null>(null);
 
   useEffect(() => {
     listAlerts(apiBaseUrl, bearerToken, investigationId)
@@ -174,43 +144,12 @@ export function AlertInbox({ apiBaseUrl, bearerToken, investigationId, onOpenInv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleJump(alertId: string): Promise<void> {
-    setError(null);
-    setJumpingId(alertId);
-    try {
-      setJumpResult(await jumpAlert(apiBaseUrl, bearerToken, investigationId, alertId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setJumpingId(null);
-    }
-  }
-
   return (
     <Panel title="Alert inbox" className="alert-inbox">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
-        {error && (
-          <p role="alert" style={{ color: "var(--error)" }}>
-            {error}
-          </p>
-        )}
-        {jumpResult && (
-          <JumpResultSummary
-            result={jumpResult}
-            onOpen={(investigationId) => {
-              onOpenInvestigation(investigationId);
-              setJumpResult(null);
-            }}
-          />
-        )}
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {alerts.map((alert) => (
-            <AlertRow
-              key={alert.id}
-              alert={alert}
-              onJump={(id) => void handleJump(id)}
-              jumping={jumpingId === alert.id}
-            />
+            <AlertRow key={alert.id} alert={alert} onOpen={onOpenAlert} />
           ))}
         </ul>
       </div>

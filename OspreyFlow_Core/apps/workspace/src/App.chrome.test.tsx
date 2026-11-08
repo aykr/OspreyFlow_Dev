@@ -57,9 +57,9 @@ vi.mock("./map/providers", async () => {
 import * as userManager from "./auth/userManager";
 import * as ontologySchema from "./ontology/schema";
 
-/** A person the three places open for, who holds the Glass and the Studio (so the banner carries its
+/** A person the four places open for, who holds the Glass and the Studio (so the banner carries its
  * cross-link) and every rail destination: the most a case screen draws. */
-const RIGHTS = ["investigate", "read_alert_queue", "keep_watches", "trace_ownership", "ask_model", "read_reports",
+const RIGHTS = ["investigate", "read_alert_queue", "triage_alerts", "keep_watches", "trace_ownership", "ask_model", "read_reports",
                 "run_analysis", "edit_pipelines", "operate_schedules"]; // prettier-ignore
 
 const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -115,21 +115,25 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
     await screen.findByRole("button", { name: "Open Prison intel in the Ingest Studio ↗" });
     const stops = before(canvas);
     expect(stops).toEqual([
-      "Osprey, go to Home", "The Glass", "Ingest Studio", "Admin",
+      // ADR-146 decision 2: Rules and Monitoring, with the count that left the banner.
+      "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Case", "Boards (coming)", "Monitoring 3 open", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
+      "Case", "Boards (coming)", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
       "Cases", "Explore", "More", "Help", "Show names",
       "Match strictness",
     ]); // prettier-ignore
   });
 
-  test("the banner's Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name", async () => {
+  test("the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name", async () => {
     render(<App />);
+    const places = await screen.findByRole("navigation", { name: "Places" });
+    const rules = await within(places).findByRole("button", { name: "Rules and Monitoring 3 open" });
+    expect(rules.querySelector(".place-switcher__count")?.textContent).toBe("3");
+    // ADR-146 decision 2: Monitoring left the Glass, its count with it.
     const sections = await screen.findByRole("navigation", { name: "In the Glass" });
-    const monitoring = await within(sections).findByRole("button", { name: "Monitoring 3 open" });
-    expect(monitoring.querySelector(".context-banner__badge")?.textContent).toBe("3");
+    expect(within(sections).queryByRole("button", { name: /Monitoring/ })).toBeNull();
   });
 
   test("the column opens with the Inspector only, the other panels folded in their order", async () => {

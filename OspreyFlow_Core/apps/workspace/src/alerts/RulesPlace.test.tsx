@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { statusSentence } from "./AlertQueue";
-import { AlertsPlace } from "./AlertsPlace";
+import { RulesPlace } from "./RulesPlace";
 import { describeParams, ruleInput } from "./RulesPanel";
 
 afterEach(() => {
@@ -70,7 +70,7 @@ function serve(level: "viewer" | "editor" | "author", extra: (path: string, init
 
 function place(onCanvas = vi.fn()) {
   render(
-    <AlertsPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={onCanvas} />,
+    <RulesPlace apiBaseUrl="http://x" bearerToken="t" investigationId="c1" accountId="me" isAdministrator={false} onCanvas={onCanvas} />,
   );
   return onCanvas;
 }
@@ -165,7 +165,7 @@ describe("the Alerts place", () => {
     };  // prettier-ignore
     serve("author", (path) => (path === "rules" ? json(200, [rule]) : null));
     place();
-    fireEvent.click(await screen.findByRole("tab", { name: "Rules" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "What raises alerts" }));
     expect(await screen.findByText("Onboarding documents · Document verification")).toBeTruthy();
     expect(screen.getByText(/budget 5,000 ms/)).toBeTruthy();
   });
@@ -173,12 +173,12 @@ describe("the Alerts place", () => {
   it("offers deployment to an Author only", async () => {
     serve("editor");
     place();
-    fireEvent.click(await screen.findByRole("tab", { name: "Rules" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "What raises alerts" }));
     expect(await screen.findByText("A case Author deploys and retires rules.")).toBeTruthy();
     cleanup();
     serve("author");
     place();
-    fireEvent.click(await screen.findByRole("tab", { name: "Rules" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "What raises alerts" }));
     expect(await screen.findByRole("form", { name: "Deploy a rule" })).toBeTruthy();
   });
 });
