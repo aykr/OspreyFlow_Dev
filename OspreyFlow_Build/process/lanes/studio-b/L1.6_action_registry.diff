@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index c64f3d4..c6d8abb 100644
+index 5ba4070..3a77762 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -1010,3 +1010,18 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
+@@ -1025,3 +1025,23 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
    // ADR-139 decision 6: the link table sorts by connection strength and by its ends' rarity.
    "sort-links-by-strength-and-rarity-by-keyboard",
  ] as const);
@@ -20,4 +20,9 @@ index c64f3d4..c6d8abb 100644
 +  "import-a-datasets-own-list-rows-by-keyboard",
 +  "register-a-source-through-a-sql-connection-by-keyboard",
 +  "refresh-a-connector-source-now-by-keyboard",
++  // The lane review of L1.6: the API and JSON read steps, unsubscribing, and a schedule stopped.
++  "register-a-source-through-an-api-connection-by-keyboard",
++  "register-a-source-through-a-json-connection-by-keyboard",
++  "unsubscribe-a-dataset-from-a-screening-list-by-keyboard",
++  "refresh-a-screening-list-by-hand-only-by-keyboard",
 +] as const);
