@@ -3442,6 +3442,47 @@ async def test_supersede_node_rollback_leaves_zero_trace_of_the_partial_operatio
         assert await adapter.get_node(new_id, CLEARED) is None
 
 
+async def test_supersede_edge_returns_the_replacements_own_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The successor is the replacement written, under its own id, and that id is what the call
+    returns: the alert store records `old → returned id` before the graph's commit and repoints
+    every alert citing the old link to it (`06_DECISIONS.md` ADR-109 Amendment 10), so a fresh id
+    of the adapter's own would leave every repointed alert citing a link that does not exist."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_edge_id,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")]
+        )
+        wanted = new_edge_id()
+        tx = await adapter.begin_transaction()
+        returned = await adapter.supersede_edge(
+            old_edge_id,
+            EdgeWrite(
+                id=wanted,
+                type="ASSOCIATE_OF",
+                source=a,
+                target=b,
+                provenance=_provenance(),
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="reviewer-1",
+                created_at=now_utc(),
+            ),
+            tx,
+        )
+        await adapter.commit_transaction(tx)
+        assert returned == wanted
+        (edge,) = await adapter.get_edges([wanted], CLEARED)
+        assert edge.id == wanted
+
+
 async def test_supersede_edge_replaces_it_in_default_reads(
     factory: GraphAdapterFactory,
 ) -> None:
