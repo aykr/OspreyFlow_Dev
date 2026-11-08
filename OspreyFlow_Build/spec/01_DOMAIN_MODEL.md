@@ -140,9 +140,17 @@ vocabulary shared.
 **A case's domain packs (ADR-126).** Every deployment composes the core with every pack, but a case
 says which packs it is about: `Investigation.domains`, a sorted set of `fibo`, `niem` and `stix`.
 - **Empty means the POLE core alone.** NULL means no one has chosen yet, and reads as empty.
-- **Who sets it.** It is chosen at creation, changed by an Author, inherited by a branch, and set
-  by a seed only while NULL. Every reader of the case may see it: it says what kind of case it is,
-  never what it holds.
+- **Where it comes from (ADR-126 Amendments 2 and 3).** It is the packs of the case's dataset's
+  live domain model (`TargetModel`, §2.2b; a composite's own), derived at every read through the
+  case's level check, so every case reading a dataset carries the same packs. It changes only when
+  that model is made live, on the Ingest Studio's Model tab. A change through the case (`PATCH`) is
+  refused (409 `packs_from_the_model`), and the Glass shows it read-only. While the dataset has no
+  model yet (one `scripts.seed_target_models` has not reached), the case's stored value stands.
+  Every reader of the case may see it: it says what kind of case it is, never what it holds.
+- **The stored column, `investigations.domains`, is deprecated.** It is kept as a record: what a
+  case chose before models, read by `scripts.seed_target_models` to seed each dataset's first
+  model, and written at creation as before. Dropping it is a later step's decision, with a
+  migration of its own.
 - **What follows from it.** It decides which Reports figures the case shows (KYC for `fibo`, a POLE
   summary otherwise) and which link types its Trends offer.
 - **What does not.** It narrows nothing else: the canvas, patterns and Explore still offer every
@@ -555,6 +563,20 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     their data; read at read time as its own id and its members. Read-only for now: nothing is
     written into it, and a case reading it writes only into its own layer (ADR-099 Amendment 15).
     Made by `POST /v1/datasets/composites`, or by the migration;
+  - **Every dataset has a `highest_marking`** (ADR-145 decision 8; ADR-143 Amendment 2 decision 3):
+    the highest marking it may hold. A drawn dataset's maker sets it at its making, within their
+    own clearance; for every other it is the deployment's highest (stored as none). Admin ›
+    Datasets shows it; L3.3 enforces it on what is written into the dataset and its cases' layers.
+  - **`drawn`** (ADR-143 Amendment 2 decision 5, built in L3.1b): made from *New drawing board* with
+    no case, in one step with its domain model, live at version 1 (the starter pack chosen, or the
+    POLE core alone), and its home case, its maker the Author; the board is L3.3's. It is read
+    through its home case alone, so its Author shares it by sharing that case: no other case may
+    choose it (it is in no case's list of datasets to choose, and the store refuses it), no case
+    is made reading it by a branch, a filtered branch or an alert's jump (409 `drawn_not_copied`,
+    refused before the case is made, and by `copy_case` itself), no pipeline loads into it (409
+    `drawn_not_loaded`), and no rule or monitor is made, changed or made live in its case until
+    it is merged (409 `drawn_not_judged`). It is listed in the Studio and in Admin › Datasets
+    with a *Drawn* badge;
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
@@ -658,8 +680,8 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     lists the packs added, removed and repinned; the extensions added, retired and restored; the
     `changed_types` they amount to; each **`ImpactedPipeline`** (a deployed pipeline of the
     dataset that writes a changed type, with the types it writes); each **`ImpactedCase`** reading
-    the dataset that the reader may open, never one they may not, and never a count of those; and
-    the composites that have the dataset as a member;
+    the dataset that the reader may open, never one they may not, and never a count of those; and,
+    of the composites that have the dataset as a member, only those the reader's own cases read;
   - **`MadeLive`**: the version now `live`, the one it replaced, and the pipelines marked as
     needing attention, each with its schedule paused and the reason.
 - **The owners named at *Make live*** (ADR-145 Amendment 4 decision 4):
@@ -667,9 +689,16 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     *Make live* in the deployment, its `owners`;
   - **`DatasetOwners`** is people, a team (ADR-112 Amendment 5), or both, and is refused when it
     names no one;
-  - a service account is refused where the owners are given, as is an owner kind Admin › System
+  - a service account or a disabled account is refused where the owners are given (a person is
+    an enabled account that is no service account), as is an owner kind Admin › System
     forbids: **`DatasetOwnerSetting`**, whose `owners_may_be` is `people_and_teams` (the default),
-    `people_only` or `teams_only` (decision 7).
+    `people_only` or `teams_only` (decision 7);
+  - who is a person is the identity provider's directory's answer, and with no directory to ask,
+    nothing goes live (fail closed): the owners cannot be checked;
+  - until teams are built (ADR-112 Amendment 5, L2.5) a team is refused in words, so the owners
+    are people, and `teams_only` lets no dataset go live;
+  - only the first *Make live* in the deployment asks; a later one naming owners is refused, the
+    owners being changed in Admin › Datasets' *Change owner…* (L2.4 part 2).
 - **`HomeCase`**: a dataset's home case (ADR-145 Amendment 4 decision 2), holding its reports, its
   dataset-wide alerts and its promotion reviews. The owners named at *Make live* are its Authors,
   and it cannot be removed while its dataset exists.

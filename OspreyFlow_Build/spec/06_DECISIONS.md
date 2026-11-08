@@ -28351,3 +28351,46 @@ new right `edit_target_model`, and names no holder. ADR-112's table gains one ro
 - `tests/services/api/test_route_rights.py`: listed among the rights no route checks yet. L3.1b's
   routes take it off that list, and the list's equality fails the build if it is left there.
 - `apps/workspace/src/shell/placesByRole.json`: regenerated from the routes.
+
+### ADR-126, Amendment 3 (8 November 2026) — an existing dataset's first domain model is seeded as a live v1 whose packs are the union of the packs its cases chose, by scripts.seed_target_models (dry run first); until then a dataset has no model and the model routes say so
+
+Status: accepted; the orchestrator's settlement of 8 November 2026 on the case lane's question, listed
+for the owner's review. ADR-126 and its Amendments 1 and 2 are unchanged except where this says so.
+Built in L3.1b.
+
+**Why.** Amendment 2 derives a case's packs from its dataset's live domain model. A dataset made
+before models has none. Read as the POLE core alone, it would take FIBO, NIEM or STIX away from
+every case that chose them, and a FIBO case would lose its KYC figures.
+
+**Decision.**
+
+1. **`scripts.seed_target_models` gives each dataset with no model its version 1, live.** Its packs
+   are the union of the packs chosen (`investigations.domains`) by the cases that read it.
+   - Each case is counted only for the one dataset it chose. A case reading a composite adds to
+     the composite's model, not its members'. So no case's choice of packs reaches a dataset it does
+     not read (the orchestrator's condition).
+   - A dataset no case chose packs for gets the POLE core alone.
+   - Each pack is pinned at the version the loaded ontology carries.
+   - An analyst layer is no dataset of its own and gets none.
+2. **Dry run first, by construction,** as `scripts.migrate_cases_to_one_dataset`: the dry run reads
+   the tables with plain `SELECT`s, never opening the store whose `connect` makes its table, and
+   records every write the plan would make, the same writes the real run makes. Each dataset given
+   a model is named, with its packs, and counted. One that already has a model is named and left as
+   it is, so a second run changes nothing.
+3. **Until it runs, a dataset has no model**, and the model routes say so in words. `GET
+   /v1/datasets/{dataset_id}/model` answers both versions as none. The impact and revert answer 409
+   `no_model_yet`: "this dataset has no domain model yet: open a draft to make its first". A new
+   dataset's first draft is version 1, the POLE core alone, made live by a person.
+4. **It runs with the derivation** (Amendment 2, built in L3.1b step 3), before cases read their
+   packs from the model, and `investigations.domains` is kept as a record, marked deprecated in
+   `01_DOMAIN_MODEL.md`. Dropping it is a later step's decision.
+
+**Tests.**
+- `tests/test_seed_target_models.py`: each dataset's packs are only its own cases' choice, red with
+  the union taken over every case; every dataset but a layer is given version 1, live; one with a
+  model is kept and a second run writes nothing; the dry run writes nothing and plans the real run's
+  writes.
+- `tests/test_seed_target_models_store.py`: the same at `_main` on Postgres, the dry run making no
+  table.
+- `tests/services/api/test_dataset_model_routes.py::test_no_model_yet_in_words`.
+

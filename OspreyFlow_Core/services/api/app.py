@@ -155,6 +155,18 @@ from schemas.analytics import (
     SightingRequest,
 )
 from schemas.compute import OwnershipTooComplex, OwnershipView
+from schemas.dataset_model import (
+    DatasetModelView,
+    DatasetOwnerSetting,
+    DrawnDatasetInput,
+    HomeCase,
+    MadeLive,
+    MakeLiveInput,
+    ModelImpact,
+    RevertModelInput,
+    TargetModel,
+    TargetModelDraftInput,
+)
 from schemas.domain import (
     Alert,
     AlertAssignee,
@@ -391,6 +403,7 @@ from .dataset_scope import (
     scope_to_dataset,
 )
 from .datasets import (
+    DRAWN,
     MAX_DATASET_NAME,
     BranchLayerError,
     CaseDatasetsRequest,
@@ -399,6 +412,8 @@ from .datasets import (
     Dataset,
     DatasetRefusedError,
     DatasetStore,
+    DrawnNotCopied,
+    HomeCaseHeld,
     InMemoryDatasetStore,
     UnknownDatasetEgressError,
 )
@@ -549,6 +564,7 @@ from .list_schedule import ListRefreshExecutor, ListScheduleRefused
 from .load_checks import READ_ONLY, ChecksRefused, check_choice, checks_view, would_raise
 from .load_records import LedgerSink, may_see_counts, released_from_of, report_view
 from .mapconfig_loader import load_map_config, public_view
+from .model_impact import flag_reason, impact_of, pack_types_of
 from .model_routing import (
     EngineRefused,
     ModelEgressRefused,
@@ -746,6 +762,15 @@ from .superset_embed import (
     may_open,
 )
 from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkStore
+from .target_models import (
+    InMemoryTargetModelStore,
+    NoModelYet,
+    PostgresTargetModelStore,
+    TargetModelRefused,
+    TargetModelStore,
+    core_types_of,
+    packs_of_case,
+)
 from .tile_cache import (
     cache_key_for,
     read_cached_tile,
@@ -865,6 +890,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     # ADR-140 Amendment 4: connections and the sources registered on them.
     source_store = await PostgresSourceStore.connect(config.postgres.dsn)
+    target_model_store = await PostgresTargetModelStore.connect(
+        config.postgres.dsn, core_types=_core_types()
+    )
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
@@ -1028,6 +1056,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pack_store = pack_store
     app.state.studio_recipes = studio_recipes
     app.state.sources = source_store
+    app.state.target_models = target_model_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     app.state.recipes_repo_root = resources.recipe_repo_root
@@ -1129,6 +1158,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await investigations.close()
         await history.close()
         await source_store.close()
+        await target_model_store.close()
+        # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
+        # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
+        app.state.target_models = None
         await sites.close()
         await judgements_store.close()
         await link_notes_store.close()
@@ -1250,6 +1283,28 @@ def get_sources(request: Request) -> SourceStore:
 
 
 SourcesDep = Annotated[SourceStore, Depends(get_sources)]
+
+
+def _core_types() -> frozenset[str]:
+    """The POLE core's entity and link types, from the default ontology (which composes no pack):
+    what a dataset's model may not redefine as an extension (ADR-140 decision 4)."""
+    from ontology.loader import load_default_ontology
+
+    core = load_default_ontology()
+    return core_types_of([e.name for e in core.entity_types], [e.name for e in core.edge_types])
+
+
+def get_target_models(request: Request) -> TargetModelStore:
+    """ADR-140 decision 5. The lifespan sets the Postgres store; a test app with no lifespan gets
+    an in-memory one."""
+    store = getattr(request.app.state, "target_models", None)
+    if store is None:
+        store = InMemoryTargetModelStore(core_types=_core_types())
+        request.app.state.target_models = store
+    return store
+
+
+TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -1711,6 +1766,15 @@ async def require_admin_role(principal: PrincipalDep) -> Principal:
     return principal
 
 
+async def with_derived_packs(
+    case: Investigation, datasets: DatasetStore, models: TargetModelStore
+) -> Investigation:
+    """The case with its packs as ADR-126 Amendment 2 derives them, from its dataset's live domain
+    model; as stored while that dataset has no model yet (Amendment 3)."""
+    derived = await packs_of_case(case.id, datasets, models)
+    return case if derived is None else case.model_copy(update={"domains": derived})
+
+
 def _authorized_at(
     level: AccessLevel, *, admin_safety_net: bool = False
 ) -> Callable[..., Awaitable[Investigation]]:
@@ -1729,10 +1793,13 @@ def _authorized_at(
         principal: PrincipalDep,
         investigations: InvestigationsDep,
         audit: AuditDep,
+        datasets: DatasetsDep,
+        models: TargetModelsDep,
     ) -> Investigation:
-        return await _authorize(
+        case = await _authorize(
             investigation_id, principal, investigations, audit, level, admin_safety_net
         )
+        return await with_derived_packs(case, datasets, models)
 
     dependency.required_level = level  # type: ignore[attr-defined]
     return dependency
@@ -1796,20 +1863,63 @@ InvestigationEditorDep = Annotated[Investigation, Depends(_AT_EDITOR)]
 InvestigationAuthorDep = Annotated[Investigation, Depends(_AT_AUTHOR)]
 
 
-async def refuse_loading_in_a_composite_case(investigation: InvestigationEditorDep) -> None:
+async def refuse_loading_in_a_composite_case(
+    investigation: InvestigationEditorDep, datasets: DatasetsDep
+) -> None:
     """ADR-099 Amendment 15: a case reading a composite loads, runs, schedules, publishes and
     uploads nothing (a composite is read-only for now). After the case's own level check, so a
     caller who may not open the case is still answered as for a missing one. It depends on the
     very check the route's own `InvestigationEditorDep` does, so FastAPI runs it once and the
-    route declares one level (`test_investigation_levels.py`)."""
+    route declares one level (`test_investigation_levels.py`). A case reading a drawn dataset
+    (its home case) loads nothing either (ADR-143 Amendment 2 decision 5)."""
     await refuse_in_a_composite_case()
+    await _refuse_in_a_drawn_case(investigation, datasets, DrawnNotLoaded)
 
 
 async def refuse_deciding_held_rows_in_a_composite_case(
-    investigation: InvestigationAuthorDep,
+    investigation: InvestigationAuthorDep, datasets: DatasetsDep
 ) -> None:
     """The same refusal for the held-rows routes, which need an author."""
     await refuse_in_a_composite_case()
+    await _refuse_in_a_drawn_case(investigation, datasets, DrawnNotLoaded)
+
+
+class NoRuleOnADrawnDataset(Exception):
+    """ADR-143 Amendment 2 decision 5: no rule runs on a drawn dataset until it is merged."""
+
+
+@app.exception_handler(NoRuleOnADrawnDataset)
+async def _no_rule_on_a_drawn_dataset_handler(
+    request: Request, exc: NoRuleOnADrawnDataset
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "drawn_not_judged",
+            "detail": "no rule runs on a drawn dataset until it is merged into another, so none "
+            "is made, changed or made live in its case",
+        },
+    )
+
+
+async def _refuse_in_a_drawn_case(
+    investigation: Investigation, datasets: DatasetStore, refusal: type[Exception]
+) -> None:
+    chosen = await datasets.chosen_of_case(investigation.id)
+    if chosen and chosen[0].kind == DRAWN:
+        raise refusal
+
+
+async def refuse_rules_in_a_drawn_case_as_author(
+    investigation: InvestigationAuthorDep, datasets: DatasetsDep
+) -> None:
+    await _refuse_in_a_drawn_case(investigation, datasets, NoRuleOnADrawnDataset)
+
+
+async def refuse_rules_in_a_drawn_case_as_editor(
+    investigation: InvestigationEditorDep, datasets: DatasetsDep
+) -> None:
+    await _refuse_in_a_drawn_case(investigation, datasets, NoRuleOnADrawnDataset)
 
 
 NoLoadingInACompositeCase = Depends(refuse_loading_in_a_composite_case)
@@ -2108,9 +2218,7 @@ async def _row_key_run_in_progress_handler(
     request: Request, exc: RowKeyRunInProgress
 ) -> JSONResponse:
     """ADR-127 decision 5: another run of this recipe into this case is still loading."""
-    return JSONResponse(
-        status_code=409, content={"error": "run_in_progress", "message": str(exc)}
-    )
+    return JSONResponse(status_code=409, content={"error": "run_in_progress", "message": str(exc)})
 
 
 @app.exception_handler(NotDocumentsError)
@@ -2415,6 +2523,19 @@ async def _composite_read_only_handler(
     return JSONResponse(
         status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
     )
+
+
+@app.exception_handler(NoModelYet)
+async def _no_model_yet_handler(request: Request, exc: NoModelYet) -> JSONResponse:
+    """A dataset with no domain model yet (ADR-126 Amendment 3: seeded with step 3)."""
+    return JSONResponse(status_code=409, content={"error": "no_model_yet", "detail": str(exc)})
+
+
+@app.exception_handler(TargetModelRefused)
+async def _model_refused_handler(request: Request, exc: TargetModelRefused) -> JSONResponse:
+    """A change to a dataset's domain model refused in words, before anything was written (ADR-140
+    decision 5)."""
+    return JSONResponse(status_code=409, content={"error": "model_refused", "detail": str(exc)})
 
 
 @app.exception_handler(BranchLayerError)
@@ -2794,6 +2915,7 @@ async def create_investigation(
     principal: PrincipalDep,
     investigations: InvestigationsDep,
     datasets: DatasetsDep,
+    models: TargetModelsDep,
     audit: AuditDep,
     body: CreateInvestigationInput | None = None,
 ) -> Investigation:
@@ -2814,9 +2936,13 @@ async def create_investigation(
     else:
         # Made before the case, so a name already taken refuses the whole request.
         named = [(await datasets.create(principal, new_name)).id]
-    investigation = await investigations.create(
-        principal, name=name, domains=body.domains if body is not None else None
-    )
+    # ADR-126 Amendment 2: a case reading a dataset with a live model takes its packs from the
+    # model, so packs sent with it are not stored (they would only stand again were the model
+    # gone, which it never is). They are kept for a dataset with no model yet (Amendment 3).
+    given = body.domains if body is not None else None
+    if given is not None and await models.live(named[0]) is not None:
+        given = None
+    investigation = await investigations.create(principal, name=name, domains=given)
     await datasets.set_for_case(investigation.id, named, principal, case_name=investigation.name)
     await audit.record(
         principal=principal,
@@ -2825,7 +2951,7 @@ async def create_investigation(
         resolved_query={"dataset_ids": list(named)},
         result_cardinality=1,
     )
-    return investigation
+    return await with_derived_packs(investigation, datasets, models)
 
 
 @app.get("/v1/datasets")
@@ -2935,9 +3061,16 @@ class InvestigationListing(BaseModel):
 
 @app.get("/v1/investigations")
 async def list_investigations(
-    principal: PrincipalDep, investigations: InvestigationsDep, datasets: DatasetsDep
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
 ) -> list[InvestigationListing]:
     hidden = await investigations.hidden_tab_ids(principal)
+    listed = [
+        (await with_derived_packs(case, datasets, models), level)
+        for case, level in await investigations.list_for(principal)
+    ]
     return [
         InvestigationListing(
             id=case.id,
@@ -2951,7 +3084,7 @@ async def list_investigations(
             datasets=[d.name for d in reads],
             dataset_ids=[d.id for d in reads],
         )
-        for case, level in await investigations.list_for(principal)
+        for case, level in listed
         for reads in [await datasets.of_case(case.id, principal)]
     ]
 
@@ -3020,6 +3153,17 @@ async def rename_investigation(
     audited on its own: a rename as `rename_investigation`, a change of packs as
     `set_case_domains` with the packs before and after. The response carries the case's name and
     packs as they now stand."""
+    if body.domains is not None:
+        # ADR-126 Amendment 2: the packs come from the dataset's domain model, read-only here.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "packs_from_the_model",
+                "message": "a case's domain packs come from its dataset's domain model: change "
+                "them on the Ingest Studio's Model tab, where they change for every case reading "
+                "the dataset",
+            },
+        )
     # One store call, one transaction: a case removed between two separate writes would leave a
     # rename committed and audited beside packs that were refused.
     after = None if body.domains is None else sorted(set(body.domains))
@@ -3056,10 +3200,21 @@ async def remove_investigation(
     investigation: InvestigationAccessManagerDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
+    datasets: DatasetsDep,
     audit: AuditDep,
 ) -> None:
     """A soft remove (ADR-052 Amendment 7). An Author, or the administrator of the case's own unit
-    through the safety net (a case no Author is left to remove); neither gains any read access."""
+    through the safety net (a case no Author is left to remove); neither gains any read access. A
+    dataset's home case is kept while its dataset exists (ADR-145 Amendment 4 decision 2)."""
+    if await datasets.dataset_of_home_case(investigation.id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "home_case_kept",
+                "message": "this is its dataset's home case, which holds the dataset's reports, "
+                "alerts and promotion reviews, so it is kept while the dataset exists",
+            },
+        )
     await investigations.remove(investigation.id, by=principal)
     await audit.record(
         principal=principal,
@@ -3282,6 +3437,7 @@ async def branch_investigation(
     # `AuthorizedInvestigationDep` has already checked the branching
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
+    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
     node_ids = body.node_ids if body is not None else None
     window = body.window if body is not None else None
     source_name = investigation.name or DEFAULT_CASE_NAME
@@ -3404,6 +3560,7 @@ async def branch_investigation_by_filter(
     answer for a type only hidden material holds as for one that does not exist) or a result still
     past the cap (`limit_exceeded`, with the filtered figures, the reader's own) leaves no case
     behind."""
+    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
     nodes, edges = await working_set.branch_filtered_contents(investigation.id, principal, body)
     name = f"Branch of {investigation.name or DEFAULT_CASE_NAME}"
     if body.name is not None and body.name.strip():
@@ -6368,7 +6525,12 @@ async def list_exports_route(
 @app.post(
     "/v1/investigations/{investigation_id}/monitors",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.KEEP_WATCHES))],
+    # A monitor runs a saved pattern on the case's data, as a rule does: none in a drawing's case
+    # until it is merged (ADR-143 Amendment 2 decision 5).
+    dependencies=[
+        Depends(require_right(Right.KEEP_WATCHES)),
+        Depends(refuse_rules_in_a_drawn_case_as_editor),
+    ],
 )
 async def create_monitor_route(
     investigation: InvestigationEditorDep,
@@ -6477,6 +6639,12 @@ async def jump_alert_route(
     `None` rather than silently pointed at a wrong investigation."""
     alert = await jumpable_alert(
         alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics
+    )
+    # Before any case is made: an alert whose data is a drawn dataset opens no case reading it.
+    await refuse_copying_a_drawn_dataset(
+        datasets,
+        dataset_id=alert.dataset_id,
+        case_id=None if alert.dataset_id else alert.investigation_id,
     )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
@@ -6993,9 +7161,7 @@ async def _case_event_filter(
     if not ancestors:
         return with_inherited(event_filter, [], [], window=None)
     _nodes, edges = await working_set.current_membership(case.id)
-    return with_inherited(
-        event_filter, ancestors, [e.id for e in edges], window=case.branch_window
-    )
+    return with_inherited(event_filter, ancestors, [e.id for e in edges], window=case.branch_window)
 
 
 class GeometriesRequest(BaseModel):
@@ -7600,10 +7766,67 @@ async def _first_name(datasets: DatasetStore, dataset_ids: Sequence[str]) -> str
 
 async def refuse_loading_a_composite(dataset_id: StudioDatasetDep, datasets: DatasetsDep) -> None:
     """The same for the Studio's own routes of a dataset (ADR-140 Amendment 4): a composite is
-    read, never loaded. After the dataset's own gate, which answers 404 to anyone it is not for."""
+    read, never loaded, and no pipeline loads into a drawn dataset (ADR-143 Amendment 2 decision
+    5). After the dataset's own gate, which answers 404 to anyone it is not for."""
+    await refuse_changing_a_composites_model(dataset_id, datasets)
+    held = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    if held is not None and held.kind == DRAWN:
+        raise DrawnNotLoaded
+
+
+async def refuse_changing_a_composites_model(
+    dataset_id: StudioDatasetDep, datasets: DatasetsDep
+) -> None:
+    """A composite's model is read, not changed, until its superset check (phase 5 item 4)."""
     if await datasets.composites_among([dataset_id]):
         # Named: past the dataset's gate, which only someone it is for reaches.
         raise CompositeReadOnlyError(await _first_name(datasets, [dataset_id]), in_a_case=False)
+
+
+class DrawnNotLoaded(Exception):
+    """ADR-143 Amendment 2 decision 5: no pipeline loads into a drawn dataset; what it holds is
+    drawn on its board, and it reaches another dataset by merging (decision 6)."""
+
+
+@app.exception_handler(DrawnNotLoaded)
+async def _drawn_not_loaded_handler(request: Request, exc: DrawnNotLoaded) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "drawn_not_loaded",
+            "detail": "a drawn dataset is drawn on its board, not loaded: nothing is loaded or "
+            "run into it, and it reaches another dataset by being merged into it",
+        },
+    )
+
+
+@app.exception_handler(DrawnNotCopied)
+async def _drawn_not_copied_handler(request: Request, exc: DrawnNotCopied) -> JSONResponse:
+    """In words naming nothing else: the reader may hold no level on the drawing's case."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "drawn_not_copied",
+            "detail": "a drawn dataset is read in its own case alone, so no other case is made "
+            "reading it",
+        },
+    )
+
+
+async def refuse_copying_a_drawn_dataset(
+    datasets: DatasetStore, *, case_id: str | None = None, dataset_id: str | None = None
+) -> None:
+    """Before any case is made: a case reading a drawn dataset is not branched, filtered into a
+    new case or opened from an alert (ADR-143 Amendment 2 decision 5). `copy_case` refuses it
+    too, as the last word."""
+    held = []
+    if case_id is not None:
+        held = await datasets.chosen_of_case(case_id)
+    elif dataset_id is not None:
+        found = (await datasets.egress_of([dataset_id])).get(dataset_id)
+        held = [found] if found is not None else []
+    if any(d.kind == DRAWN for d in held):
+        raise DrawnNotCopied
 
 
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
@@ -7662,9 +7885,7 @@ async def list_ingest_connections(
     return await sources.connections()
 
 
-@app.get(
-    "/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))]
-)
+@app.get("/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def list_admin_connections(sources: SourcesDep) -> list[Connection]:
     return await sources.connections()
 
@@ -7705,6 +7926,333 @@ async def list_dataset_source_files(
         result_cardinality=len(listing.files),
     )
     return listing
+
+
+# --- a drawn dataset (ADR-143 Amendment 2 decision 5; ADR-140 Amendment 9 decision 2; L3.1b) -----
+
+
+@app.post(
+    "/v1/datasets/drawn",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE))],
+)
+async def make_drawn_dataset(
+    request: Request,
+    body: DrawnDatasetInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    scheme: HandlingSchemeDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+) -> HomeCase:
+    """*New drawing board* with no case: in one step, a drawn dataset named after the drawing, its
+    domain model live at version 1 (the starter pack chosen, or the POLE core alone), and its home
+    case, its maker its Author. Its highest marking is the maker's choice within their own
+    clearance. The board itself is L3.3's. No other case may choose it, no pipeline loads into it,
+    and no rule runs on it until it is merged."""
+    if body.highest_marking not in scheme.classification:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{body.highest_marking!r} is not a marking of this deployment",
+        )
+    if not scheme.clears(principal.clearance, body.highest_marking):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "above_your_clearance",
+                "message": "a drawn dataset may hold nothing above your own clearance, "
+                f"{principal.clearance}",
+            },
+        )
+    if body.pack is not None and body.pack not in ontology.packs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"the starter pack {body.pack!r} is not one this deployment carries",
+        )
+    home = await investigations.create(principal, name=body.name)
+    drawn = await datasets.create_drawn(
+        principal, body.name, highest_marking=body.highest_marking, home_case=home.id
+    )
+    # Its home case is recorded before its model goes live, as at *Make live*: a dataset with a
+    # live model always has its home case.
+    made = HomeCase(
+        dataset_id=drawn.id, investigation_id=home.id, made_at=home.created_at,
+        made_by=principal.id,
+    )  # fmt: skip
+    await datasets.set_home_case(made)
+    await models.open_draft(drawn.id, principal)
+    packs = {body.pack: ontology.packs[body.pack]} if body.pack is not None else {}
+    await models.save_draft(drawn.id, TargetModelDraftInput(packs=packs), principal)
+    await models.make_live(drawn.id, 1, principal)
+    await audit.record(
+        principal=principal,
+        action="make_drawn_dataset",
+        investigation_id=home.id,
+        resolved_query={"dataset_id": drawn.id, "pack": body.pack,
+                        "highest_marking": body.highest_marking},
+        result_cardinality=1,
+    )  # fmt: skip
+    return made
+
+
+# --- ingest studio: a dataset's domain model (ADR-140 decisions 4 and 5, R12; L3.1b) ------------
+
+#: Every model route: the dataset's own gate, then the right (ADR-112 Amendment 6).
+_EDITS_THE_MODEL = [Depends(require_right(Right.EDIT_TARGET_MODEL))]
+#: And every write of one: a composite's own model waits for its superset check over its members'
+#: models (phase 5 item 4), and a composite is read-only for now (ADR-099 Amendment 14), so its
+#: model is read, not changed.
+_CHANGES_THE_MODEL = [*_EDITS_THE_MODEL, Depends(refuse_changing_a_composites_model)]
+
+
+@app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)
+async def read_dataset_model(
+    dataset_id: StudioDatasetDep, models: TargetModelsDep
+) -> DatasetModelView:
+    """The live version and the open draft; both `None` for a dataset with no model yet."""
+    live, draft = await models.live(dataset_id), await models.draft(dataset_id)
+    return DatasetModelView(live=live, draft=draft)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/draft",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def open_dataset_model_draft(
+    dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
+) -> TargetModel:
+    """Opens the draft (N+1) as a copy of the live version; a second is refused (409)."""
+    draft = await models.open_draft(dataset_id, principal)
+    await _audit_model(audit, principal, "open_model_draft", dataset_id, draft.version)
+    return draft
+
+
+@app.put("/v1/datasets/{dataset_id}/model/draft", dependencies=_CHANGES_THE_MODEL)
+async def save_dataset_model_draft(
+    dataset_id: StudioDatasetDep,
+    body: TargetModelDraftInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    audit: AuditDep,
+) -> TargetModel:
+    """Saves the draft as given; an extension removed rather than retired, or a POLE core type
+    named as one, is refused (409). Nothing that runs changes."""
+    draft = await models.save_draft(dataset_id, body, principal)
+    await _audit_model(audit, principal, "save_model_draft", dataset_id, draft.version)
+    return draft
+
+
+@app.delete(
+    "/v1/datasets/{dataset_id}/model/draft",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def discard_dataset_model_draft(
+    dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
+) -> None:
+    draft = await models.draft(dataset_id)
+    await models.discard_draft(dataset_id)
+    version = draft.version if draft is not None else 0
+    await _audit_model(audit, principal, "discard_model_draft", dataset_id, version)
+
+
+async def _model_impact(
+    request: Request, dataset_id: str, principal: Principal, models: TargetModelStore
+) -> tuple[ModelImpact, TargetModel]:
+    draft = await models.draft(dataset_id)
+    live = await models.live(dataset_id)
+    if draft is None:
+        if live is None:
+            raise NoModelYet
+        raise TargetModelRefused("there is no draft: open one to see what it would change")
+    impact = await impact_of(
+        dataset_id, live, draft,
+        pack_types=pack_types_of(get_ontology(request).type_packs),
+        recipes=get_studio_recipes(request), datasets=get_datasets(request),
+        cases=get_investigations(request), reader=principal,
+    )  # fmt: skip
+    return impact, draft
+
+
+@app.get("/v1/datasets/{dataset_id}/model/impact", dependencies=_EDITS_THE_MODEL)
+async def dataset_model_impact(
+    request: Request, dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep
+) -> ModelImpact:
+    """What making the draft live would change (R12), read before anything does."""
+    impact, _draft = await _model_impact(request, dataset_id, principal, models)
+    return impact
+
+
+@app.post("/v1/datasets/{dataset_id}/model/make-live", dependencies=_CHANGES_THE_MODEL)
+async def make_dataset_model_live(
+    request: Request,
+    dataset_id: StudioDatasetDep,
+    body: MakeLiveInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> MadeLive:
+    """The only step that changes what runs (R12): the draft named becomes live, the old live
+    version previous, and every deployed pipeline writing a changed or retired type is marked as
+    needing attention, its schedule paused with the reason. Loaded data is never rewritten."""
+    impact, draft = await _model_impact(request, dataset_id, principal, models)
+    datasets = get_datasets(request)
+    first = await datasets.home_case_of(dataset_id) is None
+    owners = await _owners_answered(request, datasets, body, first=first)
+    if draft.version != body.version:
+        raise TargetModelRefused(
+            f"the draft is version {draft.version}, not {body.version}: it changed since it was "
+            "opened, so read it again before making it live"
+        )
+    # The home case is claimed before the model goes live, so two first *Make live*s at once make
+    # one home case and one live model: the second is refused in words at the claim, before it
+    # changes anything (the round-1 review's must-fix 8).
+    if owners is not None:
+        await _make_the_home_case(request, dataset_id, owners, principal, audit)
+    live, previous = await models.make_live(dataset_id, body.version, principal)
+    reasons = {p.recipe_id: flag_reason(live, p) for p in impact.pipelines}
+    await studio_recipes.flag_for_model(dataset_id, list(reasons.items()))
+    for recipe_id, reason in reasons.items():
+        await studio_recipes.set_paused(recipe_id, paused=True, reason=reason)
+    await _audit_model(
+        audit, principal, "make_model_live", dataset_id, live.version,
+        flagged=sorted(reasons), changed_types=impact.changed_types,
+    )  # fmt: skip
+    return MadeLive(live=live, previous=previous, flagged=impact.pipelines)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/revert",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_CHANGES_THE_MODEL,
+)
+async def revert_dataset_model(
+    dataset_id: StudioDatasetDep,
+    body: RevertModelInput,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    audit: AuditDep,
+) -> TargetModel:
+    """A new draft copying an earlier version (N+2), never a rewrite of it."""
+    if await models.live(dataset_id) is None:
+        raise NoModelYet
+    draft = await models.revert(dataset_id, body.version, principal)
+    await _audit_model(
+        audit, principal, "revert_model", dataset_id, draft.version, reverted_from=body.version
+    )
+    return draft
+
+
+ALREADY_OWNED = (
+    "this dataset already has its owners: change them in Admin › Datasets (Change owner…), not at "
+    "Make live"
+)
+
+
+class OwnerNeeded(Exception):
+    """*Make live*'s owner step refused, in words (ADR-145 Amendment 4 decision 4); nothing is made
+    live and no home case is made."""
+
+
+@app.exception_handler(OwnerNeeded)
+async def _owner_needed_handler(request: Request, exc: OwnerNeeded) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": "owner_needed", "detail": str(exc)})
+
+
+async def _owners_answered(
+    request: Request, datasets: DatasetStore, body: MakeLiveInput, *, first: bool
+) -> list[str] | None:
+    """At a dataset's first *Make live* in the deployment, who answers for it: people (a team when
+    teams are built, ADR-112 Amendment 5), as Admin › System allows, never a service account, and
+    never no one. `None` on a later *Make live*, which asks nothing."""
+    if not first:
+        if body.owners is not None:
+            raise OwnerNeeded(ALREADY_OWNED)
+        return None
+    if body.owners is None:
+        raise OwnerNeeded(
+            "who answers for this dataset? Name the people who will be its home case's Authors: "
+            "it cannot go live without them"
+        )
+    allowed = await datasets.owner_setting()
+    if body.owners.team is not None:
+        if allowed == "people_only":
+            raise OwnerNeeded("Admin › System allows people only as a dataset's owners")
+        raise OwnerNeeded(
+            "a team cannot own a dataset until teams are built (ADR-112 Amendment 5): name people"
+        )
+    if allowed == "teams_only":
+        raise OwnerNeeded(
+            "Admin › System allows teams only as a dataset's owners, and teams are not built "
+            "yet (ADR-112 Amendment 5)"
+        )
+    named = sorted(set(body.owners.people))
+    people = await get_principal_names(request).people(named)
+    if people is None:
+        raise OwnerNeeded(
+            "who answers for a dataset cannot be checked: this deployment has no identity "
+            "provider directory to say who is a person"
+        )
+    if refused := [p for p in named if p not in people]:
+        raise OwnerNeeded(
+            "only a person may answer for a dataset, never a service account: "
+            + ", ".join(refused)
+            + (" is not one" if len(refused) == 1 else " are not")
+        )
+    return named
+
+
+async def _make_the_home_case(
+    request: Request, dataset_id: str, owners: list[str], maker: Principal, audit: AuditWriter
+) -> None:
+    """The dataset's home case (ADR-145 Amendment 4 decision 2): named for it, of its unit, reading
+    it, its Authors exactly the owners named, audited. The claim (`set_home_case`, one per dataset,
+    held by the store's own key) is its first write after the case: a second *Make live* that lost
+    the race removes the case it made and is refused in words, so no dataset has two."""
+    datasets = get_datasets(request)
+    investigations = get_investigations(request)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    home = await investigations.create(maker, name=dataset.name)
+    try:
+        await datasets.set_home_case(
+            HomeCase(dataset_id=dataset_id, investigation_id=home.id, made_at=home.created_at,
+                     made_by=maker.id)
+        )  # fmt: skip
+    except HomeCaseHeld:
+        await investigations.remove(home.id, by=maker)
+        raise OwnerNeeded(ALREADY_OWNED) from None
+    await datasets.set_for_case(home.id, [dataset_id], maker, case_name=home.name)
+    for owner in owners:
+        await investigations.set_grant(home.id, owner, AccessLevel.AUTHOR, by=maker)
+    if maker.id not in owners:
+        await investigations.remove_grant(home.id, maker.id, by=maker)
+    await audit.record(
+        principal=maker,
+        action="make_home_case",
+        investigation_id=home.id,
+        resolved_query={"dataset_id": dataset_id, "owners": owners},
+        result_cardinality=1,
+    )
+
+
+async def _audit_model(
+    audit: AuditWriter,
+    principal: Principal,
+    action: str,
+    dataset_id: str,
+    version: int,
+    **detail: object,
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        resolved_query={"dataset_id": dataset_id, "version": version, **detail},
+        result_cardinality=1,
+    )
 
 
 @app.get(
@@ -10182,7 +10730,10 @@ async def list_typology_rules(
 @app.post(
     "/v1/investigations/{investigation_id}/rules",
     status_code=201,
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
 )
 async def deploy_typology_rule(
     investigation: InvestigationAuthorDep,
@@ -10265,7 +10816,10 @@ def _require_rule_author(principal: Principal) -> None:
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/approve",
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
 )
 async def approve_rule_change(
     rule_id: str,
@@ -10326,7 +10880,10 @@ async def reject_rule_change(
 
 @app.post(
     "/v1/investigations/{investigation_id}/rules/{rule_id}/change",
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(refuse_rules_in_a_drawn_case_as_editor),
+    ],
 )
 async def change_rule_sentence(
     rule_id: str,
@@ -10518,7 +11075,10 @@ async def preview_rule_sentence(
 @app.post(
     "/v1/investigations/{investigation_id}/rules/sentence",
     status_code=201,
-    dependencies=[Depends(require_right(Right.DEPLOY_RULES))],
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(refuse_rules_in_a_drawn_case_as_editor),
+    ],
 )
 async def deploy_rule_sentence(
     investigation: InvestigationEditorDep,
@@ -12663,13 +13223,47 @@ async def case_model_engines_route(
     return OfferedEngines(engines=routes.offered(case_datasets, held))
 
 
+@app.get(
+    "/v1/admin/settings/dataset-owners",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def read_dataset_owner_setting(datasets: DatasetsDep) -> DatasetOwnerSetting:
+    """Admin › System's *Dataset owners may be* (ADR-145 Amendment 4 decision 7): people and teams
+    (the default), people only, or teams only. It governs *Make live*'s owner step."""
+    return DatasetOwnerSetting(owners_may_be=await datasets.owner_setting())
+
+
+@app.put(
+    "/v1/admin/settings/dataset-owners",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def set_dataset_owner_setting(
+    body: DatasetOwnerSetting, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
+) -> DatasetOwnerSetting:
+    before = await datasets.owner_setting()
+    await datasets.set_owner_setting(body.owners_may_be)
+    await audit.record(
+        principal=principal,
+        action="set_dataset_owner_setting",
+        resolved_query={"before": before, "after": body.owners_may_be},
+        result_cardinality=1,
+    )
+    return body
+
+
 @app.get("/v1/admin/datasets", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def admin_datasets_route(datasets: DatasetsDep) -> list[AdminDataset]:
     """ADR-136 decision 2: every dataset of the deployment, with the unit that holds it and its
     egress, for the administrator who sets where each may go. Names and settings only: nothing of
     what a dataset holds, and no count."""
     return [
-        AdminDataset(id=d.id, name=d.name, owning_unit=d.owning_unit, egress=d.egress)
+        AdminDataset(
+            id=d.id,
+            name=d.name,
+            owning_unit=d.owning_unit,
+            egress=d.egress,
+            highest_marking=d.highest_marking,
+        )
         for d in await datasets.list_all()
     ]
 
@@ -12696,8 +13290,9 @@ async def set_dataset_egress_route(
         result_cardinality=1,
     )
     return AdminDataset(
-        id=changed.id, name=changed.name, owning_unit=changed.owning_unit, egress=changed.egress
-    )
+        id=changed.id, name=changed.name, owning_unit=changed.owning_unit, egress=changed.egress,
+        highest_marking=changed.highest_marking,
+    )  # fmt: skip
 
 
 @app.exception_handler(UnknownDatasetEgressError)

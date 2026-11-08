@@ -59,7 +59,7 @@ built once no case names two.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, cast
 
@@ -68,6 +68,7 @@ from pydantic import BaseModel, Field
 
 from conduit_common.identity import new_id
 from schemas.admin import DatasetEgress
+from schemas.dataset_model import DatasetOwnersMayBe, HomeCase
 from schemas.domain import Principal
 from schemas.rights import rights_for
 
@@ -75,10 +76,13 @@ MAX_DATASET_NAME = 200
 #: A composite names at least two datasets (one would be the dataset itself) and a bounded number.
 MAX_COMPOSITE_MEMBERS = 50
 
-DatasetKind = Literal["source", "composite", "analyst_layer"]
+DatasetKind = Literal["source", "composite", "analyst_layer", "drawn"]
 SOURCE: DatasetKind = "source"
 COMPOSITE: DatasetKind = "composite"
 ANALYST_LAYER: DatasetKind = "analyst_layer"
+#: ADR-143 Amendment 2 decision 5: made with its case and board from a drawing with no case; read
+#: by its home case alone, loaded by no pipeline, judged by no rule until merged.
+DRAWN: DatasetKind = "drawn"
 
 _EGRESS_ORDER: dict[DatasetEgress, int] = {"none": 0, "contracted": 1, "any": 2}
 
@@ -97,6 +101,9 @@ class Dataset(BaseModel):
     members: list[str] = Field(default_factory=list)
     #: An analyst layer's case; `None` for any other kind.
     layer_of: str | None = None
+    #: The highest marking it may hold (ADR-145 decision 8; ADR-143 Amendment 2 decision 3): set
+    #: for a drawn dataset at its making; `None` for every other, read as the deployment's highest.
+    highest_marking: str | None = None
 
 
 def layer_name(case_name: str | None, investigation_id: str) -> str:
@@ -215,6 +222,26 @@ class DatasetStore(Protocol):
     async def read_only_layer_of(self, investigation_id: str) -> str | None: ...
     #: The case a layer is the layer of; `None` for an id that is not a layer.
     async def case_of_layer(self, layer_id: str) -> str | None: ...
+    #: Every case reading the dataset, directly or through a composite of it, by id: for a
+    #: dataset's own screens, filtered there to the cases the reader may open (rule 7).
+    async def cases_reading(self, dataset_id: str) -> list[str]: ...
+    #: The composites that have the dataset as a member.
+    async def composites_of(self, dataset_id: str) -> list[Dataset]: ...
+    #: ADR-145 Amendment 4 decision 2: the dataset's home case, `None` before its first *Make
+    #: live* (or `scripts.make_home_cases`).
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None: ...
+    #: The dataset whose home case this case is, `None` for any other case.
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None: ...
+    #: Records the dataset's home case, once: a second is refused (`HomeCaseHeld`).
+    async def set_home_case(self, home: HomeCase) -> None: ...
+    #: ADR-143 Amendment 2 decision 5: a drawn dataset, read by `home_case` alone (with the case's
+    #: layer); no other case may choose it.
+    async def create_drawn(
+        self, principal: Principal, name: str, *, highest_marking: str, home_case: str
+    ) -> Dataset: ...
+    #: Admin › System's *Dataset owners may be* (ADR-145 Amendment 4 decision 7).
+    async def owner_setting(self) -> DatasetOwnersMayBe: ...
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -239,6 +266,26 @@ class DatasetStore(Protocol):
     async def set_egress(
         self, dataset_id: str, egress: DatasetEgress
     ) -> tuple[DatasetEgress, Dataset]: ...
+
+
+class DrawnNotCopied(Exception):
+    """ADR-143 Amendment 2 decision 5: a drawn dataset is read through its home case alone, so no
+    other case is made reading it: not a branch, a filtered branch or a case opened from an
+    alert."""
+
+
+def refuse_copying_drawn(kinds: Iterable[str]) -> None:
+    """Both stores' `copy_case` ask this of the kinds the case reads, before anything is written."""
+    if DRAWN in kinds:
+        raise DrawnNotCopied
+
+
+class HomeCaseHeld(Exception):
+    """A dataset has one home case (ADR-145 Amendment 4 decision 2), and a case is the home of at
+    most one dataset: a second is refused."""
+
+    def __init__(self, dataset_id: str) -> None:
+        super().__init__(f"the dataset {dataset_id} already has its home case")
 
 
 class BranchLayerError(Exception):
@@ -364,6 +411,9 @@ class InMemoryDatasetStore:
         self.cases: dict[str, list[str]] = {}
         #: A branch's original case's layer, read-only (ADR-144 Amendment 1 decision 2).
         self.layer_reads: dict[str, str] = {}
+        #: Each dataset's home case (ADR-145 Amendment 4 decision 2).
+        self.homes: dict[str, HomeCase] = {}
+        self.owners_may_be: DatasetOwnersMayBe = "people_and_teams"
 
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
@@ -435,6 +485,23 @@ class InMemoryDatasetStore:
             )
         )
 
+    async def create_drawn(
+        self, principal: Principal, name: str, *, highest_marking: str, home_case: str
+    ) -> Dataset:
+        cleaned = self._free_name(principal.org_unit, _clean(name), suffix_if_taken=True)
+        drawn = self.add(
+            Dataset(
+                id=new_id(), name=cleaned, owning_unit=principal.org_unit,
+                created_at=datetime.now(UTC), created_by=principal.id, kind=DRAWN,
+                highest_marking=highest_marking,
+            )
+        )  # fmt: skip
+        self.cases[home_case] = [drawn.id]
+        await self.ensure_layer(
+            home_case, unit=principal.org_unit, created_by=principal.id, case_name=cleaned
+        )
+        return drawn
+
     async def known(self, dataset_ids: Sequence[str]) -> set[str]:
         return {d for d in dataset_ids if d in self.datasets}
 
@@ -446,8 +513,13 @@ class InMemoryDatasetStore:
 
     async def list_for(self, reader: Principal) -> list[Dataset]:
         named = reads_dataset_names(reader)
+        # A drawn dataset is its home case's alone: never offered for another case to choose.
         return sorted(
-            (d for d in self._offered() if named and d.owning_unit == reader.org_unit),
+            (
+                d
+                for d in self._offered()
+                if named and d.owning_unit == reader.org_unit and d.kind != DRAWN
+            ),
             key=lambda d: d.name,
         )
 
@@ -483,6 +555,37 @@ class InMemoryDatasetStore:
     async def case_of_layer(self, layer_id: str) -> str | None:
         held = self.datasets.get(layer_id)
         return held.layer_of if held is not None and held.kind == ANALYST_LAYER else None
+
+    async def composites_of(self, dataset_id: str) -> list[Dataset]:
+        return sorted(
+            (d for d in self.datasets.values() if d.kind == COMPOSITE and dataset_id in d.members),
+            key=lambda d: d.name,
+        )
+
+    async def cases_reading(self, dataset_id: str) -> list[str]:
+        through = {dataset_id, *(d.id for d in await self.composites_of(dataset_id))}
+        return sorted(case for case, chosen in self.cases.items() if through & set(chosen))
+
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None:
+        return self.homes.get(dataset_id)
+
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None:
+        return next(
+            (d for d, h in self.homes.items() if h.investigation_id == investigation_id), None
+        )
+
+    async def set_home_case(self, home: HomeCase) -> None:
+        if home.dataset_id in self.homes:
+            raise HomeCaseHeld(home.dataset_id)
+        if await self.dataset_of_home_case(home.investigation_id) is not None:
+            raise HomeCaseHeld(home.dataset_id)
+        self.homes[home.dataset_id] = home
+
+    async def owner_setting(self) -> DatasetOwnersMayBe:
+        return self.owners_may_be
+
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None:
+        self.owners_may_be = value
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -539,6 +642,7 @@ class InMemoryDatasetStore:
         case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
         its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         chosen = list(self.cases.get(from_investigation_id, []))
+        refuse_copying_drawn([self.datasets[c].kind for c in chosen if c in self.datasets])
         self.cases[to_investigation_id] = chosen
         if as_a_branch:
             original = await self.layer_of_case(from_investigation_id) or self.layer_reads.get(
@@ -626,6 +730,33 @@ CREATE TABLE IF NOT EXISTS case_layer_reads (
     investigation_id TEXT PRIMARY KEY,
     layer_id TEXT NOT NULL REFERENCES datasets (id)
 );
+-- ADR-145 decision 8; ADR-143 Amendment 2 decision 3: the highest marking a dataset may hold.
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS highest_marking TEXT;
+-- ADR-143 Amendment 2 decision 5: the kind `drawn`, added to the kinds the column allows once.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+        WHERE t.relname = 'datasets' AND t.relnamespace = current_schema()::regnamespace
+        AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%drawn%'
+    ) THEN
+        ALTER TABLE datasets DROP CONSTRAINT IF EXISTS datasets_kind_check;
+        ALTER TABLE datasets ADD CONSTRAINT datasets_kind_check
+            CHECK (kind IN ('source', 'composite', 'analyst_layer', 'drawn'));
+    END IF;
+END $$;
+-- ADR-145 Amendment 4 decision 2: each dataset's one home case, which is no other's.
+CREATE TABLE IF NOT EXISTS home_cases (
+    dataset_id TEXT PRIMARY KEY REFERENCES datasets (id),
+    investigation_id TEXT NOT NULL UNIQUE,
+    made_at TIMESTAMPTZ NOT NULL,
+    made_by TEXT NOT NULL
+);
+-- Decision 7: Admin › System's settings for datasets.
+CREATE TABLE IF NOT EXISTS dataset_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 _MEMBERS_SQL = (
@@ -634,7 +765,7 @@ _MEMBERS_SQL = (
 )
 _COLUMNS = (
     "d.id, d.name, d.owning_unit, d.created_at, d.created_by, d.egress, d.kind, d.layer_of, "
-    + _MEMBERS_SQL
+    "d.highest_marking, " + _MEMBERS_SQL
 )
 
 #: The name a unit's datasets may not share, case and spacing aside (`name_key`).
@@ -769,8 +900,8 @@ class PostgresDatasetStore:
                 async with self._maybe(conn) as c, c.transaction():
                     await c.execute(
                         "INSERT INTO datasets (id, name, owning_unit, created_at, created_by, "
-                        "egress, kind, layer_of) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
-                        "ON CONFLICT (id) DO NOTHING",
+                        "egress, kind, layer_of, highest_marking) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING",
                         dataset.id,
                         name,
                         dataset.owning_unit,
@@ -779,6 +910,7 @@ class PostgresDatasetStore:
                         dataset.egress,
                         dataset.kind,
                         dataset.layer_of,
+                        dataset.highest_marking,
                     )
                     await c.executemany(
                         "INSERT INTO composite_members (composite_id, member_id, position) "
@@ -824,7 +956,7 @@ class PostgresDatasetStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM datasets d WHERE d.owning_unit = $1 AND $2::boolean "
-                f"AND {_OFFERED} ORDER BY d.name",
+                f"AND {_OFFERED} AND d.kind <> 'drawn' ORDER BY d.name",
                 reader.org_unit,
                 reads_dataset_names(reader),
             )
@@ -887,6 +1019,72 @@ class PostgresDatasetStore:
             )
         return found
 
+    async def composites_of(self, dataset_id: str) -> list[Dataset]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM datasets d WHERE d.kind = 'composite' AND EXISTS "
+                "(SELECT 1 FROM composite_members m WHERE m.composite_id = d.id "
+                "AND m.member_id = $1) ORDER BY d.name",
+                dataset_id,
+            )
+        return [_row(r) for r in rows]
+
+    async def cases_reading(self, dataset_id: str) -> list[str]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT c.investigation_id FROM investigation_datasets c "
+                "WHERE c.dataset_id = $1 OR c.dataset_id IN "
+                "(SELECT m.composite_id FROM composite_members m WHERE m.member_id = $1) "
+                "ORDER BY c.investigation_id",
+                dataset_id,
+            )
+        return [r["investigation_id"] for r in rows]
+
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT dataset_id, investigation_id, made_at, made_by FROM home_cases "
+                "WHERE dataset_id = $1",
+                dataset_id,
+            )
+        return HomeCase(**dict(row)) if row is not None else None
+
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None:
+        async with self._pool.acquire() as conn:
+            found: str | None = await conn.fetchval(
+                "SELECT dataset_id FROM home_cases WHERE investigation_id = $1", investigation_id
+            )
+        return found
+
+    async def set_home_case(self, home: HomeCase) -> None:
+        async with self._pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    "INSERT INTO home_cases (dataset_id, investigation_id, made_at, made_by) "
+                    "VALUES ($1, $2, $3, $4)",
+                    home.dataset_id,
+                    home.investigation_id,
+                    home.made_at,
+                    home.made_by,
+                )
+            except asyncpg.UniqueViolationError as already:
+                raise HomeCaseHeld(home.dataset_id) from already
+
+    async def owner_setting(self) -> DatasetOwnersMayBe:
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT value FROM dataset_settings WHERE key = 'owners_may_be'"
+            )
+        return cast(DatasetOwnersMayBe, value or "people_and_teams")
+
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO dataset_settings (key, value) VALUES ('owners_may_be', $1) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                value,
+            )
+
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
     ) -> str:
@@ -941,6 +1139,29 @@ class PostgresDatasetStore:
             members=members,
         )
         return await self._insert(composite, suffix_if_taken=suffix_if_taken)
+
+    async def create_drawn(
+        self, principal: Principal, name: str, *, highest_marking: str, home_case: str
+    ) -> Dataset:
+        drawn = await self._insert(
+            Dataset(
+                id=new_id(), name=_clean(name), owning_unit=principal.org_unit,
+                created_at=datetime.now(UTC), created_by=principal.id, kind=DRAWN,
+                highest_marking=highest_marking,
+            ),
+            suffix_if_taken=True,
+        )  # fmt: skip
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
+                "VALUES ($1, $2, 0)",
+                home_case,
+                drawn.id,
+            )
+        await self.ensure_layer(
+            home_case, unit=principal.org_unit, created_by=principal.id, case_name=drawn.name
+        )
+        return drawn
 
     async def set_for_case(
         self,
@@ -1037,6 +1258,12 @@ class PostgresDatasetStore:
         case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
         its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         async with self._pool.acquire() as conn:
+            kinds = await conn.fetch(
+                "SELECT d.kind FROM investigation_datasets c "
+                "JOIN datasets d ON d.id = c.dataset_id WHERE c.investigation_id = $1",
+                from_investigation_id,
+            )
+            refuse_copying_drawn([k["kind"] for k in kinds])
             await conn.execute(
                 "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
                 "SELECT $2, c.dataset_id, c.position FROM investigation_datasets c "

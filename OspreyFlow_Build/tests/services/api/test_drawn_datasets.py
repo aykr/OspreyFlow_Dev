@@ -1,0 +1,375 @@
+"""A drawn dataset (ADR-143 Amendment 2 decisions 3 and 5; ADR-140 Amendment 9 decision 2; L3.1b
+step 5): made with its domain model and its home case from a drawing with no case; read through its
+home case alone; loaded by no pipeline and judged by no rule until merged.
+
+What a mistake would do, and the case that catches it:
+
+- a drawn dataset that another case can choose, so its drawings reach people its Author never shared
+  them with (the orchestrator's access test):
+  `test_no_other_case_may_choose_it_and_only_its_home_cases_grantees_read_it`, each check red
+  with it alone planted out (`test_each_choice_check_holds_alone`);
+- a ceiling above the maker's own clearance:
+  `test_its_highest_marking_is_within_the_makers_clearance`;
+- a pipeline loading into it, or a rule made in its case: `test_nothing_is_loaded_into_it` and
+  `test_no_rule_is_made_in_its_case`, each red with its refusal planted out;
+- its model not live, or not its starter pack: `test_making_one_makes_its_model_and_home_case`.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from services.api import app as app_module
+from services.api.datasets import DRAWN, InMemoryDatasetStore
+from services.api.investigations import AccessLevel
+
+from schemas.domain import Principal
+
+from .test_home_cases import PEOPLE, _as, world  # noqa: F401 — `world` is the fixture
+
+JUNIOR = Principal(id="jun-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+
+
+class _Rules:
+    """The rules store: any rule made is recorded, so a refusal before it shows nothing made."""
+
+    def __init__(self) -> None:
+        self.made: list[Any] = []
+
+    def __getattr__(self, name: str) -> Any:
+        async def recorded(*args: Any, **kwargs: Any) -> Any:
+            self.made.append(name)
+            raise AssertionError(f"the rules store was asked to {name}")
+
+        return recorded
+
+
+@pytest.fixture(autouse=True)
+def _a_junior(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Any:  # noqa: F811
+    PEOPLE["junior"] = JUNIOR
+    world.rules = _Rules()
+    monkeypatch.setattr(app_module.app.state, "typology_rules", world.rules, raising=False)
+    monkeypatch.setattr(app_module.app.state, "patterns_store", _Rules(), raising=False)
+    monkeypatch.setattr(app_module.app.state, "monitors_store", world.rules, raising=False)
+    yield
+    PEOPLE.pop("junior", None)
+
+
+def _draw(world: SimpleNamespace, person: str = "analyst", **body: Any) -> Any:  # noqa: F811
+    fields = {"name": "Smuggling ring", "pack": "niem", "highest_marking": "OFFICIAL", **body}
+    return world.client.post("/v1/datasets/drawn", json=fields, headers=_as(person))
+
+
+def _the_drawn(world: SimpleNamespace) -> Any:  # noqa: F811
+    (drawn,) = [d for d in world.datasets.datasets.values() if d.kind == DRAWN]
+    return drawn
+
+
+def test_making_one_makes_its_model_and_home_case(world: SimpleNamespace) -> None:  # noqa: F811
+    made = _draw(world)
+    assert made.status_code == 201, made.text
+    drawn = _the_drawn(world)
+    home = made.json()["investigation_id"]
+    assert made.json()["dataset_id"] == drawn.id and drawn.highest_marking == "OFFICIAL"
+    assert world.datasets.homes[drawn.id].investigation_id == home
+    assert world.datasets.cases[home] == [drawn.id]
+    assert world.cases.grants[home] == {"ana-1": AccessLevel.AUTHOR}
+    assert world.cases.made[home].name == "Smuggling ring"
+    import asyncio
+
+    live = asyncio.run(world.models.live(drawn.id))
+    assert live is not None and (live.version, set(live.packs)) == (1, {"niem"})
+    (entry,) = [e for e in world.audit.entries if e["action"] == "make_drawn_dataset"]
+    assert entry["resolved_query"]["highest_marking"] == "OFFICIAL"
+    listed = world.client.get("/v1/admin/datasets", headers=_as("admin")).json()
+    assert {d["id"]: d["highest_marking"] for d in listed} == {"ds-a": None, drawn.id: "OFFICIAL"}
+
+
+def test_its_highest_marking_is_within_the_makers_clearance(
+    world: SimpleNamespace,  # noqa: F811
+) -> None:
+    above = _draw(world, "junior", highest_marking="SECRET")
+    assert above.status_code == 409, above.text
+    assert above.json()["detail"]["error"] == "above_your_clearance"
+    # The words name the maker's own limit and nothing else of the scheme: no marking above it,
+    # not even the one asked for, and none of the deployment's others (rule 3).
+    assert above.json()["detail"]["message"] == (
+        "a drawn dataset may hold nothing above your own clearance, OFFICIAL"
+    )
+    unknown = _draw(world, highest_marking="VERY SECRET INDEED")
+    assert unknown.status_code == 422
+    # Only what was sent is echoed: the deployment's markings are not listed.
+    assert unknown.json()["detail"] == "'VERY SECRET INDEED' is not a marking of this deployment"
+    assert [d for d in world.datasets.datasets.values() if d.kind == DRAWN] == []
+    assert world.cases.made.keys() == {"case-a"}
+
+
+def test_no_other_case_may_choose_it_and_only_its_home_cases_grantees_read_it(
+    world: SimpleNamespace,  # noqa: F811
+) -> None:
+    home = _draw(world).json()["investigation_id"]
+    drawn = _the_drawn(world)
+    # Not offered to choose, and refused when named.
+    offered = world.client.get("/v1/datasets", headers=_as("analyst")).json()
+    assert drawn.id not in [d["id"] for d in offered]
+    second = world.client.post(
+        "/v1/investigations", json={"name": "Another", "dataset_ids": [drawn.id]},
+        headers=_as("analyst"),
+    )  # fmt: skip
+    assert second.status_code == 422, second.text
+    assert [c for c, ids in world.datasets.cases.items() if drawn.id in ids] == [home]
+    # Read through its home case, by its grantees alone.
+    assert world.client.get(f"/v1/investigations/{home}", headers=_as("analyst")).status_code == 200
+    stranger = world.client.get(f"/v1/investigations/{home}", headers=_as("engineer"))
+    assert stranger.status_code == 404
+    world.cases.grants[home]["eng-1"] = AccessLevel.VIEWER  # the Author shares it
+    shared = world.client.get(f"/v1/investigations/{home}", headers=_as("engineer"))
+    assert shared.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("widened", "chosen"),
+    [(("_choosable",), False), (("list_for",), False), (("_choosable", "list_for"), True)],
+    ids=["the-store-alone", "the-list-alone", "both-removed"],
+)
+def test_each_choice_check_holds_alone(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    widened: tuple[str, ...],
+    chosen: bool,
+) -> None:
+    """Rule 15: the route takes only a dataset in the reader's list, and the store chooses no drawn
+    dataset for a case. Each holds alone; with both planted out, as before drawn datasets, a
+    second case reads the drawing."""
+    _draw(world)
+    drawn = _the_drawn(world)
+    real_choosable, real_list = InMemoryDatasetStore._choosable, InMemoryDatasetStore.list_for
+
+    def any_kind(self: Any, dataset_id: str, unit: str, *, kinds: Any) -> Any:
+        return real_choosable(self, dataset_id, unit, kinds=(*kinds, DRAWN))
+
+    async def every_one(self: Any, reader: Any) -> Any:
+        return [*await real_list(self, reader), drawn]
+
+    if "_choosable" in widened:
+        monkeypatch.setattr(InMemoryDatasetStore, "_choosable", any_kind)
+    if "list_for" in widened:
+        monkeypatch.setattr(InMemoryDatasetStore, "list_for", every_one)
+    second = world.client.post(
+        "/v1/investigations", json={"name": "Another", "dataset_ids": [drawn.id]},
+        headers=_as("analyst"),
+    )  # fmt: skip
+    readers = [c for c, ids in world.datasets.cases.items() if drawn.id in ids]
+    assert (second.status_code == 201, len(readers) > 1) == (chosen, chosen), second.text
+
+
+def test_nothing_is_loaded_into_it(world: SimpleNamespace) -> None:  # noqa: F811
+    """A Studio route of the dataset that loads refuses, in words, before anything is read."""
+    _draw(world)
+    drawn = _the_drawn(world)
+    loading = world.client.post(f"/v1/datasets/{drawn.id}/sources", json={}, headers=_as("analyst"))
+    assert loading.status_code == 409, loading.text
+    assert loading.json()["error"] == "drawn_not_loaded"
+
+
+def test_the_loading_refusal_fails_planted_out(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15, red: with the Studio's refusal planted out, the route goes on past it."""
+
+    async def allowed(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    app_module.app.dependency_overrides[app_module.refuse_loading_a_composite] = allowed
+    try:
+        _draw(world)
+        drawn = _the_drawn(world)
+        answer = world.client.post(
+            f"/v1/datasets/{drawn.id}/sources", json={}, headers=_as("analyst")
+        )
+        assert answer.status_code != 409 or answer.json().get("error") != "drawn_not_loaded"
+    finally:
+        app_module.app.dependency_overrides.pop(app_module.refuse_loading_a_composite, None)
+
+
+def test_no_rule_is_made_in_its_case(world: SimpleNamespace) -> None:  # noqa: F811
+    home = _draw(world).json()["investigation_id"]
+    for path in ("rules", "rules/sentence", "monitors"):
+        answer = world.client.post(
+            f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst")
+        )
+        assert answer.status_code == 409, (path, answer.text)
+        assert answer.json()["error"] == "drawn_not_judged"
+    # A working case of another dataset goes on as ever, to the body's own refusal here.
+    other = world.client.post("/v1/investigations/case-a/rules", json={}, headers=_as("analyst"))
+    assert other.status_code == 422, other.text
+    assert world.rules.made == []
+
+
+def test_the_rule_refusal_fails_planted_out(world: SimpleNamespace) -> None:  # noqa: F811
+    """Rule 15, red: the refusal planted out, the rule routes go on to the body's own check."""
+
+    async def allowed(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    home = _draw(world).json()["investigation_id"]
+    for dependency in (
+        app_module.refuse_rules_in_a_drawn_case_as_author,
+        app_module.refuse_rules_in_a_drawn_case_as_editor,
+    ):
+        app_module.app.dependency_overrides[dependency] = allowed
+    try:
+        for path in ("rules", "monitors"):
+            answer = world.client.post(
+                f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst")
+            )
+            assert answer.status_code == 422, answer.text  # past the refusal, to the body's check
+    finally:
+        app_module.app.dependency_overrides.clear()
+
+
+# --- Never copied (the round-1 review's blocker 1, rule 3) ------------------------------------
+
+NOT_COPIED = {
+    "error": "drawn_not_copied",
+    "detail": "a drawn dataset is read in its own case alone, so no other case is made reading it",
+}
+
+
+class _Stopped(Exception):
+    """Raised by every stand-in past the copy: a route that gets this far has copied already."""
+
+
+class _PastTheCopy:
+    async def branch_filtered_contents(self, *_args: Any) -> tuple[list[Any], list[Any]]:
+        return [], []  # what a filtered branch holds is asked before the case is made
+
+    def __getattr__(self, name: str) -> Any:
+        async def stopped(*_args: Any, **_kwargs: Any) -> Any:
+            raise _Stopped(name)
+
+        return stopped
+
+
+def _copying(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:  # noqa: F811
+    """The three routes that make a case reading what another reads, each from the drawing's home
+    case: a branch, a filtered branch, and two alert jumps (an alert naming the drawn dataset, and
+    one naming only the case)."""
+    home = _draw(world).json()["investigation_id"]
+    drawn = _the_drawn(world)
+    for name in ("working_set", "history", "valkey", "analytics", "graph", "alerts_store"):
+        monkeypatch.setattr(app_module.app.state, name, _PastTheCopy(), raising=False)
+    alerts = {
+        "al-drawn": SimpleNamespace(id="al-drawn", dataset_id=drawn.id, investigation_id=home),
+        "al-case": SimpleNamespace(id="al-case", dataset_id=None, investigation_id=home),
+    }
+
+    async def the_alert(_store: Any, alert_id: str, **_kwargs: Any) -> Any:
+        return alerts[alert_id]
+
+    monkeypatch.setattr(app_module, "jumpable_alert", the_alert)
+    return {
+        "branch": (f"/v1/investigations/{home}/branch", None),
+        "branch-by-filter": (
+            f"/v1/investigations/{home}/branch-by-filter", {"entity_types": ["Person"]},
+        ),
+        "jump-to-the-dataset": (f"/v1/investigations/{home}/alerts/al-drawn/jump", None),
+        "jump-to-the-case": (f"/v1/investigations/{home}/alerts/al-case/jump", None),
+    }  # fmt: skip
+
+
+ROUTES = ["branch", "branch-by-filter", "jump-to-the-dataset", "jump-to-the-case"]
+
+
+def _readers(world: SimpleNamespace) -> list[str]:  # noqa: F811
+    drawn = _the_drawn(world)
+    return [c for c, ids in world.datasets.cases.items() if drawn.id in ids]
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_no_case_is_made_reading_it(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+) -> None:
+    """Refused before any case is made, in words naming nothing but the rule: no empty case is
+    left, and no second case reads the drawing."""
+    path, body = _copying(world, monkeypatch)[route]
+    made_before = set(world.cases.made)
+    answer = world.client.post(path, json=body, headers=_as("analyst"))
+    assert answer.status_code == 409, answer.text
+    assert answer.json() == NOT_COPIED
+    assert set(world.cases.made) == made_before
+    assert len(_readers(world)) == 1
+
+
+@pytest.mark.parametrize(
+    ("planted_out", "copied"),
+    [(("route",), False), (("store",), False), (("route", "store"), True)],
+    ids=["the-route-alone", "the-store-alone", "both-removed"],
+)
+@pytest.mark.parametrize("route", ["branch", "branch-by-filter", "jump-to-the-case"])
+def test_each_copy_check_holds_alone(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+    planted_out: tuple[str, ...],
+    copied: bool,
+) -> None:
+    """Rule 15, red: the route refuses before the case is made and `copy_case` refuses the copy;
+    each holds alone, and with both planted out, as before this check, a second case reads the
+    drawing. (The jump to the dataset itself has a third guard, `set_for_case`'s choice check,
+    which `test_each_choice_check_holds_alone` shows red.)"""
+    from services.api import datasets as datasets_module
+
+    path, body = _copying(world, monkeypatch)[route]
+
+    async def nothing_refused(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    if "route" in planted_out:
+        monkeypatch.setattr(app_module, "refuse_copying_a_drawn_dataset", nothing_refused)
+    if "store" in planted_out:
+        monkeypatch.setattr(datasets_module, "refuse_copying_drawn", lambda _kinds: None)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app_module.app, raise_server_exceptions=False)
+    answer = client.post(path, json=body, headers=_as("analyst"))
+    assert (len(_readers(world)) > 1) == copied, answer.text
+    if not copied:
+        assert answer.json() == NOT_COPIED
+
+
+# --- The case routes' loading refusal (the round-1 review's must-fix 3) ------------------------
+
+CASE_LOADING = ["ingest/extract", "held-rows/reject"]
+
+
+@pytest.mark.parametrize("path", CASE_LOADING)
+@pytest.mark.parametrize("planted_out", [False, True], ids=["held", "the-drawn-check-removed"])
+def test_nothing_is_loaded_through_its_case(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    planted_out: bool,
+) -> None:
+    """A case route that loads, or decides held rows, refuses in the drawing's home case
+    (`refuse_loading_in_a_composite_case`, `refuse_deciding_held_rows_in_a_composite_case`).
+    Rule 15, red: with the drawn check alone planted out (the composite check kept), the route
+    goes on past it."""
+    from fastapi.testclient import TestClient
+
+    home = _draw(world).json()["investigation_id"]
+
+    async def no_drawn_check(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    if planted_out:
+        monkeypatch.setattr(app_module, "_refuse_in_a_drawn_case", no_drawn_check)
+    client = TestClient(app_module.app, raise_server_exceptions=False)
+    answer = client.post(f"/v1/investigations/{home}/{path}", json={}, headers=_as("analyst"))
+    refused = answer.status_code == 409 and answer.json().get("error") == "drawn_not_loaded"
+    assert refused is not planted_out, answer.text

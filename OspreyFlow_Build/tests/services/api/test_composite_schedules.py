@@ -560,6 +560,8 @@ NOT_BY_THE_ROUTE = {
     # finding the reader cannot see answers 404 (`test_composite_read_only.py`).
     "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept",
     "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject",
+    # Makes a drawn dataset and its home case: it names no composite and writes into none.
+    "/v1/datasets/drawn",
 }
 _WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -569,6 +571,9 @@ def _refusals(route: Any) -> list[Any]:
         app_module.refuse_loading_in_a_composite_case,
         app_module.refuse_deciding_held_rows_in_a_composite_case,
         app_module.refuse_loading_a_composite,
+        # A dataset's model: a composite's is read, not changed (a drawn one's is changed, and
+        # loads nothing).
+        app_module.refuse_changing_a_composites_model,
     }
     return [d.dependency for d in getattr(route, "dependencies", []) if d.dependency in calls]
 

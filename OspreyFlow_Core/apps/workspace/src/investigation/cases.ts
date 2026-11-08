@@ -114,26 +114,6 @@ export async function setCaseDatasets(
   return (await response.json()) as Dataset[];
 }
 
-/** An Author's change of the case's domain models (ADR-126): `PATCH /v1/investigations/{id}` with
- * the packs alone. The Conduit refuses anyone else (403); the answer is the case as it now stands. */
-export async function changeCaseDomains(
-  apiBaseUrl: string,
-  bearerToken: string,
-  investigationId: string,
-  domains: readonly DomainPack[],
-): Promise<DomainPack[]> {
-  const response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}`, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ domains: sortedDomains(domains) }),
-  });
-  if (response.status === 403) throw new Error("Only the case's Author can change its domain models.");
-  if (response.status === 404) throw new Error("That case was not found.");
-  if (!response.ok) throw new Error(`Could not change the domain models (${response.status}).`);
-  const saved = (await response.json()) as { domains?: DomainPack[] };
-  return saved.domains ?? [];
-}
-
 /** What a case is called on screen. A case made before names existed has none; it is shown as
  * untitled with when it was made, never as an empty button. */
 /** ADR-115 Amendment 1 point 5 (the owner's ruling of 13 October 2026): a case's scope is the

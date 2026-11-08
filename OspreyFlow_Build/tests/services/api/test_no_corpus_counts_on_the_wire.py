@@ -617,6 +617,7 @@ NON_JSON_ROUTES: dict[str, str] = {
     "GET /v1/openapi.json": "the OpenAPI document: the API's schema, no data",
     "PUT /v1/investigations/{investigation_id}/tab": "204, no body",
     "DELETE /v1/investigations/{investigation_id}": "204, no body",
+    "DELETE /v1/datasets/{dataset_id}/model/draft": "204, no body",
     "PUT /v1/investigations/{investigation_id}/access": "204, no body",
     "PUT /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",

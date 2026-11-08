@@ -1218,6 +1218,36 @@ class StudioRecipeStore:
             )
         return [row["label"] for row in rows]
 
+    async def flag_for_model(
+        self, dataset_id: str, flagged: Sequence[tuple[str, str]]
+    ) -> list[str]:
+        """ADR-140 decision 5 (R12): *Make live* of the dataset's domain model changed or retired a
+        type each of these deployed recipes writes, so each needs attention, its scheduled and
+        watched runs blocked (ADR-110 decision 4) until it is deployed again under the new model.
+        `flagged` is `(recipe_id, reason)` pairs, each recipe's reason naming its own types. Only a
+        published recipe of this dataset is flagged; one already flagged keeps its first reason; a
+        recipe named twice takes its first reason. Returns the labels flagged, sorted, for the
+        route to say. L3.1b, ratified by the studio lane (`test_studio_recipes_store.py`)."""
+        # One reason per recipe, the first given: `UPDATE ... FROM` would pick among repeats.
+        once: dict[str, str] = {}
+        for recipe_id, reason in flagged:
+            once.setdefault(recipe_id, reason)
+        if not once:
+            return []
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "UPDATE studio_recipes r SET status = $1, flagged_reason = f.reason "
+                "FROM unnest($2::text[], $3::text[]) AS f(recipe_id, reason) "
+                "WHERE r.recipe_id = f.recipe_id AND r.status = $4 AND r.dataset_id = $5 "
+                "RETURNING r.label",
+                StudioRecipeStatus.FLAGGED.value,
+                list(once),
+                list(once.values()),
+                StudioRecipeStatus.PUBLISHED.value,
+                dataset_id,
+            )
+        return sorted(row["label"] for row in rows)
+
     async def current_for_migration(self) -> list[StudioRecipeDraft]:
         """Every recipe at every status but a previous version, across every dataset: for
         `scripts.migrate_sources` alone, an operator's command run with no request and no reader

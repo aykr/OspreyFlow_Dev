@@ -2082,3 +2082,114 @@ async def test_clearing_a_moved_watch_keeps_the_cron_and_its_owner(
         "0 7 * * *", AUTHOR.id, "case-7",
     )
     assert after.schedule_paused is True
+
+
+async def _published_in(store: StudioRecipeStore, dataset: str, label: str) -> StudioRecipeDraft:
+    author = AUTHOR.model_copy(update={"datasets": [dataset]})
+    draft = await store.create_draft(author, label=label, **_CONNECT)  # type: ignore[arg-type]
+    await store.mark_verified(draft.recipe_id, draft.version, now=datetime(2026, 1, 1, tzinfo=UTC))
+    return await store.publish(
+        draft.recipe_id, AUTHOR, ontology_version=3, pack_versions={}, git_path="recipes/m.yaml",
+        schedule_cron=None, schedule_watch=None, now=datetime(2026, 1, 2, tzinfo=UTC),
+    )  # fmt: skip
+
+
+async def _flag_for_model_world(store: StudioRecipeStore) -> dict[str, Any]:
+    """In one dataset: two published recipes, one already flagged, a draft, and a superseded
+    version (its recipe now a draft at version 2); in another, a published recipe."""
+    from uuid import uuid4
+
+    mine, theirs = f"ds-{uuid4().hex[:8]}", f"ds-{uuid4().hex[:8]}"
+    first = await _published_in(store, mine, "Zebra feed")
+    second = await _published_in(store, mine, "Alpha feed")
+    flagged = await _published_in(store, mine, "Already flagged")
+    await store.flag_for_model(mine, [(flagged.recipe_id, "the first reason")])
+    draft = await store.create_draft(
+        AUTHOR.model_copy(update={"datasets": [mine]}), label="Still a draft", **_CONNECT  # type: ignore[arg-type]
+    )
+    old = await _published_in(store, mine, "Reopened")
+    await store.create_new_version(old.recipe_id, AUTHOR, now=datetime(2026, 1, 3, tzinfo=UTC))
+    other = await _published_in(store, theirs, "Another dataset's")
+    return {"mine": mine, "first": first, "second": second, "flagged": flagged, "draft": draft,
+            "old": old, "other": other}  # fmt: skip
+
+
+async def _status_and_reason(
+    store: StudioRecipeStore, recipe_id: str
+) -> list[tuple[int, str, Any]]:
+    async with store._pool.acquire() as conn:  # noqa: SLF001
+        rows = await conn.fetch(
+            "SELECT version, status, flagged_reason FROM studio_recipes WHERE recipe_id = $1 "
+            "ORDER BY version",
+            recipe_id,
+        )
+    return [(r["version"], r["status"], r["flagged_reason"]) for r in rows]
+
+
+async def test_flag_for_model_flags_only_this_datasets_published_recipes(
+    store: StudioRecipeStore,
+) -> None:
+    """L3.1b: *Make live* of a dataset's model flags exactly the published recipes of that dataset
+    it names, each with its own reason; anything else named is left as it is."""
+    w = await _flag_for_model_world(store)
+    assert await store.flag_for_model(w["mine"], []) == []
+    named = [
+        (w["first"].recipe_id, "writes Account"),
+        (w["second"].recipe_id, "writes HOLDS_ACCOUNT"),
+        (w["second"].recipe_id, "a second reason, ignored"),
+        (w["flagged"].recipe_id, "a later reason"),
+        (w["draft"].recipe_id, "a draft's"),
+        (w["old"].recipe_id, "a superseded version's"),
+        (w["other"].recipe_id, "another dataset's"),
+    ]
+    assert await store.flag_for_model(w["mine"], named) == ["Alpha feed", "Zebra feed"]
+    assert await _status_and_reason(store, w["first"].recipe_id) == [
+        (1, "flagged", "writes Account")
+    ]
+    assert await _status_and_reason(store, w["second"].recipe_id) == [
+        (1, "flagged", "writes HOLDS_ACCOUNT")
+    ]
+    assert await _status_and_reason(store, w["flagged"].recipe_id) == [
+        (1, "flagged", "the first reason")
+    ]
+    assert await _status_and_reason(store, w["draft"].recipe_id) == [(1, "draft", None)]
+    assert [s for _, s, _ in await _status_and_reason(store, w["old"].recipe_id)] == [
+        "superseded", "draft",
+    ]  # fmt: skip
+    assert await _status_and_reason(store, w["other"].recipe_id) == [(1, "published", None)]
+
+
+@pytest.mark.parametrize("dropped", ["AND r.dataset_id = $5 ", "AND r.status = $4 "])
+async def test_flag_for_model_fails_with_one_condition_removed(
+    store: StudioRecipeStore, monkeypatch: pytest.MonkeyPatch, dropped: str
+) -> None:
+    """Rule 15, red, in the SQL's own shape: the same statement without the dataset's condition
+    flags another dataset's recipe; without the status's, an already flagged one's reason is
+    replaced."""
+    import inspect
+
+    import services.api.studio_recipes as module
+
+    source = inspect.getsource(StudioRecipeStore.flag_for_model)
+    assert dropped in source
+    # The condition replaced by one always true that still names its parameter, which Postgres
+    # must be able to type.
+    parameter = dropped.split()[-1]
+    always = f"AND ({parameter}::text = {parameter}) "
+    planted = inspect.cleandoc("\n" + source).replace(dropped, always)
+    scope: dict[str, Any] = {}
+    exec(compile(planted, "<planted>", "exec"), {**vars(module)}, scope)  # noqa: S102
+    monkeypatch.setattr(StudioRecipeStore, "flag_for_model", scope["flag_for_model"])
+    w = await _flag_for_model_world(store)
+    await store.flag_for_model(
+        w["mine"],
+        [(w["other"].recipe_id, "another dataset's"), (w["flagged"].recipe_id, "a later reason")],
+    )
+    if "dataset_id" in dropped:
+        assert await _status_and_reason(store, w["other"].recipe_id) == [
+            (1, "flagged", "another dataset's")
+        ]
+    else:
+        assert await _status_and_reason(store, w["flagged"].recipe_id) == [
+            (1, "flagged", "a later reason")
+        ]

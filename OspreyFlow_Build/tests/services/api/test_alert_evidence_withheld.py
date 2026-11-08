@@ -498,6 +498,13 @@ def test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one
 
             return recorded
 
+    class Datasets(Writes):
+        """The dataset store: the level check's one read (the case's chosen dataset, for its
+        packs, ADR-126 Amendment 2) answered as none; anything else recorded as a write."""
+
+        async def chosen_of_case(self, investigation_id: str) -> list[Any]:
+            return []
+
     class Cases(_Case):
         async def create(self, *_: Any, **__: Any) -> Any:
             done.append("create")
@@ -526,7 +533,7 @@ def test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one
         get_graph: lambda: graph,
         get_analytics: lambda: analytics,
         get_alerts_store: lambda: Owned(withheld),
-        get_audit: Writes, get_datasets: Writes, get_working_set: Writes, get_history: Writes,
+        get_audit: Writes, get_datasets: Datasets, get_working_set: Writes, get_history: Writes,
         get_valkey: Writes,
     })  # fmt: skip
     try:
