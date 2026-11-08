@@ -382,7 +382,7 @@ from .add_by_identifiers import (
     TooManyIdentifiersError,
     resolve_identifiers,
 )
-from .admin_people import AdminPeopleStore, DisableRefused, recipients
+from .admin_people import OTHER_UNIT, AdminPeopleStore, DisableRefused, recipients
 from .alerts import (
     AlertNotFoundError,
     AlertStore,
@@ -12117,7 +12117,7 @@ async def disable_person_route(
         for t in await custom_roles.teams(_today())
     }
     try:
-        moved = await admin_people.transfer(
+        moved, elsewhere = await admin_people.transfer(
             user_id,
             (body or DisableInput()).transfers,
             recipients(people, current, holders),
@@ -12134,6 +12134,17 @@ async def disable_person_route(
                 "items": [i.model_dump() for i in refused.items],
             },
         ) from None
+    if elsewhere:
+        # Each unit's administrator transfers their own share; the account is disabled once
+        # nothing is left in any unit. The transfers just made stand, audited.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "other_unit",
+                "message": f"{len(moved)} transferred, and those stand; not disabled yet: "
+                + OTHER_UNIT,
+            },
+        )
     try:
         person = await identity_admin.set_enabled(user_id, False)
     except IdentityAdminRefused as error:
@@ -12203,15 +12214,22 @@ async def remove_person_route(
     made keeps their id, which ADR-106 shows in place of a name once the account is gone."""
     if user_id == principal.id:
         raise HTTPException(status_code=409, detail={"error": "cannot_remove_yourself"})
-    # ADR-145 Amendment 5: a people manager through a custom role counts too.
+    # ADR-145 Amendment 5: a people manager through a custom role counts too; a team's lead or
+    # cover is handed over or ended first, so no team points at a removed account.
+    current = await custom_roles.current_rights()
     try:
         leaves_no_people_manager(
-            [p for p in await identity_admin.list_people() if p.id != user_id],
-            await custom_roles.current_rights(),
+            [p for p in await identity_admin.list_people() if p.id != user_id], current
         )
+        if led := [t for t in await custom_roles.teams(_today()) if user_id in (t.lead, t.cover)]:
+            raise RoleRefused(
+                "lead_leaves_team",
+                f"they are the lead or cover of {led[0].display_name}: hand the lead over, or end "
+                "the cover, before removing them",
+            )
     except RoleRefused as error:
         raise _role_refused(error) from None
-    person = await identity_admin.remove_person(user_id)
+    person = await identity_admin.remove_person(user_id, current)
     await audit.record(principal=principal, action="remove_person",
                        resolved_query={"user_id": user_id, "username": person.username,
                                        "name": person.name, "email": person.email},
@@ -14209,11 +14227,9 @@ async def admin_dataset_authors_route(
     # ADR-145 Amendment 5 point 5: a team's grant is the team, named apart from the people.
     teams = [a[len(TEAM_GRANT_PREFIX) :] for a in held if a.startswith(TEAM_GRANT_PREFIX)]
     authors = [a for a in held if not a.startswith(TEAM_GRANT_PREFIX)]
+    # `people` is the direct grants only, so *Change owner…* prefilled from it never turns a
+    # team's ownership into personal grants; the team is `team`.
     people = await get_identity_admin(request).list_people()
-    # A team's members are Authors while in it (Amendment 5 point 5), listed with the people.
-    for team in teams:
-        authors += [p.id for p in people if f"{CUSTOM_ROLE_PREFIX}{team}" in p.roles
-                    and p.enabled and not p.system_account and p.id not in authors]  # fmt: skip
     names = await get_principal_names(request).display_names(authors) if authors else {}
     roles_of = {p.id: p.roles for p in people}
     store = getattr(request.app.state, "custom_roles", None)

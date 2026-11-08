@@ -179,15 +179,11 @@ class _AdminPeople:
         self.elsewhere: dict[str, int] = {}
 
     async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
-        if self.elsewhere.get(person):
-            raise DisableRefused("other_unit", "they answer for 1 cases, rules or pipeline "
-                                 "schedules of another unit: that unit's administrator transfers those first")  # fmt: skip
         return DisablePlan(person=person, items=self.items.get(person, []),
                            not_yet_listed=list(admin_people_module.L38_OWNED_KINDS))  # fmt: skip
 
     async def transfer(self, person: str, transfers: Any, who: Any, *, by: Principal, audit: Any,
-                       admin_unit: str | None) -> list[tuple[OwnedItem, str]]:  # fmt: skip
-        await self.plan(person, admin_unit=admin_unit)
+                       admin_unit: str | None) -> tuple[list[tuple[OwnedItem, str]], int]:  # fmt: skip
         items = self.items.get(person, [])
         chosen = check_transfers(person, items, transfers, who, admin_unit)
         for item in items:
@@ -197,7 +193,7 @@ class _AdminPeople:
                                resolved_query={"from": person, "to": to, "kind": item.kind,
                                                "id": item.id})  # fmt: skip
         self.items[person] = []
-        return [(i, chosen[(i.kind, i.id)]) for i in items]
+        return [(i, chosen[(i.kind, i.id)]) for i in items], self.elsewhere.get(person, 0)
 
 
 class _Cases:
@@ -677,15 +673,23 @@ def test_a_team_that_exists_owns_by_its_id_or_name_as_the_setting_allows(world: 
 # --- the reviewer's findings (L2.5 lane review) -------------------------------------------------------
 
 
-def test_a_plan_holding_another_units_items_is_refused_and_nothing_is_disabled(
+def test_items_left_in_another_unit_keep_the_person_enabled_and_the_transfers_stand(
     world: SimpleNamespace,
 ) -> None:
-    world.admin_people.elsewhere["ana-1"] = 1
-    plan = world.client.get("/v1/admin/people/ana-1/disable-plan", headers=_as("adm-1"))
-    assert plan.status_code == 409 and plan.json()["detail"]["error"] == "other_unit"
-    answer = _disable(world, [])
-    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "other_unit"
+    """Each unit's administrator transfers their own unit's share; the disable waits for both, and
+    the refusal says another unit's items exist, never how many (rule 7)."""
+    world.admin_people.items["ana-1"] = ITEMS[:1]
+    world.admin_people.elsewhere["ana-1"] = 2
+    assert world.client.get("/v1/admin/people/ana-1/disable-plan", headers=_as("adm-1")).status_code == 200
+    answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "ana-2"}])
+    assert answer.status_code == 409, answer.text
+    detail = answer.json()["detail"]
+    assert detail["error"] == "other_unit" and "those stand" in detail["message"]
+    assert "2" not in detail["message"].replace("1 transferred", "")
+    assert world.admin_people.moved == [("case_author", "c1", "ana-2")]
     assert world.directory.disabled == []
+    world.admin_people.elsewhere["ana-1"] = 0
+    assert _disable(world, []).status_code == 200 and world.directory.disabled == ["ana-1"]
 
 
 def test_a_case_never_goes_to_a_person_of_another_unit(world: SimpleNamespace) -> None:
@@ -729,3 +733,11 @@ def test_removing_the_last_people_manager_through_a_custom_role_is_refused(
     answer = world.client.delete("/v1/admin/people/ppl-2", headers=_as("adm-1"))
     assert answer.status_code == 409 and answer.json()["detail"]["error"] == "locks_out_administrators"
     assert "ppl-2" in PEOPLE
+
+
+def test_a_teams_lead_or_cover_is_not_removed(world: SimpleNamespace) -> None:
+    world.roles.teams_of["r1"] = Team(role_id="r1", display_name="Intel", mailbox="i@example.org",
+                                      lead="ana-1")  # fmt: skip
+    answer = world.client.delete("/v1/admin/people/ana-1", headers=_as("adm-1"))
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "lead_leaves_team"
+    assert "ana-1" in PEOPLE

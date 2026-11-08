@@ -279,13 +279,12 @@ def people_rows(
     return AdminPeopleRows(rows=rows, without_author=without)
 
 
-def _whole(plan: _Plan) -> None:
-    if plan.elsewhere:
-        raise DisableRefused(
-            "other_unit",
-            f"they answer for {plan.elsewhere} cases, rules or pipeline schedules of another unit: "
-            "that unit's administrator transfers those first",
-        )
+#: Said when a person still answers for items of another unit: that they do, never how many
+#: (rule 7). Each unit's administrator transfers their own unit's share, then either disables.
+OTHER_UNIT = (
+    "they still answer for cases, rules or pipeline schedules of another unit: that unit's "
+    "administrator transfers those, and then either of you can disable them"
+)
 
 
 async def _case_levels_hold(
@@ -294,10 +293,11 @@ async def _case_levels_hold(
     chosen: Mapping[tuple[str, str], str],
     who: Recipients,
 ) -> None:
-    """A rule's or a pipeline schedule's runs are judged against its case (`rule_schedule.py`'s
-    Author or Editor; the scheduler's case): its recipient is an Author of that case already, in
-    their own name or through a team they are in now, or is made its Author in this same
-    transfer."""
+    """A rule's or a pipeline schedule's runs are judged against its case (`rule_schedule.py`
+    asks an Editor of a rule kept to its author, an Author otherwise; the scheduler, its case). The
+    recipient is held to the stricter, Author, which every such run accepts: already, in their own
+    name or through a team they are in now, or made its Author in this same transfer. A pipeline
+    schedule naming no case has nothing to hold it to."""
     made_author = {
         (item_id, to)
         for (kind, item_id), to in chosen.items()
@@ -471,11 +471,10 @@ class AdminPeopleStore:
         return people_rows(people, grants, cases, teams)
 
     async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
-        """The plan, or `DisableRefused` (`other_unit`) when the person owns cases, rules or
-        pipeline schedules of another unit: a plan is whole or refused, never partly listed."""
+        """The plan of the administrator's own unit; another unit's items are counted at the
+        disable (`transfer` answers `elsewhere`), never listed."""
         async with self._pool.acquire() as conn:
             plan = await _plan_items(conn, person, admin_unit)
-        _whole(plan)
         return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
 
     async def transfer(
@@ -487,13 +486,15 @@ class AdminPeopleStore:
         by: Principal,
         audit: AuditWriter,
         admin_unit: str | None,
-    ) -> list[tuple[OwnedItem, str]]:
-        """Every item to its recipient, in one transaction with an audit row for each; the plan is
-        read again inside it, so an item gained since the administrator looked is refused too."""
+    ) -> tuple[list[tuple[OwnedItem, str]], int]:
+        """Every item of the administrator's unit to its recipient, in one transaction with an
+        audit row for each; the plan is read again inside it, so an item gained since the
+        administrator looked is refused too. Answers the transfers and how many items the person
+        still owns in another unit, which the disable is then refused for; the covers end only when
+        nothing is left elsewhere, as the disable follows."""
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("LOCK TABLE investigation_grants IN SHARE ROW EXCLUSIVE MODE")
             plan = await _plan_items(conn, person, admin_unit)
-            _whole(plan)
             items = plan.items
             chosen = check_transfers(person, items, transfers, who, admin_unit)
             await _case_levels_hold(conn, plan, chosen, who)
@@ -529,6 +530,8 @@ class AdminPeopleStore:
                     conn=conn,
                 )
                 done.append((item, to))
+            if plan.elsewhere:
+                return done, plan.elsewhere
             # A cover is no ownership: the person's covers end, each audited, and the lead acts.
             for row in await conn.fetch(
                 "UPDATE teams SET cover = NULL, cover_until = NULL WHERE cover = $1 "
@@ -547,7 +550,7 @@ class AdminPeopleStore:
                     },
                     conn=conn,
                 )
-        return done
+        return done, 0
 
 
 def recipients(
@@ -566,6 +569,7 @@ def recipients(
 
 
 __all__ = [
+    "OTHER_UNIT",
     "L38_OWNED_KINDS",
     "NEEDS",
     "AdminPeopleStore",

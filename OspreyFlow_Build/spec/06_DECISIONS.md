@@ -29477,9 +29477,11 @@ this says so.
    - their active typology rules;
    - the pipeline and screening-list schedules whose runs act as them.
 
-   Each item is read with the administrator's unit in its own statement. A person who owns a
-   case, a rule or a pipeline schedule of another unit has their plan refused (409 `other_unit`): that
-   unit's administrator transfers those first, and the count is all that is read of them. A transfer
+   Each item is read with the administrator's unit in its own statement. Another unit's cases,
+   rules and pipeline schedules are counted in SQL, never read. Each unit's administrator transfers
+   their own unit's share. While the person still owns items elsewhere, the transfers just made stand
+   and the disable is refused (409 `other_unit`), saying that some exist but never how many; once
+   nothing is left in any unit, either administrator disables them. A transfer
    is also refused:
    - to the person themselves;
    - to a disabled or unknown account, or a service account;
@@ -29491,7 +29493,9 @@ this says so.
    - for a watch, to someone already watching the same pattern.
 
    The person's covers end with the disable, each audited. Taking a team's role away from its lead or
-   cover is refused until the lead is handed over or the cover ended. A case gains its new Author and keeps every grant it had; every other item
+   cover, or removing them, is refused until the lead is handed over or the cover ended. *Change
+   owner…*'s Authors are the direct grants (`people`) and the team (`team`) apart, so saving the
+   form unchanged never turns a team's ownership into personal grants. A case gains its new Author and keeps every grant it had; every other item
    changes its owner. The transfers and their audit entries (`transfer_owned_item`) are one Postgres
    transaction, committed before the identity provider disables the account. If that last step
    fails, the transfers stand, and the answer says so (502 `disable_incomplete`, audited as

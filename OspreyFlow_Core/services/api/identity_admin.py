@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -302,6 +302,10 @@ class IdentityAdmin:
                 "/users",
                 params={"first": len(users), "max": _PAGE, "briefRepresentation": "false"},
             )
+            if response.status_code != 200:
+                raise IdentityAdminRefused(
+                    f"the identity provider did not list the people ({response.status_code})"
+                )
             page = response.json()
             users += page
             if len(page) < _PAGE:
@@ -475,7 +479,9 @@ class IdentityAdmin:
 
     # --- remove (ADR-112 Amendment 3) ----------------------------------------------------------
 
-    async def remove_person(self, user_id: str) -> PersonAccount:
+    async def remove_person(
+        self, user_id: str, custom: Mapping[str, Iterable[Right]] | None = None
+    ) -> PersonAccount:
         """The person's account deleted from the identity provider: they can no longer sign in, and
         their sign-in name and email address are free again. Nothing OspreyFlow stores is changed —
         what they made keeps their id (ADR-106 shows it in place of a name). Refused, before
@@ -492,14 +498,12 @@ class IdentityAdmin:
                 f"{person.username} is an account OspreyFlow itself uses, not a person's; it "
                 "cannot be removed.",
             )
-        if person.enabled and Right.MANAGE_PEOPLE in rights_for(person.roles):
-            listed = await self._call(
-                "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
-            )
+        if person.enabled and Right.MANAGE_PEOPLE in rights_for(person.roles, custom):
+            # Every page, and a custom role by its current rights (ADR-145 Amendment 5).
             others = [
-                u for u in listed.json()
-                if str(u.get("id")) != user_id and not _system(u) and u.get("enabled", True)
-                and Right.MANAGE_PEOPLE in rights_for(_person(u).roles)
+                p for p in await self.list_people()
+                if p.id != user_id and not p.system_account and p.enabled
+                and Right.MANAGE_PEOPLE in rights_for(p.roles, custom)
             ]  # fmt: skip
             if not others:
                 raise PersonActionRefused(

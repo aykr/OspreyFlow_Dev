@@ -93,7 +93,7 @@ class _Identity:
                               delivery="one_time_code", one_time_code="WXYZ-WXYZ-WXYZ-WXYZ")  # fmt: skip
 
     # ADR-112 Amendment 3 (build order step 33 (a))
-    async def remove_person(self, user_id: str) -> PersonAccount:
+    async def remove_person(self, user_id: str, custom: Any = None) -> PersonAccount:
         if user_id == "last-admin":
             raise PersonActionRefused("last_administrator", LAST_ADMIN)
         self.made.append(("removed", user_id))
@@ -159,9 +159,9 @@ class _NoCustomRoles:
 class _OwnsNothing:
     """L2.5's *Disable…* for a person who owns nothing: no item, so no transfer is asked for."""
 
-    async def transfer(self, person: str, transfers: Any, who: Any, **_: Any) -> list[Any]:
+    async def transfer(self, person: str, transfers: Any, who: Any, **_: Any) -> tuple[list[Any], int]:
         assert list(transfers) == []
-        return []
+        return [], 0
 
 
 @pytest.fixture

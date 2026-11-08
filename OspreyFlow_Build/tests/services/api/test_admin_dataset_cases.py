@@ -479,3 +479,16 @@ def test_a_composite_takes_no_promotion_policy_and_no_merge(world: SimpleNamespa
                     {"promotion_policy": "second_person_reviews"})  # fmt: skip
     assert refused.status_code == 409 and refused.json()["error"] == "composite_read_only"
     assert not [e for e in world.audit.entries if e["action"] == "set_dataset_promotion_policy"]
+
+
+def test_a_team_owner_is_the_team_and_people_are_the_direct_grants_only(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2.5 (ADR-145 Amendment 5 point 5): a team's grant is answered as `team`, never as its members
+    in `people`, which *Change owner…* is prefilled from (the lane review's finding: members listed
+    there would be saved back as personal grants, dropping the team)."""
+    world.cases.grants["home-a"]["team:r1"] = AccessLevel.AUTHOR
+    monkeypatch.setitem(ROLES, "per-2", ["role:r1"])  # a member of the team
+    answer = world.client.get("/v1/admin/datasets/ds-a/authors", headers=_as("admin")).json()
+    assert answer["team"] == "r1"
+    assert sorted(p["id"] for p in answer["people"]) == ["adm-2", "eng-1"]

@@ -224,9 +224,9 @@ async def test_disable_moves_every_item_and_audits_each(world: SimpleNamespace) 
     plan = await world.people.plan("ana", admin_unit=UNIT)
     who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
     transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in plan.items]
-    moved = await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit,
-                                        admin_unit=UNIT)  # fmt: skip
-    assert len(moved) == len(plan.items) == 8
+    moved, left = await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit,
+                                              admin_unit=UNIT)  # fmt: skip
+    assert len(moved) == len(plan.items) == 8 and left == 0
     raw = world.raw
     owners = {
         "hotlist": await raw.fetchval("SELECT owner_id FROM hotlists WHERE id = 'h1'"),
@@ -290,26 +290,32 @@ async def test_the_cover_ends_on_its_day_and_the_lead_acts_again(world: SimpleNa
 # --- the lane review's findings ----------------------------------------------------------------------
 
 
-async def test_a_case_or_rule_of_another_unit_refuses_the_plan_and_names_nothing(
+async def test_two_units_each_transfer_their_share_and_only_then_is_nothing_left(
     world: SimpleNamespace,
 ) -> None:
-    """Rule 3: another unit's case is counted in SQL, never read; a plan is whole or refused."""
-    elsewhere = await world.cases.create(Principal(id="ana", clearance="SECRET", org_unit="unit-2"),
-                                         name="Elsewhere")  # fmt: skip
-    with pytest.raises(DisableRefused) as raised:
-        await world.people.plan("ana", admin_unit=UNIT)
-    assert raised.value.error == "other_unit" and "Elsewhere" not in raised.value.words
-    assert elsewhere.id not in raised.value.words
-    # The read itself carries the unit (rule 3), not only the refusal after it: the listing holds
-    # nothing of the other unit's case even before the plan is refused.
+    """Rule 3: another unit's case is counted in SQL, never read. A person owning cases in two
+    units has each unit's share transferred by that unit's administrator; until both have, the
+    transfer answers what is left elsewhere, and the covers stay."""
+    ana_1, ana_2 = _who("ana", []), Principal(id="ana", clearance="SECRET", org_unit="unit-2")
+    here = await world.cases.create(ana_1, name="Here")
+    there = await world.cases.create(ana_2, name="There")
     from services.api.admin_people import _plan_items
 
     async with world.people._pool.acquire() as conn:
         listed = await _plan_items(conn, "ana", UNIT)
-    assert listed.elsewhere == 1 and elsewhere.id not in {i.id for i in listed.items}
-    with pytest.raises(DisableRefused):
-        await world.people.transfer("ana", [], recipients([], {}, {}), by=ADMIN, audit=world.audit,
-                                    admin_unit=UNIT)  # fmt: skip
+    assert listed.elsewhere == 1 and [i.id for i in listed.items] == [here.id]
+    directory = [_person("bea", ["analyst"]), _person("bob", ["analyst"], unit="unit-2")]
+    who = recipients(directory, {}, {})
+    moved, left = await world.people.transfer(
+        "ana", [OwnedTransfer(kind="case_author", id=here.id, to="bea")], who, by=ADMIN,
+        audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    assert (len(moved), left) == (1, 1)
+    admin_2 = Principal(id="adm-9", clearance="SECRET", org_unit="unit-2", roles=["osprey-admin"])
+    moved, left = await world.people.transfer(
+        "ana", [OwnedTransfer(kind="case_author", id=there.id, to="bob")], who, by=admin_2,
+        audit=world.audit, admin_unit="unit-2")  # fmt: skip
+    assert (len(moved), left) == (1, 0)
+    assert (await world.cases.list_grants(there.id))["bob"] is AccessLevel.AUTHOR
 
 
 async def test_a_rule_goes_only_to_an_author_of_its_case(world: SimpleNamespace) -> None:
@@ -329,7 +335,7 @@ async def test_a_rule_goes_only_to_an_author_of_its_case(world: SimpleNamespace)
     await world.cases.set_grant(ids["case"], "bea", AccessLevel.AUTHOR, by=_who("ana", []))
     again = await world.people.plan("ana", admin_unit=UNIT)
     assert "case_author" not in {i.kind for i in again.items}
-    moved = await world.people.transfer(
+    moved, _ = await world.people.transfer(
         "ana", [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in again.items], who,
         by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
     assert len(moved) == len(again.items)
@@ -352,8 +358,9 @@ async def test_the_persons_covers_end_with_the_disable_and_are_audited(world: Si
     role_id = await _team(world)
     await world.roles.set_lead(role_id, "bea", date(2026, 11, 8))
     await world.roles.set_cover(role_id, "ana", date(2026, 11, 30), date(2026, 11, 8))
-    await world.people.transfer("ana", [], recipients(_directory(role_id), {}, {}), by=ADMIN,
-                                audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    _, left = await world.people.transfer("ana", [], recipients(_directory(role_id), {}, {}),
+                                          by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    assert left == 0
     team = await world.roles.team(role_id, date(2026, 11, 9))
     assert (team.cover, team.acting_lead) == (None, "bea")
     assert await world.raw.fetchval("SELECT count(*) FROM audit_log WHERE action = 'set_team_cover'") == 1

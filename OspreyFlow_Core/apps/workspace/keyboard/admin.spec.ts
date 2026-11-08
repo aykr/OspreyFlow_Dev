@@ -641,7 +641,9 @@ test("a role's team is saved, its lead handed over and a cover named by keyboard
   await cover.focus();
   await page.keyboard.type("No cover");
   await expect(cover).toHaveValue("");
+  const ended = page.waitForRequest((r) => r.url().endsWith("/teams/r1/cover") && r.postDataJSON()?.cover === null);
   await press(page, "End cover for Intel");
+  expect((await ended).postDataJSON()).toEqual({ cover: null, until: null });
   await expect(page.getByText("Cover ended.")).toBeVisible();
   registerCovered(REGISTRY, "end-a-teams-cover-by-keyboard");
 });
