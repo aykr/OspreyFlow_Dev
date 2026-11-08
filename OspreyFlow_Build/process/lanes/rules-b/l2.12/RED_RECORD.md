@@ -33,3 +33,11 @@ closed ports (59991–59994), no lease.
   alert, says so, outlines …` FAILED.
 - Plant: the way back not focused on opening → the same case FAILED.
 - Restored: 108 passed (reports/).
+
+## 5. The Alert monitoring board (`reports/AlertMonitoringBoard.test.tsx`)
+- Plant in `EmbeddedDashboards.tsx`: the Glass's own board sent to Superset for a guest token (the
+  `drawsItself` guard removed) → `is the first board on the Dashboards, drawn by the Glass with no
+  Superset token asked for it` FAILED.
+- Plant in `AlertMonitoringBoard.tsx`: the rule filter ignored → `opens filtered to an alert's rule and
+  period, and every figure follows the filter` FAILED.
+- Restored: 4 passed.
