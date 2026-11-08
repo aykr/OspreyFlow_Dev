@@ -91,7 +91,7 @@ describe("the screening lists", () => {
     );
     render(<ScreeningLists api={API} datasetId="ds-a" />);
     const box = await screen.findByRole("checkbox", { name: "Subscribe this dataset to Client list" });
-    expect(screen.queryByRole("button", { name: "Refresh Client list now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refresh now: Client list" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Import a list" })).toBeNull();
     fireEvent.click(box);
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("This dataset now reads Client list."));
@@ -107,7 +107,7 @@ describe("the screening lists", () => {
       "POST /v1/studio/screening-lists/01LISTID/refresh": { list_id: "01LISTID", outcome: "unchanged", words: "Client list is unchanged at version 2" },
     });
     render(<ScreeningLists api={API} datasetId="ds-a" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Refresh Client list now" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh now: Client list" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Client list is unchanged at version 2"));
     const read = screen.getByRole("list", { name: "Lists this dataset reads" });
     expect(within(read).getByText("Client list, version 2 (deployment-wide, subscribed)")).toBeTruthy();

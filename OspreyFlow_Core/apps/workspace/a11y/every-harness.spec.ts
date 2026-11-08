@@ -134,6 +134,13 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-133 decision 6, stage (d): the Checks on load step (the default) and Verify's would-be alerts.
   "checks-on-load-harness.html": ["view=verify"],
+  // ADR-140 Amendment 13 (L1.6): Studio › Sources' screening lists as a reader and as whoever may load
+  // lists (a failed import in words), the import form with the blank template's column picks, the
+  // schedule form, the register wizard over a SQL connection, and a SQL source's page.
+  "sources-connectors-harness.html": [
+    "serve=1", "serve=1&manage=1", "view=import&template=blank", "view=schedule",
+    "view=wizard&serve=1", "view=source&serve=1",
+  ],
   // ADR-140 decision 1 (redesign phase 2): the Studio's Model, Sources and Runs places, a day's run
   // report with its revert command, and the held rows opened from it (Pipelines is the default).
   "ingest-studio-harness.html": [

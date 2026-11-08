@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,19 @@ def _settings(user: str = READER) -> SqlConnectionSettings:
 @pytest.fixture
 async def nomis() -> AsyncIterator[asyncpg.Connection]:
     conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await _setup(conn)
+        yield conn
+    finally:
+        await conn.execute(f"""
+            DROP SCHEMA IF EXISTS nomis_replica_fixture CASCADE;
+            DROP OWNED BY {READER}; DROP OWNED BY {WRITER};
+            DROP ROLE IF EXISTS {READER}; DROP ROLE IF EXISTS {WRITER};
+        """)  # fmt: skip
+        await conn.close()
+
+
+async def _setup(conn: asyncpg.Connection) -> None:
     await conn.execute(f"""
         DROP SCHEMA IF EXISTS nomis_replica_fixture CASCADE;
         DROP ROLE IF EXISTS {READER}; DROP ROLE IF EXISTS {WRITER};
@@ -73,21 +87,12 @@ async def nomis() -> AsyncIterator[asyncpg.Connection]:
         GRANT SELECT, INSERT ON nomis_replica_fixture.visit_bookings TO {WRITER};
     """)  # fmt: skip
     await _insert(conn, BOOKINGS)
-    try:
-        yield conn
-    finally:
-        await conn.execute(f"""
-            DROP SCHEMA IF EXISTS nomis_replica_fixture CASCADE;
-            DROP OWNED BY {READER}; DROP OWNED BY {WRITER};
-            DROP ROLE IF EXISTS {READER}; DROP ROLE IF EXISTS {WRITER};
-        """)  # fmt: skip
-        await conn.close()
 
 
 async def _insert(conn: asyncpg.Connection, rows: list[tuple[Any, ...]]) -> None:
     await conn.executemany(
-        "INSERT INTO nomis_replica_fixture.visit_bookings VALUES ($1, $2, $3, $4::timestamptz)",
-        rows,
+        "INSERT INTO nomis_replica_fixture.visit_bookings VALUES ($1, $2, $3, $4)",
+        [(*r[:3], datetime.fromisoformat(r[3])) for r in rows],
     )
 
 

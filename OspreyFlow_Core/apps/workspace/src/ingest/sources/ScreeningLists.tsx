@@ -175,13 +175,13 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
                         });
                       }}
                     />
-                    <span>{subscribed.has(l.id) ? "Subscribed" : "Not subscribed"}</span>
+                    <span>Subscribe</span>
                   </label>
                 </td>
                 {canManage && (
                   <td style={{ display: "flex", gap: "var(--sp-4)" }}>
                     <Button
-                      aria-label={`Refresh ${l.name} now`}
+                      aria-label={`Refresh now: ${l.name}`}
                       onClick={() => void act(async () => (await refreshDeploymentList(api, l.id)).words)}
                     >
                       Refresh now
@@ -237,13 +237,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 interface ImportListFormProps {
+  /** The template drawn first (the harness's states); the OFAC SDN one otherwise. */
+  initialTemplate?: string;
   onSubmit: (body: { name: string; template: ListTemplate; location: string; mapping?: BlankListMapping | null }) => void;
   onCancel: () => void;
 }
 
-export function ImportListForm({ onSubmit, onCancel }: ImportListFormProps) {
+export function ImportListForm({ initialTemplate, onSubmit, onCancel }: ImportListFormProps) {
   const [name, setName] = useState("");
-  const [template, setTemplate] = useState<ListTemplate>("ofac_sdn");
+  const [template, setTemplate] = useState<ListTemplate>(
+    TEMPLATES.find((t) => t.value === initialTemplate)?.value ?? "ofac_sdn",
+  );
   const [location, setLocation] = useState("");
   const [columns, setColumns] = useState<Record<string, string>>({});
   const [separator, setSeparator] = useState<"|" | ";" | ",">("|");
