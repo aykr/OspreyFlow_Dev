@@ -77,6 +77,7 @@ Phase 5 is **not** in this lane (ADR-143 C1).
 | --- | --- | --- | --- |
 | L1.1 | Phase 4's remainder: `make ci` green (the causes found at step 0) | S | Phase 4's exit tests green; `make ci` green |
 | L1.2 | Phase 6: the canvas as editor, the Map editor, guided mode | L | Phase 6's exit; GOV.UK axe green |
+| L1.2d | Found by L1.2c on main: `upsert_edges`' merge writes `g.E().has("id",…)` untyped, so a merge rewrites every link type holding that id. Type the merge's write, as L1.2c typed the restore; a conformance case with two types sharing an id, red first | S | Only the merged type changes |
 | L1.3 | Phase 7a: the staging catalogue's engine (Knowledge Adapters, golden files, staged Parquet, `source_refs`); it carries reference lists of kind `screening` (ADR-140 Amendment 9 decision 3), the engine only, no screen | L | Golden files per step; provenance survives a Join; a screening list round-trips through the catalogue |
 | L1.4 | Phase 7b: the drawers for each step | M | Phase 7's exit |
 | L1.5 | Phase 8: expert steps | L | Phase 8's exit |
