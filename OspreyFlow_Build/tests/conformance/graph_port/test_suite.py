@@ -3578,6 +3578,39 @@ async def test_supersede_node_names_each_cloned_link_and_its_successor_before_th
         assert states[other_link].superseded_by is None and not states[other_link].superseded
 
 
+async def test_supersede_node_clones_a_self_loop_once_onto_the_new_node_at_both_ends(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c review round 2). A self-loop on the corrected node (an account
+    paying itself) is one link: it is cloned once, from the new node to itself, reported once, and
+    its original names that live clone as `superseded_by`, so an alert citing it follows it to a
+    link a reader is given. Red with the in-links read after the out-links were cloned: the
+    self-loop was cloned twice and its clone of a clone, the original's last successor, was
+    reverted with the old node's links, a dead end the settle followed."""
+    async with factory.context() as adapter:
+        (person,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL", family_name="Self")], [])
+        _, (loop,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", person, person, classification="OFFICIAL")])
+        reported: list[tuple[str, str]] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append((old, new))
+
+        tx = await adapter.begin_transaction()
+        new_node = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Self corrected"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+
+        ((old, clone),) = reported
+        assert old == loop
+        state = (await adapter.stored_link_states([loop]))[loop]
+        assert state.superseded_by == clone
+        (live,) = await adapter.get_edges([clone], CLEARED)
+        assert (live.source, live.target) == (new_node, new_node)
+        assert not (await adapter.stored_link_states([clone]))[clone].reverted
+
+
 async def test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone(
     factory: GraphAdapterFactory,
 ) -> None:

@@ -1,0 +1,4 @@
+# red 3(b): the dataset-stamping graph without on_link_cloned= to the adapter — offline, closed ports, 2026-11-08T14:39:30Z, at 65b993d + working tree
+E       assert [None] == [<function te... 0x11a0d8c20>]
+E         
+E         At index 0 diff: None != <function test_the_conduits_graph_passes_each_clone_report_to_the_adapter.<locals>.report at 0x11a0d8c20>

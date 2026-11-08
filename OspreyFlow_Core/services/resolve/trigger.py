@@ -305,7 +305,7 @@ async def run_resolve_entity_type_job(
     scheme: HandlingScheme,
     valkey: Valkey,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
-    alerts: AlertStore | None = None,
+    alerts: AlertStore | None,
 ) -> dict[str, Any]:
     """`JobWorker`'s fixed dispatch shape is `(payload, *, graph, tx)` —
     `ontology`/`scheme`/`valkey` are bound at registration time

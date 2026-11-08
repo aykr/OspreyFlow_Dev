@@ -100,7 +100,7 @@ async def run_supersede_node_job(
     graph: GraphPort,
     tx: TxId,
     judgement_store: JudgementStore | None = None,
-    alerts: AlertStore | None = None,
+    alerts: AlertStore | None,
 ) -> dict[str, object]:
     """The background half a worker process calls — `services/api/worker.py`'s `JobWorker`, now
     that one exists (`06_DECISIONS.md` ADR-025). Separated from `submit_supersede_node` so that
@@ -111,7 +111,9 @@ async def run_supersede_node_job(
 
     `judgement_store` — the job path's own review-flag hook, the twin of
     `submit_supersede_node`'s. `None` by default, same reasoning. `alerts` as
-    `submit_supersede_node`'s: the worker commits `tx` after this returns."""
+    `submit_supersede_node`'s: the worker commits `tx` after this returns. Required, `None`
+    named explicitly where there is no store: a registration that forgot it would record nothing
+    and leave every alert citing a cloned link withheld, so it fails at its first job instead."""
     node_id = str(payload["node_id"])
     replacement = NodeWrite.model_validate(payload["replacement"])
     async with journal_outside_commit(alerts) as cloned:

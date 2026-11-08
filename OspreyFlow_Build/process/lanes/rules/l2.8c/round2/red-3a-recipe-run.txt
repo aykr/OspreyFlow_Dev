@@ -1,0 +1,3 @@
+# red 3(a): recipe_run without alerts= to the runner — offline, closed ports, 2026-11-08T14:39:28Z, at 65b993d + working tree
+E       KeyError: 'alerts'
+1 failed in 1.39s

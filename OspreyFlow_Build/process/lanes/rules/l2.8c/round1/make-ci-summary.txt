@@ -1,0 +1,11 @@
+# make -k ci offline at 3b3066f, closed ports, OSPREY_LANE unset, start 2026-11-08T13:55:39Z
+exit 2
+make[1]: *** [trivy-image-ingest] Error 1
+make[1]: *** [trivy-image-api] Error 1
+make[1]: *** [trivy-image-workspace] Error 1
+make[1]: *** [trivy-image-harness] Error 1
+make[1]: *** [trivy-image-ner] Error 1
+make[1]: *** [trivy-image-worker] Error 1
+make[1]: *** [trivy-image-report-sync] Error 1
+make: *** [core-check] Error 2
+end 14:00:32Z

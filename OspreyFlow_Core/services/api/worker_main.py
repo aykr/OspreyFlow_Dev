@@ -42,6 +42,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # the import is deferred at runtime — see `main()`'s own comment.
+    from .alerts import AlertStore
     from .worker import JobWorker
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ def register_all(
     scheme: Any,
     valkey: Any,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
-    alerts: Any = None,
+    alerts: AlertStore | None,
 ) -> None:
     """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
     Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,

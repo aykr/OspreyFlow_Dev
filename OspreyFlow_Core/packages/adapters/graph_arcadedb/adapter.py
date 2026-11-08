@@ -2195,26 +2195,34 @@ class GraphArcadeDBAdapter:
         old_lit = groovy_string_literal(old_node_id)
         now = now_utc()
 
+        # Both lists are read before anything is cloned: a clone of an out-link is itself a link
+        # of this node only if it is a self-loop, and an in-link read after the out-links were
+        # cloned would find such a clone, and the self-loop once more (L2.8c review round 2). A
+        # self-loop is an out-link and an in-link both: it is cloned once, from the new node to
+        # itself, and left out of the in-links.
         out_edges = await self._client.gremlin(
             f'g.V().has("id",{old_lit}).outE().has("reverted",false).elementMap()',
             session_id=tx,
         )
+        in_edges = await self._client.gremlin(
+            f'g.V().has("id",{old_lit}).inE().has("reverted",false).elementMap()',
+            session_id=tx,
+        )
         for edge_record in out_edges:
+            target = edge_record["target"]
             clone = await self._clone_edge_onto(
                 edge_record,
                 source=new_node_id,
-                target=edge_record["target"],
+                target=new_node_id if target == old_node_id else target,
                 created_by=created_by,
                 now=now,
                 tx=tx,
             )
             await self._name_clone(old_lit, edge_record, clone, tx, on_link_cloned)
 
-        in_edges = await self._client.gremlin(
-            f'g.V().has("id",{old_lit}).inE().has("reverted",false).elementMap()',
-            session_id=tx,
-        )
         for edge_record in in_edges:
+            if edge_record["source"] == old_node_id:
+                continue  # a self-loop, cloned with the out-links
             clone = await self._clone_edge_onto(
                 edge_record,
                 source=edge_record["source"],

@@ -28636,7 +28636,7 @@ spreading lanes over two accounts.
    in both themes; then a pass after each later merge that changes a screen.
 
 
-### ADR-109, Amendment 11 (8 November 2026) — every write that clones or replaces a link an alert can cite goes through the repoint journal, and the purge reaches connected canvases at once
+### ADR-109, Amendment 11 (8 November 2026) — every write that clones or replaces a link an alert can cite goes through the repoint journal, and the purge is published to connected canvases
 
 Status: accepted 8 November 2026, the orchestrator's settlement of the same day on the rules lane's
 three questions for L2.8c (Q1 to Q3, each on the recommended option, on the owner's review list in
@@ -28656,7 +28656,11 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
    `reverted`, and reports each `(old, new, old_type)` to an optional `on_link_cloned`, inside the
    transaction and before its commit (`GraphPort.LinkCloned`). The original is found from the
    corrected node by its own type and id, so another type holding the same id (ADR-110 Amendment
-   18) is never marked. Clones of clones follow the settle's existing path unchanged: the settle
+   18) is never marked. A self-loop on the corrected node is one link: both lists of the node's
+   links are read before anything is cloned, and the loop is cloned once, from the new node to
+   itself (before the L2.8c review's round 2 it was cloned twice, the second clone reverted with
+   the old node's links, so its original's last successor was a dead end). Clones of clones follow
+   the settle's existing path unchanged: the settle
    trusts the graph's `superseded_by`, never the record. Nothing a reader is answered changes: a
    reverted link was already out of every read, and the revert's count of corrected elements
    leaves out anything reverted (`load_revert.py`); with the marking, the graph-port suite and the
@@ -28675,8 +28679,11 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
      record is opened at the first pair, so a write replacing nothing leaves none; each pair is
      recorded before the worker's commit; its writer never settles it, since the commit is not its
      own; the next read of alerts settles it once the graph shows the commit. A writer that raises
-     closes its record, since its committer rolls back (the worker on any handler's exception; a
-     caller of `submit_supersede_node` must too). The deployed worker (`worker_main`) connects the
+     or is cancelled inside the journal closes its record and stops its keep-alive, since its
+     committer never commits (the worker rolls back on any handler's exception, and a cancelled
+     worker sends no commit; a caller of `submit_supersede_node` must roll back too); a failure
+     after the journal, before the commit, leaves the record to the stale threshold. `alerts` is a
+     required keyword on both jobs, so a registration that forgot it is refused at its first job. The deployed worker (`worker_main`) connects the
      alert store and binds it to both jobs, as the Conduit's own registration does; the pipeline
      runner is given the store by its run (`recipe_run`), rule gate or none.
    - **A record is kept live while its writer writes** (the review's item 3). Every writer's record,
@@ -28734,7 +28741,11 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
    pair: a pending record costs a graph read per recorded link (its first hop, and once stale the
    check that drops it reads every pair again), so a record holding many pairs (a correction of a
    node of high degree) costs a read in proportion until it is settled or dropped.
-8. **Not covered** (found building this; L2.8d, the orchestrator's settlement): an alert naming a corrected node
+8. **Not covered.** A node re-marked by a settle that holds no working set (a read's settle of an
+   enrich stage's or an outside-commit writer's record) leaves its old-marking copy on a connected
+   canvas until that socket's next resynchronisation (`purge_remarked_copies`), as Amendment 10
+   point 4 says of any read path; only the writers that hold a working set publish at once. And
+   (found building this; L2.8d, the orchestrator's settlement): an alert naming a corrected node
    among its `referent_node_ids` still names the superseded revision, which no read returns, so a
    correction of a node an alert names withholds that alert as a cited link's correction did before
    this amendment. The journal renames only an alert's own `Alert` node (`alert_nodes`); a
@@ -28753,7 +28764,15 @@ open past the stale limit keeping its record, for the job and the enrich stage (
 not kept live); a read stopping at the first busy lock pool (red going on: four waits); and the
 purge's published record projected for each socket's reader (red published without its record).
 The graph-port case `test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone`
-(red with the marking made outside the transaction). The same file: a settle refusing in words when no lock connection comes
+(red with the marking made outside the transaction). Round 2: the graph-port case
+`test_supersede_node_clones_a_self_loop_once_onto_the_new_node_at_both_ends` (red with the in-links
+read after the out-links were cloned); `test_a_cancelled_outside_commit_writer_stops_keeping_its_record_and_closes_it`
+(red leaving only on an `Exception`); `test_pipeline_enrich_journal.py`'s
+`test_a_recipe_run_hands_the_runner_its_alert_store` and
+`test_the_conduits_graph_passes_each_clone_report_to_the_adapter` (each red with the binding
+removed at its call site); `test_worker_registration.py`'s
+`test_a_supersede_job_registered_without_the_alert_store_is_refused_at_its_first_job` (red with a
+default again: the job ran). The same file: a settle refusing in words when no lock connection comes
 free (red with no timeout: the case's bound fired), a record's lock not shared with a one-key lock
 on the same text (red in the one-key space: skipped), a rename and a repoint of the same alerts not
 deadlocking (red with the rename outside the lock: `DeadlockDetectedError`), and a purge published
@@ -28764,5 +28783,5 @@ the alert store; red without), `test_worker_registration.py`'s
 `test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal` (red with either job's binding
 left out) and `test_alert_evidence_withheld.py`'s
 `test_a_read_given_a_store_without_the_journal_is_refused_not_answered` (red with the tolerance put
-back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/` and its
-`round1/`).
+back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/`, `round1/` and
+`round2/`).

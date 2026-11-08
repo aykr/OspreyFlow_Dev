@@ -1,0 +1,4 @@
+# red 3(c): the supersede job's alerts given a default again — offline, closed ports, 2026-11-08T14:39:32Z, at 65b993d + working tree
+E       pydantic_core._pydantic_core.ValidationError: 6 validation errors for NodeWrite
+E       id
+E         Field required [type=missing, input_value={}, input_type=dict]

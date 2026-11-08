@@ -551,3 +551,38 @@ async def test_a_read_stops_settling_at_the_first_busy_lock_pool(stores: dict[st
         for conn in held:
             await alerts._lock_pool.release(conn)
     assert waited < 1.25, f"the read waited {waited:.2f} s: once per record, not once"
+
+
+async def test_a_cancelled_outside_commit_writer_stops_keeping_its_record_and_closes_it(
+    stores: dict[str, Any],
+) -> None:
+    """The review's round 2, item 2. A writer whose transaction the worker commits is cancelled
+    after recording a pair (a worker shut down mid-job): its commit is never sent, so its record
+    is closed and its keep-alive stopped, rather than marked live for good and paid for by every
+    read. Red with the journal leaving only on an `Exception`: the cancellation skipped it, the
+    keep-alive went on beating and the record stayed."""
+    from services.api.alerts import journal_outside_commit
+
+    alerts = stores["alerts"]
+    alerts.keep_alive_every = timedelta(seconds=0.2)
+    seen: dict[str, Any] = {}
+    recorded = asyncio.Event()
+
+    async def writer() -> None:
+        async with journal_outside_commit(alerts) as journal:
+            assert journal is not None
+            await journal(f"edge-{new_id()}", f"edge-{new_id()}", "ASSOCIATE_OF")
+            seen["journal"] = journal
+            recorded.set()
+            await asyncio.sleep(BOUND)
+
+    task = asyncio.create_task(writer())
+    await asyncio.wait_for(recorded.wait(), BOUND)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    journal = seen["journal"]
+    await asyncio.sleep(0.5)  # a beat that would still be running has had its turn
+    assert journal._alive.done(), "the keep-alive outlived its writer"
+    async with alerts._pool.acquire() as conn:
+        left = await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", journal.record_id)
+    assert left == 0, "the cancelled writer's record was left"

@@ -1565,26 +1565,36 @@ class OutsideCommitJournal:
         if self._alive is not None:
             await self._store.stop_keeping_alive(self._alive)
         if failed and self.record_id is not None:
-            # The writer raised, so its committer rolls back (the worker on any handler's
-            # exception; a caller of `submit_supersede_node` must too): nothing it recorded lands.
-            await self._store._close_record(self.record_id)
+            # The writer raised or was cancelled, so its committer never commits (the worker rolls
+            # back on any handler's exception, and a cancelled worker sends no commit; a caller of
+            # `submit_supersede_node` must roll back too): nothing it recorded lands. A failure to
+            # close is logged, never raised in place of the writer's own: the record then waits
+            # for the stale threshold, its keep-alive stopped.
+            try:
+                await self._store._close_record(self.record_id)
+            except Exception:  # noqa: BLE001
+                _log.exception("repoint record %s left for the stale threshold", self.record_id)
 
 
 @asynccontextmanager
 async def journal_outside_commit(alerts: AlertStore | None) -> AsyncIterator[LinkCloned | None]:
     """`OutsideCommitJournal` over `alerts`, kept live while the block runs; `None` (nothing
     recorded) for a writer given no alert store, as `repointing_alerts` answers one. Leaving by
-    an exception closes the record: the transaction's committer rolls back on it."""
+    an exception or a cancellation closes the record: the transaction's committer never commits
+    it. A failure after the block (the caller's own work before its committer's commit) leaves the
+    record, its keep-alive stopped, to the stale threshold, which drops it as never committed."""
     if alerts is None:
         yield None
         return
     journal = OutsideCommitJournal(alerts)
+    left = False
     try:
         yield journal
-    except Exception:
-        await journal._left(failed=True)
-        raise
-    await journal._left(failed=False)
+        left = True
+    finally:
+        # `finally`, not `except Exception`: a cancellation (`BaseException`) must stop the
+        # keep-alive too, or a record whose write never commits is marked live for good.
+        await journal._left(failed=not left)
 
 
 async def supersede_journalled[T](
@@ -1643,11 +1653,11 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
         await alerts.purged(record_id)
 
 
-async def settle_repoints(store: object, graph: GraphPort) -> None:
+async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
     """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
     the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
     no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
-    await store.settle_pending(graph)  # type: ignore[attr-defined]
+    await store.settle_pending(graph)
 
 
 async def evidence_available(

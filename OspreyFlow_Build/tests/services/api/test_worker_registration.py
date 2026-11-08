@@ -40,7 +40,7 @@ async def test_the_deployed_worker_runs_a_resolution_job_with_the_layers(
     ontology, scheme, valkey = load_default_ontology(), load_uk_le_scheme(), object()
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(
-        worker, ontology=ontology, scheme=scheme, valkey=valkey, analyst_layers=_layers
+        worker, ontology=ontology, scheme=scheme, valkey=valkey, analyst_layers=_layers, alerts=None
     )
     handler = worker._handlers["resolve_entity_type"]  # noqa: SLF001
     result = await handler({"entity_type": "Person"}, graph=object(), tx="tx")
@@ -69,6 +69,7 @@ async def test_the_registration_check_fails_with_the_bindings_planted_out(
         scheme=load_uk_le_scheme(),
         valkey=valkey,
         analyst_layers=_layers,
+        alerts=None,
     )
     with pytest.raises(TypeError, match="analyst_layers"):
         await worker._handlers["resolve_entity_type"](  # noqa: SLF001
@@ -104,3 +105,18 @@ async def test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal(
     await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
     await worker._handlers["resolve_entity_type"]({"entity_type": "Person"}, graph=object(), tx="tx")  # noqa: SLF001
     assert seen == {"supersede_node": alerts, "resolve_entity_type": alerts}
+
+
+async def test_a_supersede_job_registered_without_the_alert_store_is_refused_at_its_first_job() -> None:
+    """The review's round 2, item 3(c): every registration of the supersede job (the Conduit's in
+    `app.py`, the worker's in `worker_main.register_all`) must bind the alerts' journal. `alerts`
+    is a required keyword, so one that forgot it is refused at its first job, naming it, rather
+    than recording nothing and leaving every alert citing a cloned link withheld. Red with
+    `alerts` given a default again: the job ran."""
+    from services.api.supersede import run_supersede_node_job
+
+    valkey = object()
+    worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+    worker.register("supersede_node", run_supersede_node_job)
+    with pytest.raises(TypeError, match="alerts"):
+        await worker._handlers["supersede_node"]({"node_id": "n", "replacement": {}}, graph=object(), tx="tx")  # noqa: SLF001
