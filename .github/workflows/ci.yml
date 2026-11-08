@@ -9,6 +9,12 @@ defaults:
   run:
     working-directory: OspreyFlow_Core
 
+# Every uv job builds on Python 3.12, the version the project is built and run on. With nothing pinned, uv
+# took the runner's newest (3.14), where altair fails at import (TypedDict's closed=), and test,
+# conformance, conformance-model and route-coverage-check stopped at collection (8 November 2026).
+env:
+  UV_PYTHON: "3.12"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
