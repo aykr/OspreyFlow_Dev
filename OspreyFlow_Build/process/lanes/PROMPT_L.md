@@ -31,6 +31,10 @@ ending "Hash: recorded at merge." Commit in small Conventional Commits naming th
 OspreyFlow_Core/osprey.yaml or OspreyFlow_Core/data/; never merge to main; never push; no
 Co-Authored-By lines.
 
+Take a stack only as `stack_lease.sh acquire <lane> "<purpose>" && <the live run>`: never chain with
+`;`, and never touch a test stack's containers, databases or networks with docker or psql unless the
+lease is yours (8 November 2026: a refused acquire chained with `;` ran on against another lane's stack).
+
 Every question for the owner, every request (a reservation, a shared commit, a ratification) and your
 ready-to-merge go to the orchestrator's session (ospreyflow-7e) by cross-session message, never only in
 this window: the owner is often away, and the orchestrator answers or puts the question to the owner and

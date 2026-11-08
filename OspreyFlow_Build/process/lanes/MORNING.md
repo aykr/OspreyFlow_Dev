@@ -192,6 +192,11 @@ New ones are added at the bottom as they happen.
     entered again), and a failed rotation deleted the old key while reporting it set. Case's L3.2 held for
     a rule 3 merge path into another case's layer, and for live suites not run on its final tree.
 
+44. **Rule 14 slip, platform on stack a (about 15:5x UTC), reported and undone by the lane within minutes:**
+    a refused acquire chained with `;` ran on, creating a probe database and network on stack a's Postgres
+    while rules held it; nothing of the owner's or the tests' own databases was touched. Rules re-checks
+    its run for that minute. Prompt L now says `acquire … &&` only, and no docker or psql on a stack not held.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
