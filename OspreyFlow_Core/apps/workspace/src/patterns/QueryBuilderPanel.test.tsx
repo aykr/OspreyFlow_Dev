@@ -517,4 +517,13 @@ describe("QueryBuilderPanel ask to search's engine choice (ADR-135)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(await screen.findByText("Gemini has no extraction model on this deployment.")).toBeTruthy();
   });
+
+  it("shows an engine's limit reached in the Conduit's words", async () => {
+    const words = "Gemini has used its token budget for today; it returns at midnight UTC.";
+    mountEngines(OFFERED, { ok: false, status: 429, body: { error: "model_limit_reached", detail: words } });
+    await screen.findByRole("combobox", { name: "Model engine" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText(words)).toBeTruthy();
+  });
 });
