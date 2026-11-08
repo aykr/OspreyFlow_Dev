@@ -132,9 +132,10 @@ async def test_a_persons_level_is_the_highest_they_hold_in_their_name_or_a_teams
 # --- the People rows --------------------------------------------------------------------------------
 
 
-def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False) -> PersonAccount:
+def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False,
+            unit: str = UNIT) -> PersonAccount:  # fmt: skip
     return PersonAccount(id=pid, username=pid, name=pid, enabled=enabled, roles=roles,
-                         system_account=system)  # fmt: skip
+                         system_account=system, org_unit=unit)  # fmt: skip
 
 
 async def test_the_rows_name_levels_through_a_team_and_cases_with_no_author(
@@ -262,7 +263,7 @@ async def test_a_refused_transfer_changes_nothing(world: SimpleNamespace) -> Non
     with pytest.raises(DisableRefused) as untransferred:
         await world.people.transfer("ana", transfers[:-1], who, by=ADMIN, audit=world.audit,
                                     admin_unit=UNIT)  # fmt: skip
-    assert untransferred.value.error in {"untransferred", "recipient_refused"}
+    assert untransferred.value.error == "untransferred"
     assert await world.raw.fetchval("SELECT lead FROM teams WHERE role_id = $1", role_id) == "ana"
 
 
@@ -284,3 +285,99 @@ async def test_the_cover_ends_on_its_day_and_the_lead_acts_again(world: SimpleNa
     assert (await world.roles.team(role_id, date(2026, 11, 15))).acting_lead == "ana"
     _, handed = await world.roles.set_lead(role_id, "bea", date(2026, 11, 9))
     assert (handed.lead, handed.cover) == ("bea", None), "a cover who becomes lead stops covering"
+
+
+# --- the lane review's findings ----------------------------------------------------------------------
+
+
+async def test_a_case_or_rule_of_another_unit_refuses_the_plan_and_names_nothing(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 3: another unit's case is counted in SQL, never read; a plan is whole or refused."""
+    elsewhere = await world.cases.create(Principal(id="ana", clearance="SECRET", org_unit="unit-2"),
+                                         name="Elsewhere")  # fmt: skip
+    with pytest.raises(DisableRefused) as raised:
+        await world.people.plan("ana", admin_unit=UNIT)
+    assert raised.value.error == "other_unit" and "Elsewhere" not in raised.value.words
+    assert elsewhere.id not in raised.value.words
+    # The read itself carries the unit (rule 3), not only the refusal after it: the listing holds
+    # nothing of the other unit's case even before the plan is refused.
+    from services.api.admin_people import _plan_items
+
+    async with world.people._pool.acquire() as conn:
+        listed = await _plan_items(conn, "ana", UNIT)
+    assert listed.elsewhere == 1 and elsewhere.id not in {i.id for i in listed.items}
+    with pytest.raises(DisableRefused):
+        await world.people.transfer("ana", [], recipients([], {}, {}), by=ADMIN, audit=world.audit,
+                                    admin_unit=UNIT)  # fmt: skip
+
+
+async def test_a_rule_goes_only_to_an_author_of_its_case(world: SimpleNamespace) -> None:
+    role_id = await _team(world)
+    ids = await _owns_one_of_each(world, role_id)
+    plan = await world.people.plan("ana", admin_unit=UNIT)
+    # The case to cas, who is not bea; the rule of that case to bea, who is no Author of it.
+    directory = [*_directory(role_id), _person("cas", ["analyst"])]
+    who = recipients(directory, {}, {role_id: frozenset({"ana", "bea"})})
+    transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="cas" if i.kind == "case_author" else "bea")
+                 for i in plan.items]  # fmt: skip
+    with pytest.raises(DisableRefused) as raised:
+        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT)
+    assert raised.value.error == "recipient_refused" and "not an Author of its case" in raised.value.words
+    # With bea an Author of the case, ana is no longer its only Author: the plan drops the case,
+    # and the rule may go to bea.
+    await world.cases.set_grant(ids["case"], "bea", AccessLevel.AUTHOR, by=_who("ana", []))
+    again = await world.people.plan("ana", admin_unit=UNIT)
+    assert "case_author" not in {i.kind for i in again.items}
+    moved = await world.people.transfer(
+        "ana", [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in again.items], who,
+        by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    assert len(moved) == len(again.items)
+
+
+async def test_a_watch_never_goes_to_someone_already_watching_its_pattern(
+    world: SimpleNamespace,
+) -> None:
+    await world.raw.execute("INSERT INTO monitors (id, pattern_id, owner_id, created_at) VALUES "
+                            "('m1', 'p1', 'ana', $1), ('m2', 'p1', 'bea', $1)", T0)  # fmt: skip
+    who = recipients(_directory("r0"), {}, {})
+    with pytest.raises(DisableRefused) as raised:
+        await world.people.transfer("ana", [OwnedTransfer(kind="monitor", id="m1", to="bea")], who,
+                                    by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    assert "already watches" in raised.value.words
+    assert await world.raw.fetchval("SELECT owner_id FROM monitors WHERE id = 'm1'") == "ana"
+
+
+async def test_the_persons_covers_end_with_the_disable_and_are_audited(world: SimpleNamespace) -> None:
+    role_id = await _team(world)
+    await world.roles.set_lead(role_id, "bea", date(2026, 11, 8))
+    await world.roles.set_cover(role_id, "ana", date(2026, 11, 30), date(2026, 11, 8))
+    await world.people.transfer("ana", [], recipients(_directory(role_id), {}, {}), by=ADMIN,
+                                audit=world.audit, admin_unit=UNIT)  # fmt: skip
+    team = await world.roles.team(role_id, date(2026, 11, 9))
+    assert (team.cover, team.acting_lead) == (None, "bea")
+    assert await world.raw.fetchval("SELECT count(*) FROM audit_log WHERE action = 'set_team_cover'") == 1
+
+
+async def test_a_write_that_finds_its_item_changed_rolls_every_transfer_back(
+    world: SimpleNamespace,
+) -> None:
+    """`changed_meanwhile`: an owner column already moved by the time its UPDATE runs (a concurrent
+    transfer) leaves every earlier write of the same transaction undone."""
+    role_id = await _team(world)
+    await _owns_one_of_each(world, role_id)
+    plan = await world.people.plan("ana", admin_unit=UNIT)
+    who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
+    transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in plan.items]
+    # The list schedule is the last item written; another session moves it first, after the plan
+    # is read inside the transfer's own transaction (a trigger stands in for that session).
+    await world.raw.execute(
+        "CREATE FUNCTION steal() RETURNS trigger AS $$ BEGIN "
+        "UPDATE screening_lists SET schedule_owner = 'zed' WHERE list_name = 'ofsi'; RETURN NEW; END "
+        "$$ LANGUAGE plpgsql; CREATE TRIGGER steal AFTER UPDATE ON studio_recipes "
+        "FOR EACH ROW EXECUTE FUNCTION steal()")  # fmt: skip
+    with pytest.raises(DisableRefused) as raised:
+        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT)
+    assert raised.value.error == "changed_meanwhile"
+    assert await world.raw.fetchval("SELECT owner_id FROM hotlists WHERE id = 'h1'") == "ana"
+    assert await world.raw.fetchval("SELECT count(*) FROM audit_log") == 0

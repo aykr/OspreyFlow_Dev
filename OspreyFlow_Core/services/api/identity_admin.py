@@ -68,6 +68,10 @@ CONDUIT_ACCOUNTS = frozenset({"osprey-verify-probe", "osprey-verify-revoked"})
 ARRIVAL_EVENT = "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR"
 
 
+#: The identity provider's page of people; `list_people` reads every page.
+_PAGE = 500
+
+
 class IdentityAdminRefused(Exception):
     """The identity provider refused or could not be reached; said in words, never swallowed."""
 
@@ -289,10 +293,19 @@ class IdentityAdmin:
     # --- people -------------------------------------------------------------------------------
 
     async def list_people(self) -> list[PersonAccount]:
-        response = await self._call(
-            "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
-        )
-        users = response.json()
+        # Paged to the end, never cut at a page (rule 2): the lock-out and a team's members read
+        # this list whole.
+        users: list[dict[str, Any]] = []
+        while True:
+            response = await self._call(
+                "GET",
+                "/users",
+                params={"first": len(users), "max": _PAGE, "briefRepresentation": "false"},
+            )
+            page = response.json()
+            users += page
+            if len(page) < _PAGE:
+                break
         linked = await self._linked_ids()
         people = [
             _person(u).model_copy(update={"organisation_linked": str(u.get("id")) in linked})

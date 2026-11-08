@@ -119,6 +119,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=manage_people&serve=people&open=Roles",
     "rights=manage_people&serve=people&open=Roles&show=role-form",
     "rights=manage_people&serve=people&open=Roles&show=team",
+    "rights=manage_people&serve=people&open=Roles&show=versions",
+    "rights=manage_people&serve=people&show=refused",
   ],
 };
 

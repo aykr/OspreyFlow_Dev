@@ -35,7 +35,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Literal, cast
 
 import asyncpg
@@ -54,6 +53,7 @@ from schemas.domain import Principal
 from schemas.rights import CUSTOM_ROLE_PREFIX, Right, rights_for
 
 from .audit import AuditWriter
+from .investigations import AccessLevel, InvestigationStore
 
 #: L2.5b's seam: the kinds a person owns that are read through the case lane's ownership route
 #: (L3.8), not yet on main. Said in the plan, so an administrator is never told the list is whole.
@@ -93,38 +93,56 @@ async def l38_owned_items(conn: asyncpg.Connection, person: str) -> list[OwnedIt
 
 
 _AUTHOR_ONLY_SQL = """
-SELECT i.id, i.name, i.owning_unit, h.dataset_id, d.name AS dataset_name
+SELECT i.id, i.name, h.dataset_id, d.name AS dataset_name
 FROM investigation_grants g
 JOIN investigations i ON i.id = g.investigation_id AND i.removed_at IS NULL
 LEFT JOIN home_cases h ON h.investigation_id = i.id
 LEFT JOIN datasets d ON d.id = h.dataset_id
-WHERE g.account_id = $1 AND g.level = 'author'
+WHERE g.account_id = $1 AND g.level = 'author' AND i.owning_unit = $2
   AND NOT EXISTS (SELECT 1 FROM investigation_grants o
                   WHERE o.investigation_id = i.id AND o.level = 'author' AND o.account_id <> $1)
 ORDER BY i.id
 """
 
+#: How many of the same kinds the person owns in another unit: counted, never read, so a plan is
+#: whole or refused (a case of another unit is that unit's administrator's to transfer).
+_ELSEWHERE_SQL = """
+SELECT
+  (SELECT count(*) FROM investigation_grants g
+     JOIN investigations i ON i.id = g.investigation_id AND i.removed_at IS NULL
+    WHERE g.account_id = $1 AND g.level = 'author' AND i.owning_unit <> $2
+      AND NOT EXISTS (SELECT 1 FROM investigation_grants o WHERE o.investigation_id = i.id
+                      AND o.level = 'author' AND o.account_id <> $1))
++ (SELECT count(*) FROM typology_rules r JOIN investigations i ON i.id = r.investigation_id
+    WHERE r.owner_id = $1 AND r.status = 'active' AND i.owning_unit <> $2)
++ (SELECT count(DISTINCT recipe_id) FROM studio_recipes
+    WHERE schedule_owner = $1 AND owning_unit <> $2)
+"""
 
-async def _plan_items(
-    conn: asyncpg.Connection, person: str, admin_unit: str | None
-) -> list[OwnedItem]:
+
+@dataclass(frozen=True)
+class _Plan:
+    items: list[OwnedItem]
+    #: The case a rule's or a pipeline schedule's runs are judged against, by item.
+    case_of: dict[tuple[str, str], str]
+    #: Items of the same kinds in another unit, counted only.
+    elsewhere: int
+
+
+async def _plan_items(conn: asyncpg.Connection, person: str, admin_unit: str | None) -> _Plan:
+    """Everything the person owns in the administrator's unit, each read with the unit in its own
+    statement (rule 3); hotlists, watches, saved patterns, team leads and list schedules have no
+    unit and are the person's wherever they are. Never a hotlist's identifier, a saved pattern's
+    or a rule's analyst-written name (rule 7): their kind, and the case or date that places
+    them."""
     items: list[OwnedItem] = []
-    for row in await conn.fetch(_AUTHOR_ONLY_SQL, person):
-        # A case of another unit is named only by its id: the administrator may not read it.
-        ours = row["owning_unit"] == admin_unit
+    case_of: dict[tuple[str, str], str] = {}
+    for row in await conn.fetch(_AUTHOR_ONLY_SQL, person, admin_unit):
         if row["dataset_id"] is not None:
-            label = (
-                f"Author of the home case of the dataset {row['dataset_name']}"
-                if ours
-                else ("Author of another unit's dataset home case")
-            )
+            label = f"Author of the home case of the dataset {row['dataset_name']}"
             items.append(OwnedItem(kind="home_case_author", id=row["id"], label=label))
         else:
-            label = (
-                f"Only Author of the case {row['name'] or row['id']}"
-                if ours
-                else ("Only Author of a case of another unit")
-            )
+            label = f"Only Author of the case {row['name'] or row['id']}"
             items.append(OwnedItem(kind="case_author", id=row["id"], label=label))
     for row in await conn.fetch(
         "SELECT role_id, display_name FROM teams WHERE lead = $1 ORDER BY role_id", person
@@ -139,7 +157,6 @@ async def _plan_items(
         "ORDER BY id",
         person,
     ):
-        # Never the identifier the hotlist watches for (rule 7): its review date only.
         items.append(
             OwnedItem(
                 kind="hotlist", id=row["id"], label=f"A hotlist, for review by {row['review_date']}"
@@ -150,31 +167,34 @@ async def _plan_items(
     ):
         items.append(OwnedItem(kind="monitor", id=row["id"], label="A watch on a saved pattern"))
     for row in await conn.fetch(
-        "SELECT pattern_id, max(name) AS name FROM saved_patterns WHERE owner_id = $1 "
+        "SELECT pattern_id, max(version) AS versions FROM saved_patterns WHERE owner_id = $1 "
         "GROUP BY pattern_id ORDER BY pattern_id",
         person,
     ):
         items.append(
             OwnedItem(
-                kind="saved_pattern", id=row["pattern_id"], label=f"The saved pattern {row['name']}"
+                kind="saved_pattern",
+                id=row["pattern_id"],
+                label=f"A saved pattern ({row['versions']} versions)",
             )
         )
     for row in await conn.fetch(
-        "SELECT r.id, r.name, i.owning_unit FROM typology_rules r "
-        "LEFT JOIN investigations i ON i.id = r.investigation_id "
-        "WHERE r.owner_id = $1 AND r.status = 'active' ORDER BY r.id",
+        "SELECT r.id, r.investigation_id, i.name AS case_name FROM typology_rules r "
+        "JOIN investigations i ON i.id = r.investigation_id "
+        "WHERE r.owner_id = $1 AND r.status = 'active' AND i.owning_unit = $2 ORDER BY r.id",
         person,
+        admin_unit,
     ):
-        label = (
-            f"The rule {row['name']}, whose runs act as them"
-            if row["owning_unit"] == admin_unit
-            else "A rule of another unit's case, whose runs act as them"
-        )
+        case = row["case_name"] or row["investigation_id"]
+        label = f"A rule of the case {case}, whose runs act as them"
         items.append(OwnedItem(kind="typology_rule", id=row["id"], label=label))
+        case_of[("typology_rule", row["id"])] = row["investigation_id"]
     for row in await conn.fetch(
-        "SELECT recipe_id, max(label) AS label FROM studio_recipes WHERE schedule_owner = $1 "
+        "SELECT recipe_id, max(label) AS label, max(schedule_case) AS schedule_case "
+        "FROM studio_recipes WHERE schedule_owner = $1 AND owning_unit = $2 "
         "GROUP BY recipe_id ORDER BY recipe_id",
         person,
+        admin_unit,
     ):
         items.append(
             OwnedItem(
@@ -183,6 +203,8 @@ async def _plan_items(
                 label=f"The schedule of the pipeline {row['label']}, which runs as them",
             )
         )
+        if row["schedule_case"]:
+            case_of[("pipeline_schedule", row["recipe_id"])] = row["schedule_case"]
     for row in await conn.fetch(
         "SELECT list_name FROM screening_lists WHERE schedule_owner = $1 ORDER BY list_name", person
     ):
@@ -194,10 +216,11 @@ async def _plan_items(
             )
         )
     items.extend(await l38_owned_items(conn, person))
-    return items
+    elsewhere = int(await conn.fetchval(_ELSEWHERE_SQL, person, admin_unit) or 0)
+    return _Plan(items=items, case_of=case_of, elsewhere=elsewhere)
 
 
-_RANK = {"viewer": 1, "editor": 2, "author": 3}
+_RANK = {level.value: level.rank for level in AccessLevel}
 
 
 def people_rows(
@@ -256,6 +279,78 @@ def people_rows(
     return AdminPeopleRows(rows=rows, without_author=without)
 
 
+def _whole(plan: _Plan) -> None:
+    if plan.elsewhere:
+        raise DisableRefused(
+            "other_unit",
+            f"they answer for {plan.elsewhere} cases, rules or pipeline schedules of another unit: "
+            "that unit's administrator transfers those first",
+        )
+
+
+async def _case_levels_hold(
+    conn: asyncpg.Connection,
+    plan: _Plan,
+    chosen: Mapping[tuple[str, str], str],
+    who: Recipients,
+) -> None:
+    """A rule's or a pipeline schedule's runs are judged against its case (`rule_schedule.py`'s
+    Author or Editor; the scheduler's case): its recipient is an Author of that case already, in
+    their own name or through a team they are in now, or is made its Author in this same
+    transfer."""
+    made_author = {
+        (item_id, to)
+        for (kind, item_id), to in chosen.items()
+        if kind in ("case_author", "home_case_author")
+    }
+    for key, case_id in plan.case_of.items():
+        to = chosen[key]
+        if (case_id, to) in made_author:
+            continue
+        person = who.people.get(to)
+        teams = [
+            f"team:{r[len(CUSTOM_ROLE_PREFIX) :]}"
+            for r in (person.roles if person else [])
+            if r.startswith(CUSTOM_ROLE_PREFIX)
+        ]
+        held = await conn.fetchval(
+            "SELECT 1 FROM investigation_grants WHERE investigation_id = $1 "
+            "AND account_id = ANY($2::text[]) AND level = 'author'",
+            case_id,
+            [to, *teams],
+        )
+        if not held:
+            item = next(i for i in plan.items if _key(i.kind, i.id) == key)
+            raise DisableRefused(
+                "recipient_refused",
+                f"{item.label}: {to} is not an Author of its case, so its runs would be refused: "
+                "make them its Author first, or in this same transfer",
+                [item],
+            )
+
+
+async def _watch_clash(
+    conn: asyncpg.Connection, items: Sequence[OwnedItem], chosen: Mapping[tuple[str, str], str]
+) -> None:
+    """A person watches a saved pattern once (`monitors`' own key): a watch is never given to
+    someone already watching the same pattern."""
+    for item in items:
+        if item.kind != "monitor":
+            continue
+        to = chosen[_key(item.kind, item.id)]
+        if await conn.fetchval(
+            "SELECT 1 FROM monitors m JOIN monitors w ON w.pattern_id = m.pattern_id "
+            "WHERE m.id = $1 AND w.owner_id = $2",
+            item.id,
+            to,
+        ):
+            raise DisableRefused(
+                "recipient_refused",
+                f"{item.label}: {to} already watches the same pattern; choose someone else",
+                [item],
+            )
+
+
 def _key(kind: str, item_id: str) -> tuple[str, str]:
     return (kind, item_id)
 
@@ -270,7 +365,11 @@ class Recipients:
 
 
 def check_transfers(
-    person: str, items: Sequence[OwnedItem], transfers: Sequence[OwnedTransfer], who: Recipients
+    person: str,
+    items: Sequence[OwnedItem],
+    transfers: Sequence[OwnedTransfer],
+    who: Recipients,
+    unit: str | None = None,
 ) -> dict[tuple[str, str], str]:
     """Every item given a recipient who may take it, or `DisableRefused` in words; nothing is
     written."""
@@ -303,6 +402,8 @@ def check_transfers(
             why = f"{to} is a service account, which owns nothing"
         elif not account.enabled:
             why = f"{to} is disabled"
+        elif item.kind in ("case_author", "home_case_author") and account.org_unit != unit:
+            why = f"{to} is of another unit, and a case's level is held only within its unit"
         elif item.kind == "team_lead" and to not in who.team_members.get(item.id, frozenset()):
             why = f"{to} is not a member of the team"
         elif item.kind in NEEDS and NEEDS[item.kind] not in who.rights.get(to, frozenset()):
@@ -370,9 +471,12 @@ class AdminPeopleStore:
         return people_rows(people, grants, cases, teams)
 
     async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
+        """The plan, or `DisableRefused` (`other_unit`) when the person owns cases, rules or
+        pipeline schedules of another unit: a plan is whole or refused, never partly listed."""
         async with self._pool.acquire() as conn:
-            items = await _plan_items(conn, person, admin_unit)
-        return DisablePlan(person=person, items=items, not_yet_listed=list(L38_OWNED_KINDS))
+            plan = await _plan_items(conn, person, admin_unit)
+        _whole(plan)
+        return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
 
     async def transfer(
         self,
@@ -386,11 +490,14 @@ class AdminPeopleStore:
     ) -> list[tuple[OwnedItem, str]]:
         """Every item to its recipient, in one transaction with an audit row for each; the plan is
         read again inside it, so an item gained since the administrator looked is refused too."""
-        now = datetime.now(UTC)
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("LOCK TABLE investigation_grants IN SHARE ROW EXCLUSIVE MODE")
-            items = await _plan_items(conn, person, admin_unit)
-            chosen = check_transfers(person, items, transfers, who)
+            plan = await _plan_items(conn, person, admin_unit)
+            _whole(plan)
+            items = plan.items
+            chosen = check_transfers(person, items, transfers, who, admin_unit)
+            await _case_levels_hold(conn, plan, chosen, who)
+            await _watch_clash(conn, items, chosen)
             done: list[tuple[OwnedItem, str]] = []
             for item in items:
                 to = chosen[_key(item.kind, item.id)]
@@ -402,14 +509,8 @@ class AdminPeopleStore:
                         item.id,
                         to,
                     )
-                    await conn.execute(
-                        "INSERT INTO investigation_access_history "
-                        "(investigation_id, changed_at, changed_by, action, subject, level) "
-                        "VALUES ($1, $2, $3, 'grant', $4, 'author')",
-                        item.id,
-                        now,
-                        by.id,
-                        to,
+                    await InvestigationStore._record(
+                        conn, item.id, by.id, "grant", to, AccessLevel.AUTHOR
                     )
                 else:
                     changed = await conn.execute(_TRANSFER_SQL[item.kind], item.id, to, person)
@@ -428,6 +529,24 @@ class AdminPeopleStore:
                     conn=conn,
                 )
                 done.append((item, to))
+            # A cover is no ownership: the person's covers end, each audited, and the lead acts.
+            for row in await conn.fetch(
+                "UPDATE teams SET cover = NULL, cover_until = NULL WHERE cover = $1 "
+                "RETURNING role_id",
+                person,
+            ):
+                await audit.record(
+                    principal=by,
+                    action="set_team_cover",
+                    result_cardinality=1,
+                    resolved_query={
+                        "role_id": row["role_id"],
+                        "before": [person],
+                        "after": [None],
+                        "why": "the cover was disabled",
+                    },
+                    conn=conn,
+                )
         return done
 
 

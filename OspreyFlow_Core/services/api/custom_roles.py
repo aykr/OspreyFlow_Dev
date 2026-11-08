@@ -116,7 +116,9 @@ def parse_rights(names: Sequence[str]) -> list[Right]:
         raise RoleRefused(
             "unknown_right", f"not a right of this deployment: {', '.join(unknown)}", rights=unknown
         )
-    return sorted({_RIGHT_VALUES[n] for n in names}, key=lambda r: r.value)
+    # Only the known names are read: the refusal above is what stops an unknown one, never a
+    # lookup failing after it (rule 15).
+    return sorted({_RIGHT_VALUES[n] for n in names if n in _RIGHT_VALUES}, key=lambda r: r.value)
 
 
 def role_refusal(
@@ -429,12 +431,6 @@ class CustomRoleStore:
             )
         assert after is not None
         return _team(before, today), _team(after, today)
-
-    async def teams_led_by(self, account: str) -> list[Team]:
-        today = datetime.now(UTC).date()
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM teams WHERE lead = $1 ORDER BY role_id", account)
-        return [_team(r, today) for r in rows]
 
 
 __all__ = [

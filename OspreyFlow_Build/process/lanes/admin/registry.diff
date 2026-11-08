@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 9174f05..ed64d61 100644
+index 9174f05..be7049b 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -787,6 +787,19 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+@@ -787,6 +787,20 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
    // ADR-145 decision 5: Admin's sections.
    "move-between-admin-sections-by-keyboard",
    "open-a-coming-admin-section-by-keyboard",
@@ -19,6 +19,7 @@ index 9174f05..ed64d61 100644
 +  "make-a-role-a-team-by-keyboard",
 +  "hand-over-a-teams-lead-by-keyboard",
 +  "name-a-teams-cover-by-keyboard",
++  "end-a-teams-cover-by-keyboard",
  ] as const);
  
  // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

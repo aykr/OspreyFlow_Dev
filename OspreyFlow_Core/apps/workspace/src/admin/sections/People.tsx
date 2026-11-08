@@ -282,7 +282,13 @@ function DisablePanel({
         </div>
       )}
       {!plan ? (
-        <p className="label">Reading what they own…</p>
+        problem ? (
+          <Button aria-label={`Cancel disabling ${who}`} onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <p className="label">Reading what they own…</p>
+        )
       ) : (
         <>
           <p style={{ margin: 0 }}>

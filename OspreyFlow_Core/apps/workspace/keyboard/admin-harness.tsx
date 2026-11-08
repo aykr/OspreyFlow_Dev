@@ -95,9 +95,17 @@ if (serving === "people") {
               { kind: "team_lead", id: "r1", label: "Lead of the team Intel" },
               { kind: "typology_rule", id: "t1", label: "The rule Structuring, whose runs act as them" }] },
     "/v1/handling-scheme": { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {} } },
+    "/v1/admin/roles/r1/versions": [
+      { version: 1, name: "Intel desk", rights: ["investigate"], changed_by: "adm-1", changed_at: "2026-11-07T09:00:00Z" },
+      { version: 2, name: "Intel desk", rights: ["investigate", "read_reports"], changed_by: "adm-1", changed_at: "2026-11-08T09:00:00Z" },
+    ],
   };  // prettier-ignore
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;
+    // `show=refused`: the plan refused in words, as for a person who owns another unit's case.
+    if (show === "refused" && path === "/v1/admin/people/u1/disable-plan")
+      return new Response(JSON.stringify({ detail: { error: "other_unit", message:
+        "they answer for 1 cases, rules or pipeline schedules of another unit: that unit's administrator transfers those first" } }), { status: 409 });  // prettier-ignore
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
   };
 }
@@ -139,7 +147,8 @@ if (serving === "datasets" && show) {
   if (show === "dry-run") await pressWhenDrawn("Merge Op Heron into the dataset (dry run)");
 }
 if (serving === "people" && show) {
-  if (show === "disable") await pressWhenDrawn("Disable ana");
+  if (show === "disable" || show === "refused") await pressWhenDrawn("Disable ana");
+  if (show === "versions") await pressWhenDrawn("Versions of Intel desk");
   if (show === "role-form") await pressWhenDrawn("Copy Analyst into a new role");
   if (show === "team") await pressWhenDrawn("Team for Intel desk");
 }

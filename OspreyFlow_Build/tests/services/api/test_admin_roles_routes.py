@@ -54,7 +54,7 @@ TOKENS: dict[str, Principal] = {}
 
 def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False) -> None:
     PEOPLE[pid] = PersonAccount(id=pid, username=pid, name=f"Name {pid}", enabled=enabled,
-                                roles=list(roles), system_account=system)  # fmt: skip
+                                roles=list(roles), system_account=system, org_unit="unit-1")  # fmt: skip
     TOKENS[pid] = Principal(id=pid, clearance="SECRET", org_unit="unit-1", roles=list(roles))
 
 
@@ -68,6 +68,7 @@ class _Directory:
 
     def __init__(self) -> None:
         self.disabled: list[str] = []
+        self.refuse = False
 
     async def list_people(self) -> list[PersonAccount]:
         return [p.model_copy() for p in PEOPLE.values()]
@@ -79,7 +80,14 @@ class _Directory:
     async def list_dashboards(self) -> list[Any]:
         return [SimpleNamespace(account_id="sa-board")]
 
+    async def remove_person(self, user_id: str) -> PersonAccount:
+        return PEOPLE.pop(user_id)
+
     async def set_enabled(self, user_id: str, enabled: bool) -> PersonAccount:
+        if self.refuse:
+            from services.api.identity_admin import IdentityAdminRefused
+
+            raise IdentityAdminRefused("the identity provider did not answer")
         self.disabled.append(user_id)
         PEOPLE[user_id] = PEOPLE[user_id].model_copy(update={"enabled": enabled})
         return PEOPLE[user_id]
@@ -132,8 +140,12 @@ class _Roles:
         return self.versions_of.get(role_id, [])
 
     async def make_team(self, role_id: str, team: TeamInput, today: date) -> Team:
+        """As the real store's upsert: a re-save keeps the lead and the cover."""
+        kept = self.teams_of.get(role_id)
         self.teams_of[role_id] = Team(role_id=role_id, display_name=team.display_name,
-                                      mailbox=team.mailbox)  # fmt: skip
+                                      mailbox=team.mailbox, lead=kept.lead if kept else None,
+                                      cover=kept.cover if kept else None,
+                                      cover_until=kept.cover_until if kept else None)  # fmt: skip
         return self.teams_of[role_id]
 
     async def teams(self, today: date) -> list[Team]:
@@ -163,15 +175,21 @@ class _AdminPeople:
     def __init__(self) -> None:
         self.items: dict[str, list[OwnedItem]] = {}
         self.moved: list[tuple[str, str, str]] = []
+        #: How many items each person owns in another unit (the real store counts them in SQL).
+        self.elsewhere: dict[str, int] = {}
 
     async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
+        if self.elsewhere.get(person):
+            raise DisableRefused("other_unit", "they answer for 1 cases, rules or pipeline "
+                                 "schedules of another unit: that unit's administrator transfers those first")  # fmt: skip
         return DisablePlan(person=person, items=self.items.get(person, []),
                            not_yet_listed=list(admin_people_module.L38_OWNED_KINDS))  # fmt: skip
 
     async def transfer(self, person: str, transfers: Any, who: Any, *, by: Principal, audit: Any,
                        admin_unit: str | None) -> list[tuple[OwnedItem, str]]:  # fmt: skip
+        await self.plan(person, admin_unit=admin_unit)
         items = self.items.get(person, [])
-        chosen = check_transfers(person, items, transfers, who)
+        chosen = check_transfers(person, items, transfers, who, admin_unit)
         for item in items:
             to = chosen[(item.kind, item.id)]
             self.moved.append((item.kind, item.id, to))
@@ -623,3 +641,91 @@ def test_a_service_account_is_not_named_an_author(world: SimpleNamespace) -> Non
     answer = _name(world, "c3", "robot")
     assert answer.status_code == 409 and answer.json()["detail"]["error"] == "service_account"
     assert "robot" not in world.cases.grants["c3"]
+
+
+# --- a team as a dataset's owner (`_owners_allowed`, Make live's and Change owner…'s) -----------------
+
+
+def _owners(world: SimpleNamespace, setting: str, people: list[str], team: str | None) -> Any:
+    import asyncio
+
+    from services.api.app import OwnerNeeded, _owners_allowed
+
+    from schemas.dataset_model import DatasetOwners
+
+    class _Setting:
+        async def owner_setting(self) -> str:
+            return setting
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        custom_roles=world.roles, principal_names=_People())))  # fmt: skip
+    try:
+        return asyncio.run(_owners_allowed(request, _Setting(), DatasetOwners(people=people, team=team)))  # type: ignore[arg-type]
+    except OwnerNeeded as refused:
+        return f"refused: {refused}"
+
+
+def test_a_team_that_exists_owns_by_its_id_or_name_as_the_setting_allows(world: SimpleNamespace) -> None:
+    world.roles.teams_of["r1"] = Team(role_id="r1", display_name="Intel", mailbox="i@example.org")
+    assert _owners(world, "people_and_teams", ["ana-1"], "Intel") == ["ana-1", "team:r1"]
+    assert _owners(world, "teams_only", [], "r1") == ["team:r1"]
+    assert _owners(world, "teams_only", ["ana-1"], "r1").startswith("refused: Admin › System allows teams only")
+    assert _owners(world, "people_only", [], "r1").startswith("refused: Admin › System allows people only")
+    assert _owners(world, "people_and_teams", [], "Nobody").startswith("refused: there is no team Nobody")
+
+
+# --- the reviewer's findings (L2.5 lane review) -------------------------------------------------------
+
+
+def test_a_plan_holding_another_units_items_is_refused_and_nothing_is_disabled(
+    world: SimpleNamespace,
+) -> None:
+    world.admin_people.elsewhere["ana-1"] = 1
+    plan = world.client.get("/v1/admin/people/ana-1/disable-plan", headers=_as("adm-1"))
+    assert plan.status_code == 409 and plan.json()["detail"]["error"] == "other_unit"
+    answer = _disable(world, [])
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "other_unit"
+    assert world.directory.disabled == []
+
+
+def test_a_case_never_goes_to_a_person_of_another_unit(world: SimpleNamespace) -> None:
+    world.admin_people.items["ana-1"] = ITEMS[:1]
+    PEOPLE["ana-2"] = PEOPLE["ana-2"].model_copy(update={"org_unit": "unit-2"})
+    answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "ana-2"}])
+    assert answer.status_code == 409 and "another unit" in answer.json()["detail"]["message"]
+
+
+def test_a_disable_the_identity_provider_refuses_after_the_transfers_says_they_stand(
+    world: SimpleNamespace,
+) -> None:
+    world.admin_people.items["ana-1"] = ITEMS[:1]
+    world.directory.refuse = True
+    answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "ana-2"}])
+    assert answer.status_code == 502
+    detail = answer.json()["detail"]
+    assert detail["error"] == "disable_incomplete" and "those transfers stand" in detail["message"]
+    assert [e["action"] for e in world.audit.entries][-1] == "disable_person_incomplete"
+
+
+def test_a_lead_or_cover_cannot_have_the_teams_role_taken_away(world: SimpleNamespace) -> None:
+    world.roles.teams_of["r1"] = Team(role_id="r1", display_name="Intel", mailbox="i@example.org",
+                                      lead="ana-1", cover="ana-2",
+                                      cover_until=T0.date() + timedelta(days=3))  # fmt: skip
+    for who in ("ana-1", "ana-2"):
+        answer = _give(world, "adm-1", who, ["analyst"])
+        assert answer.status_code == 409 and answer.json()["detail"]["error"] == "lead_leaves_team"
+        assert "role:r1" in PEOPLE[who].roles
+
+
+def test_removing_the_last_people_manager_through_a_custom_role_is_refused(
+    world: SimpleNamespace,
+) -> None:
+    world.roles.seed("r3", "People desk", [Right.MANAGE_PEOPLE])
+    _person("ppl-2", ["role:r3"])
+    for pid in ("adm-2", "ppl-1"):
+        PEOPLE[pid] = PEOPLE[pid].model_copy(update={"enabled": False})
+    # adm-1 is the caller and may not remove themselves; ppl-2 is the other manager.
+    PEOPLE["adm-1"] = PEOPLE["adm-1"].model_copy(update={"enabled": False})
+    answer = world.client.delete("/v1/admin/people/ppl-2", headers=_as("adm-1"))
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "locks_out_administrators"
+    assert "ppl-2" in PEOPLE

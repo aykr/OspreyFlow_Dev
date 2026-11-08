@@ -638,6 +638,12 @@ test("a role's team is saved, its lead handed over and a cover named by keyboard
   await expect.poll(() => asked).toContain("PUT teams/r1/cover");
   await expect(page.getByText("Cover saved.")).toBeVisible();
   registerCovered(REGISTRY, "name-a-teams-cover-by-keyboard");
+  await cover.focus();
+  await page.keyboard.type("No cover");
+  await expect(cover).toHaveValue("");
+  await press(page, "End cover for Intel");
+  await expect(page.getByText("Cover ended.")).toBeVisible();
+  registerCovered(REGISTRY, "end-a-teams-cover-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

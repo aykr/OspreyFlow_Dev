@@ -29435,8 +29435,9 @@ this says so.
    - both rights of a `FORBIDDEN_PAIRS` pair (`promote_to_dataset` and `review_promotions`;
      `propose_types` and `accept_types`);
    - a right the giver may not give (`giver_may_give`);
-   - **the lock-out:** a change to a role or to a person's roles, or a disable, that would leave no
-     enabled person holding `manage_people`.
+   - **the lock-out:** a change to a role, to a person's roles, or a person's removal, that would leave
+     no enabled person holding `manage_people`, through a custom role or not. A disable needs no
+     check of its own: an administrator may not disable themselves, so one always remains.
 
    Amendment 4 added `draw_on_boards`, `promote_to_dataset`, `propose_types` and `accept_types` to the
    Analyst and Data Engineer in L2.5's `packages/schemas` commit, so that the pairs can be refused.
@@ -29476,12 +29477,25 @@ this says so.
    - their active typology rules;
    - the pipeline and screening-list schedules whose runs act as them.
 
-   A transfer is also refused to the person themselves, to a disabled or unknown account, to a
-   service account, to a non-member as lead, or to someone without the right that the item's runs
-   are checked against. A case gains its new Author and keeps every grant it had; every other item
+   Each item is read with the administrator's unit in its own statement. A person who owns a
+   case, a rule or a pipeline schedule of another unit has their plan refused (409 `other_unit`): that
+   unit's administrator transfers those first, and the count is all that is read of them. A transfer
+   is also refused:
+   - to the person themselves;
+   - to a disabled or unknown account, or a service account;
+   - for a case, to a person of another unit;
+   - for a lead, to a non-member;
+   - to someone without the right that the item's runs are checked against;
+   - for a rule or a pipeline schedule, to someone who is not an Author of its case, and is not made
+     its Author in the same transfer;
+   - for a watch, to someone already watching the same pattern.
+
+   The person's covers end with the disable, each audited. Taking a team's role away from its lead or
+   cover is refused until the lead is handed over or the cover ended. A case gains its new Author and keeps every grant it had; every other item
    changes its owner. The transfers and their audit entries (`transfer_owned_item`) are one Postgres
    transaction, committed before the identity provider disables the account. If that last step
-   fails, the transfers stand and the answer says so. **L2.5b's seam** is
+   fails, the transfers stand, and the answer says so (502 `disable_incomplete`, audited as
+   disable_person_incomplete). **L2.5b's seam** is
    `admin_people.l38_owned_items` and `L38_OWNED_KINDS`: private views and boards, promotions waiting
    for review, reviews waiting on the person, and proposed types. The plan names these kinds as not
    yet listed until the case lane's ownership route (L3.8) is on main.
@@ -29495,5 +29509,6 @@ this says so.
 **Tests.** `tests/schemas/test_rights.py` (the Rule author, the preset, the pairs, a custom role's exact
 rights); `tests/services/api/test_custom_roles.py`; `test_admin_roles_routes.py` (each refusal at the
 route, red with its check removed); the store cases under the lease
-(`test_custom_roles_store.py`, the team level gained and lost with membership). Each is in
+(`test_custom_roles_store.py`, the team level gained and lost with membership, the other unit's
+case, a rule's recipient, a watch's, a cover, a rollback). Each is in
 `process/lanes/admin/L2.5_RED_RECORD.md`.

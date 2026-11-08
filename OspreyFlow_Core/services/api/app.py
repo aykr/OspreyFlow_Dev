@@ -30,7 +30,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
@@ -11607,9 +11607,19 @@ async def set_person_roles_route(
             raise RoleRefused("beyond_your_rights",
                               f"you cannot give a right you do not hold: {', '.join(beyond)}",
                               rights=beyond)  # fmt: skip
-        teams = {t.role_id for t in await custom_roles.teams(_today())}
+        all_teams = await custom_roles.teams(_today())
+        teams = {t.role_id for t in all_teams}
         if before.system_account and teams & set(custom_role_ids(body.roles)):
             raise RoleRefused("service_account", "a service account is never a team member")
+        # Only a member may be lead or cover (ADR-112 Amendment 5 decision 4): leaving the team
+        # is refused while they are either, so a lead never outlives their membership.
+        leaving = set(custom_role_ids(before.roles)) - set(custom_role_ids(body.roles))
+        if led := [t for t in all_teams if t.role_id in leaving and user_id in (t.lead, t.cover)]:
+            raise RoleRefused(
+                "lead_leaves_team",
+                f"{before.name} is the lead or cover of {led[0].display_name}: hand the lead "
+                "over, or end the cover, before taking the team's role away",
+            )
         after = [p.model_copy(update={"roles": list(body.roles)}) if p.id == user_id else p
                  for p in people]  # fmt: skip
         leaves_no_people_manager(after, current)
@@ -11898,12 +11908,22 @@ async def set_team_cover_route(
 
 @app.get("/v1/admin/people/rows", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def people_rows_route(
-    principal: PrincipalDep, admin_people: AdminPeopleDep, identity_admin: IdentityAdminDep
+    principal: PrincipalDep,
+    admin_people: AdminPeopleDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
 ) -> AdminPeopleRows:
     """Each person's case levels (R3), their own and through a team, and the cases with no Author
     (R1), of the administrator's own unit only (ADR-052): the safety net's reach, never wider."""
     people = await identity_admin.list_people()
-    return await admin_people.rows(people, unit=principal.org_unit)
+    rows = await admin_people.rows(people, unit=principal.org_unit)
+    await audit.record(
+        principal=principal,
+        action="read_people_rows",
+        resolved_query={"unit": principal.org_unit},
+        result_cardinality=len(rows.rows),
+    )
+    return rows
 
 
 @app.put(
@@ -11972,11 +11992,23 @@ async def name_an_author_route(
     dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
 )
 async def disable_plan_route(
-    user_id: str, principal: PrincipalDep, admin_people: AdminPeopleDep
+    user_id: str, principal: PrincipalDep, admin_people: AdminPeopleDep, audit: AuditDep
 ) -> DisablePlan:
     """*Disable…*: everything the person owns today, each needing *Transfer to…*, and the kinds not
     yet listed (L2.5b's seam, `admin_people.L38_OWNED_KINDS`)."""
-    return await admin_people.plan(user_id, admin_unit=principal.org_unit)
+    try:
+        plan = await admin_people.plan(user_id, admin_unit=principal.org_unit)
+    except DisableRefused as refused:
+        raise HTTPException(
+            status_code=409, detail={"error": refused.error, "message": refused.words}
+        ) from None
+    await audit.record(
+        principal=principal,
+        action="read_disable_plan",
+        resolved_query={"user_id": user_id, "items": len(plan.items)},
+        result_cardinality=len(plan.items),
+    )
+    return plan
 
 
 def _within_your_reach(
@@ -12102,7 +12134,21 @@ async def disable_person_route(
                 "items": [i.model_dump() for i in refused.items],
             },
         ) from None
-    person = await identity_admin.set_enabled(user_id, False)
+    try:
+        person = await identity_admin.set_enabled(user_id, False)
+    except IdentityAdminRefused as error:
+        # Amendment 5 point 8: the transfers are committed and stand; the account is still enabled.
+        await audit.record(
+            principal=principal,
+            action="disable_person_incomplete",
+            resolved_query={"user_id": user_id, "transferred": len(moved), "why": str(error)},
+            result_cardinality=0,
+        )
+        raise HTTPException(status_code=502, detail={
+            "error": "disable_incomplete",
+            "message": f"every item was transferred ({len(moved)}), and those transfers stand, but "
+            f"the identity provider did not disable the account: {error}. Disable them again; "
+            "there is nothing left to transfer."}) from None  # fmt: skip
     await audit.record(
         principal=principal,
         action="disable_person",
@@ -12145,7 +12191,11 @@ async def reset_person_sign_in_route(
     "/v1/admin/people/{user_id}", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
 )
 async def remove_person_route(
-    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+    user_id: str,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
+    audit: AuditDep,
 ) -> PersonAccount:
     """The person's account removed from the identity provider (ADR-112 Amendment 3). Never one's
     own; never an account OspreyFlow itself uses, nor the last person who can manage people — each
@@ -12153,6 +12203,14 @@ async def remove_person_route(
     made keeps their id, which ADR-106 shows in place of a name once the account is gone."""
     if user_id == principal.id:
         raise HTTPException(status_code=409, detail={"error": "cannot_remove_yourself"})
+    # ADR-145 Amendment 5: a people manager through a custom role counts too.
+    try:
+        leaves_no_people_manager(
+            [p for p in await identity_admin.list_people() if p.id != user_id],
+            await custom_roles.current_rights(),
+        )
+    except RoleRefused as error:
+        raise _role_refused(error) from None
     person = await identity_admin.remove_person(user_id)
     await audit.record(principal=principal, action="remove_person",
                        resolved_query={"user_id": user_id, "username": person.username,
@@ -14118,11 +14176,17 @@ async def _authors_of(investigations: InvestigationStore, home_case_id: str) -> 
     return sorted(a for a, level in grants.items() if level == AccessLevel.AUTHOR)
 
 
-def approver_ids(authors: Sequence[str], roles_of: Mapping[str, Sequence[str]]) -> list[str]:
+def approver_ids(
+    authors: Sequence[str],
+    roles_of: Mapping[str, Sequence[str]],
+    custom: Mapping[str, Iterable[Right]] | None = None,
+) -> list[str]:
     """ADR-145 decision 8 and ADR-112 Amendment 4: a dataset's Authors who may approve another's
-    promotion under *Second person reviews*: those whose roles hold `review_promotions`. People
-    only until teams are built (ADR-112 Amendment 5, L2.5)."""
-    return [a for a in authors if Right.REVIEW_PROMOTIONS in rights_for(roles_of.get(a, ()))]
+    promotion under *Second person reviews*: those whose roles hold `review_promotions`, a custom
+    role's by its current rights (ADR-145 Amendment 5)."""
+    return [
+        a for a in authors if Right.REVIEW_PROMOTIONS in rights_for(roles_of.get(a, ()), custom)
+    ]
 
 
 @app.get(
@@ -14145,9 +14209,16 @@ async def admin_dataset_authors_route(
     # ADR-145 Amendment 5 point 5: a team's grant is the team, named apart from the people.
     teams = [a[len(TEAM_GRANT_PREFIX) :] for a in held if a.startswith(TEAM_GRANT_PREFIX)]
     authors = [a for a in held if not a.startswith(TEAM_GRANT_PREFIX)]
+    people = await get_identity_admin(request).list_people()
+    # A team's members are Authors while in it (Amendment 5 point 5), listed with the people.
+    for team in teams:
+        authors += [p.id for p in people if f"{CUSTOM_ROLE_PREFIX}{team}" in p.roles
+                    and p.enabled and not p.system_account and p.id not in authors]  # fmt: skip
     names = await get_principal_names(request).display_names(authors) if authors else {}
-    roles_of = {p.id: p.roles for p in await get_identity_admin(request).list_people()}
-    approves = set(approver_ids(authors, roles_of))
+    roles_of = {p.id: p.roles for p in people}
+    store = getattr(request.app.state, "custom_roles", None)
+    custom = await store.current_rights() if store is not None else {}
+    approves = set(approver_ids(authors, roles_of, custom))
     return AdminDatasetAuthors(
         dataset_id=dataset_id,
         has_home_case=True,
