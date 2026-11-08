@@ -14,11 +14,11 @@ unreachable identity provider or a deployment with no admin-users URL yields no 
 failed read**: the caller shows the id, as before ADR-106.
 
 **Who is a person (build order step 15).** The same read says whether an id is a person: an account
-the identity provider holds that is not a client's service account (Keycloak marks one with
-`serviceAccountClientId`). An id that is no account (a seed's own principal, such as
-`ledger-seed-worker`, which holds a grant on the case it made) is no person either. `people` answers
-for the ids a caller already serves, under decision 3's rule, and fails closed: an id it could not
-ask about is not counted a person.
+the identity provider holds, enabled, that is not a client's service account (Keycloak marks one
+with `serviceAccountClientId`). A disabled account still has its name read, but is no person. An
+id that is no account (a seed's own principal, such as `ledger-seed-worker`, which holds a grant on
+the case it made) is no person either. `people` answers for the ids a caller already serves, under
+decision 3's rule, and fails closed: an id it could not ask about is not counted a person.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ NAME_TTL_SECONDS = 300.0
 
 
 def _display_name(account: dict[str, object]) -> str | None:
-    """"firstName lastName", or the username when the account carries neither name part."""
+    """ "firstName lastName", or the username when the account carries neither name part."""
     parts = [str(account.get(key) or "").strip() for key in ("firstName", "lastName")]
     full = " ".join(part for part in parts if part)
     return full or str(account.get("username") or "").strip() or None
@@ -124,7 +124,11 @@ class PrincipalNameDirectory:
             if response.status_code == 200:
                 account = response.json()
                 name = _display_name(account)
-                person = not account.get("serviceAccountClientId")
+                # A disabled account is no person: whoever held it answers for nothing now.
+                # Keycloak always carries `enabled`; one without it is not counted (fail closed).
+                person = account.get("enabled") is True and not account.get(
+                    "serviceAccountClientId"
+                )
                 self._names[principal_id] = (name, now + self._ttl)
                 self._persons[principal_id] = person
                 resolved[principal_id] = (name, person)

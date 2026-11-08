@@ -688,7 +688,8 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     *Make live* in the deployment, its `owners`;
   - **`DatasetOwners`** is people, a team (ADR-112 Amendment 5), or both, and is refused when it
     names no one;
-  - a service account is refused where the owners are given, as is an owner kind Admin › System
+  - a service account or a disabled account is refused where the owners are given (a person is
+    an enabled account that is no service account), as is an owner kind Admin › System
     forbids: **`DatasetOwnerSetting`**, whose `owners_may_be` is `people_and_teams` (the default),
     `people_only` or `teams_only` (decision 7);
   - who is a person is the identity provider's directory's answer, and with no directory to ask,

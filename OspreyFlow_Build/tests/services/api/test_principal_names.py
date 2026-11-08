@@ -23,12 +23,18 @@ CLIENT_ID = "osprey-conduit"
 CLIENT_SECRET = "conduit-secret"
 ISSUED_BEARER = "fixture-issued-token"
 
-ACCOUNTS: dict[str, dict[str, str]] = {
-    "uuid-ayan": {"firstName": "Ayan", "lastName": "Kar", "username": "osprey-demo-analyst"},
-    "uuid-bare": {"username": "osprey-admin"},
+# As Keycloak's admin users endpoint represents each: it always carries `enabled`.
+ACCOUNTS: dict[str, dict[str, object]] = {
+    "uuid-ayan": {"firstName": "Ayan", "lastName": "Kar", "username": "osprey-demo-analyst",
+                  "enabled": True},
+    "uuid-bare": {"username": "osprey-admin", "enabled": True},
     # A client's service account, as Keycloak represents one: an account, but no person.
     "uuid-dashboard": {"username": "service-account-osprey-dashboard-1",
-                       "serviceAccountClientId": "osprey-dashboard-1"},
+                       "serviceAccountClientId": "osprey-dashboard-1", "enabled": True},
+    # A person's account an administrator has disabled: it still reads (200, with its name), but
+    # whoever it was answers for nothing now (the round-1 review of L3.1b, must-fix 2).
+    "uuid-left": {"firstName": "Gone", "lastName": "Away", "username": "left-the-unit",
+                  "enabled": False},
 }
 
 
@@ -170,11 +176,15 @@ async def test_people_are_the_accounts_that_are_persons(idp: tuple[str, _IdpStat
     base, _ = idp
     directory = PrincipalNameDirectory(_settings(base))
     try:
-        asked = ["uuid-ayan", "uuid-bare", "uuid-dashboard", "ledger-seed-worker"]
+        asked = ["uuid-ayan", "uuid-bare", "uuid-dashboard", "uuid-left", "ledger-seed-worker"]
         found = await directory.people(asked)
+        named = await directory.display_names(["uuid-left"])
     finally:
         await directory.aclose()
+    # A disabled account is no person (it may not answer for a dataset or be given an alert), and
+    # is still named where it is already shown.
     assert found == {"uuid-ayan", "uuid-bare"}
+    assert named == {"uuid-left": "Gone Away"}
 
 
 async def test_people_fail_closed_when_the_idp_refuses_or_is_unreachable(
