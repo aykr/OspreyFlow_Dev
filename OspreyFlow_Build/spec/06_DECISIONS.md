@@ -28355,7 +28355,8 @@ new right `edit_target_model`, and names no holder. ADR-112's table gains one ro
 ### ADR-109, Amendment 10 (8 November 2026) — a superseded link's repoint is recorded before the graph's commit, settled from the graph's stored states, and re-marks the moved alerts' nodes
 
 Status: accepted 8 November 2026, the orchestrator's settlement of L2.8b's items 6 and 7, its rulings
-on the lane's findings of the same day and on its reviewer's round (B1 to B9, R1, R2), reserved in
+on the lane's findings of the same day, on its reviewer's round (B1 to B9, R1, R2) and on its
+round-3 check (items 1 to 5, the lock's kind, the stored states' successor), reserved in
 `ADR_RESERVATIONS.md`. Built by the glass lane in L2.8b. Amendment 9 is unchanged except where this
 says so.
 
@@ -28371,19 +28372,34 @@ expand and `list_nodes`, the gap `7fac778` closed for new nodes, made after the 
 1. **One record per write.** Every supersede of a link alerts may cite, and of an alert's own node,
    runs inside `AlertStore.repointing` (the close's confirm of its match and of its node, a link
    change, a picture's replace or removal, the re-marking script). A record
-   (`alert_repoint_writes`, in `AlertStore`'s start-up DDL) is opened before the write; once the
-   graph has returned each new id, and before its commit, `old → new` is added to it, links and
-   nodes, and each link's successor is kept (`alert_link_successors`). The writer never drops its
-   record: it catches `Exception`, so a cancellation stays one, and a commit can land after any
-   check of it.
+   (`alert_repoint_records`, in `AlertStore`'s start-up DDL) is opened before the write; once the
+   graph has returned each new id, and before its commit, `old → new` is appended to it, links and
+   nodes in two ordered lists. Once it has sent the write's commit, the writer never drops its
+   record: it catches `Exception`, so a cancellation stays one, and a commit reported failed can
+   still land. A writer rolling back before sending its commit (a close refused whole,
+   `ports.graph.AmbiguousLinkId`) says so (`LinkRepoint.never_committed`) and closes its record; so
+   does one leaving a record empty, since every pair is recorded before the commit. The close's
+   triage names no node: the record owns the node's rename, and writing the confirmed node back
+   would undo a re-mark's.
 2. **A record is applied only once its write has committed**, read from the graph's own stored
-   states (`stored_link_states`, the graph's unfiltered lookup, which returns nothing to a reader;
-   the confinement test allows it in this module and the revert's). Applying it brings every citing
-   alert to the newest revision, following kept successors through any chain of writes; renames the
-   recorded nodes; and re-marks the moved alerts' nodes to their evidence now (`remark_alerts`,
+   states (`stored_link_states` and `stored_writes`, the graph's unfiltered lookups, which return
+   nothing to a reader; the confinement test allows them in this module and the revert's). What
+   the record names as a successor is never trusted: the graph's own `superseded_by` on each
+   `StoredLink` and `StoredNode` (a conformance case) is followed to the newest revision, so a write
+   recorded but never committed changes nothing. `superseded_by` is `compare=False`: the revert's
+   checks, which compare stored states, and the load digest are unchanged by it
+   (`test_revert_load.py`, `test_revert_elements_by_type.py`). Applying a record brings every
+   citing alert to the newest revision; renames the alerts naming a recorded node to that node's
+   newest; and re-marks the moved alerts' nodes to their evidence now (`remark_alerts`,
    each supersede recorded in the same record before its commit). Every step is idempotent, so a
    failure part-way is finished by the next settle; the record is closed only after its
-   working-set purge (point 4). A record still empty belongs to its writer alone.
+   working-set purge (point 4). A record still empty belongs to its writer alone. A record is
+   settled under a session advisory lock (`pg_try_advisory_lock(hashtext(id))`; a record another
+   settle holds is skipped), released in `finally`, its connection closed should the release fail,
+   so a crashed settle never holds it; a `hashtext` collision only makes a reader skip a record a
+   later read settles. The locks are held on a pool of their own (two connections): a settle holds
+   its lock while its steps take the store's connections, and locks drawn from that pool let four
+   concurrent settles each wait for a second connection for ever (found by round 3's first red).
 3. **The settle runs before every read of alerts**: the queue's reads, the inbox's
    (`AlertStore.list_authorized` and `get_authorized`, given the graph), the rule audit's and a
    pack's recheck. It is a writer: the service's lookup, its own transactions, the id-ordered lock.
@@ -28412,14 +28428,18 @@ expand and `list_nodes`, the gap `7fac778` closed for new nodes, made after the 
 
 **Tests.** `tests/ingest/test_alert_evidence_withheld_live.py`: a failure between the graph's commit
 and the repoint (the next read settles it; the OFFICIAL reader still not given the alert), a graph
-failure, a triage refused after the commit, the stale threshold, a commit that lands after the
-writer failed (a timeout and a cancellation), a chain of writes, a re-mark retried, the read-path
+failure, a triage refused after the commit, a close refused whole before its commit (no record
+left), the stale threshold, a commit that lands after the writer failed (a timeout and a
+cancellation), a chain of writes, a close's re-mark finished on the graph's chain in any order, a
+close never putting back the node its record re-marked, two settles of one record at once, six
+records settled at once, a record followed to what the graph committed, a re-mark retried, the read-path
 purge, an analyst's re-mark of a cited link (the alert withheld; its node neither read, expanded to
 nor listed; the canvas's copy purged), a link change's repoint (moved here from
 `test_link_changes.py`), the script's re-mark and purge; `test_kyc_rules.py`'s confirmed screening
 match through the real path and a refused close with a real Alert node; `test_entity_pictures.py`;
 `test_alert_node_marking.py::test_a_pending_link_the_store_merges_is_cited_by_the_stored_id` and
 `::test_a_re_mark_over_a_link_it_cannot_read_lists_the_alert_unsafe_and_changes_nothing`;
-`test_unfiltered_node_lookup_confined.py`; the graph-port conformance case
-`test_supersede_edge_returns_the_replacements_own_id`. Each red first, under the glass lease
+`test_unfiltered_node_lookup_confined.py`; `test_phase3_working_set.py`'s purge before the socket's
+first snapshot; the graph-port conformance cases `test_supersede_edge_returns_the_replacements_own_id`
+and `test_the_stored_states_name_each_superseded_elements_successor`. Each red first, under the glass lease
 (`process/lanes/glass/l2.8b/`).
