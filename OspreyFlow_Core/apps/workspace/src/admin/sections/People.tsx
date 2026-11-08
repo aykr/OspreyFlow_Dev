@@ -1,34 +1,89 @@
 // Admin › People › People and roles (ADR-110 Amendment 1, ADR-112, ADR-114 Amendment 5; ADR-145
-// decision 5): each person's roles, access and state, inviting a person, and refused organisation
-// sign-ins. Behind `manage_people` (`admin/sections.json`).
+// decisions 5 and 6 and Amendment 5): each person's roles (built-in, the Super user preset, custom),
+// the places they open, their case levels (R3), access and state; the cases with no Author and
+// *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
+// and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
 import { useEffect, useState } from "react";
 
-import type { OrganisationArrival, PersonAccount, SignInDelivery } from "../../../../../packages/schemas/generated";
+import type {
+  AdminPeopleRows,
+  CustomRole,
+  DisablePlan,
+  OrganisationArrival,
+  PersonAccount,
+  PersonCaseLevel,
+  SignInDelivery,
+} from "../../../../../packages/schemas/generated";
+import { PLACE_NAME, placesFor } from "../../shell/places";
 import { Button, Input, Select } from "../../design/primitives";
 import {
-  disablePerson,
+  disablePlan,
   enablePerson,
   invitePerson,
   linkOrganisation,
   listArrivals,
   listPeople,
+  listRoles,
+  nameAnAuthor,
+  peopleRows,
   removePerson,
   resetSignIn,
   setAccess,
   setRoles,
+  transferAndDisable,
   type AdminApi,
 } from "../api";
 
 const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
 
-/** ADR-112's four roles, by the name the identity provider gives them. */
+/** The built-in roles, by the name the identity provider gives them: ADR-112's four and Amendment 5's
+ * Rule author. */
 export const ROLES: { id: string; label: string }[] = [
   { id: "analyst", label: "Analyst" },
   { id: "data_engineer", label: "Data Engineer" },
   { id: "osprey-admin", label: "Admin" },
   { id: "reports_viewer", label: "Reports Viewer" },
+  { id: "rule_author", label: "Rule author" },
 ];
 const ROLE_IDS = new Set(ROLES.map((r) => r.id));
+/** The Super user preset (ADR-145 Amendment 5 point 2): three roles given together, never one. */
+export const SUPER_USER = ["analyst", "data_engineer", "rule_author"];
+
+/** What the People rows need besides the people: the custom roles, the built-in roles' rights and
+ * the case levels, read once for the section. */
+interface Context {
+  custom: CustomRole[];
+  builtIn: Record<string, string[]>;
+  rows: AdminPeopleRows | null;
+}
+
+/** "Author of Kestrel, Harrier; Editor of Heron through Intel" (R3). */
+export function levelWords(levels: PersonCaseLevel[]): string {
+  const order = ["author", "editor", "viewer"] as const;
+  const said = order
+    .map((level) => {
+      const held = levels.filter((l) => l.level === level);
+      if (!held.length) return null;
+      const name = level.charAt(0).toUpperCase() + level.slice(1);
+      return `${name} of ${held.map((l) => (l.through ? `${l.name} through ${l.through}` : l.name)).join(", ")}`;
+    })
+    .filter(Boolean);
+  return said.length ? said.join("; ") : "No case levels";
+}
+
+/** The places a person's roles open (ADR-145 decision 1), from the roles' rights as the Conduit gives
+ * them; a custom role by its current version. */
+export function placesWords(roles: string[], ctx: Context): string {
+  const rights = new Set<string>();
+  for (const role of roles) {
+    for (const r of ctx.builtIn[role] ?? []) rights.add(r);
+    if (role.startsWith("right:")) rights.add(role.slice("right:".length));
+    const custom = ctx.custom.find((c) => `role:${c.id}` === role);
+    for (const r of custom?.rights ?? []) rights.add(r);
+  }
+  const places = placesFor(rights);
+  return places.length ? `Opens ${places.map((p) => PLACE_NAME[p]).join(", ")}` : "Opens no place";
+}
 
 /** The deployment's classifications and handling codes, for the access a person is given. */
 interface Scheme {
@@ -195,28 +250,128 @@ function RemoveConfirmation({
   );
 }
 
+/** *Disable…* (ADR-145 decision 6, A4): everything the person owns, each with *Transfer to…*;
+ * *Transfer and disable* is the Conduit's to refuse, in its words, while any item has no recipient. */
+function DisablePanel({
+  api,
+  person,
+  people,
+  onDone,
+  onCancel,
+}: {
+  api: AdminApi;
+  person: PersonAccount;
+  people: PersonAccount[];
+  onDone: (p: PersonAccount) => void;
+  onCancel: () => void;
+}) {
+  const [plan, setPlan] = useState<DisablePlan | null>(null);
+  const [to, setTo] = useState<Record<string, string>>({});
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    disablePlan(api, person.id).then(setPlan).catch((e: Error) => setProblem(e.message));
+  }, [api, person.id]);
+  const who = person.username;
+  const others = people.filter((p) => p.id !== person.id && p.enabled && !p.system_account);
+  const key = (kind: string, id: string) => `${kind}:${id}`;
+  return (
+    <div role="group" aria-label={`Disable ${who}`} style={{ display: "grid", gap: "var(--sp-8)", border: "1px solid var(--line)", padding: "var(--sp-8)" }}>
+      {problem && (
+        <div role="alert" style={{ border: "2px solid var(--danger)", padding: "var(--sp-8)" }}>
+          <p style={{ margin: 0 }}>{`There is a problem: ${problem}`}</p>
+        </div>
+      )}
+      {!plan ? (
+        problem ? (
+          <Button aria-label={`Cancel disabling ${who}`} onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <p className="label">Reading what they own…</p>
+        )
+      ) : (
+        <>
+          <p style={{ margin: 0 }}>
+            {plan.items.length
+              ? `${who} answers for ${plan.items.length} ${plan.items.length === 1 ? "thing" : "things"}. Choose who takes each one: nothing is deleted, and every transfer is audited.`
+              : `${who} answers for nothing listed here.`}
+          </p>
+          {plan.items.map((item) => (
+            <label key={key(item.kind, item.id)} className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+              {item.label}
+              <Select
+                aria-label={`Transfer to, for ${item.label}`}
+                value={to[key(item.kind, item.id)] ?? ""}
+                onChange={(e) => setTo({ ...to, [key(item.kind, item.id)]: e.target.value })}
+              >
+                <option value="">Transfer to…</option>
+                {others.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {`${p.name} (${p.username})`}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ))}
+          {plan.not_yet_listed?.length ? (
+            <p className="label" style={{ margin: 0 }}>{`Not listed here yet: ${plan.not_yet_listed.join(", ")}.`}</p>
+          ) : null}
+          <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+            <Button
+              aria-label={plan.items.length ? `Transfer and disable ${who}` : `Confirm disabling ${who}`}
+              onClick={() => {
+                setProblem(null);
+                const transfers = plan.items
+                  .filter((i) => to[key(i.kind, i.id)])
+                  .map((i) => ({ kind: i.kind, id: i.id, to: to[key(i.kind, i.id)] ?? "" }));
+                void transferAndDisable(api, person.id, transfers)
+                  .then(onDone)
+                  .catch((e: Error) => setProblem(e.message));
+              }}
+            >
+              {plan.items.length ? "Transfer and disable" : "Confirm disabling"}
+            </Button>
+            <Button aria-label={`Cancel disabling ${who}`} onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PersonRow({
   api,
   person,
+  people,
   scheme,
+  ctx,
   onSaved,
   onDelivered,
   onRemoved,
 }: {
   api: AdminApi;
   person: PersonAccount;
+  people: PersonAccount[];
   scheme: Scheme;
+  ctx: Context;
   onSaved: (p: PersonAccount) => void;
   onDelivered: (d: SignInDelivery) => void;
   onRemoved: (p: PersonAccount) => void;
 }) {
-  const [chosen, setChosen] = useState(new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r))));
+  const customIds = new Set(ctx.custom.map((c) => `role:${c.id}`));
+  const [chosen, setChosen] = useState(
+    new Set((person.roles ?? []).filter((r) => ROLE_IDS.has(r) || customIds.has(r))),
+  );
   const [said, setSaid] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r));
-  const changed = ROLES.some((r) => chosen.has(r.id) !== (person.roles ?? []).includes(r.id));
+  const others = (person.roles ?? []).filter((r) => !ROLE_IDS.has(r) && !customIds.has(r));
+  const offered = [...ROLES.map((r) => r.id), ...customIds];
+  const changed = offered.some((id) => chosen.has(id) !== (person.roles ?? []).includes(id));
+  const levels = ctx.rows?.rows.find((r) => r.id === person.id)?.levels ?? [];
   const status = !person.enabled ? "Disabled" : person.must_set_password ? "Invited — must set a password" : null;
   const joined = person.organisation_linked ? "Signs in through the organisation" : null;
   const act = (done: Promise<PersonAccount>) =>
@@ -245,6 +400,14 @@ function PersonRow({
               <span className="label">{joined}</span>
             </>
           )}
+          {!person.system_account && (
+            <>
+              <br />
+              <span className="label">{placesWords(person.roles ?? [], ctx)}</span>
+              <br />
+              <span className="label">{levelWords(levels)}</span>
+            </>
+          )}
         </td>
         {ROLES.map((role) => (
           <td key={role.id} style={{ textAlign: "center" }}>
@@ -261,14 +424,32 @@ function PersonRow({
             />
           </td>
         ))}
-        <td className="label">{others.length ? others.join(", ") : "—"}</td>
+        <td className="label">
+          {ctx.custom.map((c) => (
+            <label key={c.id} style={{ display: "block" }}>
+              <input
+                type="checkbox"
+                aria-label={`${c.name} for ${person.username}`}
+                checked={chosen.has(`role:${c.id}`)}
+                onChange={(e) => {
+                  const next = new Set(chosen);
+                  if (e.target.checked) next.add(`role:${c.id}`);
+                  else next.delete(`role:${c.id}`);
+                  setChosen(next);
+                }}
+              />{" "}
+              {c.team ? `${c.name} (team)` : c.name}
+            </label>
+          ))}
+          {others.length ? others.join(", ") : ctx.custom.length ? null : "—"}
+        </td>
         <td>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)" }}>
             <Button
               disabled={!changed}
               aria-label={`Save roles for ${person.username}`}
               onClick={() =>
-                void setRoles(api, person.id, [...ROLES.map((r) => r.id).filter((id) => chosen.has(id)), ...others])
+                void setRoles(api, person.id, [...offered.filter((id) => chosen.has(id)), ...others])
                   .then((saved) => {
                     setSaid("Saved.");
                     onSaved(saved);
@@ -278,30 +459,19 @@ function PersonRow({
             >
               Save
             </Button>
+            <Button
+              aria-label={`Super user preset for ${person.username}`}
+              onClick={() => setChosen(new Set([...[...chosen].filter((r) => !ROLE_IDS.has(r)), ...SUPER_USER]))}
+            >
+              Super user
+            </Button>
             <Button aria-label={`Edit access for ${person.username}`} aria-expanded={editing} onClick={() => setEditing(!editing)}>
               Access
             </Button>
             {person.enabled ? (
-              confirming ? (
-                <>
-                  <Button
-                    aria-label={`Confirm disabling ${person.username}`}
-                    onClick={() => {
-                      setConfirming(false);
-                      act(disablePerson(api, person.id));
-                    }}
-                  >
-                    Confirm disable
-                  </Button>
-                  <Button aria-label={`Keep ${person.username} enabled`} onClick={() => setConfirming(false)}>
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button aria-label={`Disable ${person.username}`} onClick={() => setConfirming(true)}>
-                  Disable
-                </Button>
-              )
+              <Button aria-label={`Disable ${person.username}`} aria-expanded={confirming} onClick={() => setConfirming(!confirming)}>
+                Disable…
+              </Button>
             ) : (
               <Button aria-label={`Enable ${person.username}`} onClick={() => act(enablePerson(api, person.id))}>
                 Enable
@@ -333,6 +503,23 @@ function PersonRow({
         <tr>
           <td colSpan={ROLES.length + 3}>
             <AccessEditor api={api} person={person} scheme={scheme} onSaved={onSaved} />
+          </td>
+        </tr>
+      )}
+      {confirming && person.enabled && (
+        <tr>
+          <td colSpan={ROLES.length + 3}>
+            <DisablePanel
+              api={api}
+              person={person}
+              people={people}
+              onCancel={() => setConfirming(false)}
+              onDone={(saved) => {
+                setConfirming(false);
+                setSaid(null);
+                onSaved(saved);
+              }}
+            />
           </td>
         </tr>
       )}
@@ -590,8 +777,71 @@ function InviteForm({
   );
 }
 
+/** R1: the cases of your unit no enabled person is Author of, each with *Name an Author*
+ * (`PUT /v1/admin/cases/{id}/authors/{account}`), which refuses a case that has an Author. */
+function WithoutAuthor({
+  api,
+  rows,
+  people,
+  onNamed,
+}: {
+  api: AdminApi;
+  rows: AdminPeopleRows;
+  people: PersonAccount[];
+  onNamed: () => void;
+}) {
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [said, setSaid] = useState<string | null>(null);
+  if (!rows.without_author.length) return null;
+  const candidates = people.filter((p) => p.enabled && !p.system_account);
+  return (
+    <section aria-label="Cases with no Author" role="note" style={{ border: "1px solid var(--warning)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-8)" }}>
+      <p style={{ margin: 0 }}>
+        {`${rows.without_author.length === 1 ? "A case" : `${rows.without_author.length} cases`} of your unit ${rows.without_author.length === 1 ? "has" : "have"} no Author: nobody can share ${rows.without_author.length === 1 ? "it" : "them"}, or answer for ${rows.without_author.length === 1 ? "it" : "them"}.`}
+      </p>
+      {rows.without_author.map((c) => (
+        <div key={c.investigation_id} style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" }}>
+          <span className="value">{c.name}</span>
+          <Select
+            aria-label={`Author for ${c.name}`}
+            value={chosen[c.investigation_id] ?? ""}
+            onChange={(e) => setChosen({ ...chosen, [c.investigation_id]: e.target.value })}
+          >
+            <option value="">Choose a person</option>
+            {candidates.map((p) => (
+              <option key={p.id} value={p.id}>
+                {`${p.name} (${p.username})`}
+              </option>
+            ))}
+          </Select>
+          <Button
+            aria-label={`Name an Author of ${c.name}`}
+            disabled={!chosen[c.investigation_id]}
+            onClick={() =>
+              void nameAnAuthor(api, c.investigation_id, chosen[c.investigation_id] ?? "")
+                .then(() => {
+                  setSaid(`${people.find((p) => p.id === chosen[c.investigation_id])?.name ?? "They"} is now an Author of ${c.name}.`);
+                  onNamed();
+                })
+                .catch((e: Error) => setSaid(e.message))
+            }
+          >
+            Name an Author
+          </Button>
+        </div>
+      ))}
+      {said && (
+        <p role="status" className="label" style={{ margin: 0 }}>
+          {said}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function People({ api }: { api: AdminApi }) {
   const [people, setPeople] = useState<PersonAccount[] | null>(null);
+  const [ctx, setCtx] = useState<Context>({ custom: [], builtIn: {}, rows: null });
   const [problem, setProblem] = useState<string | null>(null);
   const [delivered, setDelivered] = useState<SignInDelivery | null>(null);
   const [removed, setRemoved] = useState<PersonAccount | null>(null);
@@ -599,9 +849,25 @@ export function People({ api }: { api: AdminApi }) {
   const [arrivalsProblem, setArrivalsProblem] = useState<string | null>(null);
   const [joined, setJoined] = useState<string | null>(null);
   const scheme = useScheme(api);
+  // The roles and the case levels are the row's context; either failing leaves the rest working.
+  const readContext = () => {
+    listRoles(api)
+      .then((c) =>
+        setCtx((x) => ({
+          ...x,
+          custom: c.custom ?? [],
+          builtIn: Object.fromEntries((c.built_in ?? []).map((b) => [b.id, b.rights as string[]])),
+        })),
+      )
+      .catch(() => undefined);
+    peopleRows(api)
+      .then((rows) => setCtx((x) => ({ ...x, rows: rows && Array.isArray(rows.rows) ? rows : null })))
+      .catch(() => undefined);
+  };
   useEffect(() => {
     listPeople(api).then(setPeople).catch((e: Error) => setProblem(e.message));
     listArrivals(api).then(setArrivals).catch((e: Error) => setArrivalsProblem(e.message));
+    readContext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken]);
   if (problem) return <p role="alert">{problem}</p>;
@@ -638,6 +904,7 @@ export function People({ api }: { api: AdminApi }) {
           {`${removed.name || removed.username} (${removed.username}) was removed. What they made now shows their id in place of their name.`}
         </p>
       )}
+      {ctx.rows && <WithoutAuthor api={api} rows={ctx.rows} people={people} onNamed={readContext} />}
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>
@@ -645,7 +912,7 @@ export function People({ api }: { api: AdminApi }) {
             {ROLES.map((r) => (
               <th key={r.id} style={{ textAlign: "center" }}>{r.label}</th>
             ))}
-            <th>Other grants</th>
+            <th>Custom roles and other grants</th>
             <th />
           </tr>
         </thead>
@@ -655,7 +922,9 @@ export function People({ api }: { api: AdminApi }) {
               key={p.id}
               api={api}
               person={p}
+              people={people}
               scheme={scheme}
+              ctx={ctx}
               onSaved={saved}
               onDelivered={setDelivered}
               onRemoved={(gone) => {

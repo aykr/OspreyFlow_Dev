@@ -4,9 +4,9 @@ roles, and dashboard identities (ADR-111 decision 7).
 **Through the Conduit's own service account,** bearing the ADR-043 client-credentials token, so
 every change passes the Conduit's right check and audit; the account needs `manage-users` and
 `manage-clients`. **Narrowed here, before any call:** a person's `roles` attribute may hold only the
-four roles of ADR-112, single `right:<name>` grants and the old role names — nothing else, so this
-can never hand out realm administration — and only a client named `osprey-dashboard-*` is ever
-created or removed.
+built-in roles, custom roles (`role:<id>`, ADR-145 Amendment 5), single `right:<name>` grants
+and the old role names — nothing else, so this can never hand out realm administration — and only
+a client named `osprey-dashboard-*` is ever created or removed.
 
 **A dashboard identity** is a confidential client with a service account and no browser flow: its
 token carries the principal claims (clearance, unit, roles — `reports_viewer` — handling codes) from
@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -38,6 +38,7 @@ from schemas.admin import (
     SignInDelivery,
 )
 from schemas.rights import (
+    CUSTOM_ROLE_PREFIX,
     LEGACY_ROLE_RIGHTS,
     ROLE_RIGHTS,
     SINGLE_RIGHT_PREFIX,
@@ -65,6 +66,10 @@ CONDUIT_ACCOUNTS = frozenset({"osprey-verify-probe", "osprey-verify-revoked"})
 #: (`harness/realm.py`'s `organisation_provider_mappers`); measured on Keycloak 26.0, the record
 #: holds no other id for the person.
 ARRIVAL_EVENT = "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR"
+
+
+#: The identity provider's page of people; `list_people` reads every page.
+_PAGE = 500
 
 
 class IdentityAdminRefused(Exception):
@@ -127,8 +132,15 @@ def one_time_code() -> str:
     return "-".join(letters[i : i + 4] for i in range(0, 16, 4))
 
 
+#: A custom role's id (`custom_roles.py`, `secrets.token_hex(6)`): whether it exists is the
+#: route's to check, against the store.
+_CUSTOM_ROLE = re.compile(rf"^{re.escape(CUSTOM_ROLE_PREFIX)}[a-z0-9]{{1,32}}$")
+
+
 def allowed_role(role: str) -> bool:
     if role in ROLE_RIGHTS or role in LEGACY_ROLE_RIGHTS:
+        return True
+    if _CUSTOM_ROLE.match(role):
         return True
     return (
         role.startswith(SINGLE_RIGHT_PREFIX) and role[len(SINGLE_RIGHT_PREFIX) :] in _RIGHT_VALUES
@@ -281,10 +293,23 @@ class IdentityAdmin:
     # --- people -------------------------------------------------------------------------------
 
     async def list_people(self) -> list[PersonAccount]:
-        response = await self._call(
-            "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
-        )
-        users = response.json()
+        # Paged to the end, never cut at a page (rule 2): the lock-out and a team's members read
+        # this list whole.
+        users: list[dict[str, Any]] = []
+        while True:
+            response = await self._call(
+                "GET",
+                "/users",
+                params={"first": len(users), "max": _PAGE, "briefRepresentation": "false"},
+            )
+            if response.status_code != 200:
+                raise IdentityAdminRefused(
+                    f"the identity provider did not list the people ({response.status_code})"
+                )
+            page = response.json()
+            users += page
+            if len(page) < _PAGE:
+                break
         linked = await self._linked_ids()
         people = [
             _person(u).model_copy(update={"organisation_linked": str(u.get("id")) in linked})
@@ -454,7 +479,9 @@ class IdentityAdmin:
 
     # --- remove (ADR-112 Amendment 3) ----------------------------------------------------------
 
-    async def remove_person(self, user_id: str) -> PersonAccount:
+    async def remove_person(
+        self, user_id: str, custom: Mapping[str, Iterable[Right]] | None = None
+    ) -> PersonAccount:
         """The person's account deleted from the identity provider: they can no longer sign in, and
         their sign-in name and email address are free again. Nothing OspreyFlow stores is changed —
         what they made keeps their id (ADR-106 shows it in place of a name). Refused, before
@@ -471,14 +498,12 @@ class IdentityAdmin:
                 f"{person.username} is an account OspreyFlow itself uses, not a person's; it "
                 "cannot be removed.",
             )
-        if person.enabled and Right.MANAGE_PEOPLE in rights_for(person.roles):
-            listed = await self._call(
-                "GET", "/users", params={"max": 500, "briefRepresentation": "false"}
-            )
+        if person.enabled and Right.MANAGE_PEOPLE in rights_for(person.roles, custom):
+            # Every page, and a custom role by its current rights (ADR-145 Amendment 5).
             others = [
-                u for u in listed.json()
-                if str(u.get("id")) != user_id and not _system(u) and u.get("enabled", True)
-                and Right.MANAGE_PEOPLE in rights_for(_person(u).roles)
+                p for p in await self.list_people()
+                if p.id != user_id and not p.system_account and p.enabled
+                and Right.MANAGE_PEOPLE in rights_for(p.roles, custom)
             ]  # fmt: skip
             if not others:
                 raise PersonActionRefused(

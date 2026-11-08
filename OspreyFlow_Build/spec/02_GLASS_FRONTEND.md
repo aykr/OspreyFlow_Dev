@@ -1247,7 +1247,7 @@ right; the first built section the person holds, in this order, opens first:
 
 | Group | Section | Right |
 | --- | --- | --- |
-| People | People and roles; Roles *(coming)* | `manage_people` |
+| People | People and roles; Roles | `manage_people` |
 | People | Dashboard identities | `manage_dashboards` |
 | Data | Datasets; Connections | `administer_system` |
 | Data | Proposed types | `manage_ontology` (and the administrator role, at its routes) |
@@ -1257,7 +1257,7 @@ right; the first built section the person holds, in this order, opens first:
 | Audit | Audit *(coming)* | `read_audit` |
 | Demo packs | Demo packs | `administer_system` |
 
-The rights of the five sections not yet built, and Proposed types under *Data*, are ADR-145
+The rights of the sections not yet built, and Proposed types under *Data*, are ADR-145
 Amendment 3's. A **coming** section says what it will hold and calls nothing; a
 holder of `read_audit` alone is offered no Admin place until Audit is built (§2.0a: a place is offered
 for its entry screen's first read). Hiding is never the control (rule 3): each built section's screen
@@ -1267,11 +1267,26 @@ right, over HTTP too, passing over only the reads it names per section. Choosing
 its heading and marks it `aria-current="page"` in the list. Under the GOV.UK brand the list is a
 GOV.UK side navigation (decision 13): group headings, underlined link-styled buttons (a section has
 no address of its own), the open one bold with a 4px rule. The sections' contents are as follows. *People and
-roles* (each person's four roles as checkboxes, saved whole, other grants kept and shown; since ADR-114
-Amendment 5, each person's state — disabled, or invited and yet to set a password — with *Access*
-(clearance, unit and handling codes, edited in place), *Disable* (only after *Confirm disable*) or
-*Enable*, and *Reset sign-in*; and *Invite a person*, whose answer is either "an email went to …" or a
-one-time code shown once with what to do with it), *Dashboard identities*
+roles* (each person's built-in roles — ADR-112's four and *Rule author* — and each custom role as
+checkboxes, saved whole, other grants kept and shown, and *Super user*, which chooses the preset's three
+roles together; L2.5, ADR-145 Amendment 5: the row also says the places those roles open and the
+person's case levels in the administrator's own unit, "Author of Kestrel; Editor of Heron through
+Intel" (R3); above the table, the unit's cases no enabled person is Author of, each with *Name an
+Author*, Admin's own route, refused once the case has one (R1); since ADR-114 Amendment 5, each
+person's state — disabled, or invited and yet to set a password — with *Access* (clearance, unit and
+handling codes, edited in place), *Disable…* or *Enable*, and *Reset sign-in*; *Disable…* (A4) lists
+everything the person answers for today, each with *Transfer to…*, says which kinds are not listed yet
+(L2.5b: private views and boards, promotions and reviews waiting, proposed types), and *Transfer and
+disable* is refused in the Conduit's words while any item has no recipient or one who cannot take it;
+a person who owns nothing is disabled with *Confirm disabling*; and *Invite a person*, whose answer is
+either "an email went to …" or a one-time code shown once with what to do with it), *Roles* (L2.5,
+ADR-145 decision 7 and Amendment 5: the built-in roles and the *Super user* preset with their rights,
+each with *Copy*, none editable; custom roles at their version, who holds how many, *Edit* (the next
+version), *Copy*, *Versions* and *Team*; a role's form is a name and its rights grouped by place, a
+right no group names under *Other*, and every refusal — a name used, no rights, an unknown right, a
+forbidden pair, an administration right the giver does not hold, the lock-out — is the Conduit's,
+shown in an error summary; *Team* makes the role a team with a name and a mailbox, and names its
+lead, hands it over, or names a cover until a last day, each from the team's members), *Dashboard identities*
 (register a dashboard identity — its secret shown once — and remove one; its account id is what a
 case's Author grants Viewer to), *System* (each component asked as the section opens, with *Ask again*;
 each model engine with its privacy-contract mark, ADR-136; and, ADR-145 Amendment 4 decision 7,
@@ -1285,8 +1300,9 @@ with who can approve — the dataset's Authors holding `review_promotions`, peop
 and a warning when fewer than two can. **Authors** (Amendment 4 decision 3): the home case's Authors,
 each marked when they can approve, and *Change owner…*, which takes people's account ids (people only
 until teams, and it says so) and is refused in the Conduit's words exactly as *Make live*'s owner
-step is: the System setting, a team before teams exist, a service account or an account the
-directory does not hold as a person; a dataset not yet live says its owners are asked at its first
+step is: the System setting, a team that does not exist (the Conduit takes a team by its role's id
+or name since L2.5; the screen offers people), a service account or an account the directory does
+not hold as a person; a dataset not yet live says its owners are asked at its first
 *Make live*. **Linked cases** (ADR-143 Amendment 2 decision 2): every case reading the dataset,
 member or not, open or removed, the home case and a case reading it through a composite marked, its
 layer as items, links and size — its stored properties' length as the store renders them and its

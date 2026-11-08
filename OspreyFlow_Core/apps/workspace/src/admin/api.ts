@@ -3,6 +3,13 @@
 // provider directly. Shapes are the generated ones.
 import type {
   AccessInput,
+  AdminPeopleRows,
+  CustomRole,
+  CustomRoleVersion,
+  DisablePlan,
+  OwnedTransfer,
+  RolesCatalogue,
+  Team,
   AdminDataset,
   AdminDatasetAuthors,
   AdminDatasetCases,
@@ -61,6 +68,9 @@ async function failure(response: Response): Promise<Error> {
   )
     return new Error(detail);
   if (response.status === 409 && typeof body.error === "string" && typeof detail === "string") return new Error(detail);
+  // ADR-145 Amendment 5: roles, teams, case levels and Disable…, refused in the Conduit's words.
+  if (typeof detail === "object" && detail !== null && typeof (detail as { message?: unknown }).message === "string")
+    return new Error((detail as { message: string }).message);
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
 }
@@ -152,3 +162,29 @@ export const changeSchedule = (api: AdminApi, recipeId: string, cron: string, ti
     method: "PUT",
     body: JSON.stringify({ cron, timezone }),
   });
+
+// ADR-145 decisions 6 and 7 and Amendment 5: roles, teams, the People rows and Disable….
+export const listRoles = (api: AdminApi) => call<RolesCatalogue>(api, "roles");
+export const createRole = (api: AdminApi, name: string, rights: string[]) =>
+  call<CustomRole>(api, "roles", { method: "POST", body: JSON.stringify({ name, rights }) });
+export const changeRole = (api: AdminApi, roleId: string, name: string, rights: string[]) =>
+  call<CustomRole>(api, `roles/${encodeURIComponent(roleId)}`, { method: "PUT", body: JSON.stringify({ name, rights }) });
+export const makeTeam = (api: AdminApi, roleId: string, displayName: string, mailbox: string) =>
+  call<Team>(api, `roles/${encodeURIComponent(roleId)}/team`, {
+    method: "PUT",
+    body: JSON.stringify({ display_name: displayName, mailbox }),
+  });
+export const setTeamLead = (api: AdminApi, roleId: string, lead: string) =>
+  call<Team>(api, `teams/${encodeURIComponent(roleId)}/lead`, { method: "PUT", body: JSON.stringify({ lead }) });
+export const setTeamCover = (api: AdminApi, roleId: string, cover: string | null, until: string | null) =>
+  call<Team>(api, `teams/${encodeURIComponent(roleId)}/cover`, { method: "PUT", body: JSON.stringify({ cover, until }) });
+export const peopleRows = (api: AdminApi) => call<AdminPeopleRows>(api, "people/rows");
+export const disablePlan = (api: AdminApi, userId: string) => call<DisablePlan>(api, person(userId, "disable-plan"));
+export const transferAndDisable = (api: AdminApi, userId: string, transfers: OwnedTransfer[]) =>
+  call<PersonAccount>(api, person(userId, "disable"), { method: "POST", body: JSON.stringify({ transfers }) });
+
+/** *Name an Author* (R1): a case of your unit with no Author is given one (ADR-145 Amendment 5). */
+export const nameAnAuthor = (api: AdminApi, caseId: string, account: string) =>
+  call<void>(api, `cases/${encodeURIComponent(caseId)}/authors/${encodeURIComponent(account)}`, { method: "PUT" });
+export const roleVersions = (api: AdminApi, roleId: string) =>
+  call<CustomRoleVersion[]>(api, `roles/${encodeURIComponent(roleId)}/versions`);

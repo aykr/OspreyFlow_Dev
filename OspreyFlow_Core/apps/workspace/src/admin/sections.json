@@ -5,8 +5,7 @@
       "label": "People",
       "sections": [
         { "id": "people", "label": "People and roles", "right": "manage_people", "screen": "admin/sections/People.tsx" },
-        { "id": "roles", "label": "Roles", "right": "manage_people",
-          "coming": "The four built-in roles and the Super user preset, each with the places it opens and its rights, and roles of your own: a name and a set of existing rights, versioned and audited." },
+        { "id": "roles", "label": "Roles", "right": "manage_people", "screen": "admin/sections/Roles.tsx" },
         { "id": "dashboards", "label": "Dashboard identities", "right": "manage_dashboards", "screen": "admin/sections/Dashboards.tsx" }
       ]
     },

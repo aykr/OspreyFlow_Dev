@@ -59,7 +59,9 @@ class _Identity:
         self.made: list[tuple[str, str]] = []
 
     async def list_people(self) -> list[PersonAccount]:
-        return [PersonAccount(id="u1", username="osprey-demo-analyst", name="Demo Analyst", enabled=True, roles=["analyst"])]
+        return [PersonAccount(id="u1", username="osprey-demo-analyst", name="Demo Analyst", enabled=True, roles=["analyst"]),
+                # L2.5: the administrator acting, so a change to u1 never locks every administrator out.
+                PersonAccount(id="admin-1", username="admin", name="Admin", enabled=True, roles=["osprey-admin"])]
 
     async def set_roles(self, user_id: str, roles: list[str]) -> PersonAccount:
         if not all(allowed_role(r) for r in roles):
@@ -91,7 +93,7 @@ class _Identity:
                               delivery="one_time_code", one_time_code="WXYZ-WXYZ-WXYZ-WXYZ")  # fmt: skip
 
     # ADR-112 Amendment 3 (build order step 33 (a))
-    async def remove_person(self, user_id: str) -> PersonAccount:
+    async def remove_person(self, user_id: str, custom: Any = None) -> PersonAccount:
         if user_id == "last-admin":
             raise PersonActionRefused("last_administrator", LAST_ADMIN)
         self.made.append(("removed", user_id))
@@ -144,9 +146,40 @@ class _Freshness:
             failed_at=datetime(2026, 10, 11, 10, 39, tzinfo=UTC), cases_pulled=2)}  # fmt: skip
 
 
+class _NoCustomRoles:
+    """L2.5: a deployment with no custom role and no team (`test_admin_roles_routes.py` has them)."""
+
+    async def current_rights(self, ids: Any = None) -> dict[str, Any]:
+        return {}
+
+    async def teams(self, today: Any) -> list[Any]:
+        return []
+
+    def people_lock(self) -> Any:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def held() -> Any:
+            yield
+
+        return held()
+
+
+class _OwnsNothing:
+    """L2.5's *Disable…* for a person who owns nothing: no item, so no transfer is asked for."""
+
+    async def transfer(self, person: str, transfers: Any, who: Any, **_: Any) -> tuple[list[Any], int]:
+        assert list(transfers) == []
+        return [], 0
+
+
 @pytest.fixture
 def client() -> Any:
+    from services.api.app import get_admin_people, get_custom_roles
+
     audit, identity = _Audit(), _Identity()
+    app.dependency_overrides[get_custom_roles] = _NoCustomRoles
+    app.dependency_overrides[get_admin_people] = _OwnsNothing
     app.dependency_overrides[get_report_freshness] = _Freshness
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_identity_admin] = lambda: identity

@@ -134,6 +134,10 @@ class _Names:
         known = {"alice": "Alice Author", "bob": "Bob Viewer"}
         return {i: known[i] for i in ids if i in known}
 
+    async def people(self, ids):  # type: ignore[no-untyped-def]
+        """L2.5: no directory here, so who may hold a level is not checked (`_may_hold_a_level`)."""
+        return None
+
 
 @pytest.fixture
 def store() -> _Store:

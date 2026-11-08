@@ -18,6 +18,7 @@ import { DemoPacks } from "./sections/DemoPacks";
 import { Models } from "./sections/Models";
 import { People } from "./sections/People";
 import { ProposedTypesSection } from "./sections/ProposedTypes";
+import { Roles } from "./sections/Roles";
 import { Schedules } from "./Schedules";
 import { System } from "./sections/System";
 import "./admin.css";
@@ -49,6 +50,7 @@ export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
  * ids together; `test_admin_sections.py` holds each to the file `sections.json` names). */
 export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   people: (api) => <People api={api} />,
+  roles: (api) => <Roles api={api} />,
   dashboards: (api) => <Dashboards api={api} />,
   datasets: (api) => <Datasets api={api} />,
   connections: (api) => <Connections api={api} />,

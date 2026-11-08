@@ -4,7 +4,7 @@
 // placeholder that calls nothing. That each built section's routes refuse a principal without its
 // right is the Conduit's, proved in `test_admin_sections.py` from the routes' own checks (rule 3:
 // this hiding is never the control).
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ADMIN_GROUPS, AdminPlace, SCREENS, sectionsFor } from "./AdminPlace";
@@ -46,7 +46,7 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     serve();
     place(ALL);
     expect(listed()).toEqual([
-      "# People", "People and roles", "Roles (coming)", "Dashboard identities",
+      "# People", "People and roles", "Roles", "Dashboard identities",
       "# Data", "Datasets", "Connections", "Proposed types",
       "# Running", "Operations", "System", "Models",
       "# Policies", "Grading scheme (coming)", "Approval rights (coming)", "Uploads (coming)",
@@ -93,17 +93,15 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
   it("opens a section from the side list, marks it current, and moves focus to its heading", async () => {
     const asked = serve();
     const nav = place(["manage_people", "manage_dashboards"]);
-    const roles = nav.getByRole("button", { name: "Roles (coming)" });
+    const roles = nav.getByRole("button", { name: "Roles" });
     expect(nav.getByRole("button", { name: "People and roles" }).getAttribute("aria-current")).toBe("page");
-    const before = asked.length;
     fireEvent.click(roles);
     expect(roles.getAttribute("aria-current")).toBe("page");
     expect(nav.getByRole("button", { name: "People and roles" }).getAttribute("aria-current")).toBeNull();
     const heading = screen.getByRole("heading", { name: "Roles" });
     expect(document.activeElement).toBe(heading);
-    expect(screen.getByText(/^Coming: The four built-in roles/)).toBeTruthy();
-    // The placeholder calls nothing: no read went out when it opened.
-    expect(asked.length).toBe(before);
+    // L2.5: Roles is built, and reads the roles when it opens.
+    await waitFor(() => expect(asked.some((a) => a.endsWith("/v1/admin/roles"))).toBe(true));
     fireEvent.click(nav.getByRole("button", { name: "Dashboard identities" }));
     expect(await screen.findByRole("table", { name: "Dashboard identities" })).toBeTruthy();
   });

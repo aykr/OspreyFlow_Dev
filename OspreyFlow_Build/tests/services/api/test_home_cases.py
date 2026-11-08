@@ -215,7 +215,7 @@ def test_with_no_directory_the_owners_cannot_be_checked_so_nothing_goes_live(
 @pytest.mark.parametrize(
     ("setting", "owners", "words"),
     [
-        ("people_and_teams", {"team": "Prison intel data team"}, "until teams are built"),
+        ("people_and_teams", {"team": "Prison intel data team"}, "there is no team Prison intel"),
         ("people_only", {"team": "Prison intel data team"}, "allows people only"),
         ("teams_only", {"people": ["eng-1"]}, "allows teams only"),
     ],

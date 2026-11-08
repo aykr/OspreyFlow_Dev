@@ -61,6 +61,54 @@ if (serving === "datasets") {
   };
 }
 
+// `?serve=people` (L2.5): for the axe scans, the page serves Admin › People and Roles itself: two
+// people, one holding a team's custom role, their case levels, a case with no Author, the roles and a
+// disable plan; `show=` then opens *Disable…* (`disable`), a new role's form (`role-form`) or a team
+// (`team`). Synthetic (rule 9).
+if (serving === "people") {
+  const ANA = { id: "u1", username: "ana", name: "Ana Analyst", enabled: true, roles: ["analyst", "role:r1"],
+                clearance: "OFFICIAL", org_unit: "unit-1" };  // prettier-ignore
+  const TEAM = { role_id: "r1", display_name: "Intel", mailbox: "intel@example.org", lead: "u1", cover: "u2",
+                 cover_until: "2026-11-14", acting_lead: "u2",
+                 members: [{ id: "u1", name: "Ana Analyst" }, { id: "u2", name: "Bea Engineer" }] };  // prettier-ignore
+  const served: Record<string, unknown> = {
+    "/v1/admin/people": [ANA, { ...ANA, id: "u2", username: "bea", name: "Bea Engineer", roles: ["data_engineer", "role:r1"] }],
+    "/v1/admin/organisation-arrivals": [],
+    "/v1/admin/people/rows": {
+      rows: [{ id: "u1", levels: [{ investigation_id: "c1", name: "Op Kestrel", level: "author", through: null },
+                                  { investigation_id: "c2", name: "Op Heron", level: "editor", through: "Intel" }] }],
+      without_author: [{ investigation_id: "c3", name: "Op Wren" }],
+    },
+    "/v1/admin/roles": {
+      built_in: [
+        { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts", "promote_to_dataset"], gives: [] },
+        { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "review_promotions"], gives: [] },
+        { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people"], gives: [] },
+        { id: "super_user", label: "Super user", rights: ["investigate", "edit_pipelines", "author_rules"],
+          gives: ["analyst", "data_engineer", "rule_author"] },
+      ],
+      custom: [{ id: "r1", name: "Intel desk", version: 2, rights: ["investigate", "read_reports"], changed_by: "adm-1",
+                 changed_at: "2026-11-08T09:00:00Z", holders: 2, team: TEAM }],
+    },
+    "/v1/admin/people/u1/disable-plan": { person: "u1", not_yet_listed: ["private views", "boards", "proposed types"],
+      items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" },
+              { kind: "team_lead", id: "r1", label: "Lead of the team Intel" },
+              { kind: "typology_rule", id: "t1", label: "The rule Structuring, whose runs act as them" }] },
+    "/v1/handling-scheme": { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {} } },
+    "/v1/admin/roles/r1/versions": [
+      { version: 1, name: "Intel desk", rights: ["investigate"], changed_by: "adm-1", changed_at: "2026-11-07T09:00:00Z" },
+      { version: 2, name: "Intel desk", rights: ["investigate", "read_reports"], changed_by: "adm-1", changed_at: "2026-11-08T09:00:00Z" },
+    ],
+  };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    // `show=refused`: the plan refused in words, as for a person who owns another unit's case.
+    if (show === "refused" && path === "/v1/admin/people/u1/disable-plan")
+      return new Response(JSON.stringify({ detail: { error: "other_unit", message:
+        "they answer for 1 cases, rules or pipeline schedules of another unit: that unit's administrator transfers those first" } }), { status: 409 });  // prettier-ignore
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
 createRoot(document.getElementById("root")!).render(
   <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />,
 );
@@ -97,4 +145,10 @@ if (serving === "datasets" && show) {
   await pressWhenDrawn("Details for Prison records");
   if (show === "owner") await pressWhenDrawn("Change owner of Prison records");
   if (show === "dry-run") await pressWhenDrawn("Merge Op Heron into the dataset (dry run)");
+}
+if (serving === "people" && show) {
+  if (show === "disable" || show === "refused") await pressWhenDrawn("Disable ana");
+  if (show === "versions") await pressWhenDrawn("Versions of Intel desk");
+  if (show === "role-form") await pressWhenDrawn("Copy Analyst into a new role");
+  if (show === "team") await pressWhenDrawn("Team for Intel desk");
 }

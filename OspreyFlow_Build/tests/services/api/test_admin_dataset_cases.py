@@ -366,7 +366,7 @@ def test_a_dataset_not_yet_live_has_no_authors(world: SimpleNamespace) -> None:
     [
         ("people_and_teams", {"people": [ROBOT]}, "never a service account"),
         ("people_and_teams", {"people": ["per-2", "no-such-account"]}, "never a service account"),
-        ("people_and_teams", {"team": "Prison intel data team"}, "until teams are built"),
+        ("people_and_teams", {"team": "Prison intel data team"}, "there is no team Prison intel"),
         ("people_only", {"team": "Prison intel data team"}, "allows people only"),
         ("teams_only", {"people": ["per-2"]}, "allows teams only"),
     ],
@@ -479,3 +479,25 @@ def test_a_composite_takes_no_promotion_policy_and_no_merge(world: SimpleNamespa
                     {"promotion_policy": "second_person_reviews"})  # fmt: skip
     assert refused.status_code == 409 and refused.json()["error"] == "composite_read_only"
     assert not [e for e in world.audit.entries if e["action"] == "set_dataset_promotion_policy"]
+
+
+def test_a_team_owner_is_the_team_and_people_are_the_direct_grants_only(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2.5 (ADR-145 Amendment 5 point 5): a team's grant is answered as `team`, never as its members
+    in `people`, which *Change owner…* is prefilled from (the lane review's finding: members listed
+    there would be saved back as personal grants, dropping the team)."""
+    world.cases.grants["home-a"]["team:r1"] = AccessLevel.AUTHOR
+    monkeypatch.setitem(ROLES, "per-2", ["role:r1"])  # a member of the team
+    answer = world.client.get("/v1/admin/datasets/ds-a/authors", headers=_as("admin")).json()
+    assert answer["team"] == "r1"
+    assert sorted(p["id"] for p in answer["people"]) == ["adm-2", "eng-1"]
+
+
+def test_an_unknown_action_is_refused_only_after_the_right(world: SimpleNamespace) -> None:
+    """The right is checked before the action is read (case's live run, 8 November): without
+    `administer_system` the answer is the gate's 403, never a 422 that tells the route's shape."""
+    path = "/v1/admin/datasets/ds-a/cases/gone-1/x/dry-run"
+    refused = world.client.post(path, headers=_as("analyst"))
+    assert refused.status_code == 403 and refused.json()["detail"]["error"] == "right_required"
+    assert world.client.post(path, headers=_as("admin")).status_code == 404

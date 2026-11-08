@@ -198,6 +198,7 @@ describe("people: invite, access, disable, enable, reset sign-in", () => {
 
   it("disables a person only once it is confirmed, and enables them again", async () => {
     const sent = serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, { person: "u1", items: [], not_yet_listed: ["boards"] });
       if (path === "people/u1/disable") return json(200, { ...PERSON, enabled: false });
       if (path === "people/u1/enable") return json(200, { ...PERSON, enabled: true });
       return null;
@@ -205,7 +206,7 @@ describe("people: invite, access, disable, enable, reset sign-in", () => {
     place(["manage_people"]);
     fireEvent.click(await screen.findByRole("button", { name: "Disable osprey-demo-analyst" }));
     expect(sent.some((s) => s.path === "POST people/u1/disable")).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm disabling osprey-demo-analyst" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm disabling osprey-demo-analyst" }));
     expect(await screen.findByText("Disabled")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Enable osprey-demo-analyst" }));
     await waitFor(() => expect(sent.some((s) => s.path === "POST people/u1/enable")).toBe(true));
