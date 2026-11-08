@@ -22,6 +22,7 @@ glass	L2.6	M	todo	Operations' promotions and ageing; Audit
 glass	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	building	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
+glass	L2.8c	S	todo	The other link supersedes through the repoint journal
 glass	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
 glass	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
 glass	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
