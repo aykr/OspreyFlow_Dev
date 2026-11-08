@@ -3,12 +3,13 @@ and dashboard identities. Generated into TypeScript for the Glass's Admin area."
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .ingest import RunMetering
+from .rights import Right
 
 
 class PersonAccount(BaseModel):
@@ -439,6 +440,169 @@ class PauseScheduleInput(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+# --- Roles, teams and Disable (ADR-145 decisions 6-7, Amendments 4 and 5; ADR-112 Amendments 4 and
+# 5; ADR-146 Amendment 1) ------------------------------------------------------------------------
+
+
+class BuiltInRole(BaseModel):
+    """A built-in role or the *Super user* preset (ADR-145 decision 7): listed with its rights,
+    copied into a custom role, never edited. A preset is given as the roles it names."""
+
+    id: str
+    label: str
+    rights: list[Right]
+    #: The roles the preset gives together (`SUPER_USER_PRESET`); empty for a role.
+    gives: list[str] = Field(default_factory=list)
+
+
+class TeamInput(BaseModel):
+    """*Make this role a team* (ADR-112 Amendment 5 decision 3): a display name and a contact
+    mailbox, a distribution list that is a contact, never a sign-in."""
+
+    display_name: str = Field(min_length=1, max_length=80)
+    mailbox: str = Field(pattern=EMAIL_PATTERN, max_length=254)
+
+
+class TeamMember(BaseModel):
+    id: str
+    name: str | None = None
+
+
+class Team(BaseModel):
+    """A team: a custom role's holders (the owner's L2.5 Q4 (a)), its lead, and a cover until a
+    date. `acting_lead` is the cover while the cover lasts, else the lead: the shape ADR-146
+    Amendment 1's queue tools read (rules' L2.10, `services/api/teams.py::acting_lead`)."""
+
+    role_id: str
+    display_name: str
+    mailbox: str
+    lead: str | None = None
+    cover: str | None = None
+    #: The last day the cover acts (inclusive); after it, the lead acts again with no action.
+    cover_until: date | None = None
+    acting_lead: str | None = None
+    members: list[TeamMember] = Field(default_factory=list)
+
+
+class CustomRoleInput(BaseModel):
+    """A custom role (ADR-112 Amendment 4): a name and a set of existing rights. Refused at the
+    route: a name already used, no rights, a right the giver does not hold, a forbidden pair
+    (ADR-145 decision 7), and a change that leaves no enabled person holding `manage_people`
+    (ADR-145 Amendment 5)."""
+
+    name: str = Field(min_length=1, max_length=60)
+    rights: list[str] = Field(max_length=64)
+
+
+class CustomRoleVersion(BaseModel):
+    version: int
+    name: str
+    rights: list[Right]
+    changed_by: str
+    changed_at: datetime
+
+
+class CustomRole(BaseModel):
+    """A custom role's current version, held in the token as `role:<id>`."""
+
+    id: str
+    name: str
+    version: int
+    rights: list[Right]
+    changed_by: str
+    changed_at: datetime
+    #: How many people hold it now.
+    holders: int = 0
+    team: Team | None = None
+
+
+class RolesCatalogue(BaseModel):
+    """`GET /v1/admin/roles`: the built-in roles, the preset and every custom role."""
+
+    built_in: list[BuiltInRole]
+    custom: list[CustomRole]
+
+
+class TeamLeadInput(BaseModel):
+    """Name a team's lead, or hand the role over (ADR-112 Amendment 5 decision 4): a member."""
+
+    lead: str = Field(min_length=1, max_length=200)
+
+
+class TeamCoverInput(BaseModel):
+    """Name a cover until a date (inclusive), a member other than the lead; `cover: null` ends
+    it."""
+
+    cover: str | None = Field(default=None, min_length=1, max_length=200)
+    until: date | None = None
+
+
+OwnedKind = Literal[
+    "case_author", "home_case_author", "team_lead", "hotlist", "monitor", "saved_pattern",
+    "typology_rule", "pipeline_schedule", "list_schedule",
+]
+
+
+class OwnedItem(BaseModel):
+    """One thing a person answers for, as *Disable…* lists it (ADR-145 decision 6): each needs a
+    *Transfer to…* before *Transfer and disable* is accepted."""
+
+    kind: OwnedKind
+    id: str
+    #: What it is, in words ("Kestrel (case)"), only what the administrator may already see.
+    label: str
+
+
+class DisablePlan(BaseModel):
+    """`GET /v1/admin/people/{user_id}/disable-plan`: everything the person owns today, and the
+    kinds not yet listed because their owner route is not built (L2.5b, L3.8's ownership route)."""
+
+    person: str
+    items: list[OwnedItem]
+    not_yet_listed: list[str] = Field(default_factory=list)
+
+
+class OwnedTransfer(BaseModel):
+    kind: OwnedKind
+    id: str
+    to: str = Field(min_length=1, max_length=200)
+
+
+class DisableInput(BaseModel):
+    """*Transfer and disable*: a recipient for every item of the plan; refused, in words, while any
+    item has none (409 `untransferred`), nothing changed."""
+
+    transfers: list[OwnedTransfer] = Field(default_factory=list, max_length=2000)
+
+
+class PersonCaseLevel(BaseModel):
+    """One of a person's case levels, as their row says it (R3): "Author of Kestrel"; `through`
+    names the team that gives it, when a team does."""
+
+    investigation_id: str
+    name: str
+    level: Literal["viewer", "editor", "author"]
+    through: str | None = None
+
+
+class AdminPersonRow(BaseModel):
+    """`GET /v1/admin/people/rows` (R3): each person's case levels and the cases with no Author
+    (R1), only of cases in the administrator's own unit (ADR-052)."""
+
+    id: str
+    levels: list[PersonCaseLevel] = Field(default_factory=list)
+
+
+class CaseWithoutAuthor(BaseModel):
+    investigation_id: str
+    name: str
+
+
+class AdminPeopleRows(BaseModel):
+    rows: list[AdminPersonRow]
+    without_author: list[CaseWithoutAuthor]
+
+
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
@@ -447,4 +611,7 @@ ALL_MODELS: list[type[BaseModel]] = [
     ChangeScheduleInput, AdminDataset, DatasetEgressInput, OrganisationArrival,
     OrganisationLinkInput, DatasetPromotionPolicyInput, DatasetAuthor, AdminDatasetAuthors,
     AdminLinkedCase, AdminDatasetCases, LayerDryRun,
+    BuiltInRole, TeamInput, TeamMember, Team, CustomRoleInput, CustomRoleVersion, CustomRole,
+    RolesCatalogue, TeamLeadInput, TeamCoverInput, OwnedItem, DisablePlan, OwnedTransfer,
+    DisableInput, PersonCaseLevel, AdminPersonRow, CaseWithoutAuthor, AdminPeopleRows,
 ]  # fmt: skip

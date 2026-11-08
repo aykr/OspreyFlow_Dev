@@ -9,6 +9,7 @@
     "create_case",
     "decide_held_rows",
     "deploy_rules",
+    "draw_on_boards",
     "edit_graph",
     "export",
     "export_override",
@@ -16,7 +17,9 @@
     "investigate",
     "keep_watches",
     "manage_strength_influencers",
+    "promote_to_dataset",
     "propose_link_type",
+    "propose_types",
     "read_alert_queue",
     "read_data_feeds",
     "read_held_rows",
@@ -44,6 +47,7 @@
   },
   "data_engineer": {
    "rights": [
+    "accept_types",
     "add_ingest_files",
     "create_case",
     "decide_held_rows",
@@ -52,6 +56,7 @@
     "edit_target_model",
     "investigate",
     "load_screening_lists",
+    "merge_datasets",
     "operate_schedules",
     "propose_link_type",
     "publish_pipelines",
@@ -127,6 +132,13 @@
    ],
    "answered_hidden": []
   },
+  "right:accept_types": {
+   "rights": [
+    "accept_types"
+   ],
+   "places": [],
+   "answered_hidden": []
+  },
   "right:add_ingest_files": {
    "rights": [
     "add_ingest_files"
@@ -150,6 +162,13 @@
    "places": [
     "glass"
    ],
+   "answered_hidden": []
+  },
+  "right:author_rules": {
+   "rights": [
+    "author_rules"
+   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:branch_case": {
@@ -195,6 +214,13 @@
    "places": [
     "glass"
    ],
+   "answered_hidden": []
+  },
+  "right:draw_on_boards": {
+   "rights": [
+    "draw_on_boards"
+   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:edit_graph": {
@@ -330,6 +356,13 @@
    ],
    "answered_hidden": []
   },
+  "right:merge_datasets": {
+   "rights": [
+    "merge_datasets"
+   ],
+   "places": [],
+   "answered_hidden": []
+  },
   "right:operate_schedules": {
    "rights": [
     "operate_schedules"
@@ -339,6 +372,13 @@
    ],
    "answered_hidden": []
   },
+  "right:promote_to_dataset": {
+   "rights": [
+    "promote_to_dataset"
+   ],
+   "places": [],
+   "answered_hidden": []
+  },
   "right:propose_link_type": {
    "rights": [
     "propose_link_type"
@@ -346,6 +386,13 @@
    "places": [
     "glass"
    ],
+   "answered_hidden": []
+  },
+  "right:propose_types": {
+   "rights": [
+    "propose_types"
+   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:publish_pipelines": {
@@ -529,6 +576,16 @@
     "verify_studio_recipe"
    ]
   },
+  "rule_author": {
+   "rights": [
+    "author_rules",
+    "triage_alerts"
+   ],
+   "places": [
+    "glass"
+   ],
+   "answered_hidden": []
+  },
   "source_approver": {
    "rights": [
     "publish_pipelines",
@@ -555,13 +612,16 @@
   },
   "super": {
    "rights": [
+    "accept_types",
     "add_ingest_files",
     "ask_model",
+    "author_rules",
     "branch_case",
     "confirm_inferred",
     "create_case",
     "decide_held_rows",
     "deploy_rules",
+    "draw_on_boards",
     "edit_graph",
     "edit_pipelines",
     "edit_target_model",
@@ -572,8 +632,11 @@
     "keep_watches",
     "load_screening_lists",
     "manage_strength_influencers",
+    "merge_datasets",
     "operate_schedules",
+    "promote_to_dataset",
     "propose_link_type",
+    "propose_types",
     "publish_pipelines",
     "read_alert_queue",
     "read_data_feeds",

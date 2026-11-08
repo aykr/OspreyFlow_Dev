@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 
 from schemas.domain import Principal
 from schemas.ingest import StudioRole
-from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, Right, rights_for
+from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, SUPER_USER_PRESET, Right, rights_for
 
 WORKSPACE_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/apps/workspace/src"
 PLACES_JSON = WORKSPACE_SRC / "shell/places.json"
@@ -89,13 +89,16 @@ EXPECTED_PLACES = {
     "data_engineer": ["glass", "ingest", "admin"],
     "osprey-admin": ["glass", "admin"],
     "reports_viewer": ["glass"],
+    # ADR-112 Amendment 5 decision 2: works alerts in the Glass; Rules and Monitoring, which
+    # `author_rules` opens, is the rules lane's L2.9. Never the Studio.
+    "rule_author": ["glass"],
     "super": ["glass", "ingest", "admin"],
 }
 #: The token roles each case signs in with: the four roles, the Super user preset, the legacy roles,
 #: every right granted singly (`right:<name>`), and nobody's.
 TOKEN_ROLES: dict[str, list[str]] = (
     {role: [role] for role in ROLE_RIGHTS}
-    | {"super": ["analyst", "data_engineer"]}
+    | {"super": list(SUPER_USER_PRESET)}
     | {role: [role] for role in LEGACY_ROLE_RIGHTS}
     | {f"right:{r.value}": [f"right:{r.value}"] for r in Right}
     | {"none": []}
