@@ -13,6 +13,39 @@ The full failed-job log is in the orchestrator's scratch (`ci/gh_e89d44a.log`), 
 
 **Pushing (your instruction, about 06:20 UTC):** CI runs locally on every merge, and `main` goes to `origin` in one push at the very end, not after each merge.
 
+## Restart, 8 November afternoon: O-six (six lanes), on your records of today
+
+**Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
+and docs on this one; model engines, each job's model and their keys managed in the Glass's Admin place
+(keys write-only, the CLI kept for headless and recovery), map keys the same; docs waits until rules'
+L2.9 and L2.10, admin's L2.5 and platform's P1 and P3 run deployed in both themes, and gains the README,
+an architecture guide, the welcome pages, the website and the GOV.UK wording. Recorded as ADR-142
+Amendment 3 (written), with ADR-135 Amendment 2 and ADR-147 reserved for the platform lane.
+
+**Done:** reservations (`46b73c4`); the lane scripts for six lanes and two test stacks, each new test red
+first (`208ee66`, `process/lanes/O6_RED_RECORD.md`); stack b's containers created and checked live under
+its lease; the build plan, runbook, progress table and the five first briefs (admin L2.4 part 2, rules
+L2.8c, case L3.2, studio L1.3, platform P1); worktrees `admin`, `rules` and `platform` set up. The
+studio, case and glass sessions are retired (each replied "retired"); their worktrees are clean and merged.
+
+**Needs you before any lane opens:**
+1. Close the three retired windows (studio, case, glass).
+2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
+   ```
+   account ayan = ~/.claude-ayan
+   account sol  = ~/.claude-sol
+   orchestrator = ayan
+   lane studio   = sol
+   lane case     = sol
+   lane rules    = sol
+   lane platform = sol
+   ```
+   `~/.claude-sol` must be signed in (`CLAUDE_CONFIG_DIR=~/.claude-sol claude`, then `/login`). Then say
+   go, and I open the five lanes with `lanes_launch.sh open <lane>`, checking first that a sol session's
+   messages reach me.
+3. **GitHub's CI on Python 3.14** (above): `ci.yml` is yours. I recommend pinning the jobs' Python to 3.12
+   (the version the project builds with), as a diff for you to apply, or with your word I apply it.
+
 ## For your review tomorrow: decisions I took on my recommendation
 
 You asked at 23:45 for the build to run on its own, with design conflicts settled on my recommendation and
@@ -45,6 +78,28 @@ New ones are added at the bottom as they happen.
     - **Composites:** a composite gets a home case; an analyst layer never does.
     - **The old `investigations.domains` column** is kept as a record, not dropped.
     - **Environments:** one home case per dataset per deployment until releases bring a second environment.
+
+### O-six (8 November, afternoon)
+
+22. **The second stack's ports are 2492, 55434, 6380 and 9002, bound to 127.0.0.1 only** (stack a's
+    ArcadeDB listens on every interface; b's had no need to). Its containers copy stack a's images and
+    settings, and its Postgres was given an empty `ospreyflow` database, as stack a has. ClickHouse's
+    18123 stays stack a's alone, because `test_statelessness_clickhouse.py` starts it itself. Stack b's
+    object store did not answer in the smoke test: unproven until a lane's first live run uses it.
+23. **File ownership after the split:** rules owns the shell, Home, the status bar, the theme and the brand
+    (L2.9 reworks the places and the GOV.UK header); admin owns Admin except Models and Maps; platform owns
+    those two sections and the map, geocoder and model modules; docs owns `welcome/**` and the README.
+    L2.7's Home section is built by agreement with rules.
+24. **The steps keep their numbers** (L2.4 part 2 to L2.12) under their new lanes, so the records still
+    read; the glass lane's done rows stay in the progress table.
+25. **Platform's steps are P1 to P4,** P1 (models in Admin) first, then P2 (usage and limits, which
+    `spec/00` and `spec/04` promise and nothing builds), P3 (maps in Admin, after P1, so map keys follow
+    P1's rule) and P4 (the analyst's basemap switch and place search). P1 asks you, through me, where a
+    key written from the Glass is stored and whether a key change needs a second person.
+26. **The CI failure on `case-screen-options-harness.html`** (axe's target-size) is carried into case's
+    L3.2 brief.
+27. **Fresh sessions, not repurposed ones,** as you agreed: each brief tells the new session which
+    report to read first.
 
 ## Evening, 7 November: your records of 7 November applied
 

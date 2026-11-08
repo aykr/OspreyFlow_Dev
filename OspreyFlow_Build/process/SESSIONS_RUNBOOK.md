@@ -93,10 +93,11 @@ git worktree add "$WT/case"   -b lane/case   main
 git worktree list
 ```
 
-Then, for **each** of `studio`, `glass`, `case`:
+Then, for **each** lane (from 8 November 2026, ADR-142 Amendment 3: `studio`, `case`, `admin`, `rules`,
+`platform`, `docs`; `scripts/lanes.conf` lists them, and `lanes_launch.sh setup <lane>` does all of this):
 
 ```
-L=studio        # then glass, then case
+L=studio        # then case, admin, rules, platform, docs
 cd "$WT/$L"
 cp "$REPO/.claude/settings.local.json" .claude/ 2>/dev/null || true      # your personal permissions
 cp "$REPO/OspreyFlow_Core/osprey.yaml" OspreyFlow_Core/osprey.yaml        # your local copy
@@ -116,17 +117,31 @@ brief, and refuses if a session is already running there. The documentation lane
 step 0 answer to P7), after the first feature lane merges. By hand, the equivalent is one tab per lane:
 
 ```
-cd "$WT/studio" && CLAUDE_CONFIG_DIR=~/.claude-ayan claude --model opus    # Lane 1 · Opus, medium
-cd "$WT/glass"  && CLAUDE_CONFIG_DIR=~/.claude-ayan claude --model opus    # Lane 2 · Opus, medium (Sonnet for its mechanical steps)
-cd "$WT/case"   && CLAUDE_CONFIG_DIR=~/.claude-ayan claude --model opus    # Lane 3 · Opus, medium
+cd "$WT/studio"   && CLAUDE_CONFIG_DIR=~/.claude-sol  claude --model opus   # Lane 1 · on sol
+cd "$WT/admin"    && CLAUDE_CONFIG_DIR=~/.claude-ayan claude --model opus   # Lane 2, admin (Sonnet for L2.6–L2.7)
+cd "$WT/rules"    && CLAUDE_CONFIG_DIR=~/.claude-sol  claude --model opus   # Lane 2, rules · on sol
+cd "$WT/case"     && CLAUDE_CONFIG_DIR=~/.claude-sol  claude --model opus   # Lane 3 · on sol
+cd "$WT/platform" && CLAUDE_CONFIG_DIR=~/.claude-sol  claude --model opus   # Lane 5 · on sol
+```
+
+The accounts follow ADR-142 Amendment 3 decision 2, from the owner's `~/.ospreyflow/accounts.conf`:
+
+```
+account ayan = ~/.claude-ayan
+account sol  = ~/.claude-sol
+orchestrator = ayan
+lane studio   = sol
+lane case     = sol
+lane rules    = sol
+lane platform = sol
 ```
 
 In each, paste **Prompt L** (§7) with its lane's name and its first brief (the orchestrator writes the
 briefs into `process/lanes/<lane>/BRIEF.md` on `main` at step 0; each worktree sees them once it is
 rebased, or you paste the brief's text directly).
 
-Keep the orchestrator's tab open. That makes four tabs: orchestrator, studio, glass, case, and a
-fifth for the heartbeat monitor (§5).
+Keep the orchestrator's window open, with one more for the heartbeat monitor (§5). The glass lane
+(6 to 8 November) is retired; its worktree stays for reference and is never opened again.
 
 ## 4. The test stacks: one holder each
 

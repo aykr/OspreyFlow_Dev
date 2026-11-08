@@ -11,6 +11,12 @@ Three outcomes, built at once (ADR-142):
 3. **Drawing for field analysts on a bulletproof case and dataset contract:** the analyst layer,
    case views, drawing boards, promotion (ADR-143, ADR-144).
 
+**Restarted on 8 November 2026 with six lanes (ADR-142 Amendment 3).** Glass is retired and split into
+`admin` and `rules`; a `platform` lane takes maps and model administration (Lane 5); the docs lane's scope
+widens and it starts when the new screens run deployed in both themes (Lane 4). Lanes run on chosen
+accounts (rules, case, studio and platform on `sol`) and live runs take one of two test stacks, a or b
+(`SESSIONS_RUNBOOK.md` §4).
+
 Every step obeys `process/CLAUDE.md` rules 1–15 (rule 14 as ADR-142 rewords it): tests first and shown
 red; access tests on every read path; keyboard cases for every action; spec gaps fixed in `spec/`;
 synthetic fixtures; British English; no `Co-Authored-By` lines. **Every screen is built and
@@ -86,7 +92,12 @@ Phase 5 is **not** in this lane (ADR-143 C1).
 | L1.7 | Phase 10: Operations content and external orchestration, inside Admin's *Running › Operations* (ADR-145 decision 9); and Studio › Releases, the YAML bundle, `packages/schemas/release.schema.json` (a `packages/schemas` commit first), `ospreyflow release export` and `import --dry-run` (ADR-140 Amendment 9 decision 4) | L | Phase 10's exit; ADR-140 Amendment 9's release tests |
 | L1.8 | The Studio's tips and *who can* refusals (ADR-145 Amendment 4 decision 12), from `help/roles.ts`; *Domain model* wording everywhere; `tools/ui_words_check.py` | S | No "target model" on screen; every disabled action says why and who can |
 
-## Lane 2 · Glass and places (`lane/glass`) · Opus · medium (Sonnet for L2.6–L2.7)
+## Lane 2 · Glass and places, split into Admin (`lane/admin`) and Rules (`lane/rules`) · Opus · medium (Sonnet for L2.6–L2.7)
+
+From 8 November 2026 (ADR-142 Amendment 3) the glass lane is retired. L2.1 to L2.8b are its own, merged.
+**`lane/admin`** takes L2.4 part 2, L2.5, L2.6 and L2.7; **`lane/rules`** takes L2.8c and L2.9 to L2.12.
+L2.10's team routing still waits for admin's L2.5 (merge order 11), and L2.7's Home section is built by
+agreement with rules, which owns Home (merge order 18).
 
 | Step | Work | Size | Exit |
 | --- | --- | --- | --- |
@@ -123,6 +134,22 @@ The riskiest lane: every step starts with its access and existence-leak tests (r
 | L3.8 | The ownership route Lane 2's *Disable…* reads (views, boards, promotions, proposed types per person) | S | Access test; Lane 2's L2.5 consumes it |
 | L3.9 | Merging a drawn dataset (ADR-143 Amendment 2 decisions 6 and 7): the Studio's *Merge into a dataset…* screen (in `ingest/**` by agreement with Lane 1) with map, match, dry run and merge; the drawing becomes a case view with annotations; L5 and L6 answered (a) (ADR-143 Amendment 3) | L | Decisions 6 and 7's tests |
 
+## Lane 5 · Platform: maps and model administration (`lane/platform`) · Opus · medium
+
+New on 8 November 2026 (ADR-142 Amendment 3). Neither had an owner: engines, each job's model and keys are
+set only in `osprey.yaml` and the CLI, and System shows them read-only; maps have no Admin section, the
+set-up console's basemap Build and Verify answer 501, prefetch runs only by hand, and the analyst's map
+has no basemap switch or place search. **The owner's rulings of 8 November:** model choice and keys are
+managed in the Glass's Admin place, keys write-only and never shown back, the CLI kept for headless and
+recovery use; map provider keys follow the same rule.
+
+| Step | Work | Size | Exit |
+| --- | --- | --- | --- |
+| P1 | Model administration in Admin (ADR-135 Amendment 2, written by the lane): *Admin › Models*: engines added, edited and removed (label, roles, an https base, the privacy contract and its reference); each job's model chosen from the closed, pinned lists; a key entered, rotated or removed write-only, never returned by any route, logged or sent back to the Glass; *Test the connection*; every change audited, behind a new right (`manage_models`). The Conduit writes the key only where the gateway reads it and restarts the gateway; System's engine table becomes the summary; `ospreyflow models` kept. Also the set-up console's egress warning, which reads the legacy `hosted_fallback` and not `providers` (red first). **Ask the owner first, as multiple choice:** where a key written from the Glass is stored. | L | Access tests (no right → refused; the key in no response, log or audit entry, planted at the real call site); the key round trip against the real gateway configuration; keyboard and axe in the three themes; the egress-warning test |
+| P2 | Model usage and limits: calls and tokens per engine and job over a period, from the gateway's own records; the budgets and rate limits `spec/00` and `spec/04` promise, set in *Admin › Models* | M | Figures equal a planted gateway record; access test; keyboard and axe |
+| P3 | Maps administration (ADR-147, written by the lane): *Admin › Maps*: each provider (tiers 1–4) with its state, added and edited, its key under ADR-135 Amendment 2's rule; the local basemap's state, with Build and Verify really run (the set-up console's 501s replaced, the `/v1/admin/geospatial/*` routes called) and the glyph fonts; prefetch areas set and run on a schedule; attribution; `ospreyflow map` verbs (list, build, verify, prefetch) for headless use; the WMTS `endpoint` conflict (`07_BUILD_PLAN.md`, phase 5's known gaps) settled | L | Access tests (`MANAGE_GEOSPATIAL`); demo and CI map data still tier 1 only (`test_demo_osprey_config_is_tier_1_only.py`); build and verify on a small synthetic region; keyboard and axe in the three themes |
+| P4 | The analyst's map: a basemap switch among the providers the deployment holds; place search over the loaded gazetteer; the light and GOV.UK themes' contrast check beside the dark one | M | `keyboard/map-view.spec.ts` cases for both, each shown red; contrast in the three themes |
+
 ## Lane 4 · Documentation and collateral (`lane/docs`) · Sonnet (P7 confirmed at step 0: interactive, opened after the first feature merge)
 
 Follows merges, never runs ahead of them for the guides:
@@ -136,12 +163,26 @@ Follows merges, never runs ahead of them for the guides:
   Product Overview, next draft after `Draft1l`): drawing boards as the headline feature, from the
   design reference, marked "coming" until L3.3 and L3.4 are merged; screenshots retaken after each
   merge, in the default and GOV.UK themes.
-- **D2 (after L2.9 merges):** the user, developer and admin guides, the website and the deck: four
-  places; no branches; three alert sources and one queue; Rules and Monitoring and the rule author; home
-  cases, Authors and teams; screening lists; releases; the Reports Viewer's journey; the roles' words from
-  `help/roles.ts`; GOV.UK screenshots too. The website marks unbuilt features *coming*. Exit: `make ci`'s
-  spec and link gates; no "three places" and no "branch" outside the pipeline DAG. Until then the website
-  and deck edits that say "three places" are held (ADR-145 Amendment 4).
+- **D2 (rescoped by the owner, 8 November 2026; ADR-142 Amendment 3 decision 5).** It starts when
+  rules' L2.9 and L2.10, admin's L2.5 and platform's P1 and P3 are merged and a deployment started from
+  the checkout shows them in both the default and GOV.UK themes; then a pass after each later merge that
+  changes a screen. Scope:
+  - **The README** (`OspreyFlow_Core/README.md`), carrying the overview deck's lasting content (the
+    problem, the four people, See/Where/Do, the guarantees and safeguards, the use cases, reporting, the
+    two architecture levels, the honest limits and the licence traps), describing the product as built.
+    What it claims is published, so the owner approves the draft.
+  - **The user, developer and administration guides, and a standalone architecture guide** printed
+    beside them (`tools/docs_pdf.py`): four places; no branches; three alert sources and one queue; the
+    whole rules and alerting module (sentence rules, screening lists, schedules, checks on load, the
+    second approver, hotlists, held rows, the Rules place and its editor, teams and routing, the
+    monitoring board); home cases, Authors and teams; releases; the Reports Viewer's journey; Maps and
+    Models administration; the roles' words from `help/roles.ts`; and the spec copy's drift fixed
+    (`spec/10_ADMINISTRATION_GUIDE.md` lacks §9.5 and §9.6).
+  - **The welcome pages, the website and the GOV.UK theme's wording**, brought into line with one
+    another and with the guides (the owner, 8 November: they diverge in places).
+  - **The deck**, the next draft after `Draft1l`. The website marks unbuilt features *coming*.
+  Exit: `make ci`'s spec and link gates; `make docs-pdf`; no "three places" and no "branch" outside the
+  pipeline DAG.
 
 ## File ownership
 
@@ -200,9 +241,11 @@ the lane records each one in `REPORT.md`.
 | Lane | Owns |
 | --- | --- |
 | Studio | `apps/workspace/src/ingest/**` (except `ingest/runs/promotions*` during L3.4); `services/ingest/**`; the Studio's routes in `services/api`; `packages/knowledge_adapters/**`; `recipes/**`; `connectors/**` |
-| Glass | `apps/workspace/src/{shell,layout,home,welcome,admin,statusbar,theme,brand}/**`; `apps/workspace/src/alerts/**` read-only during L2.1; the Admin and audit routes in `services/api`; the GOV.UK header |
+| Admin | `apps/workspace/src/admin/**` except the Models and Maps sections; the Admin, people, roles, teams and audit routes in `services/api`; operations' promotions and ageing |
+| Rules | `apps/workspace/src/{shell,layout,home,statusbar,theme,brand}/**` (the places and the GOV.UK header); `apps/workspace/src/alerts/**` and the Rules and Monitoring place; the alerts, rules, watches and monitoring modules and routes in `services/api` |
+| Platform | `apps/workspace/src/admin/sections/{Models,Maps}*`; `apps/workspace/src/{map,site,models}/**`; `services/api/{model_routing,tile_proxy,tile_cache,prefetch,tier4_registration,mapconfig_loader}.py` and the map, geospatial and model routes; `services/geocoder/**`; `packages/adapters/model_litellm/**`; the set-up console's Models and Geospatial screens and their routes (`apps/harness/src/screens/{Models,Geospatial}Screen.tsx`, `harness/{geospatial,install_page}.py`); `cli/ospreyflow/models.py` and the map verbs; `scripts/{build_local_basemap,fetch_basemap_glyphs,geo_local_provider,verify_map}.py` |
 | Case | `services/api/dataset_scope.py`; `services/api/working_set/**`; the case, view, board and promotion routes; the graph adapter's access step; `apps/workspace/src/{canvas,investigation}/**` and new `boards/`, `views/`; `scripts/migrate_*` |
-| Docs | `OspreyFlow_Core/docs/**`, `OspreyFlow_Build/marketing_site/**`, `OspreyFlow_presentations/**` |
+| Docs | `OspreyFlow_Core/docs/**`, `OspreyFlow_Core/README.md`, `apps/workspace/src/welcome/**`, `OspreyFlow_Build/marketing_site/**`, `OspreyFlow_presentations/**` |
 | Orchestrator | `spec/06_DECISIONS.md` (appends, reservations), `spec/ADR_RESERVATIONS.md`, `process/**`, `OspreyFlow_Build/tools/friction_assemble.py`, `OspreyFlow_Build/tools/adr_reservations_check.py`, `OspreyFlow_Build/scripts/{stack_lease,lanes_heartbeat,lanes_launch}.sh` |
 | Shared, by small orchestrator-merged commits only | `packages/schemas/**` (and the generated types); `keyboard/actionRegistry.ts`; `apps/workspace/src/design/tokens.css`; `OspreyFlow_Core/Makefile` and `.github/workflows/ci.yml` (the owner's) |
 
@@ -221,10 +264,17 @@ the lane records each one in `REPORT.md`.
 10. L2.8 before L2.9; L2.9 before L2.10–L2.12; L2.10 before L2.11.
 11. L2.5 before L2.10's team routing and before L3.1b's team owners.
 12. L3.3 and L3.4 before L3.9 (L5 and L6 answered: ADR-143 Amendment 3).
-13. D2 after L2.9, then again after each later merge that changes a screen.
+13. D2 as Lane 4 now says (ADR-142 Amendment 3 decision 5): after L2.9, L2.10, L2.5, P1 and P3, once a
+    deployment shows them in both themes; then again after each later merge that changes a screen.
 14. No brief for L2.5, L2.7, L2.9–L2.12, L3.1b–L3.4, L3.6, L3.9 or the new L1.3, L1.6, L1.7 before the
     owner's records of 7 November are on `main` (`process/inbox/specs_2026-11-07`, applied at the commit
     that appends them).
+
+15. P1 before P3: P3's map keys follow P1's rule, right and audit.
+16. A new Admin section (Models, Maps) needs its entry in Admin's section list: a small orchestrator
+    commit immediately before the merge that builds it, as with a registry id.
+17. L2.8c before L2.9 (the rules lane's first step, on the journal L2.8b left).
+18. L2.7's Home section is built by agreement with rules, which owns Home; rules is told first.
 
 ## What the owner checks by hand
 

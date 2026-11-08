@@ -17,17 +17,17 @@ glass	L2.1	M	done	The alerts gap map
 glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
 glass	L2.3	M	done	The case screen's first lightening
 glass	L2.4	M	done	Admin regrouped into sections (part 1)
-glass	L2.4p2	L	todo	Datasets' columns, Authors, linked cases; System's owners setting (waits for L3.1, ADR-145 Am 4)
-glass	L2.5	L	todo	People and roles; custom roles; Disable; Rule author, teams, leads
-glass	L2.6	M	todo	Operations' promotions and ageing; Audit
-glass	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
+admin	L2.4p2	L	todo	Datasets' columns, Authors, linked cases; System's owners setting (waits for L3.1, ADR-145 Am 4)
+admin	L2.5	L	todo	People and roles; custom roles; Disable; Rule author, teams, leads
+admin	L2.6	M	todo	Operations' promotions and ageing; Audit
+admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
-glass	L2.8c	S	todo	The other link supersedes through the repoint journal
-glass	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
-glass	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
-glass	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
-glass	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
+rules	L2.8c	S	todo	The other link supersedes through the repoint journal
+rules	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
+rules	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
+rules	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
+rules	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
 case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
 case	L3.1b	L	done	Phase 5's model half; Make live's owner step; home cases; drawn kind
 case	L3.2	L	todo	Case views replace branches; no branches anywhere
@@ -38,5 +38,9 @@ case	L3.6	S	todo	drawn_watch alerts in the one queue (with L2.10)
 case	L3.7	S	todo	The grading scheme setting and command
 case	L3.8	S	todo	The ownership route for Disable
 case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (L5, L6 ruled)
+platform	P1	L	todo	Models in Admin: engines, each job's model, keys write-only, connection test (ADR-135 Am 2)
+platform	P2	M	todo	Model usage and limits
+platform	P3	L	todo	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
+platform	P4	M	todo	The analyst's map: basemap switch, place search, contrast in three themes
 docs	D1	M	done	The website: drawing boards and three places, marked coming
-docs	D2	M	todo	Guides, website, deck: four places, no branches, alerts (after L2.9)
+docs	D2	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, L2.5, P1, P3 run deployed)

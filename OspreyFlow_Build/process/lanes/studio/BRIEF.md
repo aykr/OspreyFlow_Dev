@@ -1,48 +1,24 @@
-# Studio lane · brief L1.2a part A (redo) and L1.2b · events-only withdrawal, then phase 6's exit
+# Studio lane · brief L1.3 · phase 7a: the staging catalogue's engine
 
-Written by the orchestrator, 7 November 2026, for a **fresh studio session**. The previous session's work
-is on `lane/studio` at `ef9b35d`; its `REPORT.md` items 1–10 say where everything stands, and items 9–10
-say where Part B starts. Read them first. Opus, medium. Parts in order; message the orchestrator
-(`ospreyflow-7e`) ready-to-merge after each.
+Written by the orchestrator, 8 November 2026, for a **fresh studio session** on account `sol` (ADR-142
+Amendment 3). The previous session's last step, L1.2b, is merged (`1fb38ba`): Phase 6's exit is met.
+Read its report (`process/lanes/studio/REPORT.md`), including what it recorded but did not resolve (a new
+pipeline pins no pack, where the seeded draft pins niem 3, because it has no domain-model step). Rebase
+onto `main` first. Opus, medium. Size L.
 
-**First:** `git rebase main`. `06_DECISIONS.md` will conflict where your ADR-110 Amendment 15 and main's newer
-amendments both append at the end of the file. Keep main's text whole and put your rewritten Amendment 15 after it.
+**Binds.** `process/CLAUDE.md` rules 1–15 (1, 3, 8, 9, 12 and 15 above all); ADR-140 and its Amendments
+7–10 (Amendment 9 decision 3: screening lists as reference lists); ADR-141; `spec/09_INGEST_STUDIO.md`;
+`spec/ingest_studio_redesign/` and `BUILD_PLAN_INGEST_STUDIO.md`'s phase 7.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (rule 3 above all; rule 14 with the leased throwaway stack,
-`SESSIONS_RUNBOOK.md` §4); ADR-110 Amendments 6–13; `spec/09_INGEST_STUDIO.md`.
+**Build** (the plan's row L1.3): the staging catalogue's engine: Knowledge Adapters, golden files,
+staged Parquet and `source_refs`; it carries reference lists of kind `screening` (ADR-140 Amendment 9
+decision 3). The engine only: no screen in this step (L1.4 builds the drawers).
 
-**Part A, redo: the owner's ruling of 7 November, "Only the rows' events".** A full-snapshot refresh with
-*withdraw* takes back **only the dropped rows' own events** (their timeline and analytics rows). It never
-touches graph elements, links or nodes. A dropped row's links and nodes stay until its load is
-reverted. Why: whether a link went depended on other cases' rows, so the run's counts, the live links
-and the timeline differed with data the loader cannot read (rule 3).
-- `services/ingest/snapshot_withdrawal.py`: no graph change at all; drop both ledger reads that look at
-  other cases (`elements_kept_by_other_rows`, `elements_in_other_records`). `services/api/studio_publish.py`:
-  withdraw the rows' events by their own key, not by edge ids (they are keyed by edge today; find the
-  row's key). Drop `only_this_pipeline` if nothing needs it. Metering counts no withdrawal.
-- Rewrite ADR-110 Amendment 15 on the branch (its title too: the reservation row will take your title at
-  merge) and spec 09's "A full snapshot with withdraw" paragraph: nodes and links are left with no row
-  until a revert, and how records written earlier with a non-empty `withdrawn_node_ids` revert.
-- **The proof, rule 15's shape:** the real ArcadeDB adapter (`arcadedb_adapter`) and two real principals of
-  different cases; the same recipe run in the other case; through `run_recipe_as` and
-  `run_published_recipe`. Compare everything the loader is told, including after the row comes back
-  (`edges_created`), plus the live nodes, the live links and the timeline events, with and without the
-  other case's row and link. Red with link withdrawal restored and with each ledger read restored, kept
-  on record (`process/lanes/studio/L1.2a_RED_RECORD.md`, in the pattern of `L1.2_RED_RECORD.md`). Rewrite
-  `tests/ingest/test_snapshot_withdrawal.py`, `test_snapshot_withdrawal_tells_nothing_live.py`,
-  `test_source_refresh_snapshot_live.py` to the rule.
-- Minors: `metering.py:12-13`; the live test's docstring; the `Withdrawal` docstring; delete
-  `process/lanes/studio/L1.1_ci_makefile.diff` (superseded by `L1.2a_ci_makefile.diff`; add the live files
-  this part adds to that diff).
+**Tests first, each shown red:** golden files per step; provenance survives a Join (red with
+`source_refs` dropped at the join); a screening list round-trips through the catalogue; a guided-mode
+transform stays a Knowledge Adapter with its golden file (rule 8), never an expression.
 
-**Part B (L1.2b): phase 6's exit.** As `REPORT.md` items 9–10 say: the Prison Intelligence reports
-pipeline built from scratch in guided mode (the committed map's eleven elements and ten links) by the
-harness walk and by `DEMO_GUIDE.md` chapter 4's steps; an expert-mode edit of it; one live walk of the
-running product on the throwaway stack under the lease, naming it.
-
-**Part C waits** for L3.1's merge, and I will tell you (the owner's load-into rule for pipelines; see
-`BRIEF.md` history at `ee56678`).
-
-**Every live run takes the lease** (`OspreyFlow_Build/scripts/stack_lease.sh acquire studio "<purpose>"`),
-the throwaway stack included; nothing reaches 2491, 55433 or 6379 without it. Questions for the owner go
-to the orchestrator by message, as multiple choice. Copy every hash you send from git output.
+**Exit.** Phase 7a's exit as the redesign's plan states it, and the row's; fixtures synthetic and
+in-repo (rule 9); any live case under a named lease and stack (`stack_lease.sh acquire studio
+"<purpose>"`, a or b; pin the ports it prints); a friction fragment. Report in Prompt L's format, then
+stop.

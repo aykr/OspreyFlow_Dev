@@ -28585,3 +28585,52 @@ and `test_the_stored_states_name_each_superseded_elements_successor` and
 `test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone`;
 `test_phase3_working_set.py`'s purge before a resync's snapshot. Each red first, under the glass lease
 (`process/lanes/glass/l2.8b/`).
+
+
+### ADR-142, Amendment 3 (8 November 2026) — six lanes, chosen accounts, and two test stacks
+
+Status: accepted 8 November 2026, on the owner's records of the same day (put to the owner by the
+orchestrator as multiple choice: "Six lanes", the sol account for rules, case, studio and platform,
+model and map keys in the Glass's Admin place with the CLI kept, docs after the new screens run deployed).
+Decisions 1 to 9 and Amendments 1 and 2 stand except where this says so.
+
+**Why.** After the owner's pause of 8 November, glass held nine of the remaining steps in two strands
+that share no files (Admin's people, roles and operations; the alerts journey), and maps and model
+administration had no owner at all: the Glass's Admin place has no Maps section, the set-up console's
+basemap Build and Verify answer 501, and engines, each job's model and keys can only be set in
+`osprey.yaml` and the CLI. With four lanes, those waited behind glass. The token use of the four lanes
+over the first 33 hours (case about 25%, glass 24%, studio 21%, the orchestrator 30%) also called for
+spreading lanes over two accounts.
+
+1. **Six lanes.** `studio` and `case` are unchanged. `glass` is retired and split: **`admin`** takes
+   L2.4 part 2, L2.5, L2.6 and L2.7; **`rules`** takes L2.8c and L2.9 to L2.12. **`platform`** is new,
+   for maps and model administration (steps P1 to P4, under ADR-135 Amendment 2 and ADR-147).
+   **`docs`** keeps its lane and gains the README, a standalone architecture guide, the welcome pages,
+   the website and the GOV.UK theme's wording, brought into line with one another; it starts when a
+   deployment runs the new screens in both the default and GOV.UK themes (decision 5 below).
+   `scripts/lanes.conf` lists the six; the launcher refuses any other name, glass included.
+2. **Accounts** (Amendment 1's mechanism): `rules`, `case`, `studio` and `platform` run on the owner's
+   `sol` account; the orchestrator, `admin` and `docs` stay on the orchestrator's. The owner writes the
+   `accounts.conf` lines; the sessions of 6 to 8 November are retired, not resumed, because a session
+   cannot change account and a fresh session with a brief costs less than one carrying a lane's history.
+3. **Two test stacks, one lease each.** Six lanes would queue for one throwaway stack, so there are two,
+   listed in `scripts/lane_stacks.tsv`: stack a (the original: 2491, 55433, 6379, 9000, and ClickHouse's
+   18123, which only stack a has) and stack b (`osprey-test-b-*`, bound to 127.0.0.1: 2492, 55434, 6380,
+   9002). `stack_lease.sh acquire` takes a free stack, or the one named, and prints its ports; a lane
+   holds one stack at a time; `up`, `down` and `release` act on the holder's own stack, and a release
+   looks only at that stack's containers. `tests/port_guard.py` reads the same table and refuses each
+   stack's ports to anyone but its holder, at start-up and at every connection. The heartbeat shows both.
+   A timing or reliability figure names its stack as well as its lease. The tests are
+   `tests/test_stack_lease.py`, `test_port_guard.py`, `test_lanes_heartbeat.py` and
+   `test_lanes_launch.py`, each new case red first against the one-stack scripts, and the guard red with
+   one holder checked for both stacks (`process/lanes/O6_RED_RECORD.md`).
+4. **File ownership** moves with the steps (`process/BUILD_PLAN_PARALLEL_LANES.md`'s map): `rules` owns
+   the shell, layout, Home, status bar, theme and brand (the places and the GOV.UK header L2.9 reworks)
+   with `alerts/**` and the Rules and Monitoring place; `admin` owns `admin/**` except the Models and
+   Maps sections, and the Admin, people, teams and audit routes; `platform` owns those two sections,
+   `map/**`, `models/**`, the map, geocoder and model-routing modules of the Conduit, the model gateway's
+   adapter, the set-up console's Models and Geospatial screens and their routes, and the CLI's `models`
+   and map verbs; `docs` adds `welcome/**` and `OspreyFlow_Core/README.md`.
+5. **When docs starts.** The owner's ruling: after rules' L2.9 and L2.10, admin's L2.5 and platform's
+   Models and Maps screens (P1 and P3) are merged and a deployment started from the checkout shows them
+   in both themes; then a pass after each later merge that changes a screen.
