@@ -64,9 +64,6 @@ NOT_A_SECTION_S = {
     r"^/v1/admin/screening-lists": "the Glass's Monitoring › Lists",
     # Run by `ospreyflow` and the site geospatial wizard, not by a screen (App.tsx's note).
     r"^/v1/admin/geospatial/": "the geospatial wizard's, no screen",
-    # Admin › System's *Dataset owners may be* (ADR-145 Amendment 4 decision 7): the route is
-    # L3.1b's, its control on System's screen L2.4 part 2's; once that screen calls it, this goes.
-    r"^/v1/admin/settings/dataset-owners$": "Admin › System's, its control not yet built",
 }
 
 
