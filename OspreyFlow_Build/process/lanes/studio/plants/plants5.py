@@ -19,8 +19,8 @@ PLANTS = {
          "        if since and False:\n            refusals.append(Refusal(record.load_id, \"own_link_written_since\", since))\n"),
     ], [UNIT]),
     "O3": ("nothing captured: the load keeps no prior state", PUB, [
-        ("            report.own_key_merges = _own_key_merges(report, own, priors)\n",
-         "            report.own_key_merges = []\n"),
+        ("                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)\n",
+         "                report.own_key_merges = []\n"),
     ], [UNIT]),
     "O4": ("every merge counted as the row's own at the revert", REVERT, [
         ("    own = {m.edge_id for m in record.own_key_merges}\n", "    own = set(record.merged_edge_ids)\n"),
@@ -47,8 +47,8 @@ LIVE_PLANTS = {
          "        marking = state.handling.model_copy(update={\"classification\": \"OFFICIAL\"})\n"),
     ], [CONF, "-k", "link_state or restored_link"]),
     "L3": ("nothing captured, live: the load keeps no prior state", PUB, [
-        ("            report.own_key_merges = _own_key_merges(report, own, priors)\n",
-         "            report.own_key_merges = []\n"),
+        ("                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)\n",
+         "                report.own_key_merges = []\n"),
     ], [LIVE, "-k", "returning"]),
 }
 env = {k: v for k, v in os.environ.items() if k != "OSPREY_LANE"}

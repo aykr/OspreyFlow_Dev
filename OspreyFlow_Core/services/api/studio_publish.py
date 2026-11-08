@@ -22,13 +22,12 @@ import os
 from collections.abc import Collection, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import yaml
 from services.ingest.engine import (
     RowRejected,
     recipe_handlings,
-    row_group_keys,
     row_marking,
     run_recipe,
 )
@@ -565,9 +564,7 @@ async def load_with_rules(
             try:
                 # ADR-110 Amendment 16: a returning row's own link, read as stored in this
                 # transaction before the load writes, so its revert can put it back.
-                own, priors = await _own_links_before(
-                    recipe, rows, sink, graph, investigation_scope, tx
-                )
+                own_links = _OwnLinks(sink, graph, tx) if sink is not None else None
                 report, events = await run_recipe(
                     recipe,
                     rows,
@@ -586,7 +583,7 @@ async def load_with_rules(
                     # The store of loaded rows is the ledger's, reached through the sink (ADR-127
                     # decision 5). A recipe without `deduplicate` is asked too, for the one question
                     # of whether the case holds keys it would reload (it keeps none itself).
-                    row_keys=sink,
+                    row_keys=own_links,
                 )
                 verdict = (
                     await rules.pre_commit(
@@ -656,7 +653,8 @@ async def load_with_rules(
             if withdraw_dropped:
                 assert sink is not None
                 await _withdraw_dropped_rows(recipe, rows, report, sink, investigation_scope)
-            report.own_key_merges = _own_key_merges(report, own, priors)
+            if own_links is not None:
+                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)
             if past is not None:
                 # Before the commit, so the record the commit writes keeps the watermark reached.
                 report.watermark = past.reached
@@ -732,28 +730,33 @@ async def withdraw_dropped_rows_events(
     return await analytics.withdraw_events_by_id(ids, report.load_id)
 
 
-async def _own_links_before(
-    recipe: Recipe,
-    rows: Sequence[Mapping[str, str]],
-    sink: LoadSink | None,
-    graph: GraphPort,
-    case: str,
-    tx: TxId,
-) -> tuple[dict[str, tuple[str, ...]], dict[str, LinkPriorState]]:
-    """ADR-110 Amendment 16: of this load's rows, those an earlier full snapshot of this pipeline in
-    this case withdrew, each with the links its own key recorded, and each such link as stored now,
-    inside the load's transaction and before it writes. Asked of this pipeline's own keys in this
-    case alone (rule 3): nothing of another case is read."""
-    if sink is None or recipe.deduplicate is None:
-        return {}, {}
-    present = [key for key in row_group_keys(recipe, rows) if key is not None]
-    own = await sink.withdrawn_row_links(recipe.id, case, present) if present else {}
-    priors: dict[str, LinkPriorState] = {}
-    for edge_id in sorted({e for links in own.values() for e in links}):
-        state = await graph.read_link_state(edge_id, tx)
-        if state is not None:
-            priors[edge_id] = state
-    return own, priors
+class _OwnLinks:
+    """ADR-110 Amendment 16: the sink, as the engine asks it which of the file's keys the case has
+    kept. That question comes before the load writes, inside its transaction, with every row's key
+    (computed off the event loop, Amendment 29), so it is where a returning row's own link is read
+    as stored: of the keys not kept, those an earlier full snapshot of this pipeline in this case
+    withdrew, each with the links its record holds. Asked of this pipeline's own keys in this case
+    alone (rule 3). Every other question goes to the sink unchanged."""
+
+    def __init__(self, sink: LoadSink, graph: GraphPort, tx: TxId) -> None:
+        self._sink, self._graph, self._tx = sink, graph, tx
+        self.own: dict[str, tuple[str, ...]] = {}
+        self.priors: dict[str, LinkPriorState] = {}
+
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        kept = set(await self._sink.kept(recipe_id, case, keys))
+        # A withdrawn key is not kept (it was moved aside), so only the others can be one.
+        back = [key for key in keys if key not in kept]
+        self.own = await self._sink.withdrawn_row_links(recipe_id, case, back) if back else {}
+        self.priors = {}
+        for edge_id in sorted({e for links in self.own.values() for e in links}):
+            state = await self._graph.read_link_state(edge_id, self._tx)
+            if state is not None:
+                self.priors[edge_id] = state
+        return kept
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._sink, name)
 
 
 def _own_key_merges(
