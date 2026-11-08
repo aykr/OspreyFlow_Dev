@@ -1,0 +1,5 @@
+# red 2(c): a cited link's ends left out of the re-mark (plant in remark_alerts) — lease rules, stack b, 2026-11-08T13:53:26Z, at 5910d6d + working tree
+E           AssertionError: the alert's node was re-marked into a revision
+E           assert '01M6XPZ2QHVGJ1X36YDRA6XY15' != '01M6XPZ2QHVGJ1X36YDRA6XY15'
+E            +  where '01M6XPZ2QHVGJ1X36YDRA6XY15' = Alert(id='01M6XPZ2V4Q0YSH3JNAEBTVJWT', rule_id='typology:01M6XPZ2V4Q0YSH3JNAEBTVJWV', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).alert_node_id
+1 failed in 6.66s

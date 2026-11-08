@@ -72,12 +72,12 @@ async def submit_supersede_node(
 
     `alerts`: the alerts' repoint journal (ADR-109 Amendment 11). Each link the supersede clones is
     recorded before the caller commits `tx`, and the next read of alerts settles the record once
-    the graph shows the commit, so an alert citing one follows it to its clone."""
+    the graph shows the commit, so an alert citing one follows it to its clone. An exception from
+    here closes that record: the caller must then roll `tx` back, never commit it."""
     stats = await graph.neighbourhood_stats(node_id, principal)
     if stats.degree < degree_threshold:
-        new_id = await graph.supersede_node(
-            node_id, replacement, tx, on_link_cloned=journal_outside_commit(alerts)
-        )
+        async with journal_outside_commit(alerts) as cloned:
+            new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=cloned)
         if judgement_store is not None:
             await flag_judgements_citing_superseded_node(judgement_store, node_id)
         return SupersedeNodeAccepted(mode="sync", result_node_id=new_id)
@@ -114,9 +114,8 @@ async def run_supersede_node_job(
     `submit_supersede_node`'s: the worker commits `tx` after this returns."""
     node_id = str(payload["node_id"])
     replacement = NodeWrite.model_validate(payload["replacement"])
-    new_id = await graph.supersede_node(
-        node_id, replacement, tx, on_link_cloned=journal_outside_commit(alerts)
-    )
+    async with journal_outside_commit(alerts) as cloned:
+        new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=cloned)
     if judgement_store is not None:
         await flag_judgements_citing_superseded_node(judgement_store, node_id)
     return {"result_node_id": new_id}

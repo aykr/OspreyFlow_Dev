@@ -233,14 +233,15 @@ async def run_resolution_for_entity_type(
         scheme=scheme,
     )
     not_same_as_by_id = {e.id: e for e in every_split}
-    conflict_ids = await record_conflicts(
-        graph,
-        [*conflicts, *layer_conflicts],
-        not_same_as_by_id,
-        created_by=SERVICE_PRINCIPAL_ID,
-        tx=tx,
-        on_link_replaced=journal_outside_commit(alerts),
-    )
+    async with journal_outside_commit(alerts) as replaced:
+        conflict_ids = await record_conflicts(
+            graph,
+            [*conflicts, *layer_conflicts],
+            not_same_as_by_id,
+            created_by=SERVICE_PRINCIPAL_ID,
+            tx=tx,
+            on_link_replaced=replaced,
+        )
 
     if valkey is not None and same_as_ids:
         await ChangeStreamWriter(valkey).publish("resolution", edge_ids=same_as_ids)

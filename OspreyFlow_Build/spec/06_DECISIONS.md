@@ -28674,30 +28674,51 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
      with (`same_as_writer.record_conflicts`' `NOT_SAME_AS` supersede, through `trigger.py`). The
      record is opened at the first pair, so a write replacing nothing leaves none; each pair is
      recorded before the worker's commit; its writer never settles it, since the commit is not its
-     own; the next read of alerts settles it once the graph shows the commit, and one whose write
-     never commits is dropped at `STALE_REPOINT_AFTER`, as any record is. The deployed worker
-     (`worker_main`) connects the alert store and binds it to both jobs, as the Conduit's own
-     registration does.
+     own; the next read of alerts settles it once the graph shows the commit. A writer that raises
+     closes its record, since its committer rolls back (the worker on any handler's exception; a
+     caller of `submit_supersede_node` must too). The deployed worker (`worker_main`) connects the
+     alert store and binds it to both jobs, as the Conduit's own registration does; the pipeline
+     runner is given the store by its run (`recipe_run`), rule gate or none.
+   - **A record is kept live while its writer writes** (the review's item 3). Every writer's record,
+     in `repointing` and in `journal_outside_commit`, has its `recorded_at` restarted every
+     `REPOINT_KEEP_ALIVE` (five minutes) until the writer leaves (`AlertStore.keep_alive`), so the
+     stale threshold measures the time since the writer was last known alive, not since the record
+     was opened: a write open longer than `STALE_REPOINT_AFTER` keeps its record, and only one whose
+     writer has gone (crashed, or rolled back) for the threshold, its write never committed, is
+     dropped. An outside-commit writer's committer commits as the writer leaves, well inside the
+     threshold from its last beat.
 3. **The purge is published (Q2).** Every alert path's purge (`alerts.purge_copies`: the close, a
    link change, a picture's replace and removal, the routes above, and the read path's
    `purge_remarked_copies`) publishes each case's stored removal on its channel at once
    (`notify.publish_delta`, through `WorkingSetService.publisher`), every store cleared before
    anything is published, as the revert's own purge does. Each connected socket projects it for
-   its reader from the record (ADR-124 decision 4). A service built without a client publishes
-   nothing.
-4. **The settle's lock and rename (D9, D10).** The rename of the alerts naming a recorded node
+   its reader from the record (ADR-124 decision 4): a reader who may not read a node is sent
+   nothing naming it. A service built without a client publishes nothing; the re-marking script
+   now builds its service with one, so its purge is published too. `remark_alerts`' own
+   `supersede_node` of an alert's node clones only that node's `ALERTED_ON` links, which no alert
+   cites (a finding cites its evidence), so it reports no clone to the journal.
+4. **A re-mark counts a cited link's ends** (the review's item 2(c)). A node's correction can raise
+   an end above the link it now carries (a correction to SECRET clones an OFFICIAL link onto a
+   SECRET node): the queue already withholds the alert from a reader who may not read an end, and
+   the alert's own node is now raised to the highest marking of the cited links' ends too, so its
+   words are not read through the node by that reader either. An end that cannot be read for its
+   marking makes the re-mark unsafe, as a referent does.
+5. **The settle's lock and rename (D9, D10).** The rename of the alerts naming a recorded node
    (`AlertStore.rename_alert_nodes`) takes the alerts' rows in id order first, as `apply_repoints`
    does, so a rename and a repoint of the same alerts never take them in opposite orders and
    deadlock. A settle waits at most `REPOINT_LOCK_WAIT` (30 seconds) for a lock connection, then
    refuses in words (`RepointLockBusy`, naming the record and the wait) and leaves the record for
-   a later read; a writer whose write has committed is not failed by it. The record locks move to
-   Postgres's two-key space under their own first key (`REPOINT_LOCK_SPACE`), out of the one-key
-   space every `pg_advisory_xact_lock(hashtext(...))` elsewhere shares, so no record's lock waits
-   on, or is skipped for, another store's lock on the same text.
-5. **No store without the journal.** `settle_repoints` calls the store's `settle_pending` and
+   a later read; a writer whose write has committed is not failed by it, and a read stops settling
+   at the first refusal rather than waiting once per record. The record locks move to Postgres's
+   two-key space under their own first key (`REPOINT_LOCK_SPACE`), out of the one-key space every
+   `pg_advisory_xact_lock(hashtext(...))` elsewhere shares. The two-key space is not theirs alone:
+   `recipe_runs.py`'s locks take `(hashtext(recipe), hashtext(case))`, which meets a record's
+   lock only should a recipe id hash to `REPOINT_LOCK_SPACE` and its case to the record's id; that
+   makes one settle skip a record a later read settles, as any collision here does.
+6. **No store without the journal.** `settle_repoints` calls the store's `settle_pending` and
    refuses a store without one (`AttributeError`); the tolerance L2.8b left for the queue reads'
    fakes is gone, and each fake keeps an empty journal with the real signature.
-6. **The id path's timing (D8, Q3).** `AlertStore.get_authorized` by id, given the graph (so it
+7. **The id path's timing (D8, Q3).** `AlertStore.get_authorized` by id, given the graph (so it
    settles first), 200 reads each after ten to warm, under the rules lease on stack b (8 November
    2026, 13:12:56Z to 13:13:25Z, `process/lanes/rules/l2.8c/d8-timing.txt` and its script): no
    pending record, median 1.85 ms (quartiles 1.64 and 2.24); one pending record whose write has
@@ -28709,8 +28730,11 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
    reader's access. It says nothing of what the reader may not read, which is what rule 7 guards;
    Amendment 10 point 7's property, now measured. A record stays pending for one graph transaction
    in the ordinary case; the cost of many at once (a stuck writer, up to `STALE_REPOINT_AFTER`) is
-   a latency matter for the owner's review, not an access one.
-7. **Not covered** (found building this; for the orchestrator): an alert naming a corrected node
+   a latency matter for the owner's review, not an access one. The figures are for records of one
+   pair: a pending record costs a graph read per recorded link (its first hop, and once stale the
+   check that drops it reads every pair again), so a record holding many pairs (a correction of a
+   node of high degree) costs a read in proportion until it is settled or dropped.
+8. **Not covered** (found building this; L2.8d, the orchestrator's settlement): an alert naming a corrected node
    among its `referent_node_ids` still names the superseded revision, which no read returns, so a
    correction of a node an alert names withholds that alert as a cited link's correction did before
    this amendment. The journal renames only an alert's own `Alert` node (`alert_nodes`); a
@@ -28719,8 +28743,17 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
 **Tests.** `tests/ingest/test_repoint_journal_callers_live.py`: for each caller (the confirm and the
 retract route, the close's confirm, `supersede.py`'s synchronous path and its job, the enrich
 stage's online point, a resolution run's split annotation) an alert citing the link it replaces
-stays listed for its reader, citing the newest revision; each red with that caller's journal entry
-removed at its call site. The same file: a settle refusing in words when no lock connection comes
+stays listed for its reader, citing the newest revision, and is still refused to the case's
+OFFICIAL reader, who may not read the SECRET link's clone, and to the cleared reader in another
+case; each red with that caller's journal entry removed at its call site, the OFFICIAL reader's
+refusal red with the clone written at OFFICIAL, the other case's with the queue's case scope made
+true. The review's round 1 in the same file: a correction to SECRET withholding the alert from the
+OFFICIAL reader and re-marking its node (red with the ends left out of the re-mark); a writer held
+open past the stale limit keeping its record, for the job and the enrich stage (red with the record
+not kept live); a read stopping at the first busy lock pool (red going on: four waits); and the
+purge's published record projected for each socket's reader (red published without its record).
+The graph-port case `test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone`
+(red with the marking made outside the transaction). The same file: a settle refusing in words when no lock connection comes
 free (red with no timeout: the case's bound fired), a record's lock not shared with a one-key lock
 on the same text (red in the one-key space: skipped), a rename and a repoint of the same alerts not
 deadlocking (red with the rename outside the lock: `DeadlockDetectedError`), and a purge published
@@ -28731,4 +28764,5 @@ the alert store; red without), `test_worker_registration.py`'s
 `test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal` (red with either job's binding
 left out) and `test_alert_evidence_withheld.py`'s
 `test_a_read_given_a_store_without_the_journal_is_refused_not_answered` (red with the tolerance put
-back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/`).
+back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/` and its
+`round1/`).

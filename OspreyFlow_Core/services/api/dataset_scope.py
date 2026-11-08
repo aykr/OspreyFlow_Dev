@@ -41,7 +41,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
-from ports.graph import BulkGraphLoader, GraphPort
+from ports.graph import BulkGraphLoader, GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
     EdgeWrite,
@@ -487,7 +487,12 @@ class DatasetStampingGraph:
 
     # A correction or a revert changes what is counted too; each clears what was kept after it.
     async def supersede_node(
-        self, node_id: NodeId, replacement: NodeWrite, tx: Any, *, on_link_cloned: Any = None
+        self,
+        node_id: NodeId,
+        replacement: NodeWrite,
+        tx: Any,
+        *,
+        on_link_cloned: LinkCloned | None = None,
     ) -> NodeId:
         held = await self._held_for(lambda reader: self._inner.get_nodes([node_id], reader))
         await self._refuse_correcting(held, replacement.datasets)

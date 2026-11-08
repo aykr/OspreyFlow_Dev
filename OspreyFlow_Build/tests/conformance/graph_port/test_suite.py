@@ -3578,6 +3578,42 @@ async def test_supersede_node_names_each_cloned_link_and_its_successor_before_th
         assert states[other_link].superseded_by is None and not states[other_link].superseded
 
 
+async def test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c review, item 5). A `supersede_node` rolled back after it reported
+    its clones leaves nothing: each original link is live, names no successor and is not reverted,
+    and no clone it reported is stored, so a repoint record of a write that never committed can
+    follow nothing (the settle drops it as never committed). Red with the original's marking made
+    outside the transaction: the rolled-back write's mark survived, naming a clone no store holds."""
+    async with factory.context() as adapter:
+        (person, contact), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact"),
+            ],
+            [],
+        )
+        _, (link,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", person, contact, classification="OFFICIAL")])
+        reported: list[str] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append(new)
+
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.rollback_transaction(tx)
+
+        assert len(reported) == 1
+        state = (await adapter.stored_link_states([link]))[link]
+        assert state.superseded_by is None and not state.superseded and not state.reverted
+        assert await adapter.stored_link_states(reported) == {}
+
+
 async def test_supersede_edge_replaces_it_in_default_reads(
     factory: GraphAdapterFactory,
 ) -> None:

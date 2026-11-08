@@ -1,0 +1,4 @@
+# red 5: the original's marking made outside the transaction (plant in _name_clone) — lease rules, stack b, 2026-11-08T13:54:01Z, at 5910d6d + working tree
+E           AssertionError: assert ('01M6XQ0289AYE6BVWMMR2B7NY3' is None)
+E            +  where '01M6XQ0289AYE6BVWMMR2B7NY3' = StoredLink(reverted=False, superseded=True, superseded_by='01M6XQ0289AYE6BVWMMR2B7NY3', held_by=1).superseded_by
+1 failed in 2.21s

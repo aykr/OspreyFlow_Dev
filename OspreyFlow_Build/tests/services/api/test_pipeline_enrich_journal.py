@@ -1,5 +1,5 @@
 """ADR-109 Amendment 11 (L2.8c): the pipeline runner gives its enrich stage the alerts' repoint
-journal, the alert store of the run's rule gate. The stage's own use of it, an online point's
+journal, the alert store the run is given (`recipe_run` passes its own). The stage's own use of it, an online point's
 supersede recording each cloned link, is proved live in
 `tests/ingest/test_repoint_journal_callers_live.py`; this proves the runner hands it over."""
 
@@ -17,7 +17,7 @@ from schemas.ingest import EnrichStageReport, PipelineGraph
 READER = Principal(id="reader-1", clearance="OFFICIAL", org_unit="unit-1")
 
 
-async def test_the_runner_gives_its_enrich_stage_the_rule_gates_alert_store(
+async def test_the_runner_gives_its_enrich_stage_the_alert_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Violation caught: `run_published_pipeline` running an enrich stage without the alert store
@@ -46,6 +46,6 @@ async def test_the_runner_gives_its_enrich_stage_the_rule_gates_alert_store(
         investigation_scope="case-1",
         repo_root=None,  # type: ignore[arg-type]
         recogniser_for=lambda name: None,
-        rules=SimpleNamespace(alert_store=alert_store),  # type: ignore[arg-type]
+        alerts=alert_store,  # type: ignore[arg-type]
     )
     assert given == [alert_store]

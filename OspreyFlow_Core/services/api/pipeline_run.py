@@ -494,6 +494,7 @@ async def run_published_pipeline(
     sink: LoadSink | None = None,
     withdraw_dropped: bool = False,
     refresh: RefreshRead | None = None,
+    alerts: AlertStore | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
@@ -506,7 +507,10 @@ async def run_published_pipeline(
     `source_location`, when given, overrides the location of every source node that does not
     carry its own — the same "today's fresh export" override `run_published_recipe` has, applied
     to the sources that read the draft's own recorded location. A source node carrying its own
-    `source_location` in its config keeps it."""
+    `source_location` in its config keeps it.
+
+    `alerts`: the alerts' repoint journal, which each enrich stage's supersedes go through (ADR-109
+    Amendment 11), whether or not the run has a rule gate."""
     # The one choice of pipeline and of each branch's file Verify makes too (`run_source`, build
     # order step 30), so a run cannot read a file Verify did not check.
     pipeline = pipeline_of(draft, repo_root)
@@ -593,7 +597,7 @@ async def run_published_pipeline(
                 scheme=scheme,
                 analytics=analytics,
                 online_geocode=online_geocode,
-                alerts=None if rules is None else rules.alert_store,
+                alerts=alerts,
             )
             report.enriches.append(enrich_stage)
             report.touched_edge_ids.extend(edges)

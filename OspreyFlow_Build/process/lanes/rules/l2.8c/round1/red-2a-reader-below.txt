@@ -1,0 +1,5 @@
+# red 2(a): a node's clone written at OFFICIAL, not its original's marking (plant in _clone_edge_onto) — lease rules, stack b, 2026-11-08T13:53:08Z, at 5910d6d + working tree
+E       AssertionError: a reader who may not read the new revision is given it
+E       assert '01M6XPYKTF237GJR8TY951JFFG' not in {'01M6XPYKTF237GJR8TY951JFFG': Alert(id='01M6XPYKTF237GJR8TY951JFFG', rule_id='typology:01M6XPYKTG1QJBHT0S9G72YTTB', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E        +  where '01M6XPYKTF237GJR8TY951JFFG' = Alert(id='01M6XPYKTF237GJR8TY951JFFG', rule_id='typology:01M6XPYKTG1QJBHT0S9G72YTTB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+1 failed in 8.51s

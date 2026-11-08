@@ -1,0 +1,6 @@
+# red 2(d): the purge published without its record (plant in purge_copies) — lease rules, stack b, 2026-11-08T13:53:33Z, at 5910d6d + working tree
+E           AssertionError: assert '01M6XPZA2N1XW70ZW25F7C96CK' in []
+E            +  where '01M6XPZA2N1XW70ZW25F7C96CK' = Alert(id='01M6XPZA4W3G2NCCEZATK99ETG', rule_id='typology:01M6XPZ9T4M64QVMK08PXQJMST', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_node_id
+E            +  and   [] = DeltaRemoveSent(seq=1, op='remove', node_ids=[], edge_ids=[]).node_ids
+E            +    where DeltaRemoveSent(seq=1, op='remove', node_ids=[], edge_ids=[]) = project_delta(DeltaRemove(seq=1, op='remove', node_ids=['01M6XPZA2N1XW70ZW25F7C96CK'], edge_ids=[], removed=None), Principal(id='reader-l28c-official', clearance='OFFICIAL', org_unit='verify', receivable_handling_codes=[], roles=[], datasets=None))
+E            +      where project_delta = <services.api.working_set.service.WorkingSetService object at 0x11da30aa0>.project_delta

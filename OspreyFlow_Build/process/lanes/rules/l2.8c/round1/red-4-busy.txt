@@ -1,0 +1,4 @@
+# red 4: a read going on to the next record after a busy pool (plant in settle_pending) — lease rules, stack b, 2026-11-08T13:53:58Z, at 5910d6d + working tree
+E       AssertionError: the read waited 2.01 s: once per record, not once
+E       assert 2.0091962080914527 < 1.25
+1 failed in 3.16s

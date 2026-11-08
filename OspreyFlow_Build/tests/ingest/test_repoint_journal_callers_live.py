@@ -9,6 +9,7 @@ record (`process/lanes/rules/l2.8c/`)."""
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from typing import Any
 
 import asyncpg
@@ -132,7 +133,9 @@ async def test_a_rename_and_a_repoint_of_the_same_alerts_never_deadlock(stores: 
 # `L`: a node's correction clones it onto the new revision of `p`; a split's annotation supersedes
 # it. The alert stays listed for the reader who may read `L`, citing `L`'s newest revision. Red with
 # that caller's journal entry removed: the alert went on citing `L`, which no read returns, and was
-# withheld from every reader for good (ADR-146 decision 10).
+# withheld from every reader for good (ADR-146 decision 10). `L` is SECRET between OFFICIAL ends:
+# an OFFICIAL reader of the case, who may read `p` and `q` but not `L`, is still refused the alert
+# after the move, and the cleared reader is not given it in another case (rules 3 and 4).
 
 from datetime import UTC, datetime  # noqa: E402
 
@@ -148,9 +151,14 @@ from schemas.domain import (  # noqa: E402
 
 from conduit_common.identity import new_edge_id, new_node_id  # noqa: E402
 
-#: The reader: OFFICIAL in the unit that owns everything here, so it may read `p`, `q` and `L`.
-READER = Principal(id="reader-l28c", clearance="OFFICIAL", org_unit="verify")
+#: The reader: SECRET in the unit that owns everything here, so it may read `p`, `q` and `L`.
+READER = Principal(id="reader-l28c", clearance="SECRET", org_unit="verify")
+#: A reader of the same case who may read `p` and `q` but not the SECRET `L`.
+LOW = Principal(id="reader-l28c-official", clearance="OFFICIAL", org_unit="verify")
+#: A reader who may read none of it, for a socket's projection.
+PUBLIC_READER = Principal(id="reader-l28c-public", clearance="PUBLIC", org_unit="verify")
 OFFICIAL = Handling(classification="OFFICIAL", handling_code="P", originator="verify", owning_unit="verify")
+SECRET = OFFICIAL.model_copy(update={"classification": "SECRET"})
 
 
 def _provenance(state: ProvenanceState) -> Provenance:
@@ -166,7 +174,8 @@ def _person(name: str, state: ProvenanceState = ProvenanceState.ASSERTED, node_t
 
 
 async def _cited_link(stores: dict[str, Any], graph: Any, case: str, *, p_state: ProvenanceState,
-                      p_type: str = "Person", link_type: str = "ASSOCIATE_OF") -> tuple[str, str, Alert]:  # fmt: skip
+                      p_type: str = "Person", link_type: str = "ASSOCIATE_OF", link_handling: Handling = SECRET,
+                      alert_node: str | None = None) -> tuple[str, str, Alert]:  # fmt: skip
     """`p` (in `p_state`), `q`, the link `L` from `p` to `q`, and an alert citing `L` and `q`."""
     tag = new_id()
     p_write = _person(f"P {tag}", p_state, p_type)
@@ -175,25 +184,33 @@ async def _cited_link(stores: dict[str, Any], graph: Any, case: str, *, p_state:
     p, q = await graph.upsert_nodes([p_write, q_write], tx)
     (link,) = await graph.upsert_edges([EdgeWrite(
         id=new_edge_id(), type=link_type, source=p, target=q, provenance=_provenance(ProvenanceState.ASSERTED),
-        handling=OFFICIAL, created_by="t", created_at=T0)], tx)  # fmt: skip
+        handling=link_handling, created_by="t", created_at=T0)], tx)  # fmt: skip
     await graph.commit_transaction(tx)
     alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
                   referent_node_ids=[q], edge_ids=[link], investigation_id=case, created_at=T0,
-                  typology="structuring", words=f"A finding over {tag}", severity="medium")  # fmt: skip
-    await stores["alerts"].save(alert, handlings=[OFFICIAL])
+                  typology="structuring", words=f"A finding over {tag}", severity="medium",
+                  alert_node_id=alert_node)  # fmt: skip
+    await stores["alerts"].save(alert, handlings=[OFFICIAL, link_handling])
     return p, link, alert
 
 
 async def _still_listed(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
                         link: str) -> None:  # fmt: skip
-    """The alert is listed for the reader, citing the newest revision of `link` the graph holds."""
+    """The alert is listed for the reader, citing the newest revision of `link` the graph holds; it
+    is not given to the case's OFFICIAL reader, who may not read that revision, nor to the cleared
+    reader in another case."""
     from services.api import alert_queue
 
-    listed = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, case, READER)}
+    async def listed_for(reader: Principal, in_case: str) -> dict[str, Alert]:
+        return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, in_case, reader)}
+
+    listed = await listed_for(READER, case)
     assert alert.id in listed, "the alert citing the replaced link is withheld from its reader"
     (now,) = listed[alert.id].edge_ids
     assert now != link and (await graph.stored_link_states([now]))[now].superseded_by is None
     assert (await graph.stored_link_states([link]))[link].superseded_by is not None
+    assert alert.id not in await listed_for(LOW, case), "a reader who may not read the new revision is given it"
+    assert alert.id not in await listed_for(READER, f"case-{new_id()}"), "a reader of another case is given it"
 
 
 class _Judgements:
@@ -336,12 +353,12 @@ async def test_an_alert_citing_a_split_a_resolution_run_annotates_stays_listed(
         c, d = await graph.upsert_nodes(twins, tx)
         (split,) = await graph.upsert_edges([EdgeWrite(
             id=new_edge_id(), type="NOT_SAME_AS", source=c, target=d, provenance=_provenance(ProvenanceState.ASSERTED),
-            handling=OFFICIAL, created_by="t", created_at=datetime.now(UTC))], tx)  # fmt: skip
+            handling=SECRET, created_by="t", created_at=datetime.now(UTC))], tx)  # fmt: skip
         await graph.commit_transaction(tx)
         alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
                       referent_node_ids=[c, d], edge_ids=[split], investigation_id=case, created_at=T0,
                       typology="structuring", words="Over a split", severity="medium")  # fmt: skip
-        await stores["alerts"].save(alert, handlings=[OFFICIAL])
+        await stores["alerts"].save(alert, handlings=[OFFICIAL, SECRET])
         tx = await graph.begin_transaction()
         result = await run_resolution_for_entity_type("Person", graph=graph, tx=tx, ontology=ONTOLOGY, scheme=SCHEME,
                                                       analyst_layers=no_layers, alerts=stores["alerts"])  # fmt: skip
@@ -397,3 +414,140 @@ async def test_a_purge_of_a_re_marked_alert_node_is_published_to_the_cases_canva
         assert message is not None, "the purge reached no connected canvas"
         delta = json.loads(message["data"])
         assert delta["op"] == "remove" and alert.alert_node_id in delta["node_ids"], delta
+        # What each socket sends its reader is projected from the published record
+        # (`_forward_notifications` calls `project_delta`): the OFFICIAL reader who held the copy is
+        # told to drop it; a reader who may not read the node is sent nothing that names it.
+        from services.api.working_set.models import DeltaRemove
+
+        published = DeltaRemove.model_validate_json(message["data"])
+        sockets = WorkingSetService(graph, working, SCHEME)
+        assert alert.alert_node_id in sockets.project_delta(published, LOW).node_ids
+        assert sockets.project_delta(published, PUBLIC_READER).node_ids == []
+
+
+# ---- the review's round 1: a raised correction, a writer held open, a busy lock pool ---------------
+
+
+async def test_a_correction_raising_the_node_above_its_link_withholds_the_alert_below_and_re_marks_its_node(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """`supersede.py`'s job corrects `p` to SECRET: `L`'s clone keeps `L`'s OFFICIAL marking but now
+    ends at a SECRET node, so the case's OFFICIAL reader, who was listed the alert, is refused it
+    (a link comes back only with both ends readable), and the alert's own node, OFFICIAL, is
+    re-marked to SECRET, so its words are not read through the node either (ADR-109 Amendment 10's
+    re-mark, which now counts a cited link's ends). Red with the ends left out of the re-mark: the
+    node stayed OFFICIAL, readable by the OFFICIAL reader."""
+    from services.api import alert_queue
+    from services.api.supersede import run_supersede_node_job
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        tx = await graph.begin_transaction()
+        (node,) = await graph.upsert_nodes([_person(f"Alert node {new_id()}")], tx)
+        await graph.commit_transaction(tx)
+        p, link, alert = await _cited_link(stores, graph, case, p_state=ProvenanceState.INFERRED,
+                                           link_handling=OFFICIAL, alert_node=node)  # fmt: skip
+
+        async def listed(reader: Principal) -> dict[str, Alert]:
+            return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, case, reader)}
+
+        assert alert.id in await listed(LOW), "before the correction the OFFICIAL reader is listed it"
+        raised = _person(f"P raised {new_id()}").model_copy(update={"handling": SECRET})
+        tx = await graph.begin_transaction()
+        await run_supersede_node_job({"node_id": p, "replacement": raised.model_dump(mode="json")},
+                                     graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+        await graph.commit_transaction(tx)
+        row = (await listed(READER))[alert.id]
+        assert row.edge_ids != [link]
+        assert alert.id not in await listed(LOW)
+        assert row.alert_node_id != node, "the alert's node was re-marked into a revision"
+        revision = await graph.get_node(row.alert_node_id, READER)  # type: ignore[arg-type]
+        assert revision is not None and revision.handling.classification == "SECRET"
+        for node_id in (node, row.alert_node_id):
+            assert await graph.get_node(node_id, LOW) is None  # type: ignore[arg-type]
+
+
+class _HeldOpen:
+    """The graph, with each `supersede_node` held open past the store's stale limit after it
+    returns: its writer is still writing (the rest of a long enrich stage, a long resolution run)
+    while another reader's read settles every record (`settle_pending`)."""
+
+    def __init__(self, graph: Any, alerts: Any, hold: float) -> None:
+        self._graph, self._alerts, self._hold = graph, alerts, hold
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._graph, name)
+
+    async def supersede_node(self, *args: Any, **kwargs: Any) -> Any:
+        new = await self._graph.supersede_node(*args, **kwargs)
+        await asyncio.sleep(self._hold)
+        await self._alerts.settle_pending(self._graph)  # another reader, while this writer writes
+        return new
+
+
+@pytest.mark.parametrize("path", ["job", "enrich"])
+async def test_a_record_whose_writer_is_still_writing_past_the_stale_limit_is_kept(
+    stores: dict[str, Any], analytics: Any, path: str
+) -> None:
+    """The review's item 3. A writer still writing past `STALE_REPOINT_AFTER` (here two seconds)
+    keeps its record live (`AlertStore.keep_alive`), so another reader's settle does not drop it as
+    a write that never committed; the write then commits and the alert follows its link. For a
+    writer whose transaction the worker commits (`supersede.py`'s job) and for one that commits its
+    own (the enrich stage). Red with the record not kept live: the settle dropped it, and the
+    alert was withheld for good once the write committed."""
+    from services.api.pipeline_run import _run_enrich_stage
+    from services.api.supersede import run_supersede_node_job
+
+    from schemas.ingest import BranchRunReport, LoadReport, PipelineGraph
+    from tests.ingest.test_studio_run_geometries import RecordingAnalytics
+
+    alerts = stores["alerts"]
+    alerts.stale_after, alerts.keep_alive_every = timedelta(seconds=2), timedelta(seconds=0.3)
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        held = _HeldOpen(graph, alerts, hold=3.0)
+        if path == "job":
+            p, link, alert = await _cited_link(stores, graph, case, p_state=ProvenanceState.INFERRED)
+            tx = await graph.begin_transaction()
+            await run_supersede_node_job({"node_id": p, "replacement": _person(f"P {new_id()}").model_dump(mode="json")},
+                                         graph=held, tx=tx, alerts=alerts)  # fmt: skip
+            await graph.commit_transaction(tx)
+        else:
+            p, link, alert = await _cited_link(stores, graph, case, p_state=ProvenanceState.ASSERTED,
+                                               p_type="Location", link_type="ADJOINS")  # fmt: skip
+            pipeline = PipelineGraph.model_validate({
+                "nodes": [{"id": "src", "kind": "source", "label": "Places"},
+                          {"id": "enrich", "kind": "enrich", "label": "Geocode", "config": {"geocoder": "online_allowlist"}}],
+                "edges": [{"source": "src", "target": "enrich"}]})  # fmt: skip
+            branch = BranchRunReport(source_id="src", source_label="Places", report=LoadReport(
+                load_id="l", recipe_id="r", recipe_version=1, created_node_ids=[p]))  # fmt: skip
+
+            async def provider(name: str) -> tuple[float, float] | None:
+                return (-1.8984, 52.4778)
+
+            await _run_enrich_stage(pipeline.nodes[1], pipeline=pipeline, branches=[branch], graph=held, principal=READER,
+                                    scheme=SCHEME, analytics=RecordingAnalytics(), online_geocode=provider,  # type: ignore[arg-type]
+                                    alerts=alerts)  # fmt: skip
+        await _still_listed(stores, graph, analytics, case, alert, link)
+
+
+async def test_a_read_stops_settling_at_the_first_busy_lock_pool(stores: dict[str, Any]) -> None:
+    """The review's item 4 (D10). Every lock connection is held elsewhere and four records wait: the
+    read waits `lock_wait` once and leaves them all for a later read, rather than once per record.
+    Red with the read going on to the next record: it waited four times."""
+    import time
+
+    alerts = stores["alerts"]
+    alerts.lock_wait = 0.5
+    records = [await _record(stores) for _ in range(4)]
+    for record in records:
+        await alerts._add_to_record(record, links=[(f"edge-{new_id()}", f"edge-{new_id()}", "ASSOCIATE_OF")])
+    held = [await alerts._lock_pool.acquire() for _ in range(alerts._lock_pool.get_max_size())]
+    try:
+        started = time.monotonic()
+        await asyncio.wait_for(alerts.settle_pending(None), BOUND)  # type: ignore[arg-type]
+        waited = time.monotonic() - started
+    finally:
+        for conn in held:
+            await alerts._lock_pool.release(conn)
+    assert waited < 1.25, f"the read waited {waited:.2f} s: once per record, not once"
