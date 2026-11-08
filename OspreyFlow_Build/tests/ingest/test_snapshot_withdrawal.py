@@ -349,9 +349,11 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     """Its nodes and its link never left (Amendment 15), so the row matches them and merges into its
     link: no node or link is created, and its new event is the timeline's only one for it."""
     graph, ledger, events = MergingGraph(ONTOLOGY), WithdrawalLedger(), Events()
-    await _snapshot(graph, ledger, [A, B], "load-1", events=events)
+    first = await _snapshot(graph, ledger, [A, B], "load-1", events=events)
     await _snapshot(graph, ledger, [B], "load-2", events=events)
     links = _live_links(graph)
+    (a_link,) = first.kept_row_elements[_key(A)].edge_ids
+    as_it_was = await graph.read_link_state(a_link)
 
     back = await _snapshot(graph, ledger, [A, B], "load-3", events=events)
 
@@ -359,13 +361,10 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     assert (back.nodes_created, back.edges_created, back.created_edge_ids) == (0, 0, [])
     assert _live_links(graph) == links and graph.withdrawn == {}
     assert len(events.live) == 2, "B's, and A's new one; A's first stays set aside"
-    # Amendment 15's known limit, in words: this load merged into A's link, so it is not reverted.
-    unrevertable = (
-        "1 row withdrawn by an earlier refresh came back and merged into its link, which the "
-        "withdrawal left in place: this load cannot be reverted, nor the refresh that withdrew "
-        "it, until the owner rules (ADR-110 Amendment 15)"
-    )
-    assert back.refresh_notes == [unrevertable]
+    # ADR-110 Amendment 16: the merge is A's own, kept as the link was before it, so the load
+    # reverts; no words say otherwise.
+    assert back.own_key_merges == [as_it_was]
+    assert back.refresh_notes == []
 
 
 # --- the refresh's revert (ADR-110 Amendment 8 point 5) ---------------------------------------
@@ -517,14 +516,78 @@ async def test_the_refreshs_revert_is_refused_while_a_row_it_withdrew_is_kept_ag
     assert refusal.reason == "withdrawn_rows_loaded_again" and refusal.count == 1
     assert "1 row(s) it withdrew were loaded again by a later load" in refusal.words()
     assert (_live_values(graph), set(graph.withdrawn)) == live, "nothing changed"
-    # Amendment 15's known consequence: A's link never left, so the later load merged into it, and
-    # a load that merged into a link that already existed is not reverted (ADR-127 decision 6), as
-    # for any load that does. Recorded, not changed: the owner's to rule on (the studio REPORT).
-    with pytest.raises(RevertRefused) as later:
+
+
+async def test_a_returning_rows_load_reverts_and_puts_its_link_back_then_the_refresh_then_the_first() -> (
+    None
+):
+    """ADR-110 Amendment 16 (the owner's option A): the returning row's merge into its own
+    withdrawn key's link is the row's own. Its load reverts, putting the link back exactly as the
+    refresh left it; then the refresh reverts, giving the row back to the first load; then the
+    first load reverts, and nothing of either row is left. Before the amendment the three were
+    each refused (ADR-127 decision 6)."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    first = await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    (a_link,) = first.kept_row_elements[_key(A)].edge_ids
+    after_the_refresh = await graph.read_link_state(a_link)
+    await _snapshot(graph, keys, [A, B], "load-3")
+    assert await graph.read_link_state(a_link) != after_the_refresh
+    ledger = RefreshLedger(keys)  # one ledger: each revert is recorded for the next
+
+    reverted = await revert("load-3", reverted_by="operator-1",
+                            deps=_deps(graph, ledger, Steps()), now=NOW)  # fmt: skip
+
+    (load_3,) = reverted.reverted
+    assert (load_3.load_id, load_3.links_put_back, load_3.links) == ("load-3", 1, 0)
+    assert await graph.read_link_state(a_link) == after_the_refresh, "exactly as it was"
+    assert (CASE, _key(A)) not in {k[1:] for k in keys.kept_rows}
+    await revert("load-2", reverted_by="operator-1",
+                 deps=_deps(graph, ledger, Steps()), now=NOW)  # fmt: skip
+    assert {k[2] for k in keys.kept_rows} == {_key(A), _key(B)} and keys.withdrawn == {}
+    await revert("load-1", reverted_by="operator-1",
+                 deps=_deps(graph, ledger, Steps()), now=NOW)  # fmt: skip
+    assert _live_values(graph) == set() and _live_links(graph) == set()
+
+
+async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link() -> None:
+    """ADR-110 Amendment 16, rule 3: another case's load of the same pair merged into the link
+    after the row came back, so putting it back would take that write away. Refused, nothing
+    changed, and the words name neither that load nor its case."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    await _snapshot(graph, keys, [A, B], "load-3")
+    await _snapshot(graph, keys, [A], "their-load", case="their-case", withdraw=False)
+    live = _live_values(graph), _live_links(graph)
+
+    with pytest.raises(RevertRefused) as refused:
         await revert("load-3", reverted_by="operator-1",
                      deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
-    assert [r.reason for r in later.value.refusals] == ["merged_links"]
-    assert (_live_values(graph), set(graph.withdrawn)) == live, "nothing changed"
+
+    (refusal,) = refused.value.refusals
+    assert (refusal.reason, refusal.count) == ("own_link_written_since", 1)
+    words = refusal.words()
+    assert "1 link(s) a returning row of it merged into were written again since" in words
+    assert "their" not in words, "no other load or case is named"
+    assert (_live_values(graph), _live_links(graph)) == live, "nothing changed"
+
+
+async def test_a_merge_into_a_link_that_is_not_the_rows_own_still_refuses_the_revert() -> None:
+    """ADR-127 decision 6 stands for every other merge: a new row on the dropped row's pair (not
+    the dropped row coming back) merges into its link, and its load is refused as before."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    another_day = _row("SYN-1", "SYN-2", 9)  # A's pair, another row
+    later = await _snapshot(graph, keys, [another_day, B], "load-3")
+    assert later.own_key_merges == [] and later.merged_edge_ids
+
+    with pytest.raises(RevertRefused) as refused:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+
+    assert [r.reason for r in refused.value.refusals] == ["merged_links"]
 
 
 async def test_after_the_creating_load_is_reverted_the_refreshs_revert_restores_nothing() -> (
