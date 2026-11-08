@@ -150,7 +150,7 @@ class SupersedingGraph(FakeGraphPort):
     transaction wrote."""
 
 
-    async def stored_link_states(self, edge_ids: Any) -> dict[str, Any]:
+    async def stored_link_states(self, edge_ids: Any, *, edge_type: Any = None) -> dict[str, Any]:
         """The port's unfiltered stored states (the alert store's repoint settle asks): each link
         this fake holds, superseded once a committed change replaced it, naming its successor (the
         settle follows `superseded_by`, as the adapter fills it); an id it holds no link for is

@@ -473,9 +473,13 @@ class LinkChangeService:
             tx = await self._graph.begin_transaction()
             try:
                 await repoint.record(
-                    old.id, await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
+                    old.id,
+                    await self._graph.supersede_edge(old.id, write, tx, old_type=old.type),
+                    old_type=old.type,
                 )
             except Exception:
+                # Its commit never sent, nothing recorded can land: the record goes with it.
+                repoint.never_committed()
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)

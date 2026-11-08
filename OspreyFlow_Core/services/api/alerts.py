@@ -44,7 +44,7 @@ import asyncpg
 from conduit_common.identity import new_id, new_node_id
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
+from ports.graph import GraphPort, StoredLink
 from schemas.analytics import (
     HOTLISTS_RULE,
     MONITORS_RULE,
@@ -130,6 +130,13 @@ CREATE TABLE IF NOT EXISTS alert_repoint_records (
 );
 CREATE INDEX IF NOT EXISTS alert_repoint_records_recorded_idx
     ON alert_repoint_records (recorded_at);
+-- A settle's own re-mark pairs, kept apart from the write's (L2.8b's D1): one whose supersede never
+-- landed is re-run, never waited on. A record held open by its writer across many transactions
+-- (the re-marking script, D2) is settled by no one else while that writer is active.
+ALTER TABLE alert_repoint_records
+    ADD COLUMN IF NOT EXISTS remarks JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE alert_repoint_records
+    ADD COLUMN IF NOT EXISTS held_open BOOLEAN NOT NULL DEFAULT false;
 """
 
 
@@ -387,12 +394,20 @@ class LinkRepoint:
         called, since a commit reported failed can still land (B3)."""
         self.abandoned = True
 
-    async def record(self, old: str, new: str) -> None:
-        await self._store._add_to_record(self.id, links=[(old, new)])
+    async def record(self, old: str, new: str, *, old_type: str) -> None:
+        """`old → new`, with the old link's own type (ADR-110 Amendment 18: two types may hold one
+        id), so the settle reads that type's successor alone."""
+        await self._store._add_to_record(self.id, links=[(old, new, old_type)])
         self.pairs[old] = new
 
     async def record_node(self, old: str, new: str) -> None:
         await self._store._add_to_record(self.id, alert_nodes=[(old, new)])
+        self.nodes[old] = new
+
+    async def record_remark(self, old: str, new: str) -> None:
+        """A re-mark's supersede of an alert's node (the re-marking script's), kept as a settle's
+        own re-marks are: one that never landed is re-run by the settle, not waited on (D1)."""
+        await self._store._add_to_record(self.id, remarks=[(old, new)])
         self.nodes[old] = new
 
     async def purged(self) -> None:
@@ -418,9 +433,20 @@ def _loaded(raw: Any) -> Any:
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
+def _typed_pairs(raw: Any) -> list[tuple[str, str, str | None]]:
+    """A record's link pairs, in order, each with its old link's type (`None` where none was
+    recorded: the first hop is then read over every type)."""
+    return [(str(p[0]), str(p[1]), str(p[2]) if len(p) > 2 else None) for p in _loaded(raw)]
+
+
 def _pairs(raw: Any) -> list[tuple[str, str]]:
     """A record's pairs, in the order written."""
-    return [(str(old), str(new)) for old, new in _loaded(raw)]
+    return [(str(p[0]), str(p[1])) for p in _loaded(raw)]
+
+
+class RepointRecordGone(Exception):
+    """A pair was to be recorded in a repoint record that is missing or already applied; the write
+    it describes must not be committed, since nothing would apply it (ADR-109 Amendment 10, D2)."""
 
 
 class AlertStore:
@@ -689,7 +715,9 @@ class AlertStore:
         return _row_to_queue_row(row)
 
     @asynccontextmanager
-    async def repointing(self, graph: GraphPort) -> AsyncIterator[LinkRepoint]:
+    async def repointing(
+        self, graph: GraphPort, *, held_open: bool = False
+    ) -> AsyncIterator[LinkRepoint]:
         """Around a write that supersedes links (or an `Alert` node) alerts may cite (ADR-109
         Amendments 9 and 10). A record is opened before the write; the caller records each
         `old → new` once the graph has returned it and before the commit. Left normally, the
@@ -701,15 +729,24 @@ class AlertStore:
         each pair is recorded before the write's commit, so a write that recorded nothing never
         reached its commit; so is one whose writer rolled back before sending its commit
         (`LinkRepoint.never_committed`). A settle failing on the exception path
-        is logged, never raised in place of the write's own exception; the record waits."""
+        is logged, never raised in place of the write's own exception; the record waits.
+        `held_open`, for a writer committing in many transactions (the re-marking script): no other
+        settle applies the record while its writer is active (each pair it records keeps it so),
+        since one applied part-way would miss the writer's later pairs (L2.8b's D2); a writer gone
+        quiet for `STALE_REPOINT_AFTER` is taken to have crashed, and its record settled as any."""
         record_id = new_id()
         async with self._pool.acquire() as conn:
-            await conn.execute("INSERT INTO alert_repoint_records (id) VALUES ($1)", record_id)
+            await conn.execute(
+                "INSERT INTO alert_repoint_records (id, held_open) VALUES ($1, $2)",
+                record_id,
+                held_open,
+            )
         repoint = LinkRepoint(self, record_id)
         try:
             yield repoint
         except Exception:
             try:
+                await self._release_record(record_id)
                 if repoint.abandoned:
                     await self._close_record(record_id)
                 else:
@@ -717,6 +754,7 @@ class AlertStore:
             except Exception:  # noqa: BLE001 - the write's own exception is the one raised
                 _log.exception("repoint record %s left for a later settle", record_id)
             raise
+        await self._release_record(record_id)
         repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
@@ -731,22 +769,28 @@ class AlertStore:
         working-set purge is left for the next working-set read (`purge_remarked_copies`)."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, links, alert_nodes, recorded_at FROM alert_repoint_records "
+                "SELECT id, links, alert_nodes, recorded_at, held_open FROM alert_repoint_records "
                 "WHERE NOT applied"
             )
         cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
         for row in rows:
+            if row["held_open"] and row["recorded_at"] >= cutoff:
+                continue  # its writer is still recording (D2)
             try:
                 done = await self._settle_record(graph, row["id"])
                 if done is not None or row["recorded_at"] >= cutoff:
                     continue
-                links = _pairs(row["links"])
+                # Judged by the write's own pairs alone: a re-mark's (`remarks`) are the settle's.
                 nodes = _pairs(row["alert_nodes"])
-                link_states = await graph.stored_link_states([o for o, _ in links]) if links else {}
-                node_states = await graph.stored_writes([o for o, _ in nodes]) if nodes else {}
-                superseded = [s.superseded for s in link_states.values()] + [
-                    s.superseded for s in node_states.values()
+                superseded = [
+                    state is not None and state.superseded
+                    for state in [
+                        await self._first_hop(graph, old, old_type)
+                        for old, _, old_type in _typed_pairs(row["links"])
+                    ]
                 ]
+                node_states = await graph.stored_writes([o for o, _ in nodes]) if nodes else {}
+                superseded += [s.superseded for s in node_states.values()]
                 if not any(superseded):
                     await self._close_record(row["id"])  # the write never happened
             except Exception:  # noqa: BLE001 - one record never breaks a read: it waits
@@ -771,19 +815,40 @@ class AlertStore:
         self,
         record_id: str,
         *,
-        links: Sequence[tuple[str, str]] = (),
+        links: Sequence[tuple[str, ...]] = (),
         alert_nodes: Sequence[tuple[str, str]] = (),
+        remarks: Sequence[tuple[str, str]] = (),
     ) -> None:
-        """Pairs appended to a record, in order, and committed at once (a re-mark's, before its
-        graph commit, so a failure after that commit is repaired by the next settle)."""
+        """Pairs appended to a record, in order, and committed at once, always before the graph
+        commit they describe; a held-open record's clock restarts. Refused
+        (`RepointRecordGone`), nothing written, where the record is missing or already applied:
+        a pair recorded there would never be applied, so its writer must not commit (D2)."""
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            done = await conn.execute(
                 "UPDATE alert_repoint_records SET links = links || $2::jsonb, "
-                "alert_nodes = alert_nodes || $3::jsonb WHERE id = $1",
+                "alert_nodes = alert_nodes || $3::jsonb, remarks = remarks || $4::jsonb, "
+                "recorded_at = CASE WHEN held_open THEN now() ELSE recorded_at END "
+                "WHERE id = $1 AND NOT applied",
                 record_id,
                 json.dumps([list(p) for p in links]),
                 json.dumps([list(p) for p in alert_nodes]),
+                json.dumps([list(p) for p in remarks]),
             )
+        if done != "UPDATE 1":
+            raise RepointRecordGone(record_id)
+
+    async def _release_record(self, record_id: str) -> None:
+        """Its writer has left: the record may be settled by anyone."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE alert_repoint_records SET held_open = false WHERE id = $1", record_id
+            )
+
+    @staticmethod
+    async def _first_hop(graph: GraphPort, old: str, old_type: str | None) -> StoredLink | None:
+        """The recorded link's own stored state, read for its recorded type alone (two types may
+        hold one id, ADR-110 Amendment 18), or over every type where none was recorded."""
+        return (await graph.stored_link_states([old], edge_type=old_type)).get(old)
 
     async def _close_record(self, record_id: str) -> None:
         async with self._pool.acquire() as conn:
@@ -840,7 +905,7 @@ class AlertStore:
     ) -> list[str] | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT links, alert_nodes, purge, applied FROM alert_repoint_records "
+                "SELECT links, alert_nodes, remarks, purge, applied FROM alert_repoint_records "
                 "WHERE id = $1",
                 record_id,
             )
@@ -849,7 +914,7 @@ class AlertStore:
         if row["applied"]:
             return list(_loaded(row["purge"]))
         links, nodes = _pairs(row["links"]), _pairs(row["alert_nodes"])
-        if not links and not nodes:
+        if not links and not nodes and not _pairs(row["remarks"]):
             # Nothing recorded yet: a writer between opening its record and recording its first
             # pair. Only that writer closes it (it recorded nothing); a settle leaves it alone.
             if writer:
@@ -857,17 +922,34 @@ class AlertStore:
                 return []
             return None
         finals: dict[str, str] = {}
-        for old, _ in links:
-            newest = await self._newest(graph.stored_link_states, old)
-            if newest is None or newest == old:
+        for old, _, old_type in _typed_pairs(row["links"]):
+            first = await self._first_hop(graph, old, old_type)
+            if first is None or not first.superseded or first.superseded_by is None:
                 return None  # not committed (or never: the stale threshold)
-            finals[old] = newest
+            newest = await self._newest(graph.stored_link_states, first.superseded_by)
+            if newest is None:
+                return None
+            # An id two types hold cannot say which type's link an alert cites (alerts name a
+            # link by id): no alert is moved by it, each left as the queue's check finds it (D3).
+            # Every later revision's id is minted fresh (`new_edge_id`), so only the first hop can
+            # be shared.
+            if (await graph.stored_link_states([old]))[old].held_by == 1:
+                finals[old] = newest
         renamed: dict[str, str] = {}
         for old, _ in nodes:
             newest = await self._newest(graph.stored_writes, old)
             if newest is None or newest == old:
                 return None
             renamed[old] = newest
+        # The settle's own re-marks (D1): one that landed renames its alerts as the write's pairs
+        # do; one that never landed (its old node still live) is re-run below, never waited on.
+        rerun: list[str] = []
+        for old, _ in _pairs(row["remarks"]):
+            newest = await self._newest(graph.stored_writes, old)
+            if newest is None or newest == old:
+                rerun.append(old)
+            else:
+                renamed[old] = newest
         await self.apply_repoints(finals)
         if renamed:
             async with self._pool.acquire() as conn, conn.transaction():
@@ -876,7 +958,10 @@ class AlertStore:
                         "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
                     )
         remarked = await self._remark_citing(
-            graph, record_id, sorted(set(finals.values())), sorted(set(renamed.values()))
+            graph,
+            record_id,
+            sorted(set(finals.values())),
+            sorted({*renamed.values(), *(old for old in rerun if old not in renamed)}),
         )
         # Every node renamed or re-marked here is superseded: its working-set copies are stale.
         purge = sorted({*renamed, *remarked})
@@ -910,7 +995,7 @@ class AlertStore:
         rows = list((await self.cited_by_ids([r["id"] for r in found])).values())
 
         async def recorded(old: str, new: str) -> None:
-            await self._add_to_record(record_id, alert_nodes=[(old, new)])
+            await self._add_to_record(record_id, remarks=[(old, new)])
 
         report = await remark_alerts(graph, self, self.scheme, rows, on_supersede=recorded)
         return report.superseded_nodes
@@ -1285,10 +1370,13 @@ class _NoRepoint:
     nodes: dict[str, str] = {}
     remarked_nodes: list[str] = []
 
-    async def record(self, old: str, new: str) -> None:
+    async def record(self, old: str, new: str, *, old_type: str) -> None:
         return None
 
     async def record_node(self, old: str, new: str) -> None:
+        return None
+
+    def never_committed(self) -> None:
         return None
 
     async def purged(self) -> None:

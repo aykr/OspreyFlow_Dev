@@ -494,7 +494,9 @@ async def _close(
                         # after the commit cannot leave it naming a superseded node (B6).
                         await repoint.record_node(node.id, confirmed_node)
                     for e in matches:
-                        await repoint.record(e.id, await confirm_edge(graph, e, member, tx=tx))
+                        await repoint.record(
+                            e.id, await confirm_edge(graph, e, member, tx=tx), old_type=e.type
+                        )
                 except Exception:
                     # Its commit never sent, nothing recorded can land: the record goes with it,
                     # so a close the graph refused before its commit leaves no record.

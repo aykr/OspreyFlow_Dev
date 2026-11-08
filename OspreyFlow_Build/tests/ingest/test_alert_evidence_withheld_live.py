@@ -1240,7 +1240,7 @@ async def test_a_record_another_test_left_never_breaks_an_unrelated_read(
                 def __getattr__(self, name: str) -> Any:
                     return getattr(graph, name)
 
-                async def stored_link_states(self, edge_ids: Any) -> Any:
+                async def stored_link_states(self, edge_ids: Any, **_k: Any) -> Any:
                     raise ConnectionError("the stored-state lookup is unavailable")
 
             assert await _listed(stores, Refusing(), analytics, case, TEAMMATE) == [alert.id]
@@ -1315,6 +1315,157 @@ async def _live_alert_nodes(graph: Any, alert_id: str, rule_id: str) -> list[str
         if page.next_cursor is None:
             return listed
         cursor = page.next_cursor
+
+
+async def test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2.8b's D1: a true positive confirms the alert's node (N to C); its settle re-marks C above
+    the alert's evidence (C to R), recording the pair first, and that re-mark's graph commit is
+    refused and never lands. The next read re-runs the re-mark, so the alert names a live SECRET
+    node. Red with the re-mark's pair kept as the write's own: every settle waited on C, which
+    never becomes superseded, and the alert stayed on C at OFFICIAL for good."""
+    from conduit_common.identity import new_edge_id
+    from schemas.domain import EdgeWrite
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await _raised(stores, graph, analytics, case, "RL")
+        (alert,) = await _case_alerts(stores, ANALYST, case)
+        (link,) = await graph.get_edges(alert.edge_ids, ANALYST)
+        secret = link.handling.model_copy(update={"classification": "SECRET"})
+        tx = await graph.begin_transaction()
+        raised = await graph.supersede_edge(link.id, EdgeWrite(
+            id=new_edge_id(), type=link.type, source=link.source, target=link.target, properties=link.properties,
+            interval=link.interval, occurrences=link.occurrences, provenance=link.provenance, handling=secret,
+            created_by="t", created_at=T0), tx, old_type=link.type)  # fmt: skip
+        await graph.commit_transaction(tx)
+        await stores["alerts"].apply_repoints({link.id: raised})  # cited, its node not re-marked
+        commit, rollback = graph.commit_transaction, graph.rollback_transaction
+        commits: list[Any] = []
+
+        async def second_refused(tx: Any) -> None:
+            commits.append(tx)
+            if len(commits) == 2:  # the close's own commit lands; its settle's re-mark does not
+                monkeypatch.setattr(graph, "commit_transaction", commit)
+                await rollback(tx)
+                raise ConnectionError("ArcadeDB refused the re-mark's commit")
+            await commit(tx)
+
+        monkeypatch.setattr(graph, "commit_transaction", second_refused)
+        with pytest.raises(ConnectionError):
+            await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert.id, SECRET_LOADER,
+                                      disposition="true_positive", reason="confirmed")  # fmt: skip
+        monkeypatch.undo()
+        assert len(commits) == 2, "the close committed, then its re-mark was refused"
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        node = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
+        assert node is not None and node.handling.classification == "SECRET"
+
+
+async def test_a_record_held_open_by_its_writer_is_not_settled_by_a_read_part_way(
+    stores: dict[str, Any],
+) -> None:
+    """L2.8b's D2: the re-marking script commits one re-mark at a time into one record held open.
+    A read's settle meanwhile leaves the record alone, so the writer's later pairs are recorded
+    and applied with the rest when it leaves; once applied, a pair can no longer be recorded there
+    (`RepointRecordGone`), so no write is committed that nothing would apply. Red with a held-open
+    record settled as any: the read applied and closed it part-way through the run."""
+    from services.api.alerts import RepointRecordGone
+
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        store = stores["alerts"]
+        async with store.repointing(graph, held_open=True) as repoint:
+            await repoint.record_remark(f"n-{new_id()}", f"n-{new_id()}")  # one re-mark committed
+            await store.settle_pending(graph)  # a read, part-way through the run
+            async with store._pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT applied, held_open FROM alert_repoint_records WHERE id = $1", repoint.id
+                )
+            assert row is not None and (row["applied"], row["held_open"]) == (False, True)
+            await repoint.record_remark(f"n-{new_id()}", f"n-{new_id()}")  # the next is recorded
+        with pytest.raises(RepointRecordGone):
+            await repoint.record_remark(f"n-{new_id()}", f"n-{new_id()}")
+
+
+async def test_an_id_two_link_types_hold_moves_no_alert(stores: dict[str, Any]) -> None:
+    """L2.8b's D3: a record names a link by an id two types hold (ADR-110 Amendment 18), its own
+    type superseded. Alerts name a link by its id alone, so which type's link an alert cites
+    cannot be told: the settle moves no alert by that id, and the record is settled, not left to
+    wait. Red with the id followed regardless: the alert, which may cite the other type's link, was
+    moved to the successor of a link it never cited."""
+    from datetime import UTC, datetime
+
+    from ports.graph import StoredLink
+    from schemas.domain import AlertMode
+
+    shared, successor = f"e-{new_id()}", f"e-{new_id()}"
+
+    class TwoTypes:
+        """The graph, its stored states as the port answers where two types hold `shared` and the
+        COMMUNICATED_WITH one is superseded (the conformance suite's case)."""
+
+        def __init__(self, inner: Any) -> None:
+            self._inner = inner
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+        async def stored_link_states(self, edge_ids: Any, *, edge_type: Any = None) -> Any:
+            answers = {
+                None: {shared: StoredLink(reverted=False, superseded=True, superseded_by=successor, held_by=2)},
+                "COMMUNICATED_WITH": {shared: StoredLink(reverted=False, superseded=True, superseded_by=successor)},
+                "TRANSACTED": {shared: StoredLink(reverted=False, superseded=False)},
+            }  # fmt: skip
+            live = {successor: StoredLink(reverted=False, superseded=False)}
+            return {e: s for e, s in {**answers[edge_type], **live}.items() if e in edge_ids}
+
+    case = f"case-{new_id()}"
+    alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
+                  referent_node_ids=["a", "b"], edge_ids=[shared], investigation_id=case,
+                  created_at=datetime.now(UTC), typology="structuring", words="a paid b")  # fmt: skip
+    await stores["alerts"].save(alert)
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as inner:
+        graph = TwoTypes(inner)
+        record = await _plant_record(stores, {})
+        await stores["alerts"]._add_to_record(record, links=[(shared, successor, "COMMUNICATED_WITH")])
+        await stores["alerts"].settle_pending(graph)  # type: ignore[arg-type]
+        assert (await stores["alerts"].cited_by_ids([alert.id]))[alert.id].edge_ids == [shared]
+        async with stores["alerts"]._pool.acquire() as conn:
+            left = await conn.fetchval(
+                "SELECT count(*) FROM alert_repoint_records WHERE id = $1 AND NOT applied", record
+            )
+        assert left == 0, "settled, not left waiting"
+
+
+async def test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B3 at the close's own call site (the reviewer's D6): the close's graph commit lands and is
+    then reported failed (a timeout). Its commit was sent, so the record is kept, never closed as
+    never-committed, and the next read moves the second alert to the confirmed revision. Red with
+    `never_committed` said once the commit was sent: the record went with the close, and the
+    second alert stayed on the superseded match, withheld from every reader."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+        commit = graph.commit_transaction
+
+        async def landed_then_timed_out(tx: Any) -> None:
+            monkeypatch.setattr(graph, "commit_transaction", commit)
+            await commit(tx)
+            raise TimeoutError("the commit's reply never came")
+
+        monkeypatch.setattr(graph, "commit_transaction", landed_then_timed_out)
+        with pytest.raises(TimeoutError):
+            await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                      disposition="true_positive", reason="matches")  # fmt: skip
+        monkeypatch.undo()
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == second.id]
+        assert row.edge_ids != [link], "moved to the confirmed revision"
+        assert second.id in await _listed(stores, graph, analytics, case, SECRET_LOADER)
 
 
 async def test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds(

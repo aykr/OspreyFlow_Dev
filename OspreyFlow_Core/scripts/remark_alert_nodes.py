@@ -68,8 +68,12 @@ async def remark(
         return await remark_alerts(graph, alerts, scheme, rows, dry_run=True)
     if working_set is not None:
         await purge_remarked_copies(alerts, working_set)  # what an earlier run left to purge
-    async with alerts.repointing(graph) as repoint:
-        report = await remark_alerts(graph, alerts, scheme, rows, on_supersede=repoint.record_node)
+    # Held open: the run commits one re-mark at a time, and a read settling its record part-way
+    # would miss the later ones (ADR-109 Amendment 10, L2.8b's D2).
+    async with alerts.repointing(graph, held_open=True) as repoint:
+        report = await remark_alerts(
+            graph, alerts, scheme, rows, on_supersede=repoint.record_remark
+        )
     if working_set is not None and repoint.remarked_nodes:
         await working_set.remove_reverted(repoint.remarked_nodes, [])
         await repoint.purged()

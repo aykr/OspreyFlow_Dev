@@ -144,7 +144,7 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
             store = self
 
             class _Repoint:
-                async def record(self, old: str, new: str) -> None:
+                async def record(self, old: str, new: str, *, old_type: str) -> None:
                     store.repointed[old] = new
 
                 def never_committed(self) -> None:

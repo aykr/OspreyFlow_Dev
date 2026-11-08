@@ -367,9 +367,11 @@ class EntityPictureService:
                     replaced = await self._graph.supersede_edge(
                         before[0].id, link, tx, old_type=before[0].type
                     )
-                    await repoint.record(before[0].id, replaced)
+                    await repoint.record(before[0].id, replaced, old_type=before[0].type)
                     (link,) = as_stored([link], [replaced])
             except Exception:
+                # Its commit never sent, nothing recorded can land: the record goes with it.
+                repoint.never_committed()
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)
@@ -536,9 +538,13 @@ class EntityPictureService:
             tx = await self._graph.begin_transaction()
             try:
                 await repoint.record(
-                    old.id, await self._graph.supersede_edge(old.id, write, tx, old_type=old.type)
+                    old.id,
+                    await self._graph.supersede_edge(old.id, write, tx, old_type=old.type),
+                    old_type=old.type,
                 )
             except Exception:
+                # Its commit never sent, nothing recorded can land: the record goes with it.
+                repoint.never_committed()
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)
