@@ -11,6 +11,7 @@ import "../src/design/primitives.css";
 import { CaseDomains } from "../src/investigation/CaseDomains";
 import { CaseSettings } from "../src/investigation/CaseSettings";
 import { NewCaseForm } from "../src/investigation/NewCaseForm";
+import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
   interface Window {
@@ -23,6 +24,28 @@ window.__CASE_DATASETS__ = { created: null, changed: 0 };
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
+// Under `?brand=govuk` the forms are drawn in the GOV.UK brand (ADR-132), for the axe scan's third
+// variant; `?choice=existing` opens the new case's form on "Use an existing dataset", so the scan
+// sees the dataset radios too (ADR-099 Amendment 12).
+await applyHarnessBrand();
+const initialChoice = new URLSearchParams(window.location.search).get("choice") === "existing" ? "existing" : "new";
+// The axe scan serves no routes; in that state the harness answers the dataset list itself, with
+// synthetic datasets (rule 9), so the radios it scans are drawn. A keyboard spec's own `page.route`
+// answers first and is unaffected.
+if (initialChoice === "existing") {
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).endsWith("/v1/datasets")
+      ? new Response(
+          JSON.stringify([
+            { id: "ds-a", name: "Carrier A intake", owning_unit: "unit-1", kind: "source" },
+            { id: "ds-b", name: "Both carriers", owning_unit: "unit-1", kind: "composite", members: ["ds-a", "ds-c"] },
+          ]),
+          { status: 200 },
+        )
+      : realFetch(input, init);
+}
+
 function Harness() {
   const [made, setMade] = useState<string | null>(null);
   return (
@@ -31,6 +54,7 @@ function Harness() {
         apiBaseUrl="http://keyboard-test.invalid"
         bearerToken="unused"
         inputLabel="Case name"
+        initialChoice={initialChoice}
         onCreated={(id) => {
           window.__CASE_DATASETS__!.created = id;
           setMade(id);

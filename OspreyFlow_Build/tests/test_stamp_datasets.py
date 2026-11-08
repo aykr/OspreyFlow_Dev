@@ -23,10 +23,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from scripts.stamp_datasets import CaseRow, StampReport, _Sql, stamp
-from services.api.datasets import InMemoryDatasetStore
+from services.api.datasets import InMemoryDatasetStore, named_by_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
@@ -145,13 +146,13 @@ class _Store:
         await self.working_sets.add_nodes(FIXTURE_CASE.id, [_body(fixture)])
         await self.working_sets.add_nodes(BRANCH.id, [_body(fixture)])
 
-    async def run(self, *, write: bool = True) -> StampReport:
+    async def run(self, *, write: bool = True, cases: list[CaseRow] | None = None) -> StampReport:
         return await stamp(
             sql=self.sql,
             ontology=ONTOLOGY,
             datasets=self.datasets,
             working_sets=self.working_sets,
-            cases=CASES,
+            cases=cases or CASES,
             org_unit="unit-1",
             write=write,
             say=lambda _line: None,
@@ -182,10 +183,10 @@ async def test_a_store_loaded_before_adr_099_is_given_its_datasets(store: _Store
     )
     assert link.datasets == ["enron"]
 
-    assert await store.datasets.ids_of_case(ENRON_CASE.id) == ["enron"]
-    assert await store.datasets.ids_of_case(FIXTURE_CASE.id) == ["fixture-corp"]
-    assert await store.datasets.ids_of_case(BRANCH.id) == ["fixture-corp"]
-    assert await store.datasets.ids_of_case(HMP_CASE.id) == ["hmp"]
+    assert await named_by_case(store.datasets, ENRON_CASE.id) == ["enron"]
+    assert await named_by_case(store.datasets, FIXTURE_CASE.id) == ["fixture-corp"]
+    assert await named_by_case(store.datasets, BRANCH.id) == ["fixture-corp"]
+    assert await named_by_case(store.datasets, HMP_CASE.id) == ["hmp"]
     analyst = EVERYONE.model_copy(update={"roles": ["analyst"]})  # ADR-099 Amendment 11
     (own,) = await store.datasets.of_case(SCRATCH.id, analyst)
     assert own.name == "Scratch" and own.owning_unit == "unit-1"
@@ -312,6 +313,94 @@ async def test_a_cases_copies_are_refreshed_from_the_graph_not_only_stamped(stor
     assert copy.occurrences == current.occurrences == 1
     assert copy.datasets == ["enron"]
 
+
+#: A case whose canvas holds both seeds' data, so the stamping makes it a composite.
+BOTH_CASE = CaseRow("case-both", "Both", "unit-1", None)
+
+
+async def _composite_case(store: _Store, *, write: bool = True) -> tuple[StampReport, str]:
+    """A composite case's canvas holding a mark made by hand before ADR-099, in no dataset, on an
+    Enron email's Document, citing it as `DocumentReaderService.designate` does: the shape step 2a
+    would derive into the member."""
+    email = _person("enron-corpus").model_copy(
+        update={"type": "Document", "properties": {"title": "An Enron email"}}
+    )
+    hand = _person(email.id)
+    tx = await store.graph.begin_transaction()
+    await store.graph.upsert_nodes([email, hand], tx)
+    await store.graph.commit_transaction(tx)
+    enron_a = await store.graph.get_node(store.ids["enron_a"], EVERYONE)
+    fixture = await store.graph.get_node(store.ids["fixture"], EVERYONE)
+    assert enron_a is not None and fixture is not None
+    await store.working_sets.add_nodes(BOTH_CASE.id, [enron_a, fixture, _body(hand)])
+    # One run, as on a deployment: step 2 stamps the seeds' people, so step 3 makes the case a
+    # composite before step 2a would derive the mark from its Document.
+    report = await store.run(write=write, cases=[*CASES, BOTH_CASE])
+    return report, hand.id
+
+
+async def test_a_composite_cases_unplaced_elements_are_written_into_no_member(
+    store: _Store,
+) -> None:
+    """ADR-099 Amendment 15: a composite is read-only for now, so the stamping, writing by raw SQL
+    and so past the stamping graph, writes nothing of a composite case's into a member. What on its
+    canvas is in no dataset is counted as unplaced, in words, and left as it was: in the graph and
+    in the working set's copy the canvas is drawn from."""
+    report, hand = await _composite_case(store)
+    (chosen,) = await store.datasets.chosen_of_case(BOTH_CASE.id)
+    assert chosen.kind == "composite"
+    node = await store.graph.get_node(hand, EVERYONE)
+    assert node is not None and node.datasets == []
+    copies = await store.working_sets.source_fidelity_nodes(BOTH_CASE.id)
+    assert copies[hand].datasets == []
+    assert report.unplaced_in_composite == {BOTH_CASE.id: 1}
+    # Only the Enron case's own mark is stamped from a canvas, none of the composite case's.
+    assert report.canvas_stamped == 1 and await store.datasets_of("marked") == ["enron"]
+
+
+async def test_the_derivation_check_fails_with_it_alone_removed(
+    store: _Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: with step 2a no longer leaving a composite case's canvas out, the mark is
+    derived into the member from the Document it cites."""
+    from scripts import stamp_datasets
+
+    derive = stamp_datasets._derive  # noqa: SLF001
+
+    async def everything(*args: Any, **kwargs: Any) -> int:
+        return await derive(*args, **{**kwargs, "exclude": frozenset()})
+
+    monkeypatch.setattr(stamp_datasets, "_derive", everything)
+    _report, hand = await _composite_case(store)
+    node = await store.graph.get_node(hand, EVERYONE)
+    assert node is not None and node.datasets == ["enron"]
+
+
+async def test_a_composite_cases_unplaced_elements_are_said_in_words(store: _Store) -> None:
+    lines: list[str] = []
+    hand = _person("email:ev-3")
+    tx = await store.graph.begin_transaction()
+    await store.graph.upsert_nodes([hand], tx)
+    await store.graph.commit_transaction(tx)
+    await store.run()
+    for key in ("enron_a", "fixture"):
+        held = await store.graph.get_node(store.ids[key], EVERYONE)
+        assert held is not None
+        await store.working_sets.add_nodes(BOTH_CASE.id, [held])
+    await store.working_sets.add_nodes(BOTH_CASE.id, [_body(hand)])
+    await stamp(
+        sql=store.sql,
+        ontology=ONTOLOGY,
+        datasets=store.datasets,
+        working_sets=store.working_sets,
+        cases=[*CASES, BOTH_CASE],
+        org_unit="unit-1",
+        write=True,
+        say=lines.append,
+    )
+    said = "\n".join(lines)
+    assert "Both" in said and "read-only" in said and "1 element" in said
+    assert "not placed" in said
 
 
 async def test_a_dataset_named_on_the_graph_but_not_registered_is_counted(store: _Store) -> None:

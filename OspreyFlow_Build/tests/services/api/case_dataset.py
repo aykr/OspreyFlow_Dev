@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
 from services.api.config import PostgresConfig
 from services.api.datasets import Dataset, PostgresDatasetStore
 
@@ -35,3 +36,30 @@ async def give_case_its_dataset(investigation_id: str, principal: Principal) -> 
         await store.set_for_case(investigation_id, [dataset_for(principal)], principal)
     finally:
         await store.close()
+
+
+def new_case(name: str | None = None, **body: object) -> dict[str, object]:
+    """A `POST /v1/investigations` body for a case over a new, empty dataset of the caller's unit
+    (ADR-099 Amendment 12 item 6: a case names one dataset, or a new one; the Conduit no longer
+    makes one for a case that names none). The dataset's name is unique, so a test may make many."""
+    from uuid import uuid4
+
+    made: dict[str, object] = {"new_dataset_name": f"Test data {uuid4().hex[:12]}", **body}
+    if name is not None:
+        made["name"] = name
+    return made
+
+
+#: The layer `in_a_case_with_a_layer` holds for a test.
+TEST_LAYER = "analyst-layer-of-the-test-case"
+
+
+@pytest.fixture
+def in_a_case_with_a_layer(monkeypatch: pytest.MonkeyPatch) -> str:
+    """For a test that drives an analyst's own writer (a mark made by hand, a manual link or split)
+    directly, outside any request: the writer then holds a case's layer, as it does under a route
+    (ADR-143 Amendment 1), and refuses without one. Nothing else of the case's scope is set."""
+    from services.api import dataset_scope
+
+    monkeypatch.setattr(dataset_scope, "analyst_layer", lambda: TEST_LAYER)
+    return TEST_LAYER

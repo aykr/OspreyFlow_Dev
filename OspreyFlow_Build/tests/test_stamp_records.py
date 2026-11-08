@@ -18,7 +18,7 @@ import pytest
 from scripts.stamp_datasets import place_records
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 from services.api.hotlists import HotlistStore
 from services.api.link_type_store import LinkTypeProposalStore
 from services.api.link_types import LinkTypeProposal
@@ -58,7 +58,12 @@ async def setup():  # type: ignore[no-untyped-def]
             )
         )
     case = new_id()
-    await datasets.set_for_case(case, [f"fixture-corp-{unit}", f"enron-{unit}"], owner)
+    # ADR-099 Amendment 12: a case reading both reads a composite of them; its records (not
+    # dataset content, so they keep working there, Amendment 15 item 2) are placed under the
+    # composite's own id, the first of its read set (Amendment 14).
+    for dataset_id in (f"fixture-corp-{unit}", f"enron-{unit}"):
+        await read_also(datasets, case, dataset_id, owner)
+    (composite,) = await datasets.chosen_of_case(case)
     proposal = LinkTypeProposal(
         id=new_id(),
         name="KNOWN_TO",
@@ -87,7 +92,7 @@ async def setup():  # type: ignore[no-untyped-def]
     )
     hotlist = await hotlists.create(owner, identifier="+44", review_date=date(2027, 1, 1))
     conn = await asyncpg.connect(dsn)
-    yield conn, unit, proposal, alert, pattern, hotlist
+    yield conn, composite.id, proposal, alert, pattern, hotlist
     await conn.close()
     for store in stores:
         await store.close()
@@ -98,10 +103,10 @@ async def _dataset(conn, table: str, key: str, value: str) -> str | None:  # typ
 
 
 async def test_a_proposal_and_an_alert_take_their_cases_dataset(setup) -> None:  # type: ignore[no-untyped-def]
-    conn, unit, proposal, alert, _, _ = setup
+    conn, composite, proposal, alert, _, _ = setup
     report = await place_records(conn, write=True, say=lambda _: None)
-    assert await _dataset(conn, "link_type_proposals", "id", proposal.id) == f"fixture-corp-{unit}"
-    assert await _dataset(conn, "alerts", "id", alert.id) == f"fixture-corp-{unit}"
+    assert await _dataset(conn, "link_type_proposals", "id", proposal.id) == composite
+    assert await _dataset(conn, "alerts", "id", alert.id) == composite
     assert report.placed["link_type_proposals"] >= 1 and report.placed["alerts"] >= 1
 
 
@@ -121,7 +126,7 @@ async def test_a_dry_run_writes_nothing(setup) -> None:  # type: ignore[no-untyp
 
 
 async def test_running_it_again_moves_nothing(setup) -> None:  # type: ignore[no-untyped-def]
-    conn, unit, proposal, _, _, _ = setup
+    conn, composite, proposal, _, _, _ = setup
     await place_records(conn, write=True, say=lambda _: None)
     await place_records(conn, write=True, say=lambda _: None)
-    assert await _dataset(conn, "link_type_proposals", "id", proposal.id) == f"fixture-corp-{unit}"
+    assert await _dataset(conn, "link_type_proposals", "id", proposal.id) == composite

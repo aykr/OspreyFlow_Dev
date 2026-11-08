@@ -16,11 +16,16 @@ What it does, in order, each step safe to run again:
 3. Gives every case that reads nothing yet its datasets: those of the seeds that loaded into it
    (their load ids name it, or it bears the seed's case name), those of what is on its canvas, and
    its parent's if it is a branch (parents first). A case with none of these gets a dataset of its
-   own, named after it, so it never reads everything or nothing by accident.
+   own, named after it, so it never reads everything or nothing by accident. Then, so a composite
+   case is known first, what was derived from stamped data joins it (a Document, an entity found in
+   one, a link between two placed ends), except what is on a composite case's canvas.
 4. Stamps what is on each case's canvas and has no dataset yet (an entity the analyst marked or
-   accepted before ADR-099) with the case's first dataset.
+   accepted before ADR-099) with the case's first dataset. Not in a case reading a composite, which
+   is read-only for now (ADR-099 Amendment 15): this writes by raw SQL, past the stamping graph,
+   so it writes nothing into a member there, and counts those elements as unplaced, in words.
 5. Rewrites each case's working-set copies of its nodes and links with their datasets, since the
-   canvas is projected from those copies (`WorkingSetService._project`).
+   canvas is projected from those copies (`WorkingSetService._project`); in a composite case, a
+   copy the graph does not place is left as it was.
 6. Places the Conduit's own records made before ADR-099 Amendment 3 (`place_records`): a link-type
    proposal or an alert records the case it was made in, and takes that case's first dataset. A
    saved pattern, watch, monitor or Studio recipe records no case, so nothing says which dataset it
@@ -44,7 +49,14 @@ from typing import Any
 
 import asyncpg
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.api.datasets import Dataset, DatasetStore, PostgresDatasetStore
+from services.api.datasets import (
+    COMPOSITE,
+    Dataset,
+    DatasetStore,
+    PostgresDatasetStore,
+    named_by_case,
+    read_also,
+)
 from services.api.working_set.store import ValkeyWorkingSetStore, WorkingSetStorage
 from valkey.asyncio import Valkey
 
@@ -80,6 +92,9 @@ class StampReport:
     case_datasets: dict[str, list[str]] = field(default_factory=dict)
     own_datasets_made: list[str] = field(default_factory=list)
     canvas_stamped: int = 0
+    #: A composite case's canvas elements in no dataset, by case: written into no member, since a
+    #: composite is read-only for now (ADR-099 Amendment 15).
+    unplaced_in_composite: dict[str, int] = field(default_factory=dict)
     derived: int = 0
     refused: list[str] = field(default_factory=list)
     unstamped: dict[str, int] = field(default_factory=dict)
@@ -123,8 +138,14 @@ def _flat(value: Any) -> list[str]:
 
 
 async def _set_datasets(
-    sql: _Sql, type_name: str, placed: dict[str, list[str]], *, write: bool
+    sql: _Sql,
+    type_name: str,
+    placed: dict[str, list[str]],
+    *,
+    write: bool,
+    exclude: set[str] | frozenset[str] = frozenset(),
 ) -> int:
+    placed = {k: v for k, v in placed.items() if k not in exclude}
     if not write:
         return len(placed)
     by_datasets: dict[tuple[str, ...], list[str]] = {}
@@ -139,7 +160,13 @@ async def _set_datasets(
     return len(placed)
 
 
-async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
+async def _derive(
+    sql: _Sql,
+    ontology: OntologySchema,
+    *,
+    write: bool,
+    exclude: set[str] | frozenset[str] = frozenset(),
+) -> int:
     count = 0
     unplaced = 'filter(or(hasNot("datasets"), values("datasets").unfold().count().is(0)))'
     # A Document: the datasets shared by everything linked to it.
@@ -157,7 +184,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             shared = _shared(neighbours)
             if shared:
                 placed[r["id"]] = shared
-        count += await _set_datasets(sql, document, placed, write=write)
+        count += await _set_datasets(sql, document, placed, write=write, exclude=exclude)
     # An entity found in a Document: that Document's datasets.
     node_types = [physical_type_name(t.name) for t in ontology.entity_types]
     holders: dict[str, list[str]] = {}
@@ -175,7 +202,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             found = [holders[d] for d in sources if holders.get(d)]
             if found:
                 placed[element_id] = sorted({d for ds in found for d in ds})
-        count += await _set_datasets(sql, type_name, placed, write=write)
+        count += await _set_datasets(sql, type_name, placed, write=write, exclude=exclude)
     # A link: the datasets its two ends share.
     for edge in ontology.edge_types:
         label = physical_type_name(edge.name)
@@ -190,7 +217,7 @@ async def _derive(sql: _Sql, ontology: OntologySchema, *, write: bool) -> int:
             shared = _shared([_flat(r["a"]), _flat(r["b"])])
             if shared:
                 placed[r["id"]] = shared
-        count += await _set_datasets(sql, label, placed, write=write)
+        count += await _set_datasets(sql, label, placed, write=write, exclude=exclude)
     return count
 
 
@@ -330,26 +357,20 @@ async def stamp(
         report.stamped_by_source[seed.id] = total
         say(f"  {seed.name}: {total:,} elements {'stamped' if write else 'to stamp'}")
 
-    # 2a. What was derived from data joins the data it was derived from (as resolution now writes
-    # a `SAME_AS`): a Document the datasets shared by what it is linked to, an entity the Document
-    # it was found in, a link the datasets its two ends share. In that order, since each reads
-    # what the one before it placed.
-    report.derived = await _derive(sql, ontology, write=write)
-    say(
-        f"  derived from stamped data: {report.derived:,} elements "
-        f"{'stamped' if write else 'to stamp'}"
-    )
-
-    # 3 to 5, per case, parents first.
+    # 3, per case, parents first: what each reads, so a composite case is known before anything of
+    # its canvas is derived into a member (step 2a, below).
+    placed_cases: list[tuple[CaseRow, list[str], list[str], list[str], bool]] = []
     for case in _parents_first(cases):
-        held = await datasets.ids_of_case(case.id)
+        # What the case names (a composite as its members), never its read set: that holds the
+        # case's own analyst layer, which no other case may name (ADR-143 decision 1).
+        held = await named_by_case(datasets, case.id)
         node_ids = sorted(await working_sets.node_ids(case.id))
         edge_ids = sorted(await working_sets.edge_ids(case.id))
         if not held:
             chosen: list[str] = []
-            named = SEED_CASE_NAMES.get(case.name)
-            if named:
-                chosen.append(named)
+            seeded = SEED_CASE_NAMES.get(case.name)
+            if seeded:
+                chosen.append(seeded)
             for seed_id, prefix in SEED_LOAD_PREFIXES.items():
                 load_id = f"{prefix}:{case.id}"
                 for type_name in node_types:
@@ -361,7 +382,7 @@ async def stamp(
                         break
             if case.branched_from:
                 chosen.extend(report.case_datasets.get(case.branched_from, []))
-                chosen.extend(await datasets.ids_of_case(case.branched_from))
+                chosen.extend(await named_by_case(datasets, case.branched_from))
             on_canvas = await _datasets_by_id(sql, types, [*node_ids, *edge_ids])
             for in_these in on_canvas.values():
                 chosen.extend(in_these)
@@ -388,13 +409,44 @@ async def stamp(
                     ordered = [f"(new: {case.name or case.id})"]
                 report.own_datasets_made.append(case.id)
             if write:
-                await datasets.set_for_case(case.id, ordered, seeder)
+                # ADR-099 Amendment 12: one dataset per case; several become a composite.
+                for dataset_id in ordered:
+                    await read_also(datasets, case.id, dataset_id, seeder, case_name=case.name)
             held = ordered
         report.case_datasets[case.id] = list(held)
         say(f"  case {case.name or case.id}: reads {', '.join(held)}")
 
+        # A composite case writes nothing into a member (ADR-099 Amendment 15); in a dry run, a
+        # case that would be given more than one dataset is one.
+        composite = len(held) > 1 or any(
+            d.kind == COMPOSITE for d in await datasets.chosen_of_case(case.id)
+        )
+
+        placed_cases.append((case, list(held), node_ids, edge_ids, composite))
+
+    # 2a, after 3. What was derived from data joins the data it was derived from (as resolution
+    # now writes a `SAME_AS`): a Document the datasets shared by what it is linked to, an entity the
+    # Document it was found in, a link the datasets its two ends share. In that order, since each
+    # reads what the one before it placed. Not what is on a composite case's canvas: the stamping
+    # writes nothing of its into a member (ADR-099 Amendment 15), and a mark made by hand cites the
+    # member's Document it was made on.
+    in_composites = {
+        element_id
+        for _c, _h, on_nodes, on_edges, in_a_composite in placed_cases
+        if in_a_composite
+        for element_id in (*on_nodes, *on_edges)
+    }
+    report.derived = await _derive(sql, ontology, write=write, exclude=in_composites)
+    say(
+        f"  derived from stamped data: {report.derived:,} elements "
+        f"{'stamped' if write else 'to stamp'}"
+    )
+
+    # 4 and 5, per case, parents first.
+    for case, held, node_ids, edge_ids, composite in placed_cases:
         # 4. What is on the canvas and in no dataset joins the case's first.
         first = held[0]
+        unplaced_here = 0
         if node_ids or edge_ids:
             for type_name in types:
                 for start in range(0, max(len(node_ids), len(edge_ids)), LOOKUP_BATCH):
@@ -407,6 +459,9 @@ async def stamp(
                         f"WHERE id IN :ids AND {_IN_NO_DATASET}",
                         {"ids": chunk},
                     )
+                    if composite:
+                        unplaced_here += unplaced
+                        continue
                     if write and unplaced:
                         await sql.query(
                             f"UPDATE {type_name} SET datasets = [:ds] "
@@ -415,9 +470,21 @@ async def stamp(
                         )
                     report.canvas_stamped += unplaced
 
+        if composite and unplaced_here:
+            report.unplaced_in_composite[case.id] = unplaced_here
+            noun = "element" if unplaced_here == 1 else "elements"
+            say(
+                f"  case {case.name or case.id} reads a composite, which is read-only for now: "
+                f"{unplaced_here:,} {noun} on its canvas in no dataset not placed (nothing is "
+                "written into a member; place them from a case that reads that dataset)"
+            )
+        # The copy of an element the graph does not hold: stamped with the case's first dataset,
+        # but in a composite case left as it was.
+        placed_in = [] if composite else [first]
+
         # 5. The working set's own copies, which the canvas is drawn from: the graph's current
         # body where it holds the element (its datasets, and its counts if a load was written
-        # again), else the copy stamped with the case's first dataset.
+        # again), else the copy stamped as above.
         if write and (node_ids or edge_ids):
             node_bodies = await _bodies_by_id(sql, node_types, node_ids, node_from_element_map)
             edge_types = [physical_type_name(t.name) for t in ontology.edge_types]
@@ -428,7 +495,7 @@ async def stamp(
                 case.id,
                 [
                     node_bodies.get(n.id)
-                    or n.model_copy(update={"datasets": n.datasets or [first]})
+                    or n.model_copy(update={"datasets": n.datasets or placed_in})
                     for n in nodes.values()
                 ],
             )
@@ -436,7 +503,7 @@ async def stamp(
                 case.id,
                 [
                     edge_bodies.get(e.id)
-                    or e.model_copy(update={"datasets": e.datasets or [first]})
+                    or e.model_copy(update={"datasets": e.datasets or placed_in})
                     for e in edges.values()
                 ],
             )
@@ -456,8 +523,8 @@ async def stamp(
         for row in await sql.gremlin(f"g.{step}().values('datasets').unfold().groupCount()"):
             for dataset_id, count in (row or {}).items():
                 named[str(dataset_id)] = named.get(str(dataset_id), 0) + int(count)
-    held = await datasets.known(sorted(named))
-    report.unregistered = {d: n for d, n in sorted(named.items()) if d not in held}
+    registered = await datasets.known(sorted(named))
+    report.unregistered = {d: n for d, n in sorted(named.items()) if d not in registered}
     if report.unregistered:
         say("  naming a dataset nobody registered (no case can read them):")
         for dataset_id, count in report.unregistered.items():
@@ -497,6 +564,8 @@ async def place_records(
     """Step 6. A record whose case reads no dataset yet is left as it is, and counted with the
     unplaced; one that already has a dataset is never moved, so a second run changes nothing."""
     report = RecordsReport()
+    # The first of the case's read set (`DatasetStore.ids_of_case`): its dataset, a composite's own
+    # id included (ADR-099 Amendment 14).
     first_dataset = (
         "(SELECT d.dataset_id FROM investigation_datasets d "
         "WHERE d.investigation_id = r.investigation_id ORDER BY d.position LIMIT 1)"

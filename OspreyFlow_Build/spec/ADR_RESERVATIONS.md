@@ -27,11 +27,11 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-132 Amendment 6 | The place switch in the GOV.UK header | orchestrator | 2026-11-06 | written |
 | ADR-110 Amendment 14 | The Admin area becomes a place of its own, in sections | orchestrator | 2026-11-06 | written |
 | ADR-112 Amendment 4 | Roles an administrator defines, and five new rights | orchestrator | 2026-11-06 | written |
-| ADR-143 Amendment 1 | Where today's analyst writes go: hand-marking and manual links into the layer, accepted proposals and extractions into the source (the owner's ruling "Split", 7 November) | case | 2026-11-07 | reserved |
-| ADR-099 Amendment 14 | Data added to a case reading a composite is written under the composite's own id (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
-| ADR-136 Amendment 1 | A case's analyst layer takes the strictest egress of the case's sources (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
-| ADR-025 Amendment 1 | A split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
-| ADR-099 Amendment 15 | A composite case's write to a node already in a member becomes a new node in the composite, linked by SAME_AS; no member changes (the owner's ruling, 7 November) | case | 2026-11-07 | reserved |
+| ADR-143 Amendment 1 | Where today's analyst writes go: hand-marking and manual links into the layer, accepted proposals and extractions into the source (the owner's ruling "Split", 7 November) | case | 2026-11-07 | written |
+| ADR-099 Amendment 14 | A case reading a composite adds no data: a composite is read-only for now (the owner's ruling, 7 November) | case | 2026-11-07 | written |
+| ADR-136 Amendment 1 | A case's analyst layer takes the strictest egress of the case's sources (the owner's ruling, 7 November) | case | 2026-11-07 | written |
+| ADR-025 Amendment 1 | A split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only (the owner's ruling, 7 November) | case | 2026-11-07 | written |
+| ADR-099 Amendment 15 | In a case reading a composite, only its analyst layer is written; every other write is refused in words (the owner's ruling, 7 November) | case | 2026-11-07 | written |
 | ADR-140 Amendment 8 | Phase 6 as built: the drawer beside the pipeline, Preview, guided and expert mode, the Map editor's strip and keyboard bind (the owner's rulings of 7 November: Q1 a, Q2 a, Q3 a) | studio | 2026-11-07 | written |
 | ADR-145 Amendment 1 | Three places as built: each place follows the full checks its routes make; no route moves place; only the Studio's run history narrows (to run_pipelines); schedule preview exempt from place assignment; the GOV.UK header's local extension (the owner's corrected ruling, 7 November) | glass | 2026-11-07 | written |
 | ADR-090 Amendment 5 | Proposed types stay in Admin until the Studio's Model tab shows them (L3.5) (the owner's ruling, 7 November) | glass | 2026-11-07 | written |

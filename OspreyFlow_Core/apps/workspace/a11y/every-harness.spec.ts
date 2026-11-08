@@ -42,6 +42,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "panel-frames-harness.html": ["defaults=1"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
+  // ADR-099 Amendment 12: a new case's form on "Use an existing dataset", its dataset radios drawn.
+  "case-datasets-harness.html": ["choice=existing"],
   // The Matrix view (GDS remediation plan A1) with rows selected, and long enough to page.
   "matrix-harness.html": ["select=p2,p4", "many=1", "strength=1"],
   // ADR-139: the two new filter metrics chosen; a link's strength explained in the Inspector; the

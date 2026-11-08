@@ -1,5 +1,6 @@
 // What a case reads, and which domain models it carries, by keyboard alone (ADR-099, ADR-126,
-// rule 13): ticking the data a new case reads and creating it, the Author changing what a case
+// rule 13): choosing the one dataset a new case reads (Amendment 12) and creating it, making a new
+// case over a new dataset (the default, in the domain-model step), the Author changing what a case
 // reads, choosing a new case's domain models, and the Author changing them. No `page.mouse`, no
 // `.click()`. Each domain step asserts the request body sent and the packs shown afterwards.
 import { expect, test, type Page } from "@playwright/test";
@@ -41,24 +42,24 @@ async function serve(page: Page) {
       return route.fulfill(json(200, { id: "c1", name: "C", domains: patched.domains }));
     }
     if (url === "/v1/investigations/c1/datasets" && method === "GET") return route.fulfill(json(200, [DATASETS[1]]));
-    if (url === "/v1/investigations/c1/datasets" && method === "PUT") return route.fulfill(json(200, DATASETS));
+    if (url === "/v1/investigations/c1/datasets" && method === "PUT") return route.fulfill(json(200, [DATASETS[0]]));
     return route.fulfill(json(404, {}));
   });
   await page.goto("/keyboard/case-datasets-harness.html");
   return sent;
 }
 
-test("a dataset is ticked with Space and the case made with Enter, reading it", async ({ page }) => {
+test("a dataset is chosen with Space and the case made with Enter, reading it", async ({ page }) => {
   const sent = await serve(page);
   await page.getByLabel("Case name").focus();
   await page.keyboard.type("Shipping");
-  // ADR-099 Amendment 8: the datasets sit behind the "Read existing data…" choice, reached and
-  // chosen by keyboard before any box can be ticked.
-  await page.getByRole("radio", { name: "Read existing data…" }).focus();
+  // ADR-099 Amendment 12 item 6: the datasets sit behind "Use an existing dataset…", reached and
+  // chosen by keyboard; the case then reads exactly the one chosen.
+  await page.getByRole("radio", { name: "Use an existing dataset…" }).focus();
   await page.keyboard.press(" ");
-  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.getByRole("radio", { name: "Enron corpus" }).focus();
   await page.keyboard.press(" ");
-  await expect(page.getByRole("checkbox", { name: "Enron corpus" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Enron corpus" })).toBeChecked();
   await page.getByRole("button", { name: "Create case" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__CASE_DATASETS__?.created)).toBe("new-1");
@@ -75,13 +76,13 @@ test("the Author changes what the case reads by keyboard", async ({ page }) => {
   const section = page.getByRole("region", { name: "Data this case reads" });
   await section.getByRole("button", { name: "Change what this case reads" }).focus();
   await page.keyboard.press("Enter");
-  await section.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await section.getByRole("radio", { name: "Enron corpus" }).focus();
   await page.keyboard.press(" ");
   await section.getByRole("button", { name: "Save" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__CASE_DATASETS__?.changed)).toBe(1);
-  expect(sent.find((s) => s.method === "PUT")?.body).toEqual({ dataset_ids: ["fixture-corp", "enron"] });
-  await expect(section.getByText("Enron corpus · enron, Fixture Corp · fixture-corp")).toBeVisible();
+  expect(sent.find((s) => s.method === "PUT")?.body).toEqual({ dataset_ids: ["enron"] });
+  await expect(section.getByText("Enron corpus · enron")).toBeVisible();
   registerCovered("CASE_DATASETS_ACTIONS", "change-what-a-case-reads-by-keyboard");
 });
 
@@ -98,8 +99,10 @@ test("a new case's domain models are ticked with Space and sent when it is made 
   await page.getByRole("button", { name: "Create case" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__CASE_DATASETS__?.created)).toBe("new-1");
+  // Made over a new dataset (the default choice), named after the case (ADR-099 Amendment 12).
   expect(sent.find((s) => s.method === "POST" && s.url === "/v1/investigations")?.body).toEqual({
     name: "Prison review",
+    new_dataset_name: "Prison review",
     domains: ["niem"],
   });
   // The packs shown afterwards are the new case's own, read back from the listing.

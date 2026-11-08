@@ -18,8 +18,12 @@ from services.resolve.projection import compute_clusters
 
 from schemas.domain import AuditStub, Edge, EdgeWrite, Subgraph, TxId
 
+from ..case_dataset import in_a_case_with_a_layer  # noqa: F401 (a fixture)
 from .fakes import FakeGraphPort, FakeWorkingSetStore
 from .test_manual_resolution import INVESTIGATION, PRINCIPAL, SCHEME, _person
+
+#: ADR-143 Amendment 1: the analyst's own writes need a case's layer to go into.
+pytestmark = pytest.mark.usefixtures("in_a_case_with_a_layer")
 
 
 class MergingGraph(FakeGraphPort):

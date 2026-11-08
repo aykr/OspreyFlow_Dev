@@ -108,7 +108,11 @@ def dataset_refusal(
         name = f"“{dataset.name}”" if dataset is not None else "a dataset not known here"
         if egress == "any" or (egress == "contracted" and engine.privacy_contract):
             continue
-        (contracted if egress == "contracted" else none).append(name)
+        refused = contracted if egress == "contracted" else none
+        # Each name once: a case's analyst layer is named as the dataset it takes its egress from
+        # (`datasets.as_its_case`, ADR-143), which is named beside it.
+        if name not in refused:
+            refused.append(name)
     if none:
         return (
             f"{_names(none)} {'is' if len(none) == 1 else 'are'} set to egress none, never sent "

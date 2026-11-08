@@ -78,6 +78,7 @@ from schemas.domain import (
 )
 
 from .change_provenance import CHANGE_MARKER, without_link_ids
+from .dataset_scope import refuse_in_a_composite_case
 from .link_notes import LinkNotFoundError
 from .link_types import LinkTypeService
 from .working_set.models import DeltaReplaceEdge, DeltaReplaceEdgeSent
@@ -365,6 +366,7 @@ class LinkChangeService:
         is_author: bool = False,
     ) -> LinkChangeResult:
         old = await self._in_full(investigation_id, edge_id, principal)
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the link is read
         reason = request.reason.strip()
         if not reason:
             raise InvalidChangeError("Say why the link is being changed: a reason is required.")

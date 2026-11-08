@@ -30,7 +30,7 @@ from fastapi.testclient import TestClient
 from services.api.alerts import AlertStore
 from services.api.app import get_recipes_repo_root
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 from services.api.hotlists import HotlistStore
 from services.api.studio_publish import build_recipe, write_and_commit_recipe
 from services.api.studio_recipes import StudioRecipeStore
@@ -41,7 +41,7 @@ from tests.conftest import (
     default_claims,
     sign_token,
 )
-from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset, new_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -94,7 +94,7 @@ def _bearer(private_key: rsa.RSAPrivateKey) -> dict[str, str]:
 def _case(client: TestClient, headers: dict[str, str]) -> str:
     """ADR-099 Amendment 3: watches and alerts are asked of a case, and read its datasets; the case
     reads the dataset the nodes below are written in, as a load into it would put them."""
-    created = client.post("/v1/investigations", headers=headers)
+    created = client.post("/v1/investigations", headers=headers, json=new_case())
     assert created.status_code == 201, created.text
     case_id = str(created.json()["id"])
     asyncio.run(give_case_its_dataset(case_id, PRINCIPAL))
@@ -394,7 +394,7 @@ def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
                         created_by="test",
                     )
                 )
-                await store.set_for_case(case, [dataset_for(PRINCIPAL), other], PRINCIPAL)
+                await read_also(store, case, other, PRINCIPAL)  # a composite of both
             finally:
                 await store.close()
 
@@ -755,7 +755,9 @@ def test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_inge
     try:
         with TestClient(app) as client:
             inv_response = client.post(
-                "/v1/investigations", headers={"Authorization": f"Bearer {token_b}"}
+                "/v1/investigations",
+                headers={"Authorization": f"Bearer {token_b}"},
+                json=new_case(),
             )
             assert inv_response.status_code == 201, inv_response.text
             investigation_id = inv_response.json()["id"]
@@ -861,7 +863,7 @@ def _run_through_the_route(
     try:
         with TestClient(app) as client:
             headers = {"Authorization": f"Bearer {token}"}
-            created = client.post("/v1/investigations", headers=headers)
+            created = client.post("/v1/investigations", headers=headers, json=new_case())
             assert created.status_code == 201, created.text
             case = str(created.json()["id"])
             asyncio.run(give_case_its_dataset(case, loader))

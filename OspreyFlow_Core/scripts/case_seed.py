@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import get_args
 
-from services.api.datasets import Dataset, DatasetStore
+from services.api.datasets import Dataset, DatasetStore, read_also
 from services.api.investigations import AccessLevel, Investigation, InvestigationStore
 
 from demo_fixtures.datasets import SeedDataset
@@ -64,9 +64,11 @@ async def ensure_case(
 async def ensure_case_reads(
     store: DatasetStore, investigation_id: str, dataset: SeedDataset, *, seeder: Principal
 ) -> None:
-    """ADR-099: the seed's dataset exists, held by the seeder's unit, and the case reads it, after
-    whatever it read already. Running a seed twice changes nothing. A dataset of that id held by
-    another unit is refused (`DatasetRefusedError`), never borrowed."""
+    """ADR-099: the seed's dataset exists, held by the seeder's unit, and the case reads it, with
+    whatever it read already: a case that read another dataset now reads a composite of both
+    (Amendment 12: a case never names two; `datasets.read_also`). Running a seed twice changes
+    nothing. A dataset of that id held by another unit is refused (`DatasetRefusedError`), never
+    borrowed."""
     await store.register(
         Dataset(
             id=dataset.id,
@@ -76,9 +78,7 @@ async def ensure_case_reads(
             created_by=seeder.id,
         )
     )
-    held = await store.ids_of_case(investigation_id)
-    if dataset.id not in held:
-        await store.set_for_case(investigation_id, [*held, dataset.id], seeder)
+    await read_also(store, investigation_id, dataset.id, seeder)
 
 
 async def _reads_from_arguments(
@@ -154,9 +154,7 @@ def case_domain_list(args: argparse.Namespace) -> list[str] | None:
     return [d for d in str(text).split(",") if d]
 
 
-async def scope_for(
-    args: argparse.Namespace, *, seeder: Principal, dataset: SeedDataset
-) -> str:
+async def scope_for(args: argparse.Namespace, *, seeder: Principal, dataset: SeedDataset) -> str:
     """The case id to write under: the one given, or the named case made now. Either way the case
     reads `dataset` (ADR-099), since the seed is loading it into the case."""
     if args.investigation_scope:

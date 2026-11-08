@@ -380,14 +380,21 @@ from .compute_routes import (
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .dataset_scope import (
+    CompositeReadOnlyError,
+    NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
     outside_any_case,
+    refuse_in_a_composite_case,
+    refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
     scope_to_dataset,
 )
 from .datasets import (
+    MAX_DATASET_NAME,
+    BranchLayerError,
     CaseDatasetsRequest,
+    CreateCompositeRequest,
     CreateDatasetRequest,
     Dataset,
     DatasetRefusedError,
@@ -1050,7 +1057,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_worker.register(
         JOB_TYPE_RESOLVE_ENTITY_TYPE,
         functools.partial(
-            run_resolve_entity_type_job, ontology=ontology, scheme=handling_scheme, valkey=valkey
+            run_resolve_entity_type_job,
+            ontology=ontology,
+            scheme=handling_scheme,
+            valkey=valkey,
+            # ADR-143 Amendment 1: a layer's split is its own case's, not the corpus's.
+            analyst_layers=datasets_store.layer_ids,
         ),
     )
     job_worker.register(
@@ -1091,6 +1103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             valkey=valkey,
             principal_for_owner=app.state.principal_resolver.resolve_for_owner,
             sweeper=sweeper,
+            datasets=datasets_store,
         )
 
     sweep_task = asyncio.create_task(run_daily_kyc_sweep(valkey, _sweep_day))
@@ -1416,7 +1429,30 @@ async def get_principal(
         return scoped if scoped is not None else outside_any_case(identity)
     if investigation_id is None:
         return outside_any_case(identity)
-    return await scope_to_case(identity, investigation_id, get_datasets(request))
+    return await scope_to_case(
+        identity,
+        investigation_id,
+        get_datasets(request),
+        holds_a_level=holds_a_level_in(lambda: get_investigations(request)),
+    )
+
+
+def holds_a_level_in(
+    investigations: InvestigationStore | Callable[[], InvestigationStore],
+) -> Callable[[Principal, str], Any]:
+    """Whether a principal holds any level on a case, by the case's own Viewer check: what a branch
+    asks before its reader reads its original's layer (`scope_to_case`). Given as a getter, the
+    store is looked up only when a branch asks."""
+
+    async def holds(principal: Principal, investigation_id: str) -> bool:
+        store = investigations() if callable(investigations) else investigations
+        try:
+            await store.get_authorized(investigation_id, principal, need=AccessLevel.VIEWER)
+        except (InvestigationNotFoundError, InsufficientAccessError):
+            return False
+        return True
+
+    return holds
 
 
 def get_principal_resolver(request: Request) -> PrincipalResolver:
@@ -1752,8 +1788,32 @@ async def _audit_denied(
 
 
 InvestigationViewerDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.VIEWER))]
-InvestigationEditorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.EDITOR))]
-InvestigationAuthorDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.AUTHOR))]
+
+
+_AT_EDITOR = _authorized_at(AccessLevel.EDITOR)
+_AT_AUTHOR = _authorized_at(AccessLevel.AUTHOR)
+InvestigationEditorDep = Annotated[Investigation, Depends(_AT_EDITOR)]
+InvestigationAuthorDep = Annotated[Investigation, Depends(_AT_AUTHOR)]
+
+
+async def refuse_loading_in_a_composite_case(investigation: InvestigationEditorDep) -> None:
+    """ADR-099 Amendment 15: a case reading a composite loads, runs, schedules, publishes and
+    uploads nothing (a composite is read-only for now). After the case's own level check, so a
+    caller who may not open the case is still answered as for a missing one. It depends on the
+    very check the route's own `InvestigationEditorDep` does, so FastAPI runs it once and the
+    route declares one level (`test_investigation_levels.py`)."""
+    await refuse_in_a_composite_case()
+
+
+async def refuse_deciding_held_rows_in_a_composite_case(
+    investigation: InvestigationAuthorDep,
+) -> None:
+    """The same refusal for the held-rows routes, which need an author."""
+    await refuse_in_a_composite_case()
+
+
+NoLoadingInACompositeCase = Depends(refuse_loading_in_a_composite_case)
+NoHeldRowsInACompositeCase = Depends(refuse_deciding_held_rows_in_a_composite_case)
 #: Access management: an Author, or the administrator's safety net (ADR-052 §4).
 InvestigationAccessManagerDep = Annotated[
     Investigation, Depends(_authorized_at(AccessLevel.AUTHOR, admin_safety_net=True))
@@ -2346,6 +2406,40 @@ async def _unknown_dataset_handler(request: Request, exc: UnknownDatasetError) -
     )
 
 
+@app.exception_handler(CompositeReadOnlyError)
+async def _composite_read_only_handler(
+    request: Request, exc: CompositeReadOnlyError
+) -> JSONResponse:
+    """ADR-099 Amendment 15 (the owner, 7 November 2026): a composite is read-only for now; nothing
+    was written."""
+    return JSONResponse(
+        status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(BranchLayerError)
+async def _branch_layer_handler(request: Request, exc: BranchLayerError) -> JSONResponse:
+    """ADR-144 Amendment 1 decision 2: a branch reads its original case's layer and writes none;
+    refused before anything was written."""
+    return JSONResponse(
+        status_code=409, content={"error": "branch_layer_read_only", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(NoAnalystLayerError)
+async def _no_analyst_layer_handler(request: Request, exc: NoAnalystLayerError) -> JSONResponse:
+    """ADR-143 Amendment 1 item 3: an analyst's own write with no case's layer to go into (the
+    case reads nothing): refused, and nothing was written, rather than written into a source."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "no_analyst_layer",
+            "detail": "This case reads no dataset yet, so there is nowhere to keep what you mark "
+            "or link; nothing was written.",
+        },
+    )
+
+
 @app.exception_handler(DatasetRefusedError)
 async def _dataset_refused_handler(request: Request, exc: DatasetRefusedError) -> JSONResponse:
     """ADR-099: no dataset, or one not of the caller's unit; one answer for both."""
@@ -2679,9 +2773,12 @@ DEFAULT_CASE_NAME = "Untitled case"
 
 class CreateInvestigationInput(BaseModel):
     name: str | None = None
-    #: ADR-099: the datasets the case reads, all of the creator's unit. Left out, the case gets a
-    #: new dataset of its own, named after it, for the data that will be added to it.
+    #: ADR-099 Amendment 12 item 6 (R16): *Use an existing dataset* names exactly one, a source or a
+    #: composite of the creator's unit; *Make a new dataset* names it instead (`new_dataset_name`,
+    #: an empty dataset of the creator's unit). One or the other; neither, or both, is refused.
+    #: The Conduit no longer makes a case a dataset of its own when it names none.
     dataset_ids: list[str] | None = None
+    new_dataset_name: str | None = Field(default=None, max_length=MAX_DATASET_NAME)
     #: ADR-126: the domain packs the case carries. Left out, the column stays NULL, "never chosen",
     #: which reads as the POLE core model; a list, empty included, is a choice. An unknown pack is a
     #: 422.
@@ -2702,19 +2799,25 @@ async def create_investigation(
 ) -> Investigation:
     """Needs no grant: whoever creates a case is its first Author (ADR-052 §4). The name is
     optional here only until the Glass proposes one (stage 3), after which it is required.
-    ADR-099: the datasets named are checked before the case exists, so a refusal leaves none."""
+    ADR-099 Amendment 12: the case reads exactly one dataset, named or made here, checked before
+    the case exists, so a refusal leaves none. ADR-143 decision 1: the case's analyst layer is made
+    with it (`set_for_case`)."""
     name = (body.name if body is not None else None) or DEFAULT_CASE_NAME
-    named = body.dataset_ids if body is not None else None
+    named = list(dict.fromkeys(body.dataset_ids or [])) if body is not None else []
+    new_name = (body.new_dataset_name or "").strip() if body is not None else ""
+    if bool(named) == bool(new_name) or len(named) > 1:
+        raise DatasetRefusedError("a case reads exactly one dataset: name one, or a new one")
     if named:
         own = {d.id for d in await datasets.list_for(principal)}
         if not set(named) <= own:
             raise DatasetRefusedError("not every dataset is one of this unit's")
+    else:
+        # Made before the case, so a name already taken refuses the whole request.
+        named = [(await datasets.create(principal, new_name)).id]
     investigation = await investigations.create(
         principal, name=name, domains=body.domains if body is not None else None
     )
-    if not named:
-        named = [(await datasets.create(principal, investigation.name, suffix_if_taken=True)).id]
-    await datasets.set_for_case(investigation.id, named, principal)
+    await datasets.set_for_case(investigation.id, named, principal, case_name=investigation.name)
     await audit.record(
         principal=principal,
         action="create_investigation",
@@ -2751,6 +2854,27 @@ async def create_dataset_route(
     return dataset
 
 
+@app.post(
+    "/v1/datasets/composites",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE))],
+)
+async def create_composite_route(
+    body: CreateCompositeRequest, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
+) -> Dataset:
+    """ADR-099 Amendment 12 item 2: a composite of the caller's unit's source datasets, read at read
+    time as its members; nothing is copied. A member of another unit, a missing one, a composite and
+    an analyst layer are refused alike (`dataset_refused`)."""
+    composite = await datasets.create_composite(principal, body.name, body.member_ids)
+    await audit.record(
+        principal=principal,
+        action="create_composite_dataset",
+        resolved_query={"dataset_id": composite.id, "member_ids": composite.members},
+        result_cardinality=len(composite.members),
+    )
+    return composite
+
+
 @app.get("/v1/investigations/{investigation_id}/datasets")
 async def case_datasets_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, datasets: DatasetsDep
@@ -2772,8 +2896,10 @@ async def set_case_datasets_route(
 ) -> list[Dataset]:
     """Changes what the case reads: its Author's, audited, every dataset of the Author's unit
     (ADR-099). Nothing else widens a case's datasets."""
-    before = await datasets.ids_of_case(investigation.id)
-    changed = await datasets.set_for_case(investigation.id, body.dataset_ids, principal)
+    before = [d.id for d in await datasets.of_case(investigation.id, principal)]
+    changed = await datasets.set_for_case(
+        investigation.id, body.dataset_ids, principal, case_name=investigation.name
+    )
     await audit.record(
         principal=principal,
         action="set_case_datasets",
@@ -3209,7 +3335,12 @@ async def branch_investigation(
         **({"branch_window": held_window} if held_window is not None else {}),
     )
     # ADR-099: a branch reads what its parent reads.
-    await datasets.copy_case(investigation.id, new_investigation.id)
+    await datasets.copy_case(
+        investigation.id,
+        new_investigation.id,
+        case_name=new_investigation.name,
+        created_by=principal.id,
+    )
     if window is not None:
         outcome = await working_set.branch_add(
             new_investigation.id, lit_nodes, lit_links, principal
@@ -3283,7 +3414,12 @@ async def branch_investigation_by_filter(
         branched_from=investigation.id,
         domains=investigation.domains_to_inherit(),
     )
-    await datasets.copy_case(investigation.id, new_investigation.id)
+    await datasets.copy_case(
+        investigation.id,
+        new_investigation.id,
+        case_name=new_investigation.name,
+        created_by=principal.id,
+    )
     outcome = await working_set.branch_add(new_investigation.id, nodes, edges, principal)
     await publish_delta(valkey, new_investigation.id, outcome.delta)
     await _record_history_step(
@@ -3807,7 +3943,7 @@ async def compute_metric_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/extract",
-    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES)), NoLoadingInACompositeCase],
 )
 async def run_extraction_route(
     investigation: InvestigationEditorDep,
@@ -3971,6 +4107,8 @@ async def confirm_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
+    # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
+    await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await confirm_node(graph, node_id, principal, tx=tx)
@@ -4078,6 +4216,8 @@ async def retract_node_route(
     audit: AuditDep,
     judgements: JudgementsStoreDep,
 ) -> NodeIdResponse:
+    # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
+    await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
     tx = await graph.begin_transaction()
     try:
         new_node_id = await retract_node(graph, node_id, principal, tx=tx)
@@ -5243,7 +5383,7 @@ async def designate_in_document_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/documents",
-    dependencies=[Depends(require_right(Right.EXTRACT_FILES))],
+    dependencies=[Depends(require_right(Right.EXTRACT_FILES)), NoLoadingInACompositeCase],
 )
 async def upload_document_route(
     investigation: InvestigationEditorDep,
@@ -6349,12 +6489,21 @@ async def jump_alert_route(
     # ADR-099: the new case reads the alert's dataset; with none, what the alert's case reads; with
     # neither, a dataset of its own.
     if alert.dataset_id is not None:
-        await datasets.set_for_case(branch.id, [alert.dataset_id], principal)
+        await datasets.set_for_case(branch.id, [alert.dataset_id], principal, case_name=branch.name)
     elif alert.investigation_id is not None:
-        await datasets.copy_case(alert.investigation_id, branch.id)
+        # Not as a branch: the jumper may hold no level on the alert's case, so the new case reads
+        # its dataset and keeps an empty layer of its own, never the original's (ADR-143 Amendment
+        # 1 item 3; ADR-144 Amendment 1 decision 2 is for the branch routes).
+        await datasets.copy_case(
+            alert.investigation_id,
+            branch.id,
+            case_name=branch.name,
+            created_by=principal.id,
+            as_a_branch=False,
+        )
     if not await datasets.ids_of_case(branch.id):
         own = await datasets.create(principal, branch.name, suffix_if_taken=True)
-        await datasets.set_for_case(branch.id, [own.id], principal)
+        await datasets.set_for_case(branch.id, [own.id], principal, case_name=branch.name)
     principal = await scope_to_case(principal, branch.id, datasets)
     nodes = await fetch_jumpable_referents(alert, principal=principal, graph=graph)
     outcome = await working_set.seed(branch.id, nodes, [], principal)
@@ -7226,6 +7375,10 @@ async def set_site_grid(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="the site needs 4 control points before a grid can be drawn",
         )
+    # ADR-099 Amendment 15: drawing the grid loads its cells, so not in a case reading a composite;
+    # after the site's own check (a site the caller cannot reach is not found), before the grid is
+    # stored.
+    await refuse_in_a_composite_case()
     updated = await sites.set_grid(site.id, principal, rows=body.rows, cols=body.cols)
 
     assert updated.control_points is not None  # checked above; narrows the type for mypy
@@ -7438,6 +7591,24 @@ StudioDatasetDep = Annotated[str, Depends(require_studio_dataset)]
 SourceAuthorDep = Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))]
 
 
+async def _first_name(datasets: DatasetStore, dataset_ids: Sequence[str]) -> str | None:
+    """The first of these datasets' names, for a refusal that names a composite to an asker who
+    may be told names (ADR-099 Amendment 11); `None` for an id the store does not hold."""
+    held = {d.id: d for d in (await datasets.egress_of(dataset_ids)).values()}
+    return next((held[d].name for d in dataset_ids if d in held), None)
+
+
+async def refuse_loading_a_composite(dataset_id: StudioDatasetDep, datasets: DatasetsDep) -> None:
+    """The same for the Studio's own routes of a dataset (ADR-140 Amendment 4): a composite is
+    read, never loaded. After the dataset's own gate, which answers 404 to anyone it is not for."""
+    if await datasets.composites_among([dataset_id]):
+        # Named: past the dataset's gate, which only someone it is for reaches.
+        raise CompositeReadOnlyError(await _first_name(datasets, [dataset_id]), in_a_case=False)
+
+
+NoLoadingAComposite = Depends(refuse_loading_a_composite)
+
+
 def _source_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
 
@@ -7556,7 +7727,7 @@ async def list_dataset_sources(
 @app.post(
     "/v1/datasets/{dataset_id}/sources",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES)), NoLoadingAComposite],
 )
 async def register_dataset_source(
     dataset_id: StudioDatasetDep,
@@ -7684,7 +7855,7 @@ async def get_dataset_source_lineage(
 
 @app.patch(
     "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingAComposite],
 )
 async def edit_dataset_source_governance(
     dataset_id: StudioDatasetDep,
@@ -7750,7 +7921,7 @@ async def _set_source_refresh_paused(
 
 @app.post(
     "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/pause",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingAComposite],
 )
 async def pause_source_refresh(
     dataset_id: StudioDatasetDep,
@@ -7772,7 +7943,7 @@ async def pause_source_refresh(
 
 @app.post(
     "/v1/datasets/{dataset_id}/sources/{source_id}/refresh/resume",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingAComposite],
 )
 async def resume_source_refresh(
     dataset_id: StudioDatasetDep,
@@ -7860,7 +8031,7 @@ _UPLOAD_REFUSAL_STATUS = {
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/source-files",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
+    dependencies=[Depends(require_right(Right.ADD_INGEST_FILES)), NoLoadingInACompositeCase],
 )
 async def upload_ingest_source_file(
     investigation: InvestigationEditorDep,
@@ -7926,7 +8097,7 @@ def _with_default_classification(
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def create_studio_recipe_draft(
     investigation: InvestigationEditorDep,
@@ -7973,7 +8144,7 @@ def _check_deduplicate(config: DeduplicateConfig | None, columns: list[str] | No
 
 @app.patch(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_draft(
     investigation: InvestigationEditorDep,
@@ -8028,7 +8199,7 @@ async def update_studio_recipe_draft(
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_pipeline(
     investigation: InvestigationEditorDep,
@@ -8173,7 +8344,7 @@ async def list_transforms(principal: PrincipalDep) -> list[TransformDescriptor]:
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/row-template",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_row_template(
     investigation: InvestigationEditorDep,
@@ -8487,7 +8658,7 @@ async def read_load_checks(
 
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/checks",
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def set_load_checks(
     investigation: InvestigationEditorDep,
@@ -8549,7 +8720,7 @@ async def list_studio_recipe_registry(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/publish",
-    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES))],
+    dependencies=[Depends(require_right(Right.PUBLISH_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def publish_studio_recipe(
     investigation: InvestigationEditorDep,
@@ -8647,7 +8818,7 @@ async def publish_studio_recipe(
 
 @app.patch(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def update_studio_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8726,7 +8897,7 @@ async def _set_recipe_schedule_paused(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/pause",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def pause_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8741,7 +8912,7 @@ async def pause_recipe_schedule(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/schedule/resume",
-    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def resume_recipe_schedule(
     investigation: InvestigationEditorDep,
@@ -8775,7 +8946,7 @@ async def recipe_runs_route(
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/versions",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def create_studio_recipe_version(
     investigation: InvestigationEditorDep,
@@ -8803,7 +8974,7 @@ async def create_studio_recipe_version(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/run",
-    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingInACompositeCase],
 )
 async def run_studio_recipe(
     investigation: InvestigationEditorDep,
@@ -8938,7 +9109,13 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
 
     async def check_case(owner: Principal, case: str) -> Principal:
         await state.investigations.get_authorized(case, owner, need=AccessLevel.EDITOR)
-        return await scope_to_case(owner, case, state.datasets)
+        scoped = await scope_to_case(
+            owner, case, state.datasets, holds_a_level=holds_a_level_in(state.investigations)
+        )
+        # ADR-099 Amendment 15: a run is a load, so none in a case reading a composite, before
+        # `run_recipe_as` writes anything; the executor says so in words.
+        await refuse_in_a_composite_case()
+        return scoped
 
     async def run(
         owner: Principal,
@@ -9014,7 +9191,9 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
 
     async def check_case(author: Principal, case: str, level: AccessLevel) -> Principal:
         await state.investigations.get_authorized(case, author, need=level)
-        return await scope_to_case(author, case, state.datasets)
+        return await scope_to_case(
+            author, case, state.datasets, holds_a_level=holds_a_level_in(state.investigations)
+        )
 
     async def judge(rule: TypologyRule, author: Principal, slot: datetime) -> int:
         async def as_author(owner_id: str) -> Principal | None:
@@ -10476,7 +10655,7 @@ async def list_held_rows(
 
 @app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/held-rows/release",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
 )
 async def release_held_rows_route(
     investigation: InvestigationAuthorDep,
@@ -10612,7 +10791,7 @@ async def release_held_rows_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/held-rows/reject",
-    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS))],
+    dependencies=[Depends(require_right(Right.DECIDE_HELD_ROWS)), NoHeldRowsInACompositeCase],
 )
 async def reject_held_rows(
     investigation: InvestigationAuthorDep,
@@ -11035,6 +11214,19 @@ async def _scheduled_recipe(studio_recipes: StudioRecipeStore, recipe_id: str) -
     raise HTTPException(status_code=404, detail={"error": "schedule_not_found"})
 
 
+async def _refuse_a_composite_schedule(recipe: StudioRecipeDraft, datasets: DatasetStore) -> None:
+    """ADR-099 Amendment 15, for the Admin area's schedule routes, after the schedule is found: a
+    schedule whose case reads a composite, or whose recipe's dataset is one, is neither run,
+    re-timed nor resumed (409 `composite_read_only`), so none starts a run that would write in
+    part. The executor refuses each slot again (`check_case`), for a case switched since."""
+    ids = [recipe.dataset_id] if recipe.dataset_id else []
+    if recipe.schedule_case:
+        ids.extend(d.id for d in await datasets.chosen_of_case(recipe.schedule_case))
+    if ids and (found := await datasets.composites_among(ids)):
+        # Named: an operator of schedules holds a right, so may be told dataset names (A11).
+        raise CompositeReadOnlyError(await _first_name(datasets, sorted(found)), in_a_case=False)
+
+
 @app.get(
     "/v1/investigations/{investigation_id}/data-feeds",
     dependencies=[Depends(require_right(Right.READ_DATA_FEEDS))],
@@ -11317,11 +11509,13 @@ async def run_schedule_now_route(
     handling_scheme: HandlingSchemeDep,
     executor: ScheduleExecutorDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
     """*Run now* (ADR-110 Amendment 3, point 2): at once, **as the schedule's owner**, with every
     check a scheduled slot gets — refused in words (409) if the owner may not run it. The
     administrator is named in the audit as who asked; the run itself is the owner's."""
     recipe = await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(recipe, datasets)
     await audit.record(principal=principal, action="run_schedule_now",
                        resolved_query={"recipe_id": recipe_id, "run_as": recipe.schedule_owner},
                        result_cardinality=1)  # fmt: skip
@@ -11358,10 +11552,11 @@ async def change_schedule_route(
     handling_scheme: HandlingSchemeDep,
     repo_root: RecipesRepoRootDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
     """*Change schedule* (ADR-110 Amendment 3, point 2): a new time, refused in words if it could
     not be kept; **the owner is kept**, and the administrator named in the audit."""
-    await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(await _scheduled_recipe(studio_recipes, recipe_id), datasets)
     zone = body.timezone or DEFAULT_TIMEZONE
     validate_schedule(body.cron, zone)
     await studio_recipes.retime(recipe_id, cron=body.cron, timezone=zone, now=datetime.now(UTC))
@@ -11385,8 +11580,9 @@ async def resume_schedule_route(
     recipe_runs: RecipeRunsDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
+    datasets: DatasetsDep,
 ) -> AdminSchedule:
-    await _scheduled_recipe(studio_recipes, recipe_id)
+    await _refuse_a_composite_schedule(await _scheduled_recipe(studio_recipes, recipe_id), datasets)
     await studio_recipes.set_paused(recipe_id, paused=False, reason=None)
     await audit.record(principal=principal, action="resume_schedule",
                        resolved_query={"recipe_id": recipe_id}, result_cardinality=1)  # fmt: skip
@@ -12456,8 +12652,13 @@ async def case_model_engines_route(
 
     ADR-099 Amendment 11: the datasets are those the store names to the caller, so a caller holding
     no right is given the reason for data not known — no name, and no count. For anyone else that is
-    every dataset of the case (`investigation_datasets` refers only to registered datasets)."""
-    case_datasets = [d.id for d in await datasets.of_case(investigation.id, principal)]
+    every dataset of the case (`investigation_datasets` refers only to registered datasets).
+
+    ADR-143 decision 1, ADR-099 Amendment 12: judged over the case's read set, as the routing judges
+    a request (a composite's members and its own id, and the case's layer, named as its source by
+    `datasets.as_its_case`), so an engine shown available is one the routing will not refuse."""
+    named = await datasets.of_case(investigation.id, principal)
+    case_datasets = await datasets.ids_of_case(investigation.id) if named else []
     held = await datasets.egress_of(case_datasets)
     return OfferedEngines(engines=routes.offered(case_datasets, held))
 
@@ -12775,7 +12976,12 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     # case reads. The ticket's principal was minted outside any case and reads no dataset; the
     # header's was never scoped and reads every one. The snapshot, a resync and each live push all
     # use the principal from here on.
-    principal = await scope_to_case(principal, investigation_id, get_datasets(websocket))  # type: ignore[arg-type]
+    principal = await scope_to_case(
+        principal,
+        investigation_id,
+        get_datasets(websocket),  # type: ignore[arg-type]
+        holds_a_level=holds_a_level_in(lambda: get_investigations(websocket)),  # type: ignore[arg-type]
+    )
     await websocket.accept()
     await audit.record(
         principal=principal,

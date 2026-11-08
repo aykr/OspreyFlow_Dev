@@ -48,6 +48,7 @@ from schemas.domain import (
 )
 from schemas.model import TranscribeRequest, VisionRequest
 
+from .dataset_scope import refuse_in_a_composite_case
 from .email_extraction import MENTIONED_IN, _edge_from_write, _node_from_write
 from .link_ids import as_stored
 from .review import (
@@ -228,6 +229,7 @@ class DocumentContentService:
         using: Literal["recogniser", "model"] = "model",
     ) -> DocumentExtractionResult:
         node, ref = await self._held_document(investigation_id, document_id, principal)
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the Document is read
         try:
             data = await self._media.get(ref)
         except MediaNotFoundError as error:

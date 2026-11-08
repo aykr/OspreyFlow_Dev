@@ -561,12 +561,17 @@ the link types analysts propose (ADR-099 Amendment 3). The one exception is the 
 OspreyFlow default dataset (`default.yaml` and every promoted type), which every case reads. The Glass
 shows and asks; it enforces nothing.
 
-- **A new case** (the case picker and the case switcher) asks *What can this case see?* as a
-  first-class choice (ADR-099 Amendment 8): *Start empty — it holds only the data you load into
-  it* (the default), or *Read existing data…*, which reveals the unit's datasets as boxes to tick,
-  kept in the order ticked, each named by its name alone (names are unique, Amendment 6; a raw id
-  in the list reads as noise). Returning to *Start empty* forgets what was ticked. The read-only
-  "reads …" summaries keep the dataset id, where comparing records needs it.
+- **A new case** (the case picker and the case switcher) asks *What data does this case read?*
+  (ADR-099 Amendment 12 item 6, R16; Amendment 8 withdrawn): *Use an existing dataset…*, which
+  reveals the unit's source and composite datasets as radios (one choice; a composite says how many
+  it joins), each named by its name alone (names are unique, Amendment 6; a raw id reads as noise),
+  or *Make a new dataset — empty, loaded in the Ingest Studio* (the default), with a field for its
+  name that, left empty, takes the case's. Returning to *Make a new dataset* forgets the dataset
+  chosen. A case's analyst layer is never offered or shown: the Conduit does not send it (ADR-143
+  decision 1). The case's own *Data this case reads* changes it by the same radios, its Author's
+  only. The read-only "reads …" summaries keep the dataset id, where comparing records needs it.
+  Keyboard: `keyboard/case-datasets.spec.ts`; axe, dark, light and GOV.UK, both choices:
+  `a11y/every-harness.spec.ts` over `case-datasets-harness.html`.
 - **A new case also offers *Domain models*** (ADR-126): three boxes, labelled as the Studio labels
   the packs. With none ticked, "Bespoke POLE (the core model)" is said beside them. The case is
   created with the list shown.

@@ -117,7 +117,12 @@ def test_two_conduits_on_one_clickhouse_answer_alike_and_the_second_survives_the
     assert os.environ.get("CLICKHOUSE_HTTP_PORT"), "needs the live ClickHouse"
     instance_a, instance_b = two_clickhouse_instances
     headers = _bearer(keypair[0])
-    created = httpx.post(f"{instance_a.base_url}/v1/investigations", headers=headers)
+    # ADR-099 Amendment 12: a case reads exactly one dataset, named or made with it.
+    created = httpx.post(
+        f"{instance_a.base_url}/v1/investigations",
+        headers=headers,
+        json={"new_dataset_name": f"Statelessness {ULID()}"},
+    )
     assert created.status_code == 201, created.text
     case = created.json()["id"]
 

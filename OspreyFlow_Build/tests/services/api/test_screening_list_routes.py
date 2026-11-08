@@ -227,6 +227,20 @@ class _TwoCases:
     async def ids_of_case(self, investigation_id: str) -> list[str]:
         return {"case-a": ["ds-a"], "case-b": ["ds-b"]}.get(investigation_id, [])
 
+    # What `scope_to_case` asks of a case's datasets (ADR-099 A15, ADR-143 A1): each case reads a
+    # source with no layer and no composite, as the re-screening's own fake answers.
+    async def layer_of_case(self, investigation_id: str) -> str | None:
+        return None
+
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        return None  # not a branch
+
+    async def chosen_of_case(self, investigation_id: str) -> list[object]:
+        return []  # a source, never a composite
+
+    async def composites_among(self, dataset_ids: object) -> set[str]:
+        return set()
+
 
 class _TwoUnits:
     async def resolve_for_owner(self, owner_id: str) -> Principal | None:

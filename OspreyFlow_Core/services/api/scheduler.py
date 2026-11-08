@@ -34,6 +34,7 @@ from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from schemas.rights import Right, rights_for
 
+from .dataset_scope import CompositeReadOnlyError
 from .investigations import InsufficientAccessError, InvestigationNotFoundError
 from .recipe_runs import NotRunOutcome, RecipeRunStore, RunTrigger
 from .studio_map import resolve_source_handling
@@ -238,6 +239,13 @@ class ScheduleRunRefused(ValueError):
     """The Admin area's *Run now* refused, in words (ADR-110 Amendment 3, point 2)."""
 
 
+#: ADR-099 Amendment 15: a run whose case reads a composite, refused before anything is written.
+_COMPOSITE_CASE = (
+    "its case reads a composite, which is read-only for now: run it in a case that reads that "
+    "dataset"
+)
+
+
 class _Refused(Exception):
     """A slot that may not run, and why, in words for the ledger. `about_the_owner` is false for a
     refusal that says nothing about the owner (Amendment 3), which never pauses the schedule."""
@@ -275,7 +283,8 @@ class ScheduleExecutor:
     #: `PrincipalResolver.resolve_for_owner_detailed`: raises rather than collapsing to `None`,
     #: so the ledger can say which refusal it was.
     resolve_owner: Callable[[str], Awaitable[Principal]]
-    #: The case's own Editor check (`InvestigationStore.get_authorized`) and `scope_to_case`.
+    #: The case's own Editor check (`InvestigationStore.get_authorized`) and `scope_to_case`;
+    #: raises `CompositeReadOnlyError` for a case reading a composite (ADR-099 Amendment 15).
     check_case: Callable[[Principal, str], Awaitable[Principal]]
     run: RunAs
     #: Decision 10: a notice in the owner's own inbox when a scheduled run fails or is refused.
@@ -523,6 +532,11 @@ class ScheduleExecutor:
             raise _Refused(
                 f"the schedule's owner, {owner_id}, is no longer an Editor of its case"
             ) from error
+        except CompositeReadOnlyError as error:
+            # Every run, so a case switched to a composite after its schedule was set starts none;
+            # a lasting refusal, so after three in a row the schedule is paused, saying why,
+            # rather than the owner told at every slot (Amendment 3).
+            raise _Refused(_COMPOSITE_CASE) from error
         if not principal_may_view(resolve_source_handling(recipe), owner, self.scheme):
             raise _Refused(
                 f"the source is marked above the clearance of the schedule's owner, {owner_id}"
@@ -536,7 +550,9 @@ class ScheduleExecutor:
                 scoped = await self.check_case(owner, case)
                 if scoped.datasets and scoped.datasets[0] == dataset:
                     return case
-            except (InsufficientAccessError, InvestigationNotFoundError):
+            except (InsufficientAccessError, InvestigationNotFoundError, CompositeReadOnlyError):
+                # A pipeline's own case reading a composite loads nothing; another case of the
+                # owner's that loads into the source's dataset may (ADR-110 Amendment 6 point 6).
                 pass
         found = await self.case_for_dataset(owner, dataset) if self.case_for_dataset else None
         if found is None:

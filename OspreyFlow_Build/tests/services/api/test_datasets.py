@@ -3,8 +3,9 @@ changed by its Author, never one of another unit's.
 
 What a mistake here would do, and the case that catches it:
 
-- a case made with no dataset named would read nothing, or everything
-  (`test_a_case_made_naming_no_dataset_gets_one_of_its_own`);
+- a case made naming no dataset would read nothing, or everything; since ADR-099 Amendment 12 it
+  names one, or a new one (`test_a_case_made_naming_no_dataset_is_refused`,
+  `test_a_case_made_with_a_new_dataset_reads_it`);
 - a case allowed another unit's dataset would read that unit's data
   (`test_a_case_cannot_be_made_over_another_units_dataset_and_none_is_left_behind`,
   `test_the_author_cannot_widen_a_case_to_another_units_dataset`);
@@ -109,21 +110,33 @@ def setup(store: InMemoryDatasetStore):  # type: ignore[no-untyped-def]
     app.dependency_overrides.clear()
 
 
-def test_a_case_made_naming_no_dataset_gets_one_of_its_own(setup, store) -> None:  # type: ignore[no-untyped-def]
+def test_a_case_made_naming_no_dataset_is_refused(setup) -> None:  # type: ignore[no-untyped-def]
+    """ADR-099 Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own."""
+    client, investigations, _, _ = setup
+    for body in (
+        {"name": "Shipping leads"},
+        {"name": "Both", "dataset_ids": ["fixture"], "new_dataset_name": "Also"},
+    ):
+        refused = client.post("/v1/investigations", json=body)
+        assert (refused.status_code, refused.json()) == (422, {"error": "dataset_refused"})
+    assert investigations.made == []
+
+
+def test_a_case_made_with_a_new_dataset_reads_it(setup) -> None:  # type: ignore[no-untyped-def]
     client, _, _, _ = setup
-    made = client.post("/v1/investigations", json={"name": "Shipping leads"}).json()
-    (own,) = client.get(f"/v1/investigations/{made['id']}/datasets").json()
-    assert own["name"] == "Shipping leads" and own["owning_unit"] == "unit-1"
-
-
-def test_a_case_made_over_named_datasets_reads_those_in_order(setup) -> None:  # type: ignore[no-untyped-def]
-    client, _, audit, _ = setup
     made = client.post(
-        "/v1/investigations", json={"name": "Both", "dataset_ids": ["fixture", "enron"]}
+        "/v1/investigations", json={"name": "Shipping leads", "new_dataset_name": "Shipping"}
     ).json()
+    (own,) = client.get(f"/v1/investigations/{made['id']}/datasets").json()
+    assert own["name"] == "Shipping" and own["owning_unit"] == "unit-1"
+
+
+def test_a_case_made_over_a_named_dataset_reads_it(setup) -> None:  # type: ignore[no-untyped-def]
+    client, _, audit, _ = setup
+    made = client.post("/v1/investigations", json={"name": "F", "dataset_ids": ["fixture"]}).json()
     read = client.get(f"/v1/investigations/{made['id']}/datasets").json()
-    assert [d["id"] for d in read] == ["fixture", "enron"]
-    assert audit.records[-1]["resolved_query"] == {"dataset_ids": ["fixture", "enron"]}
+    assert [d["id"] for d in read] == ["fixture"]
+    assert audit.records[-1]["resolved_query"] == {"dataset_ids": ["fixture"]}
 
 
 def test_a_case_cannot_be_made_over_another_units_dataset_and_none_is_left_behind(setup) -> None:  # type: ignore[no-untyped-def]
@@ -144,12 +157,12 @@ def test_the_author_changes_what_a_case_reads_and_it_is_audited(setup) -> None: 
     client, _, audit, _ = setup
     made = client.post("/v1/investigations", json={"name": "C", "dataset_ids": ["fixture"]}).json()
     changed = client.put(
-        f"/v1/investigations/{made['id']}/datasets", json={"dataset_ids": ["fixture", "enron"]}
+        f"/v1/investigations/{made['id']}/datasets", json={"dataset_ids": ["enron"]}
     )
-    assert [d["id"] for d in changed.json()] == ["fixture", "enron"]
+    assert [d["id"] for d in changed.json()] == ["enron"]
     record = audit.records[-1]
     assert record["action"] == "set_case_datasets"
-    assert record["resolved_query"] == {"before": ["fixture"], "after": ["fixture", "enron"]}
+    assert record["resolved_query"] == {"before": ["fixture"], "after": ["enron"]}
 
 
 def test_the_author_cannot_widen_a_case_to_another_units_dataset(setup) -> None:  # type: ignore[no-untyped-def]
@@ -178,16 +191,17 @@ def test_the_datasets_listed_are_the_callers_units_only(setup) -> None:  # type:
 
 
 async def test_a_branch_reads_what_its_parent_reads(store: InMemoryDatasetStore) -> None:
-    await store.set_for_case("parent", ["fixture", "enron"], ALICE)
+    """Its parent's dataset; its own layer (ADR-143 decision 1, `test_analyst_layer.py`)."""
+    await store.set_for_case("parent", ["fixture"], ALICE)
     await store.copy_case("parent", "branch")
-    assert await store.ids_of_case("branch") == ["fixture", "enron"]
+    assert (await store.ids_of_case("branch"))[0] == "fixture"
+    assert [d.id for d in await store.of_case("branch", ALICE)] == ["fixture"]
 
 
 def test_the_case_list_names_what_each_case_reads(setup) -> None:  # type: ignore[no-untyped-def]
     client, _, _, _ = setup
-    client.post("/v1/investigations", json={"name": "Both", "dataset_ids": ["fixture", "enron"]})
+    client.post("/v1/investigations", json={"name": "F", "dataset_ids": ["fixture"]})
     (listed,) = client.get("/v1/investigations").json()
-    assert listed["datasets"] == ["Fixture Corp", "Enron corpus"]
-    # Their ids, in the same order, so the picker tells alike names apart (ADR-099 Amendment 6).
-    assert listed["dataset_ids"] == ["fixture", "enron"]
-
+    assert listed["datasets"] == ["Fixture Corp"]
+    # Its id, so the picker tells alike names apart (ADR-099 Amendment 6); never the layer's.
+    assert listed["dataset_ids"] == ["fixture"]

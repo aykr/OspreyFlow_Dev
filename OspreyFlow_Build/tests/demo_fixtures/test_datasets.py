@@ -39,6 +39,9 @@ class Registry:
     async def known(self, dataset_ids: Sequence[str]) -> set[str]:
         return {d for d in dataset_ids if d in self.held}
 
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]:
+        return set()  # the seeds' datasets are sources (ADR-099 Amendment 15 asks)
+
 
 class RecordingGraph:
     """Records what reaches the store. It has no bulk capability, so `stamping` returns the plain

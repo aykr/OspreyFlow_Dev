@@ -142,9 +142,19 @@ Author; a new case is visible to nobody else until shared; cases that existed be
 
 `GET /v1/investigations` lists the cases the caller holds a level on (id, name, their level, created,
 created by, branched from, whether the caller has closed the case's tab, and the names of the
-datasets it reads). `POST /v1/investigations` takes `dataset_ids`, at least one of the caller's unit;
-with none it makes a dataset of the case's own, named after it (ADR-099 decision 3). A branch reads its
-parent's datasets. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
+dataset it chose, never its analyst layer). `POST /v1/investigations` takes either `dataset_ids`, exactly
+one source or composite dataset of the caller's unit, or `new_dataset_name`, an empty dataset of the
+caller's unit made first; neither, both, or two ids is 422 `dataset_refused` and no case is made (ADR-099
+Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). The case's analyst layer
+is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). A branch reads its parent's chosen
+dataset and its parent's layer, read-only, holding none of its own: a mark or link made in it is 409
+`branch_layer_read_only` (ADR-144 Amendment 1 decision 2). A case opened from an alert reads the
+dataset and gets an empty layer of its own (ADR-143 Amendment 1 item 3). Under a case, what is written joins its source; an entity marked
+by hand and a manual link or split join its layer (ADR-143 Amendment 1). A case reading a composite
+writes nothing but into its layer: every other write is 409 `composite_read_only` ("do this in a
+case that reads that dataset"), and so is any write into a composite's id (ADR-099 Amendments 14
+and 15; the Studio's routes of a composite too). Its monitors keep working, their alerts raised into
+its layer, and its scheduled loads are refused, each slot in words. `POST .../branch` takes an optional body (ADR-084): `node_ids` forks only those nodes and the links whose two ends are both
 among them, `name` names the new case. Without a body it forks the whole working set, as before. The
 copy is filtered for the branching principal like any read, and a choice with nothing left to copy
 (every id absent, hidden from the caller, or the list empty) is one `422 nothing_to_branch`, raised
@@ -223,8 +233,9 @@ in the store) is left out of every read.
 
 ```
 POST   /v1/investigations/{id}/search      federated search across graph, documents, index, within the case's datasets (ADR-099)
-GET    /v1/datasets                     the datasets of the caller's unit, for a new case to name (ADR-099); none to a caller holding no right (Amendment 11)
-POST   /v1/datasets                     a new, empty dataset of the caller's unit (`{"name": ...}`), audited (ADR-099); `POST /v1/investigations` takes `dataset_ids`, and with none makes the case a dataset of its own named after it
+GET    /v1/datasets                     the source and composite datasets of the caller's unit, for a new case to name (ADR-099); never an analyst layer, for any role (ADR-143 decision 1); none to a caller holding no right (Amendment 11)
+POST   /v1/datasets                     a new, empty source dataset of the caller's unit (`{"name": ...}`), audited (ADR-099)
+POST   /v1/datasets/composites          a composite of two or more of the caller's unit's source datasets (`{"name", "member_ids"}`), audited; a member of another unit, a missing one, a composite or an analyst layer is 422 `dataset_refused`, one answer for all (ADR-099 Amendment 12 item 2)
 POST   /v1/investigations/{id}/suggest     type-ahead: nodes whose identifiers start with what is typed (ADR-059), within the case's datasets (ADR-099)
 GET    /v1/investigations/{id}/explore/counts          nodes per entity type and links per link type the analyst can see, within the case's datasets (ADR-100)
 GET    /v1/investigations/{id}/explore/most-connected  nodes by visible degree, most first, with the total ranked; ?entity_type, ?limit (1-50), ?offset (ADR-100)
@@ -252,16 +263,16 @@ POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/documents   
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/reader   a Document's full text with its accepted entities marked, for the full-screen reader, Viewer (ADR-092)
 POST   /v1/investigations/{investigation_id}/documents   a file (image, video, text) added to the case as a Document, held by a node if one is named, with a marking and a legal basis, Editor (ADR-094)
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/file   a held Document's file (image, video, kept text) from the media store, Viewer (ADR-094)
-PUT    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        one entity's own picture, an image Document that DEPICTS it, replacing the one seen before (kept); marking and legal basis required, Editor (ADR-105)
-DELETE /v1/investigations/{investigation_id}/nodes/{node_id}/picture        back to its type's picture; its own is kept, no longer shown, Editor (ADR-105)
+PUT    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        one entity's own picture, an image Document that DEPICTS it, replacing the one seen before (kept); marking and legal basis required; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15), before any file is stored, Editor (ADR-105)
+DELETE /v1/investigations/{investigation_id}/nodes/{node_id}/picture        back to its type's picture; its own is kept, no longer shown; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15), Editor (ADR-105)
 GET    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        the entity's picture's file, to someone who may see it; one they may not answers as none, Viewer (ADR-105)
 POST   /v1/investigations/{investigation_id}/pictures                       which of these entities have a picture of their own the caller may see, Viewer (ADR-105)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/extract   entities from a held Document by kind: text, an image described and read, a video transcribed; `using`: `recogniser` (the default, ADR-098) or `model`, Editor (ADR-094)
 POST   /v1/investigations/{investigation_id}/documents/{document_id}/candidates/{candidate_id}/accept   accept one finding from a held Document as an inferred node, Editor (ADR-094)
-POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, Editor (ADR-098)
+POST   /v1/investigations/{investigation_id}/documents/{document_id}/designations   words in a Document marked as an entity by the analyst: an asserted node linked to it, both written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing, and nothing is written), Editor (ADR-098)
 POST   /v1/investigations/{investigation_id}/links-among   the links among nodes already in the view (all, or the named ones), all or `limit_exceeded`, Editor (ADR-098); with `degree` 2–6 and 2–8 named nodes, also the routes between them within it (Amendment 4)
-GET    /v1/investigations/{investigation_id}/datasets   the datasets the case reads, in order, Viewer (ADR-099)
-PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [...]}`, at least one, all of the Author's unit; else 422 `dataset_refused`, one answer for another unit's and a missing one), audited before and after, Author (ADR-099)
+GET    /v1/investigations/{investigation_id}/datasets   the dataset the case chose (a source or a composite; never its analyst layer), Viewer (ADR-099, ADR-143)
+PUT    /v1/investigations/{investigation_id}/datasets   what the case reads (`{"dataset_ids": [one]}`, a source or composite of the Author's unit; else 422 `dataset_refused`, one answer for two ids, another unit's, a missing one and an analyst layer), audited before and after, Author (ADR-099 Amendment 12)
 POST   /v1/investigations/{investigation_id}/questions   a question to the model about every Document in the case's view the analyst can see, whole, and the graph facts around the selection (one hop) or the whole view, within the timeline window when one is set; the answer cites Documents and `[G-n]` facts and its proposals are pending findings; documents and facts together past the budget refused 409 `limit_exceeded` with its three options, never trimmed (ADR-129 decision 1, Amendment 1), none `no_documents` (422), Editor (ADR-098 decision 4)
 GET    /v1/investigations/{investigation_id}/questions   the case's questions and answers: citations of Documents the reader can see, proposals of their unit in their present state, Viewer (ADR-098 decision 4)
 POST   /v1/investigations/{investigation_id}/questions/candidates/{candidate_id}/accept   one proposal accepted: an inferred node and its `MENTIONED_IN` link onto the canvas, Editor (ADR-098 decision 4)
@@ -339,10 +350,10 @@ GET    /v1/investigations/{id}/ingest/recipes/{rid}/runs   the recipe's run ledg
 GET    /v1/investigations/{id}/data-feeds   the pipelines feeding the case (Viewer, read_data_feeds)
 GET    /v1/admin/schedules              every schedule (operate_schedules)
 GET    /v1/admin/schedules/{rid}/runs   one schedule's run ledger (operate_schedules)
-PUT    /v1/admin/schedules/{rid}        change one schedule (operate_schedules)
-POST   /v1/admin/schedules/{rid}/run    run it now (operate_schedules)
+PUT    /v1/admin/schedules/{rid}        change one schedule; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
+POST   /v1/admin/schedules/{rid}/run    run it now; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
 POST   /v1/admin/schedules/{rid}/pause  pause it (operate_schedules)
-POST   /v1/admin/schedules/{rid}/resume resume it (operate_schedules)
+POST   /v1/admin/schedules/{rid}/resume resume it; 409 `composite_read_only` for a schedule whose case reads a composite or whose recipe's dataset is one (ADR-099 Amendment 15); operate_schedules
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)
@@ -368,14 +379,14 @@ DELETE /v1/investigations/{id}/brief/requirements/{requirement}   remove it with
 PUT    /v1/investigations/{id}/brief/requirements/{requirement}/status   open or answered: the one route that sets a status, a person's (rule 5)
 POST   /v1/investigations/{id}/brief/requirements/{requirement}/attachments   attach a trend, pattern, assessment or view the Author may read; absent and unreadable are the same 404 `attachment_not_found`
 DELETE /v1/investigations/{id}/brief/requirements/{requirement}/attachments/{kind}/{attachment}   detach
-POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080); `handling`? and `confirm_lower`? (ADR-102): a raise is an Editor's, a lower handling in any part is an Author's with `confirm_lower`, else 403 `lowering_needs_author` or 409 `confirm_lower_handling`; a handling that moves the units, is above the analyst's own, or names a code the scheme lacks is 422 `invalid_link_change`
+POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080); `handling`? and `confirm_lower`? (ADR-102): a raise is an Editor's, a lower handling in any part is an Author's with `confirm_lower`, else 403 `lowering_needs_author` or 409 `confirm_lower_handling`; a handling that moves the units, is above the analyst's own, or names a code the scheme lacks is 422 `invalid_link_change`; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15)
 GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's (the OspreyFlow default dataset's), and those analysts proposed in a case reading one of this case's datasets (`proposal_id` set; a proposal made before ADR-099 Amendment 3 keeps ADR-090's case, branch and in-view rule), Viewer (ADR-090, ADR-099 Amendment 3)
 POST   /v1/investigations/{investigation_id}/link-types   propose a type when none fits (`{"name", "from_types", "to_types", "directed"?, "label"?, "colour"?, "thickness"?, "reason"}`): usable at once in every case reading this case's first dataset, probabilistic (ADR-099 Amendment 3); 422 `proposal_refused` for a name the ontology has or the case already offers, or one that is not a type name, Editor (ADR-090)
 POST   /v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw   withdraw a pending proposal of a dataset the case reads (`{"reason"}`), its proposer or an Author; 404 `proposal_not_found`, Editor (ADR-090)
 GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
 POST   /v1/investigations/{id}/export    runs the handling gate; may return 409 with blockers
 GET    /v1/exports                       the compliance-facing export ledger (ADR-047's own Gap 2) — role-gated, not per-investigation
-GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=)
+GET    /v1/investigations/{id}/ingest/candidates   extraction candidates for one document (?document_id=); the unit's, less those kept in another case's analyst layer (a mark made by hand there, ADR-143 Amendment 1 item 5)
 ```
 
 **The block above illustrates an earlier, abandoned ingest design — `09_INGEST_STUDIO.md`'s own
@@ -500,8 +511,8 @@ span (§3.6) until a candidate has actually been accepted.
 ```
 GET    /v1/resolution/threshold          current session τ
 PUT    /v1/resolution/threshold          set τ; triggers a reproject delta
-POST   /v1/resolution/link               analyst-asserted SAME_AS
-POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS
+POST   /v1/resolution/link               analyst-asserted SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing)
+POST   /v1/resolution/split              analyst-asserted NOT_SAME_AS, written in the case's analyst layer (ADR-143 Amendment 1; 409 `no_analyst_layer` when the case reads nothing)
 GET    /v1/resolution/explain/{cluster}  the comparison vector and score that produced a cluster
 ```
 
@@ -637,7 +648,7 @@ POST   /v1/investigations/{id}/rules   deploy one: a typology, its parameters, i
 POST   /v1/investigations/{id}/rules/{rule_id}/retire   retire one (never deleted), Author
 GET    /v1/investigations/{id}/rules/audit   the rule audit, newest first, paged, Author or the unit's admin
 GET    /v1/investigations/{id}/held-rows   rows a failing pre-commit rule held, at or below the reader's marking, Editor
-POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason, Author
+POST   /v1/investigations/{id}/held-rows/reject   reject named held rows, with a reason; 409 `composite_read_only` in a case reading a composite (ADR-099 Amendment 15), Author
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/held-rows/release   load named held rows of one load, Author and Loader
 POST   /v1/investigations/{id}/rules/sentence/compile   a rule sentence checked against the ontology and compiled to its drawn pattern, Viewer
 POST   /v1/investigations/{id}/rules/sentence/read   a drawn pattern read back as the sentence, its other blanks kept, Viewer
@@ -653,7 +664,7 @@ POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its propo
 POST   /v1/investigations/{id}/rules/{rule_id}/change   a new version of a sentence rule: applied at once, or waiting for approval for a whole-deployment rule, deploy_rules and keep_watches
 GET    /v1/investigations/{id}/rules/{rule_id}/versions   every version of a rule, with who proposed and who decided each, Viewer
 GET    /v1/investigations/{id}/rules/{rule_id}/runs   a scheduled rule's schedule in words, its next run or why it will not run, its latest runs, Viewer
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor; the same 409 `composite_read_only` as the disposition
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/send-back   send a proposed close back to its proposer, with a reason, Editor
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   the pipeline's "Checks on load" step: the rules it may attach and what was chosen, edit_pipelines, Editor
 PUT    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   choose the pipeline's checks and what a hit does there; names rules, never writes one, edit_pipelines, Editor
@@ -780,7 +791,7 @@ POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed �
 GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/claim   open → claimed by the caller, Editor
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/release   claimed (by the caller) → open, Editor
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor. In a case reading a composite, a true positive that would confirm anything not wholly the case's analyst layer's is 409 `composite_read_only` ("do this in a case that reads that dataset"), nothing written and the alert left as it was; one raised there, its node and `SAME_AS` in the layer, is closed (ADR-099 Amendment 15)
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/canvas   its node, entities and cited links into the working set, Editor
 ```
 
@@ -907,7 +918,7 @@ POST   /v1/investigations/{id}/sites                          create; multipart,
 GET    /v1/investigations/{id}/sites/{site_id}                one site's own metadata
 GET    /v1/investigations/{id}/sites/{site_id}/image           the site's uploaded image, proxied
 PATCH  /v1/investigations/{id}/sites/{site_id}/control-points  set the georeferencing control points
-POST   /v1/investigations/{id}/sites/{site_id}/grid            place the grid; its cells become real location entities
+POST   /v1/investigations/{id}/sites/{site_id}/grid            place the grid; its cells become real location entities; 409 `composite_read_only` in a case reading a composite, before the grid is stored (ADR-099 Amendment 15)
 ```
 
 A **site** is A1's own mechanism (`08_ACCEPTANCE_SCENARIOS.md`): an uploaded floor plan or
@@ -1015,8 +1026,8 @@ POST   /v1/investigations/{id}/packs/{pack}/export     the newest live publicati
 GET    /v1/reports/dashboards                              the Superset boards this person may open: each counted for a dashboard identity whose every figure they could count (unit, clearance, handling codes, a level on each of its cases — ADR-111 Am. 3); read_reports
 POST   /v1/reports/dashboards/{slug}/guest-token           a five-minute, read-only Superset guest token for one such board, its rows limited to that identity (row-level rule); otherwise 404; Superset refusing is a 502 in words; read_reports
 POST   /v1/investigations/{id}/documents/{document_id}/candidates/accept   the reader's Accept all pending: an enumerated list of candidate ids, never a filter (ADR-108 Q1); Editor
-POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099)
-POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099)
+POST   /v1/investigations/{id}/nodes/{node_id}/confirm   inferred/unresolved → asserted, human-attested; Editor, within the case's datasets (ADR-099); 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15); a node the caller cannot see is 404 as before.
+POST   /v1/investigations/{id}/nodes/{node_id}/retract   asserted → inferred, the mirror of confirm; Editor (ADR-099); 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15); a node the caller cannot see is 404 as before.
 POST   /v1/investigations/{id}/nodes/{node_id}/suppression-mark   propose a suppression (R7 step one); `DELETE` withdraws it; Editor (ADR-099 moved both under the case)
 DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark   withdraw that proposal; Editor (ADR-099)
 POST   /v1/investigations/{id}/ingest/recipes/{recipe_id}/run   run a published recipe against a file; a recipe with a pipeline runs through the pipeline runner (services/api/pipeline_run.py over services/ingest/pipeline.py) and answers a PipelineRunReport, every branch, extract and enrich stage its own account; the case's rule gate judges each branch (§3.8a)
@@ -1201,9 +1212,13 @@ version and the full comparison vector. Nothing is merged in storage — see
 Deterministic identifiers bypass the probabilistic path. Two endpoints with the same normalised
 E.164 are the same endpoint; do not spend a Fellegi–Sunter model on it.
 
-Analyst decisions are permanent and beat the model: a `NOT_SAME_AS` edge is never overridden by
-a later resolution run, and a later run that would have merged the pair records the conflict for
-review rather than acting on it.
+Analyst decisions are permanent and beat the model, in the case that made them: a `NOT_SAME_AS`
+edge is never overridden by a later resolution run for that case, and a later run that would have
+merged the pair records the conflict for review. A split written before ADR-143 Amendment 1, in the
+source, stops the run's merge for every case, as before. One held only in a case's analyst layer
+does not: the source `SAME_AS` goes ahead for every other case, the conflict is recorded on the
+split (so in that layer, for that case's review alone), and that case's projection still keeps the
+pair apart (ADR-025 Amendment 1).
 
 ## 6. Access control and audit
 

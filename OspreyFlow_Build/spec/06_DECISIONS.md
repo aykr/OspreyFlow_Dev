@@ -26609,6 +26609,193 @@ the analyst who sends it; the approver is a data engineer of the dataset or an A
 the proposer. Admin › Policies › Approval rights shows how many people can approve each, and warns when
 fewer than two can.
 
+### ADR-143, Amendment 1 (7 November 2026) — where today's analyst writes go: hand-marking and manual links into the layer, accepted proposals and extractions into the source
+
+Status: accepted; the owner's ruling on open question 1 ("Split", 7 November 2026), built at L3.1.
+Open question 1 is closed. Of the analyst writes that existed before the layer:
+
+1. **Into the case's analyst layer:** an entity marked by hand in the reader (ADR-098 decision 5: the
+   node and its `MENTIONED_IN` link) and a manual `SAME_AS` or `NOT_SAME_AS`
+   (`03_CONDUIT_MIDDLEWARE.md` §3.5's link and split). They are the analyst's own assertions, so they
+   sit with what the analyst draws: no other case reading the source sees them, and promotion
+   (decision 9) is how they reach a dataset.
+2. **Into the source, as before:** an accepted question proposal and an accepted extraction. They are
+   model or pipeline output that a person confirmed (rule 5), and belong with the data they came from.
+3. **How:** the request's case's layer is held beside its read set when the principal is scoped
+   (`dataset_scope.analyst_layer`); the two writers in item 1 name it on what they write. Every other
+   write names no dataset and is stamped with the case's first, exactly as before; in a case reading
+   a composite every other write is refused (ADR-099 Amendments 14 and 15). A case with no layer yet (one `scripts.migrate_cases_to_one_dataset` has not
+   reached) is given one by the writer of item 1's data, inside the route and so only after its
+   level check (never when a request is merely scoped, which comes first and writes nothing), and
+   the data goes there: it never falls back to the source (the owner's ruling of 7 November 2026 on
+   the L3.1 review's finding 7). With no case's layer to go into (outside a case, or a case reading
+   nothing) the write is refused and nothing is written (`dataset_scope.NoAnalystLayerError`, 409
+   `no_analyst_layer`). **A branch holds no layer of its own** (ADR-144 Amendment 1 decision 2,
+   the owner's ruling of 7 November 2026, "no branches anywhere", which replaces the branch's own
+   layer this item gave it at 09:25 that day): until L3.2 removes branches, a branch reads its
+   original case's dataset and its original case's layer, the layer read-only (`case_layer_reads`;
+   `DatasetStore.read_only_layer_of`). Every write into that layer from the branch is refused in
+   words, before anything is written (409 `branch_layer_read_only`, `datasets.BranchLayerError`):
+   by `analyst_writes_into`, by the store, which makes no layer for a branch, and by the stamping
+   graph's last word, a correction of what is in it included. An original with no layer yet is
+   given one when it is branched, and the branch linked to it, so a branch never makes a layer of
+   its own at its first mark. **Only a reader holding a level on the original reads its layer
+   through a branch** (`scope_to_case(..., holds_a_level=...)`; the orchestrator's call of 7
+   November 2026, on rule 3, as for the alert jump, listed for the owner's review): a member of the
+   branch alone reads no layer, and with no level check to ask (a monitor outside a request) no one
+   does; every reader of the branch is refused a write into it. **A case opened from an alert is
+   not a branch** and keeps an empty layer of its own: its maker may hold no level on the alert's
+   case, so it never reads that case's layer (rule 3; the orchestrator's call within the ruling,
+   7 November 2026; ADR-146 replaces the jump with a private view in L2.9).
+   **A temporary exception, for cases made before L3.1 only.** Such a case made from another
+   records only `branched_from`, as an alert jump's case does, so a branch cannot be told from a
+   jump; `scripts.migrate_cases_to_one_dataset` gives each an empty layer of its own, as rule 3
+   requires, and names and counts them in its output, its layer made before its dataset is set so
+   the dry run's writes are the real run's. A branch made since L3.1, which holds a
+   `case_layer_reads` link, is named and counted as reading its original's layer and given none;
+   the dry run reads the links too. L3.2 retires them, moving anything in such a
+   layer into the original case's, tagged `from_branch`. Proved by `test_analyst_layer.py`,
+   `test_analyst_layer_store.py`, `test_branch_layer.py`, `test_case_writes.py` (the real branch
+   and jump routes) and `test_migrate_cases_to_one_dataset.py`, each red with the other's
+   behaviour swapped in.
+4. **What is not moved:** marks and links written before this amendment stay in the dataset they were
+   written in. Moving them would be a load-shaped change to a dataset other cases read, and is not
+   done silently; it waits for its own decision if one is wanted.
+5. **What a mark leaves beside it is the case's too.** A mark made by hand is also kept as an
+   accepted extraction candidate (the marked words, the node's id, `analyst:<id>`); that record
+   carries the layer's id and is read only under a case that reads the layer, not by the whole unit
+   (`review.ExtractionCandidateStore`, through `dataset_scope.reach_clause`). A model's candidate
+   carries none and is the unit's, as before.
+6. **The corpus-wide resolution run honours only splits outside a layer.** It reads every
+   `NOT_SAME_AS` under its service principal; a split only in a layer is its case's own decision,
+   kept by that case's projection, and does not stop a `SAME_AS` in the source that every other
+   case reads (`services/resolve/trigger.honoured_splits`; the layers come from the dataset store,
+   a required argument of the run). The conflict is still recorded, on that split and so in that
+   layer, for that case's review alone (ADR-025 Amendment 1).
+7. **An alert resting on a case's layer goes into that layer** (rule 3; the orchestrator's ruling of
+   7 November 2026 on the final L3.1 review's first blocker). An alert any of whose referents or
+   cited links lives in the case's layer is written there, its `Alert` node and `ALERTED_ON` links
+   included, as a composite case's alerts are (ADR-099 Amendment 15 item 2); any other goes where
+   it went before. The node's words begin with a subject's name, so in the source it would put a
+   name drawn or marked in one case, and one more `Alert` in the counts, before every other case
+   reading that source. It holds for every monitor: a scheduled rule, a list's re-screening and the
+   KYC sweep (a legacy rule naming no dataset included), and a deployment-wide rule judging a
+   case's load. In a branch, an alert resting on its original's layer has no place that is not a
+   leak or a write into that layer, so its node is withheld and its queue row raised
+   (`rule_evaluation._alert_datasets`). Proved by `tests/services/api/test_alerts_and_the_layer.py`,
+   each monitor read back as a second case on the same source, red with the old rule back.
+
+Proved by `tests/services/api/test_case_writes.py` (each writer and each accept path at its real call
+site, under a principal scoped by `scope_to_case`; the branch through the branch route),
+`tests/services/api/test_case_writes_store.py` (item 5, Postgres, with a member of another case of
+the same unit) and `tests/resolve/test_trigger_layers.py` (item 6, ArcadeDB).
+
+### ADR-099, Amendment 14 (7 November 2026) — a case reading a composite adds no data: a composite is read-only for now
+
+Status: accepted; the owner's ruling on Amendment 12 item 5 (7 November 2026, first that such data be
+written under the composite's own id, then, after the L3.1 reviews, that composites are read-only for
+now). Decision 6 reads: "Data added to a case joins its dataset; a case reading a composite adds
+none." A case reading a composite reads its members (the read set, `DatasetStore.ids_of_case`, lists
+the composite's own id, then its members, then the case's layer) and keeps its own analyst layer
+(ADR-143 Amendment 1), but nothing is loaded, extracted, uploaded, accepted or corrected into it or
+its members (Amendment 15). Writing into a composite becomes its own later step, with its own
+decision. Amendment 12 item 4 (entity resolution across members writing into the composite) waits
+for that step. Proved by `tests/services/api/test_composite_read_only.py`.
+
+### ADR-099, Amendment 15 (7 November 2026) — in a case reading a composite, only its analyst layer is written; every other write is refused in words
+
+Status: accepted; the owner's ruling of 7 November 2026, after the L3.1 reviews found one write path
+after another by which a composite case changed its members (a write merged into a member's node; a
+correction; a picture; an extraction's accept and reject; a content-derived id; the Studio reaching
+the composite with no case at all). It replaces an earlier version of this amendment, under which a
+composite case's write to a member's node made a copy of it in the composite; no copy is made.
+
+1. **What is refused.** In a case reading a composite, every write other than into the case's own
+   analyst layer: extraction (an email's, a Document's, the case's ingest), and accepting or
+   rejecting what it found; a question's accepted proposal; an entity's picture, set, replaced or
+   removed; confirming or retracting a node; changing a link; closing an alert as a true positive
+   whose confirmation is not wholly the case's layer's; drawing a site's grid; rejecting or
+   releasing held rows; and loading, running, scheduling, publishing or uploading in the Ingest
+   Studio. A schedule whose case reads a composite, or whose recipe's dataset is one, is neither run,
+   re-timed nor resumed in the Admin area, and the scheduler refuses each of its slots in words
+   (`check_case`), so a case switched to a composite after its schedule was set starts no run that
+   would write in part. And any write into a composite's id, under a case or not: the Studio reaches
+   a dataset with no case (`scope_to_dataset`), and a composite is refused there too. Each is
+   refused in words (409 `composite_read_only`, "do this in a case that reads that dataset", naming
+   the composite to an asker who may be told dataset names, Amendment 11), before anything is
+   written or stored. `scripts.stamp_datasets`, which writes by raw SQL past the stamping graph,
+   writes nothing of a composite case's into a member: its canvas elements in no dataset are counted
+   as unplaced, in words. `scripts.migrate_cases_to_one_dataset` tells each case it makes or keeps
+   a composite that it is now read-only.
+2. **What is kept.** An entity marked by hand and a manual `SAME_AS` or `NOT_SAME_AS` go into the
+   case's analyst layer, as in any case (ADR-143 Amendment 1); they change no member. Reading is
+   untouched. So are the case's own records that are not dataset content: a saved pattern, a watch,
+   a monitor, and an alert's triage short of a confirm. They are the case's, not any dataset's, and
+   keep working in a composite case (the orchestrator's call within the owner's ruling, 7 November
+   2026). A monitor's alert, raised there by a scheduled rule or a list's re-screening, is written
+   into the case's layer with its `ALERTED_ON` and what it writes alongside (a screening hit's
+   listed party, as the list asserts it, and its inferred `SAME_AS`, both new): a link of the layer's is of another audience
+   than a member's, so it merges into none (`rule_evaluation.write_alert_node`). A rule made in the
+   case names the composite's own id, which holds nothing, so a re-screening reads it as its case
+   (`screening_refresh`). Closing such an alert as a true positive confirms only the layer's
+   elements and goes ahead; a close that would confirm anything else is refused under item 1
+   (`dataset_scope.refuse_unless_in_the_layer`; the orchestrator's call, 7 November 2026).
+3. **Where it is decided, and in what order.** Each writing service refuses after its own read of
+   what it would change, so a node, link, finding or picture the reader cannot see still answers as
+   not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
+   `refuse_writing_a_node_in_a_composite_case`). The case's loading routes refuse by a dependency
+   on the route's own level check, the Editor's (the Author's for held rows), which FastAPI runs
+   once, so each route declares one level; the Studio's routes of a dataset refuse after the
+   dataset's own gate. A caller the case or dataset is not for is answered 404, and one holding a
+   lower level than the route needs is answered 403, not told the case reads a composite: only a
+   caller who may do the thing is told it is read-only for now
+   (`test_composite_schedules.py::test_a_viewer_is_answered_403_not_told_the_case_reads_a_composite`,
+   red with the refusal after a Viewer's check, as it was). The node routes refuse even a node wholly in the layer: a
+   correction repoints every link incident to the node (`GraphPort.supersede_node`), which the case
+   may not all read; the close of an alert raised in the case, whose node's links are its own, is
+   the one correction allowed. `DatasetStampingGraph`
+   refuses as the last word: in a composite case, any write, correction, revert, withdrawal or
+   restore whose datasets are not the case's layer alone, and a correction of an element the case
+   cannot see (in the same words, which say nothing, since every other correction there is refused
+   too); and any naming a composite's id, the dataset store answering which ids are composites
+   (`composites_among`), a correction under no case's scope included.
+
+Proved by `tests/services/api/test_composite_read_only.py` (each write path at its real call site; a
+reader who cannot see the element answered 404; the loading routes and the Studio, with a non-member
+answered 404; the layer still written), `test_composite_schedules.py` (the scheduler, the Admin
+area's schedule routes, the grid, held rows, the loading dependency on every loading route, and the
+corrections' last word), `test_composite_monitors.py` (a scheduled rule and a re-screening each
+raising one alert into the layer), `test_composite_writes_live.py` (an extraction and a picture, on
+ArcadeDB, the member unchanged), `test_datasets_store.py` (`composites_among` on Postgres),
+`tests/test_stamp_datasets.py`, `tests/test_migrate_cases_to_one_dataset.py`, and
+`tests/conformance/graph_port/test_composite_write_to_member_node.py` (finding 5: a write to a
+member's node refused and the member unchanged). Each check has its own red companion that removes
+that check alone; where the last word also stands behind a service's check, each is shown holding
+with the other removed, and the write made only with both removed.
+
+### ADR-025, Amendment 1 (7 November 2026) — a split held only in a case's analyst layer: the source SAME_AS goes ahead and the conflict is recorded for review in that case only
+
+Status: accepted; the owner's ruling (7 November 2026). ADR-143 Amendment 1 puts an analyst's manual
+`NOT_SAME_AS` in their case's analyst layer. The corpus-wide run (this ADR) honours only a split in a
+dataset other than a layer: one only in case A's layer does not stop the `SAME_AS` in the source that
+every other case reads. The conflict is still recorded, by superseding that split with its conflict
+properties (`resolve.same_as_writer.record_conflicts`), which keeps the split's datasets, so the
+record is in case A's layer and reviewed there alone. Case A's projection still honours its split and
+keeps the pair apart; case B's merges them. `03_CONDUIT_MIDDLEWARE.md` §5's "never overridden"
+reads as per case. Proved on ArcadeDB by `tests/resolve/test_trigger_layers.py`, shown red with
+`honoured_splits` planted to honour every split.
+
+### ADR-136, Amendment 1 (7 November 2026) — a case's analyst layer takes the strictest egress of the case's sources
+
+Status: accepted; the owner's ruling (7 November 2026). A case's analyst layer (ADR-143) has no egress
+of its own to set: it takes the strictest egress (`none` stricter than `contracted`, `contracted`
+stricter than `any`) of everything else its case reads (its source, or a composite and each of its
+members), worked out each time it is asked (`DatasetStore.egress_of`, through `datasets.as_its_case`). A layer defaulting to `none` would have stopped every case asking a
+hosted model the moment it was given a layer; a looser layer than its sources would let drawn copies of
+source data leave under a looser rule. An administrator cannot set a layer's egress (the store refuses
+it), and a refusal that a layer causes names the case's dataset, never the layer, which no one is shown
+(ADR-099 Amendment 13).
+
 ## ADR-144 — Case views replace branches: a case is the only container, a view is a saved lens on it — ACCEPTED (design)
 
 Status: accepted from the owner's rulings V1–V5 of 6 November 2026, put as multiple-choice questions

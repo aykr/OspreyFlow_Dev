@@ -54,6 +54,7 @@ from schemas.domain import (
 )
 
 from .change_provenance import PICTURE_MARKER, without_link_ids
+from .dataset_scope import refuse_in_a_composite_case
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
 from .link_ids import as_stored
@@ -292,6 +293,8 @@ class EntityPictureService:
         if skip_if_picture_history and await self._has_picture_history(node_id, principal):
             return None
         before = (await self._current([node_id], principal)).get(node_id)
+        # ADR-099 Amendment 15: a composite is read-only; refused before any file is stored.
+        await refuse_in_a_composite_case()
 
         ref = reference_for(data, content_type)
         document_id = f"content:{sha256(ref.encode()).hexdigest()[:32]}"
@@ -490,6 +493,7 @@ class EntityPictureService:
         if current is None:
             raise PictureNotFoundError(node_id)
         old, _ = current
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the picture is read
         # Still withheld after the full read (a record stored so): the successor would carry the
         # removal's own marker and nothing else, replacing every stored source. Not found, as
         # `link_changes._in_full` answers it.

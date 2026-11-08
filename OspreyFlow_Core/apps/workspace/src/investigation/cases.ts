@@ -57,7 +57,15 @@ export interface Dataset {
   id: string;
   name: string;
   owning_unit: string;
+  /** ADR-099 Amendment 12: a source, or a composite read as its members. An analyst layer is never
+   * sent to the Glass (ADR-143 decision 1). Older Conduits send neither field. */
+  kind?: "source" | "composite";
+  members?: string[];
 }
+
+/** What a new case reads (ADR-099 Amendment 12 item 6): one existing dataset, or a new one named
+ * here. There is no third choice: the Conduit no longer gives a case a dataset of its own. */
+export type CaseData = { datasetId: string } | { newDatasetName: string };
 
 /** The datasets of the caller's unit, for a new case to name. */
 export async function listDatasets(apiBaseUrl: string, bearerToken: string): Promise<Dataset[]> {
@@ -82,15 +90,16 @@ export async function caseDatasets(
   return (await response.json()) as Dataset[];
 }
 
-/** Changes what a case reads: its Author's. The Conduit refuses none, and any dataset not of the
- * Author's unit, with one answer. */
+/** Changes what a case reads: its Author's. Exactly one dataset, a source or a composite (ADR-099
+ * Amendment 12); the Conduit refuses two, none, and any dataset not of the Author's unit, with one
+ * answer. */
 export async function setCaseDatasets(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
   datasetIds: string[],
 ): Promise<Dataset[]> {
-  if (datasetIds.length === 0) throw new Error("A case reads at least one dataset.");
+  if (datasetIds.length !== 1) throw new Error("A case reads exactly one dataset.");
   const response = await fetch(
     `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/datasets`,
     {
@@ -100,7 +109,7 @@ export async function setCaseDatasets(
     },
   );
   if (response.status === 403) throw new Error("Only the case's Author can change what it reads.");
-  if (response.status === 422) throw new Error("One of those datasets is not one this case can read.");
+  if (response.status === 422) throw new Error("That dataset is not one this case can read.");
   if (!response.ok) throw new Error(`Could not change what this case reads (${response.status}).`);
   return (await response.json()) as Dataset[];
 }
@@ -186,26 +195,29 @@ export async function createCase(
   apiBaseUrl: string,
   bearerToken: string,
   name: string,
-  datasetIds: string[] = [],
+  data: CaseData,
   domains: readonly DomainPack[] = [],
 ): Promise<{ id: string; name: string; domains?: DomainPack[] }> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new Error("A case needs a name.");
   }
-  // ADR-099: with none named, the Conduit gives the case a dataset of its own.
+  const reads =
+    "datasetId" in data
+      ? { dataset_ids: [data.datasetId] }
+      : { new_dataset_name: data.newDatasetName.trim() || trimmed };
   const response = await fetch(`${apiBaseUrl}/v1/investigations`, {
     method: "POST",
     headers: { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" },
     // ADR-126: the packs shown, `[]` when none is ticked, so the case counts as chosen (POLE).
-    body: JSON.stringify({
-      name: trimmed,
-      ...(datasetIds.length > 0 ? { dataset_ids: datasetIds } : {}),
-      domains: sortedDomains(domains),
-    }),
+    body: JSON.stringify({ name: trimmed, ...reads, domains: sortedDomains(domains) }),
   });
   if (response.status === 422) {
-    throw new Error("One of those datasets is not one this case can read.");
+    throw new Error(
+      "datasetId" in data
+        ? "That dataset is not one this case can read."
+        : "Your unit already has a dataset of that name; choose another name.",
+    );
   }
   if (!response.ok) {
     throw new Error(`Could not create the case (${response.status}).`);
@@ -296,6 +308,12 @@ export function nestCases(
   ]);
 }
 
+
+/** How a dataset is offered in a choice: its name, and for a composite how many it joins. */
+export function datasetChoiceLabel(dataset: Dataset): string {
+  const joins = dataset.kind === "composite" ? (dataset.members?.length ?? 0) : 0;
+  return joins > 0 ? `${dataset.name} (a composite of ${joins} datasets)` : dataset.name;
+}
 
 /** A dataset as the Glass names it: its name and its id, so two that read alike are told apart
  * (ADR-099 Amendment 6). An id of twelve characters or fewer (the seeds' `enron`) is shown whole;

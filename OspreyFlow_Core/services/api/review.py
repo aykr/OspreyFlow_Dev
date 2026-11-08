@@ -54,6 +54,8 @@ from ports.recognise import RecognisePort
 from schemas.domain import Handling, NodeId, OntologySchema, Principal
 from schemas.model import ExtractionRequest
 
+from .dataset_scope import reach_clause, refuse_in_a_composite_case
+
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS extraction_candidates (
     id TEXT PRIMARY KEY,
@@ -73,6 +75,9 @@ CREATE TABLE IF NOT EXISTS extraction_candidates (
     reviewed_at TIMESTAMPTZ,
     node_id TEXT
 );
+-- ADR-143 Amendment 1: a candidate kept for a mark made by hand belongs to the case's analyst
+-- layer, and is read only under a case that reads it. NULL: the unit's, as before.
+ALTER TABLE extraction_candidates ADD COLUMN IF NOT EXISTS dataset_id TEXT;
 """
 
 # Phase 6a Stage 4 (B6, the Dossier): `run_extraction`'s own `text` argument was discarded once
@@ -176,6 +181,9 @@ class ExtractionCandidateRecord(ExtractionCandidate):
     reviewed_by: str | None = None
     reviewed_at: datetime | None = None
     node_id: NodeId | None = None
+    #: ADR-143 Amendment 1: set for a mark made by hand (the case's analyst layer); `None` for a
+    #: model's candidate, read by the unit as before.
+    dataset_id: str | None = None
 
 
 def _row_to_record(row: asyncpg.Record) -> ExtractionCandidateRecord:
@@ -197,6 +205,7 @@ def _row_to_record(row: asyncpg.Record) -> ExtractionCandidateRecord:
         reviewed_by=data["reviewed_by"],
         reviewed_at=data["reviewed_at"],
         node_id=data["node_id"],
+        dataset_id=data.get("dataset_id"),
     )
 
 
@@ -218,7 +227,11 @@ class ExtractionCandidateStore:
         await self._pool.close()
 
     async def store(
-        self, candidates: list[ExtractionCandidate], principal: Principal
+        self,
+        candidates: list[ExtractionCandidate],
+        principal: Principal,
+        *,
+        dataset_id: str | None = None,
     ) -> list[ExtractionCandidateRecord]:
         now = datetime.now(UTC)
         records = [
@@ -228,6 +241,7 @@ class ExtractionCandidateStore:
                 owning_unit=principal.org_unit,
                 created_by=principal.id,
                 created_at=now,
+                dataset_id=dataset_id,
             )
             for candidate in candidates
         ]
@@ -237,8 +251,8 @@ class ExtractionCandidateStore:
             await conn.executemany(
                 "INSERT INTO extraction_candidates (id, document_id, entity_type, properties, "
                 "confidence, model, locator, excerpt_hash, handling, status, owning_unit, "
-                "created_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-                "$12, $13)",
+                "created_by, created_at, dataset_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, "
+                "$10, $11, $12, $13, $14)",
                 [
                     (
                         r.id,
@@ -254,6 +268,7 @@ class ExtractionCandidateStore:
                         r.owning_unit,
                         r.created_by,
                         r.created_at,
+                        r.dataset_id,
                     )
                     for r in records
                 ],
@@ -265,13 +280,17 @@ class ExtractionCandidateStore:
     ) -> list[ExtractionCandidateRecord]:
         """Scoped to `principal.org_unit` — a candidate row is Postgres state with no `Handling`
         of its own to filter by (it has never touched `GraphPort`), so `owning_unit` is this
-        store's own access boundary, the same as `StudioRecipeStore.list_drafts`."""
+        store's own access boundary, the same as `StudioRecipeStore.list_drafts`. A mark made by
+        hand is kept in its case's analyst layer, and read only under a case that reads it
+        (ADR-143 Amendment 1, `reach_clause`)."""
+        reach, params = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM extraction_candidates WHERE document_id = $1 AND owning_unit = $2 "
-                "ORDER BY created_at",
+                "SELECT * FROM extraction_candidates WHERE document_id = $1 AND owning_unit = $2"
+                f"{reach} ORDER BY created_at",
                 document_id,
                 principal.org_unit,
+                *params,
             )
         return [_row_to_record(row) for row in rows]
 
@@ -287,12 +306,14 @@ class ExtractionCandidateStore:
         line, an exception trace or a debugger. `WHERE owning_unit = $2` means that row is never
         fetched at all for a principal outside it — existence and content are refused by the same
         query, not a query followed by a Python-side check that already holds what it's about to
-        reject."""
+        reject. The same case limit as `list_for_document`."""
+        reach, params = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM extraction_candidates WHERE id = $1 AND owning_unit = $2",
+                f"SELECT * FROM extraction_candidates WHERE id = $1 AND owning_unit = $2{reach}",
                 candidate_id,
                 principal.org_unit,
+                *params,
             )
         if row is None:
             raise ExtractionCandidateNotFoundError(candidate_id)
@@ -317,9 +338,7 @@ class ExtractionCandidateStore:
                 candidate_id,
             )
 
-    async def store_document_text(
-        self, document_id: str, text: str, principal: Principal
-    ) -> None:
+    async def store_document_text(self, document_id: str, text: str, principal: Principal) -> None:
         """Upsert, not insert-only — `run_extraction` re-run against the same `document_id` (a
         different profile, a second model) re-stores the same text rather than failing on a
         primary-key conflict a caller has no reason to expect from an idempotent-looking action."""
@@ -475,6 +494,9 @@ async def accept_candidate(
     same begin/commit-or-rollback shape `services/api/working_set/service.py`'s manual
     link/split already established."""
     record = await store.get_authorized(candidate_id, principal)
+    # ADR-099 Amendment 15: every accept path comes here (a document's, an email's, a question's),
+    # and a composite is read-only; refused once the finding is read, before anything is written.
+    await refuse_in_a_composite_case()
     if record.status is not CandidateStatus.PENDING:
         raise CandidateNotPendingError(candidate_id)
 
@@ -508,6 +530,7 @@ async def reject_candidate(
     store: ExtractionCandidateStore, candidate_id: str, principal: Principal
 ) -> None:
     record = await store.get_authorized(candidate_id, principal)
+    await refuse_in_a_composite_case()  # ADR-099 Amendment 15
     if record.status is not CandidateStatus.PENDING:
         raise CandidateNotPendingError(candidate_id)
     await store.mark_reviewed(

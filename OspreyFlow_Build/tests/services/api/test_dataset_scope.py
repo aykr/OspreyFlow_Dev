@@ -21,6 +21,7 @@ that dependency: a test of the parts alone could not show it arrives.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -144,10 +145,14 @@ def test_outside_a_case_a_request_reads_no_dataset(probe) -> None:  # type: igno
 
 
 def test_a_case_request_reads_that_cases_datasets(probe) -> None:  # type: ignore[no-untyped-def]
+    """Scoping writes nothing: these cases were recorded with no layer, and none is made for a
+    read (it comes before the route's level check; the second review's must-fix 3)."""
     client, _ = probe
+    store = client.app.state.datasets
     assert client.get("/v1/investigations/case-f/probe").json()["datasets"] == ["fixture"]
     both = client.get("/v1/investigations/case-both/probe").json()
     assert both == {"datasets": ["enron", "fixture"], "writes_into": ["enron", "fixture"]}
+    assert asyncio.run(store.layer_of_case("case-f")) is None
     # A case with no datasets recorded reads nothing, not everything.
     assert client.get("/v1/investigations/case-unknown/probe").json()["datasets"] == []
 

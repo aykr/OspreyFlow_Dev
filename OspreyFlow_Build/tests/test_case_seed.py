@@ -188,8 +188,9 @@ def test_the_hmp_and_fixture_corp_seeds_take_a_case_name_or_a_scope_and_not_neit
 
 
 async def test_a_seeds_case_reads_its_dataset_after_what_it_read_and_only_once() -> None:
-    """ADR-099: a seed loaded into a case puts its dataset in the case's reading, after any it
-    had, and running the seed again adds nothing."""
+    """ADR-099: a seed loaded into a case puts its dataset in the case's reading, with any it
+    had: since Amendment 12 as a composite of both, never as a second dataset; running the seed
+    again adds nothing (no second composite)."""
     from scripts.case_seed import ensure_case_reads
     from services.api.datasets import InMemoryDatasetStore
 
@@ -199,7 +200,11 @@ async def test_a_seeds_case_reads_its_dataset_after_what_it_read_and_only_once()
     await ensure_case_reads(held, "case-1", FIXTURE_CORP, seeder=SEEDER)
     await ensure_case_reads(held, "case-1", ENRON, seeder=SEEDER)
     await ensure_case_reads(held, "case-1", ENRON, seeder=SEEDER)
-    assert await held.ids_of_case("case-1") == ["fixture-corp", "enron"]
+    (composite,) = await held.chosen_of_case("case-1")
+    assert (composite.kind, composite.members) == ("composite", ["fixture-corp", "enron"])
+    layer = await held.layer_of_case("case-1")
+    assert await held.ids_of_case("case-1") == [composite.id, "fixture-corp", "enron", layer]
+    assert sum(d.kind == "composite" for d in held.datasets.values()) == 1
     assert held.datasets["enron"].owning_unit == SEEDER.org_unit
 
 

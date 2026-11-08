@@ -37,7 +37,7 @@ from services.api.app import (
     get_valkey,
     get_working_set,
 )
-from services.api.datasets import Dataset, InMemoryDatasetStore
+from services.api.datasets import ANALYST_LAYER, Dataset, InMemoryDatasetStore
 from services.api.working_set.models import (
     DeltaAdd,
     ExpansionOutcome,
@@ -63,8 +63,9 @@ class _Graph:
     def __init__(self) -> None:
         self.visible = {
             ("Person", "prison_number", "Z1234ZZ"): _person("p1", prison_number="Z1234ZZ"),
-            ("Endpoint", "value_normalised", "+447700900123"):
-                _endpoint("e1", "+447700900123", "msisdn"),
+            ("Endpoint", "value_normalised", "+447700900123"): _endpoint(
+                "e1", "+447700900123", "msisdn"
+            ),
         }
         self.calls: list[tuple[str, str, str, Principal]] = []
 
@@ -154,6 +155,18 @@ def rig() -> Any:
         )
     )
     store.cases["case-e"] = ["enron"]
+    # Every case reads its analyst layer too (ADR-143 decision 1).
+    store.add(
+        Dataset(
+            id="layer-e",
+            name="Analyst layer: case-e",
+            owning_unit="unit-1",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            created_by="seed",
+            kind=ANALYST_LAYER,
+            layer_of="case-e",
+        )
+    )
     saved = {k: getattr(app.state, k, None) for k in ("principal_resolver", "datasets")}
     app.state.principal_resolver = _Resolver()
     app.state.datasets = store
@@ -168,8 +181,14 @@ def test_a_count_adds_nothing_and_confirm_adds(rig: Rig) -> None:
     counted = rig.post(typed)
     assert counted.status_code == 200
     assert counted.json() == {
-        "counts": {"read": 4, "found": 3, "matched_nothing": 1, "repeated": 1, "undecided": 0,
-                   "records": 2},
+        "counts": {
+            "read": 4,
+            "found": 3,
+            "matched_nothing": 1,
+            "repeated": 1,
+            "undecided": 0,
+            "records": 2,
+        },
         "added": None,
     }
     assert rig.working_set.adds == [] and rig.valkey.published == 0 and rig.history.steps == []
@@ -194,7 +213,7 @@ def test_a_count_does_not_ask_for_links_either(rig: Rig) -> None:
 
 def test_the_graph_is_asked_with_the_cases_datasets(rig: Rig) -> None:
     rig.post(["Z1234ZZ"])
-    assert [call[3].datasets for call in rig.graph.calls] == [["enron"]]
+    assert [call[3].datasets for call in rig.graph.calls] == [["enron", "layer-e"]]
 
 
 def test_a_list_naming_a_hidden_person_is_answered_as_one_naming_a_made_up_one(rig: Rig) -> None:
@@ -271,7 +290,12 @@ def test_an_empty_list_is_read_as_nothing(rig: Rig) -> None:
     response = rig.post(["", " \n , "])
     assert response.status_code == 200
     assert response.json()["counts"] == {
-        "read": 0, "found": 0, "matched_nothing": 0, "repeated": 0, "undecided": 0, "records": 0
+        "read": 0,
+        "found": 0,
+        "matched_nothing": 0,
+        "repeated": 0,
+        "undecided": 0,
+        "records": 0,
     }
 
 

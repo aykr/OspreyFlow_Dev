@@ -71,13 +71,14 @@ from fastapi.testclient import TestClient
 from services.api.config import PostgresConfig
 from services.api.review import ExtractionCandidateStore
 from services.extract.candidates import ExtractionCandidate
+from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import new_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal
-from tests.conftest import default_claims, sign_token
 
 MESSAGE_TEXT = "Dana Mercer met Alex Doe at the depot."
 NAME_A = "Dana Mercer"
@@ -192,7 +193,7 @@ def test_phase6a_exit_criterion_end_to_end(
     from services.api.app import app
 
     with TestClient(app) as client:
-        created = client.post("/v1/investigations", headers=headers)
+        created = client.post("/v1/investigations", headers=headers, json=new_case())
         assert created.status_code == 201, created.text
         investigation_id = created.json()["id"]
 

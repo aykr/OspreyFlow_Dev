@@ -184,16 +184,30 @@ class WritingGraph(FakeGraphPort):
         )
 
 
+def _in_reach(record: ExtractionCandidateRecord, principal: Principal) -> bool:
+    """`dataset_scope.reach_clause`, as the Postgres store applies it."""
+    return (
+        principal.datasets is None
+        or record.dataset_id is None
+        or record.dataset_id in principal.datasets
+    )
+
+
 class InMemoryCandidates:
     """Refuses what the Postgres store refuses: a candidate or a text is read only by its owning
-    unit, and a candidate is reviewed once."""
+    unit, a candidate kept in a dataset (a mark made by hand, ADR-143 Amendment 1) only under a case
+    that reads it, and a candidate is reviewed once."""
 
     def __init__(self) -> None:
         self.records: dict[str, ExtractionCandidateRecord] = {}
         self.texts: dict[str, tuple[str, str]] = {}
 
     async def store(
-        self, candidates: Sequence[ExtractionCandidate], principal: Principal
+        self,
+        candidates: Sequence[ExtractionCandidate],
+        principal: Principal,
+        *,
+        dataset_id: str | None = None,
     ) -> list[ExtractionCandidateRecord]:
         out = []
         for c in candidates:
@@ -203,6 +217,7 @@ class InMemoryCandidates:
                 owning_unit=principal.org_unit,
                 created_by=principal.id,
                 created_at=datetime.now(UTC),
+                dataset_id=dataset_id,
             )
             self.records[record.id] = record
             out.append(record)
@@ -223,15 +238,22 @@ class InMemoryCandidates:
         return [
             r
             for r in self.records.values()
-            if r.document_id == document_id and r.owning_unit == principal.org_unit
+            if r.document_id == document_id
+            and r.owning_unit == principal.org_unit
+            and _in_reach(r, principal)
         ]
 
     async def get_authorized(
         self, candidate_id: str, principal: Principal
     ) -> ExtractionCandidateRecord:
         record = self.records.get(candidate_id)
-        if record is None or record.owning_unit != principal.org_unit:
-            # As the real store refuses (rule 15): not found, whether absent or another unit's.
+        if (
+            record is None
+            or record.owning_unit != principal.org_unit
+            or not _in_reach(record, principal)
+        ):
+            # As the real store refuses (rule 15): not found, whether absent, another unit's or
+            # another case's.
             raise ExtractionCandidateNotFoundError(candidate_id)
         return record
 

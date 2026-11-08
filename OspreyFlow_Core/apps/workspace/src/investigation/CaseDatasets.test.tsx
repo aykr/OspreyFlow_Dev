@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// ADR-099 in the Glass: a new case names the data it reads, and a case's Author changes it. The
-// Conduit enforces both; these prove the Glass asks for what the analyst chose, says when nothing
-// was chosen, and offers the change only to the Author.
+// ADR-099 in the Glass: a new case names the one dataset it reads (Amendment 12), or a new one, and
+// a case's Author changes it. The Conduit enforces both; these prove the Glass asks for what the
+// analyst chose, refuses to save nothing, and offers the change only to the Author.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -37,38 +37,51 @@ function serve(routes: Record<string, (init?: RequestInit) => Response>) {
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
 describe("a new case's data", () => {
-  it("names no dataset when none is ticked, so the case gets one of its own", async () => {
+  it("names a new dataset for the case when asked to make one", async () => {
     const calls = serve({ "POST /v1/investigations": () => json(201, { id: "c1", name: "X" }) });
-    await createCase("http://api", "t", "X");
-    expect(calls[0]!.body).toEqual({ name: "X", domains: [] });
+    await createCase("http://api", "t", "X", { newDatasetName: "" });
+    expect(calls[0]!.body).toEqual({ name: "X", new_dataset_name: "X", domains: [] });
   });
 
-  it("asks for the datasets ticked, in the order ticked", async () => {
+  it("asks for the one dataset chosen", async () => {
     const calls = serve({
       "GET /v1/datasets": () => json(200, DATASETS),
-      "POST /v1/investigations": () => json(201, { id: "c1", name: "Both" }),
+      "POST /v1/investigations": () => json(201, { id: "c1", name: "F" }),
     });
     const onCreated = vi.fn();
     render(<NewCaseForm apiBaseUrl="http://api" bearerToken="t" inputLabel="Case name" onCreated={onCreated} />);
-    // ADR-099 Amendment 8: the datasets show behind the "Read existing data…" choice.
-    fireEvent.click(await screen.findByRole("radio", { name: /Read existing data/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
     fireEvent.click(await screen.findByLabelText("Fixture Corp"));
     fireEvent.click(screen.getByLabelText("Enron corpus"));
-    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "Both" } });
+    fireEvent.change(screen.getByLabelText("Case name"), { target: { value: "F" } });
     fireEvent.click(screen.getByRole("button", { name: "Create case" }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("c1"));
+    // A radio: choosing Enron replaced Fixture Corp (ADR-099 Amendment 12, one dataset per case).
     expect(calls.find((c) => c.key === "POST /v1/investigations")!.body).toEqual({
-      name: "Both",
-      dataset_ids: ["fixture-corp", "enron"],
+      name: "F",
+      dataset_ids: ["enron"],
       domains: [],
     });
   });
 
-  it("says a refused dataset in words", async () => {
+  it("says a refused dataset, and a new name already taken, in words", async () => {
     serve({ "POST /v1/investigations": () => json(422, { error: "dataset_refused" }) });
-    await expect(createCase("http://api", "t", "X", ["theirs"])).rejects.toThrow(
-      "One of those datasets is not one this case can read.",
+    await expect(createCase("http://api", "t", "X", { datasetId: "theirs" })).rejects.toThrow(
+      "That dataset is not one this case can read.",
     );
+    await expect(createCase("http://api", "t", "X", { newDatasetName: "Taken" })).rejects.toThrow(
+      "Your unit already has a dataset of that name; choose another name.",
+    );
+  });
+
+  it("offers a composite with how many datasets it joins", async () => {
+    serve({
+      "GET /v1/datasets": () =>
+        json(200, [...DATASETS, { id: "both", name: "Both", owning_unit: "unit-1", kind: "composite", members: ["enron", "fixture-corp"] }]),
+    });
+    render(<NewCaseForm apiBaseUrl="http://api" bearerToken="t" inputLabel="Case name" onCreated={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
+    expect(await screen.findByRole("radio", { name: "Both (a composite of 2 datasets)" })).toBeTruthy();
   });
 });
 
@@ -85,12 +98,12 @@ describe("CaseDatasets", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Change what this case reads" })).toBeNull());
   });
 
-  it("lets the Author change it, and sends the datasets ticked", async () => {
+  it("lets the Author change it, and sends the one dataset chosen", async () => {
     const calls = serve({
       "GET /v1/investigations/c1/datasets": reads,
       "GET /v1/investigations": () => json(200, [{ id: "c1", name: "C", level: "author", created_at: "", created_by: "" }]),
       "GET /v1/datasets": () => json(200, DATASETS),
-      "PUT /v1/investigations/c1/datasets": () => json(200, DATASETS),
+      "PUT /v1/investigations/c1/datasets": () => json(200, [DATASETS[0]]),
     });
     const onChanged = vi.fn();
     render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" onChanged={onChanged} />);
@@ -99,7 +112,7 @@ describe("CaseDatasets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
     expect(calls.find((c) => c.key === "PUT /v1/investigations/c1/datasets")!.body).toEqual({
-      dataset_ids: ["fixture-corp", "enron"],
+      dataset_ids: ["enron"],
     });
   });
 
@@ -113,15 +126,15 @@ describe("CaseDatasets", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Change what this case reads" })).toBeNull());
   });
 
-  it("will not save a case reading nothing", async () => {
+  it("will not save before a dataset is chosen", async () => {
     serve({
-      "GET /v1/investigations/c1/datasets": reads,
+      "GET /v1/investigations/c1/datasets": () => json(200, []),
       "GET /v1/investigations": () => json(200, [{ id: "c1", name: "C", level: "author", created_at: "", created_by: "" }]),
       "GET /v1/datasets": () => json(200, DATASETS),
     });
     render(<CaseDatasets apiBaseUrl="http://api" bearerToken="t" investigationId="c1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Change what this case reads" }));
-    fireEvent.click(await screen.findByLabelText("Fixture Corp"));
+    await screen.findByLabelText("Fixture Corp");
     expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -139,7 +152,7 @@ describe("telling datasets apart (ADR-099 Amendments 6 and 8)", () => {
   it("labels each choice with its name alone, even names that read alike", async () => {
     serve({ "GET /v1/datasets": () => json(200, ALIKE) });
     render(<NewCaseForm apiBaseUrl="http://api" bearerToken="t" inputLabel="Case name" onCreated={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("radio", { name: /Read existing data/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Use an existing dataset/ }));
     expect(await screen.findByLabelText("Enron corpus")).toBeTruthy();
     expect(screen.getByLabelText("Enron corpus (2)")).toBeTruthy();
     expect(screen.getByLabelText("Enron seed")).toBeTruthy();

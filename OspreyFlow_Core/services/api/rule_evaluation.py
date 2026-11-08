@@ -74,6 +74,12 @@ from schemas.domain import (
 
 from .alerts import AlertStore
 from .audit import AuditWriter
+from .dataset_scope import (
+    analyst_layer,
+    analyst_writes_into,
+    read_only_layer,
+    reads_a_composite,
+)
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
 from .kyc_expiries import KycExpiryStore
@@ -445,13 +451,15 @@ async def judge(
 #: Why an alert was raised without its `Alert` node, one per path that withholds it (ADR-146
 #: decision 10): its referents restricted for different units (no single safe marking); a referent
 #: whose marking could not be read in the load; a cited link that could not be read.
-NodeWithheld = Literal["units", "unseen_referent", "unreadable_link"]
+NodeWithheld = Literal["units", "unseen_referent", "unreadable_link", "originals_layer"]
 WITHHELD_WORDS: dict[str, str] = {
     "units": "its referents' restricted markings belong to different units",
     "unseen_referent": "the marking of something it names could not be read, so no node was "
     "written rather than one marked by a guess",
     "unreadable_link": "a link it cites could not be read (taken back or replaced since it was "
     "found), so no node was written rather than one marked by a guess",
+    "originals_layer": "it rests on the original case's layer, which a branch reads and writes "
+    "nothing into, so no node was written rather than one that names its subject elsewhere",
 }
 
 
@@ -504,6 +512,44 @@ async def _referent_handlings(
     return handlings
 
 
+class _AlertInAReadOnlyLayer(Exception):
+    """An alert resting on what a branch reads of its original case's layer: its node would carry
+    the layer's subjects' names, and the branch writes into no layer (ADR-144 Amendment 1 decision
+    2), so the node is withheld and the queue row still raised."""
+
+
+async def _alert_datasets(graph: GraphPort, scheme: HandlingScheme, finding: Finding) -> list[str]:
+    """What an alert's own node and `ALERTED_ON` links name, and what it writes alongside.
+
+    - In a case reading a composite (read-only for now; ADR-099 Amendment 15 item 2): the case's
+      analyst layer, made here if it has none. An `ALERTED_ON` from the layer's node to a member's
+      node is the layer's link, and changes no member.
+    - In any other case, an alert any of whose referents or cited links lives in the case's layer
+      goes into that layer too, its node and `ALERTED_ON` included (rule 3, the orchestrator's
+      ruling of 7 November 2026): the node's words begin with a subject's name, and in the source
+      they would put a name drawn or marked in this case, and one more `Alert` in the counts, in
+      front of every other case reading that source. In a branch, resting on its original's layer,
+      it is withheld (`_AlertInAReadOnlyLayer`).
+    - Otherwise nothing is named, and the stamping graph places them in the case's dataset."""
+    if await reads_a_composite():
+        return await analyst_writes_into()
+    layers = {layer for layer in (analyst_layer(), read_only_layer()) if layer is not None}
+    if not layers:
+        return []
+    reader = service_principal(scheme)
+    pending = {w.id for w in finding.pending}
+    node_ids = [n for n in finding.node_ids if n not in pending]
+    nodes = await graph.get_nodes(node_ids, reader) if node_ids else []
+    edges = await graph.get_edges(list(finding.edge_ids), reader) if finding.edge_ids else []
+    named = [*(d for n in nodes for d in n.datasets), *(d for e in edges for d in e.datasets)]
+    touched = set(named) & layers
+    if not touched:
+        return []
+    if read_only_layer() in touched:
+        raise _AlertInAReadOnlyLayer
+    return await analyst_writes_into()
+
+
 async def write_alert_node(
     graph: GraphPort,
     scheme: HandlingScheme,
@@ -524,9 +570,17 @@ async def write_alert_node(
 
     if is_just_me(finding.rule):
         return None  # an alert for its author alone puts nothing in the case's graph
+    into = await _alert_datasets(graph, scheme, finding)  # `_AlertInAReadOnlyLayer`: no node
     if finding.pending:
-        pending_nodes = [w for w in finding.pending if isinstance(w, NodeWrite)]
-        pending_edges = [w for w in finding.pending if isinstance(w, EdgeWrite)]
+        # What the finding writes alongside (a screening hit's listed party, as the list asserts
+        # it, and its inferred `SAME_AS`) is new and the rule's own: in a composite case it goes
+        # into the layer with the alert. A link of the layer's is of another audience than a
+        # member's, so it never merges into one; a write naming a dataset of its own keeps it, and
+        # the stamping graph judges it.
+        pending = [w if w.datasets or not into else w.model_copy(update={"datasets": into})
+                   for w in finding.pending]  # fmt: skip
+        pending_nodes = [w for w in pending if isinstance(w, NodeWrite)]
+        pending_edges = [w for w in pending if isinstance(w, EdgeWrite)]
         record.node_ids.extend(await graph.upsert_nodes(pending_nodes, tx))
         record.edges(pending_edges, await graph.upsert_edges(pending_edges, tx))
     marking = alert_handling(
@@ -558,6 +612,7 @@ async def write_alert_node(
         created_by=finding.deployer.id,
         created_at=now,
         load_id=load_id,
+        datasets=into,
     )
     (node_id,) = await graph.upsert_nodes([node], tx)
     record.node_ids.append(node_id)
@@ -573,6 +628,7 @@ async def write_alert_node(
             created_by=finding.deployer.id,
             created_at=now,
             load_id=load_id,
+            datasets=into,
         )
         for target in finding.node_ids
     ]
@@ -940,6 +996,8 @@ class RuleGate:
             )  # fmt: skip
         except UnreadableAlertLink:
             return None, "unreadable_link"
+        except _AlertInAReadOnlyLayer:
+            return None, "originals_layer"
         except RuntimeError:
             # A referent's marking cannot be known: no node rather than a guessed one.
             return None, "unseen_referent"
@@ -1013,6 +1071,9 @@ class RuleGate:
             # evidence), so one reverted link never stops a sweep. A node still stops the raise.
             await self.graph.rollback_transaction(tx)
             return await self._raise_row(finding, None, withheld="unreadable_link")
+        except _AlertInAReadOnlyLayer:
+            await self.graph.rollback_transaction(tx)
+            return await self._raise_row(finding, None, withheld="originals_layer")
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise

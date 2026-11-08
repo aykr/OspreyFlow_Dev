@@ -57,6 +57,7 @@ from services.api.investigations import (
 from services.api.working_set.models import DeltaAdd, ExpansionOutcome
 
 from schemas.domain import Alert, AlertMode, Interval, Principal
+from tests.services.api.case_dataset import new_case
 
 ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
@@ -252,7 +253,7 @@ def test_a_case_made_with_packs_keeps_them_sorted_and_without_repeats(
     client = _as(ALICE, cases, audit)
 
     made = client.post(
-        "/v1/investigations", json={"name": "Mixed", "domains": ["niem", "fibo", "niem"]}
+        "/v1/investigations", json=new_case("Mixed", domains=["niem", "fibo", "niem"])
     )
 
     assert made.status_code == 201, made.text
@@ -268,7 +269,7 @@ def test_an_unknown_pack_is_refused_at_the_post_and_no_case_is_made(
 ) -> None:
     client = _as(ALICE, cases, audit)
 
-    refused = client.post("/v1/investigations", json={"name": "X", "domains": ["fibo", "gone"]})
+    refused = client.post("/v1/investigations", json=new_case("X", domains=["fibo", "gone"]))
 
     assert refused.status_code == 422
     assert cases.asked_domains == []
@@ -280,9 +281,9 @@ def test_a_case_made_without_a_choice_is_never_chosen_and_one_made_with_none_is(
 ) -> None:
     client = _as(ALICE, cases, audit)
 
-    unchosen = client.post("/v1/investigations", json={"name": "A"})
-    bare = client.post("/v1/investigations")
-    pole = client.post("/v1/investigations", json={"name": "B", "domains": []})
+    unchosen = client.post("/v1/investigations", json=new_case("A"))
+    bare = client.post("/v1/investigations", json=new_case())
+    pole = client.post("/v1/investigations", json=new_case("B", domains=[]))
 
     assert [unchosen.status_code, bare.status_code, pole.status_code] == [201, 201, 201]
     assert unchosen.json()["domains"] == [] and pole.json()["domains"] == []

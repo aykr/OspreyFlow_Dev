@@ -23,7 +23,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from services.api.config import PostgresConfig
-from services.api.datasets import Dataset, PostgresDatasetStore
+from services.api.datasets import Dataset, PostgresDatasetStore, read_also
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -40,6 +40,7 @@ from schemas.domain import (
     SourceRef,
 )
 from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import new_case
 
 UNIT = Principal(id="loader-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 FIRST = "Z7001ZZ"
@@ -143,7 +144,10 @@ async def _give_case(investigation_id: str, dataset_ids: list[str]) -> None:
                 )
             except Exception:  # noqa: BLE001 - already registered by an earlier run
                 pass
-        await store.set_for_case(investigation_id, dataset_ids, UNIT)
+        # ADR-099 Amendment 12: a case reading both reads a composite of them.
+        await store.set_for_case(investigation_id, dataset_ids[:1], UNIT)
+        for dataset_id in dataset_ids[1:]:
+            await read_also(store, investigation_id, dataset_id, UNIT)
     finally:
         await store.close()
 
@@ -173,8 +177,8 @@ def test_search_and_expand_withhold_sources_from_a_case_that_reads_one_dataset(
     from services.api.app import app
 
     with TestClient(app) as client:
-        narrow = client.post("/v1/investigations", headers=headers).json()["id"]
-        wide = client.post("/v1/investigations", headers=headers).json()["id"]
+        narrow = client.post("/v1/investigations", headers=headers, json=new_case()).json()["id"]
+        wide = client.post("/v1/investigations", headers=headers, json=new_case()).json()["id"]
         _run(_give_case(narrow, [FIRST]))
         _run(_give_case(wide, [FIRST, SECOND]))
 

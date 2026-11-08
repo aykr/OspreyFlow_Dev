@@ -37,7 +37,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from valkey.asyncio import Valkey
 
@@ -51,7 +51,7 @@ from schemas.screening import ScreeningListStatus, ScreeningListUpdate
 
 from .alerts import AlertStore
 from .audit import AuditWriter
-from .dataset_scope import set_case_datasets
+from .dataset_scope import scope_a_monitor, set_case_datasets
 from .ingest_sources import ingest_root, is_inside
 from .screening import ListDiff, ScreeningEntry, ScreeningListStore, UnitCounts, screen
 
@@ -241,7 +241,15 @@ class ScreeningRules(Protocol):
 
 
 class CaseDatasets(Protocol):
+    """What a re-screening asks of the dataset store: a case's read set and layer, scoped as a
+    request is (`scope_to_case`); what it chose, so a composite case's alert goes into its layer;
+    and whether a rule's own dataset is a composite (ADR-099 Amendment 15)."""
+
     async def ids_of_case(self, investigation_id: str) -> list[str]: ...
+    async def layer_of_case(self, investigation_id: str) -> str | None: ...
+    async def read_only_layer_of(self, investigation_id: str) -> str | None: ...
+    async def chosen_of_case(self, investigation_id: str) -> list[Any]: ...
+    async def composites_among(self, dataset_ids: Sequence[str]) -> set[str]: ...
 
 
 @dataclass
@@ -320,14 +328,15 @@ class Rescreener:
         params = rule.params
         assert isinstance(params, KycScreeningParams)
         # The rule reads within its case's datasets, as at onboarding (ADR-099): its own dataset,
-        # else the case's. Whatever it writes belongs to the first of them.
-        reach = (
-            [rule.dataset_id]
-            if rule.dataset_id
-            else await self.datasets.ids_of_case(rule.investigation_id)
+        # else the case's; whatever it writes belongs to the first of them. In a case reading a
+        # composite it reads the case, and its alert goes into the case's analyst layer, whichever
+        # dataset the rule names (ADR-099 Amendment 15 item 2, `scope_a_monitor`).
+        deployer = await scope_a_monitor(
+            deployer,
+            rule.investigation_id,
+            rule.dataset_id,
+            self.datasets,  # type: ignore[arg-type]
         )
-        deployer = deployer.model_copy(update={"datasets": reach})
-        set_case_datasets(reach)
         gate = RuleGate(
             rules=[rule],
             investigation_id=rule.investigation_id,

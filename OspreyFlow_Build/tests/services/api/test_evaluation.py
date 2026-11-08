@@ -53,6 +53,11 @@ OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 OTHER_ANALYST = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-1")
 
 
+async def _no_layers() -> set[str]:
+    """No case has an analyst layer here (ADR-143 Amendment 1's `analyst_layers`)."""
+    return set()
+
+
 async def _principal_for(owner_id: str) -> Principal | None:
     """The caller-supplied stand-in `evaluation.py`'s own docstring calls for. Async since
     `06_DECISIONS.md` ADR-043 (Phase 8 Stage 1) — a real caller's own implementation
@@ -979,7 +984,13 @@ async def test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_
 
         tx = await graph.begin_transaction()
         result = await run_resolution_for_entity_type(
-            "Person", graph=graph, tx=tx, ontology=ontology, scheme=scheme, valkey=valkey
+            "Person",
+            graph=graph,
+            tx=tx,
+            ontology=ontology,
+            scheme=scheme,
+            valkey=valkey,
+            analyst_layers=_no_layers,
         )
         await graph.commit_transaction(tx)
         assert result.same_as_written >= 1, (

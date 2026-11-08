@@ -548,15 +548,77 @@ ADR-099 section; `test_bulk_loader.py`). `Principal.datasets` carries the case's
 and only the Conduit's own background work reads so; an empty list sees nothing.
 
 - **A dataset** is a named body of data held by one unit, kept in Postgres (`datasets`,
-  `investigation_datasets`). A case names at least one, all of its own unit; a branch takes its
-  parent's; only the case's Author changes them, and each change is audited (decision 3).
-- **What a case writes joins its first dataset** unless the load names another (decision 6). The
-  Conduit's own writes for a case are stamped so by `DatasetStampingGraph` (Amendment 1 decision 2),
-  and an element's properties are the latest write's (decision 2).
+  `investigation_datasets`, `composite_members`). It is of one of three kinds (`datasets.kind`;
+  ADR-099 Amendments 12 and 13, ADR-143 decision 1):
+  - **`source`**: loaded through the Studio or a seed;
+  - **`composite`**: names two or more of its unit's source datasets (`members`) and holds none of
+    their data; read at read time as its own id and its members. Read-only for now: nothing is
+    written into it, and a case reading it writes only into its own layer (ADR-099 Amendment 15).
+    Made by `POST /v1/datasets/composites`, or by the migration;
+  - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
+    it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
+    returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
+    dataset), and its name takes no place in the unit's unique names. A layer is written only by
+    its own case: a branch holds none and reads its original case's layer, read-only, every write
+    into it refused (ADR-144 Amendment 1 decision 2; branches are removed in L3.2), and only a
+    reader holding a level on the original reads it there (an original with no layer yet is given
+    one when branched); a case
+    opened from an alert has an empty layer of its own and never reads the original's, its maker
+    holding no level on it perhaps (ADR-143 Amendment 1 item 3, with the exception there for
+    cases made from another before L3.1, which each keep a layer of their own). A
+    case with no layer yet (one the migration has not reached) is given one by the analyst's own
+    writer, inside the route after its level check, never when a request is merely scoped; with
+    no case's layer to go into, that write is refused, never written into the source. An alert
+    resting on a case's layer (a referent or a cited link in it) is written into that layer, its
+    node and `ALERTED_ON` too, so its words, which name a subject, reach no other case reading
+    the source (ADR-143 Amendment 1 item 7). Its egress (ADR-136 Amendment 1) is the
+    strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`),
+    so it changes no verdict and its own name is in no refusal; an administrator cannot set it.
+- **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
+  decision 1); a branch takes its parent's; only the case's Author changes it, and each change is
+  audited (decision 3). A new case names an existing dataset or a new one; the Conduit no longer
+  makes one for a case that names none (Amendment 12 item 6).
+- **A case's read set** (`Principal.datasets` for a request under it, `DatasetStore.ids_of_case`)
+  is its chosen dataset (a composite as its own id, then its members) **plus** its analyst layer,
+  and nothing else; a case that has chosen nothing reads nothing. Case views (ADR-144) will read
+  the same set. A link drawn in one case's layer, even between two loaded nodes, is in no count,
+  degree, bucket, neighbourhood or path read under another case of the same source
+  (`tests/conformance/graph_port/test_analyst_layer.py`, shown red with the layer added to the other
+  case's read set); the read set itself is `tests/services/api/test_analyst_layer.py`.
+- **What a case writes joins its source** unless the write names another (decision 6): accepted
+  question proposals, accepted extractions and loads. The Conduit's own writes for a case are
+  stamped by `DatasetStampingGraph` (Amendment 1 decision 2), and an element's properties are the
+  latest write's (decision 2).
+- **A composite is read-only for now** (Amendments 14 and 15; the owner, 7 November 2026). A case
+  reading a composite reads its members and keeps its own analyst layer, and writes nothing else:
+  extraction and its accept and reject, a question's accepted proposal, a picture, confirming or
+  retracting a node, changing a link, a close that would confirm anything outside the layer, a
+  site's grid, held rows' release and rejection, and the Studio's loads, runs and schedules
+  (scheduled runs refused at each slot, and in the Admin area) are refused in words (409
+  `composite_read_only`, "do this in a case that reads that dataset"), before anything is
+  written; so is any write into a composite's id. What the reader cannot see answers as not found
+  first. Its own records that are not dataset content keep working: saved patterns, watches, and
+  monitors, whose alerts are raised into the layer and may be closed as true positives there.
+  Writing into a composite is its own later step.
+- **The analyst's own assertions join the case's analyst layer** (ADR-143 Amendment 1): an entity
+  marked by hand in the reader (the node and its `MENTIONED_IN` link) and a manual `SAME_AS` or
+  `NOT_SAME_AS` (§4) name the layer, which the request holds beside its read set
+  (`dataset_scope.analyst_layer`). A case with no layer yet is given one by the writer, inside the
+  route after its level check, and they go there; with no case's layer to go into, the write is
+  refused (409 `no_analyst_layer`) and nothing is written, never into the source (ADR-143
+  Amendment 1 item 3). What was written before the amendment stays where it is. `tests/services/api/test_case_writes.py`
+  drives each writer at its real call site.
+- **Placing what exists:** `python -m scripts.migrate_cases_to_one_dataset` (`--dry-run` first)
+  gives each case that names several datasets a composite of them (one composite per distinct set),
+  gives every case its own layer (a case made from another included, named in its output: the
+  exception in ADR-143 Amendment 1 item 3), reports a case it cannot place rather than
+  guessing, and then builds
+  the one-row index on `investigation_datasets`.
 - **A correction keeps its datasets**: `supersede_node` and `supersede_edge` give the new revision
   every dataset of the old one (Amendment 2 decision 2).
-- **A `SAME_AS` link is in the datasets both its records share**, so a match across two datasets is
-  in none and no case reads it (Amendment 2 decision 3, §4).
+- **A `SAME_AS` link written by resolution is in the datasets both its records share**, so a match
+  across two datasets is in none and no case reads it (Amendment 2 decision 3, §4). A manual
+  `SAME_AS` or `NOT_SAME_AS` is in the case's analyst layer (ADR-143 Amendment 1).
 - **Events carry no dataset**: they stay keyed by case in the analytics store (decision 7).
 - **A dataset is referred to by its id, and only when registered** (Amendment 6): a write naming a
   dataset the registry does not hold is refused whole. A unit's dataset names are unique, case and
@@ -718,7 +780,13 @@ The design:
    re-projects the view; it does not touch storage.
 4. Analyst decisions are edges too: a manual link is a `SAME_AS` with score 1.0 and
    `provenance.state = asserted`; a manual split is a `NOT_SAME_AS` edge that the projection
-   always honours and no future resolution run may override.
+   always honours. Both are written in the case's analyst layer (ADR-143 Amendment 1, §2.2a), so
+   another case reading the same source neither sees nor is collapsed by them. The corpus-wide
+   resolution run therefore honours only a split in a dataset other than a layer (one written
+   before the amendment, in the source): a split only in case A's layer does not stop the run
+   writing a `SAME_AS` that case B reads, the conflict is recorded on A's split for A's review
+   alone, and case A's own projection still keeps the pair apart (ADR-025 Amendment 1;
+   `services/resolve/trigger.honoured_splits`; `tests/resolve/test_trigger_layers.py`).
 
 The Glass surfaces τ as a slider with three labelled detents — **Strict (0.99)**, **Balanced
 (0.95)**, **Broad (0.80)** — and shows the analyst who moved it what changed: "3 entities merged,

@@ -38,6 +38,8 @@ import asyncpg
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from tests.conftest import default_claims, sign_token
+from tests.services.api.case_dataset import dataset_for, give_case_its_dataset, new_case
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
@@ -53,8 +55,6 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
-from tests.conftest import default_claims, sign_token
-from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 
 
 @pytest.fixture
@@ -205,7 +205,7 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_no_withheld_count(
 
     with TestClient(app) as client:
         # --- seed a working set -----------------------------------------
-        created = client.post("/v1/investigations", headers=headers)
+        created = client.post("/v1/investigations", headers=headers, json=new_case())
         assert created.status_code == 201, created.text
         investigation_id = created.json()["id"]
         _run(give_case_its_dataset(investigation_id, _UNIT))
@@ -276,7 +276,9 @@ def test_seed_expand_disconnect_reconnect_audit_cap_and_no_withheld_count(
         # --- the cap: limit_exceeded with all three options ---------------
         # A fresh investigation, seeded with only `hub` — clean headroom so
         # the breach is caused by *this* expand, not accumulated state.
-        breach_investigation = client.post("/v1/investigations", headers=headers).json()["id"]
+        breach_investigation = client.post(
+            "/v1/investigations", headers=headers, json=new_case()
+        ).json()["id"]
         _run(give_case_its_dataset(breach_investigation, _UNIT))
         client.post(
             f"/v1/investigations/{breach_investigation}/seed",
@@ -316,7 +318,7 @@ def test_a_principal_in_a_different_org_unit_is_denied(
     from services.api.app import app
 
     with TestClient(app) as client:
-        created = client.post("/v1/investigations", headers=creator_headers)
+        created = client.post("/v1/investigations", headers=creator_headers, json=new_case())
         assert created.status_code == 201, created.text
         investigation_id = created.json()["id"]
         _run(give_case_its_dataset(investigation_id, _UNIT))
@@ -351,7 +353,7 @@ def test_a_lower_clearance_principal_sharing_an_investigation_sees_the_filtered_
     from services.api.app import app
 
     with TestClient(app) as client:
-        created = client.post("/v1/investigations", headers=secret_headers)
+        created = client.post("/v1/investigations", headers=secret_headers, json=new_case())
         investigation_id = created.json()["id"]
         _run(give_case_its_dataset(investigation_id, _UNIT))
 

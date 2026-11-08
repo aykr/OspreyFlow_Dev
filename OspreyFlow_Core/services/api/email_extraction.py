@@ -49,6 +49,7 @@ from schemas.domain import (
     SourceRef,
 )
 
+from .dataset_scope import refuse_in_a_composite_case
 from .event_scope import CaseRecords, link_event_filter
 from .link_ids import as_stored
 from .link_notes import LinkNotFoundError
@@ -143,6 +144,7 @@ def _node_from_write(write: NodeWrite) -> Node:
         provenance=write.provenance,
         handling=write.handling,
         audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+        datasets=list(write.datasets),
     )
 
 
@@ -157,6 +159,7 @@ def _edge_from_write(write: EdgeWrite) -> Edge:
         provenance=write.provenance,
         handling=write.handling,
         audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+        datasets=list(write.datasets),
     )
 
 
@@ -275,21 +278,26 @@ class EmailExtractionService:
         using: Literal["recogniser", "model"] = "model",
     ) -> EmailExtractionResult:
         event = await self._event_on_link(investigation_id, edge_id, event_id, principal)
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the email is read
         now = datetime.now(UTC)
         node, edges = self._document_writes(event, principal, now)
         # Asked before the graph is written, so a full working set leaves nothing behind (rule 2).
         await self._working_set.ensure_room(
-            investigation_id, [node.id], [e.id for e in edges], principal
+            investigation_id,
+            [node.id],
+            [e.id for e in edges],
+            principal,
         )
 
         tx = await self._graph.begin_transaction()
         try:
-            await self._graph.upsert_nodes([node], tx)
+            (stored_id,) = await self._graph.upsert_nodes([node], tx)
             edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
         except Exception:
             await self._graph.rollback_transaction(tx)
             raise
         await self._graph.commit_transaction(tx)
+        node = node.model_copy(update={"id": stored_id})
         delta = await self._working_set.add_written(
             investigation_id,
             [_node_from_write(node)],
@@ -355,6 +363,7 @@ class EmailExtractionService:
             events.extend(page.events)
             if not page.events or len(events) >= page.total:
                 break
+        await refuse_in_a_composite_case()  # ADR-099 Amendment 15, once the link is read
 
         documents = [e for e in events if _has_text(e)]
         if events and not documents:
@@ -368,17 +377,21 @@ class EmailExtractionService:
             nodes.append(node)
             edges.extend(mentions)
         await self._working_set.ensure_room(
-            investigation_id, [n.id for n in nodes], [e.id for e in edges], principal
+            investigation_id,
+            [n.id for n in nodes],
+            [e.id for e in edges],
+            principal,
         )
         if nodes:
             tx = await self._graph.begin_transaction()
             try:
-                await self._graph.upsert_nodes(nodes, tx)
+                stored_ids = await self._graph.upsert_nodes(nodes, tx)
                 edges = as_stored(edges, await self._graph.upsert_edges(edges, tx))
             except Exception:
                 await self._graph.rollback_transaction(tx)
                 raise
             await self._graph.commit_transaction(tx)
+            nodes = [n.model_copy(update={"id": i}) for n, i in zip(nodes, stored_ids, strict=True)]
         delta = await self._working_set.add_written(
             investigation_id,
             [_node_from_write(n) for n in nodes],

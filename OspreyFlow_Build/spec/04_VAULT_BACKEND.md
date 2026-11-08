@@ -245,7 +245,11 @@ egress `none` (every dataset's setting until an administrator changes it, those 
 included), `contracted` (only a provider marked `privacy_contract: true`) or `any`. Material whose
 datasets are not given or not found is `none`. Each caller names the datasets on its request (Ask the
 case: the case's; a Document: its own; an extraction in a case: the case's), and the routing reads
-their egress from the `datasets` table (`model_routing.dataset_refusal`).
+their egress from the `datasets` table (`model_routing.dataset_refusal`). A case's analyst layer
+reads as the strictest of what its case otherwise reads, under that dataset's name
+(`datasets.as_its_case`; ADR-136 Amendment 1, `01_DOMAIN_MODEL.md` §2.2a); a
+composite made by the migration or a seed starts at the strictest of its members'
+(`datasets.compose_for_case`), so a migrated case may send exactly what it sent before.
 
 ## 5. Supporting services
 
@@ -256,7 +260,7 @@ their egress from the `datasets` table (`model_routing.dataset_refusal`).
 | Cache and queue | Valkey | BSD-3 | Working set, session, cache, local queue |
 | Cluster queue | NATS JetStream | Apache-2.0 | Job distribution on the cluster profile |
 | Identity | Keycloak | Apache-2.0 | OIDC, roles, clearance claims |
-| Relational store | PostgreSQL | PostgreSQL Licence | Investigations, judgements, audit, users, jobs; datasets and what each case reads (`datasets`, `investigation_datasets`, ADR-099); questions to the model (`case_questions`, ADR-098); link-type proposals and the overlay (ADR-090); saved patterns, watches, alerts and Studio recipes |
+| Relational store | PostgreSQL | PostgreSQL Licence | Investigations, judgements, audit, users, jobs; datasets, composites' members and what each case reads (`datasets`, `composite_members`, `investigation_datasets`, ADR-099 Amendments 12 and 13); questions to the model (`case_questions`, ADR-098); link-type proposals and the overlay (ADR-090); saved patterns, watches, alerts and Studio recipes |
 | Recogniser | Stanza 1.10.1, in the `ner` sidecar | Apache-2.0 | The fast named-entity pass, CPU (ADR-098) |
 | Tiles | PMTiles / TileServer GL | BSD-3 / MIT | Offline basemaps |
 | Observability | OpenTelemetry + Prometheus + Loki | Apache-2.0 | |
@@ -284,7 +288,12 @@ paths; pattern match; temporal filtering on a vertex-centric index; access filte
 principals of differing clearance; assert that an unauthorised principal cannot detect a
 filtered node's existence via path length, degree count or aggregate bucket; transaction
 rollback; schema migration up and down. A dataset section modelled on the handling one (ADR-099):
-another dataset's node and link match a graph where they never existed, through every read.
+another dataset's node and link match a graph where they never existed, through every read. Its
+analyst-layer case (ADR-143 decision 3, `graph_port/test_analyst_layer.py`): links written into case
+A's layer from a loaded node (to a drawn node, and to another loaded node) leave that node's degree,
+degree by type, most-connected rank, type counts, `expand` neighbourhood and paths **unchanged under
+case B** reading the same source, measured before and after the write; shown red by the same
+measurements differing with A's layer added to B's read set.
 `edges_among` (ADR-098); `get_nodes` and `get_edges` (ADR-124), each leaving out a hidden, superseded, reverted, other-dataset or absent id identically, a link with any unreadable
 end, and past one 1,000-id chunk; `type_counts` and `most_connected`, each checked right on
 its own and unchanged once hidden, other-dataset and reverted neighbours are added beside it
