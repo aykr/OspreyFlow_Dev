@@ -59,6 +59,9 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-110 Amendment 17 | A Studio load is stamped with its case's dataset and confined to it, by the scheduler and Run now alike, so two cases on two datasets never merge a link; Amendment 15's point 7 and its known limit restated as proven, and what is not driven (L1.2a Part A2) | studio | 2026-11-08 | written |
 | ADR-110 Amendment 18 | A link write names its type: a merge and a supersede change only their own type's link, and a link state read refuses an id two types hold, so a returning row's load stays unrevertable there (L1.2d, the orchestrator's settlement, 8 November) | studio | 2026-11-08 | written |
 | ADR-140 Amendment 10 | Phase 6's exit met: the reports pipeline built from scratch in guided mode by keys, an expert-mode edit, and a live walk under the lease (L1.2b, 8 November) | studio | 2026-11-08 | written |
+| ADR-142 Amendment 3 | Six lanes: glass split into admin and rules, a platform lane for maps and model administration, docs after the new screens run deployed; lanes on chosen accounts (studio, case, rules and platform on sol); two throwaway stacks, each leased (the owner's records of 8 November) | orchestrator | 2026-11-08 | reserved |
+| ADR-135 Amendment 2 | Model engines, each job's model and their keys are managed in the Glass's Admin place (keys write-only, never shown back, each change audited behind its own right); the CLI stays for headless and recovery use (the owner's ruling, 8 November) | platform | 2026-11-08 | reserved |
+| ADR-147 | Maps administration: providers and their keys in Admin under ADR-135 Amendment 2's rule, the local basemap's build and verify, prefetch areas on a schedule, and the analyst's basemap switch and place search (the owner's records of 8 November) | platform | 2026-11-08 | reserved |
 
 ## Baseline
 
