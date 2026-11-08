@@ -80,6 +80,9 @@ const EXTRA_STATES: Record<string, string[]> = {
     "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D",
     "board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)",
   ],
+  // ADR-143 decision 9 (L3.5): the Model tab's proposals block with its decision form, the form's
+  // error summary, and as the proposer.
+  "model-proposals-harness.html": ["open=accept", "open=decline-error", "as=alice"],
   // ADR-124 decision 2 as ADR-144 Amendment 2 changed it: the over-cap dialog with its Save as a view form.
   "view-over-cap-harness.html": ["state=form"],
   // ADR-099 Amendment 12: a new case's form on "Use an existing dataset", its dataset radios drawn.

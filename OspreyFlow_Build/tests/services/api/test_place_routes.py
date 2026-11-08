@@ -273,7 +273,12 @@ _IMPORT = re.compile(
 _EXPORTED = re.compile(r"^export\s+(?:(?:async\s+)?function\s+(\w+)|const\s+(\w+)\s*=)", re.M)
 _LITERAL = re.compile(r"`([^`]*)`|\"([^\"\n]*)\"")
 #: A file whose screen stands in another place than its folder says.
-MOVED = {"linktypes/ProposedTypes.tsx": "admin"}  # ADR-090 Amendment 5: Proposed types, in Admin
+MOVED = {
+    "linktypes/ProposedTypes.tsx": "admin",  # ADR-090 Amendment 5: Proposed types, in Admin
+    # ADR-143 decision 9 (L3.5): the Studio's Model tab decides a dataset's proposed link types.
+    "linktypes/ModelProposals.tsx": "ingest",
+    "linktypes/modelProposalsApi.ts": "ingest",
+}
 #: The workspace's path helpers, read as the prefixes they build (`ingest/api.ts`'s `studioCase`,
 #: `ingest/sources/api.ts`'s `dataset`).
 BASES = {"studioCase": "/v1/investigations/{x}", "dataset": "/v1/datasets/{x}"}

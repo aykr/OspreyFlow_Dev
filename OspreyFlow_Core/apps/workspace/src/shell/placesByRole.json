@@ -137,7 +137,11 @@
     "accept_types"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "accept_model_proposal",
+    "decline_model_proposal",
+    "list_model_proposals"
+   ]
   },
   "right:add_ingest_files": {
    "rights": [
@@ -390,16 +394,16 @@
    "rights": [
     "propose_link_type"
    ],
-   "places": [
-    "glass"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:propose_types": {
    "rights": [
     "propose_types"
    ],
-   "places": [],
+   "places": [
+    "glass"
+   ],
    "answered_hidden": []
   },
   "right:publish_pipelines": {

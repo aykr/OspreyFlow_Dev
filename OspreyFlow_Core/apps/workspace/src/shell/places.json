@@ -18,7 +18,7 @@
         "extract_files",
         "investigate",
         "manage_strength_influencers",
-        "propose_link_type",
+        "propose_types",
         "read_alert_queue",
         "read_data_feeds",
         "read_report_feed",

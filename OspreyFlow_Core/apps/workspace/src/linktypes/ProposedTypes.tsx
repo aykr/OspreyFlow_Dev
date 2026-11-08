@@ -44,6 +44,7 @@ const STATUS_WORDS: Record<LinkTypeProposal["status"], string> = {
   withdrawn: "Withdrawn",
   merged: "Merged",
   retired: "Retired",
+  accepted: "Accepted",
 };
 
 function title(p: LinkTypeProposal): string {

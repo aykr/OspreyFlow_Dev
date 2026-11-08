@@ -5,7 +5,7 @@
 // written out here because they are not domain models; they mirror the server's.
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
 
-export type ProposalStatus = "pending" | "promoted" | "rejected" | "withdrawn" | "merged" | "retired";
+export type ProposalStatus = "pending" | "promoted" | "rejected" | "withdrawn" | "merged" | "retired" | "accepted";
 
 export interface LinkTypeProposal {
   id: string;
@@ -47,51 +47,8 @@ export interface CaseLinkTypes {
   proposed: Set<string>;
 }
 
-export type LinkTypeErrorKind = "refused" | "not_found" | "forbidden" | "failed";
-
-export class LinkTypeError extends Error {
-  kind: LinkTypeErrorKind;
-  constructor(kind: LinkTypeErrorKind, message: string) {
-    super(message);
-    this.name = "LinkTypeError";
-    this.kind = kind;
-  }
-}
-
-async function refusal(response: Response): Promise<LinkTypeError> {
-  let body: { error?: string; detail?: string } = {};
-  try {
-    body = (await response.json()) as typeof body;
-  } catch {
-    // A non-JSON error body falls through to the generic kinds below.
-  }
-  if (body.error === "proposal_refused") {
-    return new LinkTypeError("refused", body.detail ?? "That cannot be done.");
-  }
-  if (body.error === "proposal_not_found" || response.status === 404) {
-    return new LinkTypeError("not_found", "That proposal is no longer there.");
-  }
-  if (response.status === 403) return new LinkTypeError("forbidden", "forbidden");
-  return new LinkTypeError("failed", `request failed: ${response.status}`);
-}
-
-async function send<T>(url: string, bearerToken: string, body?: unknown): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        Authorization: `Bearer ${bearerToken}`,
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-  } catch {
-    throw new LinkTypeError("failed", "The server could not be reached.");
-  }
-  if (!response.ok) throw await refusal(response);
-  return (await response.json()) as T;
-}
+export { LinkTypeError, type LinkTypeErrorKind } from "./http";
+import { LinkTypeError, send } from "./http";
 
 const caseUrl = (base: string, id: string) =>
   `${base}/v1/investigations/${encodeURIComponent(id)}/link-types`;
@@ -182,4 +139,30 @@ export function retireLinkType(
   reason: string,
 ): Promise<{ proposals: LinkTypeProposal[] }> {
   return send(`${apiBaseUrl}/v1/admin/link-types/retire`, bearerToken, { name, reason });
+}
+
+// --- ADR-143 decision 9 (L3.5): whether a case's links of a type can be promoted ------------------
+
+export interface Promotable {
+  name: string;
+  promotable: boolean;
+  /** Why not, in the Conduit's words; `null` when its links can be promoted. */
+  reason: string | null;
+}
+
+/** Whether links of these types can be promoted from the case into its dataset, and why not (the
+ * promotion sheet's question, L3.4). */
+export async function fetchPromotable(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  types: string[],
+): Promise<Promotable[]> {
+  const body = await send<{ types?: Promotable[] } | null>(`${caseUrl(apiBaseUrl, investigationId)}/promotable`, bearerToken, {
+    types,
+  });
+  if (!body || !Array.isArray(body.types)) {
+    throw new LinkTypeError("failed", "The server's answer was not a list of link types.");
+  }
+  return body.types;
 }

@@ -11,6 +11,7 @@ import { type CaseListing, listCases } from "../investigation/cases";
 import { PipelineStudio } from "./dag/PipelineStudio";
 import { RunsTab } from "./runs/RunsTab";
 import { caseForDataset, currentDataset, studioDatasets } from "./studio/datasets";
+import { ModelProposals } from "../linktypes/ModelProposals";
 import { ModelTab } from "./studio/ModelTab";
 import { ReadinessStrip } from "./studio/ReadinessStrip";
 import { SourcesTab } from "./studio/SourcesTab";
@@ -136,6 +137,7 @@ function Studio({
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
         {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
+        {place === "model" && datasetId && <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}><ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} /></div>}
         {place === "sources" && (
           <SourcesTab
             apiBaseUrl={apiBaseUrl}

@@ -314,11 +314,22 @@ The Ingest Studio's refusal of a probabilistic type is built (ADR-081 step D, `r
 `compose_ontology`) at start-up and after each proposal and decision. The types are the one thing a
 case reads beyond its datasets: they live in the OspreyFlow default dataset, which holds the types and
 only the types (`default.yaml` and every promoted type), is read by every case and is changed only by
-an administrator; it holds no nodes or links (ADR-099 Amendment 3 decision 1). A pending proposal
-belongs to the first dataset of the case it was proposed in, and is offered and drawn at once in every
-case reading that dataset and nowhere else (Amendment 3 decision 2); one made before that amendment
-that could not be placed keeps ADR-090's rule (its own case, and any case where one of its links is in
-view). A pending proposal is probabilistic. Each proposal's links are stored under a label of their own,
+an administrator; it holds no nodes or links (ADR-099 Amendment 3 decision 1). A proposal belongs to
+the source dataset of the case it was proposed in (never the case's analyst layer), and **is offered
+in that case alone until it is decided** (ADR-143 decision 9, ADR-090 Amendment 4, built at L3.5: no
+other case reading the same dataset is offered it, can withdraw it, or is told of it by a refused name
+or by the promotion check, rule 3; `test_analyst_link_types.py`'s
+`test_a_proposed_type_is_visible_only_in_its_own_case`). A holder of `accept_types` past the dataset's
+own gate decides it on the Ingest Studio's *1 Model* tab, never its proposer: **accepted**, it is a
+`link_type` extension of the dataset's draft domain model (`TargetModel`, §2.2b), and once that version
+is live it is offered in every case reading the dataset; **declined** (`rejected`), it is offered no
+more. **Its links can be promoted into the dataset only once it is accepted and its version live**
+(`LinkTypeService.promotion_refusals`, which L3.4's promotion sheet calls; until then they stay in the
+case's layer, and a declined type's stay there for good;
+`test_a_proposed_types_links_are_refused_promotion_until_accepted_and_live`). ADR-090's deployment-wide
+promotion by an administrator remains only for a proposal made before ADR-099 Amendment 3, which names
+no dataset and keeps ADR-090's rule (its own case, and any case where one of its links is in view); one
+that names a dataset is refused there. A pending proposal is probabilistic. Each proposal's links are stored under a label of their own,
 `<name>__<proposal id>`, declared as a `hidden` type so the graph store accepts them, and
 `storage_aliases` makes that label read as the name the links answer to: the proposal's own while
 pending, rejected, withdrawn or retired, the promoted name once promoted, merged or renamed. So no
