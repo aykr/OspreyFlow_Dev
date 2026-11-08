@@ -327,5 +327,7 @@ async def test_the_answer_just_asked_names_its_author_as_the_conversation_does()
         questions=_Questions(),  # type: ignore[arg-type]
         audit=_Audit(),  # type: ignore[arg-type]
         principal_names=_Names(),  # type: ignore[arg-type]
+        views=None,  # type: ignore[arg-type]  # asked in no view, so no view store is asked
+        working_set=None,  # type: ignore[arg-type]
     )
     assert got.author_name == "Demo Analyst"
