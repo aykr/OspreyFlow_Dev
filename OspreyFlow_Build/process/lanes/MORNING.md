@@ -216,6 +216,13 @@ New ones are added at the bottom as they happen.
     offline make test nor its leased run included those files. Fixed (tests only) on lane/rules, landing
     with L2.8d. Lesson for every lane's leased run: include each live file the change can reach.
 
+47. **Merged since the restart:** admin L2.4 part 2 (`a1d7f94`), rules L2.8c (`befcf56`), case L3.2 (`c3fc52f`),
+    studio L1.3 (`04a8cdf`), platform P1 (`b2fc5e2`), each after independent review rounds that each found a
+    real access or credential defect. Fresh sessions now run admin L2.5, rules L2.8d, case L3.2b, studio
+    L1.4 and platform P2. Rules' L2.8d is held by its review: the rule audit leaked the words the strict
+    ruling (b) withholds. **Main's Glass calls the branch routes L3.2 removed until L3.2b merges, which
+    must be before the single push.**
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
