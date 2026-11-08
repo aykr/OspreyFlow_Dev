@@ -28799,7 +28799,8 @@ questions on 8 November 2026, each by its recommended option (a):
 
 Review round 1 (8 November) brought the orchestrator's settlements that no row key, raw or hashed,
 travels in provenance, and that a subscription is by list id to a deployment-wide list. Both are in
-decisions 3 and 4.
+decisions 3 and 4. Review round 2 made a list deployment-wide by its own record only, put each
+source's raw rows under the load that read them, and had the gate check a Derive's `normalise`.
 
 **Decision.**
 
@@ -28813,19 +28814,20 @@ decisions 3 and 4.
    `staging` serialises byte for byte as before; `staging: []` is refused.
 2. **Every value-changing part of a step is a Knowledge Adapter with a golden file.** A key's
    `normalise`, and Derive's `normalise`, is a text adapter (`derive.text_adapters`): one column
-   in, one value of text out. A Derive names an operation from Derive's catalogue
+   in, one value of text out. The gate checks both. A Derive names an operation from Derive's catalogue
    (`knowledge_adapters/derive.py`): concat, split, substring, date_parse, arithmetic, case_when or
    normalise, the brief's list in §6 and no more. Its `split` is a part of what the `split`
    adapter gives. Each operation has a golden file that shows its refusals. A refusal names the
    cause, never the cell's value. A setting or a cell an operation cannot read rejects that row; it
-   never stops the run.
+   never stops the run. Arithmetic never rounds a sum, difference or product. It refuses one that
+   cannot be written exactly, and gives a quotient to 28 significant figures.
 3. **`source_refs` are the element's `provenance.sources`.** This replaces the brief's "the audit
    stub" (§6) and decision 11's wording; `AuditStub` is unchanged. `SourceRef` gains `load_id`, left
    out of what is stored when unset, so an element written outside staging is stored exactly as
    before. **No row key, raw or hashed, is carried** (rule 7). A key is low-entropy, so its hash is
    reversible, and a key is a source-system identifier. A staged row's refs are:
-   - for a source row: its table, `row <n>` and the load that read it, which the load's
-     `raw.parquet` (every source's rows) resolves on the server;
+   - for a source row: its table, `row <n>` and the load that read it. That load's
+     `raw.parquet` holds the row, so the ref resolves on the server;
    - for a list row: `reference_list:<name>@v<version>` and `row <n>`, with no load.
 
    Each row's key, the SHA-256 of its declared key columns (else of its whole row; a list row's, of
@@ -28839,13 +28841,15 @@ decisions 3 and 4.
    joined by `|`, as `split` reads it back in Map. Today's screening adapters
    (`knowledge_adapters.screening_lists`) carry no identifiers or programme, so those columns stay
    empty until L1.6's templates fill them; the parsed list's version and skipped count are not in
-   the table. A Lookup reads the dataset's own lists, and a **deployment-wide** screening list (its
-   id among those imported once for the deployment) that the dataset subscribes to **by id**.
+   the table. A Lookup reads the dataset's own lists, and a **deployment-wide** screening list
+   (imported once for the deployment; its own `dataset_id` is `deployment`, and only that makes it
+   deployment-wide) that the dataset subscribes to **by id**.
    Another dataset's list is never readable, whatever its kind or name, and is refused in the same
    words as one that does not exist.
 5. **Staged Parquet.** Each step's table is written to `<bucket>/loads/<load_id>/staged/<step>.parquet`,
    with its cells as text, its refs as `_refs`, and a list's kind, name, version and key column in
-   the file's metadata. Map reads the last table back from what was written. Test writes nothing and
+   the file's metadata. Each source's rows are written to the raw rows of the load that read them,
+   and only a staged run may tell `run_recipe` not to stage raw rows. Map reads the last table back from what was written. Test writes nothing and
    runs the same steps (`services/ingest/staged_run.py`), so Test and the load reject the same rows.
    A staging rejection is listed as *staging step <id> (<side> side, <source> row <n>): <cause>*,
    with nothing of the row in its sample.
@@ -28863,7 +28867,7 @@ decisions 3 and 4.
 | `tests/schemas/test_recipe_staging.py` | byte-for-byte serialisation; no expression under any key, a Derive's settings included; no row key on `SourceRef` |
 | `tests/ingest/test_staging_catalogue.py` | the gate; subscription by id to deployment lists only; a screening list round-trips through the catalogue and serves a Lookup; rule 8's adapters |
 | `tests/ingest/test_staged_run.py` | the phase's exit, offline: "Visits and contacts" without its expert steps, every element naming its source rows, Test and the load rejecting the same rows, no row key reaching an element or Test, the raw rows being the sources'; red with `source_refs` dropped at the join |
-| `tests/ingest/test_staged_provenance_live.py` | the Join's two sides and its list row stored by the real Map write and read back through the ArcadeDB adapter; a reader of another dataset reads none of it (rule 4); under lease studio on stack a |
+| `tests/ingest/test_staged_provenance_live.py` | the Join's two sides and its list row stored by the real Map write and read back through the ArcadeDB adapter; a reader of another dataset reads none of it, and a case reading one of an element's two datasets is sent none of its sources (rule 4; ADR-130 Amendment 2); run under a named lease (`L1.3_RED_RECORD.md`) |
 
 **Not in this step.** The drawers and the profiler on staged tables in the Map editor's left pane are
 phase 7b (L1.4), as are the Studio's save and publish of steps through this gate, the run route

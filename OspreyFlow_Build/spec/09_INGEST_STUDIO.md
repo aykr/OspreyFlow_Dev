@@ -546,8 +546,9 @@ an operation from **Derive's catalogue** (`knowledge_adapters/derive.py`):
   disagree about a cell;
 - `substring`;
 - `date_parse`: date order and zone declared;
-- `arithmetic`: add, subtract, multiply or divide two columns, or a column and a constant; a
-  result past 1E±100 is refused;
+- `arithmetic`: add, subtract, multiply or divide two columns, or a column and a constant. A sum,
+  difference or product is exact or refused, never rounded. A quotient is given to 28 significant
+  figures. A result past 1E±100 is refused;
 - `case_when`: declared values to declared results;
 - `normalise`: a text adapter, as above.
 
@@ -1182,10 +1183,11 @@ A recipe without `staging` is written exactly as before; `staging: []` is refuse
 - a step that reads a later step, or a table the pipeline does not have;
 - a step that feeds nothing (every step but the last must feed a later one);
 - a step whose `id` is a source's name;
-- a key normalised by anything but a text adapter (§4);
+- a key, or a Derive's `normalise`, read by anything but a text adapter (§4);
 - a Lookup of a list the dataset cannot read. A dataset reads its own lists, and a
-  **deployment-wide** screening list (one imported once for the deployment) that it subscribes to
-  **by the list's id**. Another dataset's list is never readable, whatever its kind or name. A
+  **deployment-wide** screening list (one imported once for the deployment, whose own `dataset_id`
+  is `deployment`) that it subscribes to **by the list's id**. Only the list's own record makes it
+  deployment-wide. Another dataset's list is never readable, whatever its kind or name. A
   refusal uses the same words as for a list that does not exist, and a name two readable lists
   share is refused too.
 
@@ -1194,7 +1196,8 @@ refuses both. The gate runs before every staged run and every Test, which refuse
 it fails; a list handed to a run under a name that is not its own is refused there too. No route
 saves or publishes staging steps yet: they arrive with the step drawers. Until then, publishing a
 recipe with steps is refused in words, and running one over a single source's rows
-(`run_recipe` or `dry_run_recipe` without its staged rows) is refused too.
+(`run_recipe` or `dry_run_recipe` without its staged rows) is refused too. Only a staged run may
+tell `run_recipe` not to stage raw rows.
 
 **What a run does with rows.** Nothing is dropped silently:
 
@@ -1211,8 +1214,9 @@ recipe with steps is refused in words, and running one over a single source's ro
 
 Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
 with its refs as a `_refs` column; this is the only place a row's key is kept. Map reads the last
-table back from what was written. The load's `raw.parquet` holds every source's rows as each
-source gave them. A staging rejection is listed in the load report as *staging step <id> (<side>
+table back from what was written. Each source's rows, with a blank cell empty, are the raw rows of
+**the load that read them**, `<bucket>/loads/<that load_id>/raw.parquet`. An element's ref
+(source, `row <n>`, `load_id`) therefore names a row of a file that exists. A staging rejection is listed in the load report as *staging step <id> (<side>
 side, <source> row <n>): <cause>*. Test and the load reject the same rows
 (`services/ingest/staged_run.py`). A staged load reports as *rows read* the rows its sources gave.
 It also counts the rows its steps staged and the bytes their Parquet took, for the run's metering.
@@ -1230,7 +1234,7 @@ It also counts the rows its steps staged and the bytes their Parquet took, for t
   and never guessed. Every staged row carries `source_refs` — each input row's identity and `load_id`
   — into the element Map writes, so every link still shows where it came from (ADR-140 decision 11).
   As built (Amendment 11), the refs are the element's `provenance.sources`, one `SourceRef` per input
-  row: the source's name, `row <n>` and its `load_id`, which the load's `raw.parquet` resolves on
+  row: the source's name, `row <n>` and its `load_id`, which that load's `raw.parquet` resolves on
   the server. **No row key, raw or hashed, is carried** (rule 7: a key is low-entropy, so a hash of it
   is reversible); keys stay in the staged Parquet. A Join's element names both sides. A Lookup's
   names the list row it took values from, as `reference_list:<name>@v<version>` with no load id. A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link marked
