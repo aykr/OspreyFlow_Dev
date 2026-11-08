@@ -103,7 +103,7 @@ async def _main(argv: list[str] | None = None) -> int:
     for alert_id in report.remarked:
         print(f"  {alert_id}")
     if not args.dry_run:
-        print(f"{report.cases_purged} superseded node(s) removed from the working sets holding one.")
+        print(f"{report.cases_purged} superseded node(s) removed from the working sets.")
     if report.unsafe:
         print(f"{len(report.unsafe)} alert(s) have no single safe marking and were left: "
               + ", ".join(report.unsafe))  # fmt: skip
