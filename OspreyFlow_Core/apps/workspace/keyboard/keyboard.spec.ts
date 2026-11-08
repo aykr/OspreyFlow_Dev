@@ -1078,6 +1078,44 @@ test("Delete takes the selected nodes out of the view, through a real DELETE", a
   registerCovered("CANVAS_ACTIONS", "delete-removes-selected-nodes");
 });
 
+test("in an opened view the canvas offers nothing that changes the case, and says so when asked by key (ADR-144 Amendment 2)", async ({
+  page,
+}) => {
+  const writes: string[] = [];
+  await page.route("**/*/investigations/*/**", async (route) => {
+    // Reads sent as POST are not writes: the pictures looked up and an expansion's preview counts.
+    const path = new URL(route.request().url()).pathname;
+    const read = route.request().method() === "GET" || /\/(pictures|expand\/preview)$/.test(path);
+    if (!read) writes.push(`${route.request().method()} ${path}`);
+    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/keyboard/harness.html?lens=1");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus(); // n0 selected
+  const bar = page.getByRole("toolbar", { name: "Selection" });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Save as a view" })).toBeVisible();
+  for (const name of ["Expand", "Remove from view", "Show links among these"]) {
+    await expect(bar.getByRole("button", { name })).toHaveCount(0);
+  }
+  for (const name of ["Clear view", "Add files", "Show links among all"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+  // A node's menu offers only what changes nothing: no link type to expand by, no mark, no files.
+  await page.keyboard.press("\\");
+  const menu = page.getByRole("menuitem");
+  await expect(menu.first()).toBeVisible();
+  const offered = await menu.allTextContents();
+  expect(offered.every((label) => /^Save selected \(1\) as a view/.test(label) || /Read full screen|View messages|Expand group/.test(label))).toBe(true);
+  await page.keyboard.press("Escape");
+  // Delete, asked by key, is said and not done.
+  await canvas.focus();
+  await page.keyboard.press("Delete");
+  await expect(page.getByText("This is a view: nothing in it changes the case. Go back to the case to change it.")).toBeVisible();
+  expect(writes).toEqual([]);
+  expect(await page.evaluate(() => window.__KEYBOARD__?.selection)).toEqual(["n0"]);
+});
+
 test("Clear view asks first, and clears only after Enter on the confirmation", async ({ page }) => {
   await page.goto("/keyboard/harness.html");
   let body: { node_ids: string[] } | null = null;

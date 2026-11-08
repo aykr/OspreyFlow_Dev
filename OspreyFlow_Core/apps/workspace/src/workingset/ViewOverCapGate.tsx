@@ -18,6 +18,10 @@ export interface ViewOverCapGateProps {
   investigationId: string;
   /** A filtered view was saved and opened (ADR-144): show it as the lens. */
   onViewOpened: (opened: CaseViewOpened) => void;
+  /** A view is open over the case (the read-only lens): the case's over-cap state is not the
+   * view's, so the gate draws nothing and holds no focus until the analyst goes back to the case,
+   * when it shows again if the case is still past the cap. */
+  lensOpen?: boolean;
 }
 
 /**
@@ -37,6 +41,7 @@ export function ViewOverCapGate({
   bearerToken,
   investigationId,
   onViewOpened,
+  lensOpen = false,
 }: ViewOverCapGateProps) {
   const viewOverCap = useStore(store, (s) => s.viewOverCap);
   const [dismissed, setDismissed] = useState(false);
@@ -46,7 +51,7 @@ export function ViewOverCapGate({
     if (dismissed) reopenRef.current?.focus();
   }, [dismissed]);
 
-  if (viewOverCap === null) return null;
+  if (viewOverCap === null || lensOpen) return null;
   if (dismissed) {
     return (
       <button

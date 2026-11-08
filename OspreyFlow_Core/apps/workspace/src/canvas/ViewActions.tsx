@@ -2,7 +2,9 @@ import { useState } from "react";
 
 export interface ViewActionsProps {
   nodeCount: number;
-  onClearAll: () => void;
+  /** Take everything off the case's canvas. Absent (in a view, which changes nothing on the case):
+   * not offered. */
+  onClearAll?: () => void;
   /** A link is selected, so it can be hidden from this view. */
   selectedLink?: boolean;
   /** How many links are hidden in this browser tab. */
@@ -50,6 +52,7 @@ export function ViewActions({
             Show links among all
           </button>
         )}
+        {onClearAll && (
         <button
           type="button"
           className="radial-menu__item"
@@ -58,12 +61,13 @@ export function ViewActions({
         >
           Clear view
         </button>
+        )}
       {onAddFiles && (
         <button type="button" className="radial-menu__item" onClick={onAddFiles}>
           Add files
         </button>
       )}
-      {confirming && nodeCount > 0 && (
+      {confirming && onClearAll && nodeCount > 0 && (
         <div
           role="alertdialog"
           aria-label="Clear the view"

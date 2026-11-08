@@ -2159,6 +2159,7 @@ export function App() {
             setViewsRead((n) => n + 1);
             showLens(opened);
           }}
+          lensOpen={lens !== null}
         />
       )}
       <Drawer open={exploreOpen} onClose={() => setExploreOpen(false)} title="Explore">

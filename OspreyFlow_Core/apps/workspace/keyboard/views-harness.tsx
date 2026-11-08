@@ -78,6 +78,16 @@ const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 const show = params.get("show");
 
+// `?asking=delete`: the panel drawn asking "Delete this view?", for the axe scan; no spec uses it.
+if (params.get("asking") === "delete") {
+  const ask = () => {
+    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Delete Alice\'s own"]');
+    if (button) button.click();
+    else requestAnimationFrame(ask);
+  };
+  requestAnimationFrame(ask);
+}
+
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
     {show === "lens" && (

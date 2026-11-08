@@ -363,6 +363,8 @@ if (!container) throw new Error("#root not found");
 // it, so a keyboard walkthrough can set a window by Set exact dates, run Select what is lit, and
 // save what it selected as a view, as App does. The timeline's own reads are answered by the spec.
 const wantsLit = new URLSearchParams(window.location.search).get("fixture") === "lit";
+// `?lens=1`: the canvas showing an opened view (ADR-144 Amendment 2, a read-only lens), as App draws it.
+const wantsLens = new URLSearchParams(window.location.search).get("lens") === "1";
 const litStore = createCrossFilterStore("http://keyboard-test.invalid", "unused", "keyboard-fixture");
 
 // `?judged=n1:2,n2:1` gives those nodes that many judgements, for the count drawn beside a node
@@ -452,6 +454,7 @@ createRoot(container).render(
       onViewMessages={(nodeId) => {
         window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
       }}
+      lens={wantsLens}
       onViewSaved={(view) => {
         window.__KEYBOARD__!.savedView = view.id;
       }}

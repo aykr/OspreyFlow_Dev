@@ -417,7 +417,6 @@ const LENS_MENU_ITEMS: ReadonlySet<string> = new Set([
   "read-full-screen",
   "view-messages",
   "expand-group",
-  "explain-cluster",
   "save-selected-as-view",
 ]);
 
@@ -646,6 +645,11 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // `pathError`'s own distinct-outcomes shape.
     // ADR-144 decision 4: the *Save as a view* form, open over the canvas.
     const [savingView, setSavingView] = useState(false);
+    // The form belongs to the selection it was opened for: cleared with it, it closes, and does not
+    // come back by itself at the next selection.
+    useEffect(() => {
+      if (selected.size === 0) setSavingView(false);
+    }, [selected]);
     const [actionError, setActionError] = useState<{
       x: number;
       y: number;
@@ -3424,13 +3428,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
             <ViewActions
               nodeCount={graph.order}
-              onClearAll={() => void removeNodeIds(graph.nodes())}
+              onClearAll={lens ? undefined : () => void removeNodeIds(graph.nodes())}
               selectedLink={selectedEdge !== null}
               hiddenLinkCount={hiddenEdges.size}
               onHideLink={hideSelectedLink}
               onShowHiddenLinks={() => setHiddenEdges(new Set())}
-              onAddFiles={bearerToken && investigationId ? () => setAddingFiles({}) : undefined}
-              onLinksAmongAll={bearerToken && investigationId ? () => void linksAmongOnCanvas(null) : undefined}
+              onAddFiles={bearerToken && investigationId && !lens ? () => setAddingFiles({}) : undefined}
+              onLinksAmongAll={bearerToken && investigationId && !lens ? () => void linksAmongOnCanvas(null) : undefined}
             />
             {/* ADR-115 E6: what last changed in the case, hidden below 1100px (DESIGN.md §5a). */}
             {lastChange && <span className="canvas-toolbar__note canvas-toolbar__last-change">{lastChange}</span>}
@@ -3690,7 +3694,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           />
           <ZoomControls onZoomIn={() => zoomBy("in")} onZoomOut={() => zoomBy("out")} onFit={fitToView} percent={zoomPercent} />
         </div>
-        {addingFiles && bearerToken && investigationId && (
+        {addingFiles && !lens && bearerToken && investigationId && (
           <div style={{ position: "absolute", zIndex: 20, top: "var(--sp-40)", right: "var(--sp-8)" }}>
             <AddFiles
               apiBaseUrl={apiBaseUrl}
