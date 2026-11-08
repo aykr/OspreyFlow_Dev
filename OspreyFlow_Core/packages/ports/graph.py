@@ -9,7 +9,6 @@ above this port may see it.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
@@ -93,31 +92,16 @@ class RestoredElements:
 
 @dataclass(frozen=True)
 class DatasetFootprint:
-    """What `GraphPort.dataset_footprints` says of one dataset: how many live nodes and links carry
-    it, the bytes of their stored properties (`stored_properties_size`) and their pictures' files
-    (`picture_size`). Numbers only."""
+    """What `GraphPort.dataset_footprints` says of one dataset, for one reader: how many live nodes
+    and links of it the reader may read, the size of their stored properties (the length of the
+    properties as the store renders them, counted in the store) and the file sizes of its pictures
+    (image Documents' `size_bytes`). Numbers only."""
 
     nodes: int = 0
     edges: int = 0
     properties_bytes: int = 0
-    #: The pictures' file sizes: each live image Document's `size_bytes` (a picture attached before
-    #: it was written counts 0).
+    #: A picture attached before `size_bytes` was written counts 0.
     picture_bytes: int = 0
-
-
-def picture_size(properties: Mapping[str, object]) -> int:
-    """An image Document's file size as stored with it (`size_bytes`); 0 for anything else, or a
-    picture attached before the size was written."""
-    size = properties.get("size_bytes")
-    if properties.get("media_kind") != "image" or not isinstance(size, int) or size < 0:
-        return 0
-    return size
-
-
-def stored_properties_size(properties: Mapping[str, object]) -> int:
-    """The bytes an element's properties take as stored: their compact, key-sorted JSON in UTF-8.
-    One definition, so every adapter measures alike (ADR-143 Amendment 2 decision 2)."""
-    return len(json.dumps(properties, sort_keys=True, separators=(",", ":"), default=str).encode())
 
 
 @dataclass(frozen=True)
@@ -471,17 +455,18 @@ class GraphPort(Protocol):
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats: ...
 
-    async def dataset_footprints(self, dataset_ids: Sequence[str]) -> dict[str, DatasetFootprint]:
-        """ADR-143 Amendment 2 decision 2: for each dataset asked, how many live (neither reverted
-        nor superseded) nodes and links carry it, the bytes of their stored properties, and the file
-        sizes of its pictures (image Documents' `size_bytes`). Every
-        id asked is answered, a dataset with nothing in it as zeros, so the answer says nothing of
-        which ids exist.
-
-        It takes **no principal and returns numbers only**: no id, type, label or property leaves
-        the adapter. It is the administrator's read of each case's analyst layer as counts (Admin ›
-        Datasets), which is all that decision shows them; the route's right is the gate. Counted in
-        the store (rule 3), never by reading the elements out to the Conduit."""
+    async def dataset_footprints(
+        self, dataset_ids: Sequence[str], principal: Principal
+    ) -> dict[str, DatasetFootprint]:
+        """ADR-143 Amendment 2 decision 2: for each dataset asked, what `principal` may read of it,
+        as counts: its live nodes and links, their properties' size and its pictures' file sizes.
+        Admin › Datasets reads each case's analyst layer this way, for cases the administrator is
+        no member of: the dataset is the one asked, in place of the principal's own, and
+        **everything else is the access step every read uses** (classification, handling code and
+        unit, reverted and superseded; a link counts only with both ends readable), so a hidden
+        item is in no count and no size (rule 3; ADR-124 decision 10). Counted in the store's own
+        query: no element, id, label, property or object ref leaves it. Every id asked is answered,
+        zeros for one with nothing readable, so the answer says nothing of which exist."""
         ...
 
     async def type_counts(self, principal: Principal) -> TypeCounts:

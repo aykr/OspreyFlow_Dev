@@ -47,8 +47,6 @@ from ports.graph import (
     StoredNode,
     SubgraphTooLarge,
     SuggestOptions,
-    picture_size,
-    stored_properties_size,
 )
 from schemas.compute import LinkStructure, StructureEdge, StructureNode
 from schemas.domain import (
@@ -1128,31 +1126,40 @@ class GraphArcadeDBAdapter:
             degree_by_type=degree_by_type,
         )
 
-    async def dataset_footprints(self, dataset_ids: Sequence[str]) -> dict[str, DatasetFootprint]:
-        """`GraphPort.dataset_footprints`: the structural step alone (no principal), narrowed to the
-        datasets asked. Each element's datasets and properties are read inside the adapter to be
-        counted and measured; only the totals are returned."""
+    async def dataset_footprints(
+        self, dataset_ids: Sequence[str], principal: Principal
+    ) -> dict[str, DatasetFootprint]:
+        """`GraphPort.dataset_footprints`: per dataset, one query for its nodes and one for its
+        links, each the access step (`gremlin_has_step`) with the dataset asked as the reader's
+        datasets, a link's ends held to the handling axes alone, so a link from a loaded node
+        counts. The counts and sums are the store's (`asString().length()`,
+        `select("size_bytes")`)."""
         asked = sorted(set(dataset_ids))
-        if not asked:
-            return {}
-        totals = {d: [0, 0, 0, 0] for d in asked}
-        live = self._access.gremlin_structural_step(datasets=asked)
-        for slot, step in ((0, "V"), (1, "E")):
-            rows = await self._client.gremlin(
-                f'g.{step}().{live}.elementMap("datasets","properties")'
+        ends = self._access.gremlin_has_step(principal.model_copy(update={"datasets": None}))
+        size = 'coalesce(unfold().values("properties").asString().length().sum(),constant(0))'
+        pictures = (
+            'coalesce(unfold().filter(values("properties").select("media_kind").is("image"))'
+            '.values("properties").select("size_bytes").sum(),constant(0))'
+        )
+
+        async def one(dataset: str) -> DatasetFootprint:
+            reader = principal.model_copy(update={"datasets": [dataset]})
+            has = self._access.gremlin_has_step(reader)
+            (nodes,) = await self._client.gremlin(
+                f'g.V().{has}.fold().project("n","b","p")'
+                f".by(count(local)).by({size}).by({pictures})"
             )
-            for row in rows:
-                properties = row.get("properties") or {}
-                size = stored_properties_size(properties)
-                picture = picture_size(properties) if slot == 0 else 0
-                for dataset in set(row.get("datasets") or []) & totals.keys():
-                    totals[dataset][slot] += 1
-                    totals[dataset][2] += size
-                    totals[dataset][3] += picture
-        return {
-            d: DatasetFootprint(nodes=n, edges=e, properties_bytes=b, picture_bytes=pic)
-            for d, (n, e, b, pic) in totals.items()
-        }
+            (edges,) = await self._client.gremlin(
+                f"g.E().{has}.where(outV().{ends}).where(inV().{ends})"
+                f'.fold().project("n","b").by(count(local)).by({size})'
+            )
+            return DatasetFootprint(
+                nodes=int(nodes["n"]), edges=int(edges["n"]),
+                properties_bytes=int(nodes["b"]) + int(edges["b"]), picture_bytes=int(nodes["p"]),
+            )  # fmt: skip
+
+        found = await asyncio.gather(*(one(d) for d in asked))
+        return dict(zip(asked, found, strict=True))
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         nodes_query, edges_query = render_type_counts_gremlin(self._access, principal)
