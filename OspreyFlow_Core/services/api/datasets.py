@@ -308,18 +308,17 @@ class ReadOnlyLayerError(Exception):
 
 
 class TouchesTheOriginalsWorkError(ReadOnlyLayerError):
-    """L3.2 item 3: in a case made from another before L3.2, which the upgrade has not yet turned
-    into a view, a write that names no dataset is stamped into the source the case reads, which
-    its original case reads too. Linking to, or merging into, a node of the original case's own
-    layer would put the original's analysts in front of work done somewhere else, through the
-    source. Refused before anything is written."""
+    """L3.2 item 3: a case made from another before L3.2, which the upgrade has not yet turned into
+    a view, writes nothing into the graph. Any write there lands in the source its original reads
+    too, and a merge into a node the writer cannot read would carry the original's work into it.
+    One refusal for every write and every reader (`dataset_scope.refuse_writing_in_an_unconverted_
+    case`), before anything is written."""
 
     def __init__(self) -> None:
         Exception.__init__(
             self,
-            "This case is waiting to become a view of the case it was made from. Nothing written "
-            "here may link to an item it cannot show you, or touch that case's own work: make the "
-            "change in that case.",
+            "This case is waiting to become a view of the case it was made from, and nothing can "
+            "be written in it until then: make the change in that case.",
         )
 
 

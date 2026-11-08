@@ -1,28 +1,25 @@
-"""A branch's unnamed writes never reach its original case through the source (L3.2 item 3, from
-L3.1's final review; ADR-144 Amendment 1).
+"""A case made from another before L3.2 writes nothing until the upgrade converts it (L3.2 item 3,
+from L3.1's final review; the lane review's round 2; ADR-144 Amendment 1).
 
-A case made from another before L3.2 reads its original's dataset and, for a reader holding a level
-on the original, the original's layer, until `scripts.migrate_branches_to_views` turns it into a
-view. A write naming no dataset there (an accepted proposal's `MENTIONED_IN`, an accepted
-extraction, a rule's `ALERTED_ON`) is stamped into the source, which the original reads too.
-Linking to, or merging into, a node of the original's own layer would put the original's analysts
-in front of work done somewhere else. The stamping graph's last word refuses it, before anything is
-written (`TouchesTheOriginalsWorkError`).
+Such a case reads its original's dataset and, for a reader holding a level on the original, the
+original's layer. A write there naming no dataset (an accepted proposal, an extraction, a rule's
+`ALERTED_ON`) would land in the source the original reads. A merge into a node the writer cannot
+read would carry the original's work into it, since the adapter unions a merged node's datasets.
+So every write there is refused, for every reader, in one set of words, before anything is written
+(`refuse_writing_in_an_unconverted_case`). The answer then says nothing about the layer (rule 3).
 
 What a mistake here would do, and the case that catches it:
 
-- an accepted proposal or email extraction in such a case linking its new node to a Document in
-  the original's layer, through the real `QuestionsService` and `EmailExtractionService`:
-  `test_an_accepted_proposal_touching_the_originals_work_is_refused`;
-- an `ALERTED_ON`, or any link naming no dataset, to a node of that layer:
-  `test_a_link_naming_no_dataset_to_the_originals_work_is_refused`;
-- a node naming no dataset merging into one of that layer (the source added to its datasets, so the
-  layer's node is in the source): `test_a_node_merging_into_the_originals_work_is_refused`;
-- each red with the check alone removed:
-  `test_each_write_lands_with_the_check_alone_removed`;
-- the check refusing what touches only the source:
-  `test_a_write_touching_only_the_source_goes_ahead`.
+- a link, a new node or a merge written there, by a reader holding a level on the original or not:
+  `test_every_unnamed_write_is_refused_alike_for_every_reader`;
+- an accept path writing its node before the link is refused (an orphan in the source):
+  `test_an_accept_writes_nothing_at_all`, with the early check alone removed in
+  `test_the_early_check_refuses_before_the_candidate_is_read`;
+- the refusal removed: `test_each_write_lands_with_the_refusal_removed`. Red at the real
+  adapter's merge, a node of the original's layer carried into the source, in
+  `test_unconverted_case_merge_live.py`.
 """
+
 
 from __future__ import annotations
 
@@ -30,10 +27,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from services.api import email_extraction as email_module
 from services.api import questions as questions_module
 from services.api.dataset_scope import (
-    DatasetStampingGraph,
     scope_to_case,
     set_case_datasets,
     stamping,
@@ -74,7 +69,8 @@ from .working_set.fakes import FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
 
 UNIT = ANALYST.org_unit
-#: The email the questions and the extraction read, an event of the case made from the original.
+
+
 _in_this_case = _event("ev-1").model_copy(update={"investigation_scope": "made"})
 
 
@@ -218,21 +214,6 @@ def _mention_of(inner: WritingGraph, accepted: Any) -> EdgeWrite:
     return mention
 
 
-ACCEPT_PATHS = pytest.mark.parametrize(
-    "accept", [_accept_a_proposal, _accept_from_an_email], ids=["question", "email"]
-)
-
-
-@ACCEPT_PATHS
-async def test_an_accepted_proposal_touching_the_originals_work_is_refused(accept: Any) -> None:
-    """Refused before anything is written: no node, no link."""
-    inner, outcome = await accept("layer")
-    assert isinstance(outcome, TouchesTheOriginalsWorkError)
-    assert "waiting to become a view" in str(outcome)
-    assert inner.committed_edges == []
-    assert not [n for n in inner.nodes.values() if n.type == "Person"]
-
-
 def _alerted_on(target: str) -> EdgeWrite:
     """As `rule_evaluation.write_alert_node` writes it: an `ALERTED_ON` naming no dataset, so the
     stamping graph gives it the case's first."""
@@ -253,8 +234,8 @@ def _alerted_on(target: str) -> EdgeWrite:
     )
 
 
-async def _write_link(to: str) -> tuple[WritingGraph, Exception | None]:
-    store, layer, _ = await _a_case_made_from_another()
+async def _write_link(to: str, holds: Any = _holds) -> tuple[WritingGraph, Exception | None]:
+    store, layer, _ = await _a_case_made_from_another(holds)
     inner = _held(
         WritingGraph(),
         node("theirs").model_copy(update={"datasets": [layer]}),
@@ -273,12 +254,6 @@ async def _write_link(to: str) -> tuple[WritingGraph, Exception | None]:
     return inner, None
 
 
-async def test_a_link_naming_no_dataset_to_the_originals_work_is_refused() -> None:
-    inner, refused = await _write_link("theirs")
-    assert refused is not None
-    assert inner.committed_edges == []
-
-
 def _merging(node_id: str) -> NodeWrite:
     held = node(node_id)
     return NodeWrite(
@@ -292,8 +267,8 @@ def _merging(node_id: str) -> NodeWrite:
     )
 
 
-async def _write_node(node_id: str) -> tuple[WritingGraph, Exception | None]:
-    store, layer, _ = await _a_case_made_from_another()
+async def _write_node(node_id: str, holds: Any = _holds) -> tuple[WritingGraph, Exception | None]:
+    store, layer, _ = await _a_case_made_from_another(holds)
     inner = _held(_ReadsBack(), node("theirs").model_copy(update={"datasets": [layer]}))
     graph = stamping(inner, registry=store)
     tx = await graph.begin_transaction()
@@ -306,127 +281,77 @@ async def _write_node(node_id: str) -> tuple[WritingGraph, Exception | None]:
     return inner, None
 
 
-async def test_a_node_merging_into_the_originals_work_is_refused() -> None:
-    inner, refused = await _write_node("theirs")
-    assert refused is not None
-    assert inner.nodes == {}
+READERS = pytest.mark.parametrize(
+    "holds", [_holds, _nobody_holds], ids=["holds-a-level", "stranger"]
+)
 
 
-async def test_a_write_touching_only_the_source_goes_ahead() -> None:
-    """The check refuses only what touches the original's layer: a proposal on a source Document,
-    an `ALERTED_ON` to a loaded node and a new node are written into the source, as before."""
-    for accept in (_accept_a_proposal, _accept_from_an_email):
-        inner, accepted = await accept("source")
-        assert not isinstance(accepted, Exception)
-        assert _mention_of(inner, accepted).datasets == ["src"]
-        assert {d for e in inner.committed_edges for d in e.datasets} == {"src"}
-    linked, refused = await _write_link("loaded")
-    assert refused is None and [e.datasets for e in linked.committed_edges] == [["src"]]
-    fresh, refused = await _write_node("new-one")
-    assert refused is None and fresh.nodes["new-one"].datasets == ["src"]
+@READERS
+async def test_every_unnamed_write_is_refused_alike_for_every_reader(holds: Any) -> None:
+    """A link to a loaded node, a link to the original's node, a new node, and a merge into the
+    original's node: each refused in the same words, nothing committed, whether or not the writer
+    reads the original's layer."""
+    outcomes = [
+        await _write_link("loaded", holds),
+        await _write_link("theirs", holds),
+        await _write_node("new-one", holds),
+        await _write_node("theirs", holds),
+    ]
+    words = set()
+    for inner, refused in outcomes:
+        assert isinstance(refused, TouchesTheOriginalsWorkError)
+        assert inner.committed_edges == [] and inner.nodes == {}
+        words.add(str(refused))
+    assert len(words) == 1 and "waiting to become a view" in words.pop()
 
 
-async def test_each_write_lands_with_the_check_alone_removed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Rule 15, red: the layer check removed (the stamping graph's last word, and the same helper
-    the two accept paths ask first), each write lands in the source, touching the original's
-    layer, where the original's analysts would see it."""
-
-    async def allowed(self: Any, node_ids: Any, **_: Any) -> None:
-        return None
-
-    async def unchecked(graph: Any, node_ids: Any, **_: Any) -> None:
-        return None
-
-    monkeypatch.setattr(DatasetStampingGraph, "_refuse_touching_a_read_only_layer", allowed)
-    monkeypatch.setattr(questions_module, "refuse_touching_a_read_only_layer", unchecked)
-    monkeypatch.setattr(email_module, "refuse_touching_a_read_only_layer", unchecked)
-    for accept in (_accept_a_proposal, _accept_from_an_email):
-        inner, accepted = await accept("layer")
-        assert not isinstance(accepted, Exception)
-        mention = _mention_of(inner, accepted)
-        assert mention.datasets == ["src"] and mention.target == email_document_id("ev-1")
-    linked, refused = await _write_link("theirs")
-    assert refused is None and linked.committed_edges[0].target == "theirs"
-    merged, refused = await _write_node("theirs")
-    assert refused is None and merged.nodes["theirs"].datasets == ["src"]
-
-
-# --- a member holding no level on the original (the lane review's blocker 2, rule 3) -----------
-
-
-async def _a_strangers_link(to: str) -> Exception | None:
-    store, layer, _ = await _a_case_made_from_another(_nobody_holds)
-    inner = _held(
-        _ReadsBack(),
-        node("theirs").model_copy(update={"datasets": [layer]}),
-        node("loaded").model_copy(update={"datasets": ["src"]}),
-    )
-    graph = stamping(inner, registry=store)
-    tx = await graph.begin_transaction()
-    try:
-        await graph.upsert_nodes([_merging("alert-1")], tx)
-        await graph.upsert_edges([_alerted_on(to)], tx)
-    except TouchesTheOriginalsWorkError as refused:
-        await graph.rollback_transaction(tx)
-        return refused
-    await graph.rollback_transaction(tx)
-    return None
-
-
-async def test_a_stranger_is_answered_alike_for_the_originals_node_and_a_missing_one() -> None:
-    """A member of the made case alone reads none of the original's layer. A link to its node and
-    a link to an id nobody holds are refused in the same words, so the answer says nothing about
-    the layer; a link to a node they read goes ahead."""
-    theirs, missing = await _a_strangers_link("theirs"), await _a_strangers_link("never-held")
-    assert theirs is not None and missing is not None and str(theirs) == str(missing)
-    assert await _a_strangers_link("loaded") is None
-
-
-async def test_a_document_the_stranger_reads_in_the_source_is_not_refused() -> None:
-    """A Document in the source and in the original's layer is read by the stranger through the
-    source: accepting a proposal on it goes ahead, as it does on any source Document, so the
-    answer cannot tell them the original's analysts also hold it."""
-    inner, accepted = await _accept_a_proposal("both", _nobody_holds)
-    assert not isinstance(accepted, Exception)
-    assert _mention_of(inner, accepted).datasets == ["src"]
-
-
-async def test_the_stranger_check_fails_with_the_layer_read_whatever_they_hold(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Rule 15, red: the check as it was, looking in the original's layer as the writer whatever
-    they hold there, refuses the stranger on the shared Document: the leak the review found."""
-    from services.api import dataset_scope
-
-    async def as_it_was(graph: Any, node_ids: Any, **_: Any) -> None:
-        scope = dataset_scope._CASE_SCOPE.get()
-        layer = dataset_scope._READ_ONLY_LAYER.get()
-        if layer is None or scope is None:
-            return
-        in_the_layer = scope[2].model_copy(update={"datasets": [layer]})
-        if await graph.get_nodes(sorted(set(node_ids)), in_the_layer):
-            raise TouchesTheOriginalsWorkError
-
-    monkeypatch.setattr(dataset_scope, "refuse_touching_a_read_only_layer", as_it_was)
-    monkeypatch.setattr(questions_module, "refuse_touching_a_read_only_layer", as_it_was)
-    _, accepted = await _accept_a_proposal("both", _nobody_holds)
-    assert isinstance(accepted, TouchesTheOriginalsWorkError)
-
-
-async def test_without_the_early_check_a_proposal_leaves_an_orphan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Rule 15 for the early check alone: with only the stamping graph's last word left, the
-    question accept commits its Person before the link is refused, an orphan in the source with
-    the candidate marked accepted, which is why the accept paths ask first."""
-
-    async def unchecked(graph: Any, node_ids: Any, **_: Any) -> None:
-        return None
-
-    monkeypatch.setattr(questions_module, "refuse_touching_a_read_only_layer", unchecked)
-    inner, outcome = await _accept_a_proposal("layer")
+@pytest.mark.parametrize(
+    "accept", [_accept_a_proposal, _accept_from_an_email], ids=["question", "email"]
+)
+@pytest.mark.parametrize("document_in", ["source", "layer"])
+async def test_an_accept_writes_nothing_at_all(accept: Any, document_in: str) -> None:
+    inner, outcome = await accept(document_in)
     assert isinstance(outcome, TouchesTheOriginalsWorkError)
     assert inner.committed_edges == []
-    assert [n.datasets for n in inner.nodes.values() if n.type == "Person"] == [["src"]]
+    assert not [n for n in inner.nodes.values() if n.type == "Person"]
+
+
+async def test_each_write_lands_with_the_refusal_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rule 15, red: the refusal removed (the stamping graph's last word and the helper the accept
+    paths ask first), a stranger's merge into the original's node is written into the source, and
+    a link to the original's node lands too."""
+    from services.api import dataset_scope
+
+    async def allowed() -> None:
+        return None
+
+    monkeypatch.setattr(dataset_scope, "refuse_writing_in_an_unconverted_case", allowed)
+    merged, refused = await _write_node("theirs", _nobody_holds)
+    assert refused is None and merged.nodes["theirs"].datasets == ["src"]
+    linked, refused = await _write_link("theirs", _nobody_holds)
+    assert refused is None and linked.committed_edges[0].target == "theirs"
+
+
+async def test_the_early_check_refuses_before_the_candidate_is_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15 for the early check alone: removed, the question accept reaches `accept_candidate`,
+    which the stamping graph's last word then refuses; with it, the candidate is never read."""
+    from services.api import review
+
+    async def unchecked() -> None:
+        return None
+
+    monkeypatch.setattr(questions_module, "refuse_writing_in_an_unconverted_case", unchecked)
+    reviewed: list[str] = []
+    real = review.accept_candidate
+
+    async def counted(*args: Any, **kwargs: Any) -> Any:
+        reviewed.append("asked")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(questions_module, "accept_candidate", counted)
+    _, outcome = await _accept_a_proposal("source")
+    assert isinstance(outcome, TouchesTheOriginalsWorkError)
+    assert reviewed == ["asked"]  # with the early check, the candidate is never reached
+

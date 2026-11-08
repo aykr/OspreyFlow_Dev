@@ -1,7 +1,7 @@
-"""A case made from another since L3.1 (a branch, in the words of the time), until the upgrade turns it
-into a view, reads its original case's layer and writes nothing into it (ADR-144 Amendment 1
-decision 2). No route makes one since L3.2; `unconverted.made_before_l3_2` makes one as the data
-holds it.
+"""A case made from another since L3.1 (a branch, in the words of the time), until the upgrade
+turns it into a view, reads its original case's layer and writes nothing into it (ADR-144
+Amendment 1 decision 2). No route makes one since L3.2; `unconverted.made_before_l3_2` makes one
+as the data holds it.
 
 What a mistake here would do, and the case that catches it:
 
@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from services.api import dataset_scope
 from services.api.dataset_scope import (
     DatasetStampingGraph,
     analyst_writes_into,
@@ -47,6 +48,10 @@ from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME
 
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+
+
+async def _nothing() -> None:
+    return None
 
 
 @pytest.fixture(autouse=True)
@@ -120,6 +125,9 @@ async def test_the_branch_check_fails_with_it_alone_removed(
         return None
 
     monkeypatch.setattr(DatasetStampingGraph, "_refuse_into_a_read_only_layer", allowed)
+    # The case writes nothing at all since L3.2's round 2; that refusal is planted out too, so this
+    # shows the layer's own check alone.
+    monkeypatch.setattr(dataset_scope, "refuse_writing_in_an_unconverted_case", _nothing)
     store, layer, _ = await _in_a_branch()
     inner = await _write_into(layer, store)
     assert inner.nodes["p9"].datasets == [layer]
@@ -144,6 +152,9 @@ async def test_a_correction_of_that_layer_goes_through_with_the_check_alone_remo
         return None
 
     monkeypatch.setattr(DatasetStampingGraph, "_refuse_into_a_read_only_layer", allowed)
+    # The case writes nothing at all since L3.2's round 2; that refusal is planted out too, so this
+    # shows the layer's own check alone.
+    monkeypatch.setattr(dataset_scope, "refuse_writing_in_an_unconverted_case", _nothing)
     store, layer, _ = await _in_a_branch()
     theirs = _member_node(ProvenanceState.INFERRED, "theirs").model_copy(
         update={"datasets": [layer]}

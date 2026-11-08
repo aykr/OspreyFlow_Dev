@@ -48,7 +48,7 @@ from schemas.domain import (
 )
 from schemas.model import TranscribeRequest, VisionRequest
 
-from .dataset_scope import refuse_in_a_composite_case, refuse_touching_a_read_only_layer
+from .dataset_scope import refuse_in_a_composite_case, refuse_writing_in_an_unconverted_case
 from .email_extraction import MENTIONED_IN, _edge_from_write, _node_from_write
 from .link_ids import as_stored
 from .review import (
@@ -424,8 +424,8 @@ class DocumentContentService:
             [f"accepting:{candidate_id}:mention"],
             principal,
         )
-        # L3.2 item 3: the link would touch the original case's work; refused before the node.
-        await refuse_touching_a_read_only_layer(self._graph, [document_id])
+        # L3.2 item 3: a case not yet converted writes nothing; refused before the node.
+        await refuse_writing_in_an_unconverted_case()
         node_id = await accept_candidate(self._candidates, self._graph, candidate_id, principal)
         now = datetime.now(UTC)
         mention = EdgeWrite(

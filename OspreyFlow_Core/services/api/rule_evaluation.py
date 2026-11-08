@@ -534,6 +534,11 @@ async def _alert_datasets(graph: GraphPort, scheme: HandlingScheme, finding: Fin
     - Otherwise nothing is named, and the stamping graph places them in the case's dataset."""
     if await reads_a_composite():
         return await analyst_writes_into()
+    if read_only_layer() is not None:
+        # A case made from another and not yet converted writes nothing (L3.2 item 3, the
+        # review's round 2): its alert is withheld, its queue row raised, as for its original's
+        # layer before.
+        raise _AlertInAReadOnlyLayer
     layers = {layer for layer in (analyst_layer(), read_only_layer()) if layer is not None}
     if not layers:
         return []

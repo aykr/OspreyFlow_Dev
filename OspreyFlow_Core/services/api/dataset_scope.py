@@ -38,7 +38,7 @@ source as before.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
@@ -379,30 +379,16 @@ def _named(writes: Sequence[NodeWrite] | Sequence[EdgeWrite]) -> set[str]:
     return {d for w in writes for d in w.datasets}
 
 
-async def refuse_touching_a_read_only_layer(
-    graph: GraphPort, node_ids: Iterable[str], *, links_to: bool = True
-) -> None:
-    """L3.2 item 3: in a case the upgrade has not yet turned into a view (one made from another
-    before L3.2, which reads its original's layer), no write links to, or merges into, a node of
-    the original case's layer (`TouchesTheOriginalsWorkError`). The stamping graph asks it of every
-    write as its last word; a service whose acceptance writes in two steps (a node, then its link
-    to a Document) asks it first, so nothing is written at all.
-
-    Decided only by what the writer reads, as their own scoped principal: a node they read only
-    through the original's layer is refused, and, for a link, so is an end they cannot read at all,
-    which they could not have chosen from what they see, whether it is hidden or does not exist.
-    A member holding no level on the original reads none of its layer (`scope_to_case`), so the
-    answer they get says nothing about it (rule 3). A node they cannot read is not refused as a
-    merge (`links_to=False`): new nodes have ids nobody reads yet."""
-    read_only = _READ_ONLY_LAYER.get()
-    scope = _CASE_SCOPE.get()
-    wanted = sorted(set(node_ids))
-    if read_only is None or scope is None or not wanted:
-        return
-    seen = {n.id: n for n in await graph.get_nodes(wanted, scope[2])}
-    if links_to and len(seen) < len(wanted):
-        raise TouchesTheOriginalsWorkError
-    if any(set(node.datasets) <= {read_only} for node in seen.values()):
+async def refuse_writing_in_an_unconverted_case() -> None:
+    """L3.2 item 3, as the lane review's round 2 settled it: a case made from another before L3.2
+    and not yet turned into a view by the upgrade writes nothing at all into the graph
+    (`TouchesTheOriginalsWorkError`). It reads its original's dataset and, for a reader holding a
+    level on the original, its layer; any write there would land in the source the original reads,
+    and a merge into a node the writer cannot read would carry the original's work into it. One
+    refusal for every write, every reader and every id, so it says nothing about the layer
+    (rule 3). The stamping graph says it as its last word; the accept paths that write in two
+    steps ask it first, so nothing is written at all."""
+    if _READ_ONLY_LAYER.get() is not None:
         raise TouchesTheOriginalsWorkError
 
 
@@ -428,9 +414,6 @@ class DatasetStampingGraph:
         self._confirmed: set[str] = set()
         #: Called after every write the store accepted (ADR-100 Amendment 3: kept figures cleared).
         self._after_write: list[Callable[[], Awaitable[None]]] = []
-        #: The nodes each open transaction has written, so a link to one of them in the same
-        #: transaction is not taken for a link to a node its writer cannot read (L3.2 item 3).
-        self._written_in: dict[Any, set[str]] = {}
 
     def after_write(self, hook: Callable[[], Awaitable[None]]) -> None:
         self._after_write.append(hook)
@@ -485,19 +468,7 @@ class DatasetStampingGraph:
         if read_only is not None and read_only in datasets:
             raise ReadOnlyLayerError
 
-    async def _refuse_touching_a_read_only_layer(
-        self, node_ids: set[str], *, links_to: bool = True
-    ) -> None:
-        if self._dataset is None:
-            await refuse_touching_a_read_only_layer(self._inner, node_ids, links_to=links_to)
 
-    async def commit_transaction(self, tx: Any) -> None:
-        self._written_in.pop(tx, None)
-        await self._inner.commit_transaction(tx)
-
-    async def rollback_transaction(self, tx: Any) -> None:
-        self._written_in.pop(tx, None)
-        await self._inner.rollback_transaction(tx)
 
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
@@ -505,6 +476,7 @@ class DatasetStampingGraph:
         case or not (the Studio reaches a dataset with no case). Before anything is written."""
         if self._dataset is not None:
             return
+        await refuse_writing_in_an_unconverted_case()  # L3.2 item 3: every write, before the rest
         await self._refuse_into_a_read_only_layer(datasets)
         layer = analyst_layer()
         composite = await _composite_read()
@@ -517,11 +489,6 @@ class DatasetStampingGraph:
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: Any) -> list[NodeId]:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
-            await self._refuse_touching_a_read_only_layer(
-                {n.id for n in stamped}, links_to=False
-            )
-            self._written_in.setdefault(tx, set()).update(n.id for n in stamped)
         await self._checked(stamped)
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
@@ -530,11 +497,6 @@ class DatasetStampingGraph:
     async def upsert_edges(self, edges: Sequence[EdgeWrite], tx: Any) -> list[str]:
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
-            await self._refuse_touching_a_read_only_layer(
-                {end for e in stamped for end in (e.source, e.target)}
-                - self._written_in.get(tx, set())
-            )
         await self._checked(stamped)
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
@@ -643,12 +605,6 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         inner: Any = self.inner
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
-        if _READ_ONLY_LAYER.get() is not None:  # only a case made from another reads one
-            # A bulk load's nodes are written outside any transaction this graph sees, so only a
-            # node read through the original's layer alone is refused here.
-            await self._refuse_touching_a_read_only_layer(
-                {end for e in stamped for end in (e.source, e.target)}, links_to=False
-            )
         await self._checked(stamped)
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
