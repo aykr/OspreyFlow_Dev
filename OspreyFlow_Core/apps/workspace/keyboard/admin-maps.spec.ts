@@ -66,7 +66,7 @@ test("a provider's key is removed by keyboard", async ({ page }) => {
 });
 
 test("the map's default is chosen by keyboard", async ({ page }) => {
-  await press(page, "Open the map on Hosted tiles");
+  await press(page, "Make the default: Hosted tiles");
   await expect(page.getByRole("status")).toContainText("The map now opens on Hosted tiles");
   expect(await asked(page)).toContain("PUT /v1/admin/maps/default");
   registerCovered(REGISTRY, "make-a-map-provider-the-default-by-keyboard");

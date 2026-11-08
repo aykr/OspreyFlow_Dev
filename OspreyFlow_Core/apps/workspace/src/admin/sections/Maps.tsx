@@ -466,7 +466,7 @@ export function Maps({ api }: { api: MapsApi }) {
                       <td>{row.state}</td>
                       <td className="admin-maps-actions">
                         {!isDefault && (
-                          <Button aria-label={`Open the map on ${p.label}`} onClick={() => act(setMapDefault(api, p.id), `The map now opens on ${p.label}.`)}>
+                          <Button aria-label={`Make the default: ${p.label}`} onClick={() => act(setMapDefault(api, p.id), `The map now opens on ${p.label}.`)}>
                             Make the default
                           </Button>
                         )}
@@ -656,9 +656,7 @@ export function Maps({ api }: { api: MapsApi }) {
               />
             ) : (
               fetchable.length > 0 && (
-                <Button aria-label="Add a prefetch area" onClick={() => setOpen({ kind: "area" })}>
-                  Add an area
-                </Button>
+                <Button onClick={() => setOpen({ kind: "area" })}>Add a prefetch area</Button>
               )
             )}
             <div className="admin-maps-actions">

@@ -123,7 +123,7 @@ const opened = params.get("open");
 if (opened) {
   const name = opened === "add" ? "Add a provider" : opened === "area" ? "Add a prefetch area" : "Enter key for Corporate aerial";
   for (let i = 0; i < 40; i++) {
-    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name);
+    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.getAttribute("aria-label") ?? b.textContent) === name);
     if (button) {
       button.click();
       break;

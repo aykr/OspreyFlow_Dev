@@ -92,3 +92,11 @@ was not built: its other stages fetch packages.
 Platform lease on stack a, taken about 21:56:40 UTC, released 21:57:48 UTC: `test_route_rights.py` 4 passed
 (P2's `models_admin_limits_route` and `models_admin_usage_route` and the eleven Maps routes in
 `ROUTE_RIGHTS`); with `maps_admin_prefetch_route`'s entry removed, 1 failed ("in the app, not the table").
+
+## Accessibility, `a11y/every-harness.spec.ts` on `maps-harness.html`
+
+The first scan found two button names not containing their visible text (2.5.3, `label-content-name-mismatch`:
+"Make the default" named "Open the map on …", "Add an area" named "Add a prefetch area"), in the dark,
+light and GOV.UK themes: 15 failed. Fixed in the names (and the keyboard spec's); the harness's `open=area`
+then matched the button by its text, so the area form is scanned open: 20 passed (five states, three themes,
+and 2.5.3's own check per state).
