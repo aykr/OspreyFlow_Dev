@@ -81,9 +81,6 @@ from harness.render import (
     BUILD_CONTEXT_FROM_OUTPUT_DIR,
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
-    GATEWAY_DB_PASSWORD,
-    GATEWAY_MASTER,
-    GATEWAY_SALT,
     REPO_ROOT,
     SECRETS_FILE,
     build_context_for,
@@ -153,10 +150,12 @@ def gateway_secret_lines() -> str:
     3), minted here on every render and then replaced by the values the deployment already holds
     (`keep_existing_secrets`), so each is minted once: a different encryption key would silently
     drop every key the gateway holds (measured)."""
+    # The names written out, as `harness.render` declares them (GATEWAY_MASTER, GATEWAY_SALT,
+    # GATEWAY_DB_PASSWORD): `test_keycloak_persisted.py` reads every minted name from this file.
     return (
-        f"{GATEWAY_MASTER}=sk-{generate_client_secret()}\n"
-        f"{GATEWAY_SALT}={generate_client_secret()}\n"
-        f"{GATEWAY_DB_PASSWORD}={generate_client_secret()}\n"
+        f"OSPREY_LITELLM_MASTER_SECRET={'sk-' + generate_client_secret()}\n"
+        f"OSPREY_LITELLM_SALT_SECRET={generate_client_secret()}\n"
+        f"OSPREY_LITELLM_DB_PASSWORD={generate_client_secret()}\n"
     )
 
 

@@ -184,6 +184,10 @@ def _minted(config: OspreyConfig, environ: Mapping[str, str]) -> dict[str, str]:
         "OSPREY_ARCADEDB_PASSWORD": arcadedb,
         "ARCADEDB_ROOT_PASSWORD": arcadedb,
         "OSPREY_ARCADEDB_CLUSTER_TOKEN": generate_client_secret(),
+        # ADR-135 Amendment 2 decision 3: the gateway's database, its master and encryption keys.
+        "OSPREY_LITELLM_MASTER_SECRET": f"sk-{generate_client_secret()}",
+        "OSPREY_LITELLM_SALT_SECRET": generate_client_secret(),
+        "OSPREY_LITELLM_DB_PASSWORD": generate_client_secret(),
     }
     minted.update(_pairs(reporting_secrets(config) + analytics_secret_lines(config)))
     minted.update(

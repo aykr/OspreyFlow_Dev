@@ -178,15 +178,16 @@ def test_models_key_for_a_provider_enabled_nowhere_still_says_how_to_enable_it(
     assert "install" not in err
 
 
-def test_models_key_and_remove_key_leave_deployment_env_600(rig: Rig) -> None:
+def test_models_key_and_remove_key_never_write_deployment_env(rig: Rig) -> None:
+    """ADR-135 Amendment 2 decision 8 (superseding ADR-137 decision 2 for these verbs): the key goes
+    to the gateway through the Conduit's key path, so `deployment.env` is neither written nor
+    re-moded."""
     env_file = _installed_with(rig, GEMINI, GEMINI)
-    env_file.chmod(0o644)
+    before = (env_file.read_bytes(), stat.S_IMODE(env_file.stat().st_mode))
     rig.env["OSPREY_MODEL_KEY_GEMINI"] = GEMINI_KEY
     assert rig("models", "key", "gemini") == 0
-    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
-    env_file.chmod(0o644)
     assert rig("models", "remove-key", "gemini") == 0
-    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+    assert (env_file.read_bytes(), stat.S_IMODE(env_file.stat().st_mode)) == before
 
 
 if sys.platform == "win32":  # pragma: no cover - modes are POSIX

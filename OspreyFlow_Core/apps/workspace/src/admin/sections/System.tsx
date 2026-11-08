@@ -144,10 +144,11 @@ function OwnersMayBe({ api }: { api: AdminApi }) {
 /** Each model engine (ADR-135 decision 5): its models per role, the roles it is the default for,
  * whether its key is present — Yes or No — and (ADR-136 decision 1) whether it is under a privacy
  * contract, with the agreement's reference. Only the named fields are read, so nothing else the
- * response might carry, a key least of all, reaches the page. Keys are set on the host with
- * `ospreyflow models key`, and the mark in `osprey.yaml`, never here. */
+ * response might carry, a key least of all, reaches the page. A summary: since ADR-135 Amendment 2
+ * engines, defaults and keys are changed in Admin › Models or with `ospreyflow models`, never here. */
 function EnginesTable({ engines }: { engines: EngineStatus[] }) {
   return (
+    <>
     <table className="table" aria-label="Engines">
       <thead>
         <tr>
@@ -174,6 +175,11 @@ function EnginesTable({ engines }: { engines: EngineStatus[] }) {
         ))}
       </tbody>
     </table>
+    <p className="label" style={{ margin: 0 }}>
+      Engines, each job&apos;s default and their keys are changed in Admin › Models, or with ospreyflow models on
+      the deployment&apos;s host.
+    </p>
+    </>
   );
 }
 

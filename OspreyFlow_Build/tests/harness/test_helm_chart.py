@@ -82,7 +82,9 @@ def test_the_chart_holds_no_secret(manifests: list[dict[str, Any]]) -> None:
                           *template["spec"]["containers"]]:  # fmt: skip
             for entry in container.get("env", []):
                 if re.search("(PASSWORD|SECRET|_TOKEN)$", entry["name"]):
-                    assert "value" not in entry or "$(" in entry["value"], entry
+                    # An empty value is the blank that keeps a secret from a workload reading the
+                    # whole Secret (ADR-135 Amendment 2 decision 3), never a secret.
+                    assert "value" not in entry or entry["value"] == "" or "$(" in entry["value"], entry
 
 
 def test_nothing_but_the_proxy_is_published(manifests: list[dict[str, Any]]) -> None:
