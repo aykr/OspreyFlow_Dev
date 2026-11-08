@@ -29,23 +29,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from conduit_common.identity import new_id
 from fastapi.testclient import TestClient
-from ontology.handling import load_uk_le_scheme
-from schemas.analytics import CountedHandling, TrendRequest, TrendResult
-from schemas.domain import (
-    AuditStub,
-    EdgeTypeDef,
-    Handling,
-    Judgement,
-    Node,
-    OntologySchema,
-    Principal,
-    PropertyDef,
-    Provenance,
-    SourceRef,
-)
-from schemas.trends import TrendDefinition
 from services.api.app import (
     app,
     get_alerts_store,
@@ -72,6 +56,24 @@ from services.api.investigations import (
     InvestigationNotFoundError,
 )
 from services.api.packs import PackStore, item_visible, reorder_visible
+
+from conduit_common.identity import new_id
+from ontology.handling import load_uk_le_scheme
+from schemas.analytics import CountedHandling, TrendRequest, TrendResult
+from schemas.domain import (
+    AuditStub,
+    EdgeTypeDef,
+    Handling,
+    Judgement,
+    Node,
+    OntologySchema,
+    Principal,
+    PropertyDef,
+    Provenance,
+    SourceRef,
+)
+from schemas.trends import TrendDefinition
+from tests.services.api.repoint_journal_fakes import Journal
 
 SCHEME = load_uk_le_scheme()
 ONTOLOGY = OntologySchema(
@@ -252,8 +254,10 @@ def world() -> Iterator[World]:
         get_handling_scheme: lambda: SCHEME, get_audit: lambda: w.audit, get_working_set: lambda: None,
         get_principal_names: lambda: w.names,
         # ADR-134: the add and refresh routes take the alert store; only an alert item reads it
-        # (`test_pack_alert_item.py` gives it the real one).
-        get_alerts_store: lambda: None,
+        # (`test_pack_alert_item.py` gives it the real one). Every read of a pack settles the
+        # alerts' repoint journal first, and a store without one is refused (ADR-109 Amendment 11
+        # point 6), so this is the shared stand-in, holding no alert, never `None`.
+        get_alerts_store: Journal,
         get_typology_rules: lambda: None,  # read only for an alert trend (ADR-134)
     })  # fmt: skip
     yield w

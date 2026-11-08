@@ -75,6 +75,10 @@ class Journal:
     async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
         return None
 
+    async def cited_by_ids(self, alert_ids: Any) -> dict[str, Any]:
+        """`AlertStore.cited_by_ids`: no alert is held, so none is found."""
+        return {}
+
     @property
     def links(self) -> list[tuple[str, str, str]]:
         """Every link pair recorded by a write that reached its commit."""

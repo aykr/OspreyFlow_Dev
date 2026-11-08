@@ -1,0 +1,1788 @@
+........................................................................ [ 11%]
+...........F......................F..................................... [ 23%]
+........................................................................ [ 35%]
+........................................................................ [ 47%]
+........................................................................ [ 58%]
+........................................................................ [ 70%]
+.....................................................F...FFFFF.FFFFFFFF. [ 82%]
+........................................................................ [ 94%]
+...................................                                      [100%]
+=================================== FAILURES ===================================
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x13d76e450>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x13f2430b0>, 'audit': <services.api.audit.AuditWriter object at 0x13b90bc80>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 16, 55, 51, 73436, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 16, 55, 51, 73436, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6Y1CXH6FMMCJ441MJBNY06V', type='SAME_AS', source='01M6Y1CVGJD7TV5F56TWQFGCYS', target='01M6Y1CXH1ZG8G9Y2TE...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x13d327c50>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x13d3264b0>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 25 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   25 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [08/Nov/2026 16:57:53] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 41 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_______ test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted ________
+
+world = <tests.services.api.test_packs.World object at 0x13f1de690>
+
+    def test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted(world: World) -> None:  # noqa: F811
+        """ADR-134 decision 3: a trend over alerts goes into a pack as any trend does — its snapshot
+        rests on the handlings the alert trend counted, so a reader below them does not get it."""
+        from services.api.app import get_typology_rules
+        from schemas.trends import TrendDefinition
+        from tests.services.api.test_alert_trends import NOW as LATER
+        from tests.services.api.test_alert_trends import _Analytics as _AlertAnalytics
+        from tests.services.api.test_alert_trends import _defn, _Rules
+    
+        world.analytics = _AlertAnalytics()  # type: ignore[assignment]
+        app.dependency_overrides[get_typology_rules] = lambda: _Rules()
+        world.trends.saved["at"] = TrendDefinition(**_defn(group_by="rule").model_dump(), id="at",
+                                                   investigation_id="case-1", created_by="ed", created_at=LATER,
+                                                   updated_at=LATER)  # fmt: skip
+        pack = _new_pack(world)
+        added = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items", json={"kind": "trend", "trend_id": "at"})
+        assert added.status_code == 201, added.text
+        item = added.json()
+        assert item["marking"] == "OFFICIAL-SENSITIVE" and item["trend"]["definition"]["source"] == "alerts"
+        assert item["trend"]["result"]["series"] == ["Hotlists", "Rapid movement over £9,000"]
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py:353: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f1ddc40>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_ test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown _
+
+world = <tests.services.api.test_packs.World object at 0x13f221130>
+
+    def test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown(world: World) -> None:
+        pack = _new_pack(world)
+        _add(world, pack, kind="note", text="Opening note", classification="OFFICIAL")
+        world.analytics.handlings = [
+            CountedHandling(classification="OFFICIAL", handling_code="P", owning_unit="unit-1", originator="unit-1"),
+            CountedHandling(classification="SECRET", handling_code="P", owning_unit="unit-1", originator="unit-1")]  # fmt: skip
+        trend = _add(world, pack, kind="trend", trend_id="t1")
+        assert trend["marking"] == "SECRET" and trend["trend"]["result"]["total"] == 10.0
+        assert trend["added_by"] == "ed" and trend["trend"]["definition"]["title"] == "Sum of amounts"
+        _add(world, pack, kind="note", text="Closing note", classification="OFFICIAL")
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:297: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f223da0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+__________ test_the_draft_and_the_history_say_withheld_as_a_yes_or_no __________
+
+world = <tests.services.api.test_packs.World object at 0x13f23c770>
+
+    def test_the_draft_and_the_history_say_withheld_as_a_yes_or_no(world: World) -> None:
+        """ADR-124 U9b: the draft carries a yes or no, never a number, for a reader who may not see some
+        of the pack's items; false for one who may see them all. The readers are analysts with the
+        `record_assessment` right the draft route needs (`READER` is a Reports Viewer and is refused it:
+        `LOW_EDITOR` is cleared only to OFFICIAL and `VIEWER` to SECRET, each at least a Viewer on the
+        case). The history's flag covers only the pack's *earlier snapshots* (a refresh's replaced trend
+        snapshots), not the draft's items, so with two SECRET notes in the draft and no refresh it is
+        false for both readers; it is a yes or no all the same."""
+        pack = _new_pack(world)
+        _add(world, pack, kind="note", text="Opening note", classification="OFFICIAL")
+        _add(world, pack, kind="note", text="Hidden one", classification="SECRET")
+        _add(world, pack, kind="note", text="Hidden two", classification="SECRET")
+>       low = world.as_(LOW_EDITOR).get(f"{CASE}/packs/{pack}")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:322: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12596: in read_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f2037a0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_ test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit _
+
+world = <tests.services.api.test_packs.World object at 0x13d73e930>
+
+    def test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit(world: World) -> None:
+        pack = _new_pack(world)
+        world.analytics.handlings = [
+            CountedHandling(classification="OFFICIAL", handling_code="R", owning_unit="unit-1", originator="unit-1")]
+        item = _add(world, pack, kind="trend", trend_id="t1")
+        assert item["marking"] == "OFFICIAL", "the banner says the classification"
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:341: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13d73d610>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+______ test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now _______
+
+world = <tests.services.api.test_packs.World object at 0x13f235f40>
+
+    def test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now(world: World) -> None:
+        pack = _new_pack(world)
+        world.graph.add("n1", _handling(), "Ada Okafor")
+        item = _add(world, pack, kind="entity", node_id="n1", caption="The account holder")
+        assert item["entity"] == {"node_id": "n1", "entity_type": "Person", "name": "Ada Okafor",
+                                  "caption": "The account holder"}  # fmt: skip
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:353: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f2379b0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+___________________ test_an_assessment_is_frozen_as_written ____________________
+
+world = <tests.services.api.test_packs.World object at 0x13d789010>
+
+    def test_an_assessment_is_frozen_as_written(world: World) -> None:
+        pack = _new_pack(world)
+        world.graph.add("n2", _handling("OFFICIAL-SENSITIVE"), "Brightwater Ltd")
+        world.judgements.saved["j1"] = Judgement(id="j1", investigation_id="case-1", statement="Likely a mule account",
+                                                 probability_band="likely", supporting=["n2"], author="ed",
+                                                 created_at=NOW)  # fmt: skip
+        item = _add(world, pack, kind="assessment", judgement_id="j1")
+        assert item["marking"] == "OFFICIAL-SENSITIVE", "marked at what it rests on"
+        world.judgements.saved["j1"] = world.judgements.saved["j1"].model_copy(update={"statement": "Edited later"})
+>       draft = world.as_(EDITOR).get(f"{CASE}/packs/{pack}").json()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12596: in read_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13d78b6b0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_______ test_a_published_version_is_unchanged_after_the_draft_is_edited ________
+
+world = <tests.services.api.test_packs.World object at 0x1484d2c00>
+
+    def test_a_published_version_is_unchanged_after_the_draft_is_edited(world: World) -> None:
+        pack = _new_pack(world)
+        first = _add(world, pack, kind="note", text="First", classification="OFFICIAL")
+        second = _add(world, pack, kind="note", text="Second", classification="OFFICIAL")
+>       assert _publish(world, pack)["version"] == 1
+               ^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:394: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x1484d1310>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+____________ test_a_refreshed_snapshot_keeps_the_old_one_in_history ____________
+
+world = <tests.services.api.test_packs.World object at 0x13d788530>
+
+    def test_a_refreshed_snapshot_keeps_the_old_one_in_history(world: World) -> None:
+        pack = _new_pack(world)
+        old = _add(world, pack, kind="trend", trend_id="t1")
+        world.analytics.total = 25.0
+>       refreshed = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items/{old['id']}/refresh")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:411: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12834: in refresh_pack_item
+    shown, _ = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13d78aff0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_ test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see _
+
+world = <tests.services.api.test_packs.World object at 0x13d768980>
+
+    def test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see(
+        world: World,
+    ) -> None:
+        """ADR-124 U9b: the one case that makes `PackHistory.withheld` true. A trend whose counted
+        events carried a SECRET handling is refreshed by a SECRET editor, so the replaced (earlier)
+        snapshot rests on a handling an OFFICIAL reader may not view. That reader is told only that
+        some are withheld, and the earlier copy is not in the response; a reader cleared for it is told
+        false and is served the copy. Every request is checked for 200 first."""
+        pack = _new_pack(world)
+        world.analytics.handlings = [
+            CountedHandling(classification="SECRET", handling_code="P", owning_unit="unit-1",
+                            originator="unit-1")]  # fmt: skip
+        old = _add(world, pack, kind="trend", trend_id="t1")
+>       refreshed = world.as_(EDITOR).post(f"{CASE}/packs/{pack}/items/{old['id']}/refresh")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:437: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12834: in refresh_pack_item
+    shown, _ = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13d769220>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_____________ test_a_publisher_cannot_publish_what_they_cannot_see _____________
+
+world = <tests.services.api.test_packs.World object at 0x13f1caa80>
+
+    def test_a_publisher_cannot_publish_what_they_cannot_see(world: World) -> None:
+        pack = _new_pack(world)
+        _add(world, pack, kind="note", text="secret", classification="SECRET")
+>       refused = world.as_(LOW_EDITOR).post(f"{CASE}/packs/{pack}/publish")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:455: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f1ca360>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+___ test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded ____
+
+world = <tests.services.api.test_packs.World object at 0x13f22c200>
+
+    def test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded(world: World) -> None:
+        pack = _new_pack(world)
+        _add(world, pack, kind="note", text="v1", classification="OFFICIAL")
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:464: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f22fad0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+____ test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up _____
+
+world = <tests.services.api.test_packs.World object at 0x13f1cef00>
+
+    def test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up(world: World) -> None:
+        pack = _new_pack(world)
+        _add(world, pack, who=LOW_EDITOR, kind="note", text="official", classification="OFFICIAL")
+        _add(world, pack, kind="note", text="secret", classification="SECRET")
+>       published = _publish(world, pack)
+                    ^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:482: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x13f1cc050>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_________ test_reading_published_packs_needs_read_reports_and_a_level __________
+
+world = <tests.services.api.test_packs.World object at 0x148442330>
+
+    def test_reading_published_packs_needs_read_reports_and_a_level(world: World) -> None:
+        pack = _new_pack(world)
+        _add(world, pack, kind="note", text="n", classification="OFFICIAL")
+>       _publish(world, pack)
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:507: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_packs.py:279: in _publish
+    response = w.as_(who).post(f"{CASE}/packs/{pack}/publish")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12923: in publish_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x148441580>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+_______ test_assembling_and_publishing_need_editor_and_record_assessment _______
+
+world = <tests.services.api.test_packs.World object at 0x1484d9b80>
+
+    def test_assembling_and_publishing_need_editor_and_record_assessment(world: World) -> None:
+        pack = _new_pack(world)
+        note = {"kind": "note", "text": "n", "classification": "OFFICIAL"}
+        for who in (VIEWER, READER):
+            client = world.as_(who)
+            assert client.post(f"{CASE}/packs", json={"title": "x"}).status_code == 403
+            assert client.post(f"{CASE}/packs/{pack}/items", json=note).status_code == 403
+            assert client.post(f"{CASE}/packs/{pack}/publish").status_code == 403
+        assert world.as_(READER).get(f"{CASE}/packs/{pack}").status_code == 403, "a draft is not a Reports Viewer's"
+>       assert world.as_(VIEWER).get(f"{CASE}/packs/{pack}").status_code == 200
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_packs.py:523: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+../../../../miniconda3/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+../../../../miniconda3/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+../../../../miniconda3/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:12596: in read_pack
+    shown, withheld = await _readable_draft(
+services/api/app.py:12539: in _readable_draft
+    return await readable(
+services/api/packs.py:140: in readable
+    await settle_repoints(alerts, graph)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = None
+graph = <tests.services.api.test_packs._Graph object at 0x1484d9af0>
+
+    async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+        """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+        no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+>       await store.settle_pending(graph)
+              ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'settle_pending'
+
+services/api/alerts.py:1837: AttributeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py::test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_draft_and_the_history_say_withheld_as_a_yes_or_no
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_assessment_is_frozen_as_written
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_published_version_is_unchanged_after_the_draft_is_edited
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_refreshed_snapshot_keeps_the_old_one_in_history
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_publisher_cannot_publish_what_they_cannot_see
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_reading_published_packs_needs_read_reports_and_a_level
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_assembling_and_publishing_need_editor_and_record_assessment
+16 failed, 595 passed, 191 deselected, 1 warning in 1143.98s (0:19:03)
+# lease rules, stack a, 2026-11-08 16:46:28Z to 17:05:33Z, at a1bfc9e (rebased on main 222b667), no working-tree changes
