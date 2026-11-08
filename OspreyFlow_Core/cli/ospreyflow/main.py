@@ -1227,7 +1227,8 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     code, out = ctx.capture([*in_conduit, "api", *engine_keys.KEY_PATH, "status"])
     states = engine_keys.parse_status(out) if code == 0 else None
     if args.action is None:
-        print("\n".join(engine_keys.list_engines(models, env_file, states)))
+        defaults = engine_keys.parse_defaults(out) if code == 0 else None
+        print("\n".join(engine_keys.list_engines(models, env_file, states, defaults)))
         return 0
     known = set(states or {})
     who = f"cli:{getpass.getuser()}"

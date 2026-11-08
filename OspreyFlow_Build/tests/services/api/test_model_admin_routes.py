@@ -368,3 +368,88 @@ async def test_a_second_conduit_replica_follows_a_change_made_through_the_first(
     os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
     assert other.key_state("gemini") == "set"
     assert other.routes().engines["gemini"].key_present
+
+
+# --- found by the lane's own review (8 November 2026) ------------------------------------------
+
+
+def test_no_route_echoes_a_key_shaped_value_in_a_refusal(client: TestClient) -> None:
+    """`contract_reference` refuses a value shaped like a key; FastAPI's own 422 would send it
+    back. Every Models route reads its own body, so the refusal names the field, never the value."""
+    shaped = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcd"
+    for method, path in (
+        ("POST", "/v1/admin/models/engines"),
+        ("PUT", "/v1/admin/models/engines/gemini"),
+    ):
+        answer = client.request(method, path, json={"provider": {
+            **GEMINI, "privacy_contract": True, "contract_reference": shaped}})  # fmt: skip
+        assert answer.status_code == 422, answer.text
+        assert shaped not in answer.text and "contract_reference" in answer.text
+    answer = client.put("/v1/admin/models/defaults", json={"defaults": [shaped]})
+    assert answer.status_code == 422 and shaped not in answer.text
+
+
+def test_a_lost_key_is_lost_for_every_process_and_entering_it_again_clears_it(
+    tmp_path: Path,
+) -> None:
+    import asyncio
+
+    from pydantic import SecretStr
+
+    w = World(tmp_path)
+    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)))
+    asyncio.run(w.admin.set_key("admin-1", "gemini", SecretStr(GOOD)))
+    w.gateway.restart(salt_key="salt-two")  # a restore onto another deployment
+    first = w.make_admin()
+    asyncio.run(first.start())  # makes the entries again, and records the loss
+    second = w.make_admin()  # another replica, or the command line, after the first start
+    asyncio.run(second.start())
+    assert first.key_state("gemini") == second.key_state("gemini") == "lost"
+    assert first.view().engines[0].key_state == "lost"
+    asyncio.run(second.set_key("cli:ayan", "gemini", SecretStr(GOOD)))
+    assert first.key_state("gemini") == "set"  # the running Conduit follows the file
+    assert w.gateway.credential("osprey-gemini") == GOOD
+    assert w.gateway.patches == []
+
+
+def test_a_gateway_that_refuses_leaves_the_models_file_and_routing_as_they_were(
+    client: TestClient, world: World
+) -> None:
+    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    before = (world.folder / "models.yaml").read_text()
+    world.gateway.master_key = "rotated-elsewhere"  # every admin call now refused
+    answer = client.put("/v1/admin/models/engines/gemini",
+                        json={"provider": {**GEMINI, "label": "Changed"}})  # fmt: skip
+    assert answer.status_code == 502 and "not saved" in answer.json()["detail"]["detail"]
+    assert (world.folder / "models.yaml").read_text() == before
+    world.gateway.master_key = MASTER
+    assert client.get("/v1/admin/models").json()["engines"][0]["provider"]["label"] == "Gemini"
+
+
+def test_clearing_an_engine_s_address_leaves_nothing_of_the_old_one(
+    client: TestClient, world: World
+) -> None:
+    based = {**GEMINI, "api_base": "https://proxy.example.org/v1"}
+    client.post("/v1/admin/models/engines", json={"provider": based})
+    entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
+    assert (
+        entry and world.gateway.stored_params(entry)["api_base"] == "https://proxy.example.org/v1"
+    )
+    client.put("/v1/admin/models/engines/gemini", json={"provider": GEMINI})
+    entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
+    assert entry and "api_base" not in world.gateway.stored_params(entry)
+    assert world.gateway.patches == []
+
+
+def test_engines_in_the_models_file_are_not_offered_while_osprey_yaml_says_local_only(
+    tmp_path: Path,
+) -> None:
+    import asyncio
+
+    from pydantic import SecretStr
+
+    w = World(tmp_path)
+    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)))
+    asyncio.run(w.admin.set_key("admin-1", "gemini", SecretStr(GOOD)))
+    w.installed = _installed(local_only=True)  # the installer declared local only since
+    assert w.make_admin().routes().engines == {}

@@ -85,8 +85,11 @@ async def _run(argv: Sequence[str]) -> int:
     by = args.by if args.by.startswith("cli:") else f"cli:{args.by}"
     try:
         if args.verb == "status":
-            for engine in admin.view().engines:
+            view = admin.view()
+            for engine in view.engines:
                 print(f"{engine.provider.name} {engine.key_state}")
+            for role, engine_name in sorted(view.defaults.items()):
+                print(f"default:{role} {engine_name}")
         elif args.verb == "move":
             moved = await move_keys(admin, sys.stdin.read().splitlines(), by)
             print(f"moved into the gateway: {', '.join(moved) or 'none'}")

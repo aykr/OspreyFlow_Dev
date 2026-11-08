@@ -114,3 +114,36 @@ def test_a_set_restored_where_it_was_taken_is_not_refused(tmp_path: Path) -> Non
 def test_a_set_with_no_key_set_loses_nothing_and_is_not_refused(tmp_path: Path) -> None:
     directory = _set(tmp_path, sealed_under=SALT_THERE, keys=[])
     _dry_run(directory, _env(tmp_path / "here", SALT_HERE))
+
+
+def test_a_stopped_conduit_s_models_file_is_still_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A quiesced backup stops the Conduit first; the models file is then read through a one-off
+    container on the same volume, and a set never silently lacks it."""
+    compose = _env(tmp_path / "dep", SALT_HERE)
+    ran: list[list[str]] = []
+
+    def run(command: list[str], **_kw: object) -> str:
+        ran.append(command)
+        if "exec" in command:
+            raise backup.BackupFailed("models", "service api is not running")
+        return "providers: []\nkeys:\n  gemini: {set_at: '2026-11-08T00:00:00Z', set_by: a}\n"
+
+    monkeypatch.setattr(backup, "_run", run)
+    taken = backup.backup_models_file(compose, tmp_path / "set" / "config" / "models.yaml")
+    assert taken is not None and "gemini" in taken.read_text()
+    assert ["run", "--rm", "--no-deps"] == ran[-1][ran[-1].index("run") : ran[-1].index("run") + 3]
+
+
+def test_a_models_file_that_cannot_be_read_stops_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    compose = _env(tmp_path / "dep", SALT_HERE)
+
+    def run(command: list[str], **_kw: object) -> str:
+        raise backup.BackupFailed("models", "no such service")
+
+    monkeypatch.setattr(backup, "_run", run)
+    with pytest.raises(backup.BackupFailed):
+        backup.backup_models_file(compose, tmp_path / "set" / "config" / "models.yaml")

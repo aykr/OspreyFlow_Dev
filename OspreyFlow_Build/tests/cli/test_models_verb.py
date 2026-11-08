@@ -53,7 +53,7 @@ ENV_FILE = (
     "OSPREY_MODEL_KEYS_IN_GATEWAY=yes\n"
     "OSPREY_MODEL_ENGINES=[]\n"
 )
-STATUS = "gemini none\nopenai set\n"
+STATUS = "gemini none\nopenai set\ndefault:extraction gemini\n"
 KEY_PATH = ["python", "-m", "services.api.model_keys"]
 
 
@@ -238,3 +238,15 @@ def test_the_command_names_each_key_as_the_harness_does(models: dict[str, object
     config = ModelsConfig.model_validate(models)
     for provider in config.enabled_providers:
         assert key_variable(models, provider.name) == config.key_variable(provider.name)
+
+
+def test_an_engine_removed_in_admin_is_not_listed_and_defaults_are_the_conduits(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-135 Amendment 2 decision 2: once Admin › Models has changed anything the models file is
+    the deployment's list, so `osprey.yaml`'s engines and defaults are not what is said."""
+    _installed(rig, status="gemini set\ndefault:vision gemini\n")
+    assert rig("models") == 0
+    out = capsys.readouterr().out
+    assert "openai" not in out
+    assert "vision: gemini" in out and "extraction: local" in out

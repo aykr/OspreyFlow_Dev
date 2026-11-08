@@ -171,7 +171,7 @@ function KeyForm({ engine, onSend, onCancel }: { engine: AdminEngine; onSend: (k
       <Input
         id={`key-${name}`}
         type="password"
-        autoComplete="new-password"
+        autoComplete="off"
         spellCheck={false}
         value={key}
         onChange={(e) => setKeyText(e.target.value)}

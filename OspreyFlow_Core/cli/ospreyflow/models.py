@@ -36,6 +36,17 @@ KEY_PATH = ("python", "-m", "services.api.model_keys")
 _STATE_WORDS = {"set": "yes", "none": "no", "lost": "lost: enter it again"}
 
 
+def parse_defaults(text: str) -> dict[str, str]:
+    """`model_keys status`'s `default:<role> <engine>` lines: each job's default as the Conduit
+    holds it (the models file's, once *Admin › Models* has changed anything)."""
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        head, _, engine = line.strip().partition(" ")
+        if head.startswith("default:") and engine:
+            found[head.removeprefix("default:")] = engine
+    return found
+
+
 def parse_status(text: str) -> dict[str, str]:
     """`model_keys status`'s lines (`<name> set|none|lost`), by engine."""
     found: dict[str, str] = {}
@@ -113,7 +124,10 @@ def _contract(provider: Mapping[str, Any]) -> str:
 
 
 def list_engines(
-    models: Mapping[str, Any], env_file: Path, states: Mapping[str, str] | None = None
+    models: Mapping[str, Any],
+    env_file: Path,
+    states: Mapping[str, str] | None = None,
+    defaults: Mapping[str, str] | None = None,
 ) -> list[str]:
     """What `ospreyflow models` says: each engine, whether each key is present (yes, no, or lost
     after a restore — never the key), whether it is under a privacy contract (ADR-136), and each
@@ -123,7 +137,9 @@ def list_engines(
     lines = ["Engines:", f"  {LOCAL}: this deployment's own models (no key)"]
     for provider in _providers(models):
         name = str(provider.get("name"))
-        if states is not None and name in states:
+        if states is not None and name not in states:
+            continue  # removed in Admin › Models: the Conduit's list is the deployment's
+        if states is not None:
             present = _STATE_WORDS[states[name]]
         else:
             present = "yes" if held.get(key_variable(models, name)) else "no"
@@ -136,7 +152,7 @@ def list_engines(
     for name, state in sorted((states or {}).items()):
         if name not in named:
             lines.append(f"  {name}: added in Admin › Models; key present: {_STATE_WORDS[state]}")
-    defaults = _defaults(models)
+    defaults = dict(defaults) if defaults is not None else _defaults(models)
     lines.append("Defaults:")
     lines += [f"  {role}: {defaults.get(role, LOCAL)}" for role in ROLES]
     if not _providers(models):

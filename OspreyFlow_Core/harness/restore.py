@@ -655,7 +655,14 @@ def restore_models_file(compose_file: Path, models_file: Path) -> None:
     """The models file back into the Conduit's own volume (ADR-135 Amendment 2 decision 9)."""
     _run(
         _compose(compose_file)
-        + ["exec", "-T", "api", "sh", "-c", "cat > /run/osprey/model-settings/models.yaml"],
+        + [
+            "exec",
+            "-T",
+            "api",
+            "sh",
+            "-c",
+            "umask 077 && cat > /run/osprey/model-settings/models.yaml",
+        ],
         item="models",
         input=models_file.read_text(encoding="utf-8"),
     )

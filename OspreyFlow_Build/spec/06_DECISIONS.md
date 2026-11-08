@@ -29037,6 +29037,32 @@ provider was called):
 - **`ospreyflow doctor`** asks an installed deployment's Conduit for each key's state and warns,
   naming each engine, where the gateway lost one (`model-keys`).
 
+**As built, after the lane's own review (8 November 2026).** These correct or settle the decisions
+above where building them showed them wrong or unclear (rule 11):
+
+- **Only measured gateway calls are relied on.** No `PATCH` is ever sent: a key is set, rotated or
+  entered again by removing the engine's credential (`DELETE`, 404 when none) and making it
+  (`POST`); an edited engine's entries are deleted and made again, so a cleared address leaves
+  nothing behind. The stand-in records every `PATCH` and the route tests assert there is none.
+- **The gateway is changed first, the models file only once it has answered.** A refusal leaves the
+  file and routing as they were, in words that say the change was not saved.
+- **"Key lost" is kept in the models file** (each key record's `lost`), marked by the first start
+  that finds the engine's entries gone, and cleared when the key is entered again, so every process,
+  replica, `ospreyflow models` and `doctor` say the same.
+- **Decision 2's `apply` clause is replaced:** `apply` does not read the models file (it lives on the
+  Conduit's volume). Instead the Conduit offers **no** engine while `osprey.yaml` declares
+  `local_only: true`, whatever the file holds, and refuses a change or key there in words.
+  `ospreyflow models` lists the engines and each job's default as the Conduit holds them.
+- **Every Models route reads its own body**, not only the key's: a contract reference shaped like a
+  key is refused naming the field, never echoing the value.
+- **A quiesced backup** (the Conduit stopped) reads the models file through a one-off container on
+  the same volume; a file that cannot be read stops the backup in words. Restore writes it `600`.
+- **On a cluster** the install hands each provider's key from the Secret to the Conduit's key path
+  (`kubectl exec … services.api.model_keys move`, on standard input) once the chart is up.
+- ***Admin › System*** says where engines and keys are changed, in words; the section list's link to
+  *Models* is the orchestrator's (Admin's section list), committed at the merge.
+- The key field's `autocomplete` is `off`, as decision 4 says.
+
 **Cost.** Every deployment gains the gateway's database (86 tables, about 12 MB empty), its
 migrations at each start, and an encryption key that must never change. The gateway's own log can
 carry a fragment of a refused key, as a provider words it (measured); that log is the operator's,
@@ -29049,9 +29075,9 @@ for the first install, now landing in the gateway by the same path once it start
   and an administrator role without it granted singly is refused too; red with the check removed
   (`tests/services/api/test_model_admin_routes.py`).
 - **The key never leaks:** a recognisable planted key, sent through each real key route and the real
-  logger (caplog on the root logger, with the Conduit's own logging set-up), appears in no response
-  body, log record, audit row, error or models file — including the refusal for a key sent to an
-  engine that does not exist and a body that fails validation (`test_model_key_never_leaks.py`).
+  logger (caplog on the root logger at DEBUG), appears in no response body, log record, audit row,
+  error or models file — including the refusal for a key sent to an engine that does not exist and a
+  body that fails validation (`test_model_admin_routes.py`).
 - **The stand-in gateway refuses as the measured one does** (rule 15), before any test against it is
   trusted: no token, a wrong token, an unknown model, an unknown id on update and delete, a missing
   provider key (500), a wrong key echoing a fragment (401), a model not offered (404), the cooldown
@@ -29063,8 +29089,8 @@ for the first install, now landing in the gateway by the same path once it start
   calls `GET /credentials`.
 - **The connection test** reports each refusal in its words, and never a planted key the stand-in
   echoes (`test_connection_check.py`).
-- **The models file** replaces `osprey.yaml`'s providers and defaults whole; `apply` refuses an
-  engine beside `local_only: true`; it is `600` after every write.
+- **The models file** replaces `osprey.yaml`'s providers and defaults whole; no engine is offered
+  beside `local_only: true`; it is `600` after every write; a lost key is lost for every process.
 - **Restore onto another deployment** is refused in words without `--model-keys-will-be-lost`, and
   with it the engines show "key lost" (the stand-in restarted with another encryption key);
   `ospreyflow backup` writes `litellm.sql` and the check value; the encryption key is blanked in every

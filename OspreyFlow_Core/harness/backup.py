@@ -713,22 +713,19 @@ def gateway_key_check(env_path: Path) -> str | None:
 
 def backup_models_file(compose_file: Path, destination: Path) -> Path | None:
     """The models file (ADR-135 Amendment 2 decision 2), from the Conduit's own volume: engines,
-    defaults and each key's record, never a key. None where *Models* has changed nothing yet."""
+    defaults and each key's record, never a key. Read through the running Conduit, or, when it is
+    stopped (a quiesced backup), a one-off container of its image on the same volume. None only
+    where *Models* has changed nothing yet; a file that cannot be read stops the backup in words,
+    never a set silently without it (`05_DEPLOYMENT.md` §6, rule 2)."""
+    read = f"cat {MODELS_FILE_IN_CONDUIT} 2>/dev/null || true"
+    compose = _compose(compose_file)
     try:
+        text = _run([*compose, "exec", "-T", "api", "sh", "-c", read], item="models")
+    except BackupFailed:
         text = _run(
-            _compose(compose_file)
-            + [
-                "exec",
-                "-T",
-                "api",
-                "sh",
-                "-c",
-                f"cat {MODELS_FILE_IN_CONDUIT} 2>/dev/null || true",
-            ],
+            [*compose, "run", "--rm", "--no-deps", "-T", "--entrypoint", "sh", "api", "-c", read],
             item="models",
         )
-    except BackupFailed:
-        return None
     if not text.strip():
         return None
     destination.parent.mkdir(parents=True, exist_ok=True)

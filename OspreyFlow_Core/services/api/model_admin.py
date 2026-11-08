@@ -72,6 +72,10 @@ class ModelAdminRefused(Exception):
 class KeyRecord(BaseModel):
     set_at: datetime
     set_by: str
+    #: The gateway no longer holds it (decision 9: a restore from another deployment, or its
+    #: encryption key changed). Kept here, so every process and replica, and the command line,
+    #: says the same until it is entered again.
+    lost: bool = False
 
 
 class ModelSettings(BaseModel):
@@ -207,13 +211,14 @@ class GatewayAdmin:
             resp = await self._http.request(method, path, json=body, timeout=30.0)
         except httpx.HTTPError:
             raise ModelAdminRefused(
-                "The model gateway could not be reached; nothing was changed.", status=502
+                "The model gateway could not be reached; the change was not saved.", status=502
             ) from None
         return resp
 
     def _refused(self, resp: httpx.Response, what: str) -> ModelAdminRefused:
         return ModelAdminRefused(
-            f"The model gateway refused {what} (HTTP {resp.status_code}). Run ospreyflow doctor.",
+            f"The model gateway refused {what} (HTTP {resp.status_code}); the change was not "
+            "saved. Run ospreyflow doctor.",
             status=502,
         )
 
@@ -228,28 +233,25 @@ class GatewayAdmin:
                 ids.add(model_id)
         return ids
 
-    async def put_entry(self, provider: ModelProviderConfig, model: str, exists: bool) -> None:
+    async def add_entry(self, provider: ModelProviderConfig, model: str) -> None:
+        """`POST /model/new` (measured). An entry is never patched: an edited engine's entries are
+        deleted and made again, so no unmeasured partial update is relied on, and a cleared
+        address leaves nothing of the old one behind."""
         params: dict[str, object] = {
             "model": gateway_model_name(provider.name, model),
             "litellm_credential_name": credential_name(provider.name),
         }
         if provider.api_base:
             params["api_base"] = provider.api_base
-        model_id = entry_id(provider.name, model)
-        if exists:
-            resp = await self._call(
-                "PATCH", f"/model/{model_id}/update", {"litellm_params": params}
-            )
-        else:
-            resp = await self._call(
-                "POST",
-                "/model/new",
-                {
-                    "model_name": gateway_model_name(provider.name, model),
-                    "litellm_params": params,
-                    "model_info": {"id": model_id},
-                },
-            )
+        resp = await self._call(
+            "POST",
+            "/model/new",
+            {
+                "model_name": gateway_model_name(provider.name, model),
+                "litellm_params": params,
+                "model_info": {"id": entry_id(provider.name, model)},
+            },
+        )
         if resp.status_code != 200:
             raise self._refused(resp, f"the model {model}")
 
@@ -258,18 +260,17 @@ class GatewayAdmin:
         if resp.status_code not in (200, 400):  # 400: already gone (measured)
             raise self._refused(resp, "a model's removal")
 
-    async def set_credential(self, provider: str, key: SecretStr, *, exists: bool) -> None:
+    async def put_credential(self, provider: str, key: SecretStr) -> None:
+        """The engine's key, as its one credential: any held is removed (`DELETE`, 404 when none,
+        both measured) and the new one made (`POST`, measured), so neither a `PATCH` of one that
+        is not there nor a `POST` over one that is is ever asked of the gateway."""
+        await self.delete_credential(provider)
         body = {
             "credential_name": credential_name(provider),
             "credential_values": {"api_key": key.get_secret_value()},
             "credential_info": {},
         }
-        if exists:
-            resp = await self._call("PATCH", f"/credentials/{credential_name(provider)}", body)
-            if resp.status_code == 404:  # the record outlived the credential: make it again
-                resp = await self._call("POST", "/credentials", body)
-        else:
-            resp = await self._call("POST", "/credentials", body)
+        resp = await self._call("POST", "/credentials", body)
         if resp.status_code != 200:
             raise self._refused(resp, "the key")
 
@@ -361,6 +362,10 @@ _EDITABLE = ("label", "roles", "api_base", "privacy_contract", "contract_referen
 
 
 class ModelAdmin:
+    """*Models*' service. **The gateway is changed first, the models file only once it has
+    answered**, so a refusal leaves the file and routing as they were; the next start makes the
+    gateway's entries equal the file again (`start`)."""
+
     def __init__(
         self,
         *,
@@ -379,8 +384,6 @@ class ModelAdmin:
         self._now = now
         self._settings = settings_file.load()
         self._stamp = settings_file.stamp()
-        #: Engines whose record says "key set" but the gateway no longer holds (decision 9).
-        self.lost: set[str] = set()
 
     # --- reading --------------------------------------------------------------------------
 
@@ -404,12 +407,15 @@ class ModelAdmin:
         self._fresh()
         if self._settings is None:
             return "set" if self._installed.key_present.get(name) else "none"
-        if name in self.lost:
-            return "lost"
-        return "set" if name in self._settings.keys else "none"
+        record = self._settings.keys.get(name)
+        if record is None:
+            return "none"
+        return "lost" if record.lost else "set"
 
     def routes(self) -> ModelRoutes:
-        """The routing's view (`model_routing.ModelRoutes`), from what *Models* holds now."""
+        """The routing's view (`model_routing.ModelRoutes`), from what *Models* holds now. While
+        `osprey.yaml` declares the deployment local only, no engine is offered, whatever the models
+        file holds (decision 1: that declaration is the installer's)."""
         current = self.settings
         engines = {
             p.name: Engine(
@@ -422,10 +428,12 @@ class ModelAdmin:
             )
             for p in current.providers
         }
+        if self._installed.local_only:
+            engines = {}
         return ModelRoutes(
             locals=cast(dict[Role, str | None], dict(self._installed.locals)),
             engines=engines,
-            defaults={r: e for r, e in current.defaults.items() if r in ROLES},
+            defaults={r: e for r, e in current.defaults.items() if r in ROLES and engines},
             sendable=frozenset(self._installed.sendable),
         )
 
@@ -456,33 +464,47 @@ class ModelAdmin:
     # --- the gateway, kept equal to the settings --------------------------------------------
 
     async def start(self) -> None:
-        """At start: find engines whose key the gateway lost, then make its entries equal the
-        settings. A gateway that cannot be reached is logged in words, and *Models* says so when it
-        is next used."""
-        if self._settings is None:
-            return
-        try:
-            held = await self._gateway.stored_entries()
-            for p in self._settings.providers:
-                if p.name in self._settings.keys:
+        """At start: mark in the models file each engine whose key the gateway lost (its entries
+        gone though the file says a key was set), then make the gateway's entries equal the file.
+        A gateway that cannot be reached is logged in words; *Models* says so when next used."""
+        if self._settings is not None:
+            try:
+                held = await self._gateway.stored_entries()
+                current = self._settings
+                keys = dict(current.keys)
+                for p in current.providers:
+                    record = keys.get(p.name)
                     wanted = {entry_id(p.name, m) for m in p.roles.values()}
-                    if not wanted & held:
-                        self.lost.add(p.name)
-            await self._reconcile(held)
-        except ModelAdminRefused as refused:
-            log.warning("model engines not reconciled with the gateway: %s", refused.words)
+                    if record is not None and not record.lost and not wanted & held:
+                        keys[p.name] = record.model_copy(update={"lost": True})
+                if keys != current.keys:
+                    self._save(current.model_copy(update={"keys": keys}, deep=True))
+                await self._reconcile(self.settings, held)
+            except ModelAdminRefused as refused:
+                log.warning("model engines not reconciled with the gateway: %s", refused.words)
         self._on_change(self.routes())
 
-    async def _reconcile(self, held: set[str] | None = None) -> None:
+    async def _reconcile(
+        self,
+        settings: ModelSettings,
+        held: set[str] | None = None,
+        rebuilt: frozenset[str] = frozenset(),
+    ) -> None:
+        """The gateway's entries made equal to `settings`: stale ones deleted, missing ones made,
+        and every entry of an engine in `rebuilt` (just edited) deleted and made again."""
         held = await self._gateway.stored_entries() if held is None else held
         wanted: dict[str, tuple[ModelProviderConfig, str]] = {}
-        for p in self.settings.providers:
+        for p in settings.providers:
             for model in dict.fromkeys(p.roles.values()):
                 wanted[entry_id(p.name, model)] = (p, model)
-        for model_id in sorted(held - set(wanted)):
-            await self._gateway.delete_entry(model_id)
+        for model_id in sorted(held):
+            stale = model_id not in wanted
+            if stale or wanted[model_id][0].name in rebuilt:
+                await self._gateway.delete_entry(model_id)
+                held = held - {model_id}
         for model_id, (p, model) in wanted.items():
-            await self._gateway.put_entry(p, model, exists=model_id in held)
+            if model_id not in held:
+                await self._gateway.add_entry(p, model)
 
     # --- changing -------------------------------------------------------------------------
 
@@ -490,8 +512,8 @@ class ModelAdmin:
         if settings.providers and self._installed.local_only:
             raise ModelAdminRefused(
                 "This deployment's osprey.yaml declares local_only: true, so no engine outside it "
-                "may be added here. The installer changes that declaration (local_only: false, "
-                "then ospreyflow apply)."
+                "may be added or changed here. The installer changes that declaration "
+                "(local_only: false, then ospreyflow apply)."
             )
         try:
             ModelsConfig(
@@ -506,7 +528,7 @@ class ModelAdmin:
             raise ModelAdminRefused(words) from None
         return settings
 
-    async def _commit(self, settings: ModelSettings) -> None:
+    def _save(self, settings: ModelSettings) -> None:
         self._file.save(settings)
         self._settings = settings
         self._stamp = self._file.stamp()
@@ -550,8 +572,8 @@ class ModelAdmin:
             current = self.settings
             proposed = self._validated(current.model_copy(
                 update={"providers": [*current.providers, provider]}, deep=True))  # fmt: skip
-            await self._commit(proposed)
-            await self._reconcile()
+            await self._reconcile(proposed)
+            self._save(proposed)
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "engine_added", provider.name, refused) from None
         await self._audited(
@@ -568,8 +590,8 @@ class ModelAdmin:
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True))  # fmt: skip
-            await self._commit(proposed)
-            await self._reconcile()
+            await self._reconcile(proposed, rebuilt=frozenset({name}))
+            self._save(proposed)
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "engine_edited", name, refused) from None
         changes = {
@@ -590,13 +612,14 @@ class ModelAdmin:
                     "first."
                 )
             keys = {k: v for k, v in current.keys.items() if k != name}
-            proposed = self._validated(current.model_copy(update={
+            proposed = current.model_copy(update={
                 "providers": [p for p in current.providers if p.name != name], "keys": keys,
-            }, deep=True))  # fmt: skip
-            await self._commit(proposed)
-            await self._reconcile()
+            }, deep=True)  # fmt: skip
+            if proposed.providers:
+                self._validated(proposed)
+            await self._reconcile(proposed)
             await self._gateway.delete_credential(name)
-            self.lost.discard(name)
+            self._save(proposed)
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "engine_removed", name, refused) from None
         await self._audited(by, "engine_removed", name)
@@ -607,7 +630,7 @@ class ModelAdmin:
             proposed = self._validated(
                 current.model_copy(update={"defaults": dict(defaults)}, deep=True)
             )
-            await self._commit(proposed)
+            self._save(proposed)
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "default_changed", None, refused) from None
         changes: dict[str, dict[str, object]] = {
@@ -620,21 +643,26 @@ class ModelAdmin:
     async def set_key(
         self, by: str, name: str, key: SecretStr, *, action: ModelAdminAction | None = None
     ) -> None:
-        """Set or rotate `name`'s key. `action` names it otherwise in the audit (`key_moved`, from
-        `deployment.env`, ADR-135 Amendment 2 decision 3)."""
+        """Set, rotate or enter again `name`'s key. `action` names it otherwise in the audit
+        (`key_moved`, from `deployment.env`, ADR-135 Amendment 2 decision 3)."""
         named = action
         action = named or "key_set"
         try:
             self._provider(name)
+            if self._installed.local_only:
+                raise ModelAdminRefused(
+                    "This deployment's osprey.yaml declares local_only: true, so no key for an "
+                    "engine outside it is taken here."
+                )
             current = self.settings
-            had = name in current.keys and name not in self.lost
-            action = named or ("key_rotated" if had else "key_set")
-            await self._gateway.set_credential(name, key, exists=name in current.keys)
+            record = current.keys.get(name)
+            action = named or (
+                "key_rotated" if record is not None and not record.lost else "key_set"
+            )
+            await self._gateway.put_credential(name, key)
+            await self._reconcile(current)
             keys = {**current.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
-            await self._commit(current.model_copy(update={"keys": keys}, deep=True))
-            self.lost.discard(name)
-            await self._reconcile()
-            self._on_change(self.routes())
+            self._save(current.model_copy(update={"keys": keys}, deep=True))
         except ModelAdminRefused as refused:
             raise await self._refusing(by, action, name, refused) from None
         await self._audited(by, action, name)
@@ -645,8 +673,7 @@ class ModelAdmin:
             await self._gateway.delete_credential(name)
             current = self.settings
             keys = {k: v for k, v in current.keys.items() if k != name}
-            await self._commit(current.model_copy(update={"keys": keys}, deep=True))
-            self.lost.discard(name)
+            self._save(current.model_copy(update={"keys": keys}, deep=True))
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "key_removed", name, refused) from None
         await self._audited(by, "key_removed", name)
@@ -656,11 +683,14 @@ class ModelAdmin:
             provider = self._provider(name)
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "connection_tested", name, refused) from None
-        if self.key_state(name) != "set":
-            result = ConnectionTestResult(
-                engine=name, outcome="key_refused", ok=False,
-                words="This engine has no key on this deployment. Enter one first.",
-            )  # fmt: skip
+        state = self.key_state(name)
+        if state != "set":
+            words = (
+                "The gateway no longer holds this engine's key. Enter it again first."
+                if state == "lost"
+                else "This engine has no key on this deployment. Enter one first."
+            )
+            result = ConnectionTestResult(engine=name, outcome="key_refused", ok=False, words=words)
         else:
             model = next(iter(provider.roles.values()))
             check = await check_connection(

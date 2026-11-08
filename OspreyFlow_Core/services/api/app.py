@@ -55,7 +55,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -13334,6 +13334,23 @@ ModelAdminDep = Annotated[model_admin_module.ModelAdmin, Depends(get_model_admin
 _MANAGE_MODELS = [Depends(require_right(Right.MANAGE_MODELS))]
 
 
+async def _model_admin_body[Body: BaseModel](request: Request, shape: type[Body]) -> Body:
+    """A Models route's body, read here rather than by FastAPI, whose 422 carries the input back:
+    a field that refuses a value shaped like a key (the contract reference) would echo it. The
+    refusal names each field and why, never what was sent."""
+    try:
+        return shape.model_validate_json(await request.body())
+    except ValidationError as invalid:
+        words = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc'])}: "
+            + str(e.get("msg", "")).removeprefix("Value error, ")
+            for e in invalid.errors(include_input=False, include_context=False, include_url=False)
+        )
+        raise HTTPException(
+            status_code=422, detail={"error": "model_admin_refused", "detail": words}
+        ) from None
+
+
 def _model_admin_refused(refused: model_admin_module.ModelAdminRefused) -> HTTPException:
     return HTTPException(
         status_code=refused.status, detail={"error": "model_admin_refused", "detail": refused.words}
@@ -13352,8 +13369,9 @@ async def models_admin_history_route(admin: ModelAdminDep) -> ModelAdminHistory:
 
 @app.post("/v1/admin/models/engines", dependencies=_MANAGE_MODELS)
 async def models_admin_add_engine_route(
-    body: EngineInput, principal: PrincipalDep, admin: ModelAdminDep
+    request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
+    body = await _model_admin_body(request, EngineInput)
     try:
         await admin.add_engine(principal.id, body.provider)
     except model_admin_module.ModelAdminRefused as refused:
@@ -13363,8 +13381,9 @@ async def models_admin_add_engine_route(
 
 @app.put("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
 async def models_admin_edit_engine_route(
-    name: str, body: EngineInput, principal: PrincipalDep, admin: ModelAdminDep
+    name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
+    body = await _model_admin_body(request, EngineInput)
     try:
         await admin.edit_engine(principal.id, name, body.provider)
     except model_admin_module.ModelAdminRefused as refused:
@@ -13385,8 +13404,9 @@ async def models_admin_remove_engine_route(
 
 @app.put("/v1/admin/models/defaults", dependencies=_MANAGE_MODELS)
 async def models_admin_defaults_route(
-    body: DefaultsInput, principal: PrincipalDep, admin: ModelAdminDep
+    request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
+    body = await _model_admin_body(request, DefaultsInput)
     try:
         await admin.set_defaults(principal.id, body.defaults)
     except model_admin_module.ModelAdminRefused as refused:

@@ -31,8 +31,10 @@ stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Me
   cooldown passes, not "Invalid model name" (measured on 8 November 2026 with the Conduit's own
   client, `GatewayAdmin`, under the platform lease on stack a).
 
-Not measured, so not modelled as refusals: `POST /credentials` for a name that exists, and `PATCH`
-for one that does not (the Conduit's code does neither: it creates once and patches what it made).
+Not measured, so not modelled as refusals and never relied on: `POST /credentials` for a name that
+exists, and `PATCH /credentials/{name}` or `PATCH /model/{id}/update` at all. The Conduit's client
+asks neither: it removes a credential before making it (`GatewayAdmin.put_credential`) and deletes
+an edited engine's entries before making them again (`ModelAdmin._reconcile`).
 
 The stand-in is an `httpx.MockTransport`, so the code under test sends real HTTP requests through
 the same `httpx.AsyncClient` it uses against the real gateway. Its own red-then-green proof is
@@ -101,6 +103,8 @@ class StandInGateway:
     asked: list[str] = field(default_factory=list)
     #: How many times anything read the credentials back (masked, but still part of the key).
     credential_reads: int = 0
+    #: Every PATCH asked of it: unmeasured on the real gateway, so the Conduit's client sends none.
+    patches: list[str] = field(default_factory=list)
     _db: dict[str, _Stored] = field(default_factory=dict)
     _creds: dict[str, tuple[str, str]] = field(default_factory=dict)
     _cooled_until: dict[str, float] = field(default_factory=dict)
@@ -175,6 +179,8 @@ class StandInGateway:
             )
         body: dict[str, Any] = json.loads(request.content or b"{}") if request.content else {}
         path, method = request.url.path, request.method
+        if method == "PATCH":
+            self.patches.append(path)
         if method == "POST" and path == "/model/new":
             return self._model_new(body)
         if method == "PATCH" and path.startswith("/model/") and path.endswith("/update"):

@@ -45,8 +45,8 @@ Outcome = Literal[
 WORDS: dict[Outcome, str] = {
     "ok": "Connected: the engine answered.",
     "not_routed": (
-        "The gateway has no route for this model yet. Save the engine, wait for the gateway to "
-        "restart, and test again."
+        "The gateway has no route for this model. Save the engine with this model for a job, "
+        "and test again."
     ),
     "gateway_token": (
         "The Conduit could not sign in to this deployment's model gateway. This is a deployment "

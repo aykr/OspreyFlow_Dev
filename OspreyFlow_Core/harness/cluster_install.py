@@ -313,6 +313,27 @@ def install(
     _say(kube, "installing the chart", helm)
     done.lines.append(f"chart installed as {RELEASE} in {namespace}; every workload ready")
 
+    # 4b. ADR-135 Amendment 2 decision 3: the providers' keys into the gateway, through the
+    # Conduit's own key path, on stdin (never an argument). The Secret keeps them, blanked for every
+    # workload but the gateway, so a second run finds them again; the move is idempotent.
+    keys = {
+        name.removeprefix("OSPREY_MODEL_KEY_").lower(): value
+        for name, value in pairs.items()
+        if name.startswith("OSPREY_MODEL_KEY_") and value
+    }
+    if keys:
+        status, _out, _err = kube.run(
+            ["kubectl", "-n", namespace, "exec", "-i", "deploy/api", "--",
+             "python", "-m", "services.api.model_keys", "move", "--by", "cluster-install"],
+            stdin="".join(f"{name}={key}\n" for name, key in keys.items()),
+        )  # fmt: skip
+        if status != 0:
+            raise ClusterInstallFailed(
+                "putting the model keys into the gateway was refused by the Conduit; run the "
+                "install again, or enter each key in Admin › Models"
+            )
+        done.lines.append(f"model keys put into the gateway: {', '.join(sorted(keys))}")
+
     # 5. The identity provider.
     identity = configure_identity or _configure_identity
     done.lines += identity(kube, namespace, config, {**values["environment"], **pairs})

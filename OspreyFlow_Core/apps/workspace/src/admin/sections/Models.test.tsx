@@ -50,7 +50,7 @@ describe("Models", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Enter key for Gemini" }));
     const field = screen.getByLabelText(/Key for Gemini/) as HTMLInputElement;
     expect(field.type).toBe("password");
-    expect(field.autocomplete).toBe("new-password");
+    expect(field.getAttribute("autocomplete")).toBe("off");
     expect(field.value).toBe("");
     fireEvent.change(field, { target: { value: PLANTED } });
     fireEvent.click(screen.getByRole("button", { name: "Set the key" }));

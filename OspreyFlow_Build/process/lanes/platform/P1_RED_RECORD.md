@@ -31,3 +31,10 @@ rotated → `cooling_down` at once, `ok` after the cooldown; entry patched → `
 entry removed → `cooling_down` (**the stand-in said `not_routed`: corrected, with
 `test_an_entry_deleted_while_cooled_down_still_answers_the_cooldown`**); unknown model → `not_routed`; PATCH of
 an unknown id → refused in fixed words (HTTP 404); wrong gateway token → `gateway_token`, no token fragment.
+
+## After the lane's own review (lane-reviewer, 8 November 2026)
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_model_admin_routes.py::test_no_route_echoes_a_key_shaped_value_in_a_refusal` | the add route takes `body: EngineInput` (FastAPI's 422 echoes a key-shaped contract reference) | 1 failed |
+| `test_model_admin_routes.py::test_a_gateway_that_refuses_leaves_the_models_file_and_routing_as_they_were` | `edit_engine` saves the file before the gateway answers | 1 failed |
