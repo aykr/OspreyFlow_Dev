@@ -57,6 +57,14 @@ The orchestrator's final review of 0cd76bb found two blockers and three must-fix
 - **Leased run (item 10).** Lease `case`, taken 00:03:36Z (8 November) and released 00:11:35Z, at 1a64bf3 (rebased on main 6311d78), with a throwaway ClickHouse on 18123, removed after. Before it started I checked `pgrep` and `lsof`, and the pytest's own environment (OSPREY_LANE=case; 2491, 55433, 6379, 18123). The orchestrator's `make ci` pytests (pids 48474 and 48475, closed ports, no lane) had already exited.
   - It covered 95 files: `conformance/graph_port/test_analyst_layer.py` (the brief's "unchanged under case B" exit); every `services/api` file sorting before `test_investigation_levels.py`; the seven test files the fixes touch, the two migration ones included; and `test_statelessness_clickhouse.py`.
   - Run 00:03:54–00:11:19Z, `-rfE`: **1,374 passed, 0 failed, 0 errors**, so there was nothing to run on main.
+- **After rebasing onto main cbf83d4** (glass's L2.8 and studio's Part A2 merged):
+  - `alert_queue.py`'s import conflicts were resolved by keeping main's `.alerts` import and adding this lane's.
+  - In `rule_evaluation.py`, the branch's withheld node went into L2.8's `NodeWithheld` as `originals_layer`, with words of its own, raised from `write_alert_node` and caught on the load path and in `raise_committed`. Test: `test_a_branch_alert_withheld_for_its_originals_layer_says_so`, on both paths, red with the withholding swallowed as before (the units' words).
+  - L2.8's link read also exposed the sweep's fake graph, which read no links; it now reads them and leaves out any the reader can't see.
+- **The second leased run.** Lease `case`, taken 00:16:19Z and released 00:25:32Z, at f320dec (on cbf83d4), ClickHouse on 18123 and removed after.
+  - Before the lease: a studio pytest (pid 77885) was found on the leased ports with `OSPREY_LANE=studio` and no lease, so the lease was held back until it ended (00:16:07Z) and no pytest with a lane set was alive.
+  - The run, 00:16:33–00:24:42Z, `-rfE`, covered 33 files: everything touching `alert_queue`, `rule_evaluation`, `RuleGate`, the sweep and re-screening, plus the branch, composite and layer files. **477 passed, 4 failed.**
+  - All 4 fail on main cbf83d4's code under the same lease (00:24:53–00:25:20Z): 3 in `ingest/test_alert_evidence_withheld_live.py` ("too many values to unpack") and 1 in `ingest/test_kyc_rules.py` (a true positive's match still `inferred`). Main's, not this lane's.
 
 ## Live figures (every one with its lease)
 
