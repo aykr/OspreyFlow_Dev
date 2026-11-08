@@ -14,7 +14,6 @@ With `OSPREY_ADDRESS_TIMING_OUT` set, the timings are written there as the run's
 
 from __future__ import annotations
 
-import asyncio
 import os
 import statistics
 import time
@@ -24,10 +23,7 @@ from datetime import UTC, date, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
-from ontology.handling import load_uk_le_scheme
-from ontology.loader import load_default_ontology
 from schemas.domain import Alert, AlertMode, Handling, NodeWrite, Principal, Provenance
 from schemas.domain import ProvenanceState, SourceRef
 from tests.conftest import default_claims, sign_token
@@ -65,41 +61,28 @@ def _node(dataset: str, classification: str) -> NodeWrite:
     )  # fmt: skip
 
 
-async def _seed(case: str, other_case: str, owner: str) -> dict[str, str]:
+async def _seed(app: object, case: str, other_case: str, owner: str) -> dict[str, str]:
     """A readable alert, one over a node hidden from the reader, and one in a case not theirs: each a
     hotlist alert of the reader's own, in its case's dataset, so the queue's scope admits it to them
-    in its case."""
-    from services.api.alerts import AlertStore
-    from services.api.config import PostgresConfig
-    from services.api.datasets import PostgresDatasetStore
-    from services.api.hotlists import HotlistStore
-
-    dsn = PostgresConfig.from_env().dsn
-    datasets = await PostgresDatasetStore.connect(dsn)
-    alerts, hotlists = await AlertStore.connect(dsn), await HotlistStore.connect(dsn)
-    try:
-        # The case's own dataset (it reads its analyst layer too).
-        dataset = (await datasets.chosen_of_case(case))[0].id
-        who = Principal(id=owner, clearance="OFFICIAL", org_unit="unit-1", datasets=[dataset])
-        hotlist = await hotlists.create(who, identifier="07700 900918", review_date=date(2027, 1, 31))
-        async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
-            tx = await graph.begin_transaction()
-            seen, hidden = await graph.upsert_nodes([_node(dataset, "OFFICIAL"), _node(dataset, "SECRET")], tx)
-            await graph.commit_transaction(tx)
-        made = {}
-        for name, node, in_case in (("readable", seen, case), ("hidden", hidden, case), ("elsewhere", seen, other_case)):
-            alert = Alert(
-                id=new_id(), rule_id=f"hotlist:{hotlist.id}", owner_id=owner, mode=AlertMode.FULL,
-                referent_node_ids=[node], investigation_id=in_case, dataset_id=dataset,
-                created_at=datetime.now(UTC),
-            )  # fmt: skip
-            await alerts.save(alert)
-            made[name] = alert.id
-        return made
-    finally:
-        await alerts.close()
-        await hotlists.close()
-        await datasets.close()
+    in its case. Written through the app's own stores and graph, the ones the route reads."""
+    state = app.state  # type: ignore[attr-defined]
+    dataset = (await state.datasets.chosen_of_case(case))[0].id
+    who = Principal(id=owner, clearance="OFFICIAL", org_unit="unit-1", datasets=[dataset])
+    hotlist = await state.hotlists_store.create(who, identifier="07700 900918", review_date=date(2027, 1, 31))
+    graph = state.graph
+    tx = await graph.begin_transaction()
+    seen, hidden = await graph.upsert_nodes([_node(dataset, "OFFICIAL"), _node(dataset, "SECRET")], tx)
+    await graph.commit_transaction(tx)
+    made = {}
+    for name, node, in_case in (("readable", seen, case), ("hidden", hidden, case), ("elsewhere", seen, other_case)):
+        alert = Alert(
+            id=new_id(), rule_id=f"hotlist:{hotlist.id}", owner_id=owner, mode=AlertMode.FULL,
+            referent_node_ids=[node], investigation_id=in_case, dataset_id=dataset,
+            created_at=datetime.now(UTC),
+        )  # fmt: skip
+        await state.alerts_store.save(alert)
+        made[name] = alert.id
+    return made
 
 
 def _times(client: TestClient, path: str, headers: dict[str, str]) -> list[float]:
@@ -133,7 +116,7 @@ def test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_qu
         made = [client.post("/v1/investigations", headers=h, json=new_case()) for h in (reader, other)]
         assert [m.status_code for m in made] == [201, 201], [m.text for m in made]
         case, other_case = (m.json()["id"] for m in made)
-        ids = asyncio.run(_seed(case, other_case, me))
+        ids = client.portal.call(_seed, app, case, other_case, me)  # type: ignore[union-attr]
 
         # Through the real `get_principal` and `case_of`: the alert, in its own case, with its node.
         opened = client.get(f"/v1/alerts/{ids['readable']}", headers=reader)
