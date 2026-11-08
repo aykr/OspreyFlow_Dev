@@ -447,7 +447,8 @@ createRoot(document.getElementById("root")!).render(<Host />);
 // Optional states for the axe scan: a place, a day's report, its held rows.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 const press = (match: (b: HTMLButtonElement) => boolean) => {
-  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(match);
+  // An enabled one only: a button disabled while a save is answered is pressed once it is free.
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => !b.disabled && match(b));
   button?.click();
   return Boolean(button);
 };
@@ -569,6 +570,16 @@ if (contacts && staged) {
     await chooseNamed("Staging step to add", "filter");
     await pressNamed("+ Step");
     await pressNamed("+ Condition");
+  }
+  if (staged === "union" || staged === "dedupe") {
+    await pressNamed("Source: Visit bookings");
+    await chooseNamed("Staging step to add", "dedupe");
+    await pressNamed("+ Step");
+    if (staged === "dedupe") await pressNamed("+ Same row when this column matches");
+    if (staged === "union") {
+      await chooseNamed("Staging step to add", "union");
+      await pressNamed("+ Step");
+    }
   }
   if (staged === "map") {
     await pressNamed("Map: Map");

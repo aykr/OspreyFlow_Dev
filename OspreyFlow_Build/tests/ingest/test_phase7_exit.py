@@ -150,6 +150,14 @@ async def test_visits_and_contacts_runs_with_every_element_traceable(
             else:
                 assert ref.load_id == f"exit-run:{ref.document_id}", ref
                 assert _raw_row(store, ref.load_id, ref.document_id, row) is not None, ref
+    # A ref names the right row, not merely a row that exists (the review of L1.4): each booking's
+    # Document carries the booking id its visit_bookings row holds.
+    documents = [n for n in graph.committed_nodes if n.type == "Document"]
+    assert documents
+    for document in documents:
+        [booking] = [r for r in document.provenance.sources if r.document_id == "visit_bookings"]
+        row = _raw_row(store, booking.load_id or "", "visit_bookings", int(booking.locator[4:]))
+        assert row is not None and row["booking_id"] == document.properties["message_id"]
     # A link the Join made names the booking that gave the number and the owner row that said whose
     # it is, each in its own source's load.
     uses = [e for e in graph.committed_edges if e.type == "USES"]

@@ -289,6 +289,12 @@ def pipeline_with_staging(graph: PipelineGraph, staging: Sequence[StagingStep]) 
     return PipelineGraph(nodes=nodes, edges=edges)
 
 
+def step_record_violations(graph: PipelineGraph) -> list[str]:
+    """Each step node whose config its kind's record refuses, in words: such a step cannot be run
+    at all, where the graph's other refusals leave the steps before it runnable."""
+    return [p for node in step_nodes(graph) for p in _record_problems(node)]
+
+
 def staging_graph_violations(graph: PipelineGraph) -> list[str]:
     """The graph's own rules for step nodes: each config its kind's record; each table a step reads
     joined to it by a line, so the canvas never draws what the recipe does not do; and the last
@@ -316,8 +322,27 @@ def staging_graph_violations(graph: PipelineGraph) -> list[str]:
     order = staging_from_pipeline(graph) or []
     last = order[-1].id
     kinds = {n.id: n.kind for n in graph.nodes}
+    labels = {n.id: n.label for n in graph.nodes}
     if not any(s == last and kinds.get(t) is PipelineNodeKind.MAP for s, t in edges):
         problems.append(f"the last step, {last!r}, feeds no Map: Map reads the last step's table")
+    # Map reads the last step's table and nothing else (rule 2: the review of L1.4 found a source
+    # no step read, with its own line to Map, read and counted by the run but mapped nowhere).
+    read = {t for step in good.values() for t in step_inputs(step)}
+    for node in graph.nodes:
+        if node.kind is PipelineNodeKind.SOURCE and node.id not in read:
+            problems.append(
+                f"source '{node.label}' is read by no step: a pipeline with staging steps maps "
+                "only its last step's table, so its rows would go nowhere"
+            )
+    for source, target in sorted(edges):
+        feeder = kinds.get(source)
+        if kinds.get(target) is PipelineNodeKind.MAP and source != last and feeder in (
+            PipelineNodeKind.SOURCE, PipelineNodeKind.PROFILE, *STAGING_KINDS,
+        ):  # fmt: skip
+            problems.append(
+                f"'{labels.get(source, source)}' feeds Map, but Map reads only the last step's "
+                "table"
+            )
     return problems
 
 

@@ -1,8 +1,11 @@
 // The Ingest Studio harness's staging steps (ADR-140 Amendment 12): the "Visits and contacts" draft
-// (`?contacts=1`), what its staging preview answers, and the save gate's refusals in the gate's own
-// words (`services/ingest/pipeline.staging_graph_violations` and
-// `staging_catalogue.staging_rule_violations`), so the fake refuses what the route refuses (rule 15),
-// not only what it grants. The rows are the exit fixture's (`tests/ingest/fixtures/visits_and_contacts`):
+// (`?contacts=1`), what its staging preview answers, and the save gate's refusals the keyboard walk
+// meets, in the gate's own words (`services/ingest/pipeline.staging_graph_violations` and
+// `staging_catalogue.staging_rule_violations`), so the fake refuses those as the route refuses them
+// (rule 15), not only what it grants. It does not model every refusal: not a Derive's `normalise`,
+// a step named like a source, a step reading itself or a later one, an undeclared key, nor the
+// preview's withholding from a reader not cleared for every sampled row. Those are the server's,
+// proved in `test_studio_staging_routes.py` and `test_staging_pipeline_nodes.py`. The rows are the exit fixture's (`tests/ingest/fixtures/visits_and_contacts`):
 // synthetic, Ofcom drama numbers and invented names (rule 9). The engine here is a small stand-in for
 // the server's, enough to give each step a sample to read; the server's own is what the Python tests
 // prove.
@@ -118,6 +121,15 @@ export function stagingRefusals(graph: Graph): string[] {
   const last = ordered.at(-1)!;
   const maps = graph.nodes.filter((n) => n.kind === "map").map((n) => n.id);
   if (!maps.some((m) => edges.has(`${last.id}→${m}`))) problems.push(`the last step, '${last.id}', feeds no Map: Map reads the last step's table`);
+  const read = new Set(steps.flatMap(inputsOf));
+  for (const n of graph.nodes)
+    if (n.kind === "source" && !read.has(n.id))
+      problems.push(`source '${n.label}' is read by no step: a pipeline with staging steps maps only its last step's table, so its rows would go nowhere`);
+  const labelOf = new Map(graph.nodes.map((n) => [n.id, n.label]));
+  const kindOf = new Map(graph.nodes.map((n) => [n.id, n.kind]));
+  for (const e of [...graph.edges].sort((a, b) => (a.source + a.target).localeCompare(b.source + b.target)))
+    if (maps.includes(e.target) && e.source !== last.id && ["source", "profile", ...STAGING].includes(kindOf.get(e.source) ?? ""))
+      problems.push(`'${labelOf.get(e.source) ?? e.source}' feeds Map, but Map reads only the last step's table`);
   if (problems.length) return problems;
   const known = graph.nodes.filter((n) => n.kind === "source").map((n) => n.id);
   const readLater = new Set<string>();

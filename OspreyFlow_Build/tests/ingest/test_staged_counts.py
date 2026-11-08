@@ -18,11 +18,12 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
-from services.ingest.engine import encode_key_parts
+from services.ingest.engine import encode_key_parts, hash_parts
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import read_staged_table, source_table
 
 from schemas.ingest import RejectionRef
+from schemas.staging import step_inputs
 from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the autouse fixture)
 from tests.ingest.test_staged_run import RECIPE, load
 
@@ -40,6 +41,19 @@ async def test_per_step_counts_equal_the_staged_tables() -> None:
     assert (lookup.rows_in, lookup.unmatched) == (6, 1)
     assert (by_step["with_owner"].rejected, by_step["with_owner"].right_rows_in) == (2, 4)
     assert sum(c.rows_out for c in done.report.staging_steps) == done.rows_staged
+    # And each step's rows in are its input table's, and a one-input step accounts for every row it
+    # read: out, left out, folded, or refused (the review of L1.4; rule 2).
+    assert RECIPE.staging
+    tables = {**done.staging.tables}
+    for step, count in zip(RECIPE.staging, done.report.staging_steps, strict=True):
+        first = step_inputs(step)[0]
+        assert count.rows_in == len(tables[first].rows), step.id
+        if step.kind in ("lookup", "filter", "derive", "dedupe"):
+            assert count.rows_in == (
+                count.rows_out + count.filtered_out + count.repeats_folded + count.rejected
+            ), step.id
+        if step.kind == "join":
+            assert count.right_rows_in == len(tables[step_inputs(step)[1]].rows)
 
 
 async def test_every_step_is_counted_in_run_order() -> None:
@@ -79,3 +93,13 @@ def test_a_staged_row_s_identity_is_the_engine_s_key_encoding() -> None:
         key=["booking_id"],
     )
     assert table.rows[0].refs[0].row_key == encode_key_parts(["VB-001"])
+
+
+def test_a_staged_row_without_a_declared_key_is_the_hash_of_all_its_cells() -> None:
+    """The shape the run route gives (`studio_staging.source_tables` declares no key): every cell,
+    in column order, in the engine's one encoding (the review of L1.4)."""
+    table = source_table(
+        "number_owners", [{"number": "+447700900731", "owner_family_name": "WHITLOW"}],
+        load_id="ld-1",
+    )  # fmt: skip
+    assert table.rows[0].refs[0].row_key == hash_parts(["+447700900731", "WHITLOW"])

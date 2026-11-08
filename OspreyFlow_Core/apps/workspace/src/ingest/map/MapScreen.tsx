@@ -35,6 +35,7 @@ import { useEffect, useState } from "react";
 
 import type {
   ColumnProfile,
+  SourceProfile,
   StagingPreview,
   MapSampleRow,
   OntologySchema,
@@ -155,7 +156,9 @@ export function MapScreen({
     setError(null);
     Promise.all([
       fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId),
-      fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId),
+      // A staged pipeline's columns are its last step's table's, so its source's own profile is
+      // not needed: a failure to read it is only a failure for an unstaged one.
+      fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId).catch((err: unknown) => err),
       fetchOntologySchema(apiBaseUrl, bearerToken),
       fetchTransforms(apiBaseUrl, bearerToken),
       fetchHandlingScheme(apiBaseUrl, bearerToken),
@@ -174,7 +177,8 @@ export function MapScreen({
         setStagedTable(staged);
         setDraft(draftResult);
         onDraftChange?.(draftResult);
-        setColumns(staged ? stagedColumns(staged) : profileResult.columns);
+        if (!staged && profileResult instanceof Error) throw profileResult;
+        setColumns(staged ? stagedColumns(staged) : (profileResult as SourceProfile).columns);
         setOntology(ontologyResult);
         setTransforms(transformsResult);
         setScheme(schemeResult);
@@ -197,10 +201,11 @@ export function MapScreen({
   useEffect(() => {
     setReadsFrom(null);
     if (stagedTable) {
+      // Decision 8's words, and beside them anything the save gate refuses or the sample withholds
+      // (the sample runs beside refusals of steps it does not need: the review of L1.4).
+      const said = (stagedTable.problems ?? []).join(" ");
       setReadsFrom(
-        (stagedTable.problems ?? []).length
-          ? `The staged table ${stagedTable.step} cannot be read: ${(stagedTable.problems ?? []).join(" ")}`
-          : `From the staged table ${stagedTable.step}: the steps over the first ten rows of each source.`,
+        `From the staged table ${stagedTable.step}: the steps over the first ten rows of each source.${said ? ` ${said}` : ""}`,
       );
       return;
     }

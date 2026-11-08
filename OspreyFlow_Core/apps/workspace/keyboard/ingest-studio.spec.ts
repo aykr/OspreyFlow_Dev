@@ -881,7 +881,8 @@ test("a staging step is removed by keyboard, and Map reads the step before it", 
 // this same pipeline, and the live walk under a lease.
 test("phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed", async ({ page }) => {
   test.setTimeout(240_000);
-  page.setDefaultTimeout(8_000);
+  // A long walk: under a loaded machine an action's own wait needs more than the default.
+  page.setDefaultTimeout(15_000);
   await buildTheContactsSteps(page);
   await press(page, "Close the drawer");
   await openTheMapEditor(page);

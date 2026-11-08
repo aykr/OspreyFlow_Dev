@@ -129,3 +129,27 @@ def test_a_half_set_step_is_refused_in_plain_words() -> None:
         "step 'lookup' needs 'on'",
         "step 'lookup' needs at least 1 in 'add'",
     ]
+
+
+def test_a_source_no_step_reads_is_refused_not_dropped() -> None:
+    """Rule 2 (the review of L1.4): with steps, Map reads only the last step's table, so a source no
+    step reads, even with its own line to Map, would be read and counted by the run and mapped
+    nowhere. The gate refuses it."""
+    assert RECIPE.staging
+    graph = pipeline_with_staging(_base(), RECIPE.staging[:1])  # the Lookup only
+    graph.edges.append(PipelineEdge(source="number_owners", target="map"))
+    problems = pipeline_rule_violations(graph)
+    assert (
+        "source 'Number owners' is read by no step: a pipeline with staging steps maps only its "
+        "last step's table, so its rows would go nowhere"
+    ) in problems
+    assert "'Number owners' feeds Map, but Map reads only the last step's table" in problems
+
+
+def test_a_step_that_is_not_the_last_cannot_feed_map() -> None:
+    assert RECIPE.staging
+    graph = pipeline_with_staging(_base(), RECIPE.staging)
+    graph.edges.append(PipelineEdge(source="with_owner", target="map"))
+    assert "'Join: owner of contact' feeds Map, but Map reads only the last step's table" in (
+        pipeline_rule_violations(graph)
+    )

@@ -23,6 +23,7 @@ case that catches it:
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -224,15 +225,67 @@ def test_a_preview_of_another_units_recipe_is_not_found(staged: TestClient) -> N
     assert response.json()["error"] == "studio_recipe_not_found"
 
 
-def test_a_reader_not_cleared_for_the_source_sees_its_rows_masked(staged: TestClient) -> None:
+def test_a_reader_not_cleared_for_a_sampled_row_is_given_nothing_of_the_run(
+    staged: TestClient,
+) -> None:
+    """Rule 3 (the review of L1.4): the reader writes the steps, so a Filter's counts, a Derive's
+    shapes or a rejection's row could answer questions about a value a mask hides. A reader who
+    may not view every sampled row is given no row, count, rejection or profile at all."""
     _update(staged, handling=_UNCLEARED_HANDLING)
-    response = _preview(staged, "with_owner")
+    graph = _draft(staged).pipeline.model_copy(deep=True)
+    graph.nodes.append(
+        PipelineNode(
+            id="guess", kind=PipelineNodeKind.FILTER, label="Guess",
+            config={
+                "input": "titled",
+                "keep": [{"field": "owner_family_name", "equals": "WHITLOW"}],
+            },
+        )  # fmt: skip
+    )
+    graph.edges = [e for e in graph.edges if (e.source, e.target) != ("titled", "map")]
+    graph.edges += [
+        PipelineEdge(source="titled", target="guess"),
+        PipelineEdge(source="guess", target="map"),
+    ]
+    response = _preview(staged, "guess", graph)
     assert response.status_code == 200
     body = response.json()
     assert body["values_masked"] is True
+    assert body["rows"] == [] and body["counts"] == [] and body["rejections"] == []
+    assert body["profile"] is None and body["columns"] == []
+    assert any(p.startswith("The sample is withheld") for p in body["problems"])
     for name in ("WHITLOW", "VB-2605-001", "HMP Fenwick Moor"):
         assert name not in response.text
-    assert body["profile"]["values_masked"] is True
+
+
+def test_a_preview_reads_only_the_saved_pipeline_s_sources(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    """Rules 3 and 4 (the review of L1.4): a source the request names that is not the saved
+    draft's own (here, another file in the ingest folder) is refused in words and never read."""
+    other = tmp_path / "elsewhere.csv"
+    other.write_text("secret_column\nSHOULD-NOT-BE-READ\n", encoding="utf-8")
+    graph = _draft(staged).pipeline.model_copy(deep=True)
+    owners = next(n for n in graph.nodes if n.id == "number_owners")
+    owners.config = {**owners.config, "source_location": str(other)}
+    body = _preview(staged, "with_establishment", graph).json()
+    assert (
+        "source 'Owners' is not the saved pipeline's: save its source before a step's sample "
+        "reads it"
+    ) in body["problems"]
+    assert body["rows"] == [] and body["counts"] == []
+    assert "SHOULD-NOT-BE-READ" not in json.dumps(body)
+
+
+def test_a_step_s_sample_names_a_refusal_of_a_step_it_does_not_run(staged: TestClient) -> None:
+    """The review of L1.4 (R1): the sample of an earlier step runs only the steps it needs, so a
+    later step's catalogue refusal reaches the drawer only through the save gate's own call."""
+    broken = _broken(staged)  # the Join's adapter is no text adapter
+    saved = staged.put(f"{RECIPE_URL}/pipeline", json=broken.model_dump(mode="json"))
+    body = _preview(staged, "with_establishment", broken).json()
+    assert body["problems"] == saved.json()["problems"]
+    assert any("no_such_adapter" in p for p in body["problems"])
+    assert len(body["rows"]) == 6
 
 
 def test_test_runs_the_steps_and_names_each_rejection_s_rows(staged: TestClient) -> None:
@@ -275,5 +328,9 @@ def test_a_step_s_sample_runs_beside_refusals_of_steps_it_does_not_need(staged: 
     unread.edges = [e for e in unread.edges if not gone & {e.source, e.target}]
     unread.edges.append(PipelineEdge(source="with_establishment", target="map"))
     body = _preview(staged, "with_establishment", unread).json()
-    assert body["problems"] == ["source 'Owners' reaches no load; its rows would go nowhere"]
+    assert body["problems"] == [
+        "source 'Owners' reaches no load; its rows would go nowhere",
+        "source 'Owners' is read by no step: a pipeline with staging steps maps only its last "
+        "step's table, so its rows would go nowhere",
+    ]
     assert len(body["rows"]) == 6

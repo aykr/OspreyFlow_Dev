@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import type { PipelineGraph, PipelineNode, StagingPreview } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
+import { Checkbox } from "../../design/primitives/Checkbox";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
 import { Table, type TableColumn } from "../../design/primitives/Table";
@@ -404,9 +405,8 @@ export function StagingSettings({
             {tables.map((t) => {
               const inputs = list<string>(rec.inputs);
               return (
-                <label key={t} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
-                  <input
-                    type="checkbox"
+                <label key={t} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", minHeight: 24 }}>
+                  <Checkbox
                     checked={inputs.includes(t)}
                     onChange={(e) => set("inputs", e.target.checked ? [...inputs, t] : inputs.filter((x) => x !== t))}
                   />
@@ -489,7 +489,9 @@ export function StagingSample({
     { key: "#", header: "Row", numeric: true, render: (r) => String(r.i + 1) },
     ...columnNames.map((name) => ({ key: name, header: name, render: (r: { i: number; values: Record<string, string> }) => r.values[name] ?? "" })),
   ];
-  const problems = preview?.problems ?? [];
+  // The withheld sentence is the sample's own, not the save gate's (rule 3; the review of L1.4).
+  const withheld = (preview?.problems ?? []).filter((p) => p.startsWith("The sample is withheld"));
+  const problems = (preview?.problems ?? []).filter((p) => !withheld.includes(p));
   return (
     <section aria-label="Sample of this step" style={{ display: "grid", gap: "var(--sp-8)", minWidth: 0 }}>
       <h4 style={{ margin: 0, fontSize: "var(--fs-13)" }}>Sample</h4>
@@ -502,6 +504,11 @@ export function StagingSample({
         </Button>
       </div>
       {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      {withheld.map((w) => (
+        <p key={w} role="status" style={{ margin: 0 }}>
+          {w}
+        </p>
+      ))}
       {problems.length > 0 && (
         <div role="alert" aria-label="What the save gate refuses" style={{ display: "grid", gap: "var(--sp-2)" }}>
           <p style={{ margin: 0 }}>The save gate refuses this pipeline:</p>

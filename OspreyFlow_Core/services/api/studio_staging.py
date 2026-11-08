@@ -21,11 +21,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from services.ingest.pipeline import (
+    pipeline_from_recipe,
     pipeline_rule_violations,
     staging_from_pipeline,
     staging_graph_violations,
+    step_record_violations,
 )
-from services.ingest.profiler import _shape_mask, profile_source
+from services.ingest.profiler import profile_source
 from services.ingest.reference_list_import import kept_lists, lists_for_run
 from services.ingest.staged_run import staging_rejection_record, step_counts
 from services.ingest.staging import ObjectStorageConfig
@@ -50,9 +52,9 @@ from schemas.ingest import (
 )
 from schemas.staging import StagingStep, step_inputs
 
-from .run_source import topological
+from .run_source import branch_location, topological
 from .studio_map import resolve_source_handling
-from .studio_profile import _read_rows, row_markings, sample_markings
+from .studio_profile import _read_rows, sample_markings
 from .target_models import TargetModelStore
 
 #: Q4 (a): a drawer's live sample reads the first ten rows of each source, as Map's sample pages.
@@ -140,8 +142,9 @@ def source_tables(
     raw: dict[str, list[dict[str, str]]] = {}
     for node in source_nodes(pipeline):
         reader = _source_draft(draft, node)
-        if location and not node.config.get("source_location"):
-            reader = reader.model_copy(update={"source_location": location})
+        chosen = branch_location(node, location)  # the run's file choice, as Verify's
+        if chosen:
+            reader = reader.model_copy(update={"source_location": chosen})
         rows = _read_rows(reader)
         if limit is not None:
             rows = rows[:limit]
@@ -165,6 +168,30 @@ def _ancestry(steps: Sequence[StagingStep], step_id: str) -> list[StagingStep]:
     return [s for s in steps if s.id in wanted]
 
 
+def _unsaved_sources(draft: StudioRecipeDraft, pipeline: PipelineGraph) -> list[str]:
+    """The source nodes of `pipeline` that are not the saved draft's own, as words. A preview reads
+    only the files the saved pipeline names (the review of L1.4: the request's own pipeline once
+    named any file in the ingest folder, read at the viewer's level under the recipe's marking)."""
+    saved = {n.id: n for n in source_nodes(pipeline_from_recipe(draft))}
+    problems = []
+    for node in source_nodes(pipeline):
+        held = saved.get(node.id)
+        keys = ("connector_profile", "source_location")
+        if held is None or any(node.config.get(k) != held.config.get(k) for k in keys):
+            problems.append(
+                f"source '{node.label}' is not the saved pipeline's: save its source before a "
+                "step's sample reads it"
+            )
+    return problems
+
+
+#: What the preview says when it withholds the sample (rule 3).
+WITHHELD = (
+    "The sample is withheld: some of its source rows are above your clearance or restricted to "
+    "another unit, and a step's own settings could be used to tell their values."
+)
+
+
 def preview_staging(
     draft: StudioRecipeDraft,
     body: StagingPreviewInput,
@@ -174,10 +201,16 @@ def preview_staging(
     references: Sequence[ReferenceList],
     storage: ObjectStorageConfig,
 ) -> StagingPreview:
-    """The steps up to `body.step` over the first ten rows of each source, with every refusal of
-    the save gate for the whole pipeline beside it. A row any of whose source rows the reader may
-    not view is masked, and so is the profile, as Map's sample and
-    Profile mask them (rule 3). Nothing is written: no staged Parquet, no raw rows."""
+    """The steps up to `body.step` over the first ten rows of each source of the **saved**
+    pipeline, with every refusal of the save gate for the pipeline the drawer holds beside it.
+    Nothing is written: no staged Parquet, no raw rows.
+
+    Rule 3 (the review of L1.4). The reader writes the steps that run over the rows, so a Filter,
+    a Derive or a Join could be made to answer questions about a value it hides: masking a cell's
+    shape is not enough. So **if the reader may not view every row the sample reads, nothing of the
+    run is returned**: no rows, counts, rejections or profile, only the gate's words and
+    `values_masked`. A source the request names that is not the saved draft's own is refused in
+    words, and nothing is read."""
     pipeline = body.pipeline
     problems = [*pipeline_rule_violations(pipeline)]
     problems.extend(
@@ -185,10 +218,13 @@ def preview_staging(
         for p in staging_gate(pipeline, references=references, dataset_id=draft.dataset_id)
         if p not in problems
     )
+    unsaved = _unsaved_sources(draft, pipeline)
+    if unsaved:
+        return StagingPreview(step=body.step, problems=[*problems, *unsaved])
     # A step's record the schema refuses cannot be run at all; any other refusal (a source not yet
     # used, a later step half set) is reported beside the sample, which runs whenever the steps
     # this one needs can.
-    if staging_graph_violations(pipeline):
+    if step_record_violations(pipeline):
         return StagingPreview(step=body.step, problems=problems)
     steps = staging_from_pipeline(pipeline) or []
     if body.step not in {s.id for s in steps}:
@@ -196,8 +232,14 @@ def preview_staging(
             step=body.step, problems=[f"the pipeline has no step {body.step!r} to preview"]
         )
     wanted = _ancestry(steps, body.step)
+    read = source_tables(draft, pipeline, load_id="preview", limit=PREVIEW_ROWS)
+    every_row = [r for rows in read.raw.values() for r in rows]
+    sample = sample_markings(draft, scheme, every_row)
+    if not sample.readable_by(principal, scheme):
+        return StagingPreview(
+            step=body.step, problems=[*problems, WITHHELD], values_masked=True
+        )
     try:
-        read = source_tables(draft, pipeline, load_id="preview", limit=PREVIEW_ROWS)
         lists = lists_for_run(
             wanted, references, dataset_id=draft.dataset_id or "", storage=storage
         )
@@ -209,33 +251,16 @@ def preview_staging(
             step=body.step,
             problems=[*problems, *(p for p in refused.problems if p not in problems)],
         )
-
-    def readable(source: str, index: int) -> bool:
-        rows = read.raw.get(source)
-        if rows is None:  # a list row: the dataset's own model, not a source's marking
-            return True
-        return row_markings(draft, scheme, rows[index]).readable_by(principal, scheme)
-
     table = result.output
-    shown: list[dict[str, str]] = []
-    masked = False
-    for row in table.rows:
-        cells = {c: row.cells.get(c) or "" for c in table.columns}
-        if all(readable(r.source, r.row_index) for r in row.refs):
-            shown.append(cells)
-        else:
-            masked = True
-            shown.append({c: _shape_mask(v) for c, v in cells.items()})
-    every_row = [r for rows in read.raw.values() for r in rows]
-    sample = sample_markings(draft, scheme, every_row)
+    shown = [{c: row.cells.get(c) or "" for c in table.columns} for row in table.rows]
     profile = (
         profile_source(
-            [{c: row.cells.get(c) or "" for c in table.columns} for row in table.rows],
+            shown,
             source_handling=resolve_source_handling(draft),
             principal=principal,
             scheme=scheme,
             source_markings=sample.markings,
-            unviewable=sample.unviewable or masked,
+            unviewable=sample.unviewable,
         )
         if table.rows
         else None
@@ -245,8 +270,8 @@ def preview_staging(
         problems=problems,
         columns=list(table.columns),
         rows=shown,
-        values_masked=masked or bool(profile and profile.values_masked),
-        rows_sampled=sum(len(rows) for rows in read.raw.values()),
+        values_masked=bool(profile and profile.values_masked),
+        rows_sampled=len(every_row),
         counts=step_counts(result),
         rejections=[staging_rejection_record(r) for r in result.rejections],
         profile=profile,
