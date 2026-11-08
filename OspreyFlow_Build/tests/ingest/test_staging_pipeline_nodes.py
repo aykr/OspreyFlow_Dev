@@ -110,3 +110,22 @@ def test_the_last_step_must_feed_map() -> None:
     graph.edges = [e for e in graph.edges if (e.source, e.target) != ("titled", "map")]
     problems = pipeline_rule_violations(graph)
     assert "the last step, 'titled', feeds no Map: Map reads the last step's table" in problems
+
+
+def test_a_half_set_step_is_refused_in_plain_words() -> None:
+    """What a drawer shows while a step is being set: what it still needs, never a validator's
+    phrasing (the save gate's words, which the drawer's sample repeats)."""
+    graph = _base()
+    graph.nodes.append(
+        PipelineNode(
+            id="lookup", kind=PipelineNodeKind.LOOKUP, label="Lookup",
+            config={"input": "visit_bookings", "list": "", "add": []},
+        )  # fmt: skip
+    )
+    graph.edges.append(PipelineEdge(source="visit_bookings", target="lookup"))
+    problems = pipeline_rule_violations(graph)
+    assert [p for p in problems if p.startswith("step 'lookup'")] == [
+        "step 'lookup' needs 'list'",
+        "step 'lookup' needs 'on'",
+        "step 'lookup' needs at least 1 in 'add'",
+    ]

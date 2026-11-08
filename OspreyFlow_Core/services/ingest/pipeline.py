@@ -205,8 +205,14 @@ def _record_problems(node: PipelineNode) -> list[str]:
             if error["type"] == "extra_forbidden":
                 words.append(f"step {node.id!r} declares {where!r}, which a {node.kind.value} "
                              "step does not read")  # fmt: skip
-            elif error["type"] == "missing":
+            elif error["type"] in ("missing", "string_too_short"):
                 words.append(f"step {node.id!r} needs {where!r}")
+            elif error["type"] == "too_short":
+                least = (error.get("ctx") or {}).get("min_length", 1)
+                words.append(f"step {node.id!r} needs at least {least} in {where!r}")
+            elif error["type"] == "value_error":
+                cause = str(error["msg"]).removeprefix("Value error, ")
+                words.append(f"step {node.id!r}: {cause}")
             else:
                 words.append(f"step {node.id!r}: {where}: {error['msg']}")
         return words

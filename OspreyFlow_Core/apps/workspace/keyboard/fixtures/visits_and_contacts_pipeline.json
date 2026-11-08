@@ -246,5 +246,32 @@
         "properties": {}
       }
     ]
-  }
+  },
+  "unmapped_fields": [
+    {
+      "field": "estab_id",
+      "action": "ignore",
+      "note": "Read by the Lookup; its name is in the title."
+    },
+    {
+      "field": "visitor_family_name",
+      "action": "ignore",
+      "note": "The visitor is matched in phase 8's fuzzy step, not here."
+    },
+    {
+      "field": "visitor_given_names",
+      "action": "ignore",
+      "note": "As above."
+    },
+    {
+      "field": "establishment",
+      "action": "ignore",
+      "note": "Added by the Lookup; carried in the title."
+    },
+    {
+      "field": "visit_at",
+      "action": "ignore",
+      "note": "The booked visit's day and time, carried in the title. Not a link time: the visit has not happened."
+    }
+  ]
 }

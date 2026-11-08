@@ -1,9 +1,9 @@
 """Phase 7's exit pipeline as the Studio's drawers build it (ADR-140 Amendment 12):
 `apps/workspace/keyboard/fixtures/visits_and_contacts_pipeline.json` is the "Visits and contacts"
 pipeline, its steps as nodes, which the keyboard walk (`ingest-studio.spec.ts`) builds by keys and
-`stagingSteps.test.ts` rebuilds through the Glass's own edits. This holds the fixture to the server's
-own `pipeline_with_staging` of the exit recipe's steps, so the three cannot drift apart, and to the
-exit recipe's steps exactly (`test_the_fixture_is_the_exit_recipe_s_steps`)."""
+`stagingSteps.test.ts` rebuilds through the Glass's own edits. This holds the fixture to the
+server's own `pipeline_with_staging` of the exit recipe's steps, so the three cannot drift apart,
+and to the exit recipe's steps exactly (`test_the_fixture_is_the_exit_recipe_s_steps`)."""
 
 from __future__ import annotations
 
@@ -46,7 +46,12 @@ def built() -> dict[str, object]:
     return {
         "base": base().model_dump(mode="json"),
         "pipeline": graph.model_dump(mode="json"),
-        "row_template": RECIPE.row_template.model_dump(mode="json", by_alias=True, exclude_none=True),
+        "row_template": RECIPE.row_template.model_dump(
+            mode="json", by_alias=True, exclude_none=True
+        ),
+        "unmapped_fields": [
+            f.model_dump(mode="json", exclude_none=True) for f in RECIPE.unmapped_fields
+        ],
     }
 
 
@@ -55,7 +60,8 @@ def test_the_fixture_is_what_the_server_builds() -> None:
 
 
 def test_the_fixture_is_the_exit_recipe_s_steps() -> None:
-    graph = PipelineGraph.model_validate(json.loads(FIXTURE.read_text(encoding="utf-8"))["pipeline"])
+    walked = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    graph = PipelineGraph.model_validate(walked["pipeline"])
     assert staging_from_pipeline(graph) == RECIPE.staging
 
 
