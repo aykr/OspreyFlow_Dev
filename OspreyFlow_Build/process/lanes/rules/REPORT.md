@@ -1,37 +1,42 @@
-# rules lane · report · L2.8d, a corrected node an alert names, and L2.8c's carries (8 November 2026)
+# rules lane · report · L2.8d, a corrected node an alert names, and L2.8c's carries (8 November 2026; after two review rounds)
 
-1. **Rulings (orchestrator and owner, recorded):**
+1. **Rulings:**
    - Q1 a: each caller records the corrected node, with no port change.
    - Q2: the L2.8c review's items 11 and 13 are built here.
-   - Q3: ADR-109 Amendment 12 reserved and written.
+   - Q3: Amendment 12.
    - Q4 a: the start-up DDL runs under a lock.
-   - The reviewer's item 4 was settled on (b), the safe default. **An owner question is open:** may a correction that lowers a marking admit lower readers to an alert with no node? If (a), it is one line in `raiser_read_admits`.
-2. **The referent rename: met.** For every caller (confirm and retract routes, the close, `supersede.py` sync and job, the enrich stage), an alert naming the corrected node stays listed for its reader. It is refused to the OFFICIAL reader of the SECRET revision and to another case. Test: `test_repoint_journal_callers_live.py`'s `..._naming_..._stays_listed`. Each is red with that caller's record removed or the settle's rename removed. The refusals are red with the revision at OFFICIAL, or with the case scope made true. A route confirming an alert's own node is covered too (reviewer item 1).
-3. **Lowered markings: met.**
-   - An alert with no node is not given to a reader below its raiser's read, for both a node and a link. Each is red with (a).
-   - A re-mark never lowers a node; red with the node's own marking dropped.
-   - A raised referent re-marks the alert's node; red with referents left out.
+   - **The owner's ruling (a):** a lowering correction admits the lower reader to an alert with no node. It is applied through the one floor function, `alerts.raiser_floor`.
+   - Decisions taken: none beyond these.
+2. **The referent rename: met.** For every caller (confirm and retract routes, the close, `supersede.py` sync and job, the enrich stage), an alert naming the corrected node stays listed for its reader. It is refused to the OFFICIAL reader of the SECRET revision and to another case. Test: `test_repoint_journal_callers_live.py`'s `..._naming_..._stays_listed`. Each is red with that caller's record removed or the rename removed; the refusals are red with the revision at OFFICIAL, or with the case scope made true. A route confirming an alert's own node is covered (red: referents alone).
+3. **Lowered markings, per the owner's ruling: met.**
+   - A lowered node and a lowered link each admit the OFFICIAL reader to an alert with no node (raised through the rule gate's own row). Each is red with (b).
+   - The queue, the audit and a pack item agree (red with (b)).
+   - A node-bearing alert is never lowered (red with the node's marking dropped).
 4. **Carries: met.**
-   - (a) Two conformance cases: the other type elsewhere (red with id-only marking) and both types at the node (red with the label dropped).
-   - (b) An Alert node carries only `ALERTED_ON` links; red with a planted `MENTIONED_IN`. The ontology doesn't guarantee it; the writer does.
-   - (c) `remove_and_publish` is one helper; history serves no copy.
-   - (d) The shared stand-in is used.
-   - (e) Alert and hotlist stores share a DDL lock; red: `UniqueViolationError`. Ceilings are in point 4.
-   - (f) A record opens at its first pair; red with it opened eagerly.
-   - (g) Item 11: the stand-in's refusal is tested. Item 13: app.py registers through `register_all`, red with `alerts=` removed.
-5. **Lane-reviewer: run, and fixed.** It returned five must-fix items (Alert node via a route, the incident conformance case, the hotlist DDL, lowered markings, gate evidence) and eleven minor ones. All are fixed except two minor ones left, below. Red records are in `l2.8d/`.
-6. **Gate commit 6afb5b2, tree fbac952d8cf2a2989551d0f376758bdaee9676f8, on main 222b667** (`gates/6afb5b2.*`).
+   - (a) Two conformance cases.
+   - (b) The `ALERTED_ON` guard.
+   - (c) `remove_and_publish`; history serves no copy.
+   - (d) The shared stand-in.
+   - (e) DDL lock, one table per transaction, with no deadlock against a live read. Red cases: `UniqueViolation`; `DeadlockDetected`.
+   - (f) A record opens at its first pair.
+   - (g) Items 11 and 13.
+5. **Review round 1 (my lane-reviewer):** 5 must-fix, 11 minor, all fixed but 2 minor.
+6. **Review round 2 (independent):**
+   - Items 1–3 fell away under ruling (a), replaced by the agreement test.
+   - Item 4: the lock order.
+   - Item 5: rebased, with the packs fix kept to its lines.
+   - Item 6: the worker binds `judgement_store`, which is now required.
+   - Item 9: the shared `RaiserReads` fake.
+   - Item 10: every red re-taken at the rebased branch, and the stray lines removed.
+   - Item 8 falls away under (a); an unjudgeable marking refuses one alert.
+7. **Gate commit eae33d9, tree f12f9e2a2ce4128196de144f876c1a67eae1846b, on main 6336bed** (`gates/eae33d9.*`).
    - **make -k ci:** exit 0.
-   - **make test:** Python 8,277 passed, 4 failed; JS 2,653/2,654. Every failure is this machine's, as at L2.8c, and is explained in the file.
-   - **Live (rules lease, stack a):** 595/611 at a1bfc9e. The 16 failures:
-     - 14 were packs: L2.8c's own regression on main, fixed at ba6f903, then 40/40.
-     - KYC fails on main.
-     - The rule list fails on O-hyg's leftover rules.
-7. **Contention (rule 14):** platform reached stack a's Postgres unleased at 15:54–16:00Z. No `litellm*` database remains. Every run up to 16:01Z was re-taken.
-8. **Left, minor:** the AST registration test misses a register-by-keyword. The journals' open-at-first-pair helpers are duplicated, and so are the live file's `_still_named`/`_still_listed`.
-9. **Commits:** 1aa4dad, 9559d84, 49164b6, d13ed81, a1bfc9e, ba6f903, 6afb5b2, then this records commit.
-10. **Ratify (outside rules' map):** app.py (routes, `register_all`), supersede.py, pipeline_run.py (studio), worker_main.py, working_set_revert.py, the graph-port suite, spec 01, the test fakes, test_packs.py.
-11. **Requests:**
-    - Mark ADR-109 Amendment 12 `written` in the reservations.
-    - Put the open owner question on the owner's list.
-12. **Still running:** nothing. Stack a is down and the lease released.
+   - **make test:** Python 8,447 passed, 4 failed, 2 errors; JS 2,660/2,661. All are this machine's or Docker Hub's, and each is explained in the file.
+   - **Live (rules lease, stack b, at 42ab45d, no code difference):** 626/628. The KYC case fails on main; the rule list fails on O-hyg's leftover rules.
+8. **Found and fixed:** L2.8c's packs regression (14 live cases red on main) lands here.
+9. **Contention (rule 14):** platform was on stack a unleased, 15:54–16:00Z; every run in that window was re-taken.
+10. **Left, minor:** the AST registration test misses a register-by-keyword. Helpers are duplicated in the journals and the live file.
+11. **Commits:** main..eae33d9 (11), then this records commit.
+12. **Ratify (outside rules' map):** app.py, supersede.py, pipeline_run.py (studio), worker_main.py, working_set_revert.py, packs.py, the graph-port suite, spec 01, test fakes, test_packs.py.
+13. **Requests:** mark Amendment 12 `written`.
+14. **Still running:** nothing. Stack b is down and the lease released.
