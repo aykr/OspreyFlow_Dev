@@ -27,15 +27,23 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pyarrow.fs as pa_fs
 import pytest
 from services.api.studio_publish import write_and_commit_recipe
 from services.ingest import staging
-from services.ingest.engine import dry_run_recipe, run_recipe
+from services.ingest.engine import StaleRecipeError, dry_run_recipe, run_recipe
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError
 from services.ingest.staged_run import dry_run_staged_recipe, run_staged_recipe
 from services.ingest.staging import ObjectStorageConfig
-from services.ingest.staging_catalogue import StagedTable, reference_table, source_table
+from services.ingest.staging_catalogue import (
+    StagedTable,
+    StagingError,
+    list_rows_path,
+    read_staged_table,
+    reference_table,
+    source_table,
+)
 
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
@@ -184,6 +192,11 @@ async def test_every_booking_is_accounted_for() -> None:
     # which Map itself rejects one (006, booked "yesterday").
     assert done.report.rows_read == 10
     assert len(done.report.rejections) == 3
+    # Map's own rejection is named by its row of the staged table it read, which the reason says,
+    # never mistaken for row 4 of `visit_bookings` (booking 005; lane review, merge round).
+    [mapped] = [r for r in done.report.rejections if r not in staging_rejections]
+    assert mapped.row_index == 4
+    assert mapped.reason.startswith("staged table titled row 4: ")
     assert set(done.staged_paths) == {"with_establishment", "with_owner", "titled"}
     assert done.rows_staged == 6 + 5 + 5
     assert done.parquet_bytes > 0
@@ -213,16 +226,127 @@ async def test_the_load_s_raw_rows_are_the_sources_rows() -> None:
     }
     # Every ref of every element resolves to its row, and the row is the one the element came from.
     rows = {(r.load_id, r.source, r.row_index): r for rs in raw.values() for r in rs}
+    lists_seen: set[str] = set()
     for element in [*graph.committed_nodes, *graph.committed_edges]:
         for ref in element.provenance.sources:
             if ref.load_id is None:
-                continue  # a list row, named by its list's version
+                lists_seen.add(ref.document_id)
+                continue  # a list row: resolved below, by its list's version
             assert (ref.load_id, ref.document_id, int(ref.locator.split()[1])) in rows, ref
     booking = _node(graph, "Document", "message_id", "VB-2605-002")
     [own] = [r for r in booking.provenance.sources if r.document_id == "visit_bookings"]
     assert rows[(own.load_id, "visit_bookings", int(own.locator.split()[1]))].fields[
         "booking_id"
     ] == ("VB-2605-002")
+    # A list row's ref resolves too (lane review, merge round): the list's rows at that version are
+    # staged under the list's own dataset, name and version, and the row named is the one used.
+    assert lists_seen == {"reference_list:establishments@v3"}
+    listed = read_staged_table(list_rows_path(ESTABLISHMENTS, storage=store), storage=store)
+    assert [r.cells["estab_id"] for r in listed.rows] == [
+        r["estab_id"] for r in _rows("establishments.csv")
+    ]
+    [via_list] = [r for r in booking.provenance.sources if r.document_id.startswith("reference_")]
+    assert listed.rows[int(via_list.locator.split()[1])].cells["name"] == "HMP Halbeck"
+
+
+def _exists(path: str) -> bool:
+    store = ObjectStorageConfig(bucket="staging")
+    return staging.filesystem(store).get_file_info(path).type != pa_fs.FileType.NotFound
+
+
+async def test_a_source_load_s_raw_rows_are_never_replaced() -> None:
+    """Lane review, merge round: a run that names a source's load whose raw rows are already
+    written reads them as they are, or is refused in words; it never replaces them, so a ref an
+    earlier element stored still resolves (rule 2). The same rows again are no change."""
+    first, _graph = await load()
+    again, _graph = await load()
+    assert again.report.rows_read == first.report.rows_read
+    store = ObjectStorageConfig(bucket="staging")
+    path = "staging/loads/ld-vb-1/raw.parquet"
+    before = staging.read_raw_rows(path, storage=store)
+    sources, lists = inputs()
+    changed = [dict(r) for r in _rows("visit_bookings.csv")]
+    changed[0]["visit_at"] = "Thu 6 Nov 09:00"
+    sources["visit_bookings"] = source_table(
+        "visit_bookings", changed, load_id="ld-vb-1", key=["booking_id"]
+    )
+    graph = ValidatingGraph(ONTOLOGY)
+    tx = await graph.begin_transaction()
+    with pytest.raises(StagingError, match="ld-vb-1.*already holds other rows"):
+        await run_staged_recipe(
+            RECIPE,
+            sources=sources,
+            lists=lists,
+            dataset_id="pid",
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx=tx,  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="ld-run-2",
+            investigation_scope="case-1",
+            storage=store,
+            scheme=SCHEME,
+        )
+    assert staging.read_raw_rows(path, storage=store) == before
+    assert graph.open_nodes == [] and graph.open_edges == []
+
+
+async def test_a_list_version_names_one_set_of_rows() -> None:
+    """Lane review, merge round: a list's rows at a version, once staged, are the rows a ref to
+    that version names; a run giving other rows under the same version is refused in words."""
+    await load()
+    sources, _lists = inputs()
+    rows = [dict(r) for r in _rows("establishments.csv")]
+    rows[0]["name"] = "HMP Elsewhere"
+    graph = ValidatingGraph(ONTOLOGY)
+    tx = await graph.begin_transaction()
+    with pytest.raises(StagingError, match="establishments.*version 3.*already holds other rows"):
+        await run_staged_recipe(
+            RECIPE,
+            sources=sources,
+            lists={"establishments": reference_table(ESTABLISHMENTS, rows)},
+            dataset_id="pid",
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx=tx,  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="ld-run-3",
+            investigation_scope="case-1",
+            storage=ObjectStorageConfig(bucket="staging"),
+            scheme=SCHEME,
+        )
+    store = ObjectStorageConfig(bucket="staging")
+    listed = read_staged_table(list_rows_path(ESTABLISHMENTS, storage=store), storage=store)
+    assert listed.rows[0].cells["name"] == "HMP Fenwick Moor"
+
+
+async def test_a_refused_run_writes_no_raw_or_list_rows() -> None:
+    """Lane review, merge round: as a plain run stages raw rows only after the run's own refusals
+    (`03` §5.1, `engine.run_recipe`), a staged run refused there (here a stale ontology) writes no
+    source's raw rows and no list's."""
+    sources, lists = inputs()
+    stale = RECIPE.model_copy(update={"ontology_version": ONTOLOGY.version - 1})
+    graph = ValidatingGraph(ONTOLOGY)
+    tx = await graph.begin_transaction()
+    with pytest.raises(StaleRecipeError):
+        await run_staged_recipe(
+            stale,
+            sources=sources,
+            lists=lists,
+            dataset_id="pid",
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx=tx,  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="ld-run-4",
+            investigation_scope="case-1",
+            storage=ObjectStorageConfig(bucket="staging"),
+            scheme=SCHEME,
+        )
+    store = ObjectStorageConfig(bucket="staging")
+    assert not _exists("staging/loads/ld-vb-1/raw.parquet")
+    assert not _exists("staging/loads/ld-no-1/raw.parquet")
+    assert not _exists(list_rows_path(ESTABLISHMENTS, storage=store))
 
 
 async def test_only_a_staged_run_may_leave_its_raw_rows_to_the_caller(tmp_path: Path) -> None:

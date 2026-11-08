@@ -65,6 +65,9 @@ class LocalStore:
     def open_input_file(self, path: str) -> Any:
         return self._fs.open_input_file(path)
 
+    def get_file_info(self, path: str) -> Any:
+        return self._fs.get_file_info(path)
+
 
 @pytest.fixture(autouse=True)
 def local_staging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

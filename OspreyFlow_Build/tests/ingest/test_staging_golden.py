@@ -113,8 +113,9 @@ def test_every_input_row_is_accounted_for(name: str) -> None:
             ("left", step.left, report.rows_in, report.unmatched),
             ("right", step.right, report.right_rows_in, report.right_unmatched),
         ):
-            first = {(ref.source, ref.row_index) for ref in result.tables[table].rows[0].refs}
-            source = next(iter(first))[0]
+            # The side's own source: its first row's first ref (a Lookup's list ref comes after),
+            # never an arbitrary member of a set, which would change with the hash seed.
+            source = result.tables[table].rows[0].refs[0].source
             met = {
                 (ref.source, ref.row_index)
                 for row in out

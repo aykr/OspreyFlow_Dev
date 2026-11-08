@@ -34,7 +34,7 @@ import asyncio
 import functools
 import json
 import time
-from collections.abc import Hashable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -774,13 +774,16 @@ def _provenance(
 
 
 def _refuse_staging_without_its_refs(
-    recipe: Recipe, row_refs: Mapping[int, Sequence[SourceRef]] | None, *, stage_raw: bool = True
+    recipe: Recipe,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None,
+    *,
+    stage_raw: bool | Callable[[], object] = True,
 ) -> None:
     """ADR-140 Amendment 11 (lane review round 1, item 4): a recipe with staging steps maps the last
     step's table, never the raw rows of one source. Run without those rows' refs it would map the
     wrong rows and record the wrong sources, so it is refused in words; it runs through
     `staged_run.run_staged_recipe` (Test: `dry_run_staged_recipe`)."""
-    if not stage_raw and (not recipe.staging or row_refs is None):
+    if stage_raw is not True and (not recipe.staging or row_refs is None):
         # `03_CONDUIT_MIDDLEWARE.md` §5.1: every load stages its raw rows first. Only a staged run,
         # which has written its sources' raw rows itself, may leave it to that (review round 2).
         raise RecipeRuleError(
@@ -2386,7 +2389,7 @@ async def run_recipe(
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
     row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
-    stage_raw: bool = True,
+    stage_raw: bool | Callable[[], object] = True,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
     a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
@@ -2441,12 +2444,15 @@ async def run_recipe(
     # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
     already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
     storage = storage or ObjectStorageConfig.from_env()
-    # A staged run (`staged_run.run_staged_recipe`) has written its sources' rows as the raw rows
-    # already; the rows here are the table Map reads, never raw (`stage_raw=False`).
-    if stage_raw:
+    # A staged run (`staged_run.run_staged_recipe`) passes its own raw staging (its sources' rows
+    # and the lists it read), run here, after the refusals above, as a plain run's is; the rows
+    # here are the table Map reads, never raw.
+    if stage_raw is True:
         await asyncio.to_thread(
             _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
         )
+    elif stage_raw is not False:
+        await asyncio.to_thread(stage_raw)
 
     resolved = await asyncio.to_thread(
         functools.partial(

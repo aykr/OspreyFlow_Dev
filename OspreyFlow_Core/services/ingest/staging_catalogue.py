@@ -40,6 +40,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 import pyarrow as pa
+import pyarrow.fs as pa_fs
 import pyarrow.parquet as pq
 
 from knowledge_adapters import REGISTRY
@@ -180,6 +181,9 @@ class StagingResult:
     tables: dict[str, StagedTable]
     reports: list[StepReport]
     rejections: list[StagingRejection] = field(default_factory=list)
+    #: The lists the Lookups read, by name: their rows are staged with the raw rows, so a list row's
+    #: ref resolves (`stage_sources_and_lists`).
+    lists_read: dict[str, StagedTable] = field(default_factory=dict)
 
 
 # --- Tables in ----------------------------------------------------------------
@@ -207,8 +211,9 @@ def source_table(
 ) -> StagedTable:
     """A source's rows as a table: each row's ref names `name`, its position, its identity (the
     hash of its declared `key` columns, else of all its cells in column order) and `load_id`. A
-    row with an empty key part has no key, as the engine's deduplicate reads it
-    (`engine.encode_key_parts`), so its identity is the hash of its cells."""
+    row with an empty key part has no key (as the engine's deduplicate reads one), so its identity
+    falls back to the hash of all its cells. The identity stays in the staged Parquet's `_refs`;
+    it never reaches provenance (rule 7)."""
     columns: list[str] = []
     for row in rows:
         for column in row:
@@ -705,9 +710,11 @@ def run_staging(
     tables: dict[str, StagedTable] = dict(sources)
     reports: list[StepReport] = []
     rejections: list[StagingRejection] = []
+    lists_read: dict[str, StagedTable] = {}
     for step in steps:
         if isinstance(step, LookupStep):
-            done = _lookup(step, tables[step.input], by_id[readable[step.list_].id])
+            lists_read[step.list_] = by_id[readable[step.list_].id]
+            done = _lookup(step, tables[step.input], lists_read[step.list_])
         elif isinstance(step, JoinStep):
             done = _join(step, tables[step.left], tables[step.right])
         elif isinstance(step, FilterStep):
@@ -722,7 +729,7 @@ def run_staging(
         tables[step.id] = table
         reports.append(report)
         rejections.extend(rejected)
-    return StagingResult(tables[steps[-1].id], tables, reports, rejections)
+    return StagingResult(tables[steps[-1].id], tables, reports, rejections, lists_read)
 
 
 # --- Into Map -------------------------------------------------------------------
@@ -775,28 +782,21 @@ def stage_table_counted(
     return path, data.size
 
 
+def list_rows_path(reference: ReferenceList, *, storage: ObjectStorageConfig) -> str:
+    """Where a list's rows at one version are kept: `<bucket>/reference_lists/<the list's own
+    dataset>/<name>@v<version>.parquet`, so a list row's ref (`reference_list:<name>@v<version>`,
+    `row <n>`), read with the element's dataset, names a row of a file that exists. A
+    deployment-wide list's dataset is `deployment`."""
+    dataset, name = quote(reference.dataset_id, safe=""), quote(reference.name, safe="")
+    return f"{storage.bucket}/reference_lists/{dataset}/{name}@v{reference.version}.parquet"
+
+
 def stage_table(table: StagedTable, *, storage: ObjectStorageConfig, load_id: str) -> str:
     """`stage_table_counted`'s path."""
     return stage_table_counted(table, storage=storage, load_id=load_id)[0]
 
 
-def stage_raw_sources(
-    sources: Mapping[str, StagedTable], *, storage: ObjectStorageConfig
-) -> list[str]:
-    """A staged run's raw rows: each source's rows, in the raw dataset's own shape
-    (`staging.stage_raw_rows`: load, source, the row's position, its fields as JSON), written under
-    **the load that read them**, `<bucket>/loads/<that load_id>/raw.parquet`, so an element's
-    `SourceRef` (source, `row <n>`, `load_id`) names a row of a file that exists. Sources read by
-    one load share its file, told apart by `source`. A blank cell is written empty. Returns the
-    paths written."""
-    by_load: dict[str, list[tuple[str, int, str]]] = {}
-    for name, table in sources.items():
-        for index, row in enumerate(table.rows):
-            load = row.refs[0].load_id
-            if load is None:
-                raise StagingError([f"row {index} of the source {name!r} names no load"])
-            fields = json.dumps({c: row.cells.get(c) or "" for c in table.columns})
-            by_load.setdefault(load, []).append((name, index, fields))
+def _raw_arrow(load: str, rows: Sequence[tuple[str, int, str]]) -> pa.Table:
     schema = pa.schema(
         [
             pa.field("load_id", pa.string()),
@@ -805,24 +805,87 @@ def stage_raw_sources(
             pa.field("fields_json", pa.string()),
         ]
     )
+    return pa.table(
+        {
+            "load_id": [load] * len(rows),
+            "source": [r[0] for r in rows],
+            "row_index": [r[1] for r in rows],
+            "fields_json": [r[2] for r in rows],
+        },
+        schema=schema,
+    )
+
+
+def _held(fs: Any, path: str) -> pa.Table | None:
+    if fs.get_file_info(path).type == pa_fs.FileType.NotFound:
+        return None
+    with fs.open_input_file(path) as source:
+        return pq.read_table(source)
+
+
+def stage_sources_and_lists(
+    sources: Mapping[str, StagedTable],
+    lists_read: Mapping[str, StagedTable],
+    *,
+    storage: ObjectStorageConfig,
+) -> list[str]:
+    """A staged run's raw rows, written once and never replaced (rule 2), so every ref an element
+    stores names a row of a file that exists:
+
+    - each source's rows, in the raw dataset's own shape (`staging.stage_raw_rows`: load, source,
+      the row's position, its fields as JSON), under **the load that read them**,
+      `<bucket>/loads/<that load_id>/raw.parquet`; sources read by one load share its file, told
+      apart by `source`, and a blank cell is written empty;
+    - each list a Lookup read, at its version, at `list_rows_path`.
+
+    A file already there holding the same rows is left as it is; one holding other rows is refused
+    in words, and checked before anything is written, so a refusal writes nothing. The engine runs
+    this after the run's own refusals, where a plain run stages its raw rows. Returns the paths."""
+    by_load: dict[str, list[tuple[str, int, str]]] = {}
+    for name, table in sources.items():
+        for index, row in enumerate(table.rows):
+            load = row.refs[0].load_id
+            if load is None:
+                raise StagingError([f"row {index} of the source {name!r} names no load"])
+            fields = json.dumps({c: row.cells.get(c) or "" for c in table.columns})
+            by_load.setdefault(load, []).append((name, index, fields))
+    wanted: list[tuple[str, pa.Table, str]] = [
+        (
+            f"{storage.bucket}/loads/{quote(load, safe='')}/raw.parquet",
+            _raw_arrow(load, rows),
+            f"the raw rows of load {load!r}",
+        )
+        for load, rows in by_load.items()
+    ]
+    for name, table in lists_read.items():
+        if table.reference is None:
+            raise StagingError([f"the list {name!r} has no record"])
+        wanted.append(
+            (
+                list_rows_path(table.reference, storage=storage),
+                _to_arrow(table),
+                f"the list {name!r} at version {table.reference.version}",
+            )
+        )
     fs = _staging.filesystem(storage)
     fs.create_dir(storage.bucket)
-    paths: list[str] = []
-    for load, rows in by_load.items():
-        arrow = pa.table(
-            {
-                "load_id": [load] * len(rows),
-                "source": [r[0] for r in rows],
-                "row_index": [r[1] for r in rows],
-                "fields_json": [r[2] for r in rows],
-            },
-            schema=schema,
-        )
-        path = f"{storage.bucket}/loads/{quote(load, safe='')}/raw.parquet"
+    to_write: list[tuple[str, pa.Table]] = []
+    clashes: list[str] = []
+    for path, arrow, what in wanted:
+        held = _held(fs, path)
+        if held is None:
+            to_write.append((path, arrow))
+        elif not held.equals(arrow, check_metadata=True):
+            clashes.append(
+                f"{what} already holds other rows, which elements may name; they are never "
+                "replaced (give these rows a new load, or the list a new version)"
+            )
+    if clashes:
+        raise StagingError(clashes)
+    for path, arrow in to_write:
         with fs.open_output_stream(path) as sink:
             pq.write_table(arrow, sink)
-        paths.append(path)
-    return paths
+    return [path for path, _arrow, _what in wanted]
 
 
 def read_staged_table(path: str, *, storage: ObjectStorageConfig) -> StagedTable:

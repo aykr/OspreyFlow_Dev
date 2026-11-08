@@ -15,6 +15,7 @@ table Parquet cannot hold fails here and not silently. Test writes nothing.
 from __future__ import annotations
 
 import asyncio
+import functools
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -35,7 +36,7 @@ from .staging_catalogue import (
     map_input,
     read_staged_table,
     run_staging,
-    stage_raw_sources,
+    stage_sources_and_lists,
     stage_table_counted,
 )
 
@@ -74,6 +75,14 @@ def staging_rejection_record(rejection: StagingRejection) -> RejectionRecord:
             f"{rejection.reason}"
         ),
         sample="",
+    )
+
+
+def map_rejection_record(record: RejectionRecord, table: str) -> RejectionRecord:
+    """A row Map refused in a staged run: its `row_index` is its position in the staged table Map
+    read, so the reason names that table, never leaving it to be mistaken for a source row."""
+    return record.model_copy(
+        update={"reason": f"staged table {table} row {record.row_index}: {record.reason}"}
     )
 
 
@@ -116,10 +125,6 @@ async def run_staged_recipe(
 ) -> StagedLoad:
     storage = storage or ObjectStorageConfig.from_env()
     staging = await asyncio.to_thread(_stage, recipe, sources, lists, dataset_id, subscribed)
-    # Each source's rows are the raw rows of the load that read them (`loads/<its load_id>/
-    # raw.parquet`), so a ref's (source, row, load_id) names a row in a file that exists; never the
-    # table Map reads, so `run_recipe` is told not to write its own raw rows.
-    await asyncio.to_thread(stage_raw_sources, sources, storage=storage)
     paths: dict[str, str] = {}
     rows_staged = parquet_bytes = 0
     for step in recipe.staging or []:
@@ -145,12 +150,17 @@ async def run_staged_recipe(
         row_keys=row_keys,
         written=written,
         row_refs=refs,
-        stage_raw=False,
+        # Each source's rows are the raw rows of the load that read them, and each list's rows are
+        # kept at its version, so every ref names a row in a file that exists; never the table Map
+        # reads. Run by the engine after its own refusals, as a plain run's raw staging is.
+        stage_raw=functools.partial(
+            stage_sources_and_lists, sources, staging.lists_read, storage=storage
+        ),
         **engine,
     )
     report.rejections = [
         *(staging_rejection_record(r) for r in staging.rejections),
-        *report.rejections,
+        *(map_rejection_record(r, table.name) for r in report.rejections),
     ]
     # "The rows it read" (ADR-110 Amendment 12) are the rows the sources gave, not the rows of the
     # table Map read, which staging may have joined, filtered or folded.
@@ -188,7 +198,7 @@ async def dry_run_staged_recipe(
     )
     result.rejections = [
         *(staging_rejection_record(r) for r in staging.rejections),
-        *result.rejections,
+        *(map_rejection_record(r, staging.output.name) for r in result.rejections),
     ]
     result.rows_read = sum(len(table.rows) for table in sources.values())
     return StagedTest(result, staging)
