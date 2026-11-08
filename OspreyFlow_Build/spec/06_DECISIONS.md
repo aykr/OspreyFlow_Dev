@@ -28785,3 +28785,73 @@ left out) and `test_alert_evidence_withheld.py`'s
 `test_a_read_given_a_store_without_the_journal_is_refused_not_answered` (red with the tolerance put
 back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/`, `round1/` and
 `round2/`).
+
+### ADR-140, Amendment 11 (8 November 2026) — Phase 7a as built: the staging catalogue's engine, its YAML keys, and staged rows' source references in each element's provenance
+
+Status: accepted, built in Lane 1 step L1.3 (redesign phase 7a). Decisions 11 and 12 and Amendment 9
+decision 3 are unchanged except where this says so. The orchestrator settled the lane's three
+questions on 8 November 2026, each by its recommended option (a):
+
+- **Q1:** the step records are a `packages/schemas` change, made as its own commit and merged first.
+- **Q2:** a staged row's refs are one `SourceRef` per input row in the element's existing
+  `provenance.sources`, with no graph-adapter change.
+- **Q3:** this amendment, together with `09_INGEST_STUDIO.md` §4 and §9.
+
+**Decision.**
+
+1. **The recipe's `staging:`** is a list of declared steps: `lookup`, `join`, `filter`, `derive`,
+   `union` and `dedupe` (`schemas/staging.py`; `09_INGEST_STUDIO.md` §9 lists every key). A step
+   reads source tables by name and earlier steps by `id`. The last step is the table Map reads, and
+   every other step must feed a later one; this is the save gate's "a step must be fed". A join's
+   two keys are required by the schema; this is "a join must name a key". Any key a step does not
+   declare is refused, so no expression can be carried under a name of its own (rule 8). A recipe
+   without `staging` serialises byte for byte as before.
+2. **Every value-changing part of a step is a Knowledge Adapter with a golden file.** A key's
+   `normalise` is a one-column adapter from `knowledge_adapters.REGISTRY`. A Derive names an
+   operation from Derive's catalogue (`knowledge_adapters/derive.py`): concat, split, substring,
+   date_parse, arithmetic, case_when or normalise, the brief's list in §6 and no more. Each has a
+   golden file that shows its refusals. A refusal names the cause, never the cell's value.
+3. **`source_refs` are the element's `provenance.sources`.** This replaces the brief's "the audit
+   stub" (§6) and decision 11's wording; `AuditStub` is unchanged. `SourceRef` gains `row_key` and
+   `load_id`, both left out of what is stored when unset, so an element written outside staging is
+   stored exactly as before. A staged row's refs are:
+   - for a source row: its table, `row <n>`, the SHA-256 of its declared key columns (else of its
+     whole row), and its load;
+   - for a list row: `reference_list:<name>@v<version>`, with its key value and no load.
+
+   A Join's row carries both sides, a Lookup's the list row it read, and a Dedupe's survivor every
+   repeat. Map gives the element one `SourceRef` per ref, so a link made from a joined row names the
+   owner row as well as the booking.
+4. **A reference list in the catalogue.** A list is a table of its kind, keyed on the list's own
+   `key_column`; a key two rows share is refused. A screening list is kind `screening`, in the one
+   screening shape of Amendment 9 decision 3: `ref`, `primary_name`, `aliases`, `date_of_birth`,
+   `nationality`, `identifiers`, `programme`, `listing` and `entity_type`. A many-valued cell is
+   joined by `|`, as `split` reads it back in Map. A Lookup reads only the dataset's own lists and
+   the screening lists it subscribes to. Another dataset's list is refused in the same words as one
+   that does not exist.
+5. **Staged Parquet.** Each step's table is written to `<bucket>/loads/<load_id>/staged/<step>.parquet`,
+   with its cells as text, its refs as `_refs`, and a list's kind, name, version and key column in
+   the file's metadata. Map reads the last table back from what was written. Test writes nothing and
+   runs the same steps (`services/ingest/staged_run.py`), so Test and the load reject the same rows.
+   A staging rejection is listed as *staging step <id>: <cause>*, with nothing of the row in its
+   sample.
+
+**Tests (each shown red first; `process/lanes/studio/L1.3_RED_RECORD.md`).**
+
+| Test | What it proves |
+| --- | --- |
+| `tests/knowledge_adapters/test_derive.py` | Derive's golden files |
+| `tests/ingest/test_staging_golden.py` | one golden file per step kind |
+| `tests/schemas/test_recipe_staging.py` | byte-for-byte serialisation; no expression under any key |
+| `tests/ingest/test_staging_catalogue.py` | the gate; a screening list round-trips through the catalogue and serves a Lookup; rule 8's adapters |
+| `tests/ingest/test_staged_run.py` | the phase's exit, offline: "Visits and contacts" without its expert steps, every element naming its source rows, Test and the load rejecting the same rows; red with `source_refs` dropped at the join |
+| `tests/ingest/test_staged_provenance_live.py` | the Join's two sides stored by the real Map write and read back through the ArcadeDB adapter, under lease studio on stack a |
+
+**Not in this step.** The drawers and the profiler on staged tables in the Map editor's left pane are
+phase 7b (L1.4), as are the Studio's run route reading a pipeline's sources into tables and the
+run report's per-step counts (`StepReport` exists in the engine, not yet in `LoadReport`). The SQL
+transform and the fuzzy match are phase 8.
+
+**Recorded, not resolved.** In a staged run, a Map rejection's `row_index` is the row's position in
+the staged table, while a staging rejection's is its first source row's. The reason tells the two
+apart. `RejectionRecord` would need refs to say more, which is a schemas change for 7b.

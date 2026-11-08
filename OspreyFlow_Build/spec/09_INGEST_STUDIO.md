@@ -534,6 +534,18 @@ result is the same normalisation logic implemented four slightly different ways.
 needs a transform that does not exist, that is a new adapter with a golden test file, written
 once and available to everyone.
 
+The staging steps (§9) obey the same rule (ADR-140 Amendment 11). A Join's or a Lookup's
+`normalise` names an adapter from the same registry, one that reads one column into one value
+(`msisdn`, `postcode`, `account_ref`…; never `split`, nor a many-column adapter such as
+`grid_ref`). A Derive names an operation from **Derive's catalogue**
+(`knowledge_adapters/derive.py`): `concat`, `split` (one part, by position), `substring`,
+`date_parse` (date order and zone declared), `arithmetic` (add, subtract, multiply or divide two
+columns, or a column and a constant), `case_when` (declared values to declared results) and
+`normalise` (any one-column adapter). Each operation has a golden file under
+`tests/knowledge_adapters/golden/derive/` that shows its refusals as well as its values. A refusal
+names the cause, never the cell's value. An operation outside the catalogue is refused by the
+recipe's schema and by the adapter alike.
+
 **Provenance and handling.** Set per source in stage 1 and overridable per element; a column can carry
 the handling — a records-management export often has its own classification column — but not the
 provenance, which is refused at Map save. Stage 1 declares which column carries each handling part
@@ -1129,9 +1141,54 @@ nothing in this section is wired to anything yet.
 
 ## 9. What the studio deliberately does not do
 
-Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). The joins, SQL and fuzzy match
-below are **not built yet** (redesign phases 7 and 8); until they are, a pipeline's sources are
-separate branches mapped row by row, as §1 describes.
+Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). **The guided staging steps'
+engine is built** (redesign phase 7a, 8 November 2026; ADR-140 Amendment 11); their drawers on the
+canvas are phase 7b. The SQL transform and the fuzzy match are phase 8's and are not built. Until a
+pipeline declares staging steps, its sources are separate branches mapped row by row, as §1
+describes.
+
+**The staging steps in the recipe** (`schemas/staging.py`). A recipe's `staging:` is a list of steps.
+Each step has an `id` that later steps read it by, a `kind`, an optional `label`, and its own keys:
+
+- `lookup`: `input`, `list`, `on`, `normalise` (optional) and `add`;
+- `join`: `left`, `right`, `left_key`, `right_key`, `normalise` (optional), `how` (`inner` or
+  `left`) and `add`;
+- `filter`: `input` and `keep`, a list of conditions, each naming a `field` and exactly one of
+  `is` (`null` or `not_null`), `equals` or `in`;
+- `derive`: `input`, `column`, `operation`, `columns` and `settings`;
+- `union`: `inputs`, two or more;
+- `dedupe`: `input` and `on`.
+
+`add` lists the columns brought across, each `{column, as}`, with `as` optional. A step reads a
+pipeline's source table by its name, or an earlier step by its `id`. **The last step is the table
+Map reads.** Any other key is refused, so no step can carry an expression under a name of its own.
+A recipe without `staging` is written exactly as before.
+
+**What the save gate refuses** (`staging_rule_violations`):
+
+- a step that reads a later step, or a table the pipeline does not have;
+- a step that feeds nothing (every step but the last must feed a later one);
+- a step whose `id` is a source's name;
+- a key normalised by anything but a one-column adapter;
+- a Lookup of a list that is neither the dataset's own nor a screening list the dataset subscribes to.
+  This is refused in the same words as a list that does not exist.
+
+A join must name both keys; the schema requires them.
+
+**What a run does with rows.** Nothing is dropped silently:
+
+- A Lookup keeps every row. A row with no match keeps empty cells and is counted.
+- A Join gives one row per match. A left Join keeps an unmatched row; an inner Join counts it. A key
+  the adapter refuses is a rejection on either side.
+- A Filter counts what it leaves out.
+- A Derive rejects a row its operation refuses, with the cause.
+- A Union requires the same columns in its inputs.
+- A Dedupe's first row stands for its repeats, carries their refs and counts them.
+
+Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
+with its refs as a `_refs` column, and Map reads the last table back from what was written. A
+rejection of a staging step is listed in the load report as *staging step <id>: <cause>*. Test and
+the load reject the same rows (`services/ingest/staged_run.py`).
 
 - **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
@@ -1144,9 +1201,13 @@ separate branches mapped row by row, as §1 describes.
 - **Joins on declared keys in guided mode; SQL and fuzzy match in expert mode, with provenance,
   disclosure and safeguards.** A Join takes two upstream tables on an exact or normalised key, declared
   and never guessed. Every staged row carries `source_refs` — each input row's identity and `load_id`
-  — into the audit stub of the element Map writes, so every link still shows where it came from
-  (ADR-140 decision 11). A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link
-  marked `inferred`, never a merge; its threshold is part of the version; below-threshold rows are kept,
+  — into the element Map writes, so every link still shows where it came from (ADR-140 decision 11).
+  As built (Amendment 11), the refs are the element's `provenance.sources`, one `SourceRef` per input
+  row: the source's name, `row <n>`, its `row_key` (the SHA-256 of its declared key columns, else of
+  its whole row) and its `load_id`. A Join's element names both sides. A Lookup's names the list row
+  it took values from, as `reference_list:<name>@v<version>`, with the key value as its `row_key`
+  and no load id. A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link marked
+  `inferred`, never a merge; its threshold is part of the version; below-threshold rows are kept,
   unmatched and counted; a value Map binds from a matched column is `inferred`, with the match's score,
   until an analyst confirms the link (ADR-006 Amendment 1). Elements still meet existing nodes only
   through *match on* and *reference*; nothing is merged in storage (rule 6).
