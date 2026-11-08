@@ -13,11 +13,12 @@ has the full reasoning for why a detected conflict is a `supersede_edge` of the 
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import HandlingScheme
-from ports.graph import GraphPort
+from ports.graph import AmbiguousLinkId, GraphPort
 from schemas.domain import (
     Edge,
     EdgeId,
@@ -32,6 +33,8 @@ from schemas.domain import (
 
 from .conflicts import ResolutionConflict, conflict_properties
 from .resolver import MODEL_VERSION, SameAsCandidate, comparison_vector_json
+
+log = logging.getLogger(__name__)
 
 
 async def write_same_as_edges(
@@ -111,6 +114,7 @@ async def record_conflicts(
     *,
     created_by: str,
     tx: TxId,
+    skipped: list[EdgeId] | None = None,
 ) -> list[EdgeId]:
     """Annotates each conflicting `NOT_SAME_AS` edge via `supersede_edge` — `conflicts.py`'s own
     docstring has the full reasoning for why this is a supersede of the existing split edge rather
@@ -134,5 +138,13 @@ async def record_conflicts(
             created_by=created_by,
             created_at=now,
         )
-        superseded_ids.append(await graph.supersede_edge(edge.id, replacement, tx))
+        try:
+            superseded_ids.append(await graph.supersede_edge(edge.id, replacement, tx))
+        except AmbiguousLinkId:
+            # ADR-110 Amendment 18: two edge types hold this link's id, so which to annotate is
+            # not certain. This one is skipped and the run goes on with the rest (one bad link
+            # never silences the whole run); the skip is in `skipped`, the run's own result.
+            log.warning("resolution skipped a split link whose id two edge types hold: %s", edge.id)
+            if skipped is not None:
+                skipped.append(edge.id)
     return superseded_ids

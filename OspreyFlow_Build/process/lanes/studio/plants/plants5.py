@@ -63,6 +63,13 @@ PLANTS = {
     "D6": ("L1.2d: the app's AmbiguousLinkId handler removed (a 500 where a refusal belongs)", f"{CORE}/services/api/app.py", [
         ("@app.exception_handler(AmbiguousLinkId)\n", ""),
     ], ["tests/services/api/test_ambiguous_link_id_refused.py"]),
+    "D7": ("L1.2d: resolution's catch removed (one ambiguous link stops the batch)", f"{CORE}/services/resolve/same_as_writer.py", [
+        ("        except AmbiguousLinkId:\n", "        except KeyError:\n"),
+    ], ["tests/resolve/test_ambiguous_link_skipped.py"]),
+    "D8": ("L1.2d: the close swallowing the refusal (confirming the rest and closing)", f"{CORE}/services/api/alert_queue.py", [
+        ("                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}\n            except Exception:\n                await graph.rollback_transaction(tx)\n                raise\n",
+         "                renamed = {e.id: await confirm_edge(graph, e, member, tx=tx) for e in matches}\n            except Exception:\n                pass\n"),
+    ], ["tests/services/api/test_ambiguous_link_id_close_refused.py"]),
 }
 ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
 CONF = "tests/conformance/graph_port/test_suite.py"
