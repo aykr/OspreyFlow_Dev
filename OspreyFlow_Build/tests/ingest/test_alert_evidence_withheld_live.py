@@ -35,7 +35,7 @@ from services.api.rule_evaluation import Finding, PreCommitVerdict, RuleGate, Ru
 from conduit_common.identity import new_id
 from ports.analytics import AnalyticsPort
 from schemas.analytics import EventFilter, EventListRequest
-from schemas.domain import Alert, Principal
+from schemas.domain import Alert, Principal, TypologyRuleInput
 from tests.ingest import test_typology_rules as _rules_suite
 from tests.ingest.test_typology_rules import (
     ANALYST,
@@ -84,9 +84,12 @@ async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: Analytics
     return alert, list(page.events)
 
 
-async def _rule_of(stores: dict[str, Any], case: str) -> Any:
-    """The one rule `_hidden_world` deployed in the case."""
-    (rule,) = await stores["rules"].list_active_for_case(case)
+async def _rule_of(stores: dict[str, Any], case: str, alert: Alert) -> Any:
+    """The rule that raised `alert` in the case, found by its own id. Never by unpacking the case's
+    active rules: `list_active_for_case` also lists every deployment-wide rule active in the
+    store, which other live files leave in a shared database (found by the case lane, L2.8b)."""
+    rule_id = alert.rule_id.removeprefix("typology:")
+    (rule,) = [r for r in await stores["rules"].list_active_for_case(case) if r.id == rule_id]
     return rule
 
 
@@ -145,7 +148,7 @@ async def test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactio
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         loaded, events = await _hidden_world(stores, graph, analytics, case, "NN")
         gate = _gate(stores, graph, analytics, [], case, loader=SECRET_LOADER)
-        rule = await _rule_of(stores, case)
+        rule = await _rule_of(stores, case, loaded)
 
         def finding(**cited: Any) -> Finding:
             return Finding(rule=rule, deployer=SECRET_LOADER, typology="structuring",
@@ -215,7 +218,7 @@ async def test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_n
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         loaded, _ = await _hidden_world(stores, graph, analytics, case, "MK")
-        rule = await _rule_of(stores, case)
+        rule = await _rule_of(stores, case, loaded)
         gate = _gate(stores, graph, analytics, [], case, loader=SECRET_LOADER)
         raised = await gate.raise_committed(
             Finding(rule=rule, deployer=SECRET_LOADER, typology="structuring",
@@ -256,7 +259,7 @@ async def test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_sti
         tx = await graph.begin_transaction()
         await graph.revert_elements([], list(loaded.edge_ids), tx)
         await graph.commit_transaction(tx)
-        rule = await _rule_of(stores, case)
+        rule = await _rule_of(stores, case, loaded)
         gate: RuleGate = _gate(stores, graph, analytics, [], case, loader=SECRET_LOADER)
         finding = Finding(rule=rule, deployer=SECRET_LOADER, typology="structuring",
                           subject=loaded.referent_node_ids[0], refs=("finding",), words="In the load",
@@ -755,13 +758,14 @@ async def test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marki
     reads the node and the finding's words on it. `--dry-run` lists it and changes nothing; the run
     supersedes the node at SECRET and points the alert at the revision, which the teammate cannot
     read; a second run changes nothing. Red with the re-mark not written (the run left as a dry
-    run): the teammate still read the node."""
+    run): the teammate still read the node; and with the purge left out, the case's working set
+    still held the old node's OFFICIAL copy, served from the store to the teammate."""
     from scripts.remark_alert_nodes import remark
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         loaded, _ = await _hidden_world(stores, graph, analytics, case, "RM")
-        rule = await _rule_of(stores, case)
+        rule = await _rule_of(stores, case, loaded)
         gate = _gate(stores, graph, analytics, [], case, loader=SECRET_LOADER)
         old = await gate.raise_committed(
             Finding(rule=rule, deployer=SECRET_LOADER, typology="structuring",
@@ -777,7 +781,23 @@ async def test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marki
         assert old.id in dry.remarked
         assert await graph.get_node(old.alert_node_id, TEAMMATE) is not None, "a dry run writes nothing"
 
-        done = await remark(graph, stores["alerts"], SCHEME, dry_run=False, investigation_id=case)
+        # A case's working set holds a copy of the old node and its ALERTED_ON link, as the canvas
+        # left them: the run removes both and deletes the case's delta stream (a fresh snapshot).
+        from services.api.working_set.store import ValkeyWorkingSetStore
+
+        working = ValkeyWorkingSetStore(stores["valkey"])
+        old_node = await graph.get_node(old.alert_node_id, SECRET_LOADER)
+        alerted = [e for e in await graph.edges_among([old.alert_node_id, *old.referent_node_ids], SECRET_LOADER)
+                   if e.type == "ALERTED_ON"]  # fmt: skip
+        await working.add_nodes(case, [old_node, *await graph.get_nodes(old.referent_node_ids, SECRET_LOADER)])  # type: ignore[list-item]
+        await working.add_edges(case, alerted)
+        await stores["valkey"].xadd(f"ws:{case}:deltas", {"d": "a delta naming the old node"})
+        done = await remark(graph, stores["alerts"], SCHEME, dry_run=False, investigation_id=case,
+                            working_sets=working, valkey=stores["valkey"])  # fmt: skip
+        assert old.alert_node_id not in await working.node_ids(case)
+        assert not ({e.id for e in alerted} & await working.edge_ids(case))
+        assert await stores["valkey"].exists(f"ws:{case}:deltas") == 0
+        assert done.cases_purged == 1
         assert old.id in done.remarked
         (row,) = [a for a in await stores["alerts"].with_alert_nodes(investigation_id=case) if a.id == old.id]
         assert row.alert_node_id != old.alert_node_id
@@ -819,7 +839,7 @@ async def test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withh
         await working.add_nodes(case, await graph.get_nodes(alert.referent_node_ids, ANALYST))
         await working.add_edges(case, [link])
         service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME), graph,
-                                    ONTOLOGY, MovedNotes(), alerts=stores["alerts"])  # fmt: skip
+                                    ONTOLOGY, MovedNotes(), scheme=SCHEME, alerts=stores["alerts"])  # fmt: skip
         secret = link.handling.model_copy(update={"classification": "SECRET"})
         changed = await service.change(case, link.id, SECRET_LOADER,
                                        LinkChangeRequest(reason="the call is SECRET", handling=secret))  # fmt: skip
@@ -828,3 +848,47 @@ async def test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withh
         assert await _listed(stores, graph, analytics, case, TEAMMATE) == []
         await _refused_as_missing(stores, graph, analytics, case, alert.id, TEAMMATE)
         assert await _listed(stores, graph, analytics, case, SECRET_LOADER) == [alert.id]
+        # ADR-109 Amendment 10: the repoint re-marks the alert's node to its new evidence, so the
+        # node, and the finding's words on it, are not read, expanded to or listed by the teammate.
+        # Red without the re-mark: the node stayed OFFICIAL and the teammate expanded to it.
+        assert row.alert_node_id != alert.alert_node_id, "the node was re-marked into a revision"
+        for node_id in (alert.alert_node_id, row.alert_node_id):
+            assert await graph.get_node(node_id, TEAMMATE) is None  # type: ignore[arg-type]
+        around = await graph.expand(_expand(list(alert.referent_node_ids)), TEAMMATE)
+        assert [n.id for n in around.nodes if n.type == "Alert"] == []
+        listed_nodes = await graph.list_nodes("Alert", TEAMMATE)
+        assert {alert.alert_node_id, row.alert_node_id}.isdisjoint(n.id for n in listed_nodes.nodes)
+        revision = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
+        assert revision is not None and revision.handling.classification == "SECRET"
+
+
+# ---- this file never assumes it is alone in the store --------------------------------------------
+
+
+async def test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Found by the case lane on a shared database: `list_active_for_case` lists every active
+    deployment-wide rule with the case's own, so a `(rule,) =` unpack of it failed ("too many values
+    to unpack") once another live file had left one. With one planted first, `_rule_of` still finds
+    the rule that raised this test's alert, by its id. Red with the unpack by position. The planted
+    rule is retired at the end, so this test leaves nothing behind."""
+    from schemas.sentences import RuleSentence, SentenceRuleParams
+
+    elsewhere = f"case-{new_id()}"
+    sentence = RuleSentence.model_validate({"subject": "Person", "scope": "deployment", "conditions": [
+        {"op": "one_of", "property": "listing", "values": ["sanction", "pep"]}]})  # fmt: skip
+    planted = await stores["rules"].create(SECRET_LOADER, elsewhere, TypologyRuleInput(
+        name="A deployment-wide rule another file left", trigger="post_commit",
+        params=SentenceRuleParams(pattern_id=f"pat-{new_id()}", sentence=sentence)))  # fmt: skip
+    # A deployment-wide rule waits for a second person (ADR-133 decision 7) before it is active.
+    planted = await stores["rules"].approve(planted.id, elsewhere, ANALYST)
+    try:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            loaded, _ = await _hidden_world(stores, graph, analytics, case, "AL")
+            assert len(await stores["rules"].list_active_for_case(case)) >= 2, "the planted rule is listed"
+            rule = await _rule_of(stores, case, loaded)
+            assert loaded.rule_id == f"typology:{rule.id}" and rule.id != planted.id
+    finally:
+        await stores["rules"].retire(planted.id, elsewhere, SECRET_LOADER)

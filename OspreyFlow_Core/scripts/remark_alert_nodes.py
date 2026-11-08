@@ -18,9 +18,15 @@ whose SECRET end then hides each from a reader below it) and the alert is pointe
 only if it still names the old one. An alert whose referents' restricted markings belong to
 different units has no single safe marking; it is listed, not changed.
 
-`--dry-run` writes nothing; it lists what a run would re-mark. Idempotent: a second run
-finds every node at its marking and reports 0. Not done here: a case's working-set copy of an old
-node keeps the marking it was copied with until the case's next read of it from the graph.
+Then every working set (Valkey) holding a copy of a node it re-marked loses that copy and its
+links, and the case's delta stream is deleted: a stored copy keeps the marking it was copied with
+and is served from the store, not read again from the graph, so it would still go to a reader
+below the new marking. With the stream gone, `deltas_after` finds a gap and every client of the
+case is sent a full projected snapshot from what is stored now. The re-marked revision is not put
+in its place: the case's analysts open the alert again to draw it, at its marking.
+
+`--dry-run` writes nothing; it lists what a run would re-mark. Idempotent: a second run finds every
+node at its marking and no copy of an old one, and reports 0.
 """
 
 from __future__ import annotations
@@ -28,28 +34,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from dataclasses import dataclass, field
+from typing import Any
 
-from services.api.alerts import AlertStore
-from services.api.config import PostgresConfig
-from services.api.rule_evaluation import alert_handling
-from services.resolve.trigger import service_principal
+from services.api.alerts import AlertStore, RemarkReport, remark_alerts
+from services.api.config import PostgresConfig, ValkeyConfig
+from services.api.working_set.store import ValkeyWorkingSetStore, WorkingSetStorage
+from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from conduit_common.identity import new_node_id, now_utc
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.graph import GraphPort
-from schemas.domain import NodeWrite
-
-
-@dataclass
-class RemarkReport:
-    """What a run changed, or would change. `remarked` is what a second run must report empty."""
-
-    remarked: list[str] = field(default_factory=list)
-    unsafe: list[str] = field(default_factory=list)
-    checked: int = 0
 
 
 async def remark(
@@ -59,52 +54,34 @@ async def remark(
     *,
     dry_run: bool,
     investigation_id: str | None = None,
+    working_sets: WorkingSetStorage | None = None,
+    valkey: Any = None,
 ) -> RemarkReport:
     """Every alert's node (or one case's, `investigation_id`), re-marked where it is below what it
-    rests on now; with `dry_run`, listed and not changed."""
-    reader = service_principal(scheme)
-    report = RemarkReport()
-    for alert in await alerts.with_alert_nodes(investigation_id=investigation_id):
-        assert alert.alert_node_id is not None
-        node = await graph.get_node(alert.alert_node_id, reader)
-        if node is None:
-            continue  # taken back or superseded since: nothing to re-mark
-        report.checked += 1
-        referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
-        links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
-        rests_on = [node.handling, *(n.handling for n in referents), *(e.handling for e in links),
-                    *(await alerts.handlings_of(alert.id) or [])]  # fmt: skip
-        required = alert_handling(scheme, rests_on)
-        if required is None:
-            report.unsafe.append(alert.id)
-            continue
-        if required == node.handling:
-            continue
-        report.remarked.append(alert.id)
-        if dry_run:
-            continue
-        tx = await graph.begin_transaction()
-        try:
-            revision = await graph.supersede_node(
-                node.id,
-                NodeWrite(
-                    id=new_node_id(),
-                    type=node.type,
-                    properties=node.properties,
-                    provenance=node.provenance,
-                    handling=required,
-                    created_by="remark_alert_nodes",
-                    created_at=now_utc(),
-                    datasets=node.datasets,
-                ),  # fmt: skip
-                tx,
-            )
-        except Exception:
-            await graph.rollback_transaction(tx)
-            raise
-        await graph.commit_transaction(tx)
-        await alerts.set_alert_node(alert.id, revision, was=node.id)
+    rests on now (`alerts.remark_alerts`, which every repoint also runs); with `dry_run`, listed and
+    not changed."""
+    rows = await alerts.with_alert_nodes(investigation_id=investigation_id)
+    report = await remark_alerts(graph, alerts, scheme, rows, dry_run=dry_run)
+    if working_sets is not None and not dry_run:
+        old = {a.alert_node_id for a in rows if a.alert_node_id and a.id in report.remarked}
+        report.cases_purged = await purge_working_sets(working_sets, valkey, old) if old else 0
     return report
+
+
+async def purge_working_sets(store: WorkingSetStorage, valkey: Any, old_node_ids: set[str]) -> int:
+    """Every case's stored copy of a re-marked node, and its links, removed, and the case's delta
+    stream deleted so its clients take a fresh snapshot. Returns how many cases changed."""
+    changed = 0
+    for case in await store.case_ids():
+        held = sorted(await store.node_ids(case) & old_node_ids)
+        if not held:
+            continue
+        links = {e for ids in (await store.adjacent_edge_ids(case, held)).values() for e in ids}
+        await store.remove_edges(case, sorted(links))
+        await store.remove_nodes(case, held)
+        await valkey.delete(f"ws:{case}:deltas")
+        changed += 1
+    return changed
 
 
 async def _main(argv: list[str] | None = None) -> int:
@@ -116,17 +93,23 @@ async def _main(argv: list[str] | None = None) -> int:
         ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
     )
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    valkey_config = ValkeyConfig.from_env()
+    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
     try:
         report = await remark(
-            GraphArcadeDBAdapter(client, scheme), alerts, scheme, dry_run=args.dry_run
-        )
+            GraphArcadeDBAdapter(client, scheme), alerts, scheme, dry_run=args.dry_run,
+            working_sets=ValkeyWorkingSetStore(valkey), valkey=valkey,
+        )  # fmt: skip
     finally:
         await client.aclose()
         await alerts.close()
+        await valkey.aclose()
     verb = "would be re-marked" if args.dry_run else "re-marked"
     print(f"{report.checked} alert node(s) checked; {len(report.remarked)} {verb}.")
     for alert_id in report.remarked:
         print(f"  {alert_id}")
+    if not args.dry_run:
+        print(f"{report.cases_purged} working set(s) lost a stale copy and will snapshot afresh.")
     if report.unsafe:
         print(f"{len(report.unsafe)} alert(s) have no single safe marking and were left: "
               + ", ".join(report.unsafe))  # fmt: skip

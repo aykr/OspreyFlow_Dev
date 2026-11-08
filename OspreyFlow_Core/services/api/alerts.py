@@ -41,7 +41,8 @@ from typing import Literal
 
 import asyncpg
 
-from conduit_common.identity import new_id
+from conduit_common.identity import new_id, new_node_id
+from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import (
@@ -61,6 +62,7 @@ from schemas.domain import (
     Handling,
     Interval,
     Node,
+    NodeWrite,
     Principal,
 )
 
@@ -393,6 +395,9 @@ class AlertStore:
         #: Where each written alert is kept for alert trends (ADR-134 decision 3): the analytics
         #: store's `load_alert_facts`, attached by `build_run_resources`. `None` keeps nothing.
         self.fact_sink: FactSink | None = None
+        #: The deployment's handling scheme, for re-marking a repointed alert's node: the one
+        #: `run_resources.build_run_resources` builds (`load_uk_le_scheme`), unless given.
+        self.scheme: HandlingScheme = load_uk_le_scheme()
 
     @classmethod
     async def connect(cls, dsn: str) -> AlertStore:
@@ -655,7 +660,7 @@ class AlertStore:
         except BaseException:
             await self._settle(graph, repoint.pairs, drop_unsettled=True)
             raise
-        await self.apply_repoints(repoint.pairs)
+        await self._remark_moved(graph, await self.apply_repoints(repoint.pairs))
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
         """Before every read of alerts: any recorded repoint whose graph write has committed is
@@ -690,6 +695,14 @@ class AlertStore:
         await self.publish_facts(moved)
         return moved
 
+    async def _remark_moved(self, graph: GraphPort, moved: Sequence[str]) -> None:
+        """A repointed alert's node raised to its new evidence's marking (ADR-109 Amendment 10): a
+        link re-marked above the node it was cited by would otherwise leave the node, and the words
+        it carries, readable by expand and `list_nodes` to a reader who may not see the link."""
+        if moved:
+            rows = list((await self.cited_by_ids(moved)).values())
+            await remark_alerts(graph, self, self.scheme, rows)
+
     async def _record_repoints(self, pairs: Mapping[str, str]) -> None:
         async with self._pool.acquire() as conn:
             await conn.executemany(
@@ -716,7 +729,7 @@ class AlertStore:
             for old, new in pairs.items()
             if old in states and states[old].superseded and new in states
         }
-        await self.apply_repoints(done)
+        await self._remark_moved(graph, await self.apply_repoints(done))
         gone = {old: new for old, new in pairs.items() if old not in done}
         if drop_unsettled and gone:
             async with self._pool.acquire() as conn:
@@ -989,6 +1002,81 @@ async def read_evidence_ids(
             )
             events.update(e.event_id for e in page.events if e.event_id in chunk)
     return ReadableEvidence(nodes, edges, frozenset(events))
+
+
+class RemarkReport:
+    """What a re-mark changed, or would change (`remark_alerts`). `remarked` is what a second run
+    must report empty."""
+
+    def __init__(self) -> None:
+        self.remarked: list[str] = []
+        self.unsafe: list[str] = []
+        self.checked = 0
+        #: The script's purge (`scripts.remark_alert_nodes`): working sets that lost a stale copy.
+        self.cases_purged = 0
+
+
+async def remark_alerts(
+    graph: GraphPort,
+    alerts: AlertStore,
+    scheme: HandlingScheme,
+    rows: Sequence[Alert],
+    *,
+    dry_run: bool = False,
+) -> RemarkReport:
+    """Each alert's `Alert` node raised to the highest marking of what it rests on now, read as the
+    service principal: its entities, the links it cites, the transactions its raiser read (its
+    stored handlings) and its own marking (never lowered). A node below it is superseded by a
+    revision at that marking, and the alert pointed at the revision only if it still names the old
+    one. No single safe marking (referents restricted to different units): listed, not changed.
+    The script's run (`scripts.remark_alert_nodes`, the nodes written before `7fac778`) and every
+    repoint (ADR-109 Amendment 10: an alert whose link was re-marked above its node) use it."""
+    from services.resolve.trigger import service_principal
+
+    from .rule_evaluation import alert_handling
+
+    reader = service_principal(scheme)
+    report = RemarkReport()
+    for alert in rows:
+        if alert.alert_node_id is None:
+            continue
+        node = await graph.get_node(alert.alert_node_id, reader)
+        if node is None:
+            continue  # taken back or superseded since: nothing to re-mark
+        report.checked += 1
+        referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
+        links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
+        rests_on = [
+            node.handling,
+            *(n.handling for n in referents),
+            *(e.handling for e in links),
+            *(await alerts.handlings_of(alert.id) or []),
+        ]
+        required = alert_handling(scheme, rests_on)
+        if required is None:
+            report.unsafe.append(alert.id)
+            continue
+        if required == node.handling:
+            continue
+        report.remarked.append(alert.id)
+        if dry_run:
+            continue
+        tx = await graph.begin_transaction()
+        try:
+            revision = await graph.supersede_node(
+                node.id,
+                NodeWrite(id=new_node_id(), type=node.type, properties=node.properties,
+                          provenance=node.provenance, handling=required,
+                          created_by="remark_alert_nodes", created_at=datetime.now(UTC),
+                          datasets=node.datasets),  # fmt: skip
+                tx,
+            )
+        except Exception:
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+        await alerts.set_alert_node(alert.id, revision, was=node.id)
+    return report
 
 
 class _NoRepoint:
