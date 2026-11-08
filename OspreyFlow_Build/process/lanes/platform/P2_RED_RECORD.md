@@ -20,3 +20,5 @@ against the code as committed and seen to pass. Offline runs use the port guard'
 | `…budget…`, `…priced_a_unit_a_token…` | hosted entries made without a price | 2 failed |
 | `…rate…`, what a person sees | the gateway's refusal (naming the key's hash) put into the words | 2 failed |
 | `…budget…` | the budget refusal's words (naming the key's last four) put into the words | 1 failed |
+| `apps/workspace/keyboard/admin-models.spec.ts` "an engine's limits are set by keyboard" (and the registry's assertion) | the limits form's save made a plain button, never submitting | 2 failed |
+| same, "the usage's period is chosen by keyboard…" (and the registry's assertion) | choosing a period never asks the Conduit again | 2 failed |

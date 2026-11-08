@@ -4,8 +4,10 @@
 import type {
   AdminEngine,
   ConnectionTestResult,
+  EngineLimits,
   ModelAdminHistory,
   ModelsAdminView,
+  ModelUsageView,
 } from "../../../../../packages/schemas/generated";
 
 type ModelProviderConfig = AdminEngine["provider"];
@@ -54,3 +56,9 @@ export const removeKey = (api: ModelsApi, name: string) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}/key`, { method: "DELETE" });
 export const testConnection = (api: ModelsApi, name: string) =>
   ask<ConnectionTestResult>(api, `/v1/admin/models/engines/${n(name)}/test`, { method: "POST" });
+/** ADR-135 Amendment 3: an engine's limits, applied by the gateway to the engine's own key. */
+export const setLimits = (api: ModelsApi, name: string, limits: EngineLimits) =>
+  ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}/limits`, { method: "PUT", body: JSON.stringify({ limits }) });
+/** ADR-135 Amendment 3: the gateway's own records over whole UTC days, as counts only. */
+export const readUsage = (api: ModelsApi, start: string, end: string) =>
+  ask<ModelUsageView>(api, `/v1/admin/models/usage?start=${n(start)}&end=${n(end)}`);
