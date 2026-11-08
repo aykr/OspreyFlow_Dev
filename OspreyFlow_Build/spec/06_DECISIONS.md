@@ -29974,7 +29974,11 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
 7. **The jump replaced.** `POST …/alerts/{alert_id}/jump`, the case of its own (ADR-144 Amendment 2
    decision 2), is removed with its client and tests; the inbox's *Open the alert* opens the address.
    ADR-124 Amendment 17's refusal now stands at the address (point 6). The history label "Opened from
-   an alert" is written by no site and still shown on the steps that hold it. The drawn-dataset copy
+   an alert" is written by no site and still shown on the steps that hold it. B14 is amended in
+   `08_ACCEPTANCE_SCENARIOS.md` to the address, and its over-the-wire test, ADR-144 Amendment 2's
+   `test_b14_an_alert_opens_into_a_case_holding_its_entities`, is renamed
+   `test_b14_an_alert_opens_at_its_address_in_its_own_case_with_its_entities` and asserts the alert's
+   own case. The drawn-dataset copy
    guard the jump called (`refuse_copying_a_drawn_dataset`, `read_the_same_dataset`) has no caller
    left; it is the case lane's to keep or remove.
 8. **The place's screens.** Tabs *Alerts* (the queue with an alert's detail beside it, and the inbox
@@ -29984,6 +29988,9 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
    Glass's banner is *Case · Boards*. Connection strength (ADR-139), not alerts, stays in the Glass
    under the rail's ⋯ More. The count before the canvas stays 24.
 
+9. **The place draws only for whom it is offered.** An address followed by someone the place is not
+   offered to lands on the Glass, the address left; under the place the Glass's Inspector, timeline and
+   status line are not drawn.
 10. **Open the evidence (R5).** The alert's detail offers *Open the evidence* to any reader of it. It saves
     a private view of the alert's own case (`POST …/views`, ADR-144 decision 4, behind `investigate`)
     holding the nodes the reader was just shown, named "From alert: ‹title›", leaves the alert's
@@ -29991,17 +29998,16 @@ which waits for the owner. ADR-146 and ADR-145 Amendment 1 are unchanged except 
     alert" and offers *← Back to the alert* (focused when it opens) before *Back to the case*; it
     returns to the alert's address, the alert still open in the queue. A view opened any other way has
     no way back to an alert. It replaces the jump's case of its own, and so ends L3.2's interim Q1.
-9. **The place draws only for whom it is offered.** An address followed by someone the place is not
-   offered to lands on the Glass, the address left; under the place the Glass's Inspector, timeline and
-   status line are not drawn.
 
 **Tests.** `test_place_routes.py` (the gate on every route but the shared ones, red with it taken off
 `deploy_typology_rule` and with it open to all; every route asking for a right of the place alone is
 the place's, red with one planted; each role offered exactly its places, the hidden place's routes
 refused over HTTP); `test_alert_address.py`, its reader the principal the real `get_principal` gives a
 path with no case (reading no dataset) and its fakes refusing what the graph, the analytics and the
-queue's scope refuse (the seven unseeable cases answered as a missing one; red with the case check, the
-evidence check and the case scoping each removed, and with the reader read unscoped); `App.test.tsx`
+queue's scope refuse (seven unseeable cases answered as a missing one: red with the case check removed,
+with the evidence checks removed for the hidden link, transaction and node, and with the reader left
+unscoped for the alert of another dataset; the owner-only hotlist alert is the real store's queue scope,
+proved on Postgres by `test_monitoring_queue.py`); `App.test.tsx`
 (the address for someone not offered the place; no working-set tools under it; *Open the evidence*,
 then *← Back to the alert*, returns to the same alert, still open, red with the way back not navigating
 and with the evidence saved short; each red); `keyboard/shell.spec.ts`,

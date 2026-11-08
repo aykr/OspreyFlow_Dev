@@ -5,6 +5,9 @@ runs, every port closed; no stack.
 
 ## 1. `/alerts/<id>` (`tests/services/api/test_alert_address.py`)
 
+*Taken on the first, four-case version of the tests (whose reader was unlimited, a fake the review
+found too permissive). Superseded by §6, re-taken on the current seven cases.*
+
 **Plant A — the route's case check skipped** (`app.py::open_alert_at_address`, the
 `investigations.get_authorized(...)` call replaced by `pass`). The alert of another case, and the
 alert of a case the reader is no member of, were answered (200, with their words); the readable
@@ -216,4 +219,54 @@ of a dataset its case does not read was answered.
     Error: expect(page).toHaveURL(expected) failed
     14 × locator resolved to <html lang="en" data-theme="dark" data-brand="ospreyflow">…</html>
     1 failed
+```
+
+## 6. The address re-taken on the current tests (review round 2)
+
+The seven unseeable cases, the reader as the real `get_principal` gives it. Plant A (the case check
+skipped) turns every case red (the level checks counted change for all; "no member" and "another's"
+are answered). Plant B (all three evidence checks removed: the whole-evidence test, the cited links'
+count, the cited transactions' count) answers the link, transaction and node cases. Plant E (the
+reader unscoped) answers the alert of a dataset its case does not read. The seventh case, another
+member's own hotlist alert, is the real store's queue scope (`alerts.queue_scope`), modelled by the
+fake and proved at the store, on Postgres, by `test_monitoring_queue.py::test_an_only_me_hotlist_alert_reaches_its_owner_alone`
+(in the leased live run).
+
+```
+### A: the route's case check skipped
+  plant: services/api/app.py: 'await investigations.get_authorized(case_id or "", principal, need=AccessLevel.VIEWER)' -> 'pass  # PLANT'
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_a_readable_alert_is_answered_with_its_case_and_explanation
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a link it cites is hidden-alerts0-hidden0-levels0]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a transaction it cites is hidden-alerts1-hidden1-levels1]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a node it names is hidden-alerts2-hidden2-levels2]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[the reader is no member of its case-alerts3-hidden3-levels3]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[its case is another's-alerts4-hidden4-levels4]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[its dataset is not one its case reads-alerts5-hidden5-levels5]
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[it is another member's own hotlist alert in the case-alerts6-hidden6-levels6]
+### B: the three evidence checks removed
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a link it cites is hidden-alerts0-hidden0-levels0]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a transaction it cites is hidden-alerts1-hidden1-levels1]
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[a node it names is hidden-alerts2-hidden2-levels2]
+### E: the reader read unscoped (every dataset)
+  plant: services/api/app.py: 'principal = await scope_to_case(\n        principal, case_id, datasets, holds_a_level=holds' -> 'principal = principal.model_copy(update={"datasets": None}) '
+    FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_alert_the_reader_may_not_see_is_answered_as_a_missing_one[its dataset is not one its case reads-alerts5-hidden5-levels5]
+```
+
+## 7. Open the evidence's failure path and focus (review round 2)
+
+```
+### App: a failed lens not said (the round-1 code: leave the address first, say nothing)
+  plant: src/App.tsx: 'const problem = await openLens(saved.view.id, { alertId, title });\n              if (probl' -> 'navigate("/");\n              const problem = await openLens('
+    ❯ src/App.test.tsx (34 tests | 1 failed | 33 skipped) 1681ms
+    × Open the evidence says so on the alert when the view cannot be opened 1193ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 33 skipped (34)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence says so on the alert when the view cannot be opened
+### App: the alert origin set after the lens mounts (focus misses the way back)
+  plant: src/App.tsx: 'showLens(result.opened, fromAlert);' -> 'showLens(result.opened); setTimeout(() => setLensFromAlert(f'
+    ❯ src/App.test.tsx (34 tests | 1 failed | 33 skipped) 1706ms
+    × Open the evidence, then Back to the alert, returns to the same alert, still open 1258ms
+    Test Files  1 failed (1)
+    Tests  1 failed | 33 skipped (34)
+    FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
 ```
