@@ -134,5 +134,7 @@ async def record_conflicts(
             created_by=created_by,
             created_at=now,
         )
-        superseded_ids.append(await graph.supersede_edge(edge.id, replacement, tx))
+        superseded_ids.append(
+            await graph.supersede_edge(edge.id, replacement, tx, old_type=edge.type)
+        )
     return superseded_ids

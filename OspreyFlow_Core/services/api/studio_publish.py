@@ -376,8 +376,9 @@ class LoadSink(Protocol):
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]:
-        """Of these keys, those withdrawn, each with its recorded links (Amendment 16)."""
+    ) -> dict[str, dict[str, str]]:
+        """Of these keys, those withdrawn, each with its recorded links and their types
+        (Amendments 16 and 18)."""
         ...
 
     # ADR-110 Amendment 6 point 1: asked only by an incremental refresh.
@@ -663,7 +664,7 @@ async def load_with_rules(
                         update={"left_digest": stored_digest(left.stored) if left else None}
                     )
                     for prior in merged
-                    for left in [await graph.read_link_state(prior.edge_id, tx)]
+                    for left in [await graph.read_link_state(prior.edge_id, prior.edge_type, tx)]
                 ]
             if past is not None:
                 # Before the commit, so the record the commit writes keeps the watermark reached.
@@ -750,7 +751,7 @@ class _OwnLinks:
 
     def __init__(self, sink: LoadSink, graph: GraphPort, tx: TxId) -> None:
         self._sink, self._graph, self._tx = sink, graph, tx
-        self.own: dict[str, tuple[str, ...]] = {}
+        self.own: dict[str, dict[str, str]] = {}
         self.priors: dict[str, LinkPriorState] = {}
 
     async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
@@ -759,8 +760,12 @@ class _OwnLinks:
         back = [key for key in keys if key not in kept]
         self.own = await self._sink.withdrawn_row_links(recipe_id, case, back) if back else {}
         self.priors = {}
-        for edge_id in sorted({e for links in self.own.values() for e in links}):
-            state = await self._graph.read_link_state(edge_id, self._tx)
+        # ADR-110 Amendment 18: each link read by its own recorded type, never by id alone; a key
+        # kept before rows recorded their link types holds none, so its link is never captured.
+        for edge_id, edge_type in sorted(
+            {(e, t) for ls in self.own.values() for e, t in ls.items()}
+        ):
+            state = await self._graph.read_link_state(edge_id, edge_type, self._tx)
             if state is not None:
                 self.priors[edge_id] = state
         return kept
@@ -770,7 +775,7 @@ class _OwnLinks:
 
 
 def _own_key_merges(
-    report: LoadReport, own: Mapping[str, tuple[str, ...]], priors: Mapping[str, LinkPriorState]
+    report: LoadReport, own: Mapping[str, Mapping[str, str]], priors: Mapping[str, LinkPriorState]
 ) -> list[LinkPriorState]:
     """The links this load merged into that a returning row's own withdrawn key recorded, each as
     stored before the merge. Any other merge stays a merge (ADR-127 decision 6): its load is still

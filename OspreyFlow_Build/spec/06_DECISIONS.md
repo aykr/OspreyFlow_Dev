@@ -28155,6 +28155,55 @@ principal to the case's datasets (ADR-099 decisions 2–4).
   refused unless that is the case's loading dataset.
 - **Timing.** Each run's `metering.wall_ms` is left out of the comparisons, and no timing is claimed.
 
+### ADR-110, Amendment 18 (8 November 2026) — a link write names its type: a merge and a supersede change only their own type's link, and a link state is read by its type
+
+Status: written 8 November 2026 by the studio lane (L1.2d), from Amendment 16's final review and
+the orchestrator's ruling on its first round. It amends Amendment 16's `read_link_state` and
+`restore_link_state`, `GraphPort.supersede_edge`, and the ArcadeDB adapter's id-only link writes.
+
+**What it found.** A link's id is unique within its type, and two types can hold the same id (a
+fixed id, written twice). Three places reached a link by id alone:
+- `upsert_edges`' merge updated `g.E().has("id",…)`, so a merge into one type's link rewrote the
+  other type's link too;
+- `supersede_edge` read and marked by id alone, so a correction of one type's link marked every
+  type's link holding the id superseded;
+- `read_link_state` took the first type it found.
+
+A first answer refused an id two types hold (an `AmbiguousLinkId`, a `409` to the corrector). The
+review found that refusal itself breaks rule 3: an access-free search of every type, told back to a
+person, says another link holds the id, which they may not be cleared to see. It also found the
+premise wrong, because every caller already holds the old link's type. So nothing searches, and
+nothing is refused.
+
+**Decision.**
+1. **Every link write names its type.** `upsert_edges`' merge names the link's type in its
+   update (`hasLabel`). `supersede_edge(edge_id, replacement, tx, *, old_type)` reads and marks the
+   old link in the type its caller names; every caller passes the `Edge` it holds (`edge.type`).
+   `restore_link_state` writes the type its state records. Each touches exactly the type it is
+   given; another type holding the same id is never read, written or told of.
+2. **A link's state is read by its type.** `read_link_state(edge_id, edge_type)` reads that
+   type's link alone (`LinkPriorState.edge_type` is the ontology's name, which the restore maps
+   to the store's). A returning row's load reads its own link by the type its row recorded:
+   `RowElements.edge_types`, beside `edge_ids`, kept in the ledger's `edge_types` column (added by
+   the store's own start-up DDL, idempotent).
+3. **A row kept before L1.2d** holds no link types (its column is NULL), so its link is never read
+   by type and never captured. A returning row's merge into it stays a merge, and its load is
+   refused a revert as any merge is (`merged_links`). This is the stated behaviour for those rows.
+
+**Tests.**
+- Conformance, with two types on one id: a merge, a supersede and a restore each change only
+  their named type; a state read reaches its named type alone. Each is red with the type ignored.
+- `tests/ingest/test_snapshot_withdrawal.py`: the capture reads by the recorded type (red when it
+  reads by another); a row kept before link types were recorded is never captured, and its load
+  stays refused.
+- `tests/services/api/test_row_key_withdrawal_ledger.py`: a key kept before reads back with no
+  links, a key kept since with each link's type (red when the ledger keeps no types).
+- Each is shown red in `process/lanes/studio/L1.2a_RED_RECORD.md`.
+
+**A minor, for later:** `builders.py` reads a path's links by id alone in one place (lines
+498–499). It is access-filtered, so it tells no one of a link they cannot read; it is recorded,
+not changed here.
+
 ### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
 
 Status: accepted from the owner's rulings of 7 November 2026 on Amendment 2's two open questions, L5 and L6

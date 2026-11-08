@@ -165,7 +165,7 @@ class Sink:
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]:
+    ) -> dict[str, dict[str, str]]:
         return {}  # no full snapshot withdraws here
 
     async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:

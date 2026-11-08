@@ -676,7 +676,11 @@ class GraphArcadeDBAdapter:
             )
             if existing is not None:
                 edge_lit = groovy_string_literal(edge_id)
-                command = f'g.E().has("id",{edge_lit}){property_steps}'
+                # ADR-110 Amendment 18: its own type alone, never another type holding the id.
+                command = (
+                    f"g.E().hasLabel({groovy_string_literal(type_name)})"
+                    f'.has("id",{edge_lit}){property_steps}'
+                )
                 await self._client.gremlin(command, params=bound_params, session_id=tx)
                 if merged_interval is not None and merged_interval.valid_to is None:
                     # ADR-127 decision 11: a merge that leaves the span open writes no flattened
@@ -1923,27 +1927,26 @@ class GraphArcadeDBAdapter:
     _NOT_PRIOR_STATE = frozenset({"valid_from", "valid_to"})
 
     async def read_link_state(
-        self, edge_id: EdgeId, tx: TxId | None = None
+        self, edge_id: EdgeId, edge_type: str, tx: TxId | None = None
     ) -> LinkPriorState | None:
-        for type_name in await self._types_with_unique_id("edge"):
-            rows = await self._client.sql(
-                f"SELECT FROM `{groovy_identifier(type_name)}` WHERE id = :id",
-                params={"id": edge_id},
-                session_id=tx,
-            )
-            if rows:
-                row = rows[0]
-                stored = self._as_stored(row)
-                audit = AuditStub.model_validate(row["audit"])
-                return LinkPriorState(
-                    edge_id=edge_id,
-                    edge_type=type_name,
-                    revision=audit.revision,
-                    load_id=audit.load_id,
-                    handling=Handling.model_validate(row["handling"]),
-                    stored=stored,
-                )
-        return None
+        type_name = groovy_identifier(physical_type_name(edge_type))
+        rows = await self._client.sql(
+            f"SELECT FROM `{type_name}` WHERE id = :id",
+            params={"id": edge_id},
+            session_id=tx,
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        audit = AuditStub.model_validate(row["audit"])
+        return LinkPriorState(
+            edge_id=edge_id,
+            edge_type=edge_type,
+            revision=audit.revision,
+            load_id=audit.load_id,
+            handling=Handling.model_validate(row["handling"]),
+            stored=self._as_stored(row),
+        )
 
     def _as_stored(self, row: Mapping[str, Any]) -> dict[str, Any]:
         return {
@@ -1951,7 +1954,7 @@ class GraphArcadeDBAdapter:
         }
 
     async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:
-        type_name = groovy_identifier(state.edge_type)
+        type_name = groovy_identifier(physical_type_name(state.edge_type))
         rows = await self._client.sql(
             f"SELECT FROM `{type_name}` WHERE id = :id",
             params={"id": state.edge_id},
@@ -1991,7 +1994,7 @@ class GraphArcadeDBAdapter:
         )
         await self._client.gremlin(
             # Its own type alone: another type holding the same id is never written (MF11).
-            f"g.E().hasLabel({groovy_string_literal(state.edge_type)})"
+            f"g.E().hasLabel({groovy_string_literal(type_name)})"
             f'.has("id",{groovy_string_literal(state.edge_id)}){steps}',
             params=bound,
             session_id=tx,
@@ -2231,7 +2234,9 @@ class GraphArcadeDBAdapter:
         )
         return cloned_edge_id
 
-    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
+    async def supersede_edge(
+        self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId, *, old_type: str
+    ) -> EdgeId:
         """Unlike `supersede_node`, nothing needs repointing: nothing in
         this domain model references an edge by id except an assessment's
         evidence list (`01_DOMAIN_MODEL.md` §5), which is expected to
@@ -2250,8 +2255,11 @@ class GraphArcadeDBAdapter:
         validate_properties(edge_type, replacement.properties)
 
         edge_lit = groovy_string_literal(edge_id)
+        # ADR-110 Amendment 18: the old link's own type, named by the caller, alone; another type
+        # holding the same id is never read or marked.
+        old_label = groovy_string_literal(groovy_identifier(physical_type_name(old_type)))
         existing_results = await self._client.gremlin(
-            f'g.E().has("id",{edge_lit}).elementMap()', session_id=tx
+            f'g.E().hasLabel({old_label}).has("id",{edge_lit}).elementMap()', session_id=tx
         )
         if not existing_results:
             raise OntologyError(f"cannot supersede {edge_id!r}: no such edge")
@@ -2279,7 +2287,8 @@ class GraphArcadeDBAdapter:
         # out: its occurrences live on in the replacement (ADR-120 Amendment 5).
         new_id_lit = groovy_string_literal(replacement_edge_id)
         await self._client.gremlin(
-            f'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})',
+            f'g.E().hasLabel({old_label}).has("id",{edge_lit})'
+            f'.property("superseded_by", {new_id_lit})',
             session_id=tx,
         )
         type_name = groovy_identifier(physical_type_name(replacement.type))

@@ -61,6 +61,8 @@ class WithdrawalLedger:
         self.withdrawn: dict[tuple[str, str, str], tuple[str, Any, Any, Any, str]] = {}
         self.records: list[LoadReport] = []
         self.case = CASE
+        #: Each kept key's link types, as the ledger keeps them (ADR-110 Amendment 18).
+        self.types: dict[tuple[str, str, str], dict[str, str]] = {}
 
     # -- what `load_with_rules` asks of its sink ------------------------------------------------
     async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
@@ -84,6 +86,8 @@ class WithdrawalLedger:
         self.records.append(report)
         for key in report.kept_row_keys:
             e = report.kept_row_elements.get(key)
+            if e is not None and (report.recipe_id, self.case, key) not in self.kept_rows:
+                self.types[(report.recipe_id, self.case, key)] = dict(e.edge_types)
             self.kept_rows.setdefault(
                 (report.recipe_id, self.case, key),
                 (report.load_id, *((None,) * 3 if e is None else
@@ -127,14 +131,15 @@ class WithdrawalLedger:
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]:
+    ) -> dict[str, dict[str, str]]:
         """As the ledger: the withdrawn keys of the recipe and case among `keys`, with the links
         each one's record holds (none for a key recorded before rows recorded them)."""
-        return {
-            k[2]: tuple(v[2] or ())
-            for k, v in self.withdrawn.items()
-            if k[:2] == (recipe_id, case) and k[2] in set(keys)
-        }
+        out: dict[str, dict[str, str]] = {}
+        for k, v in self.withdrawn.items():
+            if k[:2] == (recipe_id, case) and k[2] in set(keys):
+                types = self.types.get(k, {})
+                out[k[2]] = {e: types[e] for e in (v[2] or ()) if e in types}
+        return out
 
     async def withdrawn_row_keys_among(
         self, recipe_id: str, case: str, keys: Sequence[str]
@@ -353,7 +358,7 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     await _snapshot(graph, ledger, [B], "load-2", events=events)
     links = _live_links(graph)
     (a_link,) = first.kept_row_elements[_key(A)].edge_ids
-    as_it_was = await graph.read_link_state(a_link)
+    as_it_was = await graph.read_link_state(a_link, "TRANSACTED")
 
     back = await _snapshot(graph, ledger, [A, B], "load-3", events=events)
 
@@ -365,7 +370,7 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     # reverts; no words say otherwise.
     (kept,) = back.own_key_merges
     assert kept.model_copy(update={"left_digest": None}) == as_it_was
-    left = await graph.read_link_state(a_link)
+    left = await graph.read_link_state(a_link, "TRANSACTED")
     assert left is not None and kept.left_digest == stored_digest(left.stored), "as the load left it"
     assert back.refresh_notes == []
 
@@ -533,9 +538,9 @@ async def test_a_returning_rows_load_reverts_and_puts_its_link_back_then_the_ref
     first = await _snapshot(graph, keys, [A, B], "load-1")
     await _snapshot(graph, keys, [B], "load-2")
     (a_link,) = first.kept_row_elements[_key(A)].edge_ids
-    after_the_refresh = await graph.read_link_state(a_link)
+    after_the_refresh = await graph.read_link_state(a_link, "TRANSACTED")
     await _snapshot(graph, keys, [A, B], "load-3")
-    assert await graph.read_link_state(a_link) != after_the_refresh
+    assert await graph.read_link_state(a_link, "TRANSACTED") != after_the_refresh
     ledger = RefreshLedger(keys)  # one ledger: each revert is recorded for the next
 
     reverted = await revert("load-3", reverted_by="operator-1",
@@ -543,7 +548,7 @@ async def test_a_returning_rows_load_reverts_and_puts_its_link_back_then_the_ref
 
     (load_3,) = reverted.reverted
     assert (load_3.load_id, load_3.links_put_back, load_3.links) == ("load-3", 1, 0)
-    assert await graph.read_link_state(a_link) == after_the_refresh, "exactly as it was"
+    assert await graph.read_link_state(a_link, "TRANSACTED") == after_the_refresh, "exactly as it was"
     assert (CASE, _key(A)) not in {k[1:] for k in keys.kept_rows}
     await revert("load-2", reverted_by="operator-1",
                  deps=_deps(graph, ledger, Steps()), now=NOW)  # fmt: skip
@@ -614,14 +619,32 @@ async def test_a_returning_rows_revert_is_refused_once_an_analyst_corrected_its_
     await _snapshot(graph, keys, [A, B], "load-3")
     (a_link,) = first.kept_row_elements[_key(A)].edge_ids
     graph.superseded.add(a_link)  # an analyst's correction, as `supersede_edge` marks it
-    before = await graph.read_link_state(a_link)
+    before = await graph.read_link_state(a_link, "TRANSACTED")
 
     with pytest.raises(RevertRefused) as refused:
         await revert("load-3", reverted_by="operator-1",
                      deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
 
     assert [(r.reason, r.count) for r in refused.value.refusals] == [("own_link_written_since", 1)]
-    assert await graph.read_link_state(a_link) == before and a_link in graph.superseded
+    assert await graph.read_link_state(a_link, "TRANSACTED") == before and a_link in graph.superseded
+
+
+async def test_a_row_kept_before_its_link_types_were_recorded_is_never_captured() -> None:
+    """ADR-110 Amendment 18, the stated behaviour for rows kept before L1.2d: a key whose record
+    holds no link types cannot have its link read by type, so a returning row's merge into it is
+    not captured. It stays a merge, and its load is refused a revert as any merge is."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    await _snapshot(graph, keys, [A, B], "load-1")
+    keys.types.clear()  # as a row kept before the ledger recorded its link types
+    await _snapshot(graph, keys, [B], "load-2")
+
+    back = await _snapshot(graph, keys, [A, B], "load-3")
+
+    assert back.own_key_merges == [] and back.merged_edge_ids
+    with pytest.raises(RevertRefused) as refused:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+    assert [r.reason for r in refused.value.refusals] == ["merged_links"]
 
 
 async def test_a_merge_into_a_link_that_is_not_the_rows_own_still_refuses_the_revert() -> None:

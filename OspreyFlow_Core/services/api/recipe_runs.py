@@ -109,6 +109,9 @@ CREATE INDEX IF NOT EXISTS withdrawn_row_keys_edge_ids_idx
 -- full snapshot's withdrawal leaves in place, its events too, and counts.
 ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS event_ids TEXT[];
 ALTER TABLE withdrawn_row_keys ADD COLUMN IF NOT EXISTS event_ids TEXT[];
+-- ADR-110 Amendment 18: each kept row's link types ({edge id: type}); NULL for a row kept before.
+ALTER TABLE loaded_row_keys ADD COLUMN IF NOT EXISTS edge_types JSONB;
+ALTER TABLE withdrawn_row_keys ADD COLUMN IF NOT EXISTS edge_types JSONB;
 """
 
 
@@ -353,21 +356,27 @@ class RecipeRunStore:
                 nodes = [_ids(elements.get(k), "node_ids") for k in chunk]
                 edges = [_ids(elements.get(k), "edge_ids") for k in chunk]
                 events = [_ids(elements.get(k), "event_ids") for k in chunk]
+                # ADR-110 Amendment 18: each link's type, `null` for a key with no entry.
+                types = [
+                    None if elements.get(k) is None else dict(elements[k].edge_types) for k in chunk
+                ]
                 await conn.execute(
                     "INSERT INTO loaded_row_keys "
                     "(recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
-                    "edge_ids, event_ids) "
+                    "edge_ids, event_ids, edge_types) "
                     "SELECT $1, $2, k.key, $4, $5, "
                     "CASE WHEN n.ids = 'null' THEN NULL ELSE "
                     "ARRAY(SELECT jsonb_array_elements_text(n.ids)) END, "
                     "CASE WHEN e.ids = 'null' THEN NULL ELSE "
                     "ARRAY(SELECT jsonb_array_elements_text(e.ids)) END, "
                     "CASE WHEN v.ids = 'null' THEN NULL ELSE "
-                    "ARRAY(SELECT jsonb_array_elements_text(v.ids)) END "
+                    "ARRAY(SELECT jsonb_array_elements_text(v.ids)) END, "
+                    "CASE WHEN t.types = 'null' THEN NULL ELSE t.types END "
                     "FROM unnest($3::text[]) WITH ORDINALITY AS k(key, i) "
                     "JOIN jsonb_array_elements($6::jsonb) WITH ORDINALITY AS n(ids, i) USING (i) "
                     "JOIN jsonb_array_elements($7::jsonb) WITH ORDINALITY AS e(ids, i) USING (i) "
                     "JOIN jsonb_array_elements($8::jsonb) WITH ORDINALITY AS v(ids, i) USING (i) "
+                    "JOIN jsonb_array_elements($9::jsonb) WITH ORDINALITY AS t(types, i) USING (i) "
                     "ON CONFLICT (recipe_id, investigation_id, row_key) DO NOTHING",
                     record.recipe_id,
                     record.investigation_id or "",
@@ -377,6 +386,7 @@ class RecipeRunStore:
                     json.dumps(nodes),
                     json.dumps(edges),
                     json.dumps(events),
+                    json.dumps(types),
                 )
             withdrawn = list(dict.fromkeys(withdrawn_row_keys))
             for start in range(0, len(withdrawn), _KEY_CHUNK):
@@ -389,9 +399,10 @@ class RecipeRunStore:
                     "w.recipe_id = k.recipe_id AND w.investigation_id = k.investigation_id "
                     "AND w.row_key = k.row_key) RETURNING *) "
                     "INSERT INTO withdrawn_row_keys (recipe_id, investigation_id, row_key, "
-                    "load_id, fingerprint, node_ids, edge_ids, event_ids, withdrawn_by_load) "
+                    "load_id, fingerprint, node_ids, edge_ids, event_ids, edge_types, "
+                    "withdrawn_by_load) "
                     "SELECT recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
-                    "edge_ids, event_ids, $4 FROM moved",
+                    "edge_ids, event_ids, edge_types, $4 FROM moved",
                     record.recipe_id,
                     record.investigation_id or "",
                     withdrawn[start : start + _KEY_CHUNK],
@@ -468,23 +479,28 @@ class RecipeRunStore:
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]:
-        """ADR-110 Amendment 16: of these keys, those an earlier full snapshot of the recipe in the
-        case withdrew, each with the links its record holds (`edge_ids`). A returning row's merge
-        into one of them is its own. Per recipe and case, in chunks, as `withdrawn_row_keys_among`;
-        a key recorded before rows recorded their links holds none."""
-        found: dict[str, tuple[str, ...]] = {}
+    ) -> dict[str, dict[str, str]]:
+        """ADR-110 Amendments 16 and 18: of these keys, those an earlier full snapshot of the
+        recipe in the case withdrew, each with the links its record holds and each link's own type
+        (`edge_types`). A returning row's merge into one of them is its own, read by that type. A
+        key kept before rows recorded their link types holds none, so it is never captured. Per
+        recipe and case, in chunks, as `withdrawn_row_keys_among`."""
+        found: dict[str, dict[str, str]] = {}
         unique = list(dict.fromkeys(keys))
         async with self._pool.acquire() as conn:
             for start in range(0, len(unique), _KEY_CHUNK):
                 rows = await conn.fetch(
-                    "SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "
+                    "SELECT row_key, edge_ids, edge_types FROM withdrawn_row_keys "
+                    "WHERE recipe_id = $1 "
                     "AND investigation_id = $2 AND row_key = ANY($3::text[])",
                     recipe_id,
                     case,
                     unique[start : start + _KEY_CHUNK],
                 )
-                found.update((r["row_key"], tuple(r["edge_ids"] or ())) for r in rows)
+                for r in rows:
+                    held = r["edge_types"]
+                    types = json.loads(held) if isinstance(held, str) else (held or {})
+                    found[r["row_key"]] = {e: types[e] for e in (r["edge_ids"] or ()) if e in types}
         return found
 
     async def withdrawn_keys_kept_again(self, load_id: str) -> int:
@@ -510,9 +526,9 @@ class RecipeRunStore:
                 "AND k.investigation_id = w.investigation_id AND k.row_key = w.row_key) "
                 "RETURNING *) "
                 "INSERT INTO loaded_row_keys (recipe_id, investigation_id, row_key, load_id, "
-                "fingerprint, node_ids, edge_ids, event_ids) "
+                "fingerprint, node_ids, edge_ids, event_ids, edge_types) "
                 "SELECT recipe_id, investigation_id, row_key, load_id, fingerprint, node_ids, "
-                "edge_ids, event_ids FROM moved",
+                "edge_ids, event_ids, edge_types FROM moved",
                 load_id,
             )
         return int(status.split()[-1])

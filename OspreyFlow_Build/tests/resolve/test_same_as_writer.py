@@ -33,7 +33,8 @@ class _FakeGraphPort:
         self.writes.extend(edges)
         return [e.id for e in edges]
 
-    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: str) -> str:
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: str, *, old_type: str
+    ) -> str:
         self.superseded.append((edge_id, replacement))
         return replacement.id
 

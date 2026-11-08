@@ -40,7 +40,8 @@ class _SupersedingGraph(FakeGraphPort):
         super().__init__(Subgraph(nodes=[document], edges=[link]))
         self.superseded: list[tuple[EdgeId, EdgeWrite]] = []
 
-    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
+    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId, *, old_type: str
+    ) -> EdgeId:
         self.superseded.append((edge_id, replacement))
         return replacement.id
 

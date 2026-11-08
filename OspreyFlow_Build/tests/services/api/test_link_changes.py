@@ -161,7 +161,8 @@ class SupersedingGraph(FakeGraphPort):
         self._pending[tx] = []
         return tx
 
-    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
+    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId, *, old_type: str
+    ) -> EdgeId:
         if self.fail_with is not None:
             raise self.fail_with
         _refuse_withheld(replacement.provenance)  # as `serialization.py` refuses it

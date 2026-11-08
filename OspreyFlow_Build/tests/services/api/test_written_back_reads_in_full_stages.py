@@ -51,7 +51,8 @@ class _Graph(FakeGraphPort):
         self.node_writes.append(replacement)
         return replacement.id
 
-    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any) -> str:
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any, *, old_type: str
+    ) -> str:
         assert not replacement.provenance.sources_withheld, "the write guard refuses this"
         self.edge_writes.append(replacement)
         return replacement.id

@@ -226,8 +226,12 @@ class GraphPort(Protocol):
         reads the same way `node_id` itself now is."""
         ...
 
-    async def supersede_edge(self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId) -> EdgeId:
-        """The same operation as `supersede_node`, for an edge. `§3`:
+    async def supersede_edge(
+        self, edge_id: EdgeId, replacement: EdgeWrite, tx: TxId, *, old_type: str
+    ) -> EdgeId:
+        """The same operation as `supersede_node`, for an edge. `old_type` is the old link's own
+        type (the ontology's name), which every caller holds: the old link is read and marked in
+        that type alone, never another type holding the same id (ADR-110 Amendment 18). `§3`:
         an edge carries `AuditStub` too, and `01_DOMAIN_MODEL.md` §5's
         `Judgement.supporting`/`contradicting` can name an `EdgeId`
         directly — a correction to the evidence itself must leave that
@@ -742,15 +746,17 @@ class GraphPort(Protocol):
         ...
 
     async def read_link_state(
-        self, edge_id: EdgeId, tx: TxId | None = None
+        self, edge_id: EdgeId, edge_type: str, tx: TxId | None = None
     ) -> LinkPriorState | None:
-        """ADR-110 Amendment 16: the link exactly as stored, whatever the caller may read, found
-        through its type's unique `id` index; inside `tx` when given, so a load reads it before its
-        own write in the same transaction. `None` if no live or reverted link holds the id. Graph
-        data for the revert alone (rule 3): never passed to a view, report or log.
+        """ADR-110 Amendment 16: the link of `edge_type` (the ontology's name) holding `edge_id`,
+        exactly as stored, whatever the caller may read, through that type's unique `id` index
+        alone (Amendment 18: a read names its type, so another type holding the id is never
+        reached or told of); inside `tx` when given, so a load reads it before its own write in the
+        same transaction. `None` if no link of that type holds the id. Graph data for the revert
+        alone (rule 3): never passed to a view, report or log.
 
-        **Opaque.** The state is the adapter's own stored form: `edge_type` is the store's name for
-        the type (an adapter may prefix it), and `stored` is the record as the adapter keeps it.
+        **Opaque.** The state is the adapter's own stored form: `edge_type` is the ontology's name
+        for the link's type, and `stored` is the record as the adapter keeps it.
         On ArcadeDB that is every stored property of the link (its `id`, ends, flattened and nested
         handling, `reverted`, `superseded_by` when set, `datasets`, `properties` and their
         flattened copies, `occurrences`, `weight`, `weight_components`, `provenance`, `basis`,

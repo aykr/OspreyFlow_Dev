@@ -511,7 +511,7 @@ async def _later_refusals(
     for record in plan:
         since = 0
         for prior in record.own_key_merges:
-            now_held = await deps.graph.read_link_state(prior.edge_id)
+            now_held = await deps.graph.read_link_state(prior.edge_id, prior.edge_type)
             held = stored_digest(now_held.stored) if now_held is not None else None
             # As this load left it, or as it was before (put back by an earlier attempt); any
             # other state is a write since, by anyone, and refuses.

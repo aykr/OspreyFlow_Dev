@@ -511,10 +511,45 @@ async def test_withdrawn_row_links_answers_this_recipe_and_case_alone(
     ):
         load, refresh = new_id(), new_id()
         await runs.add_record(run, _keyed(load, rec, case), row_keys=[k1],
-                              row_elements={k1: _elements(["n1"], [edge], ["v1"])})  # fmt: skip
+                              row_elements={k1: RowElements(node_ids=["n1"], edge_ids=[edge],
+                                                            event_ids=["v1"],
+                                                            edge_types={edge: "TRANSACTED"})})  # fmt: skip
         await runs.add_record(run, _keyed(refresh, rec, case), withdrawn_row_keys=[k1])
 
-    assert await runs.withdrawn_row_links(recipe, ours, [k1]) == {k1: ("e-ours",)}
-    assert await runs.withdrawn_row_links(recipe, theirs, [k1]) == {k1: ("e-theirs",)}
-    assert await runs.withdrawn_row_links(other_recipe, ours, [k1]) == {k1: ("e-other-pipeline",)}
+    assert await runs.withdrawn_row_links(recipe, ours, [k1]) == {k1: {"e-ours": "TRANSACTED"}}
+    assert await runs.withdrawn_row_links(recipe, theirs, [k1]) == {
+        k1: {"e-theirs": "TRANSACTED"}
+    }
+    assert await runs.withdrawn_row_links(other_recipe, ours, [k1]) == {
+        k1: {"e-other-pipeline": "TRANSACTED"}
+    }
     assert await runs.withdrawn_row_links(recipe, ours, [new_id()]) == {}
+
+
+async def test_a_key_kept_before_link_types_were_recorded_reads_back_with_none(
+    runs: RecipeRunStore,
+) -> None:
+    """ADR-110 Amendment 18: the `edge_types` column added by the store's own start-up DDL is NULL
+    for a row kept before it. Such a key, once withdrawn, reads back from `withdrawn_row_links` with
+    no links, so a returning row's merge into its link is never captured. A key kept since reads
+    back with each link's type."""
+    recipe, case, first, refresh = new_id(), new_id(), new_id(), new_id()
+    old, new = new_id(), new_id()
+    run_id = await _started(runs, recipe)
+    elements = {
+        old: RowElements(node_ids=["n1"], edge_ids=["e-old"], edge_types={"e-old": "TRANSACTED"}),
+        new: RowElements(node_ids=["n2"], edge_ids=["e-new"], edge_types={"e-new": "TRANSACTED"}),
+    }
+    await runs.add_record(run_id, _keyed(first, recipe, case), row_keys=[old, new],
+                          row_elements=elements)  # fmt: skip
+    async with runs._pool.acquire() as conn:  # as the row was before the column held anything
+        await conn.execute(
+            "UPDATE loaded_row_keys SET edge_types = NULL WHERE recipe_id = $1 AND row_key = $2",
+            recipe, old,
+        )  # fmt: skip
+    await runs.add_record(run_id, _keyed(refresh, recipe, case), withdrawn_row_keys=[old, new])
+
+    assert await runs.withdrawn_row_links(recipe, case, [old, new]) == {
+        old: {},
+        new: {"e-new": "TRANSACTED"},
+    }

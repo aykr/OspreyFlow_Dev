@@ -94,7 +94,7 @@ class _RunLedger(Protocol):
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]: ...
+    ) -> dict[str, dict[str, str]]: ...
 
 
 class LedgerSink:
@@ -169,7 +169,7 @@ class LedgerSink:
 
     async def withdrawn_row_links(
         self, recipe_id: str, case: str, keys: Sequence[str]
-    ) -> dict[str, tuple[str, ...]]:
+    ) -> dict[str, dict[str, str]]:
         return await self._ledger.withdrawn_row_links(recipe_id, case, keys)
 
     async def watermark(self, recipe_id: str, case: str, source_id: str) -> SourceWatermark | None:
