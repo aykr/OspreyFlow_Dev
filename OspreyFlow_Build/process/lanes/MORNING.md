@@ -223,6 +223,11 @@ New ones are added at the bottom as they happen.
     ruling (b) withholds. **Main's Glass calls the branch routes L3.2 removed until L3.2b merges, which
     must be before the single push.**
 
+48. **Your answer in case's window (L3.2b), for the record:** an opened view is a read-only lens: the canvas
+    shows only the view's items, laid out and collapsed at its threshold by the Conduit, the timeline set to
+    its window, a banner "View: <name> · n not shown · Back to the case"; nothing in a view changes the
+    case's working set.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
