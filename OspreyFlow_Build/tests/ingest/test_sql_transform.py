@@ -129,19 +129,22 @@ def test_the_gate_s_refusal_is_the_sql_gate_s() -> None:
 
 
 @pytest.mark.parametrize(
-    "select",
+    ("select", "words"),
     [
-        "SELECT * FROM read_csv('/etc/hosts')",
-        "SELECT * FROM 'http://example.invalid/rows.csv'",
-        "SELECT * FROM read_parquet('https://example.invalid/x.parquet')",
-        "SELECT *, _ref FROM read_text('/etc/hosts')",
+        # Each carries `_ref`, so nothing but the sandbox stands between it and the file or network
+        # (rule 15: a planted read that failed for its missing `_ref` proved nothing of the sandbox).
+        ("SELECT v.*, x.* FROM visits v, read_csv('/etc/hosts') x", "disabled by configuration"),
+        ("SELECT v.*, x.* FROM visits v, 'http://example.invalid/rows.csv' x", "disabled by configuration"),
+        ("SELECT v.*, x.* FROM visits v, read_parquet('https://example.invalid/x.parquet') x",
+         "disabled by configuration"),
+        ("SELECT v.*, x.* FROM visits v, read_text('/etc/hosts') x", "disabled by configuration"),
     ],
 )
-def test_the_sandbox_refuses_a_file_or_network_read_without_the_gate(select: str) -> None:
-    """The gate taken away: the sandbox still reads no file and no network."""
+def test_the_sandbox_refuses_a_file_or_network_read_without_the_gate(select: str, words: str) -> None:
+    """The gate taken away: the sandbox itself reads no file and no network, in DuckDB's words."""
     with pytest.raises(StagingError) as refused:
         run_sql_step(_step(select, ("visits",)), [_tables()["visits"]], check=False)
-    assert refused.value.problems
+    assert any(words in p for p in refused.value.problems), refused.value.problems
 
 
 def test_the_sandbox_refuses_a_second_statement_without_the_gate() -> None:
