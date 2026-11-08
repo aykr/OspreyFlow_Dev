@@ -65,6 +65,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-109 Amendment 11 | Every write that clones or replaces a link an alert can cite goes through the repoint journal, and the purge is published to connected canvases | rules | 2026-11-08 | written |
 | ADR-112 Amendment 7 | A right to manage model engines, each job's model and their keys, manage_models, held by the administrator and grantable alone (P1, the owner's ruling, 8 November) | platform | 2026-11-08 | reserved |
 | ADR-140 Amendment 11 | Phase 7a as built: the staging catalogue's engine, its YAML keys, staged rows' source references in each element's provenance (L1.3) | studio | 2026-11-08 | reserved |
+| ADR-109 Amendment 12 | A corrected node an alert names is renamed in referent_node_ids through the repoint journal; L2.8c's carries (L2.8d) | rules | 2026-11-08 | reserved |
 
 ## Baseline
 
