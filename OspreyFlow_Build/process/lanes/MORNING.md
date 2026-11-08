@@ -28,17 +28,6 @@ its lease; the build plan, runbook, progress table and the five first briefs (ad
 L2.8c, case L3.2, studio L1.3, platform P1); worktrees `admin`, `rules` and `platform` set up. The
 studio, case and glass sessions are retired (each replied "retired"); their worktrees are clean and merged.
 
-**A question for you (rules' L2.9; it widens a role and amends an accepted ADR, so it is yours):** ADR-112
-Amendment 5 defines the *Rule author* role as author_rules + triage_alerts, with no read_alert_queue, yet
-every read in Rules and Monitoring needs read_alert_queue, and the amendment's own test expects a Rule author
-to open the place. Choose:
-- **(a) Recommended:** add read_alert_queue to the Rule author role (whoever triages must read the queue),
-  amending ADR-112 Amendment 5.
-- (b) Widen Rules and Monitoring's reads to accept triage_alerts or author_rules as well.
-- (c) Leave the Rule author with no Rules and Monitoring until L2.11.
-Built meanwhile: the place is offered only to those holders who also hold read_alert_queue, so a Rule author
-is offered nothing yet; the amendment's test is an xfail naming this question.
-
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
@@ -269,6 +258,9 @@ New ones are added at the bottom as they happen.
     (ADR-142 Amendment 4). case-b and studio-b open at 22:00. **Docs split into D2a** (README, guides, welcome,
     website, GOV.UK) **and D2b, every deck** (your ruling: the overview, architecture, Prison Intelligence demos
     and script, AML, pitch and AE decks) after the rule editor and drawing boards are merged.
+
+58. **Your ruling on rules' L2.9 Q1:** the Rule author role gains read_alert_queue (whoever triages must read
+    the queue), amending ADR-112 Amendment 5, so Rule authors are offered Rules and Monitoring.
 
 ## Evening, 7 November: your records of 7 November applied
 
