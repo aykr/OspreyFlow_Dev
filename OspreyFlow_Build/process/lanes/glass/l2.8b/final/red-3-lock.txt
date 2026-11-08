@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:13:54Z; red at 09ab55c: the record's lock released as soon as it is taken, the settles overlapping
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..75d30e3 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -892,6 +892,7 @@ class AlertStore:
+         async with self._lock_pool.acquire() as lock:
+             if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
+                 return None
++            await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)  # red: released early
+             try:
+                 return await self._settle_held(graph, record_id, writer=writer)
+             finally:
+>           assert live == [row.alert_node_id], f"one live revision, named by the alert: {live}"
+E           AssertionError: one live revision, named by the alert: ['01M6WWNTJDY1GMJ8C2507Y9CX7', '01M6WWNTR5BS2XXB00HF95RP8X']
+E           assert ['01M6WWNTJDY...XB00HF95RP8X'] == ['01M6WWNTJDY1GMJ8C2507Y9CX7']
+E             Left contains one more item: '01M6WWNTR5BS2XXB00HF95RP8X'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_two_settles_of_one_record_at_once_leave_one_live_alert_node
+1 failed, 37 deselected in 11.36s

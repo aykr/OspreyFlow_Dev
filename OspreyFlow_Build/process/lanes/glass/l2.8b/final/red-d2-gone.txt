@@ -1,0 +1,18 @@
+lease glass; 2026-11-08T06:17:36Z; red at 09ab55c: a pair recorded in a record already gone
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..bc47181 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -834,7 +834,7 @@ class AlertStore:
+                 json.dumps([list(p) for p in alert_nodes]),
+                 json.dumps([list(p) for p in remarks]),
+             )
+-        if done != "UPDATE 1":
++        if False:  # red: a pair recorded where nothing will apply it
+             raise RepointRecordGone(record_id)
+ 
+     async def _release_record(self, record_id: str) -> None:
+>           with pytest.raises(RepointRecordGone):
+E           Failed: DID NOT RAISE RepointRecordGone
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_held_open_by_its_writer_is_not_settled_by_a_read_part_way
+1 failed, 37 deselected in 6.57s

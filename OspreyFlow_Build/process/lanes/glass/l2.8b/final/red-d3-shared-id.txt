@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T06:17:43Z; red at 09ab55c: an id two types hold followed regardless
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..51838cc 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -933,8 +933,7 @@ class AlertStore:
+             # link by id): no alert is moved by it, each left as the queue's check finds it (D3).
+             # Every later revision's id is minted fresh (`new_edge_id`), so only the first hop can
+             # be shared.
+-            if (await graph.stored_link_states([old]))[old].held_by == 1:
+-                finals[old] = newest
++            finals[old] = newest  # red: an id two types hold followed regardless
+         renamed: dict[str, str] = {}
+         for old, _ in nodes:
+             newest = await self._newest(graph.stored_writes, old)
+>           assert (await stores["alerts"].cited_by_ids([alert.id]))[alert.id].edge_ids == [shared]
+E           AssertionError: assert ['e-01M6WWWGV...W6VVCV4TWQNB'] == ['e-01M6WWWGV...W6VVCV4TWQNA']
+E             At index 0 diff: 'e-01M6WWWGV9SEVAW6VVCV4TWQNB' != 'e-01M6WWWGV9SEVAW6VVCV4TWQNA'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_id_two_link_types_hold_moves_no_alert
+1 failed, 37 deselected in 11.83s

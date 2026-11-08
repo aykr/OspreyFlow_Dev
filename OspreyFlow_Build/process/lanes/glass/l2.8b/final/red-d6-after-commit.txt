@@ -1,0 +1,24 @@
+lease glass; 2026-11-08T06:18:00Z; red at 09ab55c: never_committed said once the close's commit was sent
+diff --git a/OspreyFlow_Core/services/api/alert_queue.py b/OspreyFlow_Core/services/api/alert_queue.py
+index 1a6473e..4fa41aa 100644
+--- a/OspreyFlow_Core/services/api/alert_queue.py
++++ b/OspreyFlow_Core/services/api/alert_queue.py
+@@ -503,7 +503,11 @@ async def _close(
+                     repoint.never_committed()
+                     await graph.rollback_transaction(tx)
+                     raise
+-                await graph.commit_transaction(tx)
++                try:  # red: never_committed said once the commit was sent
++                    await graph.commit_transaction(tx)
++                except Exception:
++                    repoint.never_committed()
++                    raise
+             # The moved alerts' re-marked nodes leave every working set that stored a copy at the
+             # old marking (ADR-109 Amendment 10).
+             if working_set is not None and repoint.remarked_nodes:
+>           assert row.edge_ids != [link], "moved to the confirmed revision"
+E           AssertionError: moved to the confirmed revision
+E           assert ['01M6WWX9AT66V8XGHT86PATRH7'] != ['01M6WWX9AT66V8XGHT86PATRH7']
+E            +  where ['01M6WWX9AT66V8XGHT86PATRH7'] = Alert(id='01M6WWX9JM8VA55WXAF05M8MJH', rule_id='typology:01M6WWX9JM8VA55WXAF05M8MJJ', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).edge
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record
+1 failed, 37 deselected in 10.40s

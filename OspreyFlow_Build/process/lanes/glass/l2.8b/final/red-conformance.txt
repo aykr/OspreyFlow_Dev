@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:17:10Z; red at 09ab55c: stored_link_states naming no successor
+diff --git a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+index a665c85..d852c37 100644
+--- a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
++++ b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+@@ -1927,7 +1927,7 @@ class GraphArcadeDBAdapter:
+             edge_id: StoredLink(
+                 reverted=all(r for r, _ in states),
+                 superseded=any(by is not None for _, by in states),
+-                superseded_by=next((by for _, by in states if by is not None), None),
++                superseded_by=None,  # red
+                 held_by=len(states),
+             )
+             for edge_id, states in gathered.items()
+>           assert links[old_link].superseded and links[old_link].superseded_by == new_link
+E           AssertionError: assert (True and None == '01M6WWVKK559NEKM8BBHES96YF')
+E            +  where True = StoredLink(reverted=False, superseded=True, superseded_by=None, held_by=1).superseded
+E            +  and   None = StoredLink(reverted=False, superseded=True, superseded_by=None, held_by=1).superseded_by
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_states_name_each_superseded_elements_successor[graph_arcadedb[gremlin]]
+1 failed, 277 deselected in 4.09s

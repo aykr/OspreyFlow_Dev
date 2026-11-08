@@ -1,0 +1,18 @@
+lease glass; 2026-11-08T06:17:24Z; red at 09ab55c: a held-open record settled as any
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..394c979 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -774,8 +774,6 @@ class AlertStore:
+             )
+         cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
+         for row in rows:
+-            if row["held_open"] and row["recorded_at"] >= cutoff:
+-                continue  # its writer is still recording (D2)
+             try:
+                 done = await self._settle_record(graph, row["id"])
+                 if done is not None or row["recorded_at"] >= cutoff:
+>               assert row is not None and (row["applied"], row["held_open"]) == (False, True)
+E               assert (None is not None)
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_held_open_by_its_writer_is_not_settled_by_a_read_part_way
+1 failed, 37 deselected in 10.75s

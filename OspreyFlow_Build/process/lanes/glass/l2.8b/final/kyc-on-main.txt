@@ -1,0 +1,9 @@
+lease glass; 2026-11-08T06:29:08Z; main's services, packages and tests at 542ad0f
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 6, 29, 17, 637298, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=No
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 6, 29, 17, 637298, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6WXHN6CCE9P76V017XRK3
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 12 deselected in 10.32s
+tree restored after the main check

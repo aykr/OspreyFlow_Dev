@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:13:33Z; red at 09ab55c: a node the record renamed never re-marked (only alerts citing moved links)
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..d1b281f 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -961,7 +961,7 @@ class AlertStore:
+             graph,
+             record_id,
+             sorted(set(finals.values())),
+-            sorted({*renamed.values(), *(old for old in rerun if old not in renamed)}),
++            [],  # red: renamed nodes not re-marked
+         )
+         # Every node renamed or re-marked here is superseded: its working-set copies are stale.
+         purge = sorted({*renamed, *remarked})
+>           assert node.handling.classification == "SECRET"
+E           AssertionError: assert 'OFFICIAL' == 'SECRET'
+E             - SECRET
+E             + OFFICIAL
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+1 failed, 37 deselected in 11.47s

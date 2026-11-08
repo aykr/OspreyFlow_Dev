@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:17:55Z; red at 09ab55c: the typed read answered over every type
+diff --git a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+index a665c85..01cd5c8 100644
+--- a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
++++ b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+@@ -1901,7 +1901,7 @@ class GraphArcadeDBAdapter:
+         if not chunks:
+             types: list[str] = []
+         elif edge_type is not None:
+-            types = [physical_type_name(edge_type)]  # that type's index alone
++            types = await self._types_with_unique_id("edge")  # red: every type
+         else:
+             types = await self._types_with_unique_id("edge")
+         for chunk in chunks:
+>           assert (called.superseded, called.superseded_by, called.held_by) == (True, successor, 1)
+E           AssertionError: assert (True, '01M6W...CTYYF9FKR', 2) == (True, '01M6W...CTYYF9FKR', 1)
+E             At index 2 diff: 2 != 1
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone[graph_arcadedb[gremlin]]
+1 failed, 277 deselected in 4.37s

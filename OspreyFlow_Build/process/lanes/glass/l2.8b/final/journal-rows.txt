@@ -1,0 +1,2 @@
+journal rows before: 0
+journal rows after: 0

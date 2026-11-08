@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:17:15Z; red at 09ab55c: a re-mark's pair kept as the write's own, waited on
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..93872c0 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -995,7 +995,7 @@ class AlertStore:
+         rows = list((await self.cited_by_ids([r["id"] for r in found])).values())
+ 
+         async def recorded(old: str, new: str) -> None:
+-            await self._add_to_record(record_id, remarks=[(old, new)])
++            await self._add_to_record(record_id, alert_nodes=[(old, new)])  # red: kept as the write's
+ 
+         report = await remark_alerts(graph, self, self.scheme, rows, on_supersede=recorded)
+         return report.superseded_nodes
+>           assert node is not None and node.handling.classification == "SECRET"
+E           AssertionError: assert (Node(id='01M6WWVVX28DM1A115ZWP0ZRFK', type='Alert', properties={'rule_id': '01M6WWVV2XTXKC3C3E9MAN5CKR', 'typology': '...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]) is not None and 'OFFICI
+E             - SECRET
+E             + OFFICIAL)
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on
+1 failed, 37 deselected in 8.46s

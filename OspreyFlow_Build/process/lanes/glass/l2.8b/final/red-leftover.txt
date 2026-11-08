@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T06:16:44Z; red at 09ab55c: a record's settle failure let through to the read
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..7e2cd64 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -793,7 +793,7 @@ class AlertStore:
+                 superseded += [s.superseded for s in node_states.values()]
+                 if not any(superseded):
+                     await self._close_record(row["id"])  # the write never happened
+-            except Exception:  # noqa: BLE001 - one record never breaks a read: it waits
++            except ZeroDivisionError:  # red: a record's failure let through
+                 # A record this read cannot settle (its links in no graph this deployment reads,
+                 # a store refusing for the moment) is left for a later settle or the stale
+                 # threshold; the read answers as the queue's check finds the alerts now.
+>               assert await _listed(stores, Refusing(), analytics, case, TEAMMATE) == [alert.id]
+>       raise ConnectionError("the stored-state lookup is unavailable")
+E       ConnectionError: the stored-state lookup is unavailable
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read
+1 failed, 37 deselected in 9.95s
