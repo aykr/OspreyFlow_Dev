@@ -1,13 +1,107 @@
 {
-  "operation": "split",
-  "cases": [
-    {"values": ["WHITLOW, Shona"], "params": {"delimiter": ",", "part": 0}, "expected": "WHITLOW"},
-    {"values": ["WHITLOW, Shona"], "params": {"delimiter": ",", "part": 1}, "expected": "Shona"},
-    {"values": ["a|b|c"], "params": {"part": 2}, "expected": "c"},
-    {"values": ["a||c"], "params": {"part": 1}, "expected": "c"},
-    {"values": ["a|b"], "params": {"part": 5}, "expected": null},
-    {"values": [null], "params": {"part": 0}, "expected": null},
-    {"values": ["a|b"], "params": {"part": -1}, "refused": "part must be 0 or more"},
-    {"values": ["a|b"], "params": {"delimiter": "", "part": 0}, "refused": "delimiter"}
-  ]
+ "operation": "split",
+ "cases": [
+  {
+   "values": [
+    "WHITLOW, Shona"
+   ],
+   "params": {
+    "delimiter": ",",
+    "part": 0
+   },
+   "expected": "WHITLOW"
+  },
+  {
+   "values": [
+    "WHITLOW, Shona"
+   ],
+   "params": {
+    "delimiter": ",",
+    "part": 1
+   },
+   "expected": "Shona"
+  },
+  {
+   "values": [
+    "a|b|c"
+   ],
+   "params": {
+    "part": 2
+   },
+   "expected": "c"
+  },
+  {
+   "values": [
+    "a||c"
+   ],
+   "params": {
+    "part": 1
+   },
+   "expected": "c"
+  },
+  {
+   "values": [
+    "a|b"
+   ],
+   "params": {
+    "part": 5
+   },
+   "expected": null
+  },
+  {
+   "values": [
+    null
+   ],
+   "params": {
+    "part": 0
+   },
+   "expected": null
+  },
+  {
+   "values": [
+    "a|b"
+   ],
+   "params": {
+    "part": -1
+   },
+   "refused": "part must be 0 or more"
+  },
+  {
+   "values": [
+    "a|b"
+   ],
+   "params": {
+    "delimiter": "",
+    "part": 0
+   },
+   "refused": "delimiter"
+  },
+  {
+   "values": [
+    "a|a|b"
+   ],
+   "params": {
+    "part": 1
+   },
+   "expected": "b"
+  },
+  {
+   "values": [
+    " a | | c "
+   ],
+   "params": {
+    "part": 1
+   },
+   "expected": "c"
+  },
+  {
+   "values": [
+    "a|b"
+   ],
+   "params": {
+    "part": "first"
+   },
+   "refused": "split cannot read its settings or this row's cells"
+  }
+ ]
 }

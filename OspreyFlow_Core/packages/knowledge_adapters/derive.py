@@ -53,6 +53,11 @@ def _concat(values: Cells, params: Mapping[str, Any]) -> str | None:
 
 
 def _split(values: Cells, params: Mapping[str, Any]) -> str | None:
+    """One part, by position, of what the `split` adapter gives (trimmed parts, empty ones
+    dropped, a repeated one kept once at its first place), so Derive's split and Map's never
+    disagree about a cell."""
+    from .split import split as split_adapter
+
     delimiter = str(params.get("delimiter", "|"))
     part = int(params.get("part", 0))
     if delimiter == "":
@@ -62,7 +67,7 @@ def _split(values: Cells, params: Mapping[str, Any]) -> str | None:
     text = _one("split", values)
     if text is None:
         return None
-    parts = [p.strip() for p in text.split(delimiter) if p.strip()]
+    parts = split_adapter(text, delimiter=delimiter)
     return parts[part] if part < len(parts) else None
 
 
@@ -90,6 +95,9 @@ def _date_parse(values: Cells, params: Mapping[str, Any]) -> str | None:
         raise _refuse("date_parse", values, exc.reason) from exc
     return parsed.utc.isoformat()
 
+
+#: A result past 1E±100 is refused rather than written out in full as a cell of that many digits.
+_LARGEST_EXPONENT = 100
 
 _ARITHMETIC = {
     "add": lambda a, b: a + b,
@@ -130,6 +138,8 @@ def _arithmetic(values: Cells, params: Mapping[str, Any]) -> str | None:
         result = _ARITHMETIC[op](operands[0], operands[1])
     except (DivisionByZero, InvalidOperation) as exc:
         raise _refuse("arithmetic", values, "division by zero") from exc
+    if result.is_finite() and result != 0 and abs(result.adjusted()) > _LARGEST_EXPONENT:
+        raise _refuse("arithmetic", values, "the result is too large or too small to write")
     normalised = result.normalize()
     # `normalize` writes 40 as 4E+1; a number is written plainly.
     return format(normalised, "f")
@@ -153,18 +163,32 @@ def _case_when(values: Cells, params: Mapping[str, Any]) -> str | None:
     return None if otherwise is None else str(otherwise)
 
 
-def _normalise(values: Cells, params: Mapping[str, Any]) -> str | None:
-    # Imported here: the registry imports this module's neighbours, not this module.
+def text_adapters() -> frozenset[str]:
+    """The Knowledge Adapters that read one column into one value of text: what a Derive's
+    `normalise`, and a Lookup's or a Join's key, may name. An adapter whose result is structured
+    (`datetime`, `person_name`, `address`, `card`) is bound one part at a time in Map, never
+    written whole as a cell; one that gives a list (`split`) or reads several columns is not one
+    value of one column."""
+    import typing
+
     from . import ARITY, REGISTRY
 
+    return frozenset(
+        name
+        for name, adapter in REGISTRY.items()
+        if name not in ARITY and typing.get_type_hints(adapter).get("return") is str
+    )
+
+
+def _normalise(values: Cells, params: Mapping[str, Any]) -> str | None:
+    from . import REGISTRY
+
     name = params.get("adapter")
-    if name not in REGISTRY:
-        raise _refuse("normalise", values, f"{name!r} is not a Knowledge Adapter")
-    if name in ARITY:
+    if name not in text_adapters():
         raise _refuse(
             "normalise",
             values,
-            f"{name} takes {ARITY[name]} columns; Derive's normalise takes one column",
+            f"{name!r} is not a Knowledge Adapter that reads one column into one value of text",
         )
     text = _one("normalise", values)
     if text is None:
@@ -173,13 +197,7 @@ def _normalise(values: Cells, params: Mapping[str, Any]) -> str | None:
         result = REGISTRY[name](text)
     except NormalisationError as exc:
         raise _refuse("normalise", values, f"{exc.adapter}: {exc.reason}") from exc
-    if isinstance(result, list):
-        raise _refuse(
-            "normalise", values, f"{name} gives a list, and a Derive column holds one value"
-        )
-    # A datetime gives a result object; its UTC instant is the value.
-    utc = getattr(result, "utc", None)
-    return utc.isoformat() if utc is not None else str(result)
+    return str(result)
 
 
 #: The catalogue (brief §6: concat, split, substring, date parse / zone, arithmetic, case/when,
@@ -204,4 +222,15 @@ def derive(operation: str, values: Cells, params: Mapping[str, Any]) -> str | No
             " | ".join(v or "" for v in values),
             f"{operation!r} is not in Derive's catalogue",
         )
-    return op(values, params)
+    try:
+        return op(values, params)
+    except NormalisationError:
+        raise
+    except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+        # A setting or a cell the operation cannot read refuses the row; it never stops the run.
+        # The schema refuses wrong settings before a run (`schemas.staging`); this is the floor.
+        raise NormalisationError(
+            f"derive.{operation}",
+            " | ".join(v or "" for v in values),
+            f"{operation} cannot read its settings or this row's cells ({type(exc).__name__})",
+        ) from exc
