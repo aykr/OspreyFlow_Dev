@@ -292,6 +292,11 @@ New ones are added at the bottom as they happen.
     model engines' change history is shown only to manage_models holders, not every audit reader (it named
     other units' people). Both steps held for these and their other review findings; L2.9 merges before L2.6.
 
+62. **Studio L1.4 merged** (`16a709e`; the file-path gap closed); studio's fresh session is on L1.5 (expert
+    steps). **Case's L3.3 held by its review:** opening a board counted drawn items the reader may not see
+    (my ruling, strict: count only withdrawn or deleted references, ADR-144's lost-access count); the marking
+    ceiling was not enforced through a composite; a withdrawn node's matches stayed live.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
