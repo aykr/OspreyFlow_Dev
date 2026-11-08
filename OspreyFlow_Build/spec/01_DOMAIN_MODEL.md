@@ -560,13 +560,18 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
     dataset), and its name takes no place in the unit's unique names. A layer is written only by
     its own case: a branch holds none and reads its original case's layer, read-only, every write
-    into it refused (ADR-144 Amendment 1 decision 2; branches are removed in L3.2), while a case
+    into it refused (ADR-144 Amendment 1 decision 2; branches are removed in L3.2), and only a
+    reader holding a level on the original reads it there (an original with no layer yet is given
+    one when branched); a case
     opened from an alert has an empty layer of its own and never reads the original's, its maker
     holding no level on it perhaps (ADR-143 Amendment 1 item 3, with the exception there for
     cases made from another before L3.1, which each keep a layer of their own). A
     case with no layer yet (one the migration has not reached) is given one by the analyst's own
     writer, inside the route after its level check, never when a request is merely scoped; with
-    no case's layer to go into, that write is refused, never written into the source. Its egress (ADR-136 Amendment 1) is the
+    no case's layer to go into, that write is refused, never written into the source. An alert
+    resting on a case's layer (a referent or a cited link in it) is written into that layer, its
+    node and `ALERTED_ON` too, so its words, which name a subject, reach no other case reading
+    the source (ADR-143 Amendment 1 item 7). Its egress (ADR-136 Amendment 1) is the
     strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`),
     so it changes no verdict and its own name is in no refusal; an administrator cannot set it.
 - **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12

@@ -26,8 +26,11 @@ as not found), by a route dependency for the case's and the Studio's loading rou
 **The analyst's own writes** (ADR-143 Amendment 1): an entity marked by hand and a manual `SAME_AS`
 or `NOT_SAME_AS` name the case's analyst layer, held beside the read set (`analyst_layer`). A case
 with no layer yet is given one by the writer, after the route's level check, so they never fall
-back to the source; outside a case they are refused (`NoAnalystLayerError`). A branch has a layer
-of its own.
+back to the source; outside a case they are refused (`NoAnalystLayerError`). A branch holds no
+layer of its own: it reads its original case's, read-only, and only for a reader holding a level on
+the original; every write into it is refused (`BranchLayerError`, ADR-144 Amendment 1 decision 2).
+A case opened from an alert keeps an empty layer of its own. An alert resting on a case's layer is
+written into that layer (`rule_evaluation._alert_datasets`).
 Accepted question proposals, accepted extractions and loads name nothing, and so land in the
 source as before.
 """

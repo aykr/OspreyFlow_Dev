@@ -26637,14 +26637,23 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    `DatasetStore.read_only_layer_of`). Every write into that layer from the branch is refused in
    words, before anything is written (409 `branch_layer_read_only`, `datasets.BranchLayerError`):
    by `analyst_writes_into`, by the store, which makes no layer for a branch, and by the stamping
-   graph's last word, a correction of what is in it included. **A case opened from an alert is
+   graph's last word, a correction of what is in it included. An original with no layer yet is
+   given one when it is branched, and the branch linked to it, so a branch never makes a layer of
+   its own at its first mark. **Only a reader holding a level on the original reads its layer
+   through a branch** (`scope_to_case(..., holds_a_level=...)`; the orchestrator's call of 7
+   November 2026, on rule 3, as for the alert jump, listed for the owner's review): a member of the
+   branch alone reads no layer, and with no level check to ask (a monitor outside a request) no one
+   does; every reader of the branch is refused a write into it. **A case opened from an alert is
    not a branch** and keeps an empty layer of its own: its maker may hold no level on the alert's
    case, so it never reads that case's layer (rule 3; the orchestrator's call within the ruling,
    7 November 2026; ADR-146 replaces the jump with a private view in L2.9).
    **A temporary exception, for cases made before L3.1 only.** Such a case made from another
    records only `branched_from`, as an alert jump's case does, so a branch cannot be told from a
    jump; `scripts.migrate_cases_to_one_dataset` gives each an empty layer of its own, as rule 3
-   requires, and names and counts them in its output. L3.2 retires them, moving anything in such a
+   requires, and names and counts them in its output, its layer made before its dataset is set so
+   the dry run's writes are the real run's. A branch made since L3.1, which holds a
+   `case_layer_reads` link, is named and counted as reading its original's layer and given none;
+   the dry run reads the links too. L3.2 retires them, moving anything in such a
    layer into the original case's, tagged `from_branch`. Proved by `test_analyst_layer.py`,
    `test_analyst_layer_store.py`, `test_branch_layer.py`, `test_case_writes.py` (the real branch
    and jump routes) and `test_migrate_cases_to_one_dataset.py`, each red with the other's
@@ -26663,6 +26672,18 @@ Open question 1 is closed. Of the analyst writes that existed before the layer:
    case reads (`services/resolve/trigger.honoured_splits`; the layers come from the dataset store,
    a required argument of the run). The conflict is still recorded, on that split and so in that
    layer, for that case's review alone (ADR-025 Amendment 1).
+7. **An alert resting on a case's layer goes into that layer** (rule 3; the orchestrator's ruling of
+   7 November 2026 on the final L3.1 review's first blocker). An alert any of whose referents or
+   cited links lives in the case's layer is written there, its `Alert` node and `ALERTED_ON` links
+   included, as a composite case's alerts are (ADR-099 Amendment 15 item 2); any other goes where
+   it went before. The node's words begin with a subject's name, so in the source it would put a
+   name drawn or marked in one case, and one more `Alert` in the counts, before every other case
+   reading that source. It holds for every monitor: a scheduled rule, a list's re-screening and the
+   KYC sweep (a legacy rule naming no dataset included), and a deployment-wide rule judging a
+   case's load. In a branch, an alert resting on its original's layer has no place that is not a
+   leak or a write into that layer, so its node is withheld and its queue row raised
+   (`rule_evaluation._alert_datasets`). Proved by `tests/services/api/test_alerts_and_the_layer.py`,
+   each monitor read back as a second case on the same source, red with the old rule back.
 
 Proved by `tests/services/api/test_case_writes.py` (each writer and each accept path at its real call
 site, under a principal scoped by `scope_to_case`; the branch through the branch route),
@@ -26723,10 +26744,13 @@ composite case's write to a member's node made a copy of it in the composite; no
    what it would change, so a node, link, finding or picture the reader cannot see still answers as
    not found, never as refused (`dataset_scope.refuse_in_a_composite_case`,
    `refuse_writing_a_node_in_a_composite_case`). The case's loading routes refuse by a dependency
-   that comes after the case's Viewer check, and the Studio's routes of a dataset after the
-   dataset's own gate, so a caller the case or dataset is not for is answered 404; a Viewer of the
-   case is told it is read-only before the route asks for its own, higher level, which says nothing
-   the Viewer cannot already see. The node routes refuse even a node wholly in the layer: a
+   on the route's own level check, the Editor's (the Author's for held rows), which FastAPI runs
+   once, so each route declares one level; the Studio's routes of a dataset refuse after the
+   dataset's own gate. A caller the case or dataset is not for is answered 404, and one holding a
+   lower level than the route needs is answered 403, not told the case reads a composite: only a
+   caller who may do the thing is told it is read-only for now
+   (`test_composite_schedules.py::test_a_viewer_is_answered_403_not_told_the_case_reads_a_composite`,
+   red with the refusal after a Viewer's check, as it was). The node routes refuse even a node wholly in the layer: a
    correction repoints every link incident to the node (`GraphPort.supersede_node`), which the case
    may not all read; the close of an alert raised in the case, whose node's links are its own, is
    the one correction allowed. `DatasetStampingGraph`
