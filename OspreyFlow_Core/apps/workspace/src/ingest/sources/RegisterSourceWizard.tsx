@@ -51,13 +51,25 @@ export interface RegisterSourceWizardProps {
   registered: readonly string[];
   onRegistered: (source: SourceTable) => void;
   onCancel: () => void;
+  /** Where the wizard opens (the a11y harness's states): a connection chosen, a later step. */
+  initialConnectionId?: string;
+  initialStep?: number;
 }
 
-export function RegisterSourceWizard({ api, datasetId, scheme, registered, onRegistered, onCancel }: RegisterSourceWizardProps) {
-  const [step, setStep] = useState(0);
+export function RegisterSourceWizard({
+  api,
+  datasetId,
+  scheme,
+  registered,
+  onRegistered,
+  onCancel,
+  initialConnectionId,
+  initialStep,
+}: RegisterSourceWizardProps) {
+  const [step, setStep] = useState(initialStep ?? 0);
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [files, setFiles] = useState<IngestSourceFile[] | null>(null);
-  const [connectionId, setConnectionId] = useState("files");
+  const [connectionId, setConnectionId] = useState(initialConnectionId ?? "files");
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
   const [governance, setGovernance] = useState<Governance>(EMPTY_GOVERNANCE);

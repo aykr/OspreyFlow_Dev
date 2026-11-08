@@ -12,6 +12,7 @@ import type {
   DeploymentListInput,
   ListSchedule,
   OfferedList,
+  SubscribableList,
 } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
@@ -59,15 +60,18 @@ export interface ScreeningListsProps {
   datasetId: string;
 }
 
-function lastImport(l: DeploymentList): string {
-  if (l.failure) return `Failed: ${l.failure}`;
+/** The last import in words: a failure's own words only for whoever may load lists (`managed`). */
+function lastImport(l: SubscribableList, managed?: DeploymentList): string {
+  if (managed?.failure) return `Failed: ${managed.failure}`;
+  if (l.failing) return "Its last import failed";
   if (!l.updated_at) return "never imported";
   return new Date(l.updated_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
   const [subs, setSubs] = useState<DatasetSubscriptions | null>(null);
-  const [canManage, setCanManage] = useState(false);
+  const [managed, setManaged] = useState<DeploymentList[] | null>(null);
+  const canManage = managed !== null;
   const [offered, setOffered] = useState<OfferedList[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -78,8 +82,8 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
   const reload = useCallback(() => {
     listSubscriptions(api, datasetId).then(setSubs).catch((e: Error) => setProblem(e.message));
     listDeploymentLists(api)
-      .then((found) => setCanManage(found !== null))
-      .catch(() => setCanManage(false));
+      .then(setManaged)
+      .catch(() => setManaged(null));
     offeredLists(api, datasetId).then(setOffered).catch(() => setOffered(null));
   }, [api, datasetId]);
 
@@ -159,7 +163,7 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
                 <td>{TEMPLATES.find((t) => t.value === l.template)?.label ?? l.template}</td>
                 <td>{l.version || "none yet"}</td>
                 <td>{l.entries}</td>
-                <td>{lastImport(l)}</td>
+                <td>{lastImport(l, managed?.find((m) => m.id === l.id))}</td>
                 <td>{l.schedule_words ?? "by hand"}</td>
                 <td>
                   <label style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
@@ -170,7 +174,9 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
                       onChange={(e) => {
                         const on = e.target.checked;
                         void act(async () => {
-                          await setSubscribed(api, datasetId, l.id, on);
+                          // The answer is the dataset's subscriptions now: shown before the words, so a
+                          // second toggle acts on what is true, never on a list read before.
+                          setSubs(await setSubscribed(api, datasetId, l.id, on));
                           return on ? `This dataset now reads ${l.name}.` : `This dataset no longer reads ${l.name}.`;
                         });
                       }}
@@ -186,7 +192,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
                     >
                       Refresh now
                     </Button>
-                    <Button aria-label={`Schedule ${l.name}`} onClick={() => setScheduling(l)}>
+                    <Button
+                      aria-label={`Schedule ${l.name}`}
+                      onClick={() => setScheduling(managed?.find((m) => m.id === l.id) ?? null)}
+                    >
                       Schedule
                     </Button>
                   </td>

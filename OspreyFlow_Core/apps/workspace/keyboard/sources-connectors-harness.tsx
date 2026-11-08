@@ -1,7 +1,8 @@
 // Studio › Sources' connectors and screening lists (ADR-140 Amendment 13) on their own:
 // `sources-connectors.spec.ts` intercepts the dataset's and the deployment's routes and walks each part
 // by keyboard. `?view=lists` (the default) is the screening lists, `?view=wizard` the register wizard,
-// `?view=source` a SQL source's page, `?view=import&template=blank` and `?view=schedule` the import and
+// `?view=source` a SQL source's page (`&connection=c-sql&step=1` opens the wizard on a connection's
+// read step), `?view=import&template=blank` and `?view=schedule` the import and
 // schedule forms drawn open. With `?serve=1` the harness answers its own requests with synthetic data,
 // for the axe scans of `a11y/every-harness.spec.ts`; `?manage=1` as whoever may load lists.
 import { createRoot } from "react-dom/client";
@@ -50,7 +51,11 @@ const FAILED: DeploymentList = { ...LIST, id: "01CLIENT", name: "Client list", t
 
 if (params.get("serve") === "1") {
   const answers: Record<string, unknown> = {
-    "/v1/datasets/ds-a/screening-subscriptions": { lists: [LIST, FAILED], subscribed: ["01OFAC"] },
+    "/v1/datasets/ds-a/screening-subscriptions": {
+      lists: [LIST, FAILED].map((l) => ({ id: l.id, name: l.name, template: l.template, version: l.version,
+        entries: l.entries, updated_at: l.updated_at, failing: Boolean(l.failure), schedule_words: l.schedule_words })),
+      subscribed: ["01OFAC"],
+    },  // prettier-ignore
     "/v1/datasets/ds-a/reference-lists/offered": [
       { id: "rl-est", name: "establishments", kind: "reference", version: 1, deployment_wide: false },
       { id: "01OFAC", name: "OFAC SDN (synthetic)", kind: "screening", version: 2, deployment_wide: true },
@@ -59,6 +64,8 @@ if (params.get("serve") === "1") {
     "/v1/ingest/connections": [
       { id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" },
       { id: "c-sql", kind: "sql", name: "NOMIS replica (synthetic)", created_by: "adm-1", created_at: "" },
+      { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "adm-1", created_at: "" },
+      { id: "c-json", kind: "json", name: "Bookings files", created_by: "adm-1", created_at: "" },
     ],
     "/v1/datasets/ds-a/source-files": { root: "/in", files: [] },
     "/v1/datasets/ds-a/sources/src-bookings/profile": { columns: [], rows_sampled: 0 },
@@ -83,6 +90,8 @@ function Harness() {
         registered={[]}
         onCancel={() => undefined}
         onRegistered={(s) => window.__SOURCES__!.registered.push(s)}
+        initialConnectionId={params.get("connection") ?? undefined}
+        initialStep={params.get("step") ? Number(params.get("step")) : undefined}
       />
     );
   }

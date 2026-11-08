@@ -1123,4 +1123,9 @@ export const SOURCES_CONNECTORS_ACTIONS = defineActionRegistry("SOURCES_CONNECTO
   "import-a-datasets-own-list-rows-by-keyboard",
   "register-a-source-through-a-sql-connection-by-keyboard",
   "refresh-a-connector-source-now-by-keyboard",
+  // The lane review of L1.6: the API and JSON read steps, unsubscribing, and a schedule stopped.
+  "register-a-source-through-an-api-connection-by-keyboard",
+  "register-a-source-through-a-json-connection-by-keyboard",
+  "unsubscribe-a-dataset-from-a-screening-list-by-keyboard",
+  "refresh-a-screening-list-by-hand-only-by-keyboard",
 ] as const);

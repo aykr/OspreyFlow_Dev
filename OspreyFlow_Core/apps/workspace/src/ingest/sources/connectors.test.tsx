@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DeploymentList } from "../../../../../packages/schemas/generated";
+import type { DeploymentList, SubscribableList } from "../../../../../packages/schemas/generated";
 import { fileNameOf, readOf, RegisterSourceWizard } from "./RegisterSourceWizard";
 import { ImportListForm, ScreeningLists } from "./ScreeningLists";
 
@@ -23,6 +23,9 @@ const LIST: DeploymentList = {
   licence: "the client's own list", version: 2, entries: 3, schedule_words: null, created_by: "eng-1",
   created_at: "2026-11-08T09:00:00Z", updated_at: "2026-11-08T09:05:00Z",
 };  // prettier-ignore
+
+const SUB: SubscribableList = { id: "01LISTID", name: "Client list", template: "blank", version: 2, entries: 3,
+  updated_at: "2026-11-08T09:05:00Z", failing: false, schedule_words: null };  // prettier-ignore
 
 type Call = { path: string; method: string; body: unknown };
 function serve(routes: Record<string, unknown>, statuses: Record<string, number> = {}): Call[] {
@@ -83,9 +86,9 @@ describe("the screening lists", () => {
   it("subscribes by the list's id and shows Manage only to whoever may load lists", async () => {
     const calls = serve(
       {
-        "GET /v1/datasets/ds-a/screening-subscriptions": { lists: [LIST], subscribed: [] },
+        "GET /v1/datasets/ds-a/screening-subscriptions": { lists: [SUB], subscribed: [] },
         "GET /v1/datasets/ds-a/reference-lists/offered": [],
-        "PUT /v1/datasets/ds-a/screening-subscriptions/01LISTID": { lists: [LIST], subscribed: ["01LISTID"] },
+        "PUT /v1/datasets/ds-a/screening-subscriptions/01LISTID": { lists: [SUB], subscribed: ["01LISTID"] },
       },
       { "GET /v1/studio/screening-lists": 403 },
     );
@@ -101,7 +104,7 @@ describe("the screening lists", () => {
 
   it("refreshes a list now for whoever may load lists, saying what the import did", async () => {
     serve({
-      "GET /v1/datasets/ds-a/screening-subscriptions": { lists: [LIST], subscribed: ["01LISTID"] },
+      "GET /v1/datasets/ds-a/screening-subscriptions": { lists: [SUB], subscribed: ["01LISTID"] },
       "GET /v1/datasets/ds-a/reference-lists/offered": [{ id: "01LISTID", name: "Client list", kind: "screening", version: 2, deployment_wide: true }],
       "GET /v1/studio/screening-lists": [LIST],
       "POST /v1/studio/screening-lists/01LISTID/refresh": { list_id: "01LISTID", outcome: "unchanged", words: "Client list is unchanged at version 2" },

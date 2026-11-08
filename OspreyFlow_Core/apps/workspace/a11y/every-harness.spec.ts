@@ -140,6 +140,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   "sources-connectors-harness.html": [
     "serve=1", "serve=1&manage=1", "view=import&template=blank", "view=schedule",
     "view=wizard&serve=1", "view=source&serve=1",
+    // The lane review of L1.6: the wizard's read step for each kind of connection.
+    "view=wizard&serve=1&connection=c-sql&step=1", "view=wizard&serve=1&connection=c-api&step=1",
+    "view=wizard&serve=1&connection=c-json&step=1",
   ],
   // ADR-140 decision 1 (redesign phase 2): the Studio's Model, Sources and Runs places, a day's run
   // report with its revert command, and the held rows opened from it (Pipelines is the default).

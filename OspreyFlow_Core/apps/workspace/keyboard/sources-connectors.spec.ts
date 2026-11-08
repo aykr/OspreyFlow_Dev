@@ -42,7 +42,11 @@ async function serve(page: Page, opts: { canManage?: boolean } = {}) {
     const body = (r.request().postDataJSON() ?? null) as Body | null;
     const path = url.pathname;
     state.asked.push({ method, path, body });
-    const subs = () => ({ lists: lists.map(list), subscribed: state.subscribed });
+    const subs = () => ({
+      lists: lists.map((l) => ({ id: l.id, name: l.name, template: l.template, version: l.version, entries: l.entries,
+        updated_at: null, failing: false, schedule_words: l.schedule_words })),
+      subscribed: state.subscribed,
+    });  // prettier-ignore
     if (path === "/v1/datasets/ds-a/screening-subscriptions") return json(r, subs());
     const sub = path.match(/^\/v1\/datasets\/ds-a\/screening-subscriptions\/(.+)$/);
     if (sub) {
@@ -91,10 +95,12 @@ async function serve(page: Page, opts: { canManage?: boolean } = {}) {
     }
     if (path === "/v1/ingest/connections") {
       return json(r, [{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" },
-                      { id: "c-sql", kind: "sql", name: "NOMIS replica (synthetic)", created_by: "adm-1", created_at: "" }]);  // prettier-ignore
+                      { id: "c-sql", kind: "sql", name: "NOMIS replica (synthetic)", created_by: "adm-1", created_at: "" },
+                      { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "adm-1", created_at: "" },
+                      { id: "c-json", kind: "json", name: "Bookings files", created_by: "adm-1", created_at: "" }]);  // prettier-ignore
     }
     if (path === "/v1/datasets/ds-a/sources" && method === "POST") {
-      if (body?.connection_id === "c-sql" && !body.read) return json(r, { detail: { detail: "A source on a sql connection needs its own read." } }, 422);
+      if (body?.connection_id !== "files" && (body?.read as Body | null)?.kind !== String(body?.connection_id).slice(2)) return json(r, { detail: { detail: "A source on a sql connection needs its own read." } }, 422);
       return json(r, { ...body, id: "src-new", dataset_id: "ds-a", location: `/in/uploaded/ds-a/${String(body?.location)}.csv`,
         version: 1, created_by: "eng-1", created_at: "2026-11-08T09:00:00Z" }, 201);  // prettier-ignore
     }
@@ -261,6 +267,82 @@ test("a source is registered through a SQL connection by its read", async ({ pag
   expect(sent?.body).toMatchObject({ connection_id: "c-sql", location: "visit_bookings",
     read: { kind: "sql", table: "nomis.visit_bookings", columns: [] } });  // prettier-ignore
   registerCovered(REGISTRY, "register-a-source-through-a-sql-connection-by-keyboard");
+});
+
+/** Through the wizard to Register on a connection, with the read step filled by `fillRead`. */
+async function registerThrough(page: Page, connection: string, fillRead: () => Promise<void>) {
+  await page.goto(`${HARNESS}?view=wizard`);
+  await tabTo(page, /^Connection$/);
+  await page.getByRole("combobox", { name: "Connection" }).selectOption(connection);
+  await tabTo(page, /^Next$/);
+  await page.keyboard.press("Enter");
+  await fillRead();
+  await tabTo(page, /^Next$/);
+  await page.keyboard.press("Enter");
+  for (const [label, value] of [
+    [/^Classification$/, "OFFICIAL"], [/^Handling code$/, "P"], [/^Originator$/, "unit-1"],
+    [/^Owning unit$/, "unit-1"], [/^Legal basis$/, "Synthetic demonstration"],
+  ] as const) {
+    await tabTo(page, label);
+    const el = page.locator(":focus");
+    if ((await el.evaluate((e) => e.tagName)) === "SELECT") await el.selectOption(value);
+    else await page.keyboard.type(value);
+  }  // prettier-ignore
+  await tabTo(page, /^Register$/);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__SOURCES__?.registered.length)).toBe(1);
+}
+
+test("a source is registered through an API connection by its read", async ({ page }) => {
+  const state = await serve(page);
+  await registerThrough(page, "c-api", async () => {
+    await typeInto(page, /^Source name$/, "Telco numbers");
+    await typeInto(page, /^Path under the connection's address$/, "/v1/numbers");
+    await typeInto(page, /^Where the records are/, "data.items");
+  });
+  const sent = state.asked.find((a) => a.method === "POST" && a.path === "/v1/datasets/ds-a/sources");
+  expect(sent?.body).toMatchObject({ connection_id: "c-api", location: "telco_numbers",
+    read: { kind: "api", path: "/v1/numbers", records_at: "data.items" } });  // prettier-ignore
+  registerCovered(REGISTRY, "register-a-source-through-an-api-connection-by-keyboard");
+});
+
+test("a source is registered through a JSON connection by its read", async ({ page }) => {
+  const state = await serve(page);
+  await registerThrough(page, "c-json", async () => {
+    await typeInto(page, /^Source name$/, "Bookings");
+    await typeInto(page, /^File names to read/, "bookings-*.json");
+    await typeInto(page, /^Where the records are/, "records");
+  });
+  const sent = state.asked.find((a) => a.method === "POST" && a.path === "/v1/datasets/ds-a/sources");
+  expect(sent?.body).toMatchObject({ connection_id: "c-json", location: "bookings",
+    read: { kind: "json", pattern: "bookings-*.json", records_at: "records" } });  // prettier-ignore
+  registerCovered(REGISTRY, "register-a-source-through-a-json-connection-by-keyboard");
+});
+
+test("a dataset unsubscribes from a list, and no longer reads it", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto(HARNESS);
+  await tabTo(page, /^Subscribe this dataset to OFAC SDN \(synthetic\)$/);
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("status")).toHaveText("This dataset now reads OFAC SDN (synthetic).");
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("status")).toHaveText("This dataset no longer reads OFAC SDN (synthetic).");
+  expect(state.asked.filter((a) => a.method === "DELETE").map((a) => a.path)).toEqual(["/v1/datasets/ds-a/screening-subscriptions/01OFAC"]);
+  await expect(page.getByRole("list", { name: "Lists this dataset reads" })).not.toContainText("OFAC");
+  registerCovered(REGISTRY, "unsubscribe-a-dataset-from-a-screening-list-by-keyboard");
+});
+
+test("a list's schedule is stopped, so it is refreshed by hand only", async ({ page }) => {
+  const state = await serve(page, { canManage: true });
+  await page.goto(HARNESS);
+  await tabTo(page, /^Schedule OFAC SDN \(synthetic\)$/);
+  await page.keyboard.press("Enter");
+  await tabTo(page, /^Refresh by hand only$/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toHaveText("OFAC SDN (synthetic): refreshed by hand only.");
+  const stopped = state.asked.find((a) => a.method === "PUT" && a.path.endsWith("/schedule"));
+  expect(stopped?.body).toEqual({ schedule: null });
+  registerCovered(REGISTRY, "refresh-a-screening-list-by-hand-only-by-keyboard");
 });
 
 test("a SQL source is read again by Refresh now", async ({ page }) => {
