@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { branchByFilter } from "./branchByFilter";
+import { type CaseViewOpened, deleteView, openView, saveView } from "../views/viewsApi";
 import type { LimitExceeded } from "./models";
 
 const COUNT = new Intl.NumberFormat("en-GB");
@@ -21,10 +21,9 @@ export interface ViewOverCapDialogProps {
   investigationId: string;
   /** "Try again": a resync with no last sequence. */
   onTryAgain: () => void;
-  /** The new case is made: open it, as a branch is opened. */
-  onBranchOpened: (id: string, name: string) => void;
+  /** A filtered view of the case was saved and opened now (ADR-144): show it as the lens. */
+  onViewOpened: (opened: CaseViewOpened) => void;
   onClose: () => void;
-  fetcher?: typeof fetch;
 }
 
 /** The figure, in the words the canvas's other limit refusal uses (`canvas/linksAmong.ts`). */
@@ -36,9 +35,11 @@ function figure(wouldBe: LimitExceeded): string {
 /**
  * What a reader is shown when the server says their own view of the open case is past a cap
  * (ADR-124 decision 2, Amendment 9): a colleague's work, or a restore that kept what its restorer
- * could not see, took it there. Two ways out, and the only figure on it is theirs: open a branch
- * of a narrower view of the case (entity types, a date window, or both), or try again, which asks
- * the server to count the view once more. Focus is held inside it; Escape closes it.
+ * could not see, took it there. Two ways out, and the only figure on it is theirs: save a narrower
+ * view of the case (entity types, a date window, or both) as a private case view and open it
+ * (`save_as_view`, ADR-144), or try again, which asks the server to count the view once more. A view
+ * that is still past the cap, or matches nothing, is not kept. Focus is held inside it; Escape
+ * closes it.
  */
 export function ViewOverCapDialog({
   wouldBe,
@@ -47,9 +48,8 @@ export function ViewOverCapDialog({
   bearerToken,
   investigationId,
   onTryAgain,
-  onBranchOpened,
+  onViewOpened,
   onClose,
-  fetcher = (input, init) => fetch(input, init),
 }: ViewOverCapDialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -58,6 +58,7 @@ export function ViewOverCapDialog({
   const [types, setTypes] = useState<ReadonlySet<string>>(new Set());
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [name, setName] = useState("Smaller view of this case");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -120,25 +121,40 @@ export function ViewOverCapDialog({
     }
     setBusy(true);
     setMessage(null);
-    const result = await branchByFilter(fetcher, {
-      apiBaseUrl,
-      bearerToken,
-      investigationId,
-      entityTypes: types.size > 0 ? entityTypes.filter((type) => types.has(type)) : undefined,
-      validFrom: from || undefined,
-      validTo: to || undefined,
+    const saved = await saveView(apiBaseUrl, bearerToken, investigationId, {
+      name,
+      filter: {
+        entityTypes: types.size > 0 ? entityTypes.filter((type) => types.has(type)) : undefined,
+        validFrom: from || undefined,
+        validTo: to || undefined,
+      },
     });
+    if (!saved.ok) {
+      setBusy(false);
+      setMessage(saved.message);
+      return;
+    }
+    const result = await openView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
+    if (result.ok && result.opened.nodes.length > 0) {
+      setBusy(false);
+      onViewOpened(result.opened);
+      return;
+    }
+    // Not opened: the view just saved is removed, and what is said says whether it was (rule 2:
+    // never a claim the Glass has not checked).
+    const removed = await deleteView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
+    const kept = removed.ok
+      ? "No view was kept."
+      : `The view "${saved.view.name}" was saved and could not be removed: delete it from Views in this case.`;
     setBusy(false);
     if (result.ok) {
-      onBranchOpened(result.id, result.name);
+      setMessage(`Nothing matched that choice. ${kept} Choose other types or dates.`);
     } else if (result.kind === "limit_exceeded") {
-      setMessage(`${figure(result.wouldBe)} Narrow the choice and try again.`);
-    } else if (result.kind === "nothing_matched") {
-      setMessage("Nothing matched that choice. Choose other types or dates.");
-    } else if (result.kind === "nothing_chosen") {
-      setMessage("Choose entity types, a date window, or both.");
+      setMessage(`${figure(result.wouldBe)} ${kept} Narrow the choice and try again.`);
+    } else if (result.kind === "not_found") {
+      setMessage(`The view could not be opened. ${kept} Try again.`);
     } else {
-      setMessage(result.message);
+      setMessage(`${result.message} ${kept}`);
     }
   }
 
@@ -157,7 +173,7 @@ export function ViewOverCapDialog({
       <p className="view-over-cap__figure">{figure(wouldBe)}</p>
       <p className="view-over-cap__why">
         Work in this case by others has taken the part of it you are cleared to see past what the
-        canvas can hold. You can open a smaller view of it as a branch, or try again.
+        canvas can hold. You can save a smaller view of it, private to you, and open that, or try again.
       </p>
       <div className="view-over-cap__actions">
         <button
@@ -166,7 +182,7 @@ export function ViewOverCapDialog({
           aria-expanded={choosing}
           onClick={() => setChoosing(true)}
         >
-          Open a filtered branch
+          Save as a view
         </button>
         <button type="button" className="btn" onClick={onTryAgain}>
           Try again
@@ -174,6 +190,10 @@ export function ViewOverCapDialog({
       </div>
       {choosing && (
         <form className="view-over-cap__form" onSubmit={(e) => void submit(e)}>
+          <label className="view-over-cap__name">
+            View name
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
           <fieldset className="view-over-cap__types">
             <legend>Entity types</legend>
             {entityTypes.map((type) => (
@@ -195,7 +215,7 @@ export function ViewOverCapDialog({
             </label>
           </div>
           <button type="submit" className="btn btn--primary" disabled={busy}>
-            Open branch
+            Save and open the view
           </button>
         </form>
       )}

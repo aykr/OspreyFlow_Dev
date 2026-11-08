@@ -75,11 +75,10 @@ describe("test_a_notify_mode_alert_renders_with_no_referent_the_viewer_cannot_re
 // that still sends `unreadable_count` has it ignored.
 const JUMP_RESULT = {
   investigation: {
-    id: "inv-branch-1",
+    id: "inv-alert-1",
     created_at: "2026-09-22T00:00:00Z",
     created_by: "analyst-1",
     owning_unit: "unit-1",
-    branched_from: "inv-source-1",
   },
   seeded_count: 3,
   unreadable_count: 2,

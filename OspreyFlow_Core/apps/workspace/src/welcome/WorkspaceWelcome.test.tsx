@@ -15,7 +15,7 @@ afterEach(() => {
 
 const STEPS = [
   { id: "s1", label: "Expanded", created_at: "2026-10-12T16:42:00Z" },
-  { id: "s2", label: "Branched", created_at: "2026-10-12T16:10:00Z" },
+  { id: "s2", label: "Saved a view", created_at: "2026-10-12T16:10:00Z" },
   { id: "s3", label: "Showed links among the view", created_at: "2026-10-08T11:05:00Z" },
   { id: "s4", label: "Older", created_at: "2026-10-01T11:05:00Z" },
 ];
@@ -44,7 +44,7 @@ describe("the workspace's welcome panel", () => {
     const list = within(await screen.findByRole("list", { name: "Pick up where you left off" }));
     expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual([
       expect.stringContaining("Expanded"),
-      expect.stringContaining("Branched"),
+      expect.stringContaining("Saved a view"),
       expect.stringContaining("Showed links among the view"),
     ]);
     fireEvent.click(list.getAllByRole("button")[0]!);
@@ -66,7 +66,7 @@ describe("the workspace's welcome panel", () => {
     const list = within(await screen.findByRole("list", { name: "Pick up where you left off" }));
     expect(list.getAllByRole("button").map((b) => b.textContent)).toEqual([
       expect.stringContaining("Expanded"),
-      expect.stringContaining("Branched"),
+      expect.stringContaining("Saved a view"),
       expect.stringContaining("Showed links among the view"),
     ]);
     expect(screen.queryByText("Edited the brief")).toBeNull();

@@ -1,7 +1,8 @@
 // The selection, shown once (ADR-097 step 1, design review item 2): a floating bar at the bottom
 // centre of the canvas while anything is selected, its count the only live count of the selection
 // in the page, with what can be done to all of it. Replaces the corner chip (ADR-093 step 3) and
-// the toolbar's *Remove selected* and *Branch selected*. Escape clears, as on the canvas.
+// the toolbar's *Remove selected*. *Save as a view* saves the selection as a private case view
+// (ADR-144 decision 4). Escape clears, as on the canvas.
 import { useState } from "react";
 
 /** ADR-098 Amendment 4: the furthest the routes are looked for, and how many may be selected to
@@ -13,13 +14,14 @@ export interface SelectionBarProps {
   count: number;
   /** Expand every selected node. Absent: not offered. */
   onExpand?: () => void;
-  /** Send the selection to a new case (ADR-084). Absent: this surface cannot branch. */
-  onBranch?: () => void;
+  /** Save the selection as a private view of this case (ADR-144 decision 4). Absent: not offered. */
+  onSaveView?: () => void;
   /** ADR-098: draw the links among the selected nodes, and with a degree above 1 the routes between
    * them within it (Amendment 4). Offered for two or more. */
   onLinksAmong?: (degree: number) => void;
-  /** ADR-098 decision 4: branch the selection and ask the model about its Documents. Offered while
-   * the selection holds at least one Document (`documentCount`). */
+  /** ADR-098 decision 4, ADR-144 decision 4: save the selection as a private view and ask the model
+   * about its Documents in it. Offered while the selection holds at least one Document
+   * (`documentCount`). */
   onAsk?: () => void;
   documentCount?: number;
   /** ADR-128 decision 2: what Select what is lit did, said while its selection stands, with the
@@ -28,7 +30,9 @@ export interface SelectionBarProps {
   /** Gives back the selection that was there before Select what is lit, once. Offered with
    * `litNote`. */
   onUndoLit?: () => void;
-  onRemove: () => void;
+  /** Take the selection off the case's canvas. Absent (in a view, which changes nothing on the
+   * case): not offered. */
+  onRemove?: () => void;
   onClear: () => void;
 }
 
@@ -37,7 +41,7 @@ const COUNT = new Intl.NumberFormat("en-GB");
 export function SelectionBar({
   count,
   onExpand,
-  onBranch,
+  onSaveView,
   onLinksAmong,
   onAsk,
   documentCount = 0,
@@ -136,14 +140,16 @@ export function SelectionBar({
           Ask the model about these…
         </button>
       )}
-      {onBranch && (
-        <button type="button" className="btn btn--quiet" onClick={onBranch}>
-          Branch to a new case
+      {onSaveView && (
+        <button type="button" className="btn btn--quiet" onClick={onSaveView}>
+          Save as a view
         </button>
       )}
-      <button type="button" className="btn btn--quiet" onClick={onRemove}>
-        Remove from view
-      </button>
+      {onRemove && (
+        <button type="button" className="btn btn--quiet" onClick={onRemove}>
+          Remove from view
+        </button>
+      )}
       <span className="selection-bar__divider" aria-hidden="true" />
       <button
         type="button"

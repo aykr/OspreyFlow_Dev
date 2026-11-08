@@ -55,7 +55,7 @@ describe("a view_over_cap step", () => {
     cap_kind: "nodes",
     cap: 50_000,
     would_be: 50_001,
-    options: ["branch", "filter", "promote_to_batch"],
+    options: ["save_as_view", "filter", "promote_to_batch"],
   };
 
   it("reaches onViewOverCap, advances no sequence and trips no gap", () => {

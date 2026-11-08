@@ -14,8 +14,8 @@
 // not state that matters: unreadable, expired or foreign values are ignored, and storage that
 // refuses to work degrades to "start the sign-in, open the default tab".
 
-/** `questions`: a case just branched to ask the model about its documents (ADR-098 decision 4),
- * opened on its Questions panel. */
+/** `questions`: a case opened on its Questions panel, to ask the model about its documents (ADR-098
+ * decision 4). */
 export type HandoffView = "ingest" | "questions" | "admin";
 
 export interface Handoff {

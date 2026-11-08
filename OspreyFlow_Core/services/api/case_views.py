@@ -16,6 +16,13 @@ the adapter) and the links among those it may show (`edges_among`); `missing` co
 ids it could not show, for whatever reason (gone, hidden, outside the case's read set), and names
 none. A filtered view narrows the reader's own projection of the case's working set, as ADR-124's
 filter did. A result past the working set's cap is the typed `limit_exceeded` (rule 2).
+
+**Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1, case
+views): each node shown carries the cluster it falls in at the view's `threshold`, or at the case's
+when the view has none, worked out from the `SAME_AS` and `NOT_SAME_AS` links among the shown nodes
+alone, read with the reader's principal. A hidden node or link therefore never joins two shown ones
+(rule 3), and a manual split holds however loose the view. The Glass collapses by these ids as it
+does for the case; it applies the view's `window` to the timeline itself.
 """
 
 from __future__ import annotations
@@ -27,11 +34,12 @@ from typing import Any, Protocol
 
 import asyncpg
 from pydantic import BaseModel, ConfigDict, Field
+from services.resolve.projection import compute_clusters
 
 from conduit_common.identity import new_id
 from ports.graph import GraphPort
 from schemas.case_views import CaseView, CaseViewInput, CaseViewOpened, NodePosition, ViewFilter
-from schemas.domain import Edge, Interval, Node, NodeId, Principal
+from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Interval, Node, NodeId, Principal
 
 from .working_set.models import LimitExceededError
 
@@ -296,6 +304,8 @@ class _Projection(Protocol):
         self, case_id: str, principal: Principal, keeps: ViewFilter
     ) -> tuple[list[Node], list[Edge]]: ...
 
+    async def get_resolution_threshold(self, investigation_id: str) -> float: ...
+
 
 async def _read_selection(
     graph: GraphPort, node_ids: Sequence[NodeId], principal: Principal
@@ -305,6 +315,36 @@ async def _read_selection(
     nodes = await graph.get_nodes(list(node_ids), principal)
     edges = await graph.edges_among([n.id for n in nodes], principal) if len(nodes) > 1 else []
     return nodes, edges
+
+
+async def _matches(
+    graph: GraphPort, node_ids: Sequence[NodeId], principal: Principal
+) -> tuple[list[NodeId], list[Edge]]:
+    """The nodes to cluster and the resolution links among them: the shown nodes alone, and only
+    the links between two of them the reader may see, filtered in the adapter (rule 3)."""
+    ids = list(node_ids)
+    if len(ids) < 2:
+        return ids, []
+    return ids, await graph.edges_among(ids, principal, edge_types=[SAME_AS, NOT_SAME_AS])
+
+
+async def _collapsed(
+    graph: GraphPort, nodes: list[Node], principal: Principal, tau: float
+) -> list[Node]:
+    """`nodes`, each annotated with its cluster at `tau` among the shown nodes."""
+    ids, links = await _matches(graph, [n.id for n in nodes], principal)
+    clusters = compute_clusters(
+        ids,
+        [e for e in links if e.type == SAME_AS],
+        [e for e in links if e.type == NOT_SAME_AS],
+        tau,
+    )
+    return [
+        n.model_copy(
+            update={"resolution": n.resolution.model_copy(update={"cluster_id": clusters[n.id]})}
+        )
+        for n in nodes
+    ]
 
 
 async def open_view(
@@ -326,6 +366,12 @@ async def open_view(
     breach = cap_breach(len(nodes), len(edges))
     if breach is not None:
         raise LimitExceededError(breach)
+    tau = (
+        view.threshold
+        if view.threshold is not None
+        else await working_set.get_resolution_threshold(view.case_id)
+    )
+    nodes = await _collapsed(graph, nodes, principal, tau)
     shown = {n.id for n in nodes}
     layout = {k: v for k, v in view.layout.items() if k in shown}
     return CaseViewOpened(

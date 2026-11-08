@@ -39,6 +39,11 @@ function questionsUrl(apiBaseUrl: string, investigationId: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/questions`;
 }
 
+/** `?view_id=` for a conversation kept with a case view (ADR-144 decision 4), or nothing. */
+function inView(viewId: string | null | undefined): string {
+  return viewId ? `?view_id=${encodeURIComponent(viewId)}` : "";
+}
+
 async function send(url: string, bearerToken: string, init: RequestInit = {}): Promise<Response> {
   try {
     return await fetch(url, {
@@ -62,8 +67,9 @@ export async function listQuestions(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
+  viewId?: string | null,
 ): Promise<QuestionAnswer[]> {
-  const response = await send(questionsUrl(apiBaseUrl, investigationId), bearerToken);
+  const response = await send(`${questionsUrl(apiBaseUrl, investigationId)}${inView(viewId)}`, bearerToken);
   if (!response.ok) throw new Error(`The questions could not be loaded (${response.status}).`);
   return (await response.json()) as QuestionAnswer[];
 }
@@ -78,6 +84,9 @@ export interface AskScope {
   /** ADR-135: the engine the analyst chose, from `GET /v1/models/engines`; absent, the role's
    * default. The Conduit still decides, and a refusal comes back in words (422 `engine_refused`). */
   engine?: string | null;
+  /** ADR-144 decision 4: asked in a case view (*Ask the model about these*): the question reads only
+   * what the view holds, and is kept with the view. */
+  viewId?: string | null;
 }
 
 /** What a refused question says, in words: never a bare status. */
@@ -98,6 +107,7 @@ export async function askQuestion(
         ? { window: { valid_from: scope.window.validFrom, valid_to: scope.window.validTo } }
         : {}),
       ...(scope.engine ? { engine: scope.engine } : {}),
+      ...(scope.viewId ? { view_id: scope.viewId } : {}),
     }),
   });
   if (response.ok) return (await response.json()) as QuestionAnswer;
@@ -112,7 +122,7 @@ export async function askQuestion(
         `can read at once (${figure(body.cap, "the limit")}): the documents are ` +
         `${figure(body.documents_chars, "some")} and the graph facts ` +
         `${figure(body.evidence_brief_chars, "some")}. Nothing was sent. ` +
-        "Narrow the selection, narrow the timeline window, or branch the case, then ask again.",
+        "Narrow the selection, narrow the timeline window, or ask in a smaller view, then ask again.",
     );
   }
   if (response.status === 422 && body.error === "no_documents") {
@@ -127,9 +137,10 @@ export async function acceptProposal(
   bearerToken: string,
   investigationId: string,
   candidateId: string,
+  viewId?: string | null,
 ): Promise<{ node_id: string; delta: unknown }> {
   const response = await send(
-    `${questionsUrl(apiBaseUrl, investigationId)}/candidates/${encodeURIComponent(candidateId)}/accept`,
+    `${questionsUrl(apiBaseUrl, investigationId)}/candidates/${encodeURIComponent(candidateId)}/accept${inView(viewId)}`,
     bearerToken,
     { method: "POST", body: "{}" },
   );
@@ -144,9 +155,10 @@ export async function rejectProposal(
   bearerToken: string,
   investigationId: string,
   candidateId: string,
+  viewId?: string | null,
 ): Promise<void> {
   const response = await send(
-    `${questionsUrl(apiBaseUrl, investigationId)}/candidates/${encodeURIComponent(candidateId)}/reject`,
+    `${questionsUrl(apiBaseUrl, investigationId)}/candidates/${encodeURIComponent(candidateId)}/reject${inView(viewId)}`,
     bearerToken,
     { method: "POST", body: "{}" },
   );

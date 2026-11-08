@@ -72,11 +72,11 @@ describe("placeableTypes", () => {
 
   it("puts an account on the map when its type declares a place, never a person", () => {
     const graph = buildGraph([
-      ["acct-1", { data: node("Account", { geometry_ref: "geo-branch" }) }],
+      ["acct-1", { data: node("Account", { geometry_ref: "geo-site" }) }],
       ["person-1", { data: node("Person", { geometry_ref: "geo-xyz" }) }],
     ]);
     expect(locationGeometryRefs(graph, new Set(["Location", "Account"]))).toEqual(
-      new Map([["acct-1", "geo-branch"]]),
+      new Map([["acct-1", "geo-site"]]),
     );
   });
 });

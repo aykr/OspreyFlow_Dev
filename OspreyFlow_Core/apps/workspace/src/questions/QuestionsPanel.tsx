@@ -29,6 +29,12 @@ export interface QuestionsPanelProps {
   getTimelineWindow?: () => { validFrom: string; validTo: string | null } | null;
   /** A `[G-n]` was chosen: the canvas selects what it stands for and brings it into view. */
   onSelectFacts?: (citation: GraphCitation) => void;
+  /** ADR-144 decision 4: the questions are asked in this case view (*Ask the model about these*
+   * saved it, private to the asker): its conversation is listed, asked and decided through it, and
+   * reads only what it holds. Absent: the case's own conversation. */
+  view?: { id: string; name: string } | null;
+  /** Leave the view's conversation for the case's own. */
+  onLeaveView?: () => void;
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -48,7 +54,10 @@ export function QuestionsPanel({
   selection,
   getTimelineWindow,
   onSelectFacts,
+  view = null,
+  onLeaveView,
 }: QuestionsPanelProps) {
+  const viewId = view?.id ?? null;
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
@@ -59,7 +68,8 @@ export function QuestionsPanel({
 
   useEffect(() => {
     let cancelled = false;
-    listQuestions(apiBaseUrl, bearerToken, investigationId)
+    setEntries(null);
+    listQuestions(apiBaseUrl, bearerToken, investigationId, viewId)
       .then((found) => !cancelled && setEntries(found))
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -69,7 +79,7 @@ export function QuestionsPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, investigationId]);
+  }, [apiBaseUrl, bearerToken, investigationId, viewId]);
 
   async function ask(): Promise<void> {
     const text = question.trim();
@@ -82,6 +92,7 @@ export function QuestionsPanel({
         linkIds: selection?.linkIds ?? [],
         window: getTimelineWindow?.() ?? null,
         engine: engineChoice.chosen,
+        viewId,
       });
       setEntries((prev) => [...(prev ?? []), answered]);
       setQuestion("");
@@ -106,11 +117,11 @@ export function QuestionsPanel({
     setProblem(null);
     try {
       if (accept) {
-        const result = await acceptProposal(apiBaseUrl, bearerToken, investigationId, candidate.id);
+        const result = await acceptProposal(apiBaseUrl, bearerToken, investigationId, candidate.id, viewId);
         onDelta(result.delta);
         settle(candidate.id, "accepted");
       } else {
-        await rejectProposal(apiBaseUrl, bearerToken, investigationId, candidate.id);
+        await rejectProposal(apiBaseUrl, bearerToken, investigationId, candidate.id, viewId);
         settle(candidate.id, "rejected");
       }
     } catch (err) {
@@ -122,14 +133,26 @@ export function QuestionsPanel({
 
   return (
     <section aria-label="Questions to the model" style={{ display: "grid", gap: "var(--sp-12)" }}>
+      {view && (
+        <p role="status" style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
+          <span>
+            Asking in the view <strong>{view.name}</strong>, private to you until you share it.
+          </span>
+          {onLeaveView && (
+            <button type="button" className="btn btn--quiet" onClick={onLeaveView}>
+              Ask about the whole case instead
+            </button>
+          )}
+        </p>
+      )}
       <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
-        The model reads the documents in this case that you can see, whole, and the links around
+        The model reads the documents in this {view ? "view" : "case"} that you can see, whole, and the links around
         what you have selected (the whole view when nothing is). What it proposes is a suggestion
         until you accept it.
       </p>
       {entries === null && <p style={{ margin: 0 }}>Loading the questions…</p>}
       {entries !== null && entries.length === 0 && (
-        <p style={{ color: "var(--text-tertiary)", margin: 0 }}>No questions asked in this case yet.</p>
+        <p style={{ color: "var(--text-tertiary)", margin: 0 }}>No questions asked in this {view ? "view" : "case"} yet.</p>
       )}
       {entries !== null && entries.length > 0 && (
         <ol role="list" aria-label="Questions asked" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-16)" }}>
@@ -260,6 +283,12 @@ function AnswerText({
 }: {
   entry: QuestionAnswer;
   onSelectFacts?: (citation: GraphCitation) => void;
+  /** ADR-144 decision 4: the questions are asked in this case view (*Ask the model about these*
+   * saved it, private to the asker): its conversation is listed, asked and decided through it, and
+   * reads only what it holds. Absent: the case's own conversation. */
+  view?: { id: string; name: string } | null;
+  /** Leave the view's conversation for the case's own. */
+  onLeaveView?: () => void;
 }) {
   const { parts, unmarked } = splitAnswer(entry.answer, entry.graph_citations ?? []);
   const factButton = (citation: GraphCitation, key: string) => (

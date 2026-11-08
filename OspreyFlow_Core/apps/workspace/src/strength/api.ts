@@ -30,7 +30,7 @@ async function call<T>(url: string, bearerToken: string, init: RequestInit = {})
       const detail = (body.detail ?? body) as Record<string, unknown>;
       said = (detail.message ?? detail.reason ?? null) as string | null;
       if (detail.error === "limit_exceeded") {
-        said = "There are too many pairs in this view to work out rarity; narrow the view or branch it first.";
+        said = "There are too many pairs in this view to work out rarity; narrow the view or save a smaller one first.";
       }
       if (detail.error === "own_change") said = (detail.message as string) ?? "You proposed this; a second person must approve it.";
     } catch {

@@ -785,8 +785,8 @@ interactively.
 **The working set** is what one analyst is currently investigating: the subgraph they have
 expanded into, plus the events attached to it. It is bounded at **50,000 nodes and 250,000
 edges** by policy, held server-side in Valkey keyed by `investigation_id`, and streamed to the
-browser as deltas over a WebSocket. It is the unit of undo, of branching to a new tab, and of
-save/restore.
+browser as deltas over a WebSocket. It is the unit of undo and of save/restore, and what a case
+view (ADR-144) is a saved lens on.
 
 **The browser set** is the working set, in memory, in a graphology instance. Filters — timeline
 brush, histogram selection, map viewport, degree threshold — operate on the browser set only,
@@ -815,7 +815,7 @@ views cross-filter each other without a round trip.
   schedule's owner, through the same run path as *Run now* (`services/api/scheduler.py`).
 
 Expanding beyond the working-set cap does not silently truncate. The Glass offers three explicit
-choices: expand into a new branch tab, apply a filter before expanding, or promote the expansion
+choices: save a smaller view of the case (ADR-144), apply a filter before expanding, or promote the expansion
 to a batch job whose result is a saved subgraph. Silent truncation of an intelligence picture is
 a correctness failure, not a performance trade-off.
 

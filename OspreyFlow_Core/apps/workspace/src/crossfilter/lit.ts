@@ -84,7 +84,7 @@ function windowWords(window: TimeWindow): { range: string; open: boolean; oneDay
 }
 
 /**
- * The tab a branch of what is lit opens in, named from the window: "5 Jan – 30 Apr 2026, selected".
+ * The name a view of what is lit is saved under, from the window: "5 Jan – 30 Apr 2026, selected".
  * The end is included in what is lit, so it is named by the day it falls on, an end at midnight
  * included. Dates are UTC, as the timeline's are.
  */

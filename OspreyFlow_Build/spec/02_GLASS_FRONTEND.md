@@ -183,7 +183,7 @@ narrowed.
 │  │  Selection drives the inspector.                  ├─────────────────────────────┤
 │  │  Every filter dims, never removes.                │ ▸ Metrics                ⋯  │
 │  │                                                   ├─────────────────────────────┤
-│  │ [3 selected  Expand  Branch…  Remove  Clear]      │ ▸ Query builder          ⋯  │
+│  │ [3 selected  Expand  Save as a view  Remove  Clear]│ ▸ Query builder          ⋯  │
 │  ├───────────────────────────────────────────────────┤                             │
 │  │ ▸ Timeline ▁▂▅▃▁▆▂  2001-05-14 to 2001-12-03 (34px)│                             │
 ├──┴───────────────────────────────────────────────────┴─────────────────────────────┤
@@ -209,7 +209,7 @@ hairline) it says what the canvas holds, offers the case's three latest history 
 (each restored as the History drawer restores one) and the keys worth knowing (`/`, the arrows, Enter, F,
 Escape, `?`). It is open until the person closes it once (kept per person in this browser); `?` anywhere
 but a text field opens it again (`keyboard/welcome.spec.ts`). *Cases* opens a
-drawer with the tree of cases and branches (ADR-084 Amendment 4) and *Browse all cases*. The
+drawer with the open case's *Views in this case*, every case with its views (ADR-144 decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
 appears when anything is selected (ADR-097 step 1; `keyboard/selection.spec.ts`), on the inverse
@@ -528,10 +528,8 @@ for the owner to accept, amend or reject as real spec.
 **Superseded in part by ADR-052 Amendment 5 (29 September 2026).** Step 3 above (create a case on
 every load with no id) is gone. With no case resolved, and the analyst signed in, the Glass shows a
 **case picker**: the cases the caller holds a level on, each with the caller's own level, and a
-"New case" form. Each original case is listed once, with its branches (ADR-084) indented beneath it,
-oldest first, each said to be a branch beside its level; a branch whose original the caller cannot
-see sits under its oldest visible ancestor (ADR-084 Amendment 3; `nestCases` in
-`investigation/cases.ts`). The header carries a case switcher, and the Ingest Studio shows the same switcher
+"New case" form. Each case is listed once (ADR-144 Amendment 1: no case is made from another;
+`orderCases` in `investigation/cases.ts`). The header carries a case switcher, and the Ingest Studio shows the same switcher
 above its tabs ("Data loaded from this studio goes into"), with "New case" in it. Choosing a case
 sets the sessionStorage key and reloads the page, because the working set, cross-filter store and
 delta stream are built once per case, and it signs back in by itself (`from=case`, ADR-052 Amendment 6). Steps 1 and 2 (query parameter, then session) are unchanged.
@@ -601,7 +599,7 @@ the rest.
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Find connections | A side panel (ADR-116): From and To by search or from the selected node; the fewest degrees connecting them said in words, routes listed by degree and widened one degree at a time to eight, ten of more said as such; a route put on the canvas marks its nodes with their degree from From |
-| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Branch to a new case* on the selection bar, or *Branch selected (n)* in any selected node's right-click menu (ADR-084 Amendment 1, ADR-097 step 1) — and the selection opens as a new case, listed under its parent in the *Cases* drawer (§3.1h, ADR-084), with its own filter state; the parent is untouched. A bounding-box selection has no implementation yet |
+| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar, or *Save selected (n) as a view…* in any selected node's right-click menu (ADR-144 decision 4, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -709,10 +707,13 @@ names its type and how many links of that type join the same two entities ("3 li
 these two"), and goes when the pointer leaves (`keyboard/link-hover.spec.ts`). A keyboard user reads the
 same from the Inspector with the link selected.
 
-**Questions to the model, in a branch (ADR-098 decision 4).** While the selection holds a Document, the
-selection bar offers *Ask the model about these…*: it branches the selection into a new case named
-"Questions on <n> documents" and opens that case with its *Questions* panel open (the case address carries
-`view=questions`, kept through the sign-in round trip as the Ingest tab is). The panel is also on the left
+**Questions to the model, in a view (ADR-098 decision 4, ADR-144 decision 4).** While the selection holds a
+Document, the selection bar offers *Ask the model about these…*: it saves the selection as a private view
+named "Questions on <n> documents" and opens the *Questions* panel on that view, saying so ("Asking in the
+view <name>, private to you until you share it", with *Ask about the whole case instead*); every question,
+answer and proposal there is asked, listed and decided with the view's `view_id`, and reads only what the
+view holds (spec 03 §3.1). A case opened on its questions carries `view=questions` in its address, kept
+through the sign-in round trip as the Ingest tab is. The panel is also on the left
 rail as *Questions*, for any case. It lists the case's questions in order, each with its answer, *Draws on*
 buttons for the Documents it cites (each opens the reader), and the model's proposals with *Accept* and
 *Reject*; a proposal whose words are not in the Document the model named is left out and counted. The
@@ -914,39 +915,77 @@ afresh and the view is fitted to the result; the first fill of an empty canvas i
 that are going somewhere are animated. `keyboard/keyboard.spec.ts` proves an expansion leaves the camera and
 the settled nodes where they were.
 
-### 3.1h Branch selected, and the case's branches in the Cases drawer (ADR-084, ADR-097)
+### 3.1h Save as a view, and the case's views in the Cases drawer (ADR-144, ADR-097)
 
-Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Branch to a new case** sends the nodes to a **new case of their own**, holding those nodes and the links between them, and opens it. The case you branched from is left exactly as it was. A branch is a **copy** made at that moment: later changes to either never touch the other. It reads its parent's datasets (ADR-099 decision 3). A selected Group Node stands for every member of its group, so choosing one chooses them all. What the new case holds is re-checked against the branching analyst's own clearance, as every read is: a node they may not see is not copied, and a request that leaves nothing to copy says only "None of the selected nodes could be branched", whatever the reason.
+A case is the only container (ADR-144 Amendment 1); no case is made from another. A **case view** is a
+saved lens on one case: a name, its creator, private or shared, a node selection or a filter, a layout,
+a timeline window and a resolution threshold. It holds **no data**: opening it re-reads the case now,
+as its reader may see it (ADR-144 decisions 1 and 2; spec 03 §3.1, case views).
+
+**Saving one.** Selecting nodes shows the **selection bar** (ADR-097 step 1, below), whose **Save as a
+view** opens a small form over the canvas: *View name* (offered as "Selection of n nodes", or right
+after *Select what is lit* the window's own name, "5 Jan – 30 Apr 2026, selected"), *Save view* and
+*Cancel*; Enter saves and Escape cancels. The view keeps the chosen nodes, where they sit now and the
+timeline's window; its threshold is left unset, so it opens at the case's. A selected Group Node stands
+for every member of its group. Nothing on the case changes. A view is **private** to the analyst who
+saved it until they share it. A refusal is said on the form, in words, and nothing is saved. Under the
+GOV.UK brand the form is a GOV.UK form (`govuk-form-group`, `govuk-label`, `govuk-input`,
+`govuk-button`; ADR-144 decision 7).
 
 **Seeing and working the selection (ADR-093, ADR-097).** A selected node is drawn larger with a bold
 brass ring (§4's table). While anything is selected, the **selection bar** floats at the bottom centre
 of the canvas (an overlay: a shadow, no hairline): "n selected", the only live count of the selection
 in the page, then *Expand* (each selected node in turn, each through its own preview and the working
-set's cap), *Branch to a new case*, *Remove from view* and *Clear* (with its *Esc* key cap); Escape
+set's cap), *Save as a view*, *Remove from view* and *Clear* (with its *Esc* key cap); Escape
 clears, on the bar or on the canvas itself. *Expand* is the bar's one primary action, in brass, and the bar's
 count the page's only one — the Inspector's several-node view repeats it nowhere (ADR-115 E4). The canvas
 shows its own focus ring (2px brass, inset) and its accessible description says what is selected
 ("Selection of 2. Arrow keys move between nodes, Escape clears."). It replaces the
-corner chip and the toolbar's *Remove selected* and *Branch selected*. A branch is named "Branch of
-<case> (n nodes)", or "Branch of <case>" for the whole view; never a selection count with a middle dot. When more than one node is selected, the Inspector lists them
+corner chip and the toolbar's *Remove selected*. When more than one node is selected, the Inspector lists them
 by name under "Selected (n)": choosing a name centres the canvas on that node and leaves the
 selection as it was, and × takes it out. Proved by keyboard in `keyboard/selection.spec.ts`
 (registry `SELECTION_ACTIONS`); the ring by painted pixels in `keyboard/selection-look.spec.ts`.
 
-The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the node, or takes it out again). *Branch to a new case* is on the selection bar and, for any node that is in the selection, *Branch selected (n)* is an entry in that node's own right-click menu (ADR-084 Amendment 1); a node outside the selection does not offer it. Both reach the same route; `keyboard/keyboard.spec.ts` proves each by keyboard.
+The selection is built with the lasso, or by clicking nodes with Shift, Ctrl or Cmd held (each adds the
+node, or takes it out again). *Save as a view* is on the selection bar and, for any node that is in the
+selection, *Save selected (n) as a view…* is an entry in that node's own right-click menu; a node outside
+the selection does not offer it. Both open the same form; `keyboard/keyboard.spec.ts` proves each by
+keyboard.
 
-Each branch is a case saved for the analyst who made it (they are its Author, and it is visible to nobody else until they share it). It starts with the resolution threshold, layout and timeline brush of its own, not shared with the case it came from. The events behind the links it copied (the timeline's counts, *Show emails*, an email to extract from) are read from the case they were loaded into, for the links the branch holds, wherever the analyst can see that case; nothing is copied (ADR-084 Amendment 2).
+**Opening one: a read-only lens (the owner's ruling of 8 November 2026, ADR-144 Amendment 2).** An
+opened view takes the canvas's place: its items as the Conduit answers them (only what the reader may
+see now, each already collapsed at the view's threshold, or the case's when it has none), placed where
+the view keeps them, and the timeline set to its window. A banner above the canvas reads "View: <name>",
+its *Private* or *Shared* tag, "n items in this view could not be shown" when the Conduit counted any
+(never which, nor why), "Nothing in a view changes the case." and **Back to the case**. Nothing in a view
+changes the case's working set: the selection bar offers *Save as a view*, *Ask the model about these…*
+and *Clear* only; the toolbar offers no *Clear view*, *Add files* or *Show links among all*; a node's
+menu offers only what changes nothing (read full screen, view messages, expand a group, save the
+selection as a view); and a link's menu only folding, a note, hiding, its history and its events (no
+*Confirm as the same*, *Mark as not the same*, *Explain this link*, *Change* or *Put the emails on the
+canvas*: explaining asks the case about clusters worked out at the case's threshold, not the view's).
+An action that would change the working set asked for another way is said ("This is a view: nothing in
+it changes the case. Go back to the case to change it."), not done. When the view opens, focus moves to
+its *Back to the case*. A view past the working set's cap is refused with its own figures, never cut to fit
+(rule 2). The lens is the Graph's: the Map, the Matrix and the status bar go on showing the
+case while a view is open. A view with no window clears the timeline's window while it is open, and
+*Back to the case* gives the case's window back and takes `case_view` out of the address. The over-cap
+dialog, the case's, steps aside while a view is open on the Graph, and shows on the Map and the Matrix,
+which show the case, and again on the Graph once the analyst is back on the case, if it is still past
+the cap.
 
-The cases and their branches are one tree (ADR-084 Amendment 4), shown alike in the top bar's case
-menu and the **Cases** drawer on the left rail: each original case once, its branches indented beneath
-it, a branch named for what it holds and when it was made ("2 nodes · 14 Oct 16:40") until renamed; the
-case on screen is marked "you are here", and on a branch the menu's button reads *case › ⑂ branch*. A
-branch's ⋯ offers **Open**, **Rename** (its Author) and **Delete** (its Author, or an administrator of
-the unit) in place; Delete asks once — "It leaves every list for everyone; the case it came from is
-untouched" — and is the same soft remove as any case. Deleting the branch on screen returns to the case
-it came from (`keyboard/case-tree.spec.ts`).
+**Where views are listed (ADR-144 decision 5).** The left rail's **Cases** drawer shows, first, the open
+case's **Views in this case**: each view the reader may see (their own, and those shared with the case)
+with its *Private* or *Shared* tag and *Open*; its creator alone is offered *Share with the case* (while
+it is private) and *Delete*, which asks once — "Delete this view? Nothing on the case is deleted with
+it." Under the GOV.UK brand the panel is a GOV.UK summary list with `govuk-tag`s (decision 7). Below it,
+every case the caller holds a level on is listed once, the case on screen marked "you are here", with
+each case's views beneath it; a view of another case opens that case on the view (`case_view` in the
+address, kept through the sign-in round trip). The top bar's case menu lists the same cases, without
+their views. A member is never shown another's private view: the Conduit never sends it
+(`keyboard/views.spec.ts`, registry `VIEW_ACTIONS`).
 
-Opening another case or branch from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step (ADR-084).
+Opening another case from the drawer reloads the page, as every case switch does (§1): the working set, timeline and delta stream are each built once per case. The expansions and filters of a case are kept on the server, so they are still there; where nodes sit on screen and what was selected are not. Opening a view of the case on screen does not reload. Having several canvases live in one page, so that switching is instant and keeps the layout, is a later step.
 
 ### 3.2 Social network analysis
 
@@ -1836,7 +1875,7 @@ it its own surface. Three artefact shapes share one handling gate — there is o
 | Shape | Source | Format |
 | --- | --- | --- |
 | Chart | The current canvas (`@sigma/export-image`, §1) or a saved metric/histogram/timeline view (ECharts' own export) | PNG |
-| Subgraph | The current working set, or a lassoed selection via the same "Branch to new tab" mechanism §3.1 already defines | JSON |
+| Subgraph | The current working set, or a lassoed selection saved as a case view (§3.1h) | JSON |
 | Report | The investigation's assessment objects (§9), assembled with their own cited evidence — the artefact A15 itself names ("Export the chart and the assessment") | Self-contained HTML |
 
 **File formats, recorded here rather than left undetermined.** This document named where each

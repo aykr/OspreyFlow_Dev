@@ -1,0 +1,41 @@
+/* Case views (ADR-144): the *Views in this case* panel, the *Save as a view* form and the lens banner.
+   Tokens only (`design/tokens.css`). Under the GOV.UK brand the panel and the form use the package's
+   own govuk-summary-list, govuk-tag, govuk-form-group and govuk-button classes; these rules only
+   space them. Every control is at least 24 by 24 pixels (axe target-size). */
+.case-views { display: grid; gap: var(--sp-8); }
+.case-views__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.case-views__row { display: grid; gap: var(--sp-4); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border-subtle); }
+.case-views__line { display: flex; align-items: center; gap: var(--sp-8); min-width: 0; }
+.case-views__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-13); color: var(--text-primary); }
+.case-views__actions, .case-views__confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); }
+.case-views__button { min-height: var(--h-control-24); min-width: var(--h-control-24); }
+.case-views__danger { color: var(--error); }
+.case-views__problem { margin: 0; font-size: var(--fs-12); color: var(--error); }
+.case-views--govuk .govuk-summary-list__actions { display: flex; flex-wrap: wrap; gap: var(--sp-8); justify-content: flex-end; }
+.case-views--govuk .case-views__button { margin-bottom: 0; }
+
+.view-tag {
+  flex: none; padding: 0 var(--sp-6); border-radius: var(--r-chip); border: 1px solid var(--border);
+  font-size: var(--fs-11); line-height: var(--lh-11); color: var(--text-secondary);
+}
+.view-tag--shared { color: var(--text-primary); border-color: var(--border-strong); }
+
+.save-view { display: grid; gap: var(--sp-8); }
+.save-view__row { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }
+
+/* The lens over the canvas (the owner's ruling of 8 November 2026: an opened view is read-only). */
+.view-lens-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12);
+  background: var(--surface-raised); border-bottom: 1px solid var(--border); font-size: var(--fs-13); color: var(--text-primary);
+}
+.view-lens-banner__name { font-weight: 600; }
+.view-lens-banner__note { color: var(--text-secondary); }
+.view-lens-banner__back { margin-left: auto; min-height: var(--h-control-24); }
+
+/* The *Save as a view* form, over the canvas just above the selection bar. */
+.save-view-anchor {
+  position: absolute; left: 50%; bottom: calc(var(--sp-12) + var(--h-control-36) + var(--sp-8)); transform: translateX(-50%);
+  z-index: 13; width: min(360px, calc(100% - var(--sp-32)));
+}
+.save-view-anchor .save-view { padding: var(--sp-12); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-panel); box-shadow: var(--overlay-shadow); }
+.save-view--govuk { background: var(--surface-raised); }

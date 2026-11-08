@@ -506,7 +506,7 @@ export function Timeline({
       const max = Math.max(1, ...buckets.map((b) => b.count));
       // The weekly view has no window brush and no zoom: the density view's listeners come off, and
       // a drag across cells is the rectangle brush, its listener registered here and taken off
-      // again by the density branch (and by this one on each redraw).
+      // again by the density path (and by this one on each redraw).
       chart.off("brushEnd");
       chart.off("datazoom");
       chart.on("brushEnd", (params: unknown) => {

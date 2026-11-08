@@ -15,7 +15,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check bundle
+ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
@@ -28,6 +28,13 @@ lanes-check:
 # planted (process/lanes/glass/l2.8b/red-b1-confined.txt).
 confinement-check:
 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+
+# ADR-144 Amendment 1: no case's branch named in the Glass, the Conduit or packages/schemas (a pipeline's
+# branch kept by file, a git flag by token). Shown red with each shape the code used and with one word
+# planted in a real Glass file of the real tree (L3.2b, process/lanes/case/L3.2b_RED_RECORD.md).
+no-branches-check:
+	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_branches_check
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_branches_check.py
 
 core-check:
 	$(MAKE) -C $(CORE) check

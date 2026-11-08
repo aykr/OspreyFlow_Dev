@@ -134,6 +134,17 @@ jobs:
       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.product_tree_link_check
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_product_tree_link_check.py
 
+  # ADR-144 Amendment 1: no case's branch named in the Glass, the Conduit or packages/schemas; a
+  # pipeline's branch kept by file, a git flag by token. See OspreyFlow_Build/tools/no_branches_check.py.
+  no-branches-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.no_branches_check
+      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+
   # Same shape, one level down — does a PRODUCT-classified ADR in 06_DECISIONS.md cite a
   # PROCESS-classified one by number. `06_DECISIONS.md` ADR-034 §B10. Allowlist at
   # OspreyFlow_Build/tests/fixtures/decision_log_publication_allowlist.txt (6 known references, found on this

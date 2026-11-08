@@ -33,9 +33,10 @@ declare global {
       selectedEdge: string | null;
       /** The last link-menu entry that hands over to the Inspector (ADR-080): which link and what. */
       linkAction: { edgeId: string; action: string } | null;
-      /** The case the canvas was told a branch of the selection was made as (ADR-084). */
-      branchedTo: string | null;
-      /** The case the selection was branched to so the model could be asked about it (ADR-098). */
+      /** The view the canvas said the selection was saved as (ADR-144 decision 4). */
+      savedView: string | null;
+      /** The view the selection was saved as so the model could be asked about it in it (ADR-098,
+       * ADR-144 decision 4). */
       askedIn: string | null;
       /** The Document the canvas asked to open to read (ADR-092). */
       openedDocument: string | null;
@@ -185,7 +186,7 @@ window.__KEYBOARD__ = {
   viewMessagesNodeId: null,
   selectedEdge: null,
   linkAction: null,
-  branchedTo: null,
+  savedView: null,
   askedIn: null,
   openedDocument: null,
 };
@@ -360,8 +361,10 @@ if (!container) throw new Error("#root not found");
 
 // `?fixture=lit` is ADR-128's (B3, select what is lit): the chain above with the real timeline under
 // it, so a keyboard walkthrough can set a window by Set exact dates, run Select what is lit, and
-// branch what it selected, as App does. The timeline's own reads are answered by the spec.
+// save what it selected as a view, as App does. The timeline's own reads are answered by the spec.
 const wantsLit = new URLSearchParams(window.location.search).get("fixture") === "lit";
+// `?lens=1`: the canvas showing an opened view (ADR-144 Amendment 2, a read-only lens), as App draws it.
+const wantsLens = new URLSearchParams(window.location.search).get("lens") === "1";
 const litStore = createCrossFilterStore("http://keyboard-test.invalid", "unused", "keyboard-fixture");
 
 // `?judged=n1:2,n2:1` gives those nodes that many judgements, for the count drawn beside a node
@@ -451,11 +454,12 @@ createRoot(container).render(
       onViewMessages={(nodeId) => {
         window.__KEYBOARD__!.viewMessagesNodeId = nodeId;
       }}
-      onBranchCreated={(id) => {
-        window.__KEYBOARD__!.branchedTo = id;
+      lens={wantsLens}
+      onViewSaved={(view) => {
+        window.__KEYBOARD__!.savedView = view.id;
       }}
-      onAskAboutDocuments={(id) => {
-        window.__KEYBOARD__!.askedIn = id;
+      onAskInView={(view) => {
+        window.__KEYBOARD__!.askedIn = view.id;
       }}
       onGroupedCountChange={(count) => {
         window.__GROUPED__ = count;

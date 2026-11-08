@@ -1,0 +1,49 @@
+# make test-js at e8f4a9e, 2026-11-08T19:16:20Z, both patches applied
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 4998ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 4997ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 2701 ms: expected 2700.734709 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 319 passed (320)
+      Tests  1 failed | 2671 passed (2672)
+   Start at  19:16:21
+   Duration  24.83s (environment 50%, tests 37%, import 10%, transform 2%, setup 1%, worker 1%)
+
+    Isolate  320 workers spawned · ~461ms startup each (spawn + environment, per file)
+             at least ~12.96s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [test-js] Error 1
+# exit 2
+
+# re-run alone at e8f4a9e, 2026-11-08T19:17:25Z:
+ Test Files  1 passed (1)
+      Tests  1 passed (1)

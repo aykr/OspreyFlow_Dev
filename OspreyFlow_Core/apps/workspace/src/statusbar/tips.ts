@@ -6,5 +6,5 @@ export const WORKSPACE_TIPS = [
   "Shift-click to add to the selection. Esc clears it.",
   "Brush the timeline to dim everything outside the window. Nothing is removed from the canvas.",
   "Dashed links were inferred by the model. Solid links come from a source record.",
-  "Branch a selection to work on it in a new case without changing this one.",
+  "Save a selection as a view to look at it on its own later; a view changes nothing in the case.",
 ] as const;

@@ -317,8 +317,8 @@ only the types (`default.yaml` and every promoted type), is read by every case a
 an administrator; it holds no nodes or links (ADR-099 Amendment 3 decision 1). A pending proposal
 belongs to the first dataset of the case it was proposed in, and is offered and drawn at once in every
 case reading that dataset and nowhere else (Amendment 3 decision 2); one made before that amendment
-that could not be placed keeps ADR-090's rule (its own case, its branches, any case where one of its
-links is in view). A pending proposal is probabilistic. Each proposal's links are stored under a label of their own,
+that could not be placed keeps ADR-090's rule (its own case, and any case where one of its links is in
+view). A pending proposal is probabilistic. Each proposal's links are stored under a label of their own,
 `<name>__<proposal id>`, declared as a `hidden` type so the graph store accepts them, and
 `storage_aliases` makes that label read as the name the links answer to: the proposal's own while
 pending, rejected, withdrawn or retired, the promoted name once promoted, merged or renamed. So no
@@ -573,8 +573,8 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     POLE core alone), and its home case, its maker the Author; the board is L3.3's. It is read
     through its home case alone, so its Author shares it by sharing that case: no other case may
     choose it (it is in no case's list of datasets to choose, and the store refuses it), no case
-    is made reading it by a branch, a filtered branch or an alert's jump (409 `drawn_not_copied`,
-    refused before the case is made, and by `copy_case` itself), no pipeline loads into it (409
+    is made reading it by an alert's jump (409 `drawn_not_copied`, refused before the case is
+    made), no pipeline loads into it (409
     `drawn_not_loaded`), and no rule or monitor is made, changed or made live in its case until
     it is merged (409 `drawn_not_judged`). It is listed in the Studio and in Admin › Datasets
     with a *Drawn* badge;
@@ -582,10 +582,10 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
     dataset), and its name takes no place in the unit's unique names. A layer is written only by
-    its own case: a branch holds none and reads its original case's layer, read-only, every write
-    into it refused (ADR-144 Amendment 1 decision 2; branches are removed in L3.2), and only a
-    reader holding a level on the original reads it there (an original with no layer yet is given
-    one when branched); a case
+    its own case. No case is made from another (ADR-144 Amendment 1); a case made from another
+    before L3.2, until the upgrade turns it into a view, holds none and reads its original case's
+    layer, read-only, every write into it refused (decision 2), and only a reader holding a level
+    on the original reads it there; a case
     opened from an alert has an empty layer of its own and never reads the original's, its maker
     holding no level on it perhaps (ADR-143 Amendment 1 item 3, with the exception there for
     cases made from another before L3.1, which each keep a layer of their own). A
@@ -598,7 +598,7 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     strictest of what its case otherwise reads, under that dataset's name (`datasets.as_its_case`),
     so it changes no verdict and its own name is in no refusal; an administrator cannot set it.
 - **A case chooses exactly one dataset**, a source or a composite, of its own unit (Amendment 12
-  decision 1); a branch takes its parent's; only the case's Author changes it, and each change is
+  decision 1); only the case's Author changes it, and each change is
   audited (decision 3). A new case names an existing dataset or a new one; the Conduit no longer
   makes one for a case that names none (Amendment 12 item 6).
 - **A case's read set** (`Principal.datasets` for a request under it, `DatasetStore.ids_of_case`)
@@ -759,7 +759,8 @@ reads its original's dataset and, for a reader holding a level on the original, 
 layer. A write there that names no dataset (an accepted proposal, an accepted extraction, a rule's
 `ALERTED_ON`) is stamped into the source, which the original reads too. So no write there may link
 to, or merge into, a node of the original's layer. The refusal is 409 `original_layer_read_only`
-(`branch_layer_read_only` before L3.2), with words saying the case is waiting to become a view.
+(its code before L3.2 named the retired kind of case), with words saying the case is waiting to
+become a view.
 - The stamping graph refuses it as its last word.
 - The three accept paths whose acceptance writes in two steps (a question's, an email's, a held
   document's) ask the same helper first (`dataset_scope.refuse_touching_a_read_only_layer`), so
@@ -1635,7 +1636,7 @@ are on the port too, each taking the principal like every other read.
   element reverted and withdrawn by `load_id`; one already reverted is left alone. The second brings
   back exactly what `load_id` withdrew, except a link whose pair (type and ends) has a live link
   written since: each link is written once. No `principal`, as `revert_elements`. Conformance:
-  `tests/conformance/graph_port/test_suite.py`'s withdrawal section, six cases, each branch shown
+  `tests/conformance/graph_port/test_suite.py`'s withdrawal section, six cases, each path shown
   red by a plant. Since ADR-110 Amendment 15 no refresh withdraws a node or a link, so nothing calls
   `withdraw_elements`; `restore_withdrawn` stays for the revert (`services/ingest/load_revert.py`)
   of a refresh recorded before it, whose record lists withdrawn nodes and links.
@@ -1801,7 +1802,7 @@ class EventFilter(BaseModel):
     value_filters: dict[str, list[str]] = {}   # equality facets, compiled into the WHERE clause
     inherited: InheritedEvents | None = None   # ADR-084 Amendment 2; set only by the Conduit
 
-class InheritedEvents(BaseModel):    # a branch's parents' events on the links it holds
+class InheritedEvents(BaseModel):    # other cases' events; since L3.2 always None (ADR-144 Amendment 1)
     scopes: list[str] = []
     edge_ids: list[EdgeId] = []
 
@@ -2162,9 +2163,8 @@ when it fired, so nothing about it — not even the identifier that matched — 
 principal who could not see it anyway. `investigation_id` is a best-effort audit-shaped hint, not
 an access-control scope, threaded from whichever producer route was investigation-scoped at the
 point the triggering write happened; `None` for a producer with no single investigation in scope
-(a corpus-wide resolution trigger, say). Jumping from an alert into an investigation branches a new
-one from this field via the same mechanism an ordinary investigation branch already uses; a `None`
-here means the jump starts an unbranched investigation rather than one carrying that link. An alert's
+(a corpus-wide resolution trigger, say). Jumping from an alert makes a case of its own, never one
+made from the case in this field (ADR-144 Amendment 1), and carries no link to it (Amendment 2). An alert's
 entities are read as the case it arose in reads, and one with no case reads nothing of them
 (ADR-099 Amendment 1 decision 4). The case a jump opens reads the alert's dataset, else what the
 alert's case reads, else a dataset of its own (Amendment 4 decision 3).

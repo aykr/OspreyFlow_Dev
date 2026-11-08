@@ -1900,14 +1900,15 @@ def test_b13_a_hotlist_alone_fires_nothing_until_the_ingest_arrives(
     )
 
 
-def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
+def test_b14_an_alert_opens_into_a_case_holding_its_entities(
     seizure_alert: dict, analyst: httpx.Client
 ) -> None:
     """**B14**: "Open the alert into a pre-populated investigation … The new working set contains
     the alert's entities and a link to the originating investigation."
 
-    The entities half holds as written. The link half is withdrawn by ADR-144 Amendment 1 (no case
-    records another it came from); the audit row keeps the alert's case.
+    The entities half holds as written. The link half is withdrawn (ADR-144 Amendment 1: no case
+    records another it came from; Amendment 2 decision 2 amends B14 in spec 08); the audit row keeps
+    the alert's case.
     """
     alert = seizure_alert["alerts"][0]
 
@@ -1920,9 +1921,9 @@ def test_b14_an_alert_opens_into_an_investigation_linked_to_the_original(
     assert "unreadable_count" not in result, (
         f"the jump still answers with a count of unreadable referents: {result}"
     )
-    # ADR-144 Amendment 1 (L3.2's Q1, the orchestrator's settlement on the owner's review list): the
-    # case opened records no case it came from; the audit row names the alert's case, and L2.9
-    # opens the alert as a private view instead (B14 to be amended in spec 08 with L3.2b).
+    # ADR-144 Amendment 1 and Amendment 2 decision 2 (L3.2's Q1): the case opened records no case it
+    # came from; the audit row names the alert's case. L2.9 opens the alert as a private view
+    # instead (ADR-144 decision 4), which carries no origin link either.
     assert "branched_from" not in result["investigation"]
 
 

@@ -3,7 +3,7 @@
 export type ShellIcon = "cases" | "history" | "watches" | "alerts" | "ownership" | "types" | "ingest" | "glass" | "names" | "questions" | "explore" | "admin" | "dashboards";
 
 const PATHS: Record<ShellIcon, string> = {
-  // Two stacked folders: the case and its branches.
+  // Two stacked folders: the cases and their views.
   cases: "M2 4.5h4l1.5 1.5H14v7H2z M4 2.5h3l1 1",
   // A clock face.
   history: "M8 2.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11z M8 5v3.2l2.2 1.3",

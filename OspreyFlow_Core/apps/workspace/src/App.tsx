@@ -88,13 +88,18 @@ import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
 import { CasePicker } from "./investigation/CasePicker";
 import { CaseSwitcher } from "./investigation/CaseSwitcher";
-import { CaseTree } from "./investigation/CaseTree";
+import { CaseList } from "./investigation/CaseList";
 import { CaseAccessPanel } from "./investigation/CaseAccessPanel";
 import { CaseSettings } from "./investigation/CaseSettings";
 import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
-import { caseIsOpenable, openCase } from "./investigation/cases";
+import { caseIsOpenable, openCase, openCaseView } from "./investigation/cases";
+import { buildLens, type Lens, lensWindow } from "./views/lens";
+import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
+import { ViewLensBanner } from "./views/ViewLensBanner";
+import { ViewsPanel } from "./views/ViewsPanel";
+import { type CaseView, type CaseViewOpened, openView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
@@ -152,7 +157,7 @@ const API_BASE_URL =
 
 // `06_DECISIONS.md` ADR-050: "the VITE_DEV_BEARER_TOKEN path survives only for `npm run dev`."
 // `import.meta.env.DEV` is Vite's own `command === "serve"` flag — `false` for every production
-// build, so this branch is dead code (and the variable read below moot) in anything
+// build, so this path is dead code (and the variable read below moot) in anything
 // `vite.config.ts`'s own build-time fence would have let through. There is no Keycloak in
 // `deploy/compose/dev.yaml`'s lightweight dev stack (`tools/mint_dev_token.py` mints against a
 // throwaway keypair instead), so this path — not the real OIDC flow below — is what `make dev-up`
@@ -658,12 +663,19 @@ export function App() {
   }, [principal?.sub]);
   const openWelcome = useCallback(() => setWelcomeOpen(true), []);
   useHelpKey(openWelcome);
-  // ADR-097 Amendment 1: the case and its branches, reached from the rail.
+  // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the rail.
   const [casesOpen, setCasesOpen] = useState(false);
+  // ADR-144 and the owner's ruling of 8 November 2026 (Amendment 2): an opened view, shown on the
+  // canvas as a read-only lens over the case, and `viewsRead` bumped to read the views again.
+  const [lens, setLens] = useState<Lens | null>(null);
+  const [viewsRead, setViewsRead] = useState(0);
+  const [viewProblem, setViewProblem] = useState<string | null>(null);
+  // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
+  const [questionsView, setQuestionsView] = useState<{ id: string; name: string } | null>(null);
   // ADR-128 decision 3: opening a saved trend from the case brief starts the Reports view on Trends;
   // the count re-mounts the place so a second open starts there again.
   const [reportsStart, setReportsStart] = useState<{ tab?: "trends"; opened: number }>({ opened: 0 });
-  // ADR-098 decision 4: the case's questions to the model, open at once in a case branched for them.
+  // ADR-098 decision 4: the case's questions to the model, open at once when the case was opened on them.
   const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
   // ADR-100: where to start in a case's data, from the rail (and over an empty canvas).
   const [exploreOpen, setExploreOpen] = useState(false);
@@ -861,6 +873,78 @@ export function App() {
       investigationId,
     );
   }
+
+  // ADR-144 (the owner's ruling of 8 November 2026, Amendment 2): an opened view takes the canvas's
+  // place as a read-only lens. Its window goes to the timeline, as the case's would; the Conduit has
+  // already collapsed its items at its threshold. "Back to the case" puts the case's canvas back.
+  // The case's own timeline window while a view is open, given back on *Back to the case*.
+  const caseWindowRef = useRef<{ validFrom: string; validTo: string | null } | null | undefined>(undefined);
+  // The latest view asked for: an earlier answer arriving after it is dropped.
+  const lensAskedRef = useRef(0);
+
+  function showLens(opened: CaseViewOpened): void {
+    // Whatever opened this view, an earlier `openLens` still in flight no longer replaces it.
+    lensAskedRef.current += 1;
+    setViewProblem(null);
+    const timeline = crossFilterRef.current?.store.getState();
+    if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
+    setLens(buildLens(opened));
+    setSelectedNodeIds([]);
+    setSelectedNode(null);
+    // The view's window, or none: a view keeps no window of the case's.
+    timeline?.setWindow(lensWindow(opened));
+    setView("graph");
+  }
+
+  async function openLens(viewId: string): Promise<void> {
+    if (!investigationId) return;
+    const asked = ++lensAskedRef.current;
+    const result = await openView(API_BASE_URL, bearerToken, investigationId, viewId);
+    if (asked !== lensAskedRef.current) return;
+    if (result.ok) {
+      showLens(result.opened);
+      return;
+    }
+    setViewProblem(
+      result.kind === "not_found"
+        ? "That view could not be opened. It may have been deleted, or not shared with you."
+        : result.kind === "limit_exceeded"
+          ? `This view holds more than the canvas can: ${result.wouldBe.would_be.toLocaleString("en-GB")} ${result.wouldBe.cap_kind === "nodes" ? "nodes" : "links"} against a limit of ${result.wouldBe.cap.toLocaleString("en-GB")}. Nothing was cut to fit.`
+          : result.message,
+    );
+  }
+
+  function closeLens(): void {
+    lensAskedRef.current += 1;
+    setLens(null);
+    setViewProblem(null);
+    setSelectedNodeIds([]);
+    setSelectedNode(null);
+    if (caseWindowRef.current !== undefined) {
+      crossFilterRef.current?.store.getState().setWindow(caseWindowRef.current);
+      caseWindowRef.current = undefined;
+    }
+    if (new URL(window.location.href).searchParams.has("case_view")) {
+      window.history.replaceState(window.history.state, "", withoutCaseView(window.location.href));
+    }
+  }
+
+  // A case opened on one of its views (from another case's row in the Cases drawer): opened once the
+  // case and the sign-in are there.
+  const caseViewTaken = useRef(false);
+  useEffect(() => {
+    if (caseViewTaken.current || !investigationId || !bearerToken) return;
+    caseViewTaken.current = true;
+    const viewId = takeCaseView(investigationId, window.location.search);
+    // Taken once: the address no longer names it, so a reload opens the case, and a view that could
+    // not be opened is not asked for again.
+    if (new URL(window.location.href).searchParams.has("case_view")) {
+      window.history.replaceState(window.history.state, "", withoutCaseView(window.location.href));
+    }
+    if (viewId) void openLens(viewId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per case load, by design
+  }, [investigationId, bearerToken]);
+
   const [dimming, setDimming] = useState<{
     dimmedNodeIds: ReadonlySet<string>;
     dimmedEdgeIds: ReadonlySet<string>;
@@ -1232,7 +1316,7 @@ export function App() {
   );
 
   // `06_DECISIONS.md` ADR-050's tests-owed list: "an unauthenticated load presents the sign-in,
-  // not an error page and not an empty workspace." Checked before the "not ready yet" branch below
+  // not an error page and not an empty workspace." Checked before the "not ready yet" case below
   // — an unauthenticated caller is never "still loading", it has a definite answer already.
   if (!isDevBypass && authChecked && !bearerToken) {
     return (
@@ -1453,7 +1537,6 @@ export function App() {
             bearerToken={bearerToken}
             currentId={investigationId}
             onBrowse={() => setBrowsingCases(true)}
-            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             onOpen={(id) => openCase(id, view === "ingest" ? "ingest" : undefined)}
           />
         }
@@ -1600,7 +1683,20 @@ export function App() {
         )}
         {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
           <div style={{ flex: 1, position: "relative" }}>
-            {view === "graph" && welcomeOpen && (
+            {view === "graph" && lens && (
+              <ViewLensBanner
+                name={lens.opened.view.name}
+                shared={lens.opened.view.shared ?? false}
+                missing={lens.opened.missing}
+                onBack={closeLens}
+              />
+            )}
+            {view === "graph" && viewProblem && (
+              <p role="alert" className="view-lens-banner">
+                {viewProblem}
+              </p>
+            )}
+            {view === "graph" && welcomeOpen && !lens && (
               <WorkspaceWelcome
                 apiBaseUrl={API_BASE_URL}
                 bearerToken={bearerToken}
@@ -1617,10 +1713,12 @@ export function App() {
             )}
             {view === "graph" && (
               <GlassCanvas
+                // A view opened or closed draws a different working set: the canvas starts afresh.
+                key={lens ? `view:${lens.opened.view.id}` : "case"}
                 ref={glassCanvasRef}
                 lastChange={lastChange}
-                graph={workingSetRef.current.graph}
-                store={workingSetRef.current.store}
+                graph={(lens?.workingSet ?? workingSetRef.current).graph}
+                store={(lens?.workingSet ?? workingSetRef.current).store}
                 ontology={ontology}
                 edgeTypes={edgeTypes}
                 entityTypes={ontologySchema?.entity_types}
@@ -1646,12 +1744,17 @@ export function App() {
                   if (action === "events") setLinkEventsSignal((n) => n + 1);
                   if (action === "history") setLinkHistorySignal((n) => n + 1);
                 }}
-                onBranchCreated={(id) => openCase(id)}
-                onAskAboutDocuments={(id) => openCase(id, "questions")}
+                onViewSaved={() => setViewsRead((n) => n + 1)}
+                onAskInView={(saved) => {
+                  setViewsRead((n) => n + 1);
+                  setQuestionsView({ id: saved.id, name: saved.name });
+                  setQuestionsOpen(true);
+                }}
+                lens={lens !== null}
                 onSelectionChange={(nodeIds) => {
                   setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
-                  const graph = workingSetRef.current.graph;
+                  const graph = (lens?.workingSet ?? workingSetRef.current).graph;
                   setSelectedNode(
                     first && graph.hasNode(first)
                       ? graph.getNodeAttribute(first, "data")
@@ -1689,7 +1792,7 @@ export function App() {
               />
             )}
             {/* ADR-100: an empty canvas offers where to start, until something is drawn. */}
-            {view === "graph" && counts.nodes === 0 && investigationId && (
+            {view === "graph" && counts.nodes === 0 && investigationId && !lens && (
               <div
                 className="explore-overlay"
                 style={{
@@ -2076,7 +2179,12 @@ export function App() {
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
           investigationId={investigationId}
-          onBranchOpened={(id) => openCase(id)}
+          onViewOpened={(opened) => {
+            setViewsRead((n) => n + 1);
+            showLens(opened);
+          }}
+          // The lens is the Graph's: on the Map or the Matrix the case is on screen, and so is its cap.
+          lensOpen={lens !== null && view === "graph"}
         />
       )}
       <Drawer open={exploreOpen} onClose={() => setExploreOpen(false)} title="Explore">
@@ -2131,19 +2239,45 @@ export function App() {
           onSelectFacts={(citation) => {
             if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
           }}
+          view={questionsView}
+          onLeaveView={() => setQuestionsView(null)}
         />
       </Drawer>
-      {/* ADR-084 Amendment 4: the cases and their branches, one tree, as the case menu shows them. */}
+      {/* ADR-144 decision 5: the open case's *Views in this case*, then every case once with its views. */}
       <Drawer open={casesOpen} onClose={() => setCasesOpen(false)} title="Cases">
         <div style={{ display: "grid", gap: "var(--sp-8)" }}>
-          <CaseTree
+          {investigationId && (
+            <ViewsPanel
+              apiBaseUrl={API_BASE_URL}
+              bearerToken={bearerToken}
+              caseId={investigationId}
+              me={principal?.sub ?? ""}
+              openViewId={lens?.opened.view.id ?? null}
+              refreshKey={viewsRead}
+              onOpen={(chosen) => {
+                setCasesOpen(false);
+                void openLens(chosen.id);
+              }}
+              onDeleted={(viewId) => {
+                setViewsRead((n) => n + 1);
+                if (lens?.opened.view.id === viewId) closeLens();
+                if (questionsView?.id === viewId) setQuestionsView(null);
+              }}
+            />
+          )}
+          <CaseList
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             currentId={investigationId}
-            isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
+            refreshKey={viewsRead}
             onOpen={(id) => {
               setCasesOpen(false);
               openCase(id);
+            }}
+            onOpenView={(caseId, chosen: CaseView) => {
+              setCasesOpen(false);
+              if (caseId === investigationId) void openLens(chosen.id);
+              else openCaseView(caseId, chosen.id);
             }}
           />
           <Button

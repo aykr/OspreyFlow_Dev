@@ -45,6 +45,11 @@ const EXTRA_STATES: Record<string, string[]> = {
   "panel-frames-harness.html": ["defaults=1"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
+  // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
+  // over an opened view.
+  "views-harness.html": ["as=bob", "show=form", "show=lens", "asking=delete"],
+  // ADR-124 decision 2 as ADR-144 Amendment 2 changed it: the over-cap dialog with its Save as a view form.
+  "view-over-cap-harness.html": ["state=form"],
   // ADR-099 Amendment 12: a new case's form on "Use an existing dataset", its dataset radios drawn.
   "case-datasets-harness.html": ["choice=existing"],
   // The Matrix view (GDS remediation plan A1) with rows selected, and long enough to page.

@@ -97,8 +97,8 @@ and the last run). It opens on **3 Pipelines**; the person picks the entry point
   the Studio routes of its own (ADR-140 Amendment 7, ADR-143 decision 1), every Studio route is still a case's (ADR-099 Amendment 4 decision 5), so the
   switcher works *through a case* (ADR-140 Amendment 2, the owner's ruling "Dataset label, case behind"):
   it offers each dataset one of the person's cases **loads into** (its first, ADR-099 decision 6), and
-  choosing one opens the case that loads into it — the current case when it does, else a case before a
-  branch, the higher level first (`studio/datasets.ts`). A dataset a case only reads is not offered: through
+  choosing one opens the case that loads into it — the current case when it does, else the case of the
+  higher level first (`studio/datasets.ts`). A dataset a case only reads is not offered: through
   that case a load would go into another dataset than the label names. The line beside the switcher names
   the case the Studio is working through. Nothing is widened: the routes, roles and access checks are the
   case's, as before.

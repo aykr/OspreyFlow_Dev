@@ -291,11 +291,10 @@ test("jumping from an alert calls the real jump route and shows the result, reac
       contentType: "application/json",
       body: JSON.stringify({
         investigation: {
-          id: "inv-branch-1",
+          id: "inv-alert-1",
           created_at: "2026-09-22T00:00:00Z",
           created_by: "analyst-1",
           owning_unit: "unit-1",
-          branched_from: "inv-source-1",
         },
         seeded_count: 1,
       }),
@@ -314,7 +313,7 @@ test("jumping from an alert calls the real jump route and shows the result, reac
   await page.keyboard.press("Enter");
   await expect
     .poll(() => page.evaluate(() => window.__WATCH_HARNESS__?.openedInvestigationId))
-    .toBe("inv-branch-1");
+    .toBe("inv-alert-1");
   registerCovered("WATCH_PANEL_ACTIONS", "jump-result-open-investigation");
 });
 

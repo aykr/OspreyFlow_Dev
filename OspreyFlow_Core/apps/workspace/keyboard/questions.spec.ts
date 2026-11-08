@@ -202,6 +202,33 @@ test("the model engine is reached from the question by Shift+Tab, changed by key
   registerCovered(REGISTRY, "choose-the-model-engine-by-keyboard");
 });
 
+test("asked in a view, the questions go through it, and Ask about the whole case instead leaves it, by keyboard (ADR-144 decision 4)", async ({ page }) => {
+  const lists: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "GET" && /\/v1\/investigations\/[^/]+\/questions/.test(request.url())) lists.push(new URL(request.url()).search);
+  });
+  const { scopes } = await serve(page, [], ANSWER, "/keyboard/questions-harness.html?view=1");
+  await expect(page.getByRole("status")).toContainText("Asking in the view Questions on 1 document");
+  await expect.poll(() => lists).toEqual(["?view_id=v-q"]);
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who wrote about the plant?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByText("Dana Mercer wrote about it [1].")).toBeVisible();
+  expect((scopes[0] as { view_id?: string }).view_id).toBe("v-q");
+
+  const leave = page.getByRole("button", { name: "Ask about the whole case instead" });
+  await leave.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Asking in the view")).toHaveCount(0);
+  await expect.poll(() => lists.at(-1)).toBe("");
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("And the whole case?");
+  await page.keyboard.press("Control+Enter");
+  await expect.poll(() => scopes.length).toBe(2);
+  expect((scopes[1] as { view_id?: string }).view_id).toBeUndefined();
+  registerCovered(REGISTRY, "ask-in-a-view-then-about-the-whole-case-by-keyboard");
+});
+
 test("every registered questions action has its own proving test case above", () => {
   assertAllCovered("QUESTIONS_ACTIONS", QUESTIONS_ACTIONS);
 });

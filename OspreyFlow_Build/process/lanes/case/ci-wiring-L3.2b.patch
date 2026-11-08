@@ -1,0 +1,49 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index b0943ab..dd40cb1 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -134,6 +134,17 @@ jobs:
+       - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.product_tree_link_check
+       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_product_tree_link_check.py
+ 
++  # ADR-144 Amendment 1: no case's branch named in the Glass, the Conduit or packages/schemas; a
++  # pipeline's branch kept by file, a git flag by token. See OspreyFlow_Build/tools/no_branches_check.py.
++  no-branches-check:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: astral-sh/setup-uv@v3
++      - run: uv sync
++      - run: PYTHONPATH=../OspreyFlow_Build uv run python -m tools.no_branches_check
++      - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
++
+   # Same shape, one level down — does a PRODUCT-classified ADR in 06_DECISIONS.md cite a
+   # PROCESS-classified one by number. `06_DECISIONS.md` ADR-034 §B10. Allowlist at
+   # OspreyFlow_Build/tests/fixtures/decision_log_publication_allowlist.txt (6 known references, found on this
+diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
+index 905e117..5153cf6 100644
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -15,7 +15,7 @@ TOOLS := PYTHONPATH=$(BUILD)
+ 
+ # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
+ # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
+-ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check bundle
++ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check bundle
+ 
+ # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
+ # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
+@@ -29,6 +29,13 @@ lanes-check:
+ confinement-check:
+ 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+ 
++# ADR-144 Amendment 1: no case's branch named in the Glass, the Conduit or packages/schemas (a pipeline's
++# branch kept by file, a git flag by token). Shown red with each shape the code used and with one word
++# planted in a real Glass file of the real tree (L3.2b, process/lanes/case/L3.2b_RED_RECORD.md).
++no-branches-check:
++	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_branches_check
++	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_branches_check.py
++
+ core-check:
+ 	$(MAKE) -C $(CORE) check
+ 

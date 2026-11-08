@@ -85,7 +85,7 @@ export interface LimitExceeded {
   cap_kind: "nodes" | "edges";
   cap: number;
   would_be: number;
-  options: ["branch", "filter", "promote_to_batch"];
+  options: ["save_as_view", "filter", "promote_to_batch"];
 }
 
 /** Sent in place of a snapshot or a delta when the reader's own view of the case is past a cap

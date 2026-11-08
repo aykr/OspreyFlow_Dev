@@ -9,12 +9,12 @@ import { SelectionBar } from "./SelectionBar";
 afterEach(cleanup);
 
 function mount(count: number) {
-  const calls = { expand: vi.fn(), branch: vi.fn(), remove: vi.fn(), clear: vi.fn() };
+  const calls = { expand: vi.fn(), saveView: vi.fn(), remove: vi.fn(), clear: vi.fn() };
   const view = render(
     <SelectionBar
       count={count}
       onExpand={calls.expand}
-      onBranch={calls.branch}
+      onSaveView={calls.saveView}
       onRemove={calls.remove}
       onClear={calls.clear}
     />,
@@ -33,10 +33,10 @@ describe("SelectionBar", () => {
     expect(screen.getByRole("toolbar", { name: "Selection" })).toBeTruthy();
     expect(screen.getAllByText(/3 selected/)).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Expand" }));
-    fireEvent.click(screen.getByRole("button", { name: "Branch to a new case" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as a view" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove from view" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
-    expect([calls.expand, calls.branch, calls.remove, calls.clear].every((f) => f.mock.calls.length === 1)).toBe(true);
+    expect([calls.expand, calls.saveView, calls.remove, calls.clear].every((f) => f.mock.calls.length === 1)).toBe(true);
   });
 
   it("clears on Escape", () => {
@@ -45,10 +45,17 @@ describe("SelectionBar", () => {
     expect(calls.clear).toHaveBeenCalled();
   });
 
-  it("offers no Branch where the surface cannot branch", () => {
+  it("offers no Save as a view where the surface cannot save one", () => {
     render(<SelectionBar count={1} onRemove={vi.fn()} onClear={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "Branch to a new case" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save as a view" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+  });
+
+  it("in a view offers Save as a view, Ask and Clear, and nothing that changes the case", () => {
+    // The owner's ruling of 8 November 2026 (ADR-144 Amendment 2): an opened view is read-only.
+    render(<SelectionBar count={2} onSaveView={vi.fn()} onAsk={vi.fn()} documentCount={1} onClear={vi.fn()} />);
+    const names = screen.getAllByRole("button").map((b) => b.textContent?.trim());
+    expect(names).toEqual(["Ask the model about these…", "Save as a view", "Clear Esc"]);
   });
 });
 
@@ -120,7 +127,7 @@ describe("SelectionBar: Show links among these", () => {
 // that Escape does the same.
 describe("the selection bar's actions", () => {
   it("makes Expand the primary action and every other action quiet", () => {
-    render(<SelectionBar count={3} onExpand={() => undefined} onBranch={() => undefined} onRemove={() => undefined} onClear={() => undefined} />);
+    render(<SelectionBar count={3} onExpand={() => undefined} onSaveView={() => undefined} onRemove={() => undefined} onClear={() => undefined} />);
     const bar = screen.getByRole("toolbar", { name: "Selection" });
     const primary = Array.from(bar.querySelectorAll(".btn--primary")).map((b) => b.textContent);
     expect(primary).toEqual(["Expand"]);

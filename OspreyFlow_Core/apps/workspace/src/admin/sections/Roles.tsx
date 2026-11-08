@@ -12,7 +12,7 @@ import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover
 /** The rights grouped as the places they work in (decision 7); a right named in no group is still
  * offered, under *Other*, so no right is ever left out of the form. */
 export const RIGHT_GROUPS: { label: string; rights: string[] }[] = [
-  { label: "Cases", rights: ["create_case", "share_case", "remove_case", "branch_case", "export", "export_override"] },
+  { label: "Cases", rights: ["create_case", "share_case", "remove_case", "export", "export_override"] },
   {
     label: "Investigation (the Glass)",
     rights: ["investigate", "edit_graph", "confirm_inferred", "extract_files", "resolve_entities", "record_assessment",

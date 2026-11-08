@@ -36,19 +36,15 @@ const LEVEL_ORDER: Record<AccessLevel, number> = { author: 0, editor: 1, viewer:
 
 /** The case the Studio works through for `datasetId`. The current case, when the dataset is the one
  * it loads into; otherwise a case of the person's whose first dataset it is (so a load goes where
- * the label says), a case before a branch, the higher level first. `null` when none is. */
+ * the label says), the higher level first. `null` when none is. */
 export function caseForDataset(
   cases: readonly CaseListing[],
   datasetId: string,
   currentId: string | null,
 ): string | null {
   if (currentDataset(cases, currentId) === datasetId) return currentId;
-  const rank = (c: CaseListing) => [c.branched_from ? 1 : 0, LEVEL_ORDER[c.level]] as const;
-  const byRank = (a: CaseListing, b: CaseListing) => {
-    const [ab, al] = rank(a);
-    const [bb, bl] = rank(b);
-    return ab - bb || al - bl || a.name.localeCompare(b.name);
-  };
+  const byRank = (a: CaseListing, b: CaseListing) =>
+    LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level] || a.name.localeCompare(b.name);
   const loadsInto = cases.filter((c) => c.dataset_ids?.[0] === datasetId).sort(byRank);
   return loadsInto[0]?.id ?? null;
 }

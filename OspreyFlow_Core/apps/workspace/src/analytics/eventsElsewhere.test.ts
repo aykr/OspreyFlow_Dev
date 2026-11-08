@@ -22,9 +22,9 @@ describe("eventsElsewhereSentence", () => {
   });
 
   it("names every holder, and an untitled one as such", () => {
-    const three = [LEDGER, { investigation_id: "b", name: "Branch" }, { investigation_id: "u", name: null }];
+    const three = [LEDGER, { investigation_id: "b", name: "Kestrel" }, { investigation_id: "u", name: null }];
     expect(eventsElsewhereSentence({ has_events: false, held_by: three })).toMatch(
-      /are in Operation Ledger \(synthetic demo\), Branch and an untitled case\.$/,
+      /are in Operation Ledger \(synthetic demo\), Kestrel and an untitled case\.$/,
     );
   });
 });

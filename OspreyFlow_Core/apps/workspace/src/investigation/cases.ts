@@ -2,7 +2,8 @@
 // the dataset / case that I want to work on"). This lists the cases an account holds a level on
 // and creates a named one. It enforces nothing: the Conduit does (ADR-050), and answers a case the
 // account may not see with the same "not found" as one that does not exist.
-import { MONTHS, utcStamp } from "../time/utcStamp";
+import { utcStamp } from "../time/utcStamp";
+import { rememberCaseView } from "../views/lensHandoff";
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
 
 export type AccessLevel = "viewer" | "editor" | "author";
@@ -40,7 +41,6 @@ export interface CaseListing {
   level: AccessLevel;
   created_at: string;
   created_by: string;
-  branched_from?: string | null;
   /** ADR-126: the case's domain packs, sorted; empty is the POLE core model. Every reader of the
    * case may see it: it says what kind of case it is, never what it holds. */
   domains?: DomainPack[];
@@ -236,11 +236,13 @@ export async function removeCase(
 }
 
 /** The URL the Glass already reads on load (`initialInvestigationId`). */
-export function caseUrl(id: string, view?: "ingest" | "questions"): string {
+export function caseUrl(id: string, view?: "ingest" | "questions", caseView?: string): string {
   // `from=case` makes the Glass sign back in by itself: the reload drops the in-memory sign-in
   // (`auth/launcherHandoff.ts`), and without it the person met the sign-in screen after every switch.
   const base = `/?investigation=${encodeURIComponent(id)}&from=case`;
-  return view ? `${base}&view=${view}` : base;
+  const withView = view ? `${base}&view=${view}` : base;
+  // ADR-144: a case opened on one of its views (`case_view`), shown as a lens on it.
+  return caseView ? `${withView}&case_view=${encodeURIComponent(caseView)}` : withView;
 }
 
 /** Switching case reloads the page on purpose: the working set, the cross-filter store and the
@@ -255,39 +257,17 @@ export function openCase(
   navigate(caseUrl(id, view));
 }
 
-function rootOf(byId: Map<string, CaseListing>, start: CaseListing): CaseListing {
-  let top = start;
-  const seen = new Set<string>([start.id]);
-  for (;;) {
-    const parent = top.branched_from ? byId.get(top.branched_from) : undefined;
-    if (!parent || seen.has(parent.id)) return top;
-    seen.add(parent.id);
-    top = parent;
-  }
+/** Opens a case on one of its views (ADR-144): the case is loaded as any switch loads it, and the
+ * view is then opened over it as a lens. */
+export function openCaseView(
+  caseId: string,
+  viewId: string,
+  navigate: (url: string) => void = (url) => window.location.assign(url),
+): void {
+  sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, caseId);
+  rememberCaseView(caseId, viewId);
+  navigate(caseUrl(caseId, undefined, viewId));
 }
-
-/** The picker's rows (ADR-084 Amendment 3): each original case in `orderCases`' order, followed by
- * every branch in its family (as `branchFamily` groups them) oldest first, marked as a branch. A
- * branch whose original this account cannot see sits under its oldest visible ancestor, which then
- * heads the family. No case is left out. */
-export function nestCases(
-  cases: readonly CaseListing[],
-): Array<{ entry: CaseListing; branch: boolean }> {
-  const byId = new Map(cases.map((entry) => [entry.id, entry]));
-  const families = new Map<string, CaseListing[]>();
-  for (const entry of cases) {
-    const root = rootOf(byId, entry);
-    if (root.id !== entry.id) families.set(root.id, [...(families.get(root.id) ?? []), entry]);
-  }
-  const roots = orderCases(cases.filter((entry) => rootOf(byId, entry).id === entry.id));
-  return roots.flatMap((root) => [
-    { entry: root, branch: false },
-    ...(families.get(root.id) ?? [])
-      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
-      .map((entry) => ({ entry, branch: true })),
-  ]);
-}
-
 
 /** How a dataset is offered in a choice: its name, and for a composite how many it joins. */
 export function datasetChoiceLabel(dataset: Dataset): string {
@@ -300,41 +280,6 @@ export function datasetChoiceLabel(dataset: Dataset): string {
  * a longer one (a ULID) by its last five. */
 export function datasetLabel(id: string, name: string): string {
   return `${name} · ${id.length <= 12 ? id : `\u2026${id.slice(-5)}`}`;
-}
-
-// --- A branch in its case's tree (ADR-084 Amendment 4) ------------------------------------------
-// The owner, 14 October 2026: "the current display method for the Branch and main case is very
-// confusing, i need a method to delete a branch as through the Glass view". A branch is shown beneath
-// its case, named for what it holds and when it was made rather than by repeating the case's name.
-
-const BRANCH_DEFAULT = /^Branch of .+ \((\d+) (?:node|nodes)\)$/;
-
-function shortStamp(made: Date): string {
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${made.getUTCDate()} ${MONTHS[made.getUTCMonth()]} ${two(made.getUTCHours())}:${two(made.getUTCMinutes())}`;
-}
-
-/** A branch's own name: as renamed by someone, or, while it keeps the name branching gave it, how
- * many nodes it was made from and when (UTC). */
-export function branchLabel(entry: Pick<CaseListing, "name" | "created_at">): string {
-  const name = entry.name.trim();
-  const made = new Date(entry.created_at);
-  const when = Number.isNaN(made.getTime()) ? "" : ` · ${shortStamp(made)}`;
-  const sized = BRANCH_DEFAULT.exec(name);
-  if (sized) {
-    const count = Number(sized[1]);
-    return `${count} ${count === 1 ? "node" : "nodes"}${when}`;
-  }
-  if (!name || name.startsWith("Branch of ")) return `Branch${when}`;
-  return name;
-}
-
-/** The case a branch came from, when this account can see it: where deleting the branch you are in
- * takes you. `null` for an original case, or a branch whose original is not listed. */
-export function returnFor(cases: readonly CaseListing[], id: string): CaseListing | null {
-  const entry = cases.find((c) => c.id === id);
-  if (!entry?.branched_from) return null;
-  return cases.find((c) => c.id === entry.branched_from) ?? null;
 }
 
 /** Renames a case (its Author only: the Conduit decides). */
