@@ -747,7 +747,13 @@ class GraphPort(Protocol):
         """ADR-110 Amendment 16: the link exactly as stored, whatever the caller may read, found
         through its type's unique `id` index; inside `tx` when given, so a load reads it before its
         own write in the same transaction. `None` if no live or reverted link holds the id. Graph
-        data for the revert alone (rule 3): never passed to a view, report or log."""
+        data for the revert alone (rule 3): never passed to a view, report or log.
+
+        **Opaque.** The state is the adapter's own stored form: `edge_type` is the store's name for
+        the type (an adapter may prefix it), and `stored` is the record as the adapter keeps it.
+        It means something only to `restore_link_state` on the same adapter, which puts it back
+        exactly (the conformance suite's round trip); no caller reads or interprets its parts,
+        beyond `handling`, `revision` and `load_id`."""
         ...
 
     async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:

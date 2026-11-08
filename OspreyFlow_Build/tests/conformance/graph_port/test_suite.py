@@ -6423,6 +6423,29 @@ async def test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_re
         assert await adapter.read_link_state(new_edge_id()) is None
 
 
+async def test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exactly(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: the state is the adapter's own stored form, meaningful only to
+    `restore_link_state` on the same adapter. Read and put back as it is, by the link's own last
+    load, the link and its state are exactly as they were: nothing in the form is lost or
+    re-encoded on the way through, so no caller needs to read it."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=3, load_id="load-1",
+                                                         classification="SECRET")])  # fmt: skip
+        before = await _link_as_read(adapter, a)
+        state = await adapter.read_link_state(link)
+        assert state is not None
+
+        tx = await adapter.begin_transaction()
+        assert await adapter.restore_link_state(state, written_by="load-1", tx=tx) is True
+        await adapter.commit_transaction(tx)
+
+        assert await _link_as_read(adapter, a) == before
+        assert await adapter.read_link_state(link) == state
+
+
 async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
     factory: GraphAdapterFactory,
 ) -> None:
