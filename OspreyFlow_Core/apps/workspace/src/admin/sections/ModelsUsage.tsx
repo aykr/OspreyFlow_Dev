@@ -75,7 +75,8 @@ export function LimitsForm({
     <form className="admin-models-form" aria-label={`Limits for ${label}`} onSubmit={submit}>
       <p className="label" style={{ margin: 0 }}>
         The model gateway applies these to every call sent to {label}. A call past a limit is refused, and the person
-        who asked is told which limit stopped it and when to try again. Leave a field blank for no limit.
+        who asked is told which limit stopped it and when to try again. The call that crosses a limit is still answered;
+        the next one is refused. Leave a field blank for no limit.
       </p>
       {problem && <p role="alert">{problem}</p>}
       <label htmlFor={`${id}-rpm`}>Requests a minute</label>
@@ -133,10 +134,21 @@ export function ModelsUsage({ api, today = new Date() }: { api: ModelsApi; today
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
+    // Only the answer for the period last asked is shown: an earlier, slower one is dropped.
+    let current = true;
     setProblem(null);
     readUsage(api, asked[0], asked[1])
-      .then((u) => (Array.isArray(u?.rows) ? setUsage(u) : setProblem("The usage could not be read.")))
-      .catch((e: Error) => setProblem(e.message));
+      .then((u) => {
+        if (!current) return;
+        if (Array.isArray(u?.rows)) setUsage(u);
+        else setProblem("The usage could not be read.");
+      })
+      .catch((e: Error) => {
+        if (current) setProblem(e.message);
+      });
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken, asked[0], asked[1]]);
 
@@ -150,8 +162,8 @@ export function ModelsUsage({ api, today = new Date() }: { api: ModelsApi; today
       <h3 id="models-usage">Usage</h3>
       <p className="label" style={{ margin: 0 }}>
         Calls and tokens per engine and job, from the model gateway&apos;s own records, by whole days in UTC. Only counts
-        are kept: no prompt, answer, key or person, and no figure for any one person. Refused calls are counted as
-        failed.
+        are kept: no prompt, answer, key or person, and no figure for any one person. Calls refused for a budget are
+        counted as failed. Transcriptions and embeddings are not counted yet.
       </p>
       <div className="admin-models-row">
         <label htmlFor="usage-period">Period</label>

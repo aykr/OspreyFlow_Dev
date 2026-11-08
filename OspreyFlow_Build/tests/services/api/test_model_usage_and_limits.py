@@ -44,6 +44,7 @@ from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import ModelLimitReached
 from adapters.model_litellm.stand_in import StandInGateway, StandInProvider
 from adapters.model_litellm.usage import engine_key
+from schemas.deployment import ModelProviderConfig
 from schemas.domain import Handling, Principal
 from schemas.model import ExtractionRequest
 
@@ -86,9 +87,17 @@ class World:
                                  headers={"Authorization": f"Bearer {MASTER}"})  # fmt: skip
         self.admin = ModelAdmin(
             installed=Installed(
-                providers=[], defaults={}, key_present={}, local_only=local_only, sendable=["O"],
-                locals={"extraction": "qwen2.5:7b-instruct", "vision": None,
-                        "transcription": None, "embedding": None},
+                providers=[],
+                defaults={},
+                key_present={},
+                local_only=local_only,
+                sendable=["O"],
+                locals={
+                    "extraction": "qwen2.5:7b-instruct",
+                    "vision": None,
+                    "transcription": None,
+                    "embedding": None,
+                },
             ),  # fmt: skip
             settings_file=ModelSettingsFile(tmp_path / "model-settings"),
             gateway=GatewayAdmin(http),
@@ -106,8 +115,9 @@ class World:
             text=f"{PROMPT}: what does {SOURCE_ID} say?",
             json_schema={"type": "object"},
             model="qwen2.5:7b-instruct",
-            handling=Handling(classification="OFFICIAL", handling_code="O", owning_unit="u",
-                              originator="u"),  # fmt: skip
+            handling=Handling(
+                classification="OFFICIAL", handling_code="O", owning_unit="u", originator="u"
+            ),  # fmt: skip
             engine="gemini",
             datasets=["open"],
         )
@@ -166,6 +176,30 @@ def test_the_figures_equal_a_planted_gateway_record(client: TestClient, world: W
     assert view["total"]["calls"] == 10 and view["total"]["tokens"] == 193
     one_day = _usage(client, "2026-11-09", "2026-11-09")
     assert one_day["total"]["calls"] == 5
+
+
+def test_every_page_of_the_gateway_s_records_is_counted(
+    client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gateway pages its records (measured): every page is read and summed, never the first
+    alone (rule 2)."""
+    monkeypatch.setattr("adapters.model_litellm.usage.PAGE_SIZE", 3)
+    for day in range(1, 11):
+        world.gateway.record_usage(f"2026-11-{day:02d}", "osprey:gemini/extraction", calls=1,
+                                   prompt=10)  # fmt: skip
+    view = _usage(client)
+    assert view["total"]["calls"] == 10 and view["total"]["prompt_tokens"] == 100
+
+
+def test_records_longer_than_can_be_read_are_refused_in_words_never_cut_short(
+    client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("adapters.model_litellm.usage.PAGE_SIZE", 1)
+    monkeypatch.setattr("adapters.model_litellm.usage._MAX_PAGES", 2)
+    for day in range(1, 4):
+        world.gateway.record_usage(f"2026-11-{day:02d}", "osprey:gemini/extraction", calls=1)
+    resp = client.get("/v1/admin/models/usage", params={"start": "2026-11-01", "end": "2026-11-30"})
+    assert resp.status_code == 502 and "choose a shorter period" in resp.json()["detail"]["detail"]
 
 
 def test_calls_through_the_real_routing_are_counted_by_engine_and_job(
@@ -245,6 +279,7 @@ def test_a_token_budget_set_stops_the_next_request_and_says_when_it_returns(
     assert engine["limits"]["budget_tokens"] == 50
     for _ in range(3):  # 22 tokens each: the third crosses 50 and is answered
         world.extract()
+        world.clock.now += 11  # past the gateway's write of the spend (measured: batched)
     with pytest.raises(ModelLimitReached) as stopped:
         world.extract()
     assert "Gemini has used its token budget for today" in str(stopped.value)
@@ -331,16 +366,6 @@ def test_no_prompt_answer_key_or_source_id_appears_in_any_usage_response(
         assert planted not in shown, planted
 
 
-def test_no_request_to_the_gateway_carries_a_person_s_id(client: TestClient, world: World) -> None:
-    _limits(client, requests_per_minute=100)
-    world.extract()
-    every = "\n".join(world.gateway.seen)
-    assert ADMIN.id not in every and "PERSON-PLANT" not in every
-    for _token, body in world.gateway.received:
-        assert "user" not in body and "end_user" not in body
-        assert body["metadata"] == {"tags": ["osprey:gemini/extraction"]}
-
-
 def test_no_engine_key_or_master_key_reaches_any_log_record(
     client: TestClient, world: World, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -357,3 +382,136 @@ def test_no_engine_key_or_master_key_reaches_any_log_record(
     key = engine_key(MASTER, "gemini")
     for secret in (key, key[-12:], MASTER, GOOD):
         assert secret not in logged, secret
+
+
+def test_a_refused_removal_of_the_engine_s_key_leaves_it_answering(
+    client: TestClient, world: World
+) -> None:
+    """The engine's own key is removed before its credential: if the gateway refuses the first,
+    the engine is put back with its credential, so the "key set" the file still says stays true."""
+    world.gateway.refuse_key_delete = 500
+    resp = client.delete("/v1/admin/models/engines/gemini")
+    assert resp.status_code == 502
+    assert world.gateway.credential("osprey-gemini") == GOOD
+    assert client.get("/v1/admin/models").json()["engines"][0]["key_state"] == "set"
+    assert world.extract().engine == "gemini"
+
+
+async def test_a_gateway_unreachable_at_start_is_tried_again_until_the_engine_s_key_exists(
+    tmp_path: Path,
+) -> None:
+    """At start the Conduit makes each engine's own key; a gateway not yet answering is tried again
+    in the background, so hosted calls do not stay refused until the next restart."""
+    first = World(tmp_path)
+    await first.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    # A second Conduit starting on the same models file, against a gateway that has lost
+    # everything (its keys too) and is not answering yet.
+    fresh = World(tmp_path)
+    down = {"yes": True}
+    real = fresh.gateway.transport()
+
+    async def flaky(request: httpx.Request) -> httpx.Response:
+        if down["yes"]:
+            raise httpx.ConnectError("not yet")
+        return await real.handle_async_request(request)
+
+    http = httpx.AsyncClient(base_url="http://litellm:4000", transport=httpx.MockTransport(flaky),
+                             headers={"Authorization": f"Bearer {MASTER}"})  # fmt: skip
+    admin = ModelAdmin(
+        installed=fresh.admin._installed,
+        settings_file=ModelSettingsFile(tmp_path / "model-settings"),
+        gateway=GatewayAdmin(http), audit=fresh.audit, retry_seconds=0.01,
+    )  # fmt: skip
+    await admin.start()
+    assert fresh.gateway.virtual_keys() == {}
+    down["yes"] = False
+    for _ in range(200):
+        if engine_key(MASTER, "gemini") in fresh.gateway.virtual_keys():
+            break
+        await asyncio.sleep(0.01)
+    assert engine_key(MASTER, "gemini") in fresh.gateway.virtual_keys()
+    assert admin._retrying is not None and admin._retrying.done()
+    await admin.close()
+
+
+# --- through an analyst's own route -------------------------------------------------------------
+
+ANALYST = Principal(id="analyst-PERSON-PLANT-2", clearance="OFFICIAL", org_unit="unit-1",
+                    roles=["analyst"], datasets=["open"])  # fmt: skip
+
+
+def _extract_as_analyst(client: TestClient) -> httpx.Response:
+    return client.post("/v1/investigations/inv-1/ingest/extract", json={
+        "document_id": SOURCE_ID, "text": f"{PROMPT}: {SOURCE_ID}",
+        "profile": {"entity_types": ["Person"]},
+        "handling": {"classification": "OFFICIAL", "handling_code": "O", "originator": "u",
+                     "owning_unit": "u"},
+        "model": "qwen2.5:7b-instruct",
+    })  # fmt: skip
+
+
+@pytest.fixture
+def analyst_route(client: TestClient, world: World) -> Iterator[TestClient]:
+    """The analyst's extraction route (`POST …/ingest/extract`), its stores stood in as
+    `test_review_routes.py` stands them in, its model the real routing over the stand-in gateway,
+    and Gemini the extraction default."""
+    from services.api.app import (
+        get_audit,
+        get_extraction_candidates,
+        get_investigations,
+        get_model,
+        get_ontology,
+    )  # fmt: skip
+
+    from tests.services.api.test_review_routes import (
+        ONTOLOGY,
+        _FakeAudit,
+        _FakeExtractionCandidates,
+        _FakeInvestigations,
+    )  # fmt: skip
+
+    assert client.put("/v1/admin/models/defaults",
+                      json={"defaults": {"extraction": "gemini"}}).status_code == 200  # fmt: skip
+    world.gateway.answer = json.dumps({"Person": []})
+    app.dependency_overrides[get_principal] = lambda: ANALYST
+    app.dependency_overrides[get_model] = lambda: world.model
+    app.dependency_overrides[get_extraction_candidates] = _FakeExtractionCandidates
+    app.dependency_overrides[get_ontology] = lambda: ONTOLOGY
+    app.dependency_overrides[get_audit] = _FakeAudit
+    app.dependency_overrides[get_investigations] = _FakeInvestigations
+    yield client
+
+
+def test_a_person_stopped_by_a_limit_is_told_so_in_words_through_their_own_route(
+    analyst_route: TestClient, world: World
+) -> None:
+    app.dependency_overrides[get_principal] = lambda: ADMIN
+    assert _limits(analyst_route, requests_per_minute=1).status_code == 200
+    app.dependency_overrides[get_principal] = lambda: ANALYST
+    assert _extract_as_analyst(analyst_route).status_code == 200
+    stopped = _extract_as_analyst(analyst_route)
+    assert stopped.status_code == 429
+    body = stopped.json()
+    assert body["error"] == "model_limit_reached"
+    assert body["detail"].startswith("Gemini has reached its limit of requests a minute")
+    assert int(stopped.headers["retry-after"]) >= 1
+    key = engine_key(MASTER, "gemini")
+    assert (
+        key[-4:] not in stopped.text
+        and hashlib.sha256(key.encode()).hexdigest() not in stopped.text
+    )
+
+
+def test_no_request_to_the_gateway_carries_the_asking_person_s_id(
+    analyst_route: TestClient, world: World
+) -> None:
+    """Through the analyst's own route, as a principal with a recognisable id: neither the body nor
+    a header of any request to the gateway names them."""
+    assert _extract_as_analyst(analyst_route).status_code == 200
+    chats = [s for s in world.gateway.seen if "/chat/completions" in s]
+    assert len(chats) == 1
+    every = "\n".join(world.gateway.seen)
+    assert ANALYST.id not in every and "PERSON-PLANT" not in every
+    for _token, body in world.gateway.received:
+        assert "user" not in body and "end_user" not in body
+        assert body["metadata"] == {"tags": ["osprey:gemini/extraction"]}

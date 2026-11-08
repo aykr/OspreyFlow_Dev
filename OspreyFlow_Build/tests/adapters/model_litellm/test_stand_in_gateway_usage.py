@@ -182,7 +182,10 @@ async def test_a_token_budget_answers_the_crossing_call_refuses_the_next_and_res
             "budget_duration": "1d",
         })  # fmt: skip
     async with _client(gateway, ENGINE_KEY) as engine:
-        answers = [await _chat(engine) for _ in range(4)]
+        answers = []
+        for _ in range(4):
+            answers.append(await _chat(engine))
+            clock.now += 11  # past the gateway's write of the spend
         assert [a.status_code for a in answers] == [200, 200, 200, 429]
         refused = answers[3].json()["error"]
         assert refused["type"] == "budget_exceeded"
@@ -197,8 +200,30 @@ async def test_a_token_budget_answers_the_crossing_call_refuses_the_next_and_res
     assert (m["api_requests"], m["failed_requests"]) == (4, 1)  # the budget's refusal is a failure
 
 
-@pytest.mark.parametrize(("duration", "resets"), [("1d", "2026-11-09T00:00:00+00:00"),
-                                                  ("30d", "2026-12-01T00:00:00+00:00")])
+async def test_the_activity_is_paged_ten_rows_a_page_unless_asked_otherwise() -> None:
+    """Measured: 130 tags on one day came back ten a page (14 pages, `has_more`), and all at once
+    with `page_size=1000`."""
+    gateway = _gateway(Clock())
+    for i in range(25):
+        gateway.record_usage("2026-11-08", f"osprey:e{i:02d}/extraction", calls=1)
+    period = {"start_date": "2026-11-01", "end_date": "2026-11-30"}
+    async with _client(gateway) as admin:
+        first = (await admin.get("/tag/daily/activity", params=period)).json()
+        last = (await admin.get("/tag/daily/activity", params={**period, "page": 3})).json()
+        whole = (
+            await admin.get("/tag/daily/activity", params={**period, "page_size": 1000})
+        ).json()
+    assert len(first["results"][0]["breakdown"]["entities"]) == 10
+    assert first["metadata"] == {"page": 1, "total_pages": 3, "has_more": True}
+    assert len(last["results"][0]["breakdown"]["entities"]) == 5
+    assert last["metadata"]["has_more"] is False
+    assert len(whole["results"][0]["breakdown"]["entities"]) == 25
+
+
+@pytest.mark.parametrize(
+    ("duration", "resets"),
+    [("1d", "2026-11-09T00:00:00+00:00"), ("30d", "2026-12-01T00:00:00+00:00")],
+)
 async def test_a_budget_resets_as_measured(duration: str, resets: str) -> None:
     gateway = _gateway(Clock())
     async with _client(gateway) as admin:

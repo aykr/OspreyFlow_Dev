@@ -29,7 +29,7 @@ against a live LiteLLM/Ollama vision model that this translates correctly to Oll
 conformance or retries.
 
 **Each call names its engine and job** (ADR-135 Amendment 3): inside `usage.calling(engine, job)`,
-set by the routing, a JSON call carries one tag, `osprey:<engine>/<job>`, which the gateway records
+set by the routing, a chat call carries one tag, `osprey:<engine>/<job>`, which the gateway records
 its usage under, and a hosted engine's call goes with that engine's own gateway key
 (`usage.engine_key`), whose limits the gateway enforces; a call outside it, or for `local`, goes
 with the master key, untagged. A limit's refusal is `ModelLimitReached`, never the gateway's words.
@@ -243,7 +243,8 @@ class LiteLLMClient:
         if not texts:
             return []
         body: dict[str, Any] = {"model": model, "input": list(texts)}
-        resp = await self._http.post("/embeddings", json=body, headers=self._routed(body))
+        # Untagged: a tag on `/embeddings` was not measured (ADR-135 Amendment 3, "Left").
+        resp = await self._http.post("/embeddings", json=body, headers=self._routed())
         limit = limit_refusal(resp)
         if limit is not None:
             raise limit

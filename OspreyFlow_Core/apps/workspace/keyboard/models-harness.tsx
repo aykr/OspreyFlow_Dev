@@ -2,7 +2,8 @@
 // The Conduit is stood in for by an in-memory answerer that records every request
 // (`window.modelsAsked`), so `admin-models.spec.ts` proves each action reached its route, and the
 // every-harness axe scan sees a populated screen. Synthetic (rule 9): no real key, no real provider.
-// `?open=add`, `?open=key` and `?open=limits` draw the forms open; `?local=1` a local-only deployment.
+// `?open=add`, `?open=key` and `?open=limits` draw the forms open; `?local=1` a local-only deployment;
+// `?usage=chosen` the usage's own days drawn; `?usage=fail` the gateway not giving its usage.
 // Usage and limits (ADR-135 Amendment 3) are answered from the same in-memory record.
 import { createRoot } from "react-dom/client";
 
@@ -56,6 +57,9 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
   const reply = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
   if (path === "/history") return reply(200, { entries: history });
+  if (path === "/usage" && params.get("usage") === "fail") {
+    return reply(502, { detail: { error: "model_usage_unavailable", detail: "The model gateway could not be reached, so its usage cannot be read now." } });
+  }
   if (path === "/usage") {
     const query = new URL(String(input)).searchParams;
     asked[asked.length - 1] = `GET /usage?start=${query.get("start")}&end=${query.get("end")}`;
@@ -105,6 +109,19 @@ createRoot(document.getElementById("root")!).render(
     <Models api={{ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused" }} />
   </section>,
 );
+
+if (params.get("usage") === "chosen") {
+  for (let i = 0; i < 40; i++) {
+    const period = document.getElementById("usage-period") as HTMLSelectElement | null;
+    if (period) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(period, "chosen");
+      period.dispatchEvent(new Event("change", { bubbles: true }));
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
 
 const open = params.get("open");
 if (open) {

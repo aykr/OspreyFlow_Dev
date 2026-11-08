@@ -37,7 +37,8 @@ from .errors import ModelLimitReached, UsageUnavailableError
 TAG_PREFIX = "osprey:"
 #: The deployment's own engine (`services.api.model_routing.LOCAL`); its calls use the master key.
 LOCAL = "local"
-_NAME = re.compile(r"[a-z][a-z0-9_]{0,23}")
+#: An engine's name as `ModelProviderConfig` takes it (any length), or `local`.
+_NAME = re.compile(r"[a-z][a-z0-9_]*")
 _JOB = re.compile(r"[a-z]{1,24}")
 
 
@@ -93,14 +94,18 @@ def engine_key(master: str, engine: str) -> str:
 
 # --- a limit's refusal --------------------------------------------------------------------------
 
+#: The gateway's own words for a key's limit (measured); a 429 without them is not one.
+_RATE_WORDS = re.compile(r"^Rate limit exceeded for (api_key|model_per_key): ")
+_BUDGET_WORDS = "Budget has been exceeded!"
 _RESETS = re.compile(r"Limit resets at: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC")
 _KIND = re.compile(r"Limit type: (requests|tokens)\b")
 
 
 def limit_refusal(response: httpx.Response) -> ModelLimitReached | None:
     """A 429 the gateway gave for a key's limit, as `ModelLimitReached`; None for any other answer
-    (a cooldown's 429 is `internal_server_error`, not a limit). Only the type, the kind and the
-    reset time are read from it: nothing else of its words, which name the key's hash or part of
+    (a cooldown's 429, a provider's own 429 passed through). It must carry both the measured type
+    and the gateway's own words for a key's limit. Only the type, the kind and the reset time are
+    read from it: nothing else of its words, which name the key's hash or part of
     the key, ever leaves this function."""
     if response.status_code != 429:
         return None
@@ -110,9 +115,9 @@ def limit_refusal(response: httpx.Response) -> ModelLimitReached | None:
         return None
     kind_of = str(error.get("type", ""))
     message = str(error.get("message", ""))
-    if kind_of == "budget_exceeded":
+    if kind_of == "budget_exceeded" and message.startswith(_BUDGET_WORDS):
         return ModelLimitReached("budget")
-    if kind_of == "throttling_error":
+    if kind_of == "throttling_error" and _RATE_WORDS.match(message):
         kind = _KIND.search(message)
         resets = _RESETS.search(message)
         at = (
@@ -137,7 +142,10 @@ _FROM_GATEWAY: Mapping[Figure, str] = {
     "completion_tokens": "completion_tokens",
     "tokens": "total_tokens",
 }
-#: Pages read before refusing: a period's answer longer than this is said, never cut short.
+#: Rows a page asks for (measured: the gateway's default is 10 rows of day and tag, and it takes
+#: 1000), and pages read before refusing: a period's answer longer than this is said, never cut
+#: short (rule 2).
+PAGE_SIZE = 1000
 _MAX_PAGES = 100
 
 
@@ -158,7 +166,12 @@ async def read_usage(http: httpx.AsyncClient, start: date, end: date) -> list[Us
         try:
             resp = await http.get(
                 "/tag/daily/activity",
-                params={"start_date": start.isoformat(), "end_date": end.isoformat(), "page": page},
+                params={
+                    "start_date": start.isoformat(),
+                    "end_date": end.isoformat(),
+                    "page": page,
+                    "page_size": PAGE_SIZE,
+                },
                 timeout=30.0,
             )
         except httpx.HTTPError:

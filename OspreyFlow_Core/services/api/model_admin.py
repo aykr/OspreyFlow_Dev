@@ -519,7 +519,10 @@ class ModelAdmin:
         audit: ModelAdminAudit,
         on_change: Callable[[ModelRoutes], None] = lambda _routes: None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        retry_seconds: float = 30.0,
     ) -> None:
+        self._retry_seconds = retry_seconds
+        self._retrying: asyncio.Task[None] | None = None
         self._installed = installed
         self._file = settings_file
         self._gateway = gateway
@@ -617,32 +620,59 @@ class ModelAdmin:
 
     async def start(self) -> None:
         """At start: mark in the models file each engine whose key the gateway lost (its entries
-        gone though the file says a key was set), then make the gateway's entries equal the file.
-        A local-only deployment keeps no hosted entry. A gateway that cannot be reached is logged
-        in words; *Models* says so when next used."""
-        if self._settings is not None:
-            try:
-                async with self._exclusive:
-                    self._fresh()
-                    entries = await self._gateway.entries()
-                    held = set(entries)
-                    current = self.settings
-                    keys = dict(current.keys)
-                    for p in current.providers:
-                        record = keys.get(p.name)
-                        wanted = {entry_id(p.name, m) for m in p.roles.values()}
-                        if record is not None and not record.lost and not wanted & held:
-                            keys[p.name] = record.model_copy(update={"lost": True})
-                    if keys != current.keys:
-                        self._save(current.model_copy(update={"keys": keys}, deep=True))
-                    unpriced = frozenset(
-                        p.name for p in current.providers
-                        if any(not entries.get(entry_id(p.name, m), True) for m in p.roles.values())
-                    )  # fmt: skip
-                    await self._reconcile(self.settings, held, rebuilt=unpriced)
-            except (ModelAdminRefused, OSError) as failed:
-                log.warning("model engines not reconciled with the gateway: %s", _said(failed))
+        gone though the file says a key was set), then make the gateway's entries and each
+        engine's own key equal the file. A local-only deployment keeps no hosted entry. **A gateway
+        that cannot be reached is tried again in the background** (`retry_seconds`) until it
+        answers (ADR-135 Amendment 3): until then a hosted engine's key may not exist there, and
+        its calls would be refused."""
+        if not await self._start_once():
+            self._retrying = asyncio.create_task(self._keep_trying())
         self._on_change(self.routes())
+
+    async def _keep_trying(self) -> None:
+        while True:
+            await asyncio.sleep(self._retry_seconds)
+            if await self._start_once():
+                log.info("model engines reconciled with the gateway after a retry")
+                self._on_change(self.routes())
+                return
+
+    async def close(self) -> None:
+        """Stops the background retry, if one is running."""
+        if self._retrying is not None:
+            self._retrying.cancel()
+            try:
+                await self._retrying
+            except asyncio.CancelledError:
+                pass
+            self._retrying = None
+
+    async def _start_once(self) -> bool:
+        if self._settings is None:
+            return True
+        try:
+            async with self._exclusive:
+                self._fresh()
+                entries = await self._gateway.entries()
+                held = set(entries)
+                current = self.settings
+                keys = dict(current.keys)
+                for p in current.providers:
+                    record = keys.get(p.name)
+                    wanted = {entry_id(p.name, m) for m in p.roles.values()}
+                    if record is not None and not record.lost and not wanted & held:
+                        keys[p.name] = record.model_copy(update={"lost": True})
+                if keys != current.keys:
+                    self._save(current.model_copy(update={"keys": keys}, deep=True))
+                unpriced = frozenset(
+                    p.name for p in current.providers
+                    if any(not entries.get(entry_id(p.name, m), True) for m in p.roles.values())
+                )  # fmt: skip
+                await self._reconcile(self.settings, held, rebuilt=unpriced)
+            return True
+        except (ModelAdminRefused, OSError) as failed:
+            log.warning("model engines not reconciled with the gateway: %s", _said(failed))
+            return False
 
     def _hosted(self, settings: ModelSettings) -> ModelSettings:
         """What the gateway should hold: nothing hosted while the deployment is local only."""
@@ -849,8 +879,10 @@ class ModelAdmin:
             }, deep=True)  # fmt: skip
             # Removing is always allowed, local only or not: it can only narrow what leaves.
             await self._reconcile(proposed)
-            await self._gateway.delete_credential(name)
+            # The engine's own key first: if its removal is refused, the credential is still there,
+            # so the entries put back answer and the file's "key set" stays true.
             await self._gateway.delete_engine_key(name)
+            await self._gateway.delete_credential(name)
             self._save(proposed)
 
         await self._change(by, "engine_removed", name, work)

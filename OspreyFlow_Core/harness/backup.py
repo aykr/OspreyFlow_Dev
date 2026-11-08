@@ -320,6 +320,10 @@ GATEWAY_SEALED_TABLES = (
     '"LiteLLM_CredentialsTable"',
     '"LiteLLM_ProxyModelTable"',
     '"LiteLLM_Config"',
+    # ADR-135 Amendment 3: each engine's own gateway key (its hash, last four and spend). Restored
+    # elsewhere it would keep the old deployment's engine key working there; a restore's first
+    # start makes each engine's key afresh (its budget's spend so far starts again).
+    '"LiteLLM_VerificationToken"',
 )
 
 

@@ -37,7 +37,8 @@ stack a, against the same image (litellm 1.101.0):
 - every call is recorded under each of its tags (the body's `tags` or `metadata.tags`, and two
   `User-Agent: …` tags the gateway adds itself) per day: calls, successes, failures, prompt and
   completion tokens; a call refused for an unknown model or an exhausted budget is a failure;
-  `GET /tag/daily/activity?start_date&end_date` answers them under `breakdown.entities`, `400`
+  `GET /tag/daily/activity?start_date&end_date` answers them under `breakdown.entities`, ten rows
+  of day and tag a page unless `page_size` says otherwise (1000 taken), with `has_more`; `400`
   without both dates, an empty list for an empty or reversed period, and `401` to any token but
   the master key ("Only proxy admin can be used…"); no prompt or answer text is kept;
 - an `rpm`/`tpm` on a model entry is **not** enforced (the default routing reads it as a weight);
@@ -46,7 +47,7 @@ stack a, against the same image (litellm 1.101.0):
   once the minute's requests or tokens have reached the limit is refused 429 `throttling_error`
   naming **the key's SHA-256**; once the spend has reached the budget, 429 `budget_exceeded`
   naming the key's alias and **its last four characters**; the call that crosses a limit is
-  answered. Spend is each token times the entry's `input_cost_per_token`/`output_cost_per_token`
+  answered (the next, half a second later, refused). Spend is each token times the entry's `input_cost_per_token`/`output_cost_per_token`
   (none: 0). A `1d` budget resets at the next midnight UTC after the first spend; `30d` on the
   first of the next month;
 - `GET /key/info?key=` (404 "Key not found in database"), `POST /key/update` (404 "Key not
@@ -131,6 +132,8 @@ class _VirtualKey:
     window_start: float = -1e18
     window_requests: int = 0
     window_tokens: int = 0
+    #: Spend not yet written: (when it is, the cost).
+    pending: list[tuple[float, float]] = field(default_factory=list)
 
 
 _FIGURES = ("api_requests", "successful_requests", "failed_requests", "prompt_tokens",
@@ -180,7 +183,13 @@ class StandInGateway:
     #: Every chat request body as it arrived, so a test can say what the Conduit sent (a person's
     #: id, a prompt) and with which token.
     received: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
-    #: Every request as it arrived (method, path with its query, body), whatever it asked.
+    #: How long a call's spend takes to count against its key's budget (measured: the call after
+    #: the crossing one, half a second later, was refused, so none is modelled).
+    spend_lag_seconds: float = 0.0
+    #: When set, `POST /key/delete` is refused with this status (a write its database does not
+    #: take), so a test can say what a failed removal leaves.
+    refuse_key_delete: int | None = None
+    #: Every request as it arrived (method, path with its query, headers, body), whatever it asked.
     seen: list[str] = field(default_factory=list)
     #: What every answer says (an extraction's test sets JSON its schema accepts).
     answer: str = "OK"
@@ -270,7 +279,8 @@ class StandInGateway:
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         sent = request.content.decode("utf-8", "replace")
-        self.seen.append(f"{request.method} {request.url.raw_path.decode()} {sent}")
+        headers = " ".join(f"{k}={v}" for k, v in request.headers.items())
+        self.seen.append(f"{request.method} {request.url.raw_path.decode()} {headers} {sent}")
         auth = request.headers.get("authorization", "")
         token = auth.removeprefix("Bearer ").strip()
         if not token:
@@ -464,6 +474,9 @@ class StandInGateway:
             return None
         held = self._keys[virtual]
         now = self.clock()
+        written = [cost for at, cost in held.pending if at <= now]
+        held.pending = [(at, cost) for at, cost in held.pending if at > now]
+        held.spend += sum(written)
         if held.budget_reset_at is not None and now >= held.budget_reset_at:
             held.spend = 0.0
             held.budget_reset_at = None
@@ -497,7 +510,7 @@ class StandInGateway:
         params = self.stored_params(ids[0]) if ids else {}
         cost = usage["prompt_tokens"] * float(params.get("input_cost_per_token", 0) or 0) + usage[
             "completion_tokens"] * float(params.get("output_cost_per_token", 0) or 0)  # fmt: skip
-        held.spend += cost
+        held.pending.append((self.clock() + self.spend_lag_seconds, cost))
         if held.budget_duration and held.budget_reset_at is None:
             held.budget_reset_at = _next_reset(self.clock(), held.budget_duration)
 
@@ -515,10 +528,16 @@ class StandInGateway:
                 400, json={"detail": {"error": "Please provide start_date and end_date"}}
             )
         wanted = set(query.get("tags") or [])
+        # Paged by rows of day and tag (measured: 10 a page by default, `page_size` taken, and
+        # `has_more` while pages remain).
+        size = int((query.get("page_size") or ["10"])[0])
+        page = int((query.get("page") or ["1"])[0])
+        rows = [(day, tag, figures) for (day, tag), figures in sorted(self._daily.items())
+                if start <= day <= end and (not wanted or tag in wanted)]  # fmt: skip
+        pages = (len(rows) + size - 1) // size
         days: dict[str, dict[str, dict[str, int]]] = {}
-        for (day, tag), figures in sorted(self._daily.items()):
-            if start <= day <= end and (not wanted or tag in wanted):
-                days.setdefault(day, {})[tag] = dict(figures)
+        for day, tag, figures in rows[(page - 1) * size : page * size]:
+            days.setdefault(day, {})[tag] = dict(figures)
         results = []
         for day, entities in days.items():
             total = {f: sum(e[f] for e in entities.values()) for f in _FIGURES}
@@ -534,7 +553,7 @@ class StandInGateway:
         return httpx.Response(
             200,
             json={"results": results,
-                  "metadata": {"page": 1, "total_pages": 1 if results else 0, "has_more": False}},
+                  "metadata": {"page": page, "total_pages": pages, "has_more": page < pages}},
         )  # fmt: skip
 
     def _key_admin(
@@ -573,6 +592,8 @@ class StandInGateway:
                 if f in body:
                     setattr(held, f, body[f])
             return httpx.Response(200, json={"key": key, "token": _hash(key), "spend": held.spend})
+        if method == "POST" and path == "/key/delete" and self.refuse_key_delete:
+            return _error(self.refuse_key_delete, "Internal Server Error", "internal_server_error")
         if method == "POST" and path == "/key/delete":
             keys = [str(k) for k in body.get("keys") or []]
             if not keys or any(k not in self._keys for k in keys):

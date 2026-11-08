@@ -1294,6 +1294,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.strength_influencers = None
         await litellm_client.aclose()
         app.state.model_admin = None
+        await model_admin.close()
         await model_admin_audit.close()
         await gateway_http.aclose()
         await resources.close()
