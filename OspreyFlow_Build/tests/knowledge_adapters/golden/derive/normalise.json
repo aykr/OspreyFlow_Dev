@@ -3,21 +3,21 @@
  "cases": [
   {
    "values": [
-    "07700 900718"
+    "07700 900731"
    ],
    "params": {
     "adapter": "msisdn"
    },
-   "expected": "+447700900718"
+   "expected": "+447700900731"
   },
   {
    "values": [
-    "+44 7700 900718"
+    "+44 7700 900731"
    ],
    "params": {
     "adapter": "msisdn"
    },
-   "expected": "+447700900718"
+   "expected": "+447700900731"
   },
   {
    "values": [

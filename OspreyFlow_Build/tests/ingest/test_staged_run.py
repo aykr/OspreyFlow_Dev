@@ -119,7 +119,7 @@ def _node(graph: ValidatingGraph, type_: str, field: str, value: str) -> Any:
 async def test_a_join_s_provenance_survives_to_the_link_it_makes() -> None:
     _done, graph = await load()
     whitlow = _node(graph, "Person", "family_name", "WHITLOW")
-    number = _node(graph, "Endpoint", "value_normalised", "+447700900718")
+    number = _node(graph, "Endpoint", "value_normalised", "+447700900731")
     uses = [e for e in graph.committed_edges if e.type == "USES"]
     assert [(e.source, e.target) for e in uses if e.source == whitlow.id] == [
         (whitlow.id, number.id)
