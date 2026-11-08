@@ -262,6 +262,13 @@ New ones are added at the bottom as they happen.
 58. **Your ruling on rules' L2.9 Q1:** the Rule author role gains read_alert_queue (whoever triages must read
     the queue), amending ADR-112 Amendment 5, so Rule authors are offered Rules and Monitoring.
 
+59. **A rule 3 defect already on main, found by the independent review of studio's L1.4:** a source author
+    could read another dataset's uploaded file by naming it in a pipeline's source node and previewing it
+    (the save gate never checked a node's file against the dataset's own folder). Fixed in L1.4 before it
+    merges, at one choke point covering Profile, preview, Test and the run. Test and the Map preview also
+    lacked the drawer preview's guards (a hidden-row count oracle). It reached no deployment (nothing pushed
+    since `e89d44a`, which predates the Studio's file sources? — checked at the push).
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
