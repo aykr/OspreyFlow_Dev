@@ -115,6 +115,7 @@ STORES = (
     "RecipeRunStore",
     "ExtractionCandidateStore",
     "InfluencerStore",
+    "PostgresTargetModelStore",
 )
 
 

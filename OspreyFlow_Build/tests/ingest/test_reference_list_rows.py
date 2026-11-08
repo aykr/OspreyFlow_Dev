@@ -81,13 +81,15 @@ def test_an_import_never_replaces_other_rows(tmp_path: Path) -> None:
 
 
 def test_the_import_admits_only_synthetic_fixtures(tmp_path: Path) -> None:
-    outside = tmp_path / "establishments.csv"
-    outside.write_text(CSV.read_text(encoding="utf-8"), encoding="utf-8")
+    """Rule 9, by content: a file whose bytes are not a synthetic list the repository names is
+    refused wherever it sits; the same bytes elsewhere are the same synthetic list."""
+    other = tmp_path / "establishments.csv"
+    other.write_text(CSV.read_text(encoding="utf-8") + "ZZZ,Not listed,Nowhere\n", encoding="utf-8")
     with pytest.raises(StagingError) as refused:
-        import_list(ESTABLISHMENTS, outside, storage=STORAGE)
+        import_list(ESTABLISHMENTS, other, storage=STORAGE)
     assert refused.value.problems == [
-        "only a synthetic fixture in this repository's tests may be imported as a list's rows "
-        "(rule 9); this file is not one"
+        "only a synthetic list this repository names may be imported as a list's rows "
+        "(rule 9, synthetic_lists.json); this file is not one"
     ]
 
 

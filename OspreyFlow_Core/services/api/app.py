@@ -841,7 +841,6 @@ from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkSt
 from .target_models import (
     InMemoryTargetModelStore,
     NoModelYet,
-    PostgresTargetModelStore,
     TargetModelRefused,
     TargetModelStore,
     core_types_of,
@@ -968,9 +967,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     # ADR-140 Amendment 4: connections and the sources registered on them.
     source_store = await PostgresSourceStore.connect(config.postgres.dsn)
-    target_model_store = await PostgresTargetModelStore.connect(
-        config.postgres.dsn, core_types=_core_types()
-    )
+    # ADR-140 Amendment 12: opened with the run's resources, which a staged run reads it through,
+    # so the Conduit holds one pool for it and closes it with them.
+    target_model_store = resources.target_models
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     # ADR-144: the saved views of each case, holding no data.
     case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
@@ -1271,7 +1270,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.custom_roles = None
         await history.close()
         await source_store.close()
-        await target_model_store.close()
         await case_view_store.close()
         app.state.case_views = None
         # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left

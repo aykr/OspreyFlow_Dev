@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from services.api.target_models import PostgresTargetModelStore, core_types_of
+from services.ingest.staging import ObjectStorageConfig
 from valkey.asyncio import Valkey
 
 from adapters.compute_rustworkx.adapter import ComputeRustworkxAdapter
@@ -93,6 +95,9 @@ class RunResources:
     recipe_runs: RecipeRunStore
     extraction_candidates: ExtractionCandidateStore
     datasets_store: PostgresDatasetStore
+    #: ADR-140 Amendment 12: a staged pipeline's lists, and where staged rows are kept.
+    target_models: PostgresTargetModelStore
+    staging_storage: ObjectStorageConfig
     explore_cache: CachedQuery
     analytics: AnalyticsPort
     close_analytics: Close
@@ -135,6 +140,8 @@ class RunResources:
             kyc_expiries=self.kyc_expiries,
             recipe_runs=self.recipe_runs,
             influencers=self.influencers,
+            target_models=self.target_models,
+            staging_storage=self.staging_storage,
         )
 
     async def close(self) -> None:
@@ -154,6 +161,7 @@ class RunResources:
         await self.recipe_runs.close()
         await self.extraction_candidates.close()
         await self.datasets_store.close()
+        await self.target_models.close()
         await self.principal_resolver.aclose()
         await self.close_analytics()
 
@@ -190,6 +198,18 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     # ADR-099: the datasets of each unit and of each case.
     datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
+    # ADR-140 Amendment 12: the datasets' domain models, whose lists a staged pipeline's Lookups
+    # read, and the store their rows and the staged Parquet are kept in.
+    from ontology.loader import load_default_ontology
+
+    core = load_default_ontology()
+    target_models = await PostgresTargetModelStore.connect(
+        config.postgres.dsn,
+        core_types=core_types_of(
+            [e.name for e in core.entity_types], [e.name for e in core.edge_types]
+        ),
+    )
+    staging_storage = ObjectStorageConfig.from_env()
     # ADR-099 Amendment 6: no write names a dataset the registry does not hold.
     cast(DatasetStampingGraph, graph).check_against(datasets_store)
 
@@ -242,6 +262,8 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         recipe_runs=recipe_runs,
         extraction_candidates=extraction_candidates,
         datasets_store=datasets_store,
+        target_models=target_models,
+        staging_storage=staging_storage,
         explore_cache=explore_cache,
         analytics=analytics,
         close_analytics=close_analytics,

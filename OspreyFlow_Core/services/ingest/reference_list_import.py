@@ -9,11 +9,11 @@ from there (`lists_for_run`), and a list with no rows kept is refused in words: 
 empty list, which would leave every Lookup silently unmatched (rule 2).
 
 Until L1.6 builds import in the Studio, rows are put there by this module, from a **synthetic
-fixture in this repository's tests only** (rule 9):
+list this repository names only** (rule 9, by the SHA-256 in `synthetic_lists.json`):
 
     python -m services.ingest.reference_list_import --dataset pid --list-id rl-est \\
         --name establishments --key estab_id --version 3 --bucket staging \\
-        ../OspreyFlow_Build/tests/ingest/fixtures/visits_and_contacts/establishments.csv
+        <the synthetic establishments.csv>
 
 A screening list is deployment-wide, and no dataset can subscribe to one until L1.6, so a run reads
 only the dataset's own lists for now; the save gate already refuses a Lookup of any other.
@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import csv
 import dataclasses
+import hashlib
 import json
 import sys
 from collections.abc import Collection, Sequence
@@ -49,14 +50,16 @@ from .staging_catalogue import (
     stage_sources_and_lists,
 )
 
-#: Rule 9: the only files this module reads are the repository's own synthetic test fixtures.
-_REPOSITORY = Path(__file__).resolve().parents[3]
-_FIXTURES_UNDER = _REPOSITORY / "OspreyFlow_Build" / "tests"
+#: Rule 9: the synthetic lists this module may keep, by the SHA-256 of their bytes.
+SYNTHETIC_LISTS = Path(__file__).with_name("synthetic_lists.json")
 
 
 def _synthetic(path: Path) -> bool:
-    resolved = path.resolve()
-    return resolved.is_relative_to(_FIXTURES_UNDER) and "fixtures" in resolved.parts
+    """Rule 9: a file is admitted only if its bytes are a synthetic list this repository names in
+    `synthetic_lists.json`, as `screening_refresh` admits a synthetic screening list. Judged by
+    content, never by where the file sits."""
+    digests = json.loads(SYNTHETIC_LISTS.read_text(encoding="utf-8"))["digests"]
+    return hashlib.sha256(path.read_bytes()).hexdigest() in digests
 
 
 def import_list(reference: ReferenceList, csv_path: Path, *, storage: ObjectStorageConfig) -> str:
@@ -66,8 +69,8 @@ def import_list(reference: ReferenceList, csv_path: Path, *, storage: ObjectStor
     if not _synthetic(csv_path):
         raise StagingError(
             [
-                "only a synthetic fixture in this repository's tests may be imported as a list's "
-                "rows (rule 9); this file is not one"
+                "only a synthetic list this repository names may be imported as a list's rows "
+                "(rule 9, synthetic_lists.json); this file is not one"
             ]
         )
     with csv_path.open(encoding="utf-8", newline="") as handle:
