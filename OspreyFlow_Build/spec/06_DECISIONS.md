@@ -28785,3 +28785,231 @@ left out) and `test_alert_evidence_withheld.py`'s
 `test_a_read_given_a_store_without_the_journal_is_refused_not_answered` (red with the tolerance put
 back). Each red under the rules lease on stack b, or offline (`process/lanes/rules/l2.8c/`, `round1/` and
 `round2/`).
+
+### ADR-112, Amendment 7 (8 November 2026) — a right to manage model engines, each job's model and their keys, manage_models, held by the administrator and grantable alone
+
+Status: accepted; the owner's ruling of 8 November 2026 (P1, question 4, option A, from options), written
+by the platform lane. ADR-112 and its Amendments 1 to 6 are unchanged except where this says so. Built in
+P1 with ADR-135 Amendment 2.
+
+**Decision.** ADR-112's table gains one row:
+
+| # | Right | Level | Analyst | Data engineer | Administrator | Reports viewer |
+| --- | --- | --- | --- | --- | --- | --- |
+| A9 | Manage model engines: add, edit and remove an engine, choose each job's default engine, set, rotate and remove an engine's key, test its connection, and read *Admin › Models* and its history | — | | | ✓ | |
+
+- **Held by the administrator** (`osprey-admin`), who already holds A1 to A8. Not folded into
+  `administer_system`: a key decides where case content may go, so the owner wanted it named and
+  grantable on its own (`right:manage_models`) without the rest of A1.
+- **Its level is "—":** an installation-wide setting, not a case's.
+- *Admin › System*'s engine summary stays under `administer_system` and carries nothing about a key
+  but "key set" or "no key" (ADR-135 decision 5).
+
+**Tests.** `tests/schemas/test_rights.py`: the row, and forty-five rights.
+`tests/services/api/test_route_rights.py`: every `/v1/admin/models` route declares `manage_models`,
+and `manage_models` leaves the list of rights no route checks once P1's routes exist.
+`tests/services/api/test_model_admin_routes.py`: each route refused without it (rule 4), shown red with
+the check removed.
+
+### ADR-135, Amendment 2 (8 November 2026) — Model engines, each job's model and their keys are managed in the Glass's Admin place (keys write-only, never shown back, each change audited behind its own right); the CLI stays for headless and recovery use (the owner's ruling, 8 November)
+
+Status: accepted; the owner's rulings of 8 November 2026, from options (relayed by the orchestrator),
+written by the platform lane. **It reverses ADR-135's ruling 2** ("never in the Admin area, never in a
+browser page of the Glass") and amends decisions 2, 3 and 5. ADR-135 and its Amendment 1, ADR-136 and
+ADR-137 are otherwise unchanged. Built in P1.
+
+**The owner's rulings, 8 November 2026:**
+1. Engines, each job's default engine and their keys are managed in *Admin › Models*; keys write-only.
+   The CLI (`ospreyflow models`) stays for headless and recovery use; hand-editing `osprey.yaml` for
+   providers is no longer the documented way. Map provider keys follow the same rule (ADR-147, P3).
+2. **Where a key is kept: the gateway's own database** (option B), written through LiteLLM's admin
+   API, encrypted, with no restart. Not the lane's recommendation (a gateway-only key file); the
+   consequences are below.
+3. **Where engines and defaults are kept: a models file** (option A). `osprey.yaml` stays the starting
+   point; Admin's changes go to a separate models file, which the Conduit, `ospreyflow models` and
+   `apply` read and from which the gateway's entries are made. Keys are never in it.
+4. **No second person** for any change (option A); every change is audited, never the key.
+5. **A new right, `manage_models`** (ADR-112 Amendment 7).
+
+**Measured first** (rule 15), on 8 November 2026 under the platform lease on test stack a: the gateway
+image the product pins (`ghcr.io/berriai/litellm@sha256:d295634e…`), started on a Docker network with
+no route out, with its own database on the stack's Postgres, and a stand-in provider (no hosted
+provider was called):
+- Its Prisma migrations applied with no outbound network. It also tried, and failed harmlessly, to
+  fetch its model price list from GitHub at start (as it already does in every deployment today).
+- After the migrations it **generates a diff between the database and its schema and applies it**
+  ("Running post-migration sanity check … Migration diff applied successfully").
+- `POST /model/new` with the master key stores the entry with every `litellm_params` value encrypted
+  (no plaintext key in `LiteLLM_ProxyModelTable`), and its response returns them encrypted.
+  `PATCH /model/{id}/update` rotates a key; `POST /model/delete` removes an entry. `POST /model/update`
+  without `model_info` is refused (400). An unknown id is refused (404 on update, 400 on delete).
+  A duplicate id is a 500. **An entry with no key, or a provider that cannot be reached, is accepted.**
+- The proxy's own refusals: no token, 401 "No api key passed in"; a wrong token, 401 "Invalid proxy
+  server token passed. Received API Key = sk-...XYZW", **echoing the token's last four characters**;
+  an unknown model, 400 "Invalid model name passed in model=…".
+- A provider's refusals through it: a wrong key, 401 "AuthenticationError … Incorrect API key
+  provided: sk-PLA****7Q4Z", **echoing part of the key**, and the same fragment in the gateway's own
+  log (four times); **no key, 500** with "AuthenticationError … api_key client option must be set"; a
+  model the provider does not offer, 404 "NotFoundError"; after a failure the entry is **cooled down**
+  and answers 429 "No deployments available for selected model … cooldown_list" for about a minute,
+  even after a good key is set. Once that passed, a rotated key answered.
+- Restarted with the same encryption key, every stored entry answered. Restarted with **a different
+  encryption key, every stored entry was silently dropped** (a warning in the gateway's log; each model
+  then "Invalid model name").
+- Its spend log recorded each call (21) with no prompt or answer text. The database held 86 tables,
+  12 MB.
+
+**Decision.**
+
+1. ***Admin › Models*** (`apps/workspace/src/admin/sections/Models.tsx`, behind `manage_models`):
+   - engines added, edited and removed: the provider's name (fixed once added), its label, each role
+     it takes with the provider's model for it, an optional `https://` base, the privacy contract and
+     its reference (ADR-136 decision 1), the schema's own validation (`ModelProviderConfig`) refusing in
+     words;
+   - each job's (role's) default engine, chosen from `local` and the enabled engines that take that
+     role (`ModelsConfig`'s own validator); the local engine's models stay the pinned lists
+     (ADR-095), set at install;
+   - a key entered, rotated or removed in a write-only field; the page shows only "key set (when, by
+     whom)", "no key" or "key lost: enter it again";
+   - *Test the connection* for each engine, its answer in words (5);
+   - the engines' history (7).
+   Adding an engine on a deployment whose `osprey.yaml` declares `local_only: true` is refused in
+   words: that declaration, and `sendable_handling_codes`, stay the installer's, in `osprey.yaml`
+   (`spec/04` §4: egress is default-denied). *Admin › System*'s engine table becomes the summary,
+   with a link to *Models* for a holder of `manage_models`.
+
+2. **The models file** (ruling 3). `model-settings/models.yaml` in the deployment's rendered folder,
+   beside `deployment.env`, `600`, kept by `apply` as `deployment.env` is, mounted read-write into the
+   Conduit alone (`/run/osprey/model-settings`).
+   - It holds `providers` and `defaults` in `ModelsConfig`'s shape, and per provider a key record
+     (`key_set_at`, `key_set_by`): never a key, a fragment, a hash or a length.
+   - When present, its `providers` and `defaults` **replace** `osprey.yaml`'s whole, never field by
+     field, so there is one answer to "what is enabled". When absent, `osprey.yaml`'s are used, as
+     before.
+   - The Conduit reads it at start and after each of its own writes, which are atomic (a temporary
+     file renamed over the old one); routing (`model_routing.py`) takes its engines from it rather than
+     from the environment, so **no service is restarted** for any change in *Models*.
+   - `ospreyflow models` lists from it; `apply` validates `osprey.yaml` with it applied and refuses in
+     words, changing nothing, where they no longer agree (for example `local_only: true` beside an
+     engine).
+   - It is in the backup set's configuration (`harness/backup.py`'s `CONFIGURATION_SOURCES`).
+
+3. **The gateway's database** (ruling 2).
+   - **Where: its own database and role, `litellm`, on the deployment's Postgres**, made by a one-shot
+     step before the gateway starts, as Keycloak's are (ADR-114 Amendment 5), and over TLS on a managed
+     Postgres. **Not a schema in the Conduit's database:** the gateway's start-up applies a diff
+     between whatever is in its database and its own schema (measured), which in a shared database
+     could act on the Conduit's tables; and its own role means the Conduit's database login cannot
+     read the encrypted keys, nor the gateway's read case data. No new container or volume.
+   - The gateway runs with `store_model_in_db: true` and `DATABASE_URL` naming that database. **Hosted
+     engines' entries live only there**; the rendered `litellm.yaml` keeps the local models alone, so
+     no `model_name` is ever both rendered and stored (the gateway would balance between them).
+     Each entry's `model_name` is unchanged (`<provider>/<model>`), and its id is
+     `osprey-<provider>-<model>` (characters other than letters, digits, `.`, `_` and `-` replaced
+     by `-`).
+   - **Its encryption key** is `LITELLM_SALT_KEY`, kept as `OSPREY_LITELLM_SALT_KEY` in
+     `deployment.env` (`600`): minted at install (32 random bytes, URL-safe), minted by the first
+     `apply` or `start` of an existing deployment that has none, given to the gateway's environment
+     alone and blanked in every other service's (as model keys are today), kept by every `apply`
+     (ADR-132 ruling 6). **Never in `osprey.yaml`, never in a generated file, never rotated by any
+     verb:** a different one silently drops every stored engine (measured).
+   - **The Conduit reconciles** the gateway's entries to the models file at start and after each
+     change (`/model/new`, `PATCH /model/{id}/update`, `/model/delete`, read back with
+     `/v2/model/info`), with the gateway master key it already holds, on the deployment's internal
+     network only. An engine with no key is **not registered** (measured: the gateway accepts it, and
+     every call fails), so it is shown "no key" and not offered to analysts (ADR-135 decision 3).
+   - **Existing deployments.** The first `apply` or `start` with this version moves each
+     `OSPREY_MODEL_KEY_<NAME>` (and `OSPREY_MODEL_PROVIDER_KEY`) from `deployment.env` into the
+     gateway, through the Conduit's key path (8) with the key on standard input, writes the key record,
+     and only then removes the line. A failure leaves the line and says so; nothing is lost.
+
+4. **A key's path, and what never holds it.** The Glass's field (`type="password"`,
+   `autocomplete="off"`, never filled from anything, cleared once sent) → `PUT
+   /v1/admin/models/engines/{name}/key` over the deployment's TLS → the Conduit (the body's key is a
+   `SecretStr`; this route's validation errors never echo their input) → the gateway's admin API.
+   The gateway's response, which carries the key encrypted, is discarded. **The key appears in no
+   response body, log line, audit entry, error, models file, `osprey.yaml`, generated file or
+   `deployment.env`**, and in the Glass only until it is sent. ADR-135's "read by the gateway alone:
+   never the Conduit" becomes: **it passes through the Conduit's key route and is kept by nothing
+   but the gateway's database.** `DELETE` on the same path removes it.
+
+5. ***Test the connection*** asks the gateway for one completion of at most one token on the engine's
+   model and answers in fixed words, **never the provider's or the gateway's** (both can echo part of a
+   key, as measured): connected; no route yet; the gateway's own token refused (a deployment fault:
+   `ospreyflow doctor`); the key refused (401, 403, or the 500 a missing key gives); the model not
+   offered (404); cooling down after a failure (429 naming a cooldown: test again in a minute); the
+   provider limiting the key (any other 429); not reachable (any other 5xx, or no answer)
+   (`packages/adapters/model_litellm/connection.py`). It is audited (who, which engine, the outcome).
+
+6. **Routes** (`services/api/model_admin.py`), each behind `manage_models` (rule 4), none returning or
+   logging a key: `GET /v1/admin/models` (engines, defaults, each key's record and state, the pinned
+   local models, `local_only` and the sendable codes, read-only); `POST /v1/admin/models/engines`;
+   `PUT` and `DELETE /v1/admin/models/engines/{name}`; `PUT /v1/admin/models/defaults`;
+   `PUT` and `DELETE /v1/admin/models/engines/{name}/key`; `POST
+   /v1/admin/models/engines/{name}/test`; `GET /v1/admin/models/history`. Removing an engine that is
+   a role's default is refused in words naming the role. `GET /v1/models/engines` (the analysts'
+   choice) reads the same models file.
+
+7. **The audit** (`model_admin_audit` in the Conduit's database): when, who (the person's subject, or
+   `cli:<account>` from the command line), the action (`engine_added`, `engine_edited`,
+   `engine_removed`, `default_changed`, `key_set`, `key_rotated`, `key_removed`, `key_moved`,
+   `connection_tested`), the engine, for an edit each changed field's old and new value (none of them
+   secret: label, roles, base, contract mark and reference), and the outcome (done, or refused with
+   its words). **Never the key, a fragment, a hash or a length.** Read in *Models*' history
+   (`manage_models`), and by the Audit section when it is built (`read_audit`).
+
+8. **The CLI stays.** `ospreyflow models` lists from the models file and the gateway (key set, no
+   key, key lost). `models key <name>` and `models remove-key <name>` read the key as before
+   (`OSPREY_MODEL_KEY_<NAME>` in the terminal, or a hidden prompt) and hand it, on standard input,
+   to the Conduit's own key path inside its container (`docker compose exec -T api python -m
+   services.api.model_keys set <name>`), so the gateway's admin API, the reconcile and the audit are
+   the same code as *Admin › Models*', and **no service is restarted** (ADR-135 decision 3's restart
+   is withdrawn). They work with the Glass unreachable or sign-in broken, which is what they are kept
+   for.
+
+9. **Backup and restore.** `ospreyflow backup` already dumps every database on the deployment's
+   Postgres but Keycloak's, so the `litellm` database is in the set (`litellm.sql`), keys encrypted;
+   the models file is in the configuration. The encryption key is not: the set never holds a secret
+   (`05_DEPLOYMENT.md` §6.1). **Restored onto the deployment it came from** (its `deployment.env`
+   kept), every key works. **Restored onto another deployment**, the gateway cannot decrypt them and
+   drops every stored engine (measured): the reconcile finds each engine whose record says "key set"
+   missing from the gateway, shows "key lost: enter it again", offers it to no analyst, and `ospreyflow
+   doctor` names each. The administration guide says so beside `restore`.
+
+10. **Offline.** The gateway is started with `LITELLM_LOCAL_MODEL_COST_MAP=True`, so it no longer
+    reaches GitHub at start (ADR-114 Amendment 7: nothing reaches outside unless a configured feature
+    needs it).
+
+**Cost.** Every deployment gains the gateway's database (86 tables, about 12 MB empty), its
+migrations at each start, and an encryption key that must never change. The gateway's own log can
+carry a fragment of a refused key, as a provider words it (measured); that log is the operator's,
+not OspreyFlow's logger, and is written inside the deployment. The gateway's spend log records each
+call without its text; P2 reads it. The set-up console's Models screen keeps its write-only key fields
+for the first install, now landing in the gateway by the same path once it starts.
+
+**Tests that would fail if it were broken** (rule 12; each shown red first):
+- **Access (rule 4):** every `/v1/admin/models` route refuses a principal without `manage_models`,
+  and an administrator role without it granted singly is refused too; red with the check removed
+  (`tests/services/api/test_model_admin_routes.py`).
+- **The key never leaks:** a recognisable planted key, sent through each real key route and the real
+  logger (caplog on the root logger, with the Conduit's own logging set-up), appears in no response
+  body, log record, audit row, error or models file — including the refusal for a key sent to an
+  engine that does not exist and a body that fails validation (`test_model_key_never_leaks.py`).
+- **The stand-in gateway refuses as the measured one does** (rule 15), before any test against it is
+  trusted: no token, a wrong token, an unknown model, an unknown id on update and delete, a missing
+  provider key (500), a wrong key echoing a fragment (401), a model not offered (404), the cooldown
+  (429), and entries dropped under a different encryption key
+  (`tests/adapters/model_litellm/test_stand_in_gateway.py`).
+- **The key round trip:** after a write the gateway's database entry for each of the engine's models
+  holds the key (read back through the stand-in's decrypting store), and after a removal no entry
+  does; the reconcile registers no engine without a key.
+- **The connection test** reports each refusal in its words, and never a planted key the stand-in
+  echoes (`test_connection_check.py`).
+- **The models file** replaces `osprey.yaml`'s providers and defaults whole; `apply` refuses an
+  engine beside `local_only: true`; it is `600` after every write.
+- **Restore onto another deployment** shows "key lost" (the stand-in restarted with another
+  encryption key).
+- **Keyboard (rule 13):** every *Models* action reached and activated by keyboard
+  (`apps/workspace/keyboard/admin-models.spec.ts`); **axe** in the dark, light and GOV.UK themes.
+- **The egress warning** (`spec/05` §2.1) reads `providers` (`tests/harness/test_egress_consequence.py`,
+  red with the legacy read).
