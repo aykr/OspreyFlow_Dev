@@ -295,8 +295,40 @@ def _case_routes() -> dict[tuple[str, str], APIRoute]:
     return routes
 
 
+#: Routes naming a case that take no case level, each with its reason. They are held instead to
+#: an Admin section's right, and to no level, by
+#: `test_each_route_outside_case_levels_declares_no_level_and_its_right`.
+OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
+    # ADR-143 Amendment 2 decisions 1 and 2: an administrator runs a removed case's merge or delete
+    # dry, as counts, for cases they are no member of; Admin › Datasets' right is the gate, and
+    # the counts are under the administrator's own handling.
+    ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
+        "Admin › Datasets: administer_system, never a case level",
+}  # fmt: skip
+
+
 def test_every_case_route_is_in_the_table_and_every_table_row_is_a_route() -> None:
-    assert set(_case_routes()) == set(NEEDS)
+    assert set(_case_routes()) - set(OUTSIDE_CASE_LEVELS) == set(NEEDS)
+    assert set(OUTSIDE_CASE_LEVELS) <= set(_case_routes()), "an exemption with no route"
+
+
+@pytest.mark.parametrize("key", sorted(OUTSIDE_CASE_LEVELS))
+def test_each_route_outside_case_levels_declares_no_level_and_its_right(
+    key: tuple[str, str],
+) -> None:
+    route = _case_routes()[key]
+    assert _declared_levels(route) == set()
+    rights: set[str] = set()
+
+    def walk(dependant: object) -> None:
+        for sub in dependant.dependencies:  # type: ignore[attr-defined]
+            right = getattr(sub.call, "required_right", None)
+            if right is not None:
+                rights.add(str(right))
+            walk(sub)
+
+    walk(route.dependant)
+    assert rights == {"administer_system"}, rights
 
 
 @pytest.mark.parametrize(("key", "need"), sorted(NEEDS.items(), key=lambda kv: kv[0]))

@@ -667,15 +667,24 @@ def _case_column_lists() -> tuple[list[str], list[str]]:
     return selects, inserts
 
 
+#: Reads of the cases table that build no `Investigation` record, with their column lists exactly.
+NO_RECORD_READS = ("SELECT id, name, removed_at IS NOT NULL AS removed",)
+
+
 def test_every_column_list_on_the_cases_table_carries_domains() -> None:
     """ADR-126 decision 1: `get`, `_LEVEL_SQL`, `get_authorized`, `list_for`, `get_for_access_admin`
     (which the record's list did not name) and the INSERT. A list that left the column out would
     read every case as POLE, or store none of what was chosen."""
     selects, inserts = _case_column_lists()
+    # `admin_states` (Admin › Datasets' linked cases, ADR-143 Amendment 2 decision 2) reads a
+    # case's name and whether it is removed, and builds no `Investigation`, so it carries no
+    # `domains`. Named here, and only it, so another read leaving the column out still fails.
+    record_reads = [c for c in selects if c not in NO_RECORD_READS]
+    assert [c for c in selects if c in NO_RECORD_READS] == list(NO_RECORD_READS)
 
-    assert len(selects) == 5, f"expected the five case reads; found {selects}"
+    assert len(record_reads) == 5, f"expected the five case reads; found {record_reads}"
     assert len(inserts) == 1
-    for columns in [*selects, *inserts]:
+    for columns in [*record_reads, *inserts]:
         assert "domains" in columns, columns
 
 
