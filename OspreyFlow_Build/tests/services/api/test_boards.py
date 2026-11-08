@@ -1,0 +1,715 @@
+"""Drawing boards through the real app (ADR-143 decisions 4 to 7; Amendments 2 and 3; L3.3): the real
+`get_principal`, which scopes each reader to the case's read set (its source and its analyst layer),
+the case's own level checks and rights, and a graph that holds what is written and refuses what the
+adapter refuses (`board_fakes.BoardGraph`).
+
+Case K (Alice its Author, Bob an Editor at OFFICIAL, Rita a Viewer) and case B (Carol its Author)
+read the same source dataset, whose highest allowed marking is OFFICIAL-SENSITIVE.
+
+What a mistake here would do, and the case that catches it (each shown red in
+`process/lanes/case/L3.3_RED_RECORD.md`):
+
+- a drawn item readable outside its case (rule 3): `test_a_drawn_item_is_never_readable_outside_its_case`,
+  red with case K's layer in case B's read set
+  (`test_the_outside_check_fails_with_case_ks_layer_in_case_bs_read_set`);
+- a board route reachable by someone with no level on the case, a member of another case reading
+  the same source included, or telling them the case exists (rule 4):
+  `test_every_board_route_refuses_a_non_member_as_a_missing_case`;
+- a drawn item written into the source, or without its author, board, case, grading and source
+  (decision 4): `test_a_drawn_item_is_attributed_graded_and_in_the_layer`, red with the writer
+  aiming at the source (`test_the_layer_check_fails_with_the_writer_aimed_at_the_source`);
+- an item above the case's ceiling written (Amendment 2 decision 3):
+  `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling check bypassed
+  (`test_the_ceiling_check_fails_with_the_ceiling_bypassed`);
+- a drawing with no case not making its dataset, case and board, or its items going to a layer
+  (Amendment 2 decision 5; Amendment 3 decision 1):
+  `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aiming at a
+  layer (`test_the_drawn_dataset_check_fails_with_the_writer_aimed_at_a_layer`);
+- no watch set, a watch outliving its item, or a watch shown to a reader who may not see its item
+  (Amendment 2 decision 8): `test_drawing_sets_a_watch_and_withdrawing_ends_it` and
+  `test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole`, red with every watch listed
+  (`test_the_withheld_check_fails_with_every_watch_listed`);
+- matching merging two items in storage (rule 6): `test_same_writes_one_link_and_merges_nothing`,
+  red with the writer merging (`test_the_merge_check_fails_with_the_writer_merging`);
+- a picture of a drawn item written into the source, or shown to someone not cleared for it
+  (ADR-105 Amendment 3): `test_a_pictures_document_and_link_are_in_the_layer_with_its_marking`;
+- someone else's item edited or withdrawn, a marking lowered, a link left resting on a withdrawn
+  node: `test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking` and
+  `test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store`;
+- someone drawing on another's board, or without the right: `test_only_the_boards_creator_draws`
+  and `test_drawing_needs_the_right_and_reading_needs_investigate`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from services.api import boards as boards_module
+from services.api.app import app
+from services.api.board_store import InMemoryBoardItemStore
+from services.api.boards import Boards
+from services.api.case_views import InMemoryCaseViewStore
+from services.api.datasets import DRAWN, Dataset, InMemoryDatasetStore
+from services.api.investigations import (
+    AccessLevel,
+    InsufficientAccessError,
+    Investigation,
+    InvestigationNotFoundError,
+)
+from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModelStore
+from services.api.working_set.service import WorkingSetService
+
+from adapters.media_objectstore import reference_for
+from adapters.media_objectstore.testing import InMemoryMediaStore
+from ontology.handling import load_uk_le_scheme
+from ontology.packs import load_deployment_ontology
+from schemas.domain import SAME_AS, Node, NodeWrite, Principal
+
+from .board_fakes import BoardGraph
+from .working_set.fakes import FakeWorkingSetStore
+from .working_set.test_visible_link import node
+
+UNIT = "unit-1"
+SCHEME = load_uk_le_scheme()
+ONTOLOGY = load_deployment_ontology()
+PEOPLE = {
+    "alice": Principal(id="alice", clearance="SECRET", org_unit=UNIT, roles=["analyst"]),
+    "bob": Principal(id="bob", clearance="OFFICIAL", org_unit=UNIT, roles=["analyst"]),
+    "carol": Principal(id="carol", clearance="SECRET", org_unit=UNIT, roles=["analyst"]),
+    "rita": Principal(id="rita", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"]),
+}
+K, B = "case-k", "case-b"
+GRADE = {"source": "B", "intelligence": "2", "handling": "1"}
+
+
+class _Resolver:
+    def resolve(self, token: str) -> Principal:
+        return PEOPLE[token]
+
+
+class _Cases:
+    """Cases and their grants; a level is held only by a grant. `create` makes a home case."""
+
+    def __init__(self) -> None:
+        self.made: dict[str, Investigation] = {}
+        self.grants: dict[str, dict[str, AccessLevel]] = {}
+
+    def seed(self, case_id: str, grants: dict[str, AccessLevel]) -> None:
+        self.made[case_id] = Investigation(
+            id=case_id, name=case_id, created_at=datetime(2026, 11, 1, tzinfo=UTC),
+            created_by="seed", owning_unit=UNIT,
+        )  # fmt: skip
+        self.grants[case_id] = dict(grants)
+
+    async def create(self, principal: Principal, *, name: str, **_: Any) -> Investigation:
+        case_id = f"home-{len(self.made)}"
+        self.seed(case_id, {principal.id: AccessLevel.AUTHOR})
+        return self.made[case_id]
+
+    async def get_authorized(
+        self, case_id: str, principal: Principal, *, need: AccessLevel
+    ) -> Investigation:
+        held = self.grants.get(case_id, {}).get(principal.id)
+        if held is None:
+            raise InvestigationNotFoundError(case_id)
+        if held.rank < need.rank:
+            raise InsufficientAccessError(case_id)
+        return self.made[case_id]
+
+    async def list_for(self, principal: Principal) -> list[tuple[Investigation, AccessLevel]]:
+        return [(self.made[c], g[principal.id]) for c, g in self.grants.items() if principal.id in g]
+
+    async def hidden_tab_ids(self, principal: Principal) -> set[str]:
+        return set()
+
+
+class _Audit:
+    def __init__(self) -> None:
+        self.records: list[dict[str, Any]] = []
+
+    async def record(self, **kwargs: Any) -> None:
+        self.records.append(kwargs)
+
+
+def _loaded(node_id: str, marking: str = "OFFICIAL", **properties: Any) -> Node:
+    return node(node_id, marking).model_copy(
+        update={"properties": properties, "datasets": ["src"]}
+    )
+
+
+IMAGE_REF = reference_for(b"\x89PNG loaded", "image/png")
+
+
+@pytest.fixture
+def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
+    datasets = InMemoryDatasetStore()
+    datasets.add(
+        Dataset(id="src", name="Prison intel", owning_unit=UNIT, created_by="eng",
+                created_at=datetime(2026, 11, 1, tzinfo=UTC),
+                highest_marking="OFFICIAL-SENSITIVE")
+    )  # fmt: skip
+    datasets.cases[K] = ["src"]
+    datasets.cases[B] = ["src"]
+    cases = _Cases()
+    cases.seed(K, {"alice": AccessLevel.AUTHOR, "bob": AccessLevel.EDITOR,
+                   "rita": AccessLevel.VIEWER})  # fmt: skip
+    cases.seed(B, {"carol": AccessLevel.AUTHOR})
+    image = _loaded("img-1").model_copy(
+        update={"type": "Document",
+                "properties": {"title": "photo.png", "media_kind": "image",
+                               "object_ref": IMAGE_REF}}
+    )  # fmt: skip
+    graph = BoardGraph(
+        ONTOLOGY,
+        nodes=[
+            _loaded("p-loaded", family_name="Mercer", nino="AB123456C"),
+            _loaded("p-secret", "SECRET", family_name="Hidden"),
+            image,
+        ],
+    )
+    media = InMemoryMediaStore()
+    media.files[IMAGE_REF] = b"\x89PNG loaded"
+    held = SimpleNamespace(
+        datasets=datasets, cases=cases, graph=graph, views=InMemoryCaseViewStore(),
+        items=InMemoryBoardItemStore(), audit=_Audit(), media=media,
+        models=InMemoryTargetModelStore(core_types=CORE_TYPES_FOR_TESTS),
+    )  # fmt: skip
+    state = {
+        "principal_resolver": _Resolver(), "investigations": cases, "datasets": datasets,
+        "audit": held.audit, "graph": graph, "case_views": held.views,
+        "board_items": held.items, "media": media, "target_models": held.models,
+        "handling_scheme": SCHEME, "ontology": ONTOLOGY,
+        "working_set": WorkingSetService(graph, FakeWorkingSetStore(), SCHEME),
+    }  # fmt: skip
+    for key, value in state.items():
+        monkeypatch.setattr(app.state, key, value, raising=False)
+    yield held
+
+
+def _as(who: str) -> TestClient:
+    return TestClient(app, headers={"Authorization": f"Bearer {who}"})
+
+
+def _board(who: str = "alice", case: str = K, **body: Any) -> str:
+    answer = _as(who).post(f"/v1/investigations/{case}/boards", json={"name": "Wing B", **body})
+    assert answer.status_code == 201, answer.text
+    return str(answer.json()["id"])
+
+
+def _item(board: str, who: str = "alice", case: str = K, **over: Any) -> dict[str, Any]:
+    body = {"type": "Person", "label": "Unknown male “Tall”", "marking": "OFFICIAL",
+            "grading": GRADE, "source_note": "Wing officer report, 4 Nov", "x": 0.2, "y": 0.3,
+            "properties": {"family_name": "Tall"}}
+    body.update(over)
+    answer = _as(who).post(f"/v1/investigations/{case}/boards/{board}/items", json=body)
+    assert answer.status_code == 201, answer.text
+    return dict(answer.json())
+
+
+def _link(board: str, source: str, target: str, **over: Any) -> Any:
+    body = {"type": "ASSOCIATE_OF", "label": "seen together", "marking": "OFFICIAL",
+            "grading": GRADE, "source_note": "Visits log", "source": source, "target": target}
+    body.update(over)
+    return _as("alice").post(f"/v1/investigations/{K}/boards/{board}/links", json=body)
+
+
+# --- rule 3: a drawn item is never readable outside its case ---------------------------------
+
+
+def _drawn_in_k(world: SimpleNamespace) -> tuple[str, str, str]:
+    """Alice draws a person on a board of K, from a selection holding the loaded Mercer, and links
+    the two: the board, the drawn node and the link."""
+    board = _board(start="selection", node_ids=["p-loaded"])
+    drawn = _item(board)["element_id"]
+    linked = _link(board, drawn, "p-loaded")
+    assert linked.status_code == 201, linked.text
+    return board, drawn, linked.json()["element_id"]
+
+
+def _carol_sees_it_from_b(drawn: str) -> bool:
+    """Carol, in case B (the same source), saves a view naming the drawn id and opens it."""
+    saved = _as("carol").post(f"/v1/investigations/{B}/views",
+                              json={"name": "probe", "node_ids": [drawn, "p-loaded"]})  # fmt: skip
+    assert saved.status_code == 201, saved.text
+    opened = _as("carol").get(f"/v1/investigations/{B}/views/{saved.json()['id']}")
+    assert opened.status_code == 200, opened.text
+    return drawn in {n["id"] for n in opened.json()["nodes"]}
+
+
+def test_a_drawn_item_is_never_readable_outside_its_case(world: SimpleNamespace) -> None:
+    board, drawn, link = _drawn_in_k(world)
+    assert not _carol_sees_it_from_b(drawn)
+    # Nor its link from the loaded node it rests on: B's view of Mercer and the drawn id shows
+    # no link, and B's own board routes do not find K's board.
+    assert _as("carol").get(f"/v1/investigations/{B}/boards/{board}").status_code == 404
+    assert _as("carol").get(f"/v1/investigations/{B}/boards").json() == []
+    assert _as("carol").get(f"/v1/investigations/{B}/drawn-watches").json() == []
+    # Alice, in K, sees both.
+    opened = _as("alice").get(f"/v1/investigations/{K}/boards/{board}").json()
+    assert drawn in opened["drawn"] and link in opened["drawn"]
+
+
+def test_the_outside_check_fails_with_case_ks_layer_in_case_bs_read_set(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: the plant is the read set's own call site, `DatasetStore.ids_of_case` (what
+    `scope_to_case` reads), answering case B with K's layer in it."""
+    _, drawn, _ = _drawn_in_k(world)
+    real = InMemoryDatasetStore.ids_of_case
+
+    async def leaking(self: InMemoryDatasetStore, investigation_id: str) -> list[str]:
+        held = await real(self, investigation_id)
+        layer = await self.layer_of_case(K)
+        return [*held, layer] if investigation_id == B and layer else held
+
+    monkeypatch.setattr(InMemoryDatasetStore, "ids_of_case", leaking)
+    assert _carol_sees_it_from_b(drawn)
+
+
+BOARD_ROUTES = [
+    ("get", "boards", None),
+    ("post", "boards", {"name": "x"}),
+    ("get", "boards/{board}", None),
+    ("post", "boards/{board}/share", None),
+    ("delete", "boards/{board}", None),
+    ("post", "boards/{board}/items", {"type": "Person", "label": "x", "marking": "OFFICIAL",
+                                      "grading": GRADE, "source_note": "n"}),
+    ("post", "boards/{board}/links", {"type": "ASSOCIATE_OF", "label": "x", "marking": "OFFICIAL",
+                                      "grading": GRADE, "source_note": "n", "source": "a",
+                                      "target": "b"}),
+    ("put", "boards/{board}/layout", {"positions": {}}),
+    ("patch", "board-items/{item}", {"label": "y"}),
+    ("post", "board-items/{item}/withdraw", None),
+    ("get", "boards/{board}/matches", None),
+    ("post", "boards/{board}/matches", {"drawn": "a", "loaded": "b", "same": True}),
+    ("post", "boards/{board}/nodes/{node}/picture", {"document_id": "img-1",
+                                                     "marking": "OFFICIAL"}),
+    ("get", "boards/{board}/pictures", None),
+    ("get", "boards/{board}/nodes/{node}/picture", None),
+    ("get", "drawn-watches", None),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(("method", "path", "body"), BOARD_ROUTES)
+def test_every_board_route_refuses_a_non_member_as_a_missing_case(
+    world: SimpleNamespace, method: str, path: str, body: Any
+) -> None:
+    """Carol is a member of B, which reads the same source; to K's routes she is a stranger, and
+    each answers her exactly as for a case that does not exist (one refusal, ADR-099 decision 5)."""
+    board, drawn, _ = _drawn_in_k(world)
+    item = next(iter(world.items.items))
+    filled = path.format(board=board, item=item, node=drawn)
+
+    def ask(case: str) -> Any:
+        kwargs = {"json": body} if body is not None else {}
+        return getattr(_as("carol"), method)(f"/v1/investigations/{case}/{filled}", **kwargs)
+
+    stranger, missing = ask(K), ask("no-such-case")
+    assert stranger.status_code == missing.status_code == 404, (stranger.text, missing.text)
+    assert stranger.json() == missing.json()
+
+
+# --- decision 4: attributed, graded, sourced, in the layer ------------------------------------
+
+
+def test_a_drawn_item_is_attributed_graded_and_in_the_layer(world: SimpleNamespace) -> None:
+    board = _board()
+    made = _item(board)
+    drawn = world.graph.node(made["element_id"])
+    layer = await_layer(world)
+    assert drawn.datasets == [layer] and "src" not in drawn.datasets
+    assertion = drawn.provenance.drawn
+    assert assertion is not None
+    assert assertion.provenance_class == "analyst_drawn"
+    assert (assertion.asserted_by, assertion.board_id, assertion.case_id) == ("alice", board, K)
+    assert assertion.item_id == made["item_id"]
+    assert assertion.grading.source == "B" and assertion.source_note == "Wing officer report, 4 Nov"
+    assert drawn.handling.classification == "OFFICIAL"
+    assert drawn.provenance.state == "asserted"  # asserted by its author, not inferred (rule 5)
+    audit = [r for r in world.audit.records if r["action"] == "draw_item"]
+    assert audit and audit[0]["resolved_query"]["item_id"] == made["item_id"]
+
+
+def test_the_layer_check_fails_with_the_writer_aimed_at_the_source(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: the plant is `Boards.into`, the one place a drawing's dataset is chosen."""
+    real = Boards.into
+
+    async def into_the_source(self: Boards, case_id: str) -> Any:
+        held = await real(self, case_id)
+        return boards_module.Into("src", held.ceiling, held.watched, drawn_dataset=False)
+
+    monkeypatch.setattr(Boards, "into", into_the_source)
+    made = _item(_board())
+    assert world.graph.node(made["element_id"]).datasets == ["src"]
+
+
+# --- Amendment 2 decision 3: the ceiling ------------------------------------------------------
+
+
+def _nothing_written(world: SimpleNamespace, before: int) -> None:
+    assert len(world.graph.node_writes) + len(world.graph.edge_writes) == before
+    assert not [i for i in world.items.items.values()]
+    assert not world.items.watches
+
+
+def test_an_item_above_the_ceiling_is_refused_in_words(world: SimpleNamespace) -> None:
+    board = _board()
+    before = len(world.graph.node_writes) + len(world.graph.edge_writes)
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "SECRET", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "above_the_ceiling"
+    assert "OFFICIAL-SENSITIVE" in answer.json()["detail"]
+    _nothing_written(world, before)
+
+
+def test_an_item_above_the_drawers_clearance_is_refused_too(world: SimpleNamespace) -> None:
+    board = _board("bob")
+    answer = _as("bob").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "OFFICIAL-SENSITIVE", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 409 and answer.json()["error"] == "above_your_clearance"
+
+
+def test_the_ceiling_check_fails_with_the_ceiling_bypassed(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: the plant is the ceiling `Boards.into` reads, set to the deployment's highest."""
+    real = Boards.into
+
+    async def no_ceiling(self: Boards, case_id: str) -> Any:
+        held = await real(self, case_id)
+        return boards_module.Into(held.dataset_id, "SECRET", held.watched, held.drawn_dataset)
+
+    monkeypatch.setattr(Boards, "into", no_ceiling)
+    board = _board()
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "SECRET", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 201
+
+
+# --- Amendment 2 decision 5, Amendment 3 decision 1: a drawing with no case --------------------
+
+
+def _start_drawing() -> dict[str, Any]:
+    answer = _as("alice").post(
+        "/v1/drawings", json={"name": "Night visits", "highest_marking": "OFFICIAL-SENSITIVE"}
+    )
+    assert answer.status_code == 201, answer.text
+    return dict(answer.json())
+
+
+def test_a_drawing_with_no_case_makes_its_dataset_case_and_board(world: SimpleNamespace) -> None:
+    made = _start_drawing()
+    dataset = world.datasets.datasets[made["dataset_id"]]
+    assert dataset.kind == DRAWN and dataset.name == "Night visits"
+    home = made["investigation_id"]
+    assert world.cases.grants[home] == {"alice": AccessLevel.AUTHOR}
+    assert made["board"]["case_id"] == home
+    item = _item(made["board"]["id"], case=home)
+    drawn = world.graph.node(item["element_id"])
+    # Written to the drawn dataset and to no layer: the home case's own layer (made with it, for
+    # what is marked by hand) holds nothing drawn.
+    assert drawn.datasets == [made["dataset_id"]]
+    assert await_layer(world, home) not in drawn.datasets
+    # Its ceiling is the drawn dataset's own.
+    refused = _as("alice").post(
+        f"/v1/investigations/{home}/boards/{made['board']['id']}/items",
+        json={"type": "Person", "label": "x", "marking": "SECRET", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert refused.status_code == 409 and refused.json()["error"] == "above_the_ceiling"
+
+
+def test_the_drawn_dataset_check_fails_with_the_writer_aimed_at_a_layer(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def always_a_layer(self: Boards, case_id: str) -> Any:
+        layer = (await boards_module.analyst_writes_into())[0]
+        return boards_module.Into(layer, "SECRET", None, drawn_dataset=False)
+
+    made = _start_drawing()
+    monkeypatch.setattr(Boards, "into", always_a_layer)
+    item = _item(made["board"]["id"], case=made["investigation_id"])
+    assert world.graph.node(item["element_id"]).datasets != [made["dataset_id"]]
+
+
+# --- Amendment 2 decision 8: watches ----------------------------------------------------------
+
+
+def _watches(who: str) -> list[dict[str, Any]]:
+    answer = _as(who).get(f"/v1/investigations/{K}/drawn-watches")
+    assert answer.status_code == 200, answer.text
+    return list(answer.json())
+
+
+def test_drawing_sets_a_watch_and_withdrawing_ends_it(world: SimpleNamespace) -> None:
+    board = _board()
+    made = _item(board)
+    (watch,) = _watches("alice")
+    assert (watch["item_id"], watch["owner"], watch["kind"]) == (
+        made["item_id"], "alice", "drawn_watch"
+    )
+    assert watch["dataset_id"] == "src"  # on the case's dataset
+    withdrawn = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+    assert withdrawn.status_code == 200 and withdrawn.json()["watches_ended"] == 1
+    assert _watches("alice") == []
+
+
+def test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    _item(board, marking="OFFICIAL")
+    sensitive = _item(board, marking="OFFICIAL-SENSITIVE")
+    assert len(_watches("alice")) == 2
+    bobs = _watches("bob")
+    assert len(bobs) == 1 and sensitive["item_id"] not in str(bobs)
+
+
+def test_the_withheld_check_fails_with_every_watch_listed(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def every_watch(self: Boards, case_id: str, principal: Principal) -> Any:
+        return await self.items.active_watches(case_id)
+
+    monkeypatch.setattr(Boards, "watches", every_watch)
+    board = _board()
+    _item(board, marking="OFFICIAL")
+    _item(board, marking="OFFICIAL-SENSITIVE")
+    assert len(_watches("bob")) == 2
+
+
+# --- decision 6, rule 6: matching ---------------------------------------------------------------
+
+
+def _drawn_mercer(world: SimpleNamespace) -> tuple[str, str]:
+    board = _board(start="selection", node_ids=["p-loaded"])
+    made = _item(board, label="Mercer", properties={"family_name": "Mercer"})
+    return board, made["element_id"]
+
+
+def test_same_writes_one_link_and_merges_nothing(world: SimpleNamespace) -> None:
+    board, drawn = _drawn_mercer(world)
+    before = world.graph.node("p-loaded")
+    suggested = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/matches").json()
+    (pair,) = suggested["suggestions"]
+    assert (pair["drawn"], pair["loaded"]["id"], pair["state"]) == (drawn, "p-loaded", "inferred")
+    # A suggestion acts on nothing by itself (rule 5).
+    assert not [e for e in world.graph.edges() if e.type == SAME_AS]
+    decided = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/matches",
+        json={"drawn": drawn, "loaded": "p-loaded", "same": True},
+    )
+    assert decided.status_code == 201, decided.text
+    (same,) = [e for e in world.graph.edges() if e.type == SAME_AS]
+    assert (same.source, same.target, same.properties["score"]) == (drawn, "p-loaded", 1.0)
+    assert same.datasets == [await_layer(world)]
+    # Two nodes still, the loaded one exactly as it was.
+    assert world.graph.node("p-loaded") == before
+    assert world.graph.node(drawn).id == drawn
+    # Decided: no longer suggested.
+    again = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/matches").json()
+    assert again["suggestions"] == []
+
+
+def await_layer(world: SimpleNamespace, case: str = K) -> str:
+    (layer,) = [d.id for d in world.datasets.datasets.values() if d.kind == "analyst_layer"
+                and d.layer_of == case]  # fmt: skip
+    return layer
+
+
+def test_the_merge_check_fails_with_the_writer_merging(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: the plant is `match_writes`, the one place a decision's writes are made: it
+    writes the drawn node under the loaded node's id, a merge in storage."""
+    real = boards_module.match_writes
+
+    def merging(drawn: Node, loaded: Node, **kwargs: Any) -> Any:
+        nodes, edges = real(drawn, loaded, **kwargs)
+        merged = NodeWrite(
+            id=loaded.id, type=drawn.type, properties=drawn.properties,
+            provenance=drawn.provenance, handling=drawn.handling, created_by="alice",
+            created_at=datetime.now(UTC), datasets=drawn.datasets,
+        )  # fmt: skip
+        return [merged], edges
+
+    monkeypatch.setattr(boards_module, "match_writes", merging)
+    board, drawn = _drawn_mercer(world)
+    before = world.graph.node("p-loaded")
+    _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/matches",
+        json={"drawn": drawn, "loaded": "p-loaded", "same": True},
+    )
+    assert world.graph.node("p-loaded") != before
+
+
+# --- decision 7: pictures ---------------------------------------------------------------------
+
+
+def test_a_pictures_document_and_link_are_in_the_layer_with_its_marking(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share")
+    drawn = _item(board)["element_id"]
+    uploaded = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL-SENSITIVE"},
+        content=b"\x89PNG drawn",
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    layer = await_layer(world)
+    (depicts,) = [e for e in world.graph.edges() if e.type == "DEPICTS"]
+    document = world.graph.node(depicts.source)
+    assert depicts.datasets == [layer] and document.datasets == [layer]
+    assert depicts.handling.classification == "OFFICIAL-SENSITIVE"
+    pictures = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/pictures").json()
+    assert pictures == {drawn: document.id}
+    file = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture")
+    assert file.status_code == 200 and file.content == b"\x89PNG drawn"
+    # Bob, at OFFICIAL, sees the drawn item and no picture.
+    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}/pictures").json() == {}
+    hidden = _as("bob").get(f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture")
+    assert hidden.status_code == 404
+
+
+def test_a_picture_the_case_holds_is_linked_in_the_layer_and_stays_in_its_dataset(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    drawn = _item(board)["element_id"]
+    chosen = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture",
+        json={"document_id": "img-1", "marking": "OFFICIAL"},
+    )
+    assert chosen.status_code == 201, chosen.text
+    (depicts,) = [e for e in world.graph.edges() if e.type == "DEPICTS"]
+    assert depicts.datasets == [await_layer(world)]
+    assert world.graph.node("img-1").datasets == ["src"]
+
+
+# --- decision 5: the author's own, withdrawal ---------------------------------------------------
+
+
+def test_only_the_author_edits_or_withdraws_and_never_lowers_a_marking(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    made = _item(board, marking="OFFICIAL-SENSITIVE")
+    _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share")
+    item = made["item_id"]
+    # Bob is an Editor of K, at OFFICIAL: the item is not one he may see, so it is not found.
+    assert _as("bob").patch(f"/v1/investigations/{K}/board-items/{item}",
+                            json={"label": "y"}).status_code == 404  # fmt: skip
+    mine = _item(_board("bob"), "bob")
+    refused = _as("alice").post(f"/v1/investigations/{K}/board-items/{mine['item_id']}/withdraw")
+    assert refused.status_code == 403 and refused.json()["error"] == "not_your_item"
+    lowered = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
+                                 json={"marking": "OFFICIAL"})  # fmt: skip
+    assert lowered.status_code == 409 and lowered.json()["error"] == "marking_never_lowered"
+    edited = _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
+                                json={"label": "Tall man", "grading": {**GRADE, "source": "A"}})
+    assert edited.status_code == 200, edited.text
+    drawn = world.graph.node(made["element_id"]).provenance.drawn
+    assert drawn is not None and drawn.label == "Tall man" and drawn.grading.source == "A"
+
+
+def test_withdrawing_a_node_takes_its_links_and_keeps_everything_in_the_store(
+    world: SimpleNamespace,
+) -> None:
+    board, drawn, link = _drawn_in_k(world)
+    (item,) = [i.item_id for i in world.items.items.values() if i.element_id == drawn]
+    answer = _as("alice").post(f"/v1/investigations/{K}/board-items/{item}/withdraw")
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["nodes"] == [drawn] and answer.json()["links"] == [link]
+    opened = _as("alice").get(f"/v1/investigations/{K}/boards/{board}").json()
+    assert drawn not in opened["drawn"] and link not in opened["drawn"]
+    # Kept, reverted, never deleted; the loaded end untouched.
+    assert world.graph.node(drawn).audit.reverted
+    assert world.graph.node(drawn).audit.withdrawn_by_load == f"board-withdrawal:{item}"
+    assert not world.graph.node("p-loaded").audit.reverted
+
+
+def test_deleting_a_board_leaves_what_was_drawn(world: SimpleNamespace) -> None:
+    board = _board()
+    drawn = _item(board)["element_id"]
+    assert _as("alice").delete(f"/v1/investigations/{K}/boards/{board}").status_code == 204
+    assert not world.graph.node(drawn).audit.reverted
+    assert len(_watches("alice")) == 1
+
+
+# --- who draws ------------------------------------------------------------------------------
+
+
+def test_only_the_boards_creator_draws(world: SimpleNamespace) -> None:
+    board = _board()
+    _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share")
+    opened = _as("bob").get(f"/v1/investigations/{K}/boards/{board}")
+    assert opened.status_code == 200 and opened.json()["may_draw"] is False
+    answer = _as("bob").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "OFFICIAL", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 403 and answer.json()["error"] == "not_the_boards_creator"
+
+
+def test_a_private_board_is_invisible_to_another_member(world: SimpleNamespace) -> None:
+    board = _board()
+    assert _as("bob").get(f"/v1/investigations/{K}/boards").json() == []
+    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}").status_code == 404
+    # And a board is not a view: the views list does not show it.
+    assert _as("alice").get(f"/v1/investigations/{K}/views").json() == []
+
+
+def test_drawing_needs_the_right_and_reading_needs_investigate(world: SimpleNamespace) -> None:
+    board = _board()
+    _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share")
+    answer = _as("rita").post(f"/v1/investigations/{K}/boards", json={"name": "x"})
+    assert answer.status_code == 403
+    assert _as("rita").get(f"/v1/investigations/{K}/boards").status_code == 403
+
+
+def test_a_type_outside_the_model_and_a_link_off_the_board_are_refused(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    answer = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Alert", "label": "x", "marking": "OFFICIAL", "grading": GRADE,
+              "source_note": "n", "properties": {"family_name": "x"}},
+    )  # fmt: skip
+    assert answer.status_code == 422 and answer.json()["error"] == "not_in_the_model"
+    drawn = _item(board)["element_id"]
+    off = _link(board, drawn, "p-loaded")  # Mercer is not on this blank board
+    assert off.status_code == 422 and off.json()["error"] == "ends_not_on_the_board"
+
+
+def test_moving_keeps_the_boards_layout_for_items_on_it(world: SimpleNamespace) -> None:
+    board = _board(start="selection", node_ids=["p-loaded", "p-secret"])
+    drawn = _item(board)["element_id"]
+    moved = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/layout",
+        json={"positions": {drawn: {"x": 0.7, "y": 0.1}, "p-loaded": {"x": 0.5, "y": 0.5},
+                            "not-on-it": {"x": 0, "y": 0}}},
+    )  # fmt: skip
+    assert moved.status_code == 204, moved.text
+    layout = _as("alice").get(f"/v1/investigations/{K}/boards/{board}").json()["layout"]
+    assert layout[drawn] == {"x": 0.7, "y": 0.1} and "not-on-it" not in layout

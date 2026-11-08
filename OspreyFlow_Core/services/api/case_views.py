@@ -95,6 +95,21 @@ class CaseViewStore(Protocol):
     async def get(self, case_id: str, view_id: str, reader: str) -> StoredCaseView: ...
     async def share(self, case_id: str, view_id: str, reader: str) -> StoredCaseView: ...
     async def delete(self, case_id: str, view_id: str, reader: str) -> None: ...
+    # Boards (ADR-143 decision 5): a view with drawing switched on, its references and layout
+    # changed only by its creator; `visible_in` lists views alone, `boards_in` boards alone.
+    async def save_board(
+        self, case_id: str, name: str, creator: str, *, node_ids: Sequence[NodeId]
+    ) -> StoredCaseView: ...
+    async def boards_in(self, case_id: str, reader: str) -> list[StoredCaseView]: ...
+    async def update_board(
+        self,
+        case_id: str,
+        view_id: str,
+        reader: str,
+        *,
+        add_node_ids: Sequence[NodeId] = (),
+        layout: dict[NodeId, NodePosition] | None = None,
+    ) -> StoredCaseView: ...
 
 
 def _made(
@@ -112,6 +127,33 @@ def _made(
         window=given.window,
         threshold=given.threshold,
         converted_from_case=converted_from_case,
+    )
+
+
+def _board(case_id: str, name: str, creator: str, node_ids: Sequence[NodeId]) -> StoredCaseView:
+    return StoredCaseView(
+        id=new_id(),
+        case_id=case_id,
+        name=name.strip() or "Board",
+        created_by=creator,
+        created_at=datetime.now(UTC),
+        node_ids=list(dict.fromkeys(node_ids)),
+        drawing=True,
+    )
+
+
+def _updated(
+    board: StoredCaseView,
+    add_node_ids: Sequence[NodeId],
+    layout: dict[NodeId, NodePosition] | None,
+) -> StoredCaseView:
+    held = list(board.node_ids or [])
+    added = [n for n in dict.fromkeys(add_node_ids) if n not in held]
+    return board.model_copy(
+        update={
+            "node_ids": held + added,
+            "layout": {**board.layout, **(layout or {})},
+        }
     )
 
 
@@ -138,9 +180,46 @@ class InMemoryCaseViewStore:
 
     async def visible_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
         return sorted(
-            (v for v in self.views.values() if v.case_id == case_id and visible_to(v, reader)),
+            (
+                v
+                for v in self.views.values()
+                if v.case_id == case_id and visible_to(v, reader) and not v.drawing
+            ),
             key=lambda v: (v.created_at, v.id),
         )
+
+    async def save_board(
+        self, case_id: str, name: str, creator: str, *, node_ids: Sequence[NodeId]
+    ) -> StoredCaseView:
+        board = _board(case_id, name, creator, node_ids)
+        self.views[board.id] = board
+        return board
+
+    async def boards_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
+        return sorted(
+            (
+                v
+                for v in self.views.values()
+                if v.case_id == case_id and visible_to(v, reader) and v.drawing
+            ),
+            key=lambda v: (v.created_at, v.id),
+        )
+
+    async def update_board(
+        self,
+        case_id: str,
+        view_id: str,
+        reader: str,
+        *,
+        add_node_ids: Sequence[NodeId] = (),
+        layout: dict[NodeId, NodePosition] | None = None,
+    ) -> StoredCaseView:
+        board = await self._own(case_id, view_id, reader)
+        if not board.drawing:
+            raise ViewNotFound(view_id)
+        changed = _updated(board, add_node_ids, layout)
+        self.views[view_id] = changed
+        return changed
 
     async def get(self, case_id: str, view_id: str, reader: str) -> StoredCaseView:
         view = self.views.get(view_id)
@@ -247,15 +326,52 @@ class PostgresCaseViewStore:
             await insert_view(conn, view)
         return view
 
-    async def visible_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
+    async def _listed(self, case_id: str, reader: str, *, drawing: bool) -> list[StoredCaseView]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM case_views WHERE case_id = $1 AND {_VISIBLE} "
-                "ORDER BY created_at, id",
+                "AND drawing = $3 ORDER BY created_at, id",
                 case_id,
                 reader,
+                drawing,
             )
         return [_row(r) for r in rows]
+
+    async def visible_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
+        return await self._listed(case_id, reader, drawing=False)
+
+    async def boards_in(self, case_id: str, reader: str) -> list[StoredCaseView]:
+        return await self._listed(case_id, reader, drawing=True)
+
+    async def save_board(
+        self, case_id: str, name: str, creator: str, *, node_ids: Sequence[NodeId]
+    ) -> StoredCaseView:
+        board = _board(case_id, name, creator, node_ids)
+        async with self._pool.acquire() as conn:
+            await insert_view(conn, board)
+        return board
+
+    async def update_board(
+        self,
+        case_id: str,
+        view_id: str,
+        reader: str,
+        *,
+        add_node_ids: Sequence[NodeId] = (),
+        layout: dict[NodeId, NodePosition] | None = None,
+    ) -> StoredCaseView:
+        async with self._pool.acquire() as conn, conn.transaction():
+            board = await self._own(conn, case_id, view_id, reader)
+            if not board.drawing:
+                raise ViewNotFound(view_id)
+            changed = _updated(board, add_node_ids, layout)
+            await conn.execute(
+                "UPDATE case_views SET lens = $3 WHERE id = $1 AND created_by = $2 AND drawing",
+                view_id,
+                reader,
+                json.dumps(changed.model_dump(mode="json", include=_LENS)),
+            )
+        return changed
 
     async def _fetch(self, conn: Any, case_id: str, view_id: str, reader: str) -> StoredCaseView:
         row = await conn.fetchrow(
