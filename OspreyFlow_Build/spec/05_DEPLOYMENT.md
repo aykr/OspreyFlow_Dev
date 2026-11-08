@@ -93,7 +93,7 @@ showing what has been decided and what is outstanding.
 | --- | --- |
 | **Profile** | Laptop, small or cluster. Every later screen filters its options to what is valid here |
 | **Components** | Graph store, analytics engine, and the storage roots for data, staging and backups |
-| **Models** | The deployment's own model for each job, from the list of pinned models (ADR-095): entity extraction (default `qwen2.5:7b-instruct`, a 4.68 GB download on the first Launch; `qwen2.5:14b-instruct` is the other choice, 8.99 GB), image description, transcription and embedding (each with today's one model). Then local only, or local with a named hosted fallback — and if hosted, which handling codes may be sent to it. Defaults to none |
+| **Models** | The deployment's own model for each job, from the list of pinned models (ADR-095): entity extraction (default `qwen2.5:7b-instruct`, a 4.68 GB download on the first Launch; `qwen2.5:14b-instruct` is the other choice, 8.99 GB), image description, transcription and embedding (each with today's one model). Then local only, or local with the engines (providers) an administrator enables (ADR-135; the older single `provider` and `hosted_fallback` are still read) — and if any, which handling codes may be sent to them. Defaults to none |
 | **Governance** | Identity provider, handling scheme, ontology. Ships with a UK law-enforcement scheme, a US criminal-intelligence scheme, and the default ontology |
 | **Geospatial** | Provider tier and basemap registry; gazetteers and boundary sets to load |
 | **Preflight** | Environment checks, then generate, review and launch |
@@ -102,7 +102,7 @@ Three properties make this worth building as a UI rather than a questionnaire in
 
 **Consequences are shown, not described.** Choosing `cluster` renders the machine count, the
 components that appear, and the estimated memory footprint, updating as later screens change.
-Enabling a hosted model draws the egress exception it creates on the deployment diagram. Nobody
+Enabling a hosted model draws the egress exception it creates on the deployment diagram, naming each enabled engine with its contract mark (ADR-136), read from `providers` (`tests/harness/test_egress_consequence.py`). Nobody
 has to hold the architecture in their head to see what a choice costs.
 
 **Preflight runs live.** Each check appears as it completes — available memory against the

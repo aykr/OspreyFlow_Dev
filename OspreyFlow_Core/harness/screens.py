@@ -124,7 +124,39 @@ def _egress_consequence(models: ModelsConfig) -> tuple[bool, str | None]:
     never touches `services/` or `adapters/`; it only states, for the screen, what a hosted
     fallback would mean. `ModelsConfig`'s own validator already refuses an inconsistent answer
     (a `hosted_fallback` with no codes, or codes with no fallback), so by the time a config reaches
-    here the two fields already agree."""
+    here the two fields already agree.
+
+    **Providers first** (ADR-114 Amendment 6, ADR-135): `models.provider` and `models.providers`
+    replaced `hosted_fallback`, and the schema refuses a provider beside it. Reading only the legacy
+    field showed "No egress exception." for a provider set the new way (platform lane, brief P1,
+    `tests/harness/test_egress_consequence.py`). Each provider is named by the label analysts see,
+    with ADR-136's contract mark."""
+    enabled = models.enabled_providers
+    if enabled:
+        engines = ", ".join(
+            f"{p.label} ("
+            + (
+                f"under contract ({p.contract_reference})"
+                if p.privacy_contract and p.contract_reference
+                else "under contract"
+                if p.privacy_contract
+                else "no contract"
+            )
+            + ")"
+            for p in enabled
+        )
+        if not models.sendable_handling_codes:
+            return (
+                True,
+                f"engines are enabled outside this deployment ({engines}), but no handling code "
+                "is sendable, so no case content may leave for them",
+            )
+        codes = ", ".join(models.sendable_handling_codes)
+        return (
+            True,
+            f"queries carrying handling code(s) [{codes}] may leave this deployment for {engines}, "
+            "where each dataset's egress setting also allows it (ADR-136)",
+        )
     if models.local_only or models.hosted_fallback is None:
         return False, None
     codes = ", ".join(models.sendable_handling_codes) if models.sendable_handling_codes else "none"
