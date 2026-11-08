@@ -3476,6 +3476,7 @@ async def test_supersede_edge_returns_the_replacements_own_id(
                 created_at=now_utc(),
             ),
             tx,
+            old_type="ASSOCIATE_OF",
         )
         await adapter.commit_transaction(tx)
         assert returned == wanted
@@ -3507,6 +3508,7 @@ async def test_the_stored_states_name_each_superseded_elements_successor(
             EdgeWrite(id=new_link, type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
                       handling=_handling("OFFICIAL"), created_by="reviewer-1", created_at=now_utc()),  # type: ignore[arg-type]
             tx,
+            old_type="ASSOCIATE_OF",
         )  # fmt: skip
         await adapter.commit_transaction(tx)
         links = await adapter.stored_link_states([old_link, new_link])

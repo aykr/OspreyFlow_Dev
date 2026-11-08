@@ -677,7 +677,7 @@ async def test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_supe
         superseding = old.model_dump(include={"type", "source", "target", "properties", "basis",
                                               "provenance", "handling"})  # fmt: skip
         moved = await graph.supersede_edge(link, EdgeWrite(id=new_edge_id(), created_by="t", created_at=T0,
-                                                           **superseding), tx)  # fmt: skip
+                                                           **superseding), tx, old_type=old.type)  # fmt: skip
         await graph.commit_transaction(tx)
         (live_link,) = [e for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
                         if e.id == moved]  # fmt: skip
@@ -1273,7 +1273,7 @@ async def test_a_close_never_puts_back_the_node_its_own_record_re_marked(
         raised = await graph.supersede_edge(link.id, EdgeWrite(
             id=new_edge_id(), type=link.type, source=link.source, target=link.target, properties=link.properties,
             interval=link.interval, occurrences=link.occurrences, provenance=link.provenance, handling=secret,
-            created_by="t", created_at=T0), tx)  # fmt: skip
+            created_by="t", created_at=T0), tx, old_type=link.type)  # fmt: skip
         await graph.commit_transaction(tx)
         await stores["alerts"].apply_repoints({link.id: raised})  # cited, its node not re-marked
         closed = await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert.id, SECRET_LOADER,
@@ -1301,7 +1301,7 @@ async def _link_above_node(stores: dict[str, Any], graph: Any, analytics: Analyt
         id=new_edge_id(), type=link.type, source=link.source, target=link.target, properties=link.properties,
         interval=link.interval, occurrences=link.occurrences, provenance=link.provenance,
         handling=link.handling.model_copy(update={"classification": "SECRET"}), created_by="t",
-        created_at=T0), tx)  # fmt: skip
+        created_at=T0), tx, old_type=link.type)  # fmt: skip
     await graph.commit_transaction(tx)
     return alert, link.id, raised
 
