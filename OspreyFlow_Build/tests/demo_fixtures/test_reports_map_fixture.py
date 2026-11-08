@@ -17,7 +17,11 @@ PARTS = ("row_template", "unmapped_fields", "deduplicate")
 
 
 def _differences(recipe: dict, copy: dict) -> list[str]:
-    return [part for part in PARTS if recipe.get(part) != copy.get(part)]
+    found = [part for part in PARTS if recipe.get(part) != copy.get(part)]
+    # The column carrying each part of the marking, which the draft's own settings declare.
+    if recipe["defaults"].get("handling_columns") != copy.get("handling_columns"):
+        found.append("handling_columns")
+    return found
 
 
 def test_the_keyboard_copy_is_the_committed_map() -> None:
@@ -34,3 +38,10 @@ def test_a_copy_differing_by_one_condition_is_caught() -> None:
     copy = json.loads(COPY.read_text())
     copy["row_template"]["edges"][3].pop("when")
     assert _differences(recipe, copy) == ["row_template"]
+
+
+def test_a_copy_declaring_another_marking_column_is_caught() -> None:
+    recipe = yaml.safe_load(RECIPE.read_text())
+    copy = json.loads(COPY.read_text())
+    copy["handling_columns"]["originator"] = "owning_unit"
+    assert _differences(recipe, copy) == ["handling_columns"]

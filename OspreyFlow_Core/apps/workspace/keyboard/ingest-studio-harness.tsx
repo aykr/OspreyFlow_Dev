@@ -88,11 +88,13 @@ const HELD = [
 ];  // prettier-ignore
 
 const HANDLING = { classification: "OFFICIAL", handling_code: "P", originator: "unit-a", owning_unit: "unit-a" };
-// Chapter 4's reports file declares a column for each of the six parts of a marking, as the committed
-// recipe's `handling_columns` does, so every element of its map binds all six (ADR-127 Amendment 2).
+// Chapter 4's reports file is registered with its marking and the units its rows may name, as a person
+// registers it (the register wizard declares no handling column). The draft's own settings then
+// declare a column for each of the six parts, as the committed recipe's `handling_columns` does, so
+// every element of its map binds all six (ADR-127 Amendment 2).
 const HANDLING_PARTS = ["classification", "handling_code", "action_code", "sanitisation_code", "originator", "owning_unit"];
-const REPORTS_HANDLING = { ...HANDLING, units: ["unit-a", "unit-b"],
-  handling_columns: Object.fromEntries(HANDLING_PARTS.map((part) => [part, part])) };  // prettier-ignore
+const REPORTS_HANDLING = { ...HANDLING, units: ["unit-a", "unit-b"] };
+const REPORTS_COLUMNS_DECLARED = Object.fromEntries(HANDLING_PARTS.map((part) => [part, part]));
 let SOURCES: Record<string, unknown>[] = [
   { id: "src-calls", dataset_id: "harbour-extract", connection_id: "files", name: "Wing phone calls file",
     location: "harbour-extract/calls.csv", connector_profile: "generic-csv", handling: HANDLING,
@@ -158,7 +160,8 @@ let created: Record<string, unknown> | null = null;
 // already holding the whole committed map, for the axe scan of the Map editor at its fullest.
 if (startParams.get("pipeline") === "reports-map")
   created = { ...base, recipe_id: "r-new", version: 1, status: "draft", label: "Intelligence reports",
-    source_location: "harbour-extract/intel_reports.csv", handling: REPORTS_HANDLING, ready_for_profile: true, created_at: day(0),
+    source_location: "harbour-extract/intel_reports.csv", handling: { ...REPORTS_HANDLING, handling_columns: REPORTS_COLUMNS_DECLARED },
+    ready_for_profile: true, created_at: day(0),
     row_template: REPORTS_MAP.row_template, unmapped_fields: REPORTS_MAP.unmapped_fields, deduplicate: REPORTS_MAP.deduplicate,
     pipeline: { ...CHAIN, nodes: CHAIN.nodes.map((n) => (n.id === "source" ? { ...n, label: "Intelligence reports file", config: { source_id: "src-reports" } } : n)) } };  // prettier-ignore
 (window as unknown as { __asked: typeof asked }).__asked = asked;

@@ -1,5 +1,5 @@
 {
-  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate); tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
+  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate, defaults.handling_columns); tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
   "row_template": {
     "entities": [
       {
@@ -765,5 +765,13 @@
         "field": "report_ref"
       }
     ]
+  },
+  "handling_columns": {
+    "classification": "classification",
+    "handling_code": "handling_code",
+    "action_code": "action_code",
+    "sanitisation_code": "sanitisation_code",
+    "originator": "originator",
+    "owning_unit": "owning_unit"
   }
 }

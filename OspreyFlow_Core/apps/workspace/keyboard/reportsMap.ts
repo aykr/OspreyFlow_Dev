@@ -141,3 +141,18 @@ export async function mapTheReports(page: Page) {
     await press(page, `Ignore ${ignored.field}`);
   }
 }
+
+/** The committed recipe's `handling_columns`: the column carrying each part of a report's marking. */
+export const REPORTS_HANDLING_COLUMNS: Record<string, string> = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./fixtures/pid_intel_reports_map.json", import.meta.url)), "utf8"),
+).handling_columns;
+
+/** On the draft's own settings (Connect): the column carrying each part of the marking, typed. */
+export async function declareTheMarkingColumns(page: Page) {
+  const labels: Record<string, string> = { classification: "Classification", handling_code: "Handling code",
+    action_code: "Action code", sanitisation_code: "Sanitisation code", originator: "Originator", owning_unit: "Owning unit" };  // prettier-ignore
+  for (const [part, column] of Object.entries(REPORTS_HANDLING_COLUMNS)) {
+    await page.getByRole("textbox", { name: `Column carrying ${labels[part]}`, exact: true }).focus();
+    await page.keyboard.type(column);
+  }
+}

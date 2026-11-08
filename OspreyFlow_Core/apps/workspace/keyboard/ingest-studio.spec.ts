@@ -5,7 +5,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
-import { REPORTS_MAP, mapTheReports, meaning } from "./reportsMap";
+import { REPORTS_HANDLING_COLUMNS, REPORTS_MAP, declareTheMarkingColumns, mapTheReports, meaning } from "./reportsMap";
 
 const REGISTRY = "INGEST_STUDIO_ACTIONS";
 const HARNESS = "/keyboard/ingest-studio-harness.html";
@@ -423,9 +423,11 @@ async function buildTheReportsMap(page: Page) {
   await press(page, "Preview");
   await press(page, "Run preview");
   await expect(drawer(page).getByRole("cell", { name: "Report two" })).toBeVisible();
-  // The row key, on the draft's own settings: what makes a report the same report again.
+  // On the draft's own settings: the column carrying each part of the marking (the register wizard
+  // declares none), and the row key, what makes a report the same report again.
   await press(page, "Settings");
   await press(page, "The draft's own settings");
+  await declareTheMarkingColumns(page);
   for (const part of REPORTS_MAP.deduplicate.key) {
     await page.getByRole("textbox", { name: "Key column name" }).focus();
     await page.keyboard.type(part.field!);
@@ -434,7 +436,9 @@ async function buildTheReportsMap(page: Page) {
   await press(page, "Save");
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "PATCH" && a.path.endsWith("/r-new") && a.body!.includes('"deduplicate"'))).toBe(true);
   const patch = (await asked(page)).filter((a) => a.method === "PATCH" && a.path.endsWith("/r-new")).at(-1)!;
-  expect((JSON.parse(patch.body!) as { deduplicate: unknown }).deduplicate).toEqual(REPORTS_MAP.deduplicate);
+  const sent = JSON.parse(patch.body!) as { deduplicate: unknown; handling: { handling_columns?: unknown } };
+  expect(sent.deduplicate).toEqual(REPORTS_MAP.deduplicate);
+  expect(sent.handling.handling_columns).toEqual(REPORTS_HANDLING_COLUMNS);
   await press(page, "Close the drawer");
   await openTheMapEditor(page);
   await mapTheReports(page);
@@ -493,8 +497,11 @@ test("the reports pipeline is edited in expert mode by keyboard, and the save ca
   await library.focus();
   await library.selectOption("spacy");
   await press(page, "Apply extract settings");
-  await expect.poll(async () => (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline")).length).toBeGreaterThan(1);
-  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline")).at(-1)!;
+  // The save after Apply is the one that carries the setting; an earlier one (the Extract added)
+  // does not, so wait for a save holding an extract with any library before reading the last.
+  const saves = async () => (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline"));
+  await expect.poll(async () => (await saves()).some((a) => /"kind":"extract"[^}]*"library"/.test(a.body ?? ""))).toBe(true);
+  const put = (await saves()).at(-1)!;
   const graph = JSON.parse(put.body!) as { nodes: { id: string; kind: string; config?: { library?: string } }[]; edges: { source: string; target: string }[] };
   const extract = graph.nodes.find((n) => n.kind === "extract")!;
   expect(extract.config!.library).toBe("spacy");
@@ -526,6 +533,10 @@ test("a reports map leaving a declared part of the marking unbound is refused at
   await chooser.focus();
   await chooser.selectOption("src-reports");
   await press(page, "Use this source");
+  await press(page, "The draft's own settings");
+  await declareTheMarkingColumns(page);
+  await press(page, "Save");
+  await press(page, "Close the drawer");
   await openTheMapEditor(page);
   await press(page, "+ entity");
   await press(page, "Save draft");
