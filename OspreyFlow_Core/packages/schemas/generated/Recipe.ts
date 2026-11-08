@@ -75,7 +75,9 @@ export type PipelineNodeKind =
   | "filter"
   | "derive"
   | "union"
-  | "dedupe";
+  | "dedupe"
+  | "sql"
+  | "fuzzy_match";
 export type Label1 = string;
 export type Nodes = PipelineNode[];
 export type Source = string;
@@ -83,8 +85,8 @@ export type Target = string;
 export type Edges1 = PipelineEdge[];
 export type Staging =
   | [
-      LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep,
-      ...(LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep)[]
+      LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep | SqlStep | FuzzyMatchStep,
+      ...(LookupStep | JoinStep | FilterStep | DeriveStep | UnionStep | DedupeStep | SqlStep | FuzzyMatchStep)[]
     ]
   | null;
 export type Id2 = string;
@@ -175,6 +177,38 @@ export type Input3 = string;
  * @minItems 1
  */
 export type On1 = [string, ...string[]];
+export type Id8 = string;
+export type Label8 = string | null;
+export type Kind7 = "sql";
+/**
+ * @minItems 1
+ */
+export type Inputs1 = [string, ...string[]];
+export type Select = string;
+export type Summary = string;
+export type Id9 = string;
+export type Label9 = string | null;
+export type Kind8 = "fuzzy_match";
+export type Left1 = string;
+export type Right1 = string;
+/**
+ * @minItems 1
+ */
+export type Compare = [FuzzyComparison, ...FuzzyComparison[]];
+export type Left2 = string;
+export type Right2 = string;
+export type Method = "exact" | "jaro_winkler" | "levenshtein";
+export type Left3 = string;
+export type Right3 = string;
+export type Method1 = "exact" | "soundex" | "year";
+export type BlockOn = FuzzyBlocking[];
+export type Threshold = number;
+/**
+ * @minItems 1
+ */
+export type Add2 = [AddedColumn, ...AddedColumn[]];
+export type Left4 = string;
+export type Right4 = string;
 
 export interface Recipe {
   id: Id;
@@ -482,4 +516,66 @@ export interface DedupeStep {
   kind: Kind6;
   input: Input3;
   on: On1;
+}
+/**
+ * Expert mode (ADR-140 decision 12; R4, R15): **one SELECT** over the tables named in
+ * `inputs`, each read under its own name, run by the Vault's DuckDB in a sandbox: read-only, no
+ * file or network function, no table but its inputs, a time and a memory limit, and only the
+ * rows the person running it may read. Every input table carries a `_ref` column; the SELECT
+ * must carry it through, as a column named `_ref` or starting `_ref_` (an aggregate as a list,
+ * `list(_ref)`), so each output row names every input row it came from. `summary` is the plain
+ * words guided mode and every run report show beside the SQL: mandatory.
+ */
+export interface SqlStep {
+  id: Id8;
+  label?: Label8;
+  kind: Kind7;
+  inputs: Inputs1;
+  select: Select;
+  summary: Summary;
+}
+/**
+ * Expert mode (ADR-140 decision 13; ADR-006 Amendment 1; R5, R13): each row of `left` kept,
+ * with the columns `add` names from its best-scoring row of `right` and that row's score as
+ * `match_score`, when the score is at least `threshold`; a row below it is kept with those cells
+ * empty, and counted. The threshold is part of the pipeline's version. What Map writes from a
+ * matched column is `inferred` with the score, and the match itself is the `SAME_AS` that
+ * `same_as` names, inferred until a person confirms it. It is the last step: Map reads it.
+ */
+export interface FuzzyMatchStep {
+  id: Id9;
+  label?: Label9;
+  kind: Kind8;
+  left: Left1;
+  right: Right1;
+  compare: Compare;
+  block_on?: BlockOn;
+  threshold: Threshold;
+  add: Add2;
+  same_as: FuzzySameAs;
+}
+/**
+ * One comparison: a column of the left table against a column of the right, by a method.
+ */
+export interface FuzzyComparison {
+  left: Left2;
+  right: Right2;
+  method: Method;
+}
+/**
+ * Only pairs agreeing on this key are compared (as the ontology's `resolution.blocking`).
+ */
+export interface FuzzyBlocking {
+  left: Left3;
+  right: Right3;
+  method?: Method1;
+}
+/**
+ * The two elements of Map's row template the match says may be one: `left`, written from the
+ * left table's columns, and `right`, from the matched columns. The engine writes a scored
+ * `SAME_AS` between them marked `inferred`, never a merge (ADR-006 Amendment 1; rules 5 and 6).
+ */
+export interface FuzzySameAs {
+  left: Left4;
+  right: Right4;
 }

@@ -10,6 +10,9 @@ export type RepeatsFolded = number;
 export type Rejected = number;
 export type RightRowsIn = number;
 export type RightUnmatched = number;
+export type Threshold = number | null;
+export type Matched = number;
+export type RowsWithheld = number;
 
 /**
  * ADR-140 Amendment 12: what one staging step did in a run, as counts: the rows it read and
@@ -27,4 +30,7 @@ export interface StagingStepCount {
   rejected?: Rejected;
   right_rows_in?: RightRowsIn;
   right_unmatched?: RightUnmatched;
+  threshold?: Threshold;
+  matched?: Matched;
+  rows_withheld?: RowsWithheld;
 }

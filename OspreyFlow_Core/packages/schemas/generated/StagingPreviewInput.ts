@@ -19,7 +19,9 @@ export type PipelineNodeKind =
   | "filter"
   | "derive"
   | "union"
-  | "dedupe";
+  | "dedupe"
+  | "sql"
+  | "fuzzy_match";
 export type Label = string;
 export type Nodes = PipelineNode[];
 export type Source = string;

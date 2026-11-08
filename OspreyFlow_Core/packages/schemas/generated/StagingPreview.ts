@@ -18,6 +18,9 @@ export type RepeatsFolded = number;
 export type Rejected = number;
 export type RightRowsIn = number;
 export type RightUnmatched = number;
+export type Threshold = number | null;
+export type Matched = number;
+export type RowsWithheld = number;
 export type Counts = StagingStepCount[];
 export type RowIndex = number;
 export type Reason = string;
@@ -107,6 +110,9 @@ export interface StagingStepCount {
   rejected?: Rejected;
   right_rows_in?: RightRowsIn;
   right_unmatched?: RightUnmatched;
+  threshold?: Threshold;
+  matched?: Matched;
+  rows_withheld?: RowsWithheld;
 }
 /**
  * One rejected row, grouped by cause in the load report — never a

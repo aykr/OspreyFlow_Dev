@@ -81,6 +81,11 @@ class Right(StrEnum):
     # ADR-112 Amendment 5 decision 1: merge a drawn dataset into another in the Studio (ADR-143
     # Amendment 2). Held by the Data Engineer; its route arrives with the merge (L3.4).
     MERGE_DATASETS = "merge_datasets"  # D11
+    # ADR-140 decision 3 (the redesign's phase 8): write the expert steps, a SQL transform and a
+    # fuzzy match, in expert mode. Granted by an administrator, singly
+    # (`right:write_sql_transforms`) or in a custom role; no built-in role holds it (ADR-112
+    # Amendment 8).
+    WRITE_SQL_TRANSFORMS = "write_sql_transforms"  # D12
     # Reporting
     READ_REPORTS = "read_reports"  # R1, Viewer
     READ_REPORT_FEED = "read_report_feed"  # R2, Viewer
