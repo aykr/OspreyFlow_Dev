@@ -1142,8 +1142,8 @@ nothing in this section is wired to anything yet.
 ## 9. What the studio deliberately does not do
 
 Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). **The guided staging steps'
-engine is built** (redesign phase 7a, 8 November 2026; ADR-140 Amendment 11); their drawers on the
-canvas are phase 7b. The SQL transform and the fuzzy match are phase 8's and are not built. Until a
+engine is built** (ADR-140 Amendment 11). Their drawers on the canvas are not built yet, and nor are
+the SQL transform and the fuzzy match. Until a
 pipeline declares staging steps, its sources are separate branches mapped row by row, as §1
 describes.
 
