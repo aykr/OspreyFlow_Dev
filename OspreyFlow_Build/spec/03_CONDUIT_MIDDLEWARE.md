@@ -415,8 +415,8 @@ GET    /v1/datasets/{dataset_id}/model                     its domain model: the
 POST   /v1/datasets/{dataset_id}/model/draft               opens the draft, N+1, as a copy of live (v1 bare POLE if none); 409 model_refused for a second
 PUT    /v1/datasets/{dataset_id}/model/draft               saves it; an extension removed not retired, or a POLE core type, 409 model_refused
 DELETE /v1/datasets/{dataset_id}/model/draft               discards it; audited
-GET    /v1/datasets/{dataset_id}/model/impact              what making it live would change: types, the pipelines writing them, the cases and composites the reader may open
-POST   /v1/datasets/{dataset_id}/model/make-live           the named draft live; the pipelines writing a changed type flagged and paused with the reason; audited
+GET    /v1/datasets/{dataset_id}/model/impact              what making it live would change: types, the pipelines writing them, the cases the reader may open and only the composites the reader's cases read
+POST   /v1/datasets/{dataset_id}/model/make-live           the named draft live; at the dataset's first, its owners (people the directory holds, enabled, never a service account) named and its home case made first, their Authors, 409 owner_needed in words otherwise, and for a second first Make live at once; the pipelines writing a changed type flagged and paused with the reason; audited
 POST   /v1/datasets/{dataset_id}/model/revert              a new draft N+2 copying an earlier version, never a rewrite; 409 no_model_yet for a dataset with none
 POST   /v1/investigations/{id}/ingest/recipes                                   Connect: create a draft
 GET    /v1/investigations/{id}/ingest/recipes                                   Connect: the author's own unit's drafts

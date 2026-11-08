@@ -130,6 +130,13 @@ class _Datasets(Protocol):
     async def chosen_of_case(self, investigation_id: str) -> list[Any]: ...
 
 
+def composites_they_read(composites: Sequence[Any], read_by_them: set[str]) -> list[str]:
+    """Of the composites having the dataset as a member, the names of those one of the reader's
+    own cases reads, and no other: a composite only another unit's case reads is neither named
+    nor counted (rule 7)."""
+    return sorted(d.name for d in composites if d.id in read_by_them)
+
+
 async def impact_of(
     dataset_id: str,
     live: TargetModel | None,
@@ -158,9 +165,7 @@ async def impact_of(
         draft_version=draft.version,
         pipelines=pipelines,
         cases=sorted(visible, key=lambda c: (c.name or "", c.investigation_id)),
-        composites=sorted(
-            d.name for d in await datasets.composites_of(dataset_id) if d.id in read_by_them
-        ),
+        composites=composites_they_read(await datasets.composites_of(dataset_id), read_by_them),
         packs_added=changes.packs_added,
         packs_removed=changes.packs_removed,
         packs_repinned=changes.packs_repinned,

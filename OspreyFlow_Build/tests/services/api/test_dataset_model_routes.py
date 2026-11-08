@@ -13,9 +13,12 @@ What a mistake would do, and the case that catches it:
 - *Make live* flagging a pipeline it does not affect, or missing one it does, or leaving a flagged
   pipeline's schedule running:
   `test_make_live_flags_and_pauses_exactly_the_pipelines_writing_a_change`;
-- the impact naming a case or composite the reader may not open (rule 7):
-  `test_the_impact_names_only_cases_and_composites_the_reader_may_open`, red with each filter
-  planted out;
+- the impact naming a case the reader may not open, or a composite none of the reader's own cases
+  reads (rule 7): `test_the_impact_names_only_cases_and_composites_the_reader_may_open`, red with
+  the reader's case list planted out
+  (`test_the_hidden_case_and_composite_are_named_with_the_filters_planted_out`) and with the
+  composite filter alone planted out
+  (`test_the_hidden_composite_is_named_with_its_filter_alone_planted_out`);
 - a route on a dataset with no model answering as if it had one: `test_no_model_yet_in_words`.
 """
 
@@ -279,7 +282,7 @@ def test_the_hidden_case_and_composite_are_named_with_the_filters_planted_out(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Rule 15, red: `impact_of` handed a reader's case list holding every case, as an unfiltered
-    read would be, names the hidden case and its composite."""
+    read would be, names the hidden case, and with it the composite that case reads."""
     real = app_module.impact_of
 
     class _Everyone:
@@ -293,6 +296,22 @@ def test_the_hidden_case_and_composite_are_named_with_the_filters_planted_out(
     monkeypatch.setattr(app_module, "impact_of", unfiltered)
     impact = _impact(world)
     assert "case-hidden" in [c["investigation_id"] for c in impact["cases"]]
+    assert "Dataset comp-hidden" in impact["composites"]
+
+
+def test_the_hidden_composite_is_named_with_its_filter_alone_planted_out(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red (the round-1 review's item 12): the reader's case list kept, the composite
+    filter alone planted out, as a composite listing read without it would be: the hidden case
+    stays unnamed, while comp-hidden, read only by it, is named."""
+    from services.api import model_impact
+
+    monkeypatch.setattr(
+        model_impact, "composites_they_read", lambda composites, _read: [d.name for d in composites]
+    )
+    impact = _impact(world)
+    assert "case-hidden" not in [c["investigation_id"] for c in impact["cases"]]
     assert "Dataset comp-hidden" in impact["composites"]
 
 

@@ -680,8 +680,8 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     lists the packs added, removed and repinned; the extensions added, retired and restored; the
     `changed_types` they amount to; each **`ImpactedPipeline`** (a deployed pipeline of the
     dataset that writes a changed type, with the types it writes); each **`ImpactedCase`** reading
-    the dataset that the reader may open, never one they may not, and never a count of those; and
-    the composites that have the dataset as a member;
+    the dataset that the reader may open, never one they may not, and never a count of those; and,
+    of the composites that have the dataset as a member, only those the reader's own cases read;
   - **`MadeLive`**: the version now `live`, the one it replaced, and the pipelines marked as
     needing attention, each with its schedule paused and the reason.
 - **The owners named at *Make live*** (ADR-145 Amendment 4 decision 4):
