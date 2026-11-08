@@ -67,9 +67,15 @@ def storage() -> Iterator[ObjectStorageConfig]:
         ObjectStorageConfig.from_env(), bucket=f"studio-l14-{uuid.uuid4().hex[:12]}"
     )
     yield config
-    fs = staging.filesystem(config)
+    # The run's own bucket, removed whole: the store is a throwaway stack's, and the bucket is this
+    # run's alone.
+    fs = pa_fs.S3FileSystem(
+        endpoint_override=config.endpoint, access_key=config.access_key,
+        secret_key=config.secret_key, scheme="https" if config.use_ssl else "http",
+        allow_bucket_deletion=True,
+    )  # fmt: skip
     if fs.get_file_info(config.bucket).type != pa_fs.FileType.NotFound:
-        fs.delete_dir_contents(config.bucket)
+        fs.delete_dir(config.bucket)
 
 
 def _held(fs: pa_fs.FileSystem, path: str) -> list[dict[str, object]] | None:
