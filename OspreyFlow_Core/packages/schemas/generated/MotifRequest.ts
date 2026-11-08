@@ -14,6 +14,17 @@ export type ExtractionConfidence = number | null;
 export type FirstSeen = string;
 export type LastConfirmed = string | null;
 export type PrincipalId = string;
+export type ProvenanceClass = "analyst_drawn";
+export type DrawnItemId = string;
+export type DrawnBoardId = string;
+export type DrawnCaseId = string;
+export type DrawnLabel = string;
+export type GradingSchemeName = "5x5x5" | "3x5x2";
+export type GradeSource = string;
+export type GradeIntelligence = string;
+export type GradeHandling = string;
+export type DrawnSourceNote = string | null;
+export type DrawnIcon = string | null;
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;
@@ -105,6 +116,7 @@ export interface Provenance {
   first_seen: FirstSeen;
   last_confirmed?: LastConfirmed;
   confirmed_by?: PrincipalId | null;
+  drawn?: DrawnAssertion | null;
   [k: string]: unknown;
 }
 export interface SourceRef {
@@ -113,6 +125,32 @@ export interface SourceRef {
   excerpt_hash: ExcerptHash;
   load_id?: SourceLoadId;
   [k: string]: unknown;
+}
+/**
+ * ADR-143 decision 4: on the provenance of every drawn node and link. A drawn item is asserted
+ * by its author, not model-derived: rule 5's `inferred` is for the matches it raises, not for it.
+ */
+export interface DrawnAssertion {
+  provenance_class?: ProvenanceClass;
+  item_id: DrawnItemId;
+  asserted_by: PrincipalId;
+  board_id: DrawnBoardId;
+  case_id: DrawnCaseId;
+  label: DrawnLabel;
+  grading: Grading;
+  source_note?: DrawnSourceNote;
+  source_document?: DocumentId | null;
+  icon?: DrawnIcon;
+}
+/**
+ * A grade in one scheme, kept with its scheme so a later change of scheme (L3.7) keeps the
+ * original beside the new one (C13).
+ */
+export interface Grading {
+  scheme?: GradingSchemeName;
+  source: GradeSource;
+  intelligence: GradeIntelligence;
+  handling: GradeHandling;
 }
 export interface Handling {
   classification: Classification;
