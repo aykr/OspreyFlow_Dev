@@ -65,6 +65,7 @@ from schemas.ingest import (
     SourceWatermark,
     StudioRecipeDraft,
     StudioRecipeStatus,
+    stored_digest,
 )
 
 from .rule_evaluation import (
@@ -654,7 +655,16 @@ async def load_with_rules(
                 assert sink is not None
                 await _withdraw_dropped_rows(recipe, rows, report, sink, investigation_scope)
             if own_links is not None:
-                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)
+                merged = _own_key_merges(report, own_links.own, own_links.priors)
+                # And each as this load left it, read again in its transaction after its write:
+                # the revert goes ahead only while the link still reads back to that.
+                report.own_key_merges = [
+                    prior.model_copy(
+                        update={"left_digest": stored_digest(left.stored) if left else None}
+                    )
+                    for prior in merged
+                    for left in [await graph.read_link_state(prior.edge_id, tx)]
+                ]
             if past is not None:
                 # Before the commit, so the record the commit writes keeps the watermark reached.
                 report.watermark = past.reached

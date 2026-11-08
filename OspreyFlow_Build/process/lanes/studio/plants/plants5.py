@@ -19,8 +19,8 @@ PLANTS = {
          "        if since and False:\n            refusals.append(Refusal(record.load_id, \"own_link_written_since\", since))\n"),
     ], [UNIT]),
     "O3": ("nothing captured: the load keeps no prior state", PUB, [
-        ("                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)\n",
-         "                report.own_key_merges = []\n"),
+        ("                merged = _own_key_merges(report, own_links.own, own_links.priors)\n",
+         "                merged = []\n"),
     ], [UNIT]),
     "O4": ("every merge counted as the row's own at the revert", REVERT, [
         ("    own = {m.edge_id for m in record.own_key_merges}\n", "    own = set(record.merged_edge_ids)\n"),
@@ -29,6 +29,29 @@ PLANTS = {
         ("    own_key_merges: SkipJsonSchema[list[LinkPriorState]] = Field(default_factory=list, exclude=True)\n",
          "    own_key_merges: list[LinkPriorState] = Field(default_factory=list)\n"),
     ], [TOLD]),
+    "O6": ("the revert's planning comparing only the last load, not the whole record (the old shape)", REVERT, [
+        ("            held = stored_digest(now_held.stored) if now_held is not None else None\n",
+         "            held = (prior.left_digest if now_held is not None and now_held.load_id == record.load_id\n"
+         "                    else (stored_digest(now_held.stored) if now_held is not None else None))\n"),
+    ], [UNIT]),
+    "O7": ("the stamping wrapper's restore without its composite guard", f"{CORE}/services/api/dataset_scope.py", [
+        ("        await self._refuse_loading_here()\n        restored = await self._inner.restore_link_state(state, tx)\n",
+         "        restored = await self._inner.restore_link_state(state, tx)\n"),
+    ], ["tests/services/api/test_restore_link_state_through_the_wrapper.py"]),
+    "O8": ("the wrapper's declared restore removed (left to __getattr__)", f"{CORE}/services/api/dataset_scope.py", [
+        ("    async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:\n",
+         "    async def _absent_restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:\n"),
+        ('        if name == "restore_link_state":  # a write: declared above, with its guard, or absent\n            raise AttributeError(name)\n', ""),
+    ], ["tests/services/api/test_restore_link_state_through_the_wrapper.py"]),
+    "O9": ("the put-back links left out of the working sets", REVERT, [
+        ("            reverting_nodes, [*record.created_edge_ids, *put_back]\n        )\n",
+         "            reverting_nodes, list(record.created_edge_ids)\n        )\n"),
+        ("            reverting_nodes, [*record.created_edge_ids, *put_back], final_pass=True\n",
+         "            reverting_nodes, list(record.created_edge_ids), final_pass=True\n"),
+    ], [UNIT]),
+    "O10": ("nobody told the put-back links changed", REVERT, [
+        ("        if put_back and deps.links_changed is not None:\n", "        if False:\n"),
+    ], [UNIT]),
 }
 ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
 CONF = "tests/conformance/graph_port/test_suite.py"
@@ -36,24 +59,35 @@ LIVE = "tests/services/api/test_source_refresh_snapshot_live.py"
 LIVE_PLANTS = {
     "L0": ("the adapter without the two methods (the conformance cases before it)", ADAPTER, [
         ("    async def read_link_state(\n", "    async def _absent_read_link_state(\n"),
-        ("    async def restore_link_state(self,", "    async def _absent_restore_link_state(self,"),
+        ("    async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:\n        type_name", "    async def _absent_restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:\n        type_name"),
     ], [CONF, "-k", "link_state or restored_link"]),
-    "L1": ("the restore without its written-since check", ADAPTER, [
-        ("        if not rows or AuditStub.model_validate(rows[0][\"audit\"]).load_id != written_by:\n",
-         "        if not rows:\n"),
-    ], [CONF, "-k", "link_state or restored_link"]),
+    "L1": ("the restore without its whole-record check (written since, by anyone)", ADAPTER, [
+        ("        if held != state.left_digest:\n            return False  # written since, by anyone\n", ""),
+    ], [CONF, "-k", "link_state or restored_link or digest or its_own_type or marking_before"]),
     "L2": ("the restore writing the link at a weaker marking", ADAPTER, [
         ("        marking = state.handling\n",
          "        marking = state.handling.model_copy(update={\"classification\": \"OFFICIAL\"})\n"),
     ], [CONF, "-k", "link_state or restored_link"]),
+    "L5": ("the restore's write untyped (every type holding the id)", ADAPTER, [
+        ('            f"g.E().hasLabel({groovy_string_literal(state.edge_type)})"\n            f\'.has("id",{groovy_string_literal(state.edge_id)}){steps}\',\n',
+         '            f\'g.E().has("id",{groovy_string_literal(state.edge_id)}){steps}\',\n'),
+    ], [CONF, "-k", "its_own_type"]),
+    "W1": ("withdrawn_row_links without the case", f"{CORE}/services/api/recipe_runs.py", [
+        ('"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND investigation_id = $2 AND row_key = ANY($3::text[])",\n',
+         '"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n                    "AND $2::text IS NOT NULL AND row_key = ANY($3::text[])",\n'),
+    ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_links_answers_this_recipe_and_case_alone"]),
+    "W2": ("withdrawn_row_links without the recipe", f"{CORE}/services/api/recipe_runs.py", [
+        ('"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE recipe_id = $1 "\n',
+         '"SELECT row_key, edge_ids FROM withdrawn_row_keys WHERE $1::text IS NOT NULL "\n'),
+    ], ["tests/services/api/test_row_key_withdrawal_ledger.py::test_withdrawn_row_links_answers_this_recipe_and_case_alone"]),
     "L4": ("the restore altering one stored property (occurrences + 1)", ADAPTER, [
         ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
          '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'
          '        props["occurrences"] = int(props.get("occurrences") or 1) + 1\n'),
     ], [CONF, "-k", "round_trips_exactly"]),
     "L3": ("nothing captured, live: the load keeps no prior state", PUB, [
-        ("                report.own_key_merges = _own_key_merges(report, own_links.own, own_links.priors)\n",
-         "                report.own_key_merges = []\n"),
+        ("                merged = _own_key_merges(report, own_links.own, own_links.priors)\n",
+         "                merged = []\n"),
     ], [LIVE, "-k", "returning"]),
 }
 env = {k: v for k, v in os.environ.items() if k != "OSPREY_LANE"}

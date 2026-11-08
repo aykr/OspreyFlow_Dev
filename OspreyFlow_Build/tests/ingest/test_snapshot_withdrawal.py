@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 from adapters.media_objectstore.testing import InMemoryMediaStore
 from schemas.analytics import EventRecord
-from schemas.ingest import LoadReport, Recipe
+from schemas.ingest import LoadReport, Recipe, stored_digest
 from services.api.recipe_runs import KeptRow
 from services.api.studio_publish import load_with_rules, withdraw_dropped_rows_events
 
@@ -363,7 +363,10 @@ async def test_a_row_that_comes_back_is_kept_again_and_creates_nothing() -> None
     assert len(events.live) == 2, "B's, and A's new one; A's first stays set aside"
     # ADR-110 Amendment 16: the merge is A's own, kept as the link was before it, so the load
     # reverts; no words say otherwise.
-    assert back.own_key_merges == [as_it_was]
+    (kept,) = back.own_key_merges
+    assert kept.model_copy(update={"left_digest": None}) == as_it_was
+    left = await graph.read_link_state(a_link)
+    assert left is not None and kept.left_digest == stored_digest(left.stored), "as the load left it"
     assert back.refresh_notes == []
 
 
@@ -571,6 +574,54 @@ async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_li
     assert "1 link(s) a returning row of it merged into were written again since" in words
     assert "their" not in words, "no other load or case is named"
     assert (_live_values(graph), _live_links(graph)) == live, "nothing changed"
+
+
+async def test_a_case_holding_the_put_back_link_drops_its_merged_copy_and_is_told() -> None:
+    """ADR-110 Amendment 16: a case with the link on its canvas holds the merged copy. The revert
+    takes it out of every working set (both passes), so the canvas keeps no stale copy and its next
+    expand reads the restored link, and tells the change stream the link changed, for the case."""
+    import dataclasses
+
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    first = await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    await _snapshot(graph, keys, [A, B], "load-3")
+    (a_link,) = first.kept_row_elements[_key(A)].edge_ids
+    told: list[tuple[list[str], str | None]] = []
+
+    async def links_changed(edge_ids: list[str], case: str | None) -> None:
+        told.append((list(edge_ids), case))
+
+    steps = Steps()
+    deps = dataclasses.replace(_deps(graph, RefreshLedger(keys), steps), links_changed=links_changed)
+    deps.working_sets.cases = {"a-canvas": {a_link}}  # type: ignore[attr-defined]
+
+    await revert("load-3", reverted_by="operator-1", deps=deps, now=NOW)
+
+    assert deps.working_sets.cases["a-canvas"] == set(), "no stale merged copy"  # type: ignore[attr-defined]
+    removals = [s for s in steps.log if s[0] in ("working_sets", "working_sets_again")]
+    assert [a_link in s[2].split(",") for s in removals] == [True, True]
+    assert told == [([a_link], CASE)]
+
+
+async def test_a_returning_rows_revert_is_refused_once_an_analyst_corrected_its_link() -> None:
+    """ADR-110 Amendment 16: a correction (`superseded`) leaves the link's last load and revision
+    alone, so only the whole stored record shows it was written since. Refused, nothing changed,
+    and the corrected link is never brought back live beside its successor."""
+    graph, keys = MergingGraph(ONTOLOGY), WithdrawalLedger()
+    first = await _snapshot(graph, keys, [A, B], "load-1")
+    await _snapshot(graph, keys, [B], "load-2")
+    await _snapshot(graph, keys, [A, B], "load-3")
+    (a_link,) = first.kept_row_elements[_key(A)].edge_ids
+    graph.superseded.add(a_link)  # an analyst's correction, as `supersede_edge` marks it
+    before = await graph.read_link_state(a_link)
+
+    with pytest.raises(RevertRefused) as refused:
+        await revert("load-3", reverted_by="operator-1",
+                     deps=_deps(graph, RefreshLedger(keys), Steps()), now=NOW)  # fmt: skip
+
+    assert [(r.reason, r.count) for r in refused.value.refusals] == [("own_link_written_since", 1)]
+    assert await graph.read_link_state(a_link) == before and a_link in graph.superseded
 
 
 async def test_a_merge_into_a_link_that_is_not_the_rows_own_still_refuses_the_revert() -> None:

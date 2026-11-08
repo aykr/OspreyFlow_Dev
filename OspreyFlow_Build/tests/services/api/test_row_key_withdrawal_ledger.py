@@ -491,3 +491,30 @@ async def test_a_records_own_key_merges_round_trip_and_no_run_view_carries_them(
     (row,) = [r for r in await runs.for_recipe(recipe, limit=5) if r.run_id == run_id]
     reader = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
     assert SENTINEL not in app_module._schedule_run_view(row, reader, SCHEME).model_dump_json()
+
+
+async def test_withdrawn_row_links_answers_this_recipe_and_case_alone(
+    runs: RecipeRunStore,
+) -> None:
+    """ADR-110 Amendment 16, rules 3 and 4: the links a returning row's own withdrawn key recorded,
+    asked of this pipeline in this case. Another case's withdrawal of the same key, and another
+    pipeline's in this case, are never this one's: a returning row would otherwise read and later
+    restore a link that is not its own. Red with either condition removed (`L1.2a_RED_RECORD.md`)."""
+    recipe, other_recipe, ours, theirs = new_id(), new_id(), new_id(), new_id()
+    k1 = new_id()
+    run_id = await _started(runs, recipe)
+    other_run = await _started(runs, other_recipe)
+    for rec, case, run, edge in (
+        (recipe, ours, run_id, "e-ours"),
+        (recipe, theirs, run_id, "e-theirs"),
+        (other_recipe, ours, other_run, "e-other-pipeline"),
+    ):
+        load, refresh = new_id(), new_id()
+        await runs.add_record(run, _keyed(load, rec, case), row_keys=[k1],
+                              row_elements={k1: _elements(["n1"], [edge], ["v1"])})  # fmt: skip
+        await runs.add_record(run, _keyed(refresh, rec, case), withdrawn_row_keys=[k1])
+
+    assert await runs.withdrawn_row_links(recipe, ours, [k1]) == {k1: ("e-ours",)}
+    assert await runs.withdrawn_row_links(recipe, theirs, [k1]) == {k1: ("e-theirs",)}
+    assert await runs.withdrawn_row_links(other_recipe, ours, [k1]) == {k1: ("e-other-pipeline",)}
+    assert await runs.withdrawn_row_links(recipe, ours, [new_id()]) == {}

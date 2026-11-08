@@ -60,6 +60,7 @@ from services.api.alerts import AlertStore
 from services.api.analytics_store import open_analytics
 from services.api.audit import AuditWriter
 from services.api.cache import invalidate_every_cache
+from services.api.change_stream import ChangeStreamWriter
 from services.api.config import DEFAULT_ANALYTICS_DB_PATH, PostgresConfig, ValkeyConfig
 from services.api.held_rows import HeldRowStore
 from services.api.history import InvestigationHistoryStore
@@ -241,7 +242,14 @@ def build_revert_deps(
         audit=audit,
         working_sets=working_sets,
         invalidate_caches=lambda: invalidate_every_cache(valkey),
+        links_changed=lambda edge_ids, case: _links_changed(valkey, edge_ids, case),
     )
+
+
+async def _links_changed(valkey: Valkey, edge_ids: list[str], case: str | None) -> None:
+    """ADR-110 Amendment 16: the links a revert put back, on the change stream as a load's change
+    to them (`"ingest"`, the source a load's own writes carry), for the record's case."""
+    await ChangeStreamWriter(valkey).publish("ingest", edge_ids=edge_ids, investigation_id=case)
 
 
 #: Where the stores are: set inside the deployment's network (its `deployment.env`), never on the
