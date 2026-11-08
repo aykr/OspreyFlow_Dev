@@ -4,9 +4,9 @@
 // per person. Limits are applied by the gateway itself to every call sent to the engine.
 import { useEffect, useState, type FormEvent } from "react";
 
-import type { AdminEngine, EngineLimits, ModelUsageView, UsageFigures } from "../../../../../packages/schemas/generated";
-import { Button, Input, Select } from "../../design/primitives";
-import { readUsage, type ModelsApi } from "./ModelsApi";
+import type { AdminEngine, EngineLimits, ModelUsageView, UsageFigures } from "../../../../packages/schemas/generated";
+import { Button, Input, Select } from "../design/primitives";
+import { readUsage, type ModelsApi } from "../admin/sections/ModelsApi";
 
 const JOB_WORDS: Record<string, string> = {
   extraction: "Extraction and Ask",

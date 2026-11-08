@@ -26,7 +26,7 @@ import {
   testConnection,
   type ModelsApi,
 } from "./ModelsApi";
-import { LimitsForm, ModelsUsage, limitsInWords } from "./ModelsUsage";
+import { LimitsForm, ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 
 /** The jobs an engine outside the deployment may take. Embeddings never leave it (ADR-135). */
 const JOBS = [

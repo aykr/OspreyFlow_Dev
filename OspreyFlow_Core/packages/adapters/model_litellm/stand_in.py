@@ -47,7 +47,8 @@ stack a, against the same image (litellm 1.101.0):
   once the minute's requests or tokens have reached the limit is refused 429 `throttling_error`
   naming **the key's SHA-256**; once the spend has reached the budget, 429 `budget_exceeded`
   naming the key's alias and **its last four characters**; the call that crosses a limit is
-  answered (the next, half a second later, refused). Spend is each token times the entry's `input_cost_per_token`/`output_cost_per_token`
+  answered (the next, half a second later, refused). Spend is each token times the entry's
+  `input_cost_per_token`/`output_cost_per_token`
   (none: 0). A `1d` budget resets at the next midnight UTC after the first spend; `30d` on the
   first of the next month;
 - `GET /key/info?key=` (404 "Key not found in database"), `POST /key/update` (404 "Key not
