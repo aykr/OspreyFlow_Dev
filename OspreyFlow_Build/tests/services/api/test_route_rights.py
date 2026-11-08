@@ -256,6 +256,7 @@ ROUTE_RIGHTS = {
     "export_pack_route": "export",
     "read_report_feed": "read_report_feed",
     "read_alert_queue": "read_alert_queue",
+    "read_alert_queue_counts": "read_alert_queue",
     "explain_alert": "read_alert_queue",
     "claim_alert": "triage_alerts",
     "release_alert": "triage_alerts",

@@ -78,7 +78,8 @@ async def _seed(case: str, other_case: str, owner: str) -> dict[str, str]:
     datasets = await PostgresDatasetStore.connect(dsn)
     alerts, hotlists = await AlertStore.connect(dsn), await HotlistStore.connect(dsn)
     try:
-        (dataset,) = await datasets.ids_of_case(case)
+        # The case's own dataset (it reads its analyst layer too).
+        dataset = (await datasets.chosen_of_case(case))[0].id
         who = Principal(id=owner, clearance="OFFICIAL", org_unit="unit-1", datasets=[dataset])
         hotlist = await hotlists.create(who, identifier="07700 900918", review_date=date(2027, 1, 31))
         async with arcadedb_adapter(load_default_ontology(), load_uk_le_scheme()) as graph:
