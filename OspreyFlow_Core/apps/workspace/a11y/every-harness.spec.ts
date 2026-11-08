@@ -59,6 +59,17 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
   "views-harness.html": ["as=bob", "show=form", "show=lens", "asking=delete"],
+  // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
+  // item and link forms and the withdrawal's question; another member's read-only view; a blank board.
+  "boards-harness.html": [
+    "board=b-wing",
+    "board=b-wing&as=bob",
+    "board=b-night",
+    "board=b-wing&press=Declare%20a%20Location",
+    "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)",
+    "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6",
+    "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D",
+  ],
   // ADR-124 decision 2 as ADR-144 Amendment 2 changed it: the over-cap dialog with its Save as a view form.
   "view-over-cap-harness.html": ["state=form"],
   // ADR-099 Amendment 12: a new case's form on "Use an existing dataset", its dataset radios drawn.
