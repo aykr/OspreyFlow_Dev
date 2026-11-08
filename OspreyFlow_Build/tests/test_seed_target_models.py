@@ -123,3 +123,17 @@ async def test_the_dry_run_writes_nothing_and_plans_what_the_real_run_makes() ->
     assert any(
         "Nobody's (ds-quiet): version 1, live, the POLE core alone" in line for line in lines
     )
+
+
+async def test_a_pack_the_ontology_no_longer_carries_is_named_and_left_out() -> None:
+    """The round-1 review's must-fix 9: a case chose a pack this deployment's ontology does not
+    carry. The dataset is seeded without it, and the pack is named with the dataset."""
+    store, lines = _store(), []
+    report = await seed(
+        [DatasetRow("ds-bank", "Bank records", "source")], {"case-kyc": "ds-bank"},
+        {"case-kyc": ["fibo", "retired-pack"]}, set(), store=store,
+        pack_versions=PACK_VERSIONS, write=True, say=lines.append,
+    )  # fmt: skip
+    assert (await store.live("ds-bank")).packs == {"fibo": 1}  # type: ignore[union-attr]
+    assert report.not_carried == [("Bank records (ds-bank)", ["retired-pack"])]
+    assert any("retired-pack, which this deployment's ontology does not carry" in x for x in lines)

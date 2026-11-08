@@ -13,8 +13,11 @@ its KYC figures. So each dataset with no model is given version 1, live:
 - its packs are **the union of the packs chosen by the cases that read it**, each case counted for
   the one dataset it chose and no other (a case reading a composite adds to the composite's model,
   not its members'), so no case's choice reaches a dataset it does not read;
+- a removed case counts for nothing: its choice is no longer anyone's;
 - a dataset whose cases chose none, or that no case reads, gets the POLE core alone;
-- each pack is pinned at the version the loaded ontology carries.
+- each pack is pinned at the version the loaded ontology carries. A pack a case chose that the
+  ontology no longer carries is left out, and named with its dataset, so nobody is surprised when
+  the case's figures for it go.
 
 An analyst layer is no dataset of its own and gets none. A dataset that already has a model is
 named and left as it is, so a second run changes nothing. Each dataset given one is named, with its
@@ -56,6 +59,8 @@ class Report:
     seeded: list[tuple[str, list[str]]] = field(default_factory=list)
     #: Labels of datasets that already had a model, left as they are.
     kept: list[str] = field(default_factory=list)
+    #: (dataset label, the packs its cases chose that the ontology does not carry), left out.
+    not_carried: list[tuple[str, list[str]]] = field(default_factory=list)
     writes: list[str] = field(default_factory=list)
 
 
@@ -131,7 +136,14 @@ async def seed(
         if dataset.id in with_a_model:
             report.kept.append(label)
             continue
-        packs = [p for p in packs_for(dataset.id, chosen, domains) if p in pack_versions]
+        wanted = packs_for(dataset.id, chosen, domains)
+        packs = [p for p in wanted if p in pack_versions]
+        if lacking := [p for p in wanted if p not in pack_versions]:
+            report.not_carried.append((label, lacking))
+            say(
+                f"  {label}: its cases chose {', '.join(lacking)}, which this deployment's "
+                "ontology does not carry: left out of its model"
+            )
         await through.open_draft(dataset.id, seeder)
         await through.save_draft(
             dataset.id,
@@ -167,13 +179,15 @@ async def read_tables(
         for r in await conn.fetch(
             "SELECT DISTINCT ON (c.investigation_id) c.investigation_id, c.dataset_id "
             "FROM investigation_datasets c JOIN datasets d ON d.id = c.dataset_id "
+            "JOIN investigations i ON i.id = c.investigation_id AND i.removed_at IS NULL "
             "WHERE coalesce(to_jsonb(d) ->> 'kind', 'source') <> 'analyst_layer' "
             "ORDER BY c.investigation_id, c.position"
         )
     }
+    # A removed case's choice is no longer anyone's (ADR-052 Amendment 7's soft remove).
     domains = {
         r["id"]: list(r["domains"] or [])
-        for r in await conn.fetch("SELECT id, domains FROM investigations")
+        for r in await conn.fetch("SELECT id, domains FROM investigations WHERE removed_at IS NULL")
     }
     with_a_model: set[str] = set()
     if await conn.fetchval("SELECT to_regclass('target_models') IS NOT NULL"):
@@ -226,6 +240,11 @@ async def _main(argv: list[str] | None = None, *, dsn: str | None = None) -> int
         f"{len(report.seeded)} {'given' if write else 'to give'} a first model, "
         f"{len(report.kept)} already had one; {len(report.writes)} writes "
         + ("made." if write else "planned.")
+        + (
+            f" {len(report.not_carried)} left a pack out that the ontology does not carry."
+            if report.not_carried
+            else ""
+        )
     )
     return 0
 
