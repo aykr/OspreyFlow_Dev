@@ -8,7 +8,13 @@ import type { PipelineEdge, PipelineGraph, PipelineNode } from "../../../../../p
 
 /** The closed catalogue (rule 8): guided mode offers these and no other. */
 export const STAGING_KINDS = ["lookup", "join", "filter", "derive", "union", "dedupe"] as const;
-export type StagingKind = (typeof STAGING_KINDS)[number];
+export type GuidedKind = (typeof STAGING_KINDS)[number];
+/** The expert steps (ADR-140 decisions 12 and 13): offered in expert mode to a holder of
+ * `write_sql_transforms` only, read-only everywhere else; the server refuses them otherwise. */
+export const EXPERT_KINDS = ["sql", "fuzzy_match"] as const;
+export type ExpertKind = (typeof EXPERT_KINDS)[number];
+export type StagingKind = GuidedKind | ExpertKind;
+export const EXPERT_RIGHT = "write_sql_transforms";
 
 export const STAGING_KIND_NAMES: Record<StagingKind, string> = {
   lookup: "Lookup",
@@ -17,13 +23,19 @@ export const STAGING_KIND_NAMES: Record<StagingKind, string> = {
   derive: "Derive",
   union: "Union",
   dedupe: "Dedupe",
+  sql: "SQL transform",
+  fuzzy_match: "Fuzzy match",
 };
+
+/** The Splink-backed comparisons and blocking keys (`schemas.staging.FuzzyMethod`, `FuzzyBlock`). */
+export const FUZZY_METHODS = ["jaro_winkler", "levenshtein", "exact"] as const;
+export const FUZZY_BLOCKS = ["exact", "soundex", "year"] as const;
 
 /** Derive's catalogue (`knowledge_adapters.derive.DERIVE_OPERATIONS`). */
 export const DERIVE_OPERATIONS = ["concat", "split", "substring", "date_parse", "arithmetic", "case_when", "normalise"] as const;
 
 export function isStagingStep(node: Pick<PipelineNode, "kind">): boolean {
-  return (STAGING_KINDS as readonly string[]).includes(node.kind);
+  return (STAGING_KINDS as readonly string[]).includes(node.kind) || (EXPERT_KINDS as readonly string[]).includes(node.kind);
 }
 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -31,8 +43,8 @@ const text = (v: unknown): string => (typeof v === "string" ? v : "");
 /** The tables a step reads, in order, as its record names them (`schemas.staging.step_inputs`). */
 export function stepInputs(node: PipelineNode): string[] {
   const c = node.config ?? {};
-  if (node.kind === "join") return [text(c.left), text(c.right)].filter(Boolean);
-  if (node.kind === "union") return (Array.isArray(c.inputs) ? c.inputs : []).map(text).filter(Boolean);
+  if (node.kind === "join" || node.kind === "fuzzy_match") return [text(c.left), text(c.right)].filter(Boolean);
+  if (node.kind === "union" || node.kind === "sql") return (Array.isArray(c.inputs) ? c.inputs : []).map(text).filter(Boolean);
   return [text(c.input)].filter(Boolean);
 }
 
@@ -97,7 +109,7 @@ export function rewireStaging(graph: PipelineGraph): PipelineGraph {
   const stepIds = new Set(steps.map((s) => s.id));
   let edges: PipelineEdge[] = edgesOf(graph).filter((e) => !stepIds.has(e.target));
   if (steps.length > 0) {
-    edges = edges.filter((e) => !(maps.includes(e.target) && ["source", "profile", ...STAGING_KINDS].includes(kinds.get(e.source) ?? "")));
+    edges = edges.filter((e) => !(maps.includes(e.target) && ["source", "profile", ...STAGING_KINDS, ...EXPERT_KINDS].includes(kinds.get(e.source) ?? "")));
     for (const step of steps)
       for (const table of stepInputs(step)) if (ids.has(table)) edges.push({ source: table, target: step.id });
     for (const last of terminalSteps(graph)) for (const map of maps) edges.push({ source: last.id, target: map });
@@ -131,6 +143,10 @@ function emptyRecord(kind: StagingKind, input: string): Record<string, unknown> 
       return { inputs: [input] };
     case "dedupe":
       return { input, on: [] };
+    case "sql":
+      return { inputs: [input], select: `SELECT *\nFROM ${input || "a_table"}`, summary: "" };
+    case "fuzzy_match":
+      return { left: input, right: "", compare: [], threshold: 0.85, add: [], same_as: { left: "", right: "" } };
   }
 }
 

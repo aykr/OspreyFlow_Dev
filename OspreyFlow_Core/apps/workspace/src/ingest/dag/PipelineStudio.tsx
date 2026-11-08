@@ -17,10 +17,10 @@ import { MapEditor } from "../map/MapEditor";
 import { PublishScreen } from "../publish/PublishScreen";
 import { statusWords } from "../studio/vocabulary";
 import { GuidedSteps, guidedMayNotRemove } from "./GuidedSteps";
-import { NodeDrawer, type DrawerPane } from "./NodeDrawer";
+import { NodeDrawer, mayEditExpertSteps, type DrawerPane } from "./NodeDrawer";
 import { PipelineCanvas } from "./PipelineCanvas";
 import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
-import { STAGING_KIND_NAMES, STAGING_KINDS, addStagingStep, isStagingStep, removeStagingStep, type StagingKind } from "./stagingSteps";
+import { EXPERT_KINDS, STAGING_KIND_NAMES, STAGING_KINDS, addStagingStep, isStagingStep, removeStagingStep, type StagingKind } from "./stagingSteps";
 import { readStudioMode, writeStudioMode, type StudioMode } from "./studioMode";
 
 export interface PipelineStudioProps {
@@ -31,6 +31,8 @@ export interface PipelineStudioProps {
   onChanged?: () => void;
   /** The signed-in person, whose guided or expert mode this is (ADR-140 decision 3). */
   username?: string | null;
+  /** The person's rights (`GET /v1/me/rights`): `write_sql_transforms` offers the expert steps. */
+  rights?: ReadonlySet<string> | null;
 }
 
 type View =
@@ -41,7 +43,7 @@ type View =
   // republished, and goes back to the home.
   | { at: "publish"; recipeId: string };
 
-export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onChanged, username }: PipelineStudioProps) {
+export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onChanged, username, rights }: PipelineStudioProps) {
   const [view, setView] = useState<View>({ at: "home" });
 
   if (view.at === "home") {
@@ -99,6 +101,7 @@ export function PipelineStudio({ apiBaseUrl, bearerToken, investigationId, onCha
       recipeId={view.recipeId}
       initialSelectedId={view.selectedId ?? null}
       username={username ?? null}
+      rights={rights ?? null}
       onChanged={onChanged}
       onHome={() => setView({ at: "home" })}
       onOpenMap={(pipeline, mapNodeId) => setView({ at: "map", recipeId: view.recipeId, pipeline, mapNodeId })}
@@ -197,6 +200,7 @@ function PipelineEditor({
   recipeId,
   initialSelectedId,
   username,
+  rights,
   onChanged,
   onHome,
   onOpenMap,
@@ -273,7 +277,11 @@ function PipelineEditor({
   const switchMode = (next: StudioMode) => {
     setMode(next);
     writeStudioMode(username, next);
+    // Guided mode offers no expert step to add (ADR-140 decision 3).
+    if (next === "guided" && (EXPERT_KINDS as readonly string[]).includes(stepKind)) setStepKind("lookup");
   };
+  // ADR-140 decision 3: the expert steps, in expert mode, to a holder of `write_sql_transforms`.
+  const offered: StagingKind[] = [...STAGING_KINDS, ...(mayEditExpertSteps(mode, rights) ? EXPERT_KINDS : [])];
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-16)", padding: "var(--sp-16)", alignItems: "start" }}>
@@ -293,6 +301,7 @@ function PipelineEditor({
               Expert
             </Button>
           </div>
+          <Button onClick={() => setPane({ at: "yaml" })}>Show YAML</Button>
           <Button onClick={() => setPane({ at: "checks" })}>Load rules</Button>
           <Button onClick={() => setPane({ at: "test" })}>Test</Button>
           <Button variant="primary" onClick={() => setPane({ at: "deploy" })}>
@@ -323,7 +332,7 @@ function PipelineEditor({
             disabled={busy}
             onChange={(e) => setStepKind(e.target.value as StagingKind)}
           >
-            {STAGING_KINDS.map((k) => (
+            {offered.map((k) => (
               <option key={k} value={k}>
                 {STAGING_KIND_NAMES[k]}
               </option>
@@ -402,6 +411,11 @@ function PipelineEditor({
         onDraft={setDraft}
         onOpenMapEditor={() => selected && onOpenMap(pipeline, selected.id)}
         onChanged={onChanged}
+        rights={rights ?? null}
+        onPipelineSaved={(saved) => {
+          setDraft(saved);
+          setPipeline(saved.pipeline ?? pipeline);
+        }}
       />
     </div>
   );

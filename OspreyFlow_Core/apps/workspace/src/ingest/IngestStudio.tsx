@@ -149,7 +149,7 @@ function Studio({
           />
         )}
         {place === "pipelines" && (
-          <PipelineStudio apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} onChanged={data.reload} username={username ?? null} />
+          <PipelineStudio apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} onChanged={data.reload} username={username ?? null} rights={rights ?? null} />
         )}
         {place === "runs" && (
           <RunsTab

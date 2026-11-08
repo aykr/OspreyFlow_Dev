@@ -10,6 +10,7 @@
 // error.
 import { useEffect, useState } from "react";
 
+import { ExpertDisclosure } from "../dag/ExpertStepDrawer";
 import type {
   LoadReportView,
   PipelineRunReportView,
@@ -520,11 +521,14 @@ export function PublishScreen({
             <li>Load id: {loadReport.load_id}</li>
             <li>Counts withheld — {COUNTS_WITHHELD_REASON}</li>
           </ul>
+          {/* ADR-140 decision 16: the expert steps are disclosed whether or not the counts are. */}
+          <ExpertDisclosure steps={loadReport.expert_steps} />
         </Panel>
       )}
 
       {loadReport && !loadReport.withheld && (
         <Panel title="Load result">
+          <ExpertDisclosure steps={loadReport.expert_steps} />
           <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
             <li>Load id: {loadReport.load_id}</li>
             <li>Rows read: {loadReport.rows_read}</li>

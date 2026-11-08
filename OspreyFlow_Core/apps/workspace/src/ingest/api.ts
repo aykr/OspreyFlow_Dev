@@ -616,13 +616,68 @@ export async function savePipeline(
       body: JSON.stringify(pipeline),
     },
   );
-  if (response.status === 422) {
-    const body = (await response.json()) as { error?: string; problems?: string[] };
-    if (body.error === "pipeline_invalid") {
+  return pipelineSaveOutcome(response, "PUT /v1/ingest/recipes/{id}/pipeline");
+}
+
+/** The save's refusals in words: the gate's (422 `pipeline_invalid`), or an expert step changed
+ * without `write_sql_transforms` (403, ADR-140 decision 3). */
+async function pipelineSaveOutcome(response: Response, what: string): Promise<PipelineSaveOutcome> {
+  if (response.status === 422 || response.status === 403) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string; problems?: string[] };
+    if (body.error === "pipeline_invalid" || (body.error === "right_required" && body.problems)) {
       return { kind: "invalid", problems: body.problems ?? [] };
     }
+    throw new Error(`${what} failed: ${response.status}`);
   }
-  return { kind: "saved", draft: await parseOrThrow(response, "PUT /v1/ingest/recipes/{id}/pipeline") };
+  return { kind: "saved", draft: await parseOrThrow(response, what) };
+}
+
+/** *Show YAML* (ADR-140 decision 3): the pipeline as the Conduit writes it. */
+export async function fetchPipelineYaml(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+): Promise<string> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/pipeline/yaml`, {
+    headers: authHeaders(bearerToken),
+  });
+  const body = await parseOrThrow<{ text: string }>(response, "GET /v1/ingest/recipes/{id}/pipeline/yaml");
+  return body.text;
+}
+
+/** Expert mode's YAML save, through the canvas's own gates. */
+export async function savePipelineYaml(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  text: string,
+): Promise<PipelineSaveOutcome> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/pipeline/yaml`, {
+    method: "PUT",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  return pipelineSaveOutcome(response, "PUT /v1/ingest/recipes/{id}/pipeline/yaml");
+}
+
+/** A SQL step's *Check SQL* (ADR-140 decision 12): the sandbox gate's words; nothing runs. */
+export async function checkSql(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  pipeline: PipelineGraph,
+  step: string,
+): Promise<string[]> {
+  const response = await fetch(`${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/sql-check`, {
+    method: "POST",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify({ pipeline, step }),
+  });
+  const body = await parseOrThrow<{ problems?: string[] }>(response, "POST /v1/ingest/recipes/{id}/sql-check");
+  return body.problems ?? [];
 }
 
 /** A staging step's drawer's live sample (ADR-140 Amendment 12): the steps up to `step` over the

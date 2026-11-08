@@ -7,6 +7,7 @@
 // runs with the Conduit quiesced (ADR-127 Amendment 9; ADR-140 Amendment 2, the owner's ruling).
 import { useState } from "react";
 
+import { ExpertDisclosure, disclosuresOf } from "../dag/ExpertStepDrawer";
 import type { ScheduleRunView, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import { runInWords, triggerInWords } from "../../admin/Schedules";
 import { HeldRowsPanel } from "../../alerts/HeldRowsPanel";
@@ -185,6 +186,8 @@ export function RunsTab(props: RunsTabProps) {
           <h3 style={{ margin: 0, fontSize: "var(--fs-14)" }}>
             {selectedRow.pipeline.label} · {dayInWords(selectedCell.day)}
           </h3>
+          {/* ADR-140 decision 16: every run report discloses the pipeline's expert steps. */}
+          <ExpertDisclosure steps={disclosuresOf(selectedRow.pipeline.pipeline)} title="Expert steps in this pipeline" />
           {selectedCell.runs.length === 0 ? (
             <p className="label" style={{ margin: 0 }}>
               {selectedCell.state === "scheduled" ? "Scheduled, not yet run today." : "No run that day."}

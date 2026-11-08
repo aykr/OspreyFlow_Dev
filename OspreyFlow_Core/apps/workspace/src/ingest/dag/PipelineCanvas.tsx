@@ -24,7 +24,7 @@ export const KIND_NAMES: Record<string, string> = {
   dedupe: "Dedupe",
   // The expert steps (ADR-140 decisions 12 and 13), named here so guided mode can label one it
   // reads; their editors are phase 8's.
-  sql_transform: "SQL transform",
+  sql: "SQL transform",
   fuzzy_match: "Fuzzy match",
 };
 
