@@ -1003,8 +1003,8 @@ under different patterns or for different owners, or read by a keyless pipeline,
 put to the object store and the elements it wrote to the graph, on its report and in the ledger.
 Rows staged and bytes to Parquet are *not measured* for a run without staging steps, and are said
 so, never shown as 0. A staged load counts both (§9); they reach the run report when the Studio's
-run route runs a staged pipeline. The run report, the Runs tab and Admin's run rows show them after the counts, and withhold
-them where the counts are withheld.
+run route runs a staged pipeline. The run report, the Runs tab and Admin's run rows show them after
+the counts, and withhold them where the counts are withheld.
 
 A published recipe may run on a schedule. **The editor** (the Publish screen's *Schedule* panel)
 offers every hour, every day, every weekday or every week at a time, in a named time zone (Europe/
@@ -1215,9 +1215,14 @@ tell `run_recipe` not to stage raw rows.
 Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
 with its refs as a `_refs` column; this is the only place a row's key is kept. Map reads the last
 table back from what was written. Each source's rows, with a blank cell empty, are the raw rows of
-**the load that read them**, `<bucket>/loads/<that load_id>/raw.parquet`. An element's ref
-(source, `row <n>`, `load_id`) therefore names a row of a file that exists. A staging rejection is listed in the load report as *staging step <id> (<side>
-side, <source> row <n>): <cause>*. Test and the load reject the same rows
+**the load that read them**, `<bucket>/loads/<that load_id>/raw.parquet`. Each list a Lookup read
+is kept at its version, `<bucket>/reference_lists/<the list's dataset>/<name>@v<version>.parquet`.
+An element's ref, a source row's (source, `row <n>`, `load_id`) or a list row's, therefore names a
+row of a file that exists. Both files are written once and never replaced: the same rows again
+are no change, other rows are refused in words before anything is written, and a run refused by
+its own checks writes neither. A staging rejection is listed in the load report as *staging step
+<id> (<side> side, <source> row <n>): <cause>*, and a row Map refused as *staged table <table> row
+<n>: <cause>*. Test and the load reject the same rows
 (`services/ingest/staged_run.py`). A staged load reports as *rows read* the rows its sources gave.
 It also counts the rows its steps staged and the bytes their Parquet took, for the run's metering.
 
@@ -1231,13 +1236,16 @@ It also counts the rows its steps staged and the bytes their Parquet took, for t
   `_ref` columns, and listed in the run report with its rows in and out (ADR-140 decision 12).
 - **Joins on declared keys in guided mode; SQL and fuzzy match in expert mode, with provenance,
   disclosure and safeguards.** A Join takes two upstream tables on an exact or normalised key, declared
-  and never guessed. Every staged row carries `source_refs` — each input row's identity and `load_id`
-  — into the element Map writes, so every link still shows where it came from (ADR-140 decision 11).
+  and never guessed. Every staged row carries `source_refs` — which input rows it came from, and
+  their loads — into the element Map writes, so every link still shows where it came from (ADR-140
+  decision 11).
   As built (Amendment 11), the refs are the element's `provenance.sources`, one `SourceRef` per input
   row: the source's name, `row <n>` and its `load_id`, which that load's `raw.parquet` resolves on
   the server. **No row key, raw or hashed, is carried** (rule 7: a key is low-entropy, so a hash of it
   is reversible); keys stay in the staged Parquet. A Join's element names both sides. A Lookup's
-  names the list row it took values from, as `reference_list:<name>@v<version>` with no load id. A **fuzzy match** decides a match at ingest only as a scored `SAME_AS` link marked
+  names the list row it took values from, as `reference_list:<name>@v<version>` with no load id,
+  which the list's rows kept at that version resolve. A **fuzzy match** decides a match at ingest
+  only as a scored `SAME_AS` link marked
   `inferred`, never a merge; its threshold is part of the version; below-threshold rows are kept,
   unmatched and counted; a value Map binds from a matched column is `inferred`, with the match's score,
   until an analyst confirms the link (ADR-006 Amendment 1). Elements still meet existing nodes only

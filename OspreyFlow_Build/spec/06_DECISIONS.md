@@ -28801,6 +28801,8 @@ Review round 1 (8 November) brought the orchestrator's settlements that no row k
 travels in provenance, and that a subscription is by list id to a deployment-wide list. Both are in
 decisions 3 and 4. Review round 2 made a list deployment-wide by its own record only, put each
 source's raw rows under the load that read them, and had the gate check a Derive's `normalise`.
+The merge round's review kept each list's rows at its version, so a list row's ref resolves too,
+and made every raw file written once, never replaced.
 
 **Decision.**
 
@@ -28828,7 +28830,11 @@ source's raw rows under the load that read them, and had the gate check a Derive
    reversible, and a key is a source-system identifier. A staged row's refs are:
    - for a source row: its table, `row <n>` and the load that read it. That load's
      `raw.parquet` holds the row, so the ref resolves on the server;
-   - for a list row: `reference_list:<name>@v<version>` and `row <n>`, with no load.
+   - for a list row: `reference_list:<name>@v<version>` and `row <n>`, with no load. The run
+     keeps the list's rows at that version in
+     `<bucket>/reference_lists/<the list's dataset>/<name>@v<version>.parquet`, so this ref
+     resolves on the server too, read with the element's dataset (`deployment` for a
+     deployment-wide list).
 
    Each row's key, the SHA-256 of its declared key columns (else of its whole row; a list row's, of
    its key), is kept only in the staged Parquet's `_refs`. A Join's row carries both sides, a
@@ -28849,10 +28855,15 @@ source's raw rows under the load that read them, and had the gate check a Derive
 5. **Staged Parquet.** Each step's table is written to `<bucket>/loads/<load_id>/staged/<step>.parquet`,
    with its cells as text, its refs as `_refs`, and a list's kind, name, version and key column in
    the file's metadata. Each source's rows are written to the raw rows of the load that read them,
-   and only a staged run may tell `run_recipe` not to stage raw rows. Map reads the last table back from what was written. Test writes nothing and
-   runs the same steps (`services/ingest/staged_run.py`), so Test and the load reject the same rows.
-   A staging rejection is listed as *staging step <id> (<side> side, <source> row <n>): <cause>*,
-   with nothing of the row in its sample.
+   and each list a Lookup read to its version's file (decision 3). Both are written once and never
+   replaced (rule 2): a file already holding the same rows is left as it is, and one holding other
+   rows is refused in words before anything is written. The engine writes them after the run's own
+   refusals, where a plain run stages its raw rows, so a refused run writes neither. Only a staged
+   run may give `run_recipe` its own raw staging. Map reads the last table back from what was
+   written. Test writes nothing and runs the same steps (`services/ingest/staged_run.py`), so Test
+   and the load reject the same rows. A staging rejection is listed as *staging step <id> (<side>
+   side, <source> row <n>): <cause>*, and a row Map refused as *staged table <table> row <n>:
+   <cause>*, with nothing of the row in either sample.
 6. **Where the gate runs.** `staging_rule_violations` runs before every staged run and every
    Test. No route saves or publishes staging steps yet, because drafts carry none until the step
    drawers. Until then, publishing a recipe with steps is refused in words, and so is running one
@@ -28866,7 +28877,7 @@ source's raw rows under the load that read them, and had the gate check a Derive
 | `tests/ingest/test_staging_golden.py` | one golden file per step kind |
 | `tests/schemas/test_recipe_staging.py` | byte-for-byte serialisation; no expression under any key, a Derive's settings included; no row key on `SourceRef` |
 | `tests/ingest/test_staging_catalogue.py` | the gate; subscription by id to deployment lists only; a screening list round-trips through the catalogue and serves a Lookup; rule 8's adapters |
-| `tests/ingest/test_staged_run.py` | the phase's exit, offline: "Visits and contacts" without its expert steps, every element naming its source rows, Test and the load rejecting the same rows, no row key reaching an element or Test, the raw rows being the sources'; red with `source_refs` dropped at the join |
+| `tests/ingest/test_staged_run.py` | the phase's exit, offline: "Visits and contacts" without its expert steps, every element naming its source rows, Test and the load rejecting the same rows, no row key reaching an element or Test, the raw rows being the sources' and every ref, a list row's included, resolving; raw and list rows written once and never by a refused run; red with `source_refs` dropped at the join |
 | `tests/ingest/test_staged_provenance_live.py` | the Join's two sides and its list row stored by the real Map write and read back through the ArcadeDB adapter; a reader of another dataset reads none of it, and a case reading one of an element's two datasets is sent none of its sources (rule 4; ADR-130 Amendment 2); run under a named lease (`L1.3_RED_RECORD.md`) |
 
 **Not in this step.** The drawers and the profiler on staged tables in the Map editor's left pane are
@@ -28875,6 +28886,16 @@ reading a pipeline's sources into tables, and the run report's per-step counts a
 (`StepReport`, `StagedLoad.rows_staged` and `parquet_bytes` exist in the engine, not yet in
 `LoadReport` or `RunMetering`). The SQL transform and the fuzzy match are phase 8.
 
+The exit's fixture is narrower than the prototype's Map ("Person, Visit, Endpoint, VISITED, USES",
+`ingest_studio_redesign/wf3_pipeline_canvas.svg`). It maps the booking as a Document, the contact
+number as an Endpoint, and the number's owner as a Person, with MENTIONED_IN and USES. The visitor
+Person, the Visit and VISITED are left out. VISITED is the `niem` pack's, so the recipe would pin a
+pack. A visitor matched on family name alone would also merge with the number's owner of the same
+name, which is the fuzzy step's question (phase 8). What the exit proves, every element traceable
+to its source rows across a Lookup, a Join and a Derive, needs neither. Phase 8 adds the visitor
+with its fuzzy step.
+
 **Recorded, not resolved.** In a staged run, a Map rejection's `row_index` is the row's position in
-the staged table, while a staging rejection's is its first source row's. The reason tells the two
-apart. `RejectionRecord` would need refs to say more, which is a schemas change for 7b.
+the staged table, while a staging rejection's is its first source row's. Each reason names its own
+table, staged or source (decision 5). `RejectionRecord` would need refs to say more, which is a
+schemas change for 7b.
