@@ -266,8 +266,9 @@ New ones are added at the bottom as they happen.
     could read another dataset's uploaded file by naming it in a pipeline's source node and previewing it
     (the save gate never checked a node's file against the dataset's own folder). Fixed in L1.4 before it
     merges, at one choke point covering Profile, preview, Test and the run. Test and the Map preview also
-    lacked the drawer preview's guards (a hidden-row count oracle). It reached no deployment (nothing pushed
-    since `e89d44a`, which predates the Studio's file sources? — checked at the push).
+    lacked the drawer preview's guards (a hidden-row count oracle). The file-path gap is also in the code
+    already pushed to `origin` (`e89d44a`'s `_confined` checks only the ingest root); no deployment runs it,
+    and the fix goes out with the run's single push.
 
 ## Evening, 7 November: your records of 7 November applied
 
