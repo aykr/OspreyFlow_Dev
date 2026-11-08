@@ -906,36 +906,3 @@ async def test_a_revision_with_no_recorded_handling_is_left_out_for_every_reader
     ]
     assert await _history_for(rows, reader) == ["Revision 4", "Revision 2", "Revision 1"]
 
-
-# ---- L2.8b item 7: a link an alert cites is repointed when an analyst changes it -----------------
-
-
-async def test_an_alert_citing_a_changed_link_follows_it_to_its_successor() -> None:
-    """`link_changes.py`'s supersede: an analyst changes a link an alert cites; the alert cites the
-    successor (ADR-109 Amendment 10), against the real alert store (the repoint is its SQL). Red
-    with the repoint recording nothing (`repointing_alerts` a no-op): the alert still cited the
-    superseded link, which the queue's link check withholds it for."""
-    from services.api.alerts import AlertStore
-    from services.api.config import PostgresConfig
-
-    from conduit_common.identity import new_id
-    from schemas.domain import Alert, AlertMode
-
-    link_id = f"e-{new_id()}"
-    service, graph, store, changes, notes = await _build([_edge(link_id, "a", "b", occurrences=3)])
-    alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
-    try:
-        service = LinkChangeService(changes, WorkingSetService(graph, store, SCHEME), graph, ONTOLOGY,
-                                    notes, alerts=alerts)  # fmt: skip
-        case = f"case-{new_id()}"
-        alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=ANALYST.id, mode=AlertMode.FULL,
-                      referent_node_ids=["a", "b"], edge_ids=[link_id], investigation_id=case,
-                      created_at=datetime.now(UTC), typology="structuring", words="a paid b")  # fmt: skip
-        await alerts.save(alert)
-        result = await service.change("inv-1", link_id, ANALYST,
-                                      LinkChangeRequest(type="FAMILY_OF", properties={"relation": "cousin"},
-                                                        reason="Told so"))  # fmt: skip
-        (row,) = [a for a in await alerts.list_case_queue(case, ANALYST) if a.id == alert.id]
-        assert row.edge_ids == [result.edge.id] != [link_id]
-    finally:
-        await alerts.close()

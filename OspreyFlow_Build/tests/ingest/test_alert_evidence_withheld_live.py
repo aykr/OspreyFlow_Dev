@@ -903,3 +903,44 @@ async def test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store(
             assert loaded.rule_id == f"typology:{rule.id}" and rule.id != planted.id
     finally:
         await stores["rules"].retire(planted.id, elsewhere, SECRET_LOADER)
+
+
+# ---- L2.8b item 7: a link an alert cites is repointed when an analyst changes it -----------------
+
+
+async def test_an_alert_citing_a_changed_link_follows_it_to_its_successor() -> None:
+    """(Moved from `test_link_changes.py`, whose other cases need no store.) `link_changes.py`'s supersede: an analyst changes a link an alert cites; the alert cites the
+    successor (ADR-109 Amendment 10), against the real alert store (the repoint is its SQL). Red
+    with the repoint recording nothing (`repointing_alerts` a no-op): the alert still cited the
+    superseded link, which the queue's link check withholds it for."""
+    from datetime import UTC, datetime
+
+    from services.api.alerts import AlertStore
+    from services.api.config import PostgresConfig
+    from services.api.link_changes import LinkChangeRequest, LinkChangeService
+    from services.api.working_set.service import WorkingSetService
+
+    from schemas.domain import AlertMode
+    from tests.services.api.test_link_changes import ANALYST as CHANGER
+    from tests.services.api.test_link_changes import ONTOLOGY as LINK_ONTOLOGY
+    from tests.services.api.test_link_changes import _build, _edge
+    from tests.services.api.working_set.test_visible_link import SCHEME as LINK_SCHEME
+
+    link_id = f"e-{new_id()}"
+    service, graph, store, changes, notes = await _build([_edge(link_id, "a", "b", occurrences=3)])
+    alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        service = LinkChangeService(changes, WorkingSetService(graph, store, LINK_SCHEME), graph,
+                                    LINK_ONTOLOGY, notes, alerts=alerts)  # fmt: skip
+        case = f"case-{new_id()}"
+        alert = Alert(id=new_id(), rule_id=f"typology:{new_id()}", owner_id=CHANGER.id, mode=AlertMode.FULL,
+                      referent_node_ids=["a", "b"], edge_ids=[link_id], investigation_id=case,
+                      created_at=datetime.now(UTC), typology="structuring", words="a paid b")  # fmt: skip
+        await alerts.save(alert)
+        result = await service.change("inv-1", link_id, CHANGER,
+                                      LinkChangeRequest(type="FAMILY_OF", properties={"relation": "cousin"},
+                                                        reason="Told so"))  # fmt: skip
+        (row,) = [a for a in await alerts.list_case_queue(case, CHANGER) if a.id == alert.id]
+        assert row.edge_ids == [result.edge.id] != [link_id]
+    finally:
+        await alerts.close()
