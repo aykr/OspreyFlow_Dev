@@ -48,11 +48,18 @@ SCHEME = load_uk_le_scheme()
 
 class BoardGraph(FakeGraphPort):
     def __init__(
-        self, ontology: OntologySchema, nodes: Sequence[Node] = (), edges: Sequence[Edge] = ()
+        self,
+        ontology: OntologySchema,
+        nodes: Sequence[Node] = (),
+        edges: Sequence[Edge] = (),
     ) -> None:
-        super().__init__(Subgraph(nodes=[], edges=[]), graph_nodes=nodes, graph_edges=edges)
+        super().__init__(
+            Subgraph(nodes=[], edges=[]), graph_nodes=nodes, graph_edges=edges
+        )
         self.ontology = ontology
-        self._pending: dict[str, tuple[list[NodeWrite], list[EdgeWrite], list[Any]]] = {}
+        self._pending: dict[
+            str, tuple[list[NodeWrite], list[EdgeWrite], list[Any]]
+        ] = {}
         self.node_writes: list[NodeWrite] = []
         self.edge_writes: list[EdgeWrite] = []
 
@@ -71,9 +78,9 @@ class BoardGraph(FakeGraphPort):
         for node in self._graph_nodes.values():
             entity = self.ontology.entity_type(node.type)
             keys = entity.identifiers if entity is not None else []
-            if any(node.properties.get(k) == query for k in keys) and self._node_readable(
-                principal, node
-            ):
+            if any(
+                node.properties.get(k) == query for k in keys
+            ) and self._node_readable(principal, node):
                 found.append(node)
         return sorted(found, key=lambda n: n.id)[:limit]
 
@@ -128,7 +135,9 @@ class BoardGraph(FakeGraphPort):
         for write in nodes:
             entity = self.ontology.entity_type(write.type)
             if entity is None:
-                raise OntologyError(f"{write.type!r} is not a type in the active ontology")
+                raise OntologyError(
+                    f"{write.type!r} is not a type in the active ontology"
+                )
             validate_properties(entity, write.properties)
             if write.provenance.sources_withheld:
                 raise ValueError("a withheld provenance is never written")
@@ -140,7 +149,9 @@ class BoardGraph(FakeGraphPort):
         ids = []
         for write in edges:
             if self.ontology.edge_type(write.type) is None:
-                raise OntologyError(f"{write.type!r} is not a link type in the active ontology")
+                raise OntologyError(
+                    f"{write.type!r} is not a link type in the active ontology"
+                )
             held = self._merge_target(write)
             ids.append(held.id if held is not None else write.id)
         self._pending[tx][1].extend(edges)
@@ -188,8 +199,10 @@ class BoardGraph(FakeGraphPort):
                 "provenance": merge_provenance(held.provenance, write.provenance),
                 "handling": merge_handling(held.handling, write.handling, SCHEME),
                 "datasets": merge_datasets(held.datasets, write.datasets),
-                "audit": held.audit.model_copy(update={"revision": held.audit.revision + 1}),
-            }  # fmt: skip
+                "audit": held.audit.model_copy(
+                    update={"revision": held.audit.revision + 1}
+                ),
+            }
         )
 
     def _land_edge(self, write: EdgeWrite) -> None:
@@ -205,9 +218,11 @@ class BoardGraph(FakeGraphPort):
                     properties=write.properties,
                     provenance=write.provenance,
                     handling=write.handling,
-                    audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+                    audit=AuditStub(
+                        created_at=write.created_at, created_by=write.created_by
+                    ),
                     datasets=sorted(set(write.datasets)),
-                )  # fmt: skip
+                )
             )
             return
         merged = held.model_copy(
@@ -222,15 +237,21 @@ class BoardGraph(FakeGraphPort):
                 "handling": merge_handling(held.handling, write.handling, SCHEME),
                 "datasets": merge_datasets(held.datasets, write.datasets),
                 "occurrences": held.occurrences + 1,
-            }  # fmt: skip
+            }
         )
-        self._graph_edges = [merged if e.id == held.id else e for e in self._graph_edges]
+        self._graph_edges = [
+            merged if e.id == held.id else e for e in self._graph_edges
+        ]
 
-    def _land_withdrawal(self, node_ids: list[str], edge_ids: list[str], load_id: str) -> None:
+    def _land_withdrawal(
+        self, node_ids: list[str], edge_ids: list[str], load_id: str
+    ) -> None:
         def withdrawn(audit: AuditStub) -> AuditStub:
             if audit.reverted:
                 return audit
-            return audit.model_copy(update={"reverted": True, "withdrawn_by_load": load_id})
+            return audit.model_copy(
+                update={"reverted": True, "withdrawn_by_load": load_id}
+            )
 
         for node_id in node_ids:
             held = self._graph_nodes.get(node_id)

@@ -557,7 +557,7 @@ def test_the_merge_check_fails_with_the_writer_merging(
     real = boards_module.match_writes
 
     def merging(drawn: Node, loaded: Node, **kwargs: Any) -> Any:
-        nodes, edges = real(drawn, loaded, **kwargs)
+        _nodes, edges = real(drawn, loaded, **kwargs)
         merged = NodeWrite(
             id=loaded.id, type=drawn.type, properties=drawn.properties,
             provenance=drawn.provenance, handling=drawn.handling, created_by="alice",
