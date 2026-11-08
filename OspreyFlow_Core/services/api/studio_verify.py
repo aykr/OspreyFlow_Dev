@@ -31,6 +31,7 @@ from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
 from schemas.domain import Edge, EdgeWrite, Handling, Node, NodeWrite, OntologySchema, Principal
 from schemas.ingest import (
+    ExpertStepDisclosure,
     Recipe,
     RecipeDefaults,
     RejectionGroup,
@@ -157,6 +158,7 @@ async def run_verify(
     check_reference_matches(draft.row_template, ontology)
 
     source_handling = resolve_source_handling(draft)
+    expert_steps: list[ExpertStepDisclosure] = []
     steps = staging_from_pipeline(draft.pipeline) if draft.pipeline is not None else None
     if steps and staging is None:
         raise RecipeRuleError(
@@ -241,6 +243,7 @@ async def run_verify(
         except StagingError as refused:
             raise RecipeRuleError(refused.problems) from refused
         result = tested.result
+        expert_steps = tested.expert_steps
         sampled = tested_rows
         result.rejections = [r.model_copy(update={"sample": ""}) for r in result.rejections]
         result.rows_read = sum(len(t.rows) for t in read.tables.values())
@@ -341,4 +344,5 @@ async def run_verify(
         would_raise=would[0],
         checks_not_judged=would[1],
         checks_judged=would[2],
+        expert_steps=expert_steps,
     )
