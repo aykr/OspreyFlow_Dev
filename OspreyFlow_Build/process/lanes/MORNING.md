@@ -21,6 +21,11 @@ New ones are added at the bottom as they happen.
 11. **An alert in a branch that rests on the original case's layer has its node withheld and its queue row raised** (case's call within my ruling): it can go neither to the source (a leak) nor into the read-only layer.
 12. **ADR-110 Amendment 17** carries studio's Part A2 findings, because Amendment 15 had been rewritten in place on a branch. It was restored, since decisions are amended, never edited.
 13. **L1.2c (your option A): reverting the returning row's load puts its link back exactly as it was before the merge.** The load record keeps the link's prior state for its own-key merges only, never shown anywhere, and restored at its own marking. A revert is refused, in words, if the link has been written since. The other two options were a counted unmerge, which would leave the reverted load's values on the link, or marking the link reverted, which would leave a gap in its history.
+14. **L3.1b's four questions, settled on my recommendation:**
+    - **Home case Author:** an existing dataset's home case gets its creator as Author. If that's a service account or a person no longer active, it gets none and is listed as "needs an owner".
+    - **Composites:** a composite gets a home case; an analyst layer never does.
+    - **The old `investigations.domains` column** is kept as a record, not dropped.
+    - **Environments:** one home case per dataset per deployment until releases bring a second environment.
 
 ## Evening, 7 November: your records of 7 November applied
 
