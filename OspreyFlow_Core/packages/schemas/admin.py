@@ -191,6 +191,13 @@ class AdminDataset(BaseModel):
     name: str
     owning_unit: str
     egress: DatasetEgress
+    #: The highest marking the dataset may hold (ADR-145 decision 8, Amendment 3; ADR-143 Amendment
+    #: 2 decision 3). Set when the dataset is made: a drawn dataset's maker chooses it within their
+    #: own clearance; every other dataset has the deployment's highest marking, which the Conduit
+    #: fills in (L3.1b step 5); `None` until then, read as that. Read by the Glass's Admin ›
+    #: Datasets column *Highest marking it may hold* (L2.4 part 2); enforced on what is written
+    #: into the dataset and its cases' layers by L3.3.
+    highest_marking: str | None = None
 
 
 class DatasetEgressInput(BaseModel):

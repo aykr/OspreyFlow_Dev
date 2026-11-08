@@ -238,6 +238,22 @@ class MadeLive(BaseModel):
     flagged: list[ImpactedPipeline] = Field(default_factory=list)
 
 
+class DrawnDatasetInput(BaseModel):
+    """`POST /v1/datasets/drawn` (ADR-143 Amendment 2 decision 5; ADR-140 Amendment 9 decision 2):
+    *New drawing board* with no case makes, in one step, a dataset of kind `drawn` named after the
+    drawing, its domain model live at version 1 (the starter pack chosen, or the POLE core alone),
+    and its home case, with the maker as its Author. The board itself is L3.3's."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    #: The starter pack the analyst picks; `None` for the POLE core alone.
+    pack: DomainPack | None = None
+    #: The highest marking the drawn dataset may hold, within the maker's own clearance (refused
+    #: above it); a classification of the deployment's handling scheme.
+    highest_marking: str = Field(min_length=1)
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     ModelExtension,
     TargetModel,
@@ -253,4 +269,5 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ImpactedCase,
     ModelImpact,
     MadeLive,
+    DrawnDatasetInput,
 )

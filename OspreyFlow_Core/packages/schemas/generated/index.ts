@@ -381,3 +381,4 @@ export type { ImpactedPipeline } from "./ImpactedPipeline";
 export type { ImpactedCase } from "./ImpactedCase";
 export type { ModelImpact } from "./ModelImpact";
 export type { MadeLive } from "./MadeLive";
+export type { DrawnDatasetInput } from "./DrawnDatasetInput";

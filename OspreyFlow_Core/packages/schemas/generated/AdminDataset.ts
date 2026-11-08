@@ -4,6 +4,7 @@ export type Id = string;
 export type Name = string;
 export type OwningUnit = string;
 export type Egress = "none" | "contracted" | "any";
+export type HighestMarking = string | null;
 
 /**
  * One dataset as the Admin area's Datasets screen shows it (ADR-136 decision 2): its name, the
@@ -14,5 +15,6 @@ export interface AdminDataset {
   name: Name;
   owning_unit: OwningUnit;
   egress: Egress;
+  highest_marking?: HighestMarking;
   [k: string]: unknown;
 }
