@@ -6,7 +6,7 @@ rootdir: /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build
 configfile: pytest.ini
 plugins: asyncio-1.4.0, anyio-4.15.1
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 8692 items
+collected 8703 items
 
 ../OspreyFlow_Build/tests/adapters/analytics_duckdb/test_event_time_zone.py . [  0%]
                                                                          [  0%]
@@ -79,7 +79,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_gateway_usage.py . [  3%]
 ...........                                                              [  3%]
 ../OspreyFlow_Build/tests/adapters/model_litellm/test_usage.py ......... [  3%]
-........                                                                 [  4%]
+........                                                                 [  3%]
 ../OspreyFlow_Build/tests/authorized_query_check/test_principal_predicate_required.py . [  4%]
 .......                                                                  [  4%]
 ../OspreyFlow_Build/tests/cli/test_answers.py .......................... [  4%]
@@ -167,7 +167,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/harness/test_deployment_models.py .........    [ 12%]
 ../OspreyFlow_Build/tests/harness/test_deployment_name.py ...........    [ 12%]
 ../OspreyFlow_Build/tests/harness/test_deployment_schema.py ............ [ 12%]
-................................................                         [ 13%]
+................................................                         [ 12%]
 ../OspreyFlow_Build/tests/harness/test_dev_compose_arcadedb_heap.py ...  [ 13%]
 ../OspreyFlow_Build/tests/harness/test_egress_consequence.py .....       [ 13%]
 ../OspreyFlow_Build/tests/harness/test_front_proxy.py .................. [ 13%]
@@ -222,11 +222,11 @@ collected 8692 items
 ../OspreyFlow_Build/tests/harness/test_release_chart.py ....             [ 18%]
 ../OspreyFlow_Build/tests/harness/test_release_lock.py ....              [ 18%]
 ../OspreyFlow_Build/tests/harness/test_release_matrix.py ....            [ 18%]
-../OspreyFlow_Build/tests/harness/test_release_render.py ...             [ 19%]
+../OspreyFlow_Build/tests/harness/test_release_render.py ...             [ 18%]
 ../OspreyFlow_Build/tests/harness/test_render.py ....................... [ 19%]
 ..................................................                       [ 19%]
 ../OspreyFlow_Build/tests/harness/test_render_clickhouse.py .....        [ 19%]
-../OspreyFlow_Build/tests/harness/test_render_egress.py .........        [ 20%]
+../OspreyFlow_Build/tests/harness/test_render_egress.py .........        [ 19%]
 ../OspreyFlow_Build/tests/harness/test_render_external.py ...........    [ 20%]
 ../OspreyFlow_Build/tests/harness/test_render_memory.py .....            [ 20%]
 ../OspreyFlow_Build/tests/harness/test_render_objectstore.py ......      [ 20%]
@@ -244,7 +244,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/harness/test_update_apply.py ................. [ 21%]
 ...................                                                      [ 21%]
 ../OspreyFlow_Build/tests/harness/test_update_check.py ......            [ 21%]
-../OspreyFlow_Build/tests/harness/test_wait_for_ports_bindable.py ....   [ 22%]
+../OspreyFlow_Build/tests/harness/test_wait_for_ports_bindable.py ....   [ 21%]
 ../OspreyFlow_Build/tests/harness/test_webapp_admin_access.py ........   [ 22%]
 ../OspreyFlow_Build/tests/harness/test_webapp_artefacts.py ..........    [ 22%]
 ../OspreyFlow_Build/tests/harness/test_webapp_config_errors.py .         [ 22%]
@@ -262,12 +262,12 @@ collected 8692 items
 ../OspreyFlow_Build/tests/harness/test_webapp_sign_in.py ............... [ 23%]
 .............                                                            [ 23%]
 ../OspreyFlow_Build/tests/harness/test_welcome_settings.py ...           [ 23%]
-../OspreyFlow_Build/tests/harness/test_workspace_proxy.py ...            [ 23%]
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py .EE            [ 23%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_account_ref.py ....... [ 23%]
 ...........................                                              [ 23%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_address.py ....        [ 23%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_coordinates.py ....... [ 23%]
-......                                                                   [ 24%]
+......                                                                   [ 23%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_datetime.py .......... [ 24%]
                                                                          [ 24%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_derive.py ............ [ 24%]
@@ -283,7 +283,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/knowledge_adapters/test_person_name.py ....... [ 25%]
                                                                          [ 25%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_postcode.py ......     [ 25%]
-../OspreyFlow_Build/tests/knowledge_adapters/test_screening_lists.py ... [ 26%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_screening_lists.py ... [ 25%]
 ....................                                                     [ 26%]
 ../OspreyFlow_Build/tests/knowledge_adapters/test_split.py ............. [ 26%]
                                                                          [ 26%]
@@ -295,7 +295,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/licence_check/test_own_licence_and_notice.py . [ 26%]
 ....                                                                     [ 26%]
 ../OspreyFlow_Build/tests/ontology/test_alert_ontology.py ..             [ 26%]
-../OspreyFlow_Build/tests/ontology/test_audience.py ........             [ 27%]
+../OspreyFlow_Build/tests/ontology/test_audience.py ........             [ 26%]
 ../OspreyFlow_Build/tests/ontology/test_client_parity.py .........       [ 27%]
 ../OspreyFlow_Build/tests/ontology/test_content_ontology.py ............ [ 27%]
 ....                                                                     [ 27%]
@@ -313,7 +313,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/ontology/test_pack_versions.py .............   [ 28%]
 ../OspreyFlow_Build/tests/ontology/test_packs.py .............           [ 28%]
 ../OspreyFlow_Build/tests/ontology/test_pattern_where.py ............... [ 28%]
-....                                                                     [ 29%]
+....                                                                     [ 28%]
 ../OspreyFlow_Build/tests/ontology/test_paysim_ontology.py ...           [ 29%]
 ../OspreyFlow_Build/tests/ontology/test_relationship_basis.py .......... [ 29%]
 ...........................................                              [ 29%]
@@ -321,7 +321,7 @@ collected 8692 items
 .....                                                                    [ 29%]
 ../OspreyFlow_Build/tests/ontology/test_searchable_names.py ............ [ 29%]
 ..                                                                       [ 29%]
-../OspreyFlow_Build/tests/ontology/test_sources_in_full.py .....         [ 30%]
+../OspreyFlow_Build/tests/ontology/test_sources_in_full.py .....         [ 29%]
 ../OspreyFlow_Build/tests/ontology/test_validation.py ..........         [ 30%]
 ../OspreyFlow_Build/tests/ontology/test_withhold_sources.py .........    [ 30%]
 ../OspreyFlow_Build/tests/ontology/test_yardstick.py .....               [ 30%]
@@ -331,7 +331,7 @@ collected 8692 items
 ...........                                                              [ 30%]
 ../OspreyFlow_Build/tests/resolve/test_conflict_pipeline.py ..           [ 30%]
 ../OspreyFlow_Build/tests/resolve/test_conflicts.py .....                [ 30%]
-../OspreyFlow_Build/tests/resolve/test_duckdb_setup.py .........         [ 31%]
+../OspreyFlow_Build/tests/resolve/test_duckdb_setup.py .........         [ 30%]
 ../OspreyFlow_Build/tests/resolve/test_projection.py ..........          [ 31%]
 ../OspreyFlow_Build/tests/resolve/test_projection_perf.py .              [ 31%]
 ../OspreyFlow_Build/tests/resolve/test_resolution_accuracy.py ......     [ 31%]
@@ -345,7 +345,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_batches.py .. [ 31%]
 ....                                                                     [ 31%]
 ../OspreyFlow_Build/tests/scenarios/test_paysim_fixture.py ............. [ 31%]
-......                                                                   [ 32%]
+......                                                                   [ 31%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_client_parity.py ......     [ 32%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_cohort_list.py .........    [ 32%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_connection_strength.py .... [ 32%]
@@ -354,13 +354,13 @@ collected 8692 items
 ../OspreyFlow_Build/tests/scenarios/test_pid_files.py .................. [ 32%]
 ...................................                                      [ 32%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_batches.py ..... [ 32%]
-.                                                                        [ 33%]
+.                                                                        [ 32%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_picture_marking.py ...      [ 33%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_plan.py ................... [ 33%]
 ......................................................                   [ 33%]
 ../OspreyFlow_Build/tests/scenarios/test_pid_scale_cohort.py .....       [ 33%]
-../OspreyFlow_Build/tests/scenarios/test_seizure_fixture_shape.py ...... [ 34%]
-                                                                         [ 34%]
+../OspreyFlow_Build/tests/scenarios/test_seizure_fixture_shape.py ...... [ 33%]
+                                                                         [ 33%]
 ../OspreyFlow_Build/tests/schemas/test_analytics.py .......              [ 34%]
 ../OspreyFlow_Build/tests/schemas/test_dataset_model.py .....            [ 34%]
 ../OspreyFlow_Build/tests/schemas/test_domain.py ............            [ 34%]
@@ -389,7 +389,7 @@ collected 8692 items
 ....                                                                     [ 37%]
 ../OspreyFlow_Build/tests/services/api/test_admin_routes.py ............ [ 37%]
 ........................................................................ [ 38%]
-........................................................................ [ 39%]
+........................................................................ [ 38%]
 .....                                                                    [ 39%]
 ../OspreyFlow_Build/tests/services/api/test_admin_sections.py .......... [ 39%]
 ...................                                                      [ 39%]
@@ -399,8 +399,8 @@ collected 8692 items
 ......................................                                   [ 39%]
 ../OspreyFlow_Build/tests/services/api/test_alert_jump_carries_no_count.py . [ 39%]
 .                                                                        [ 39%]
-../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py ...... [ 40%]
-...                                                                      [ 40%]
+../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py ...... [ 39%]
+...                                                                      [ 39%]
 ../OspreyFlow_Build/tests/services/api/test_alert_trends.py ......       [ 40%]
 ../OspreyFlow_Build/tests/services/api/test_alert_view_explains.py ..... [ 40%]
 .................                                                        [ 40%]
@@ -410,7 +410,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_analyst_layer.py ........... [ 40%]
 ............                                                             [ 40%]
 ../OspreyFlow_Build/tests/services/api/test_analytics_case_routes.py ... [ 40%]
-..........                                                               [ 41%]
+..........                                                               [ 40%]
 ../OspreyFlow_Build/tests/services/api/test_analytics_store.py ........  [ 41%]
 ../OspreyFlow_Build/tests/services/api/test_app.py ........              [ 41%]
 ../OspreyFlow_Build/tests/services/api/test_ask_to_search_egress.py .... [ 41%]
@@ -427,7 +427,7 @@ collected 8692 items
 ...                                                                      [ 42%]
 ../OspreyFlow_Build/tests/services/api/test_case_domains.py ............ [ 42%]
 ...............                                                          [ 42%]
-../OspreyFlow_Build/tests/services/api/test_case_events.py .......       [ 43%]
+../OspreyFlow_Build/tests/services/api/test_case_events.py .......       [ 42%]
 ../OspreyFlow_Build/tests/services/api/test_case_tabs_routes.py .....    [ 43%]
 ../OspreyFlow_Build/tests/services/api/test_case_views.py .............. [ 43%]
 .......................                                                  [ 43%]
@@ -442,7 +442,7 @@ collected 8692 items
 .................................                                        [ 44%]
 ../OspreyFlow_Build/tests/services/api/test_connections_route.py ....... [ 44%]
 ....                                                                     [ 44%]
-../OspreyFlow_Build/tests/services/api/test_credentials.py ..            [ 45%]
+../OspreyFlow_Build/tests/services/api/test_credentials.py ..            [ 44%]
 ../OspreyFlow_Build/tests/services/api/test_custom_roles.py ............ [ 45%]
 .                                                                        [ 45%]
 ../OspreyFlow_Build/tests/services/api/test_data_feeds_route.py ...      [ 45%]
@@ -452,7 +452,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py .... [ 45%]
 .......................                                                  [ 45%]
 ../OspreyFlow_Build/tests/services/api/test_dataset_scope.py ........    [ 45%]
-../OspreyFlow_Build/tests/services/api/test_dataset_sources.py ......... [ 46%]
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py ......... [ 45%]
 ..............                                                           [ 46%]
 ../OspreyFlow_Build/tests/services/api/test_datasets.py ...........      [ 46%]
 ../OspreyFlow_Build/tests/services/api/test_delta_wire.py .........      [ 46%]
@@ -489,7 +489,7 @@ collected 8692 items
 ...........                                                              [ 48%]
 ../OspreyFlow_Build/tests/services/api/test_geospatial_admin_routes.py . [ 48%]
 ........                                                                 [ 48%]
-../OspreyFlow_Build/tests/services/api/test_history_labels.py .......... [ 49%]
+../OspreyFlow_Build/tests/services/api/test_history_labels.py .......... [ 48%]
 ......................                                                   [ 49%]
 ../OspreyFlow_Build/tests/services/api/test_history_routes.py .....      [ 49%]
 ../OspreyFlow_Build/tests/services/api/test_home_cases.py .............. [ 49%]
@@ -501,7 +501,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_identity_admin.py .......... [ 50%]
 .................                                                        [ 50%]
 ../OspreyFlow_Build/tests/services/api/test_ingest_sources.py .......... [ 50%]
-.........................................                                [ 51%]
+.........................................                                [ 50%]
 ../OspreyFlow_Build/tests/services/api/test_investigation_access_routes.py . [ 51%]
 .................                                                        [ 51%]
 ../OspreyFlow_Build/tests/services/api/test_investigation_levels.py .... [ 51%]
@@ -520,7 +520,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_link_prior_state_never_told.py . [ 54%]
 ..                                                                       [ 54%]
 ../OspreyFlow_Build/tests/services/api/test_link_type_overlay.py ......  [ 54%]
-../OspreyFlow_Build/tests/services/api/test_link_type_routes.py ......   [ 55%]
+../OspreyFlow_Build/tests/services/api/test_link_type_routes.py ......   [ 54%]
 ../OspreyFlow_Build/tests/services/api/test_link_type_service.py ....... [ 55%]
 ................                                                         [ 55%]
 ../OspreyFlow_Build/tests/services/api/test_liveness_route.py ........   [ 55%]
@@ -534,7 +534,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_map_tile_route.py ....       [ 55%]
 ../OspreyFlow_Build/tests/services/api/test_mapconfig_loader.py ..       [ 55%]
 ../OspreyFlow_Build/tests/services/api/test_media_store_choice.py ...    [ 55%]
-../OspreyFlow_Build/tests/services/api/test_model_admin_routes.py ...... [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_admin_routes.py ...... [ 55%]
 ......................                                                   [ 56%]
 ../OspreyFlow_Build/tests/services/api/test_model_engines.py ........... [ 56%]
 ...                                                                      [ 56%]
@@ -555,7 +555,7 @@ collected 8692 items
 ........................................................................ [ 63%]
 ........................................................................ [ 64%]
 ........................................................................ [ 65%]
-........................................................................ [ 66%]
+........................................................................ [ 65%]
 ........................................................................ [ 66%]
 ........................................................................ [ 67%]
 ........................................................................ [ 68%]
@@ -571,8 +571,8 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_pack_versions_for.py ....    [ 69%]
 ../OspreyFlow_Build/tests/services/api/test_paths_route.py ...           [ 69%]
 ../OspreyFlow_Build/tests/services/api/test_pattern_ask.py ............. [ 69%]
-..........................                                               [ 70%]
-../OspreyFlow_Build/tests/services/api/test_pattern_conditions_routes.py . [ 70%]
+..........................                                               [ 69%]
+../OspreyFlow_Build/tests/services/api/test_pattern_conditions_routes.py . [ 69%]
 ................                                                         [ 70%]
 ../OspreyFlow_Build/tests/services/api/test_patterns.py .....            [ 70%]
 ../OspreyFlow_Build/tests/services/api/test_pipeline_enrich_journal.py . [ 70%]
@@ -586,7 +586,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_questions.py .............   [ 71%]
 ../OspreyFlow_Build/tests/services/api/test_questions_graph_facts.py ... [ 71%]
 ................................                                         [ 71%]
-../OspreyFlow_Build/tests/services/api/test_readiness.py .......         [ 72%]
+../OspreyFlow_Build/tests/services/api/test_readiness.py .......         [ 71%]
 ../OspreyFlow_Build/tests/services/api/test_recipe_run_module.py .....   [ 72%]
 ../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py ..        [ 72%]
 ../OspreyFlow_Build/tests/services/api/test_recipe_runs_unreverted.py .. [ 72%]
@@ -601,8 +601,8 @@ collected 8692 items
 .............................                                            [ 72%]
 ../OspreyFlow_Build/tests/services/api/test_resolution_routes.py ....... [ 72%]
 ................                                                         [ 72%]
-../OspreyFlow_Build/tests/services/api/test_resolution_trigger.py ...... [ 73%]
-...                                                                      [ 73%]
+../OspreyFlow_Build/tests/services/api/test_resolution_trigger.py ...... [ 72%]
+...                                                                      [ 72%]
 ../OspreyFlow_Build/tests/services/api/test_restore_link_state_through_the_wrapper.py . [ 73%]
 ..                                                                       [ 73%]
 ../OspreyFlow_Build/tests/services/api/test_revert_closes_alerts.py ..   [ 73%]
@@ -616,7 +616,7 @@ collected 8692 items
 .....                                                                    [ 73%]
 ../OspreyFlow_Build/tests/services/api/test_rule_sentences.py .......... [ 73%]
 ........                                                                 [ 73%]
-../OspreyFlow_Build/tests/services/api/test_run_counts_withheld.py ..... [ 74%]
+../OspreyFlow_Build/tests/services/api/test_run_counts_withheld.py ..... [ 73%]
 ........................                                                 [ 74%]
 ../OspreyFlow_Build/tests/services/api/test_run_ledger_read_side.py .... [ 74%]
 .....                                                                    [ 74%]
@@ -625,8 +625,8 @@ collected 8692 items
 .................                                                        [ 74%]
 ../OspreyFlow_Build/tests/services/api/test_schedule_slots.py .......... [ 74%]
 ........                                                                 [ 74%]
-../OspreyFlow_Build/tests/services/api/test_screening.py .......         [ 75%]
-../OspreyFlow_Build/tests/services/api/test_search_normalisation.py .... [ 75%]
+../OspreyFlow_Build/tests/services/api/test_screening.py .......         [ 74%]
+../OspreyFlow_Build/tests/services/api/test_search_normalisation.py .... [ 74%]
 .....                                                                    [ 75%]
 ../OspreyFlow_Build/tests/services/api/test_search_route.py ..           [ 75%]
 ../OspreyFlow_Build/tests/services/api/test_sentence_rules.py .......    [ 75%]
@@ -642,9 +642,9 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_studio_map_routes.py ....... [ 75%]
 ........                                                                 [ 75%]
 ../OspreyFlow_Build/tests/services/api/test_studio_preview_routes.py ... [ 75%]
-.........                                                                [ 76%]
-../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py . [ 76%]
-.....                                                                    [ 76%]
+.........                                                                [ 75%]
+../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py . [ 75%]
+.....                                                                    [ 75%]
 ../OspreyFlow_Build/tests/services/api/test_studio_publish_routes.py ... [ 76%]
 ...................                                                      [ 76%]
 ../OspreyFlow_Build/tests/services/api/test_studio_recipe_routes.py .... [ 76%]
@@ -655,7 +655,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/services/api/test_studio_schedule_routes.py .. [ 77%]
 ......                                                                   [ 77%]
 ../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py ... [ 77%]
-...........                                                              [ 77%]
+...................                                                      [ 77%]
 ../OspreyFlow_Build/tests/services/api/test_studio_verify_routes.py .... [ 77%]
 ......                                                                   [ 77%]
 ../OspreyFlow_Build/tests/services/api/test_suggest_route.py ........... [ 77%]
@@ -721,7 +721,7 @@ collected 8692 items
 .............                                                            [ 81%]
 ../OspreyFlow_Build/tests/services/api/working_set/test_service.py ..... [ 81%]
 .........                                                                [ 81%]
-../OspreyFlow_Build/tests/services/api/working_set/test_sources_withheld.py . [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_sources_withheld.py . [ 81%]
 .....                                                                    [ 82%]
 ../OspreyFlow_Build/tests/services/api/working_set/test_view_over_cap.py . [ 82%]
 ........................                                                 [ 82%]
@@ -779,7 +779,7 @@ collected 8692 items
 ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 88%]
                                                                          [ 88%]
 ../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 88%]
-                                                                         [ 88%]
+...                                                                      [ 88%]
 ../OspreyFlow_Build/tests/test_layout.py .....................           [ 88%]
 ../OspreyFlow_Build/tests/test_load_revert_resting.py ....               [ 88%]
 ../OspreyFlow_Build/tests/test_make_home_cases.py ........               [ 88%]
@@ -859,10 +859,77 @@ collected 8692 items
 ../OspreyFlow_Build/tests/test_website_wording.py ...................... [ 99%]
 .........                                                                [100%]
 
+==================================== ERRORS ====================================
+_ ERROR at setup of test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api] _
+
+    @pytest.fixture(scope="module")
+    def workspace_image() -> str:
+        tag = "osprey-test-workspace:proxy"
+>       _docker("build", "-q", "-f", str(WORKSPACE / "Dockerfile"), "-t", tag, str(REPO_ROOT))
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+check = True
+args = ('build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Core/apps/workspace/Dockerfile', '-t', 'osprey-test-workspace:proxy', ...)
+
+    def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        done = subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+        )
+        if check:
+>           assert done.returncode == 0, done.stderr or done.stdout
+E           AssertionError: Dockerfile:52
+E             --------------------
+E               50 |     RUN npm run build --workspace apps/workspace
+E               51 |     
+E               52 | >>> FROM nginx:1.30-alpine
+E               53 |     
+E               54 |     # Base-image OS packages lag the upstream image's own last-published point
+E             --------------------
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['docker', 'build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Core/apps/w...tus from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests\n").returncode
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:33: AssertionError
+_ ERROR at setup of test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api.osprey.svc.cluster.local] _
+
+    @pytest.fixture(scope="module")
+    def workspace_image() -> str:
+        tag = "osprey-test-workspace:proxy"
+>       _docker("build", "-q", "-f", str(WORKSPACE / "Dockerfile"), "-t", tag, str(REPO_ROOT))
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+check = True
+args = ('build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Core/apps/workspace/Dockerfile', '-t', 'osprey-test-workspace:proxy', ...)
+
+    def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        done = subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+        )
+        if check:
+>           assert done.returncode == 0, done.stderr or done.stdout
+E           AssertionError: Dockerfile:52
+E             --------------------
+E               50 |     RUN npm run build --workspace apps/workspace
+E               51 |     
+E               52 | >>> FROM nginx:1.30-alpine
+E               53 |     
+E               54 |     # Base-image OS packages lag the upstream image's own last-published point
+E             --------------------
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['docker', 'build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Core/apps/w...tus from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests\n").returncode
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:33: AssertionError
 =================================== FAILURES ===================================
 ______________ test_the_deployments_own_valkey_is_reached_plainly ______________
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x17e93ad50>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x168095460>
 
     def test_the_deployments_own_valkey_is_reached_plainly(monkeypatch: pytest.MonkeyPatch) -> None:
         for name in ("VALKEY_PASSWORD", "VALKEY_TLS"):
@@ -879,7 +946,7 @@ E         Use -v to get more diff
 ../OspreyFlow_Build/tests/services/api/test_valkey_config.py:19: AssertionError
 __________ test_the_extraction_loads_as_documents_held_by_the_phones ___________
 
-tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5155/test_the_extraction_loads_as_d0')
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-5284/test_the_extraction_loads_as_d0')
 
     @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg makes the media")
     async def test_the_extraction_loads_as_documents_held_by_the_phones(tmp_path: Path) -> None:
@@ -945,6 +1012,7 @@ tests/services/api/test_studio_map_routes.py: 1 warning
 tests/services/api/test_studio_publish_routes.py: 4 warnings
 tests/services/api/test_studio_recipe_routes.py: 2 warnings
 tests/services/api/test_studio_schedule_routes.py: 4 warnings
+tests/services/api/test_studio_staging_routes.py: 2 warnings
   /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
     response = await handler(conn, exc)  # type: ignore[arg-type]
 
@@ -956,12 +1024,12 @@ tests/services/api/test_sites_routes.py::test_grid_cannot_be_set_before_control_
 
 tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
 tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
-  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8056: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8058: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
     raise refresh_needs_a_key(keyless)
 
 tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
 tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
-  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:3571: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:3573: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
     grantee = _grantee(account_id)
 
 tests/services/api/test_model_engines.py::test_a_request_naming_a_refused_engine_is_answered_in_words_with_a_4xx
@@ -974,14 +1042,24 @@ tests/services/api/test_no_corpus_counts_on_the_wire.py::test_a_delta_the_stream
     return self.__pydantic_serializer__.to_json(
 
 tests/services/api/test_studio_recipe_routes.py::test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words
-  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9594: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9616: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
     raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8939: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8873: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
 FAILED ../OspreyFlow_Build/tests/test_phone_extraction_fixture.py::test_the_extraction_loads_as_documents_held_by_the_phones
-====== 2 failed, 8687 passed, 3 skipped, 55 warnings in 992.41s (0:16:32) ======
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api]
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api.osprey.svc.cluster.local]
+= 2 failed, 8696 passed, 3 skipped, 59 warnings, 2 errors in 1096.89s (0:18:16) =
 make: *** [test] Error 1
 TEST_EXIT=2
 
@@ -994,14 +1072,14 @@ npm test --workspace apps/workspace
 
  RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Core/apps/workspace
 
- ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 6816ms
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 6150ms
    ❯ MatrixView at 50,000 nodes and 250,000 links (1)
-     × opens inside §5's first-frame budget, drawing one page of each table and saying so 6815ms
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 6149ms
 
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 
  FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
-AssertionError: opened in 3810 ms: expected 3809.5576669999996 to be less than 2500
+AssertionError: opened in 3404 ms: expected 3403.570875 to be less than 2500
  ❯ src/matrix/MatrixView.budget.test.tsx:50:60
      48|     expect(entities.querySelector("caption")?.textContent).toContain("…
      49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
@@ -1015,11 +1093,11 @@ AssertionError: opened in 3810 ms: expected 3809.5576669999996 to be less than 2
 
  Test Files  1 failed | 322 passed (323)
       Tests  1 failed | 2688 passed (2689)
-   Start at  21:20:03
-   Duration  31.44s (environment 51%, tests 36%, import 10%, transform 2%, setup 1%)
+   Start at  22:32:43
+   Duration  28.39s (environment 49%, tests 37%, import 10%, transform 2%, setup 1%, worker 1%)
 
-    Isolate  323 workers spawned · ~581ms startup each (spawn + environment, per file)
-             at least ~16.47s faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  323 workers spawned · ~513ms startup each (spawn + environment, per file)
+             at least ~14.56s faster with isolate: false — reuses workers across files instead of one per file
 
 npm error Lifecycle script `test` failed with error:
 npm error code 1
@@ -1032,9 +1110,8 @@ make: *** [test-js] Error 1
 JS_EXIT=2
 
 === MatrixView.budget run alone ===
-
  Test Files  1 passed (1)
       Tests  1 passed (1)
-   Start at  21:20:48
-   Duration  3.56s (tests 74%, environment 14%, import 9%, transform 3%)
+   Start at  22:33:25
+   Duration  3.29s (tests 78%, environment 17%, import 4%, transform 1%)
 

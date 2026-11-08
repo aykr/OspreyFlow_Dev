@@ -1,0 +1,47 @@
+lease studio, stack b, commit fb5024d, started 22:35:59Z
+F.............................                                           [100%]
+=================================== FAILURES ===================================
+_____________ test_every_route_names_the_right_the_table_gives_it ______________
+
+    def test_every_route_names_the_right_the_table_gives_it() -> None:
+        routes = _routes()
+>       assert set(routes) == set(ROUTE_RIGHTS), (
+            f"in the app, not the table: {sorted(set(routes) - set(ROUTE_RIGHTS))}; "
+            f"in the table, not the app: {sorted(set(ROUTE_RIGHTS) - set(routes))}"
+        )
+E       AssertionError: in the app, not the table: ['models_admin_limits_route', 'models_admin_usage_route']; in the table, not the app: []
+E       assert {'accept_docu...nection', ...} == {'accept_docu...nection', ...}
+E         
+E         Extra items in the left set:
+E         'models_admin_usage_route'
+E         'models_admin_limits_route'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:410: AssertionError
+=============================== warnings summary ===============================
+../../studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+tests/services/api/test_studio_staging_routes.py::test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8939: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/studio-gate/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8873: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1 failed, 29 passed, 5 warnings in 28.11s
+ended 22:36:28Z
+=== the same test at main 4d925d2, lease studio, stack b, 22:36:50Z
+E       AssertionError: in the app, not the table: ['models_admin_limits_route', 'models_admin_usage_route']; in the table, not the app: []
+E       assert {'accept_docu...nection', ...} == {'accept_docu...nection', ...}
+E         
