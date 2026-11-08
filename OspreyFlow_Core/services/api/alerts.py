@@ -1757,14 +1757,14 @@ async def purge_copies(working_set: Any, nodes: Sequence[str]) -> None:
     projected for its reader, rather than at its next resynchronisation (ADR-109 Amendment 11,
     closing Amendment 10 point 6's second gap). Every store is cleared before anything is
     published, as the revert's own purge does (`working_set_revert.py`). A service built without
-    a client (a test's) publishes nothing."""
-    from .notify import publish_delta
+    a client (a test's) publishes nothing. The removal is the revert's own
+    (`working_set_revert.remove_and_publish`). It does not scrub the named-step history, as the
+    revert does: history serves no copy (its list is metadata only, and a restore re-reads the
+    Vault, which returns no superseded node), and the superseded revision stays in the Vault itself,
+    so a stored body there is no copy beyond it (ADR-109 Amendment 12, L2.8c's carry (c))."""
+    from .working_set_revert import remove_and_publish
 
-    removals = await working_set.remove_reverted(nodes, [])
-    publisher = working_set.publisher
-    if publisher is not None:
-        for removal in removals:
-            await publish_delta(publisher, removal.investigation_id, removal.delta)
+    await remove_and_publish(working_set, working_set.publisher, nodes, [])
 
 
 async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:

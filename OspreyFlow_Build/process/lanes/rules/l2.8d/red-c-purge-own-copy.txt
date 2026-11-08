@@ -1,0 +1,58 @@
+# red: c-purge-own-copy — offline, at ea0a129 + working tree, 2026-11-08T16:03:18Z
+# plant in services/api/alerts.py:
+# - '    from .working_set_revert import remove_and_publish\n\n    await remove_and_publish(working_set, working_set.publisher, nodes, [])'
+# + '    from .notify import publish_delta\n\n    for removal in await working_set.remove_reverted(nodes, []):\n        if working_set.publisher is not None:\n            await publish_delta(working_set.publisher, removal.investigation_id, removal.delta)'
+# exit 1
+
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+___ test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10f238200>
+
+    async def test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Both callers reach `remove_and_publish`: the revert with its Valkey client and the links it
+        took back, the alert purge with the service's own publisher and nodes alone. Red with either
+        keeping its own copy of the removal: that caller never reached the helper."""
+        calls: list[tuple[str, Any, list[str], list[str]]] = []
+    
+        async def recorded(service: Any, publisher: Any, nodes: Any, links: Any) -> list[Any]:
+            calls.append((type(service).__name__, publisher, list(nodes), list(links)))
+            return []
+    
+        class _History:
+            async def remove_elements(self, nodes: Any, links: Any) -> int:
+                return 0
+    
+        monkeypatch.setattr(working_set_revert, "remove_and_publish", recorded)
+        service, valkey = _Service([]), object()
+        service.publisher = object()
+        await WorkingSetReverter(service, valkey, _History()).remove(["n1"], ["e1"])  # type: ignore[arg-type]
+>       await alerts_module.purge_copies(service, ["alert-node-1"])
+
+../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:84: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/alerts.py:1769: in purge_copies
+    await publish_delta(working_set.publisher, removal.investigation_id, removal.delta)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <object object at 0x10495f350>, investigation_id = 'case-a'
+delta = {'op': 'remove', 'case': 'a'}
+
+    async def publish_delta(client: Valkey, investigation_id: str, delta: WorkingSetDelta) -> None:
+        """Publishes the stored form of a delta, record included (ADR-124 decision 4): every socket's
+        own projection decides what its reader is sent of it. The stored and sent forms are separate
+        types, so the checker refuses a sent one; the check below is for a caller it does not see,
+        since nothing can be projected from a sent form."""
+        if isinstance(delta, DeltaRemoveSent | DeltaReplaceEdgeSent | DeltaViewOverCap):
+            raise TypeError(f"a sent {type(delta).__name__} has no record to project readers from")
+>       await _reply(client.publish(notify_channel(investigation_id), delta.model_dump_json()))
+                     ^^^^^^^^^^^^^^
+E       AttributeError: 'object' object has no attribute 'publish'
+
+services/api/notify.py:45: AttributeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper
+1 failed, 2 passed in 0.46s
