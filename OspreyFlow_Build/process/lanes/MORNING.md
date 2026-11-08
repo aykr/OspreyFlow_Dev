@@ -28,6 +28,20 @@ its lease; the build plan, runbook, progress table and the five first briefs (ad
 L2.8c, case L3.2, studio L1.3, platform P1); worktrees `admin`, `rules` and `platform` set up. The
 studio, case and glass sessions are retired (each replied "retired"); their worktrees are clean and merged.
 
+**A question for you when you are back (admin's L2.5, Q3b; it narrows your own ruling, so it is yours):**
+your Q3 answer said a custom role may not hold "a right the giver lacks". Taken literally, an
+administrator, whose role holds none of the analyst's or data engineer's rights, could never define an
+analyst-like role, which defeats custom roles (R2). Until now "nobody gives more than they hold" (ADR-114
+Amendment 5) has meant clearance and handling codes, never rights.
+- **(a) Recommended:** only the administration rights (administer_system, manage_people,
+  manage_dashboards, operate_schedules, manage_ontology, manage_geospatial, read_audit,
+  read_export_ledger, manage_models) must be held by whoever puts them in a role or gives them; any other
+  right may be bundled by a manage_people holder; the access ceiling (clearance and handling) stands.
+  This stops a manage_people-only holder making themselves an administrator.
+- (b) No rights check; the ceiling stays access alone, with the pair and lock-out rules.
+- (c) Every right, literally: an administrator bundles only rights they hold.
+Admin is building (a) behind one function, marked pending; L2.5 waits for your answer before it merges.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
