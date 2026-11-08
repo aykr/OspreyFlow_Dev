@@ -850,6 +850,18 @@ class AlertStore:
         hold one id, ADR-110 Amendment 18), or over every type where none was recorded."""
         return (await graph.stored_link_states([old], edge_type=old_type)).get(old)
 
+    async def applied_purges(self) -> list[tuple[str, list[str]]]:
+        """Each applied record still waiting for its working-set purge, with the nodes to purge."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, purge FROM alert_repoint_records WHERE applied AND purge <> '[]'::jsonb"
+            )
+        return [(row["id"], [str(n) for n in _loaded(row["purge"])]) for row in rows]
+
+    async def purged(self, record_id: str) -> None:
+        """The record's nodes have left every working set: the record is closed."""
+        await self._close_record(record_id)
+
     async def _close_record(self, record_id: str) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute("DELETE FROM alert_repoint_records WHERE id = $1", record_id)
@@ -1402,14 +1414,9 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
     working sets) leave every working set that stored a copy at the old marking
     (`WorkingSetService.remove_reverted`), and their records are closed (ADR-109 Amendment 10;
     L2.8b's R2). A stored copy is served from the store, not read again from the graph."""
-    async with alerts._pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT id, purge FROM alert_repoint_records WHERE applied AND purge <> '[]'::jsonb"
-        )
-    for row in rows:
-        nodes = json.loads(row["purge"]) if isinstance(row["purge"], str) else row["purge"]
-        await working_set.remove_reverted(list(nodes), [])
-        await alerts._close_record(row["id"])
+    for record_id, nodes in await alerts.applied_purges():
+        await working_set.remove_reverted(nodes, [])
+        await alerts.purged(record_id)
 
 
 async def settle_repoints(store: object, graph: GraphPort) -> None:
