@@ -20,8 +20,8 @@ async function press(page: Page, name: string, exact = true) {
 export type Binding = { field?: string; literal?: string; transform?: string; optional?: boolean };
 export type MapEntity = { ref: string; pole_class: string; type: string; match_on?: string; on_match?: string;
   when?: { field: string; is: string }; properties: Record<string, Binding>; content?: { kind: string; field: string };
-  handling: Record<string, { field: string }> };  // prettier-ignore
-export type MapEdge = { type: string; from: string; to: string; when?: { field: string; is: string }; handling: Record<string, { field: string }> };
+  handling?: Record<string, { field: string }> };  // prettier-ignore
+export type MapEdge = { type: string; from: string; to: string; when?: { field: string; is: string }; handling?: Record<string, { field: string }> };
 export type ReportsMap = { row_template: { entities: MapEntity[]; edges: MapEdge[] };
   unmapped_fields: { field: string; action: string; note?: string }[]; deduplicate: { key: Binding[] };
   handling_columns: Record<string, string> };  // prettier-ignore
@@ -70,7 +70,9 @@ export async function setCondition(page: Page, when: { field: string; is: string
   await choose(page, "Condition test", when.is);
 }
 
-export async function buildEntity(page: Page, entity: MapEntity) {
+/** One entity through the inspector's controls. `position`: its number in the entity list, the
+ * committed reports map's own when not given. */
+export async function buildEntity(page: Page, entity: MapEntity, position?: number) {
   await press(page, "+ entity");
   const ref = page.getByRole("textbox", { name: "Entity ref", exact: true });
   await ref.focus();
@@ -110,8 +112,9 @@ export async function buildEntity(page: Page, entity: MapEntity) {
     await choose(page, "Its own text", entity.content.kind);
     await choose(page, "Column holding its text", entity.content.field);
   }
-  await bindHandling(page, entity.handling);
-  await expect(page.getByRole("button", { name: `Entity ${REPORTS_MAP.row_template.entities.indexOf(entity) + 1}: ${entity.ref} (${entity.type})` })).toBeVisible();
+  if (entity.handling && Object.keys(entity.handling).length) await bindHandling(page, entity.handling);
+  const number = position ?? REPORTS_MAP.row_template.entities.indexOf(entity) + 1;
+  await expect(page.getByRole("button", { name: `Entity ${number}: ${entity.ref} (${entity.type})` })).toBeVisible();
 }
 
 export async function buildLink(page: Page, edge: MapEdge) {
@@ -120,7 +123,7 @@ export async function buildLink(page: Page, edge: MapEdge) {
   await choose(page, "Link type", edge.type);
   await press(page, "Add link");
   if (edge.when) await setCondition(page, edge.when);
-  await bindHandling(page, edge.handling);
+  if (edge.handling && Object.keys(edge.handling).length) await bindHandling(page, edge.handling);
 }
 
 /** Every entity and link of the map, then the ignored columns with their notes, in the Map editor. */

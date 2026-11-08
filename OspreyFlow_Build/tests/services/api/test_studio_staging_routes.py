@@ -254,3 +254,26 @@ def test_a_list_the_live_model_does_not_name_is_not_read(staged: TestClient) -> 
         "step 'with_establishment' looks up 'establishments', which names no list this dataset "
         "holds or subscribes to"
     ]
+
+
+def test_a_step_s_sample_runs_beside_refusals_of_steps_it_does_not_need(staged: TestClient) -> None:
+    """A pipeline is built a step at a time: while a later step is half set, or a source not yet
+    read, the save gate refuses the pipeline, and an earlier step's drawer still shows its sample,
+    with every refusal beside it in the gate's own words."""
+    graph = _draft(staged).pipeline.model_copy(deep=True)
+    derive = next(n for n in graph.nodes if n.id == "titled")
+    derive.config = {**derive.config, "columns": ["establishment"]}  # concat reads two
+    saved = staged.put(f"{RECIPE_URL}/pipeline", json=graph.model_dump(mode="json"))
+    assert saved.status_code == 422
+    body = _preview(staged, "with_establishment", graph).json()
+    assert body["problems"] == saved.json()["problems"]
+    assert body["problems"] == ["step 'titled': concat reads at least 2 column(s), not 1"]
+    assert body["rows"] == []  # a record the schema refuses runs nothing
+    unread = _draft(staged).pipeline.model_copy(deep=True)
+    unread.nodes = [n for n in unread.nodes if n.id not in ("with_owner", "titled")]
+    gone = {"with_owner", "titled"}
+    unread.edges = [e for e in unread.edges if not gone & {e.source, e.target}]
+    unread.edges.append(PipelineEdge(source="with_establishment", target="map"))
+    body = _preview(staged, "with_establishment", unread).json()
+    assert body["problems"] == ["source 'Owners' reaches no load; its rows would go nowhere"]
+    assert len(body["rows"]) == 6

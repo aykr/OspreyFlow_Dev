@@ -174,8 +174,9 @@ def preview_staging(
     references: Sequence[ReferenceList],
     storage: ObjectStorageConfig,
 ) -> StagingPreview:
-    """The steps up to `body.step` over the first ten rows of each source. A row any of whose
-    source rows the reader may not view is masked, and so is the profile, as Map's sample and
+    """The steps up to `body.step` over the first ten rows of each source, with every refusal of
+    the save gate for the whole pipeline beside it. A row any of whose source rows the reader may
+    not view is masked, and so is the profile, as Map's sample and
     Profile mask them (rule 3). Nothing is written: no staged Parquet, no raw rows."""
     pipeline = body.pipeline
     problems = [*pipeline_rule_violations(pipeline)]
@@ -184,7 +185,10 @@ def preview_staging(
         for p in staging_gate(pipeline, references=references, dataset_id=draft.dataset_id)
         if p not in problems
     )
-    if problems:
+    # A step's record the schema refuses cannot be run at all; any other refusal (a source not yet
+    # used, a later step half set) is reported beside the sample, which runs whenever the steps
+    # this one needs can.
+    if staging_graph_violations(pipeline):
         return StagingPreview(step=body.step, problems=problems)
     steps = staging_from_pipeline(pipeline) or []
     if body.step not in {s.id for s in steps}:
@@ -201,7 +205,10 @@ def preview_staging(
             wanted, sources=read.tables, lists=lists, dataset_id=draft.dataset_id or ""
         )
     except StagingError as refused:
-        return StagingPreview(step=body.step, problems=refused.problems)
+        return StagingPreview(
+            step=body.step,
+            problems=[*problems, *(p for p in refused.problems if p not in problems)],
+        )
 
     def readable(source: str, index: int) -> bool:
         rows = read.raw.get(source)
@@ -235,6 +242,7 @@ def preview_staging(
     )
     return StagingPreview(
         step=body.step,
+        problems=problems,
         columns=list(table.columns),
         rows=shown,
         values_masked=masked or bool(profile and profile.values_masked),

@@ -186,7 +186,10 @@ def step_nodes(graph: PipelineGraph) -> list[PipelineNode]:
 
 
 def _step_record(node: PipelineNode) -> dict[str, object]:
-    return {**node.config, "id": node.id, "kind": node.kind.value}
+    """A step node as its step's record: its id, kind and config, and its label unless it is its
+    kind's own name, which the canvas gives a step that has none."""
+    label = None if node.label == KIND_LABELS.get(node.kind.value) else node.label
+    return {**node.config, "id": node.id, "kind": node.kind.value, "label": label}
 
 
 def _step_of(node: PipelineNode) -> StagingStep:
@@ -271,6 +274,7 @@ def pipeline_with_staging(graph: PipelineGraph, staging: Sequence[StagingStep]) 
         record = step.model_dump(by_alias=True, exclude_none=True)
         record.pop("id")
         record.pop("kind")
+        record.pop("label", None)
         nodes.append(
             PipelineNode(
                 id=step.id,

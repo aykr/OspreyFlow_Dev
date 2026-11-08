@@ -88,7 +88,6 @@
         "kind": "lookup",
         "label": "Lookup: establishment",
         "config": {
-          "label": "Lookup: establishment",
           "input": "visit_bookings",
           "list": "establishments",
           "on": "estab_id",
@@ -105,7 +104,6 @@
         "kind": "join",
         "label": "Join: owner of contact",
         "config": {
-          "label": "Join: owner of contact",
           "left": "with_establishment",
           "right": "number_owners",
           "left_key": "contact_number",
@@ -124,7 +122,6 @@
         "kind": "derive",
         "label": "Derive: the booking's title",
         "config": {
-          "label": "Derive: the booking's title",
           "input": "with_owner",
           "column": "title",
           "operation": "concat",

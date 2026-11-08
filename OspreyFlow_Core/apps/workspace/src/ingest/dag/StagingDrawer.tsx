@@ -76,19 +76,22 @@ function ColumnField({ label, value, columnsId, onChange }: { label: string; val
 /** A list of rows, each a set of fields, with its own add and remove buttons named by what they do. */
 function Rows<T>({
   noun,
+  plural,
   rows,
   make,
   onChange,
   render,
 }: {
   noun: string;
+  /** The group's name: the noun's plural, `${noun}s` when not given. */
+  plural?: string;
   rows: T[];
   make: () => T;
   onChange: (rows: T[]) => void;
   render: (row: T, n: number, set: (row: T) => void) => React.ReactNode;
 }) {
   return (
-    <div role="group" aria-label={`${noun}s`} style={{ display: "grid", gap: "var(--sp-4)" }}>
+    <div role="group" aria-label={plural ?? `${noun}s`} style={{ display: "grid", gap: "var(--sp-4)" }}>
       {rows.map((row, i) => (
         <div key={i} style={{ display: "flex", gap: "var(--sp-4)", alignItems: "end", flexWrap: "wrap" }}>
           {render(row, i + 1, (next) => onChange(rows.map((r, j) => (j === i ? next : r))))}
@@ -106,6 +109,7 @@ function AddedColumns({ value, columnsId, onChange }: { value: Rec[]; columnsId:
   return (
     <Rows<Rec>
       noun="Column to bring across"
+      plural="Columns to bring across"
       rows={value}
       make={() => ({ column: "" })}
       onChange={onChange}
@@ -125,6 +129,7 @@ function NameList({ noun, value, columnsId, onChange }: { noun: string; value: s
   return (
     <Rows<string>
       noun={noun}
+      plural={`${noun}: the list`}
       rows={value}
       make={() => ""}
       onChange={onChange}
@@ -260,12 +265,10 @@ export function StagingSettings({
   onApply: (config: Rec, label: string) => void;
 }) {
   const kind = node.kind as StagingKind;
+  // Read once: the drawer is keyed by the step, so a save's answer arriving while a person types
+  // never puts back what they have not applied yet.
   const [rec, setRec] = useState<Rec>(node.config ?? {});
   const [label, setLabel] = useState(node.label);
-  useEffect(() => {
-    setRec(node.config ?? {});
-    setLabel(node.label);
-  }, [node]);
   const set = (k: string, v: unknown) => setRec((r) => ({ ...r, [k]: v }));
   const tables = tablesFor(pipeline, node.id);
   const columnsId = `columns-of-${node.id}`;
@@ -509,7 +512,7 @@ export function StagingSample({
           </ul>
         </div>
       )}
-      {preview && problems.length === 0 && (
+      {preview && (rows.length > 0 || (preview.counts ?? []).length > 0) && (
         <>
           <p role="status" style={{ margin: 0 }}>
             {`${rows.length} row${rows.length === 1 ? "" : "s"} out, from ${preview.rows_sampled} source row${preview.rows_sampled === 1 ? "" : "s"} read.`}

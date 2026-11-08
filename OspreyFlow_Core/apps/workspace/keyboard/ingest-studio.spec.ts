@@ -2,12 +2,21 @@
 // 2; `CLAUDE.md` rule 13): the tabs, the dataset switcher, the Runs tab's grid, held rows and Run now,
 // Sources' Add files, and Deploy as vN with Deploy and run now — no `page.mouse`, no `.click()`. The
 // harness serves itself and records every request, so each case proves its action reached its route.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test, type Page } from "@playwright/test";
 
 import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
-import { REPORTS_HANDLING_COLUMNS, REPORTS_MAP, declareTheMarkingColumns, mapTheReports, meaning } from "./reportsMap";
+import { REPORTS_HANDLING_COLUMNS, REPORTS_MAP, buildEntity, buildLink, choose, declareTheMarkingColumns, mapTheReports, meaning, type MapEdge, type MapEntity } from "./reportsMap";
 
 const REGISTRY = "INGEST_STUDIO_ACTIONS";
+/** Phase 7's exit pipeline and map (`tests/ingest/test_visits_pipeline_fixture.py` holds it to the
+ * server's own build of the exit recipe). */
+const CONTACTS = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./fixtures/visits_and_contacts_pipeline.json", import.meta.url)), "utf8"),
+) as { pipeline: { nodes: { id: string; kind: string; config: Record<string, unknown> }[] };
+  row_template: unknown; unmapped_fields: { field: string; note?: string }[] };  // prettier-ignore
 const HARNESS = "/keyboard/ingest-studio-harness.html";
 
 async function press(page: Page, name: string, exact = true) {
@@ -675,6 +684,232 @@ test("Deploy is refused in words to a person without the source approver's role"
   await expect(page.getByText(/source_approver|studio role/)).toBeVisible();
   expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-visits/publish"))).toBe(true);
   await expect(page.getByText("Deployed", { exact: true })).toHaveCount(0);
+});
+
+// --- Phase 7b (ADR-140 Amendment 12): a drawer per staging step, each with a live sample and the save
+// gate's refusals in its words; then phase 7's exit, "Visits and contacts" without its expert steps,
+// built by keys. The harness's `?contacts=1` draft holds two sources and Map, and its fake refuses what
+// `studio_staging.staging_gate` refuses, in the same words (`stagingHarness.ts`).
+
+async function openContacts(page: Page) {
+  await page.goto(`${HARNESS}?contacts=1`);
+  await press(page, "Open Visits and contacts");
+  await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+}
+
+async function typeInto(page: Page, label: string, value: string) {
+  // A column field offers the sample's columns as suggestions (a `list`), which makes it a combobox.
+  const box = drawer(page).getByLabel(label, { exact: true });
+  await box.focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type(value);
+}
+
+async function chooseIn(page: Page, label: string, value: string) {
+  const select = drawer(page).getByRole("combobox", { name: label, exact: true });
+  await select.focus();
+  await select.selectOption(value);
+}
+
+/** *Apply step settings* is disabled while the pipeline's last save is answered (shown so), so a
+ * person waits for it, as this does, before pressing it. */
+async function applyStep(page: Page) {
+  await expect(drawer(page).getByRole("button", { name: "Apply step settings" })).toBeEnabled();
+  await press(page, "Apply step settings");
+}
+
+async function addStep(page: Page, kind: string) {
+  await choose(page, "Staging step to add", kind);
+  await press(page, "+ Step");
+}
+
+const pipelineSaves = async (page: Page) =>
+  (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-contacts/pipeline"));
+type Saved = { nodes: { id: string; kind: string; label: string; config?: Record<string, unknown> }[]; edges: { source: string; target: string }[] };
+const lastSaved = async (page: Page): Promise<Saved> => JSON.parse((await pipelineSaves(page)).at(-1)!.body!) as Saved;
+
+/** The exit's three steps, set in their drawers by keys: a Lookup of the establishment, a left Join
+ * of each number's owner on E.164, and a Derive of the booking's title. */
+async function buildTheContactsSteps(page: Page) {
+  await openContacts(page);
+  await press(page, "Source: Visit bookings");
+  await addStep(page, "lookup");
+  await expect(drawer(page).getByRole("heading", { name: "Lookup: Lookup" })).toBeVisible();
+  await typeInto(page, "Step name", "establishment");
+  await typeInto(page, "Reference list", "establishments");
+  await typeInto(page, "Match on column", "estab_id");
+  await press(page, "+ Column to bring across");
+  await typeInto(page, "Column 1", "name");
+  await typeInto(page, "Name it (optional) 1", "establishment");
+  await applyStep(page);
+  await expect(drawer(page).getByRole("status").filter({ hasText: "6 rows out, from 10 source rows read." })).toBeVisible();
+  await addStep(page, "join");
+  await typeInto(page, "Step name", "owner of contact");
+  await chooseIn(page, "Right table", "number_owners");
+  await typeInto(page, "Left key column", "contact_number");
+  await typeInto(page, "Right key column", "number");
+  await typeInto(page, "Normalise both keys with (optional)", "msisdn");
+  await chooseIn(page, "Keep", "left");
+  await press(page, "+ Column to bring across");
+  await typeInto(page, "Column 1", "owner_family_name");
+  await applyStep(page);
+  await expect(drawer(page).getByRole("list", { name: "Rows refused" })).toContainText("staging step join (right side, number_owners row 3)");
+  await addStep(page, "derive");
+  await typeInto(page, "Step name", "the booking's title");
+  await typeInto(page, "New column", "title");
+  for (const [n, column] of [[1, "establishment"], [2, "visit_at"]] as const) {
+    await press(page, "+ Column it reads");
+    await typeInto(page, `Column it reads ${n}`, column);
+  }
+  await typeInto(page, "Separator", " · ");
+  await applyStep(page);
+  await expect(drawer(page).getByRole("cell", { name: "HMP Fenwick Moor · Tue 4 Nov 14:00" })).toBeVisible();
+  // The saved steps are the exit recipe's, under the ids the Studio gave them.
+  const ids: Record<string, string> = { with_establishment: "lookup", with_owner: "join", titled: "derive" };
+  const rename = (v: unknown): unknown => (typeof v === "string" ? (ids[v] ?? v) : Array.isArray(v) ? v.map(rename) : v);
+  const expected = CONTACTS.pipeline.nodes
+    .filter((n) => n.id in ids)
+    .map((n) => ({ id: ids[n.id], kind: n.kind, config: Object.fromEntries(Object.entries(n.config).map(([k, v]) => [k, rename(v)])) }));
+  await expect.poll(async () => {
+    const saved = await lastSaved(page);
+    return saved.nodes.filter((n) => Object.values(ids).includes(n.id)).map((n) => ({ id: n.id, kind: n.kind, config: n.config }));
+  }).toEqual(expected);
+  const saved = await lastSaved(page);
+  expect(saved.edges).toContainEqual({ source: "derive", target: "map" });
+  expect(saved.edges).not.toContainEqual({ source: "visit_bookings", target: "map" });
+}
+
+test("a staging step is added beside the pipeline and opens its drawer, by keyboard", async ({ page }) => {
+  await openContacts(page);
+  await press(page, "Source: Visit bookings");
+  await addStep(page, "dedupe");
+  await expect(drawer(page).getByRole("heading", { name: "Dedupe: Dedupe" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Steps" }).getByRole("button", { name: "Dedupe: Dedupe" })).toBeVisible();
+  // Saved as a node of the pipeline, reading the source chosen, and refused until it is set.
+  await expect.poll(async () => (await pipelineSaves(page)).length).toBeGreaterThan(0);
+  await expect(page.getByRole("alert").first()).toContainText("step 'dedupe' needs at least 1 in 'on'");
+  registerCovered(REGISTRY, "add-a-staging-step-by-keyboard");
+});
+
+test("the Visits and contacts steps are set in their drawers by keyboard, each with its sample", async ({ page }) => {
+  test.setTimeout(120_000);
+  await buildTheContactsSteps(page);
+  registerCovered(REGISTRY, "set-a-lookup-in-its-drawer-by-keyboard");
+  registerCovered(REGISTRY, "set-a-join-in-its-drawer-by-keyboard");
+  registerCovered(REGISTRY, "set-a-derive-in-its-drawer-by-keyboard");
+});
+
+test("a filter is set in its drawer by keyboard, a condition added and removed", async ({ page }) => {
+  await openContacts(page);
+  await press(page, "Source: Visit bookings");
+  await addStep(page, "filter");
+  await press(page, "+ Condition");
+  await press(page, "+ Condition");
+  await press(page, "Remove condition 2");
+  await expect(drawer(page).getByLabel("Column 2", { exact: true })).toHaveCount(0);
+  await typeInto(page, "Column 1", "estab_id");
+  await chooseIn(page, "Test 1", "in");
+  await typeInto(page, "Value 1", "FMR|HBK");
+  await applyStep(page);
+  await expect(drawer(page).getByRole("list", { name: "Each step's counts" })).toContainText("filter: 6 in, 5 out, 1 left out");
+  const filter = (await lastSaved(page)).nodes.find((n) => n.id === "filter")!;
+  expect(filter.config).toEqual({ input: "visit_bookings", keep: [{ field: "estab_id", in: ["FMR", "HBK"] }] });
+  registerCovered(REGISTRY, "set-a-filter-in-its-drawer-by-keyboard");
+  registerCovered(REGISTRY, "add-and-remove-a-row-in-a-steps-drawer-by-keyboard");
+});
+
+test("a union and a dedupe are set in their drawers by keyboard", async ({ page }) => {
+  await openContacts(page);
+  await press(page, "Source: Visit bookings");
+  await addStep(page, "dedupe");
+  await press(page, "+ Same row when this column matches");
+  await typeInto(page, "Same row when this column matches 1", "contact_number");
+  await applyStep(page);
+  await expect(drawer(page).getByRole("list", { name: "Each step's counts" })).toContainText("dedupe: 6 in, 5 out, 1 repeats folded");
+  await addStep(page, "union");
+  const box = drawer(page).getByRole("checkbox", { name: "visit_bookings", exact: true });
+  await box.focus();
+  await page.keyboard.press("Space");
+  await applyStep(page);
+  const union = (await lastSaved(page)).nodes.find((n) => n.id === "union")!;
+  expect(union.config).toEqual({ inputs: ["dedupe", "visit_bookings"] });
+  registerCovered(REGISTRY, "set-a-dedupe-in-its-drawer-by-keyboard");
+  registerCovered(REGISTRY, "set-a-union-in-its-drawer-by-keyboard");
+});
+
+test("a step's sample is read again, and its Preview shows the sample alone, by keyboard", async ({ page }) => {
+  test.setTimeout(120_000);
+  await buildTheContactsSteps(page);
+  const previews = async () => (await asked(page)).filter((a) => a.method === "POST" && a.path.endsWith("/r-contacts/staging-preview")).length;
+  const before = await previews();
+  await press(page, "Read the sample again");
+  await expect.poll(previews).toBe(before + 1);
+  registerCovered(REGISTRY, "read-a-steps-sample-again-by-keyboard");
+  await press(page, "Preview");
+  await expect(drawer(page).getByRole("region", { name: "Sample of this step" })).toBeVisible();
+  await expect(drawer(page).getByRole("button", { name: "Apply step settings" })).toHaveCount(0);
+  registerCovered(REGISTRY, "preview-a-staging-step-by-keyboard");
+});
+
+test("a drawer refuses what the save gate refuses, in the same words, by keyboard", async ({ page }) => {
+  test.setTimeout(120_000);
+  await buildTheContactsSteps(page);
+  await press(page, "Join: owner of contact");
+  await typeInto(page, "Normalise both keys with (optional)", "no_such_adapter");
+  await applyStep(page);
+  const words = "step 'join' normalises its key with 'no_such_adapter', which is not a Knowledge Adapter that reads one column into one value of text";
+  await expect(page.getByRole("alert").filter({ hasText: words }).first()).toBeVisible();
+  await expect(drawer(page).getByRole("alert", { name: "What the save gate refuses" })).toContainText(words);
+  registerCovered(REGISTRY, "a-drawer-refuses-what-the-save-gate-refuses-by-keyboard");
+});
+
+test("a staging step is removed by keyboard, and Map reads the step before it", async ({ page }) => {
+  test.setTimeout(120_000);
+  await buildTheContactsSteps(page);
+  await press(page, "Derive: the booking's title");
+  await press(page, "Remove selected");
+  await expect.poll(async () => (await lastSaved(page)).edges).toContainEqual({ source: "join", target: "map" });
+  expect((await lastSaved(page)).nodes.some((n) => n.id === "derive")).toBe(false);
+  registerCovered(REGISTRY, "remove-a-staging-step-by-keyboard");
+});
+
+// Phase 7's exit (the build plan's phase 7; ADR-140 Amendment 12): "Visits and contacts" without its
+// two expert steps, built by keys alone: its three steps in their drawers, then the Map over the last
+// step's table, into exactly the exit recipe's map, then Test and Deploy. The run on the synthetic
+// data, every created element traceable to its source rows, is `tests/ingest/test_phase7_exit.py` over
+// this same pipeline, and the live walk under a lease.
+test("phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
+  await buildTheContactsSteps(page);
+  await press(page, "Close the drawer");
+  await openTheMapEditor(page);
+  await expect(page.getByText("From the staged table derive: the steps over the first ten rows of each source.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose column title", exact: true })).toBeVisible();
+  const template = CONTACTS.row_template as { entities: MapEntity[]; edges: MapEdge[] };
+  for (const [i, entity] of template.entities.entries()) await buildEntity(page, entity, i + 1);
+  for (const edge of template.edges) await buildLink(page, edge);
+  for (const ignored of CONTACTS.unmapped_fields) {
+    await page.getByRole("textbox", { name: `Note for ignoring ${ignored.field}` }).focus();
+    await page.keyboard.type(ignored.note ?? "");
+    await press(page, `Ignore ${ignored.field}`);
+  }
+  await press(page, "Save draft");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "PUT" && a.path.endsWith("/r-contacts/row-template"))).toBe(true);
+  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-contacts/row-template")).at(-1)!;
+  const saved = JSON.parse(put.body!) as { row_template: unknown; unmapped_fields: unknown };
+  expect(meaning(saved.row_template)).toEqual(meaning(CONTACTS.row_template));
+  expect(meaning(saved.unmapped_fields)).toEqual(meaning(CONTACTS.unmapped_fields));
+  await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
+  await page.keyboard.press("Enter");
+  await press(page, "Test");
+  await press(page, "Run the test");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-contacts/verify"))).toBe(true);
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
+  registerCovered(REGISTRY, "build-visits-and-contacts-by-keys-for-phase-7s-exit");
 });
 
 test("every registered Ingest Studio action has its own proving test case above", () => {
