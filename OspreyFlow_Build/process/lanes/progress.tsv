@@ -18,9 +18,9 @@ glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
 glass	L2.3	M	done	The case screen's first lightening
 glass	L2.4	M	done	Admin regrouped into sections (part 1)
 admin	L2.4p2	L	done	Datasets' columns, Authors, linked cases, promotion policy; System's owners setting
-admin	L2.5	L	building	People and roles; custom roles; Rule author; teams and leads; Disable (what is owned today)
+admin	L2.5	L	done	People and roles; custom roles; Rule author; teams and leads; Disable (what is owned today)
 admin	L2.5b	S	todo	Disable…'s full transfer list, from case's ownership route (after L3.8)
-admin	L2.6	M	todo	Operations' promotions and ageing; Audit
+admin	L2.6	M	building	Operations' promotions and ageing; Audit
 admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
@@ -33,8 +33,8 @@ rules	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports View
 case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
 case	L3.1b	L	done	Phase 5's model half; Make live's owner step; home cases; drawn kind
 case	L3.2	L	done	Case views; the migration; the Conduit without branches; no_branches_check (Conduit half)
-case	L3.2b	M	building	No branches in the Glass: the Views panel, keyboard and axe; the check in make ci
-case	L3.3	L	todo	Drawing boards; drawn datasets; drawn items watched; marking ceiling
+case	L3.2b	M	done	No branches in the Glass: the Views panel, keyboard and axe; the check in make ci
+case	L3.3	L	building	Drawing boards; drawn datasets; drawn items watched; marking ceiling
 case	L3.4	L	todo	Promotion; a removed case's layer merged or deleted
 case	L3.5	M	todo	Analyst-defined link types
 case	L3.6	S	todo	drawn_watch alerts in the one queue (with L2.10)
