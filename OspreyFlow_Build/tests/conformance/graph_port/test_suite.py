@@ -6537,11 +6537,14 @@ async def test_restore_link_state_refuses_a_link_written_since_by_anyone(
         elif how == "a provenance strip":
             assert await adapter.strip_provenance_references("doc") >= 1
         else:  # a re-stamp, in place
+            from adapters.graph_arcadedb.naming import physical_type_name
+
             client = adapter._client  # type: ignore[attr-defined]
             state = await adapter.read_link_state(link, "COMMUNICATED_WITH")
             assert state is not None
             await client.sql(
-                f"UPDATE `{state.edge_type}` SET datasets = datasets || [:ds] WHERE id = :id",
+                f"UPDATE `{physical_type_name(state.edge_type)}` "
+                "SET datasets = datasets || [:ds] WHERE id = :id",
                 params={"ds": "restamped", "id": link},
             )
         now = await adapter.read_link_state(link, "COMMUNICATED_WITH")

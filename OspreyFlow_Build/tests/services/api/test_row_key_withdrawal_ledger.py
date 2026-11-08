@@ -511,12 +511,18 @@ async def test_withdrawn_row_links_answers_this_recipe_and_case_alone(
     ):
         load, refresh = new_id(), new_id()
         await runs.add_record(run, _keyed(load, rec, case), row_keys=[k1],
-                              row_elements={k1: _elements(["n1"], [edge], ["v1"])})  # fmt: skip
+                              row_elements={k1: RowElements(node_ids=["n1"], edge_ids=[edge],
+                                                            event_ids=["v1"],
+                                                            edge_types={edge: "TRANSACTED"})})  # fmt: skip
         await runs.add_record(run, _keyed(refresh, rec, case), withdrawn_row_keys=[k1])
 
-    assert await runs.withdrawn_row_links(recipe, ours, [k1]) == {k1: ("e-ours",)}
-    assert await runs.withdrawn_row_links(recipe, theirs, [k1]) == {k1: ("e-theirs",)}
-    assert await runs.withdrawn_row_links(other_recipe, ours, [k1]) == {k1: ("e-other-pipeline",)}
+    assert await runs.withdrawn_row_links(recipe, ours, [k1]) == {k1: {"e-ours": "TRANSACTED"}}
+    assert await runs.withdrawn_row_links(recipe, theirs, [k1]) == {
+        k1: {"e-theirs": "TRANSACTED"}
+    }
+    assert await runs.withdrawn_row_links(other_recipe, ours, [k1]) == {
+        k1: {"e-other-pipeline": "TRANSACTED"}
+    }
     assert await runs.withdrawn_row_links(recipe, ours, [new_id()]) == {}
 
 
