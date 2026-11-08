@@ -286,6 +286,12 @@ New ones are added at the bottom as they happen.
     it (rule 3) and no promotion is undone silently; refusing would reveal the link, and withdrawing it would
     undo a promotion without a word.
 
+61. **Two access tightenings taken by me as the strict default (overrule if you wish):** (1) rules' L2.9: an
+    alert's address must do the same reads whether the alert is present, hidden or absent, so its timing
+    reveals nothing; the lane had accepted a timing difference without a ruling. (2) admin's L2.6: the
+    model engines' change history is shown only to manage_models holders, not every audit reader (it named
+    other units' people). Both steps held for these and their other review findings; L2.9 merges before L2.6.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
