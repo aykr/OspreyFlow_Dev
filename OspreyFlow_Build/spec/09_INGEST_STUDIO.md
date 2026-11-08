@@ -1155,10 +1155,24 @@ nothing in this section is wired to anything yet.
 ## 9. What the studio deliberately does not do
 
 Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). **The guided staging steps'
-engine is built** (ADR-140 Amendment 11). Their drawers on the canvas are not built yet, and nor are
-the SQL transform and the fuzzy match. Until a
-pipeline declares staging steps, its sources are separate branches mapped row by row, as §1
-describes.
+engine is built** (ADR-140 Amendment 11), **and so are their drawers** (Amendment 12); the SQL
+transform and the fuzzy match are not. Until a pipeline declares staging steps, its sources are
+separate branches mapped row by row, as §1 describes.
+
+**In the Studio** (Amendment 12). A step is a node of the pipeline: its id the step's, its config the
+step's record. The recipe's `staging:` is built from the step nodes in run order when the pipeline is
+saved and published, and the lines follow what the steps read (a line from each table a step reads,
+and from the last step to Map, which no source then feeds). *+ Step* adds a step of the chosen kind,
+reading the step or source chosen, and opens its drawer beside the pipeline: its record's own fields,
+applied with *Apply step settings*, and beneath them a **live sample**, the steps up to that one over
+the first ten rows of each source, at the reader's own clearance, writing nothing, with the save
+gate's refusals in the gate's own words. A source table is named by its source node's id. The Map
+editor of a staged pipeline maps the last step's table, its columns the profile of that table.
+
+**A dataset's reference lists.** A Lookup reads the lists kept for its dataset whose ids the dataset's
+live domain model names, each at the highest version kept, read from the list's version file below;
+a list with no rows kept is refused in words. Until L1.6 builds import, rows are put there by
+`python -m services.ingest.reference_list_import` from a synthetic test fixture only.
 
 **The staging steps in the recipe** (`schemas/staging.py`). A recipe's `staging:` is a list of steps.
 Each step has an `id` that later steps read it by, a `kind`, an optional `label`, and its own keys:
@@ -1193,11 +1207,11 @@ A recipe without `staging` is written exactly as before; `staging: []` is refuse
 
 A join must name both keys, and a Derive's settings and columns must be its operation's; the schema
 refuses both. The gate runs before every staged run and every Test, which refuse the whole run if
-it fails; a list handed to a run under a name that is not its own is refused there too. No route
-saves or publishes staging steps yet: they arrive with the step drawers. Until then, publishing a
-recipe with steps is refused in words, and running one over a single source's rows
-(`run_recipe` or `dry_run_recipe` without its staged rows) is refused too. Only a staged run may
-tell `run_recipe` not to stage raw rows.
+it fails; a list handed to a run under a name that is not its own is refused there too. The
+pipeline's save, a step's sample and publish ask it too (`studio_staging.staging_gate`), in the same
+words, so nothing with steps is saved or published unjudged. Running a recipe with steps over a
+single source's rows (`run_recipe` or `dry_run_recipe` without its staged rows) is refused. Only a
+staged run may tell `run_recipe` not to stage raw rows.
 
 **What a run does with rows.** Nothing is dropped silently:
 
@@ -1212,7 +1226,8 @@ tell `run_recipe` not to stage raw rows.
   empty key part has no key, as the engine's deduplicate reads it, so it stands alone and is
   never folded.
 
-Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
+**A run reads each source by a load of its own**, `<the run's load>:<the source node's id>`, new for
+every run, so no two runs share a raw file. Each step's table is written to staged Parquet, `<bucket>/loads/<load_id>/staged/<step>.parquet`,
 with its refs as a `_refs` column; this is the only place a row's key is kept. Map reads the last
 table back from what was written. Each source's rows, with a blank cell empty, are the raw rows of
 **the load that read them**, `<bucket>/loads/<that load_id>/raw.parquet`. Each list a Lookup read
@@ -1224,7 +1239,9 @@ its own checks writes neither. A staging rejection is listed in the load report 
 <id> (<side> side, <source> row <n>): <cause>*, and a row Map refused as *staged table <table> row
 <n>: <cause>*. Test and the load reject the same rows
 (`services/ingest/staged_run.py`). A staged load reports as *rows read* the rows its sources gave.
-It also counts the rows its steps staged and the bytes their Parquet took, for the run's metering.
+It also counts the rows its steps staged and the bytes their Parquet took, for the run's metering
+(`RunMetering.rows_staged`, `parquet_bytes`), and reports each step's counts (`staging_steps`, withheld
+with the other counts) and each rejection's rows by table, row, load and side (`refs`), never by key.
 
 - **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
