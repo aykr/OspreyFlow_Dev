@@ -80,11 +80,23 @@ async def test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helpe
             return 0
 
     monkeypatch.setattr(working_set_revert, "remove_and_publish", recorded)
-    service, valkey = _Service([]), object()
-    service.publisher = object()
+    class _Publisher:
+        """A client that takes a publish, so a caller's own copy of the removal runs to its end."""
+
+        async def publish(self, channel: str, data: Any) -> int:
+            return 0
+
+    class _Holding(_Service):
+        """No case holds a copy: a caller's own copy of the removal publishes nothing."""
+
+        async def remove_reverted(self, nodes: Any, links: Any) -> list[Any]:
+            return []
+
+    service, valkey = _Holding([]), _Publisher()
+    service.publisher = _Publisher()
     await WorkingSetReverter(service, valkey, _History()).remove(["n1"], ["e1"])  # type: ignore[arg-type]
     await alerts_module.purge_copies(service, ["alert-node-1"])
     assert calls == [
-        ("_Service", valkey, ["n1"], ["e1"]),
-        ("_Service", service.publisher, ["alert-node-1"], []),
+        ("_Holding", valkey, ["n1"], ["e1"]),
+        ("_Holding", service.publisher, ["alert-node-1"], []),
     ]
