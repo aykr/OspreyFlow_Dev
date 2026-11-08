@@ -35,6 +35,9 @@ class _Provider(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "image/png")
         self.end_headers()
+        if "/7/" in self.path:  # a provider answering far more than any tile
+            self.wfile.write(PNG + b"x" * (5 * 1024 * 1024))
+            return
         self.wfile.write(PNG if status == 200 else b"refused")
 
     def log_message(self, *_args: object) -> None:  # the server's own log is not the Conduit's
@@ -138,3 +141,77 @@ def test_an_unset_environment_key_is_said_in_words(
         del app.state.map_admin
     assert answer.status_code == 503 and "UNSET_MAP_KEY_FOR_TEST" not in answer.text
     assert "needs a key" in answer.json()["detail"]
+
+
+# --- The independent review's must-fix 3: a key outside the query ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "source",
+    ["https://tiles.example.test/{credential}/{z}/{x}/{y}.png",
+     "https://tiles.example.test:{credential}/{z}/{x}/{y}.png",
+     "https://{credential}.example.test/{z}/{x}/{y}.png",
+     "https://tiles.example.test/{z}/{x}/{y}.png#{credential}"],
+)  # fmt: skip
+def test_a_key_is_taken_in_the_query_alone(source: str) -> None:
+    """`{credential}` anywhere but the query would put the key where a log keeps it (a path, a
+    port) or where a resolver sends it (a host), so no provider, `osprey.yaml`'s included, may."""
+    with pytest.raises(ValueError, match="query"):
+        MapConfig.model_validate({"default": "p", "providers": [{
+            "id": "p", "label": "P", "kind": "raster", "source": source, "proxy": "required",
+            "attribution": "E", "licence": {"id": "e", "redistributable": False,
+                                            "client_scope": "per-deployment"}}]})  # fmt: skip
+
+
+async def test_a_secret_in_a_url_s_path_reaches_no_log_record(
+    provider_port: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The real fetch and the real loggers (`httpx`, and `httpcore`'s own `connection` and `http11`,
+    each its own logger): whatever a URL carries past its host is not logged."""
+    from services.api.tile_proxy import _http_get
+
+    caplog.set_level(logging.DEBUG)
+    await _http_get(f"http://127.0.0.1:{provider_port}/{PLANTED}/1/2/3.png")
+    logged = _everything_logged(caplog)
+    assert "127.0.0.1" in logged and PLANTED not in logged
+    assert {r.name for r in caplog.records} >= {"httpx", "httpcore.connection", "httpcore.http11"}
+
+
+async def test_a_secret_in_a_url_s_port_is_a_fetch_failure_that_names_no_url(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from services.api.tile_proxy import TileFetchFailed, _http_get
+
+    caplog.set_level(logging.DEBUG)
+    with pytest.raises(TileFetchFailed) as failed:
+        await _http_get(f"http://127.0.0.1:{PLANTED}/1/2/3.png")
+    assert PLANTED not in str(failed.value) and failed.value.__suppress_context__
+    assert PLANTED not in _everything_logged(caplog)
+
+
+@pytest.mark.parametrize(
+    "name", ["httpx", "httpcore", "httpcore.connection", "httpcore.http11", "httpcore.http2"]
+)
+def test_each_http_client_logger_drops_what_a_url_carries_past_its_host(
+    caplog: pytest.LogCaptureFixture, name: str
+) -> None:
+    """Measured: no record of httpcore's own loggers carries a URL past its host today (the real
+    fetch above), so each is held to it by a record made as httpx makes its own: a format string and
+    the URL as an argument. A logger's filter applies to its own records alone, never a child's."""
+    import services.api.tile_proxy  # noqa: F401 - installs the filters
+
+    caplog.set_level(logging.DEBUG)
+    url = f"https://tiles.example.test/a/{PLANTED}?k={PLANTED}"
+    logging.getLogger(name).debug('HTTP Request: %s %s "%s"', "GET", url, "200")
+    logged = _everything_logged(caplog)
+    assert "tiles.example.test" in logged and PLANTED not in logged
+
+
+async def test_a_tile_larger_than_any_tile_is_refused_and_not_kept(provider_port: int) -> None:
+    """ADR-147 decision 5: a response past the cap (4 MB; a tile is tens of kilobytes) is a failed
+    fetch, read no further, so a provider cannot fill the cache or the Conduit's memory."""
+    from services.api.tile_proxy import MAX_TILE_BYTES, TileFetchFailed, _http_get
+
+    assert MAX_TILE_BYTES == 4 * 1024 * 1024
+    with pytest.raises(TileFetchFailed, match="larger"):
+        await _http_get(f"http://127.0.0.1:{provider_port}/7/1/2.png")

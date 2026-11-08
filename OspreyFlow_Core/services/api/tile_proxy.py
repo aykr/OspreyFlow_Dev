@@ -46,14 +46,15 @@ from schemas.mapconfig import MapProvider, OgcServiceKind
 # names the URL. The query of every URL those loggers write is dropped here, and the fetch below
 # raises errors of its own that carry a status and nothing else.
 
-_URL_QUERY = re.compile(r"(https?://[^\s?\"']*)\?[^\s\"']*")
+#: Everything a URL carries past its host (path, query, fragment), which a key may be in.
+_URL_PAST_HOST = re.compile(r"(https?://[^\s/?#\"']+)[/?#][^\s\"']*")
 
 
 def _without_query(value: object) -> object:
     text = str(value)
-    if "?" not in text or "://" not in text:
+    if "://" not in text:
         return value
-    return _URL_QUERY.sub(r"\1?…", text)
+    return _URL_PAST_HOST.sub(r"\1/…", text)
 
 
 class _NoUrlQuery(logging.Filter):
@@ -66,21 +67,32 @@ class _NoUrlQuery(logging.Filter):
         return True
 
 
-for _name in ("httpx", "httpcore"):
+# A logger's filter applies to the records made on that logger alone, never a child's, so each of
+# httpcore's own loggers is named.
+for _name in ("httpx", "httpcore", "httpcore.connection", "httpcore.http11", "httpcore.http2",
+              "httpcore.proxy", "httpcore.socks"):  # fmt: skip
     logging.getLogger(_name).addFilter(_NoUrlQuery())
+
+
+#: ADR-147 decision 5: the most a tile may be; a tile is tens of kilobytes, so anything past this is
+#: not one, and is read no further.
+MAX_TILE_BYTES = 4 * 1024 * 1024
 
 
 class TileFetchFailed(RuntimeError):
     """The provider refused a tile, or could not be reached. Never its URL, which may carry a
     key."""
 
-    def __init__(self, status: int | None) -> None:
+    def __init__(self, status: int | None, *, too_large: bool = False) -> None:
         self.status = status
-        super().__init__(
-            f"the provider answered HTTP {status}"
-            if status
-            else "the provider could not be reached"
-        )
+        self.too_large = too_large
+        if too_large:
+            words = "the provider answered with something larger than any tile"
+        elif status:
+            words = f"the provider answered HTTP {status}"
+        else:
+            words = "the provider could not be reached"
+        super().__init__(words)
 
 
 class MissingMapKeyError(RuntimeError):
@@ -187,12 +199,17 @@ async def _http_get(url: str) -> bytes:
     httpx's message nor its traceback (both name the URL) reaches a log."""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
-    except httpx.HTTPError:
+            async with client.stream("GET", url, timeout=10.0) as response:
+                if response.status_code >= 400:
+                    raise TileFetchFailed(response.status_code)
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body += chunk
+                    if len(body) > MAX_TILE_BYTES:
+                        raise TileFetchFailed(None, too_large=True)
+                return bytes(body)
+    except (httpx.HTTPError, httpx.InvalidURL):
         raise TileFetchFailed(None) from None
-    if response.status_code >= 400:
-        raise TileFetchFailed(response.status_code)
-    return response.content
 
 
 async def fetch_tile(url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get) -> bytes:

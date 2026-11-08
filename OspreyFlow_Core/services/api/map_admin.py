@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ipaddress
 import json
 import logging
 import os
@@ -371,15 +372,58 @@ def _refused(words: str) -> MapAdminRefused:
     return MapAdminRefused(words, status=422)
 
 
-def _checked_address(provider_id: str, address: str) -> None:
+def resolve_host(host: str) -> list[str]:
+    """Every address `host` resolves to now, or none where it does not resolve (a test stands
+    in)."""
+    import socket
+
+    try:
+        return sorted({str(info[4][0]) for info in socket.getaddrinfo(host, None)})
+    except (OSError, UnicodeError):
+        return []
+
+
+def _literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """`host` read as an IP address in any form a resolver takes: dotted, IPv6, and the short,
+    hexadecimal and whole-number IPv4 forms (`127.1`, `0x7f.1`, `2130706433`)."""
+    import socket
+
+    try:
+        return ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        pass
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except OSError:
+        return None
+
+
+def _is_inside(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return any((ip.is_loopback, ip.is_link_local, ip.is_private, ip.is_reserved,
+                ip.is_unspecified, ip.is_multicast))  # fmt: skip
+
+
+def host_inside(host: str) -> bool:
+    """Whether `host` is, or now resolves to, an address inside the deployment or its network."""
+    ip = _literal_ip(host)
+    if ip is not None:
+        return _is_inside(ip)
+    resolved = [_literal_ip(a) for a in resolve_host(host)]
+    return any(_is_inside(r) for r in resolved if r is not None)
+
+
+def _checked_address(provider_id: str, address: str, *, resolve: bool = True) -> None:
     """An address *Admin › Maps* may give the Conduit (ADR-147 decision 2a): `file://` under the
-    tiles folder, or `http(s)` to a dotted host name outside the deployment — never `localhost`, an
-    IP address that is loopback, link-local (a cloud's metadata service), private or reserved, a
-    dotless name (a service of the deployment's own: `postgres`, `keycloak`), credentials in the
-    address, or a host the template fills in. The tile route answers only an image, so even a name
-    that resolves inside reads nothing but tiles back."""
-    import ipaddress
-    from urllib.parse import urlsplit
+    tiles folder, or `http(s)` to a host name outside the deployment — never a host or port the
+    template fills in, `localhost`, an IP address in any form that is loopback, link-local (a
+    cloud's metadata service), private or reserved, a name with no dot once a trailing one is
+    dropped (a service of the deployment's own: `postgres.`, `keycloak`), a name that resolves to
+    any of those now, credentials in the address, or a key typed into it. The host is looked up
+    again before every fetch of a provider not exactly as `osprey.yaml` gives it (`host_inside`),
+    since DNS can change in between."""
+    from urllib.parse import parse_qsl, urlsplit
 
     where = f"The provider {_shown(provider_id)}'s address"
     if address.startswith("file://"):
@@ -389,33 +433,47 @@ def _checked_address(provider_id: str, address: str) -> None:
                 f"{where} is a local file outside the tiles folder ({TILES_CONTAINER_PATH})."
             )
         return
-    probe = re.sub(r"\{(z|x|y|credential)\}", "0", address)
-    parts = urlsplit(probe)
-    if parts.scheme not in ("http", "https"):
+    raw = urlsplit(address)
+    if raw.scheme not in ("http", "https"):
         raise _refused(f"{where} must be an https or http address, or a file in the tiles folder.")
-    host = parts.hostname or ""
-    if "{" in parts.netloc or "}" in parts.netloc:
-        raise _refused(f"{where} names its host by a variable; write the host out.")
-    if parts.username or parts.password:
+    if "{" in raw.netloc or "}" in raw.netloc:
+        raise _refused(f"{where} fills its host or port from the template; write them out.")
+    if "{credential}" in raw.path or "{credential}" in raw.fragment:
+        raise _refused(
+            f"{where} carries its key outside the query; put {{credential}} in the query."
+        )
+    if raw.username or raw.password:
         raise _refused(
             f"{where} carries a user name or password; set a key in Admin › Maps instead."
         )
+    for name, value in parse_qsl(raw.query, keep_blank_values=True):
+        if re.search(r"key|token|secret|sig|password|auth", name, re.I) and value != "{credential}":
+            raise _refused(
+                f"{where} has a key typed into it ({_shown(name)}); write {{credential}} there and "
+                "set the key with Enter key, so it is kept out of the address."
+            )
+    host = (raw.hostname or "").rstrip(".")
     try:
-        ip = ipaddress.ip_address(host)
+        raw.port
     except ValueError:
-        ip = None
-    if ip is not None:
-        inside = (ip.is_loopback, ip.is_link_local, ip.is_private, ip.is_reserved,
-                  ip.is_unspecified, ip.is_multicast)  # fmt: skip
-        if any(inside):
+        raise _refused(f"{where} has a port that is not a number.") from None
+    if host == "localhost" or host.endswith(".localhost"):
+        raise _refused(f"{where} names this machine; name the provider's host in full.")
+    if _literal_ip(host) is not None:
+        if host_inside(host):
             raise _refused(
                 f"{where} is inside this deployment or its network; name a host outside it."
             )
         return
-    if host == "localhost" or host.endswith(".localhost") or "." not in host:
+    if "." not in host:
         raise _refused(
-            f"{where} names a host inside this deployment (a name with no dot, or localhost); name "
-            "the provider's host in full."
+            f"{where} names a host inside this deployment (a name with no dot); name the "
+            "provider's host in full."
+        )
+    if resolve and host_inside(host):
+        raise _refused(
+            f"{where} names a host that resolves inside this deployment or its network; name a "
+            "host outside it."
         )
 
 
@@ -430,6 +488,13 @@ def admissible(provider: MapProvider, before: MapProvider | None) -> None:
         raise _refused(
             "A provider's key is set in Admin › Maps with Enter key, never by naming one of the "
             "Conduit's settings here; an installer's reference in osprey.yaml stays as it is."
+        )
+    if kept is not None and before is not None and address_of(provider) != address_of(before):
+        # The independent review's blocker: the installer's key is bound to the installer's
+        # address as an Admin key is to its own (decision 2), so the edit is refused.
+        raise _refused(
+            "This provider's key comes from the installer's settings, so its address is changed "
+            "in osprey.yaml, not here; or add a provider of your own and enter its key."
         )
     for address in (provider.source, provider.endpoint):
         if address is not None:
@@ -469,6 +534,7 @@ class MapAdmin:
         http_get: Callable[[str], Awaitable[bytes]] | None = None,
         now: Callable[[], datetime] = _now,
         java: Callable[[str], str | None] = shutil.which,
+        tiles_per_second: float = 10.0,
     ) -> None:
         self._installed = installed
         self._file = settings_file
@@ -479,6 +545,9 @@ class MapAdmin:
         self._http_get = http_get
         self._now = now
         self._java = java
+        #: ADR-147 decision 5: a run fetches at most this many tiles a second from a provider.
+        self._pause = 1 / tiles_per_second
+        self._sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
         self._stamp: float | None = None
         self._settings = MapSettings()
         self._exclusive = _Exclusive(settings_file.path.parent, ".maps.lock")
@@ -514,9 +583,69 @@ class MapAdmin:
 
     def config(self) -> MapConfig:
         """What the map serves: the maps file's once *Admin › Maps* has changed it, else
-        `osprey.yaml`'s."""
+        `osprey.yaml`'s; the maps file vetted as it is read (`_vetted`), whoever wrote it."""
         held = self.settings.map
-        return held if held is not None else self._installed
+        return self._vetted(held) if held is not None else self._installed
+
+    def _vetted(self, held: MapConfig) -> MapConfig:
+        """A maps file held to what *Admin › Maps* may name (ADR-147 decision 2a), since one
+        restored or edited by hand never passed `admissible`. A provider exactly as `osprey.yaml`
+        gives it is the installer's and stands. Any other: an `env:` reference stands only where
+        `osprey.yaml` gives the same provider the same reference at the same address, and is
+        otherwise removed; an address `admissible` would refuse leaves the provider out. Each is
+        logged by its id."""
+        installed = {p.id: p for p in self._installed.providers}
+        kept: list[MapProvider] = []
+        for provider in held.providers:
+            theirs = installed.get(provider.id)
+            if theirs is not None and theirs == provider:
+                kept.append(provider)
+                continue
+            if provider.credential is not None and not (
+                theirs is not None
+                and theirs.credential == provider.credential
+                and address_of(theirs) == address_of(provider)
+            ):
+                log.warning("maps file: provider %s's env: reference removed", provider.id)
+                provider = provider.model_copy(update={"credential": None})
+            try:
+                for address in (provider.source, provider.endpoint):
+                    if address is not None:
+                        # No lookup here (every request reads the map); the fetch looks it up.
+                        _checked_address(provider.id, address, resolve=False)
+            except MapAdminRefused:
+                log.warning("maps file: provider %s left out, its address refused", provider.id)
+                continue
+            kept.append(provider)
+        if not kept:
+            return self._installed
+        ids = {p.id for p in kept}
+        default = held.default if held.default in ids else kept[0].id
+        return MapConfig(default=default, providers=kept)
+
+    def installers(self, provider: MapProvider) -> bool:
+        """Whether a provider is exactly as `osprey.yaml` gives it: the installer's choice, which
+        may name an address inside its own network (a corporate WMTS), and is not looked up
+        again."""
+        return any(p == provider for p in self._installed.providers)
+
+    def refuse_inside(self, provider: MapProvider) -> None:
+        """Before a fetch for a provider *Admin › Maps* gave: its host looked up again, and refused
+        in words if it now resolves inside the deployment (ADR-147 decision 2a)."""
+        from urllib.parse import urlsplit
+
+        if self.installers(provider):
+            return
+        for address in (provider.source, provider.endpoint):
+            if address is None or address.startswith("file://"):
+                continue
+            host = (urlsplit(address).hostname or "").rstrip(".")
+            if host_inside(host):
+                raise MapAdminRefused(
+                    f"The map provider {_shown(provider.id)}'s host is inside this deployment or "
+                    "its network now, so its tiles are not fetched.",
+                    status=502,
+                )
 
     def provider(self, provider_id: str) -> MapProvider:
         found = next((p for p in self.config().providers if p.id == provider_id), None)
@@ -888,6 +1017,7 @@ class MapAdmin:
                     self._checked_area(area)
                     provider = self.provider(area.provider_id)
                     assert provider.cache is not None  # `_checked_area`
+                    self.refuse_inside(provider)
                     key = self.key_for(provider.id)
                     for zoom in range(area.zoom_min, area.zoom_max + 1):
                         x0, x1, y0, y1 = tile_range_for_bbox(
@@ -902,6 +1032,8 @@ class MapAdmin:
                             if held is not None:
                                 cached += 1
                                 continue
+                            if fetched:
+                                await self._sleep(self._pause)
                             url = build_upstream_url(provider, zoom, x, y, key=key)
                             data = (
                                 await fetch_tile(url) if self._http_get is None
@@ -938,6 +1070,8 @@ def _failure_words(error: BaseException) -> str:
     if isinstance(error, (MissingMapKeyError, MissingCredentialError)):
         return "The provider needs a key and none is set."
     if isinstance(error, TileFetchFailed):
+        if error.too_large:
+            return "The provider answered with something larger than any tile; nothing was kept."
         if error.status:
             return f"The provider refused a tile (HTTP {error.status})."
         return "The provider could not be reached."
@@ -1003,6 +1137,7 @@ async def build_basemap(
     downloader: Callable[[str, Path], Path] | None = None,
     planetiler_runner: Callable[..., Path] | None = None,
     tiles_root: Path = Path(TILES_CONTAINER_PATH),
+    settle: Callable[[], Awaitable[None]] | None = None,
 ) -> tuple[str, int, int, int]:
     """The tier-1 build (`00_ARCHITECTURE.md` §1.2's one button): the region's extract, planetiler
     into the tiles folder, the OSM gazetteer loaded (`load_places`, which the caller runs in a
@@ -1040,6 +1175,10 @@ async def build_basemap(
     await asyncio.to_thread(planetiler_runner or run_planetiler, extract, pmtiles, jar_path=jar)
     progress("Loading the OSM-derived gazetteer...")
     created, referenced, rejected = await load_places(extract)
+    if settle is not None:
+        # The places committed before the provider is registered, so the map never points at a
+        # basemap whose gazetteer a failed commit lost (the independent review's minor 9).
+        await settle()
     progress(
         f"Gazetteer: {created} places created, {referenced} already known, {rejected} rejected."
     )
@@ -1133,16 +1272,17 @@ async def _main(argv: Sequence[str]) -> int:
 async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
     """`build` from the command line: the gazetteer loaded through the Conduit's own graph."""
     from scripts.build_local_basemap import load_gazetteer
+    from services.resolve.trigger import service_principal
 
     from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
     from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
     from ontology.handling import load_uk_le_scheme
     from ontology.loader import load_default_ontology
-    from schemas.domain import Principal
 
     scheme = load_uk_le_scheme()
-    principal = Principal(id=f"map-build:{by}", clearance=scheme.classification[-1],
-                          org_unit="system")  # fmt: skip
+    # The Conduit's own system principal, as its other reference-data loads use; the person is the
+    # maps' history's `by`.
+    principal = service_principal(scheme)
     client = ArcadeDBClient(
         ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
     )
@@ -1150,25 +1290,28 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
     ontology = load_default_ontology()
     await graph.apply_schema(ontology)
 
+    held: dict[str, str] = {}
+
     async def load_places(extract: Path) -> tuple[int, int, int]:
         tx = await graph.begin_transaction()
-        try:
-            report = await load_gazetteer(
-                extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
-                load_id=f"load-osm-gazetteer-{region}",
-            )  # fmt: skip
-        except BaseException:
-            await graph.rollback_transaction(tx)
-            raise
-        await graph.commit_transaction(tx)
+        held["tx"] = tx
+        report = await load_gazetteer(
+            extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
+            load_id=f"load-osm-gazetteer-{region}",
+        )  # fmt: skip
         return report.nodes_created, report.nodes_referenced, len(report.rejections)
+
+    async def settle() -> None:
+        await graph.commit_transaction(held.pop("tx"))
 
     try:
         name, created, referenced, rejected = await build_basemap(
-            admin, by=by, region=region, load_places=load_places
+            admin, by=by, region=region, load_places=load_places, settle=settle
         )
     except Exception as error:  # noqa: BLE001 - said in words, exit 1
-        print(f"The build stopped: {error}", file=sys.stderr)
+        if "tx" in held:
+            await graph.rollback_transaction(held["tx"])
+        print(f"The build stopped ({type(error).__name__}): {error}", file=sys.stderr)
         return 1
     finally:
         await client.aclose()

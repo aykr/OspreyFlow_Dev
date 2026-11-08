@@ -204,6 +204,22 @@ class MapProvider(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _a_key_goes_in_the_query_alone(self) -> MapProvider:
+        """ADR-147: `{credential}` only in an address's query. In its host a resolver would be sent
+        the key; in its port or path a log would keep it."""
+        for address in (self.source, self.endpoint):
+            if address is None or "{credential}" not in address:
+                continue
+            before, _, rest = address.partition("?")
+            query, _, fragment = rest.partition("#")
+            if "{credential}" in before or "{credential}" in fragment:
+                raise ValueError(
+                    f"provider {self.id!r} takes its key outside its address's query; put "
+                    "{credential} in the query"
+                )
+        return self
+
+    @model_validator(mode="after")
     def _a_wmts_key_has_a_parameter(self) -> MapProvider:
         if self.credential_param is not None and self.service is not OgcServiceKind.WMTS:
             raise ValueError(

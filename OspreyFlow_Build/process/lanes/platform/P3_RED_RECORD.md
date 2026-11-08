@@ -140,3 +140,30 @@ fix's own plant at its real call site (offline, closed ports, unless named live)
 **A red that was not one, caught at once:** the first plant of the live build case ran through the
 offline runner (closed ports), so its "2 failed" was the store being unreachable, not the plant; it was
 run again under the lease with the leased ports, red for the right reason.
+
+## After the orchestrator's independent review (8 November 2026)
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_map_admin_routes.py::test_an_installer_s_key_never_follows_an_edit_to_another_host` (the reviewer's plant exactly: `env:OS_DATAHUB_API_KEY` pointed at `attacker.example`) | (before the fix) / the address check on an installer's key removed | 1 failed / 1 failed |
+| `…::test_a_maps_file_written_outside_admin_never_moves_an_installer_s_key` | (before) / the `env:` removal in `_vetted` removed / `config()` not vetting | 1 failed each |
+| `…::test_the_host_check_is_not_bypassed` (`1{z}7.0.0.1`, a `{z}` port, `127.1`, `0x7f.1`, `169.254.43518`, `2130706433`, `postgres.`, `keycloak.`) | (before) / the raw host-placeholder check removed / `inet_aton` fallback removed / the trailing-dot strip removed | 7 failed / 1 / 3 / 2 failed |
+| `…::test_a_name_that_resolves_inside_is_refused_at_save` (five answers, the resolver stood in) | (before) / the save-time lookup removed | 5 failed each |
+| `…::test_a_name_that_resolves_inside_by_the_time_of_a_fetch_is_not_fetched` | (before) / the route's `refuse_inside` removed | 1 failed each |
+| `test_tile_key_in_no_log.py::test_a_key_is_taken_in_the_query_alone` (path, port, host, fragment) | (before) / the schema's query rule removed | 4 failed each |
+| `…::test_a_secret_in_a_url_s_path_reaches_no_log_record` (the real fetch, the real loggers) | (before) / the redaction back to the query alone | 1 failed each |
+| `…::test_a_secret_in_a_url_s_port_is_a_fetch_failure_that_names_no_url` | (before) / `InvalidURL` not caught | 1 failed each |
+| `…::test_each_http_client_logger_drops_what_a_url_carries_past_its_host` | the filter on `httpx` and `httpcore` alone, not its children | 3 failed |
+| `test_map_admin_routes.py::test_a_key_typed_into_the_address_is_refused_pointing_to_enter_key` | the key-shaped-parameter check removed | 3 failed |
+| `…::test_the_schedule_is_six_hours_a_day_or_a_week` | `every_hours: int` | 4 failed |
+| `test_map_admin.py::test_a_run_is_paced_so_a_provider_is_not_flooded` | the pause removed | 1 failed |
+| `test_tile_key_in_no_log.py::test_a_tile_larger_than_any_tile_is_refused_and_not_kept` (a loopback provider answering 5 MB) | the cap removed | 1 failed |
+| `test_demo_osprey_config_is_tier_1_only.py::test_a_conduit_with_no_maps_file_serves_exactly_this_config` | a tier-2 OS Open Zoomstack provider added to the committed `osprey.yaml` (restored at once, never staged) | 1 failed (the open-licence cases still passing) |
+| `test_geospatial_admin_routes.py::test_build_basemap_route_rolls_back_and_reports_a_real_failure` | the error's own words sent to the Glass | 1 failed |
+| `…::test_the_places_are_committed_before_the_provider_is_registered` | `settle` never called | 1 failed |
+
+**A first green that was not one:** the pacing case first passed with no pause in the code, because its
+area was a single tile, so "one pause fewer than the tiles" was zero; the area was widened and it failed,
+then passed with the pause. **Measured:** no record of httpcore's own loggers carries a URL past its host on
+a real fetch (their connection record names host and port), so a real fetch cannot show their filter red;
+a record made as httpx makes its own does.

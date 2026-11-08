@@ -30168,8 +30168,21 @@ base URL — was already closed in `tile_proxy.py`).
    `localhost`, nor an IP address that is loopback, link-local (a cloud's metadata service), private,
    reserved or multicast; no dotless name (a service of the deployment's own: `postgres`, `keycloak`), no
    user or password in the address, no host filled by a variable; a `file://` only under the tiles folder.
-   A profile is set in `osprey.yaml`. A provider that takes a key is fetched by the Conduit. The tile
-   route answers only an image, so a name that resolves inside reads nothing but tiles back.
+   A profile is set in `osprey.yaml`. A provider that takes a key is fetched by the Conduit. **After the
+   orchestrator's independent review:** an installer's key is bound to the installer's address as an
+   Admin key is to its own, so an edit that changes the address of a provider with an `env:` reference is
+   refused in words; the host and port are read from the address as written (any placeholder in either
+   refused), an IPv4 address in every form a resolver takes (`127.1`, `0x7f.1`, `2130706433`), a trailing
+   dot dropped before the dotless check, and the name resolved at save and again before every fetch of a
+   provider not exactly as `osprey.yaml` gives it (DNS can change between), any loopback, private,
+   link-local or metadata answer refused; a query parameter named like a key (`key`, `token`, `secret`,
+   `sig`, `auth`) must be `{credential}`, so a key is never typed into the address. **A maps file is
+   vetted as it is read**, whoever wrote it (a restore, a hand edit): a provider exactly as `osprey.yaml`
+   gives it stands; any other loses an `env:` reference that is not `osprey.yaml`'s for the same address,
+   and one whose address would be refused is left out, each logged by its id. `{credential}` may stand in
+   an address's query alone, for every provider (`MapProvider`), and the HTTP client's loggers (`httpx`
+   and each of `httpcore`'s own) drop everything a URL carries past its host. The tile route answers only
+   an image, so a name that resolves inside reads nothing but tiles back.
 3. **The local basemap is built and verified in the Conduit.** One code (`services/api/map_admin.py`):
    *Admin › Maps* calls `/v1/admin/geospatial/build-basemap` and `/verify`; the set-up console and
    `ospreyflow map build|verify` run `python -m services.api.map_admin` in the Conduit's container
@@ -30198,7 +30211,8 @@ base URL — was already closed in `tile_proxy.py`).
    and caches (`proxy` not `none`, a `cache`), **at most 5,000 tiles an area** over its zooms, a larger
    one refused in words with its count, never cut to fit (rule 2). They run by hand
    (`POST /v1/admin/maps/prefetch`, `ospreyflow map prefetch`) or **on a schedule in the Conduit**
-   (every 6 hours, a day or a week; `PrefetchScheduler`, checked each minute), each tile fetched once and
+   (every 6 hours, a day or a week, and no other; `PrefetchScheduler`, checked each minute), at most ten
+   tiles a second, a response past 4 MB refused as no tile, each tile fetched once and
    kept; a run's failure is said on its own area in fixed words that carry neither the key nor the
    address. The object store is called in worker threads, off the event loop. Two replicas may both run
    an area; the second's fetches are cache hits. The `geometry_ref` areas `osprey.yaml` may name stay

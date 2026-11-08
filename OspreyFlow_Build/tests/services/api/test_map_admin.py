@@ -73,6 +73,15 @@ class MemoryTiles:
         self.tiles[object_key] = data
 
 
+
+@pytest.fixture(autouse=True)
+def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every `.test` name resolves to nothing, as it should, whatever this network's resolver does;
+    a case that needs a name to resolve inside says so itself."""
+    from services.api import map_admin
+
+    monkeypatch.setattr(map_admin, "resolve_host", lambda host: [])
+
 class World:
     def __init__(self, tmp_path: Path, *, providers: list[dict[str, object]] | None = None) -> None:
         self.folder = tmp_path / "map-settings"
@@ -460,3 +469,24 @@ async def test_adding_a_provider_records_each_of_its_fields(tmp_path: Path) -> N
     changes = w.audit.entries[-1].changes
     assert changes["endpoint"] == {"old": None, "new": "https://gis.example.test/wmts"}
     assert changes["attribution"]["new"] == "Corporate" and "tier" in changes
+
+
+async def test_a_run_is_paced_so_a_provider_is_not_flooded(tmp_path: Path) -> None:
+    """ADR-147 decision 5: at most so many tiles a second from one run (`tiles_per_second`), the
+    pause between fetches, never before the first or for a tile already kept."""
+    w = World(tmp_path)
+    pauses: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        pauses.append(seconds)
+
+    w.admin._sleep = sleep  # noqa: SLF001 - the run's own pause, stood in
+    await w.admin.set_key("a", "hosted-tiles", SecretStr(PLANTED))
+    area = _area()
+    assert area_tiles(area) > 1
+    await w.admin.set_areas("a", [area])
+    await w.admin.run_prefetch("a")
+    assert len(pauses) == area_tiles(area) - 1 and all(p == 1 / 10 for p in pauses)
+    pauses.clear()
+    await w.admin.run_prefetch("a")  # every tile kept: nothing fetched, nothing waited for
+    assert pauses == []

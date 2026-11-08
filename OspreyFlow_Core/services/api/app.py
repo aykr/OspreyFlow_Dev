@@ -7676,6 +7676,12 @@ async def get_map_tile_route(
         if cached is not None:
             return Response(content=cached, media_type=image_content_type(cached))
 
+    map_admin = getattr(request.app.state, "map_admin", None)
+    if map_admin is not None:
+        try:
+            map_admin.refuse_inside(provider)
+        except map_admin_module.MapAdminRefused as refused:
+            raise HTTPException(status_code=refused.status, detail=refused.words) from None
     # ADR-147: a key set in *Admin › Maps* first, then `osprey.yaml`'s `env:` reference; a provider
     # that needs one and holds neither is said in words, never its address.
     try:
@@ -7695,6 +7701,9 @@ async def get_map_tile_route(
                 f"The map provider {provider_id!r} refused the tile (HTTP {failed.status}). If it "
                 "was refused for its key, set the key again in Admin › Maps."
                 if failed.status
+                else f"The map provider {provider_id!r} answered with something larger than any "
+                "tile, so it was not kept."
+                if failed.too_large
                 else f"The map provider {provider_id!r} could not be reached."
             ),
         ) from None
@@ -7789,6 +7798,7 @@ async def build_basemap_route(
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[str] = asyncio.Queue()
         transaction: dict[str, str] = {}
+        audited = False
 
         def _progress(line: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, line)
@@ -7802,61 +7812,81 @@ async def build_basemap_route(
             )  # fmt: skip
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
+        async def _settle() -> None:
+            # Committed before the provider is registered (`map_admin.build_basemap`).
+            await graph.commit_transaction(transaction.pop("tx"))
+
         async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:
                 result = await map_admin_module.build_basemap(
                     admin, by=principal.id, region=body.region, load_places=_load_places,
-                    progress=_progress, tiles_root=admin.tiles_root,
+                    progress=_progress, tiles_root=admin.tiles_root, settle=_settle,
                 )  # fmt: skip
             except BaseException as exc:  # noqa: BLE001 - reported to the caller, not swallowed
                 if "tx" in transaction:
-                    await graph.rollback_transaction(transaction["tx"])
+                    await graph.rollback_transaction(transaction.pop("tx"))
                 return None, exc
-            await graph.commit_transaction(transaction["tx"])
             return result, None
 
-        task = asyncio.ensure_future(_run_build())
-        while True:
-            get_line = asyncio.ensure_future(queue.get())
-            done, _pending = await asyncio.wait(
-                {task, get_line}, return_when=asyncio.FIRST_COMPLETED
-            )
-            if get_line in done:
-                yield f"data: {json.dumps({'line': get_line.result()})}\n\n".encode()
-                continue
-            get_line.cancel()
-            break
-        # Drain whatever progress arrived after the build task itself finished but before this
-        # loop's own last `queue.get()` was scheduled — a real race the `asyncio.wait` above
-        # cannot close on its own, found writing this route's own first test.
-        while not queue.empty():
-            yield f"data: {json.dumps({'line': queue.get_nowait()})}\n\n".encode()
+        try:
+            task = asyncio.ensure_future(_run_build())
+            while True:
+                get_line = asyncio.ensure_future(queue.get())
+                done, _pending = await asyncio.wait(
+                    {task, get_line}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if get_line in done:
+                    yield f"data: {json.dumps({'line': get_line.result()})}\n\n".encode()
+                    continue
+                get_line.cancel()
+                break
+            # Drain whatever progress arrived after the build task itself finished but before
+            # this loop's own last `queue.get()` was scheduled — a real race the `asyncio.wait`
+            # above cannot close on its own, found writing this route's own first test.
+            while not queue.empty():
+                yield f"data: {json.dumps({'line': queue.get_nowait()})}\n\n".encode()
 
-        result, error = task.result()
-        await audit.record(
-            principal=principal,
-            action="geospatial_build_basemap",
-            resolved_query={"region": body.region},
-            result_cardinality=0 if error is not None else 1,
-        )
-        if error is not None:
-            words = (
-                error.words if isinstance(error, map_admin_module.MapAdminRefused) else str(error)
+            result, error = task.result()
+            await audit.record(
+                principal=principal,
+                action="geospatial_build_basemap",
+                resolved_query={"region": body.region},
+                result_cardinality=0 if error is not None else 1,
             )
+            audited = True
+            if error is not None:
+                # The independent review's minor 8: an error's own words (a path, a provider's
+                # answer) are the Conduit's log's; the Glass is told it stopped, and its kind.
+                if isinstance(error, map_admin_module.MapAdminRefused):
+                    words = error.words
+                else:
+                    logger.warning("the basemap build stopped: %s", error)
+                    words = (
+                        f"The build stopped ({type(error).__name__}). The Conduit's log has the "
+                        "reason."
+                    )
+                stopped = json.dumps({"returncode": 1, "error": words})
+                yield f"event: complete\ndata: {stopped}\n\n".encode()
+                return
+            assert result is not None
+            name, created, referenced, rejected = result
+            payload = BuildBasemapResult(
+                pmtiles_file=name, nodes_created=created, nodes_referenced=referenced,
+                rejections=rejected,
+            )  # fmt: skip
             yield (
-                f"event: complete\ndata: {json.dumps({'returncode': 1, 'error': words})}\n\n"
+                f"event: complete\ndata: "
+                f"{json.dumps({'returncode': 0, 'result': payload.model_dump()})}\n\n"
             ).encode()
-            return
-        assert result is not None
-        name, created, referenced, rejected = result
-        payload = BuildBasemapResult(
-            pmtiles_file=name, nodes_created=created, nodes_referenced=referenced,
-            rejections=rejected,
-        )  # fmt: skip
-        yield (
-            f"event: complete\ndata: "
-            f"{json.dumps({'returncode': 0, 'result': payload.model_dump()})}\n\n"
-        ).encode()
+        finally:
+            # A stream the Glass abandoned still leaves its record (the review's minor 8).
+            if not audited:
+                await audit.record(
+                    principal=principal,
+                    action="geospatial_build_basemap",
+                    resolved_query={"region": body.region},
+                    result_cardinality=0,
+                )
 
     return StreamingResponse(_events(), media_type="text/event-stream")
 

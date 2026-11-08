@@ -209,12 +209,13 @@ def test_build_basemap_route_streams_real_progress_and_completes(
     _fake_gazetteer(monkeypatch)
 
     async def _fake_build(
-        admin: Any, *, progress: Any, load_places: Any, **_kwargs: Any
+        admin: Any, *, progress: Any, load_places: Any, settle: Any, **_kwargs: Any
     ) -> tuple[str, int, int, int]:
         progress("Downloading the 'great-britain' Geofabrik extract...")
         progress("Running planetiler...")
         progress("Loading the OSM-derived gazetteer...")
         counts = await load_places(Path("/tmp/great-britain.osm.pbf"))
+        await settle()  # as `map_admin.build_basemap` does, before it registers the provider
         return ("great-britain.pmtiles", *counts)
 
     monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build)
@@ -249,7 +250,10 @@ def test_build_basemap_route_rolls_back_and_reports_a_real_failure(
 
     assert response.status_code == 200
     assert '"returncode": 1' in response.text
-    assert "planetiler stopped" in response.text
+    # The independent review's minor 8: the error's own words (a path, a provider's answer) are the
+    # Conduit's log's, never the Glass's; the person is told it stopped, and by which kind of error.
+    assert "planetiler stopped" not in response.text
+    assert "The build stopped (RuntimeError)" in response.text
     assert graph.rolled_back and not graph.committed
 
 
@@ -352,3 +356,38 @@ def test_verify_map_route_reports_a_real_attribution_issue() -> None:
     body = response.json()
     assert body["passed"] is False
     assert body["issues"][0]["check"] == "attribution"
+
+
+def test_the_places_are_committed_before_the_provider_is_registered(
+    client: TestClient, graph: _FakeGraph, map_admin: MapAdmin, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The independent review's minor 9: a provider registered before its places are committed
+    would point the map at a basemap whose gazetteer a failed commit then lost."""
+    import scripts.build_local_basemap as basemap_script
+
+    _fake_gazetteer(monkeypatch)
+    order: list[str] = []
+
+    async def commit(tx: TxId) -> None:
+        order.append("commit")
+
+    graph.commit_transaction = commit  # type: ignore[method-assign]
+    real_register = map_admin.register_local
+
+    async def register(*args: Any, **kwargs: Any) -> None:
+        order.append("register")
+        await real_register(*args, **kwargs)
+
+    monkeypatch.setattr(map_admin, "register_local", register)
+
+    def downloader(region: str, dest: Path) -> Path:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x00\x00\x00\x0d\x0a\x09OSMHeader synthetic")
+        return dest
+
+    monkeypatch.setattr(basemap_script, "download_extract", downloader)
+    monkeypatch.setattr(basemap_script, "run_planetiler",
+                        lambda e, o, *, jar_path: o.write_bytes(b"PMTiles") and o)  # fmt: skip
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+    assert '"returncode": 0' in response.text, response.text
+    assert order == ["commit", "register"]

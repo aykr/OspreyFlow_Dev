@@ -42,7 +42,7 @@ const TIER_WORDS: Record<number, string> = {
   3: "Tier 3: hosted, through the Conduit",
   4: "Tier 4: an OGC service",
 };
-const SCHEDULES = [
+const SCHEDULES: { hours: 0 | 6 | 24 | 168; label: string }[] = [
   { hours: 0, label: "By hand only" },
   { hours: 6, label: "Every 6 hours" },
   { hours: 24, label: "Every day" },
@@ -667,7 +667,7 @@ export function Maps({ api }: { api: MapsApi }) {
                   value={String(scheduleHours)}
                   onChange={(e) => {
                     const hours = Number(e.target.value);
-                    act(setSchedule(api, { every_hours: hours === 0 ? null : hours }), "The prefetch schedule is saved.");
+                    act(setSchedule(api, { every_hours: hours === 0 ? null : (hours as 6 | 24 | 168) }), "The prefetch schedule is saved.");
                   }}
                 >
                   {SCHEDULES.map((s) => (

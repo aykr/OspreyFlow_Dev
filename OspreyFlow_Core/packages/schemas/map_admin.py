@@ -109,7 +109,8 @@ class PrefetchSchedule(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    every_hours: int | None = Field(default=None, ge=1, le=24 * 28)
+    #: Every 6 hours, every day or every week (ADR-147 decision 5); `None` is by hand only.
+    every_hours: Literal[6, 24, 168] | None = None
 
 
 class PrefetchRun(BaseModel):

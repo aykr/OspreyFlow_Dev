@@ -57,4 +57,5 @@ def test_a_conduit_with_no_maps_file_serves_exactly_this_config(tmp_path: Path) 
         audit=InMemoryMapAdminAudit(), tiles_root=tmp_path,
     )  # fmt: skip
     assert admin.config() == installed
-    assert all(p.tier in (1, 2) and p.key_state == "none" for p in admin.view().providers)
+    # Rule 9: tier 1 only, not merely local (an OS OpenData file is tier 2).
+    assert all(p.tier == 1 and p.key_state == "none" for p in admin.view().providers)

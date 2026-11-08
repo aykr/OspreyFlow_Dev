@@ -134,7 +134,7 @@ export type TilesFetched = number;
 export type TilesAlreadyCached = number;
 export type Failed = string | null;
 export type Areas = PrefetchAreaView[];
-export type EveryHours = number | null;
+export type EveryHours = (6 | 24 | 168) | null;
 export type NextRunAt = string | null;
 
 /**
