@@ -1,0 +1,36 @@
+# red: c-wrong-channel — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:25Z
+# plant in services/api/working_set_revert.py:
+# - '            await publish_delta(publisher, removal.investigation_id, removal.delta)\n    return list(removals)'
+# + '            await publish_delta(publisher, removals[0].investigation_id, removal.delta)\n    return list(removals)'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_each_cases_removal_is_published_on_its_own_channel_after_the_removal ___
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x111a82810>
+
+    async def test_each_cases_removal_is_published_on_its_own_channel_after_the_removal(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The removal's order and channels: `remove_reverted` clears every case's store before it
+        returns, and only then is anything published (a socket resynchronising on a published message
+        finds the stores already clean), each case's removal on that case's own channel. Red with every
+        removal published on the first case's channel: case b's canvas was never told."""
+        events: list[str] = []
+    
+        async def publish(client: Any, case: str, delta: Any) -> None:
+            events.append(f"published {case}")
+    
+        monkeypatch.setattr(working_set_revert, "publish_delta", publish)
+        removals = await remove_and_publish(_Service(events), object(), ["n1"], ["e1"])
+>       assert events == ["removed ['n1'] ['e1']", "published case-a", "published case-b"]
+E       assert ["removed ['n...ished case-a'] == ["removed ['n...ished case-b']
+E         
+E         At index 2 diff: 'published case-a' != 'published case-b'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:47: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_each_cases_removal_is_published_on_its_own_channel_after_the_removal
+1 failed in 0.37s

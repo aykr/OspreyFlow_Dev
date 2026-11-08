@@ -1,0 +1,43 @@
+# red: b-alert-node-mentioned-in — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:45:31Z
+# plant in services/api/rule_evaluation.py:
+# - '    record.edges(alerted, await graph.upsert_edges(alerted, tx))\n    return node_id, finding'
+# + "    record.edges(alerted, await graph.upsert_edges(alerted, tx))\n    (_doc,) = await graph.upsert_nodes([node.model_copy(update={'id': new_node_id(), 'type': 'Document', 'properties': {'title': 'planted'}})], tx)\n    await graph.upsert_edges([alerted[0].model_copy(update={'id': new_edge_id(), 'type': 'MENTIONED_IN', 'basis': 'direct', 'target': _doc})], tx)\n    return node_id, finding"
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11bca9c70>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11b60e0f0>, 'audit': <services.api.audit.AuditWriter object at 0x11bca8b30>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x10ff39d90>
+
+    async def test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """Carry (b). Amendment 11 point 3 exempts `remark_alerts`' supersede of an alert's own node from
+        the journal because that node carries only `ALERTED_ON` links, which no alert cites. The
+        ontology does not guarantee it (`MENTIONED_IN` runs from any type, `Alert` included): the rule's
+        writer (`write_alert_node`) does. An alert raised through the real rule gate: every live link
+        at its node is an `ALERTED_ON` from it, and no alert cites one. Red with the writer also linking
+        the node to a document by `MENTIONED_IN`."""
+        from tests.ingest.test_typology_rules import _case_alerts, _raised
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "AO")
+            (alert,) = await _case_alerts(stores, ANALYST, case)
+            assert alert.alert_node_id is not None
+            touching = await graph.live_edges_touching([alert.alert_node_id])
+            links = await graph.get_edges(sorted(touching), SECRET_READER)
+            assert touching and len(links) == len(touching)
+>           assert {(e.type, e.source) for e in links} == {("ALERTED_ON", alert.alert_node_id)}
+E           AssertionError: assert {('ALERTED_ON...YD2KW9V6HT4')} == {('ALERTED_ON...YD2KW9V6HT4')}
+E             
+E             Extra items in the left set:
+E             ('MENTIONED_IN', '01M6Y47TT03ZF6EYD2KW9V6HT4')
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:844: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites
+1 failed in 8.62s

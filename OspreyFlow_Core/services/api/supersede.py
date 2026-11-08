@@ -71,13 +71,17 @@ async def submit_supersede_node(
     a submitted job has no `judgement_store` reference to carry across the queue boundary.
 
     `alerts`: the alerts' repoint journal (ADR-109 Amendment 11). Each link the supersede clones is
-    recorded before the caller commits `tx`, and the next read of alerts settles the record once
+    recorded before the caller commits `tx`, as is the node itself (so an alert naming it is
+    renamed, Amendment 12), and the next read of alerts settles the record once
     the graph shows the commit, so an alert citing one follows it to its clone. An exception from
     here closes that record: the caller must then roll `tx` back, never commit it."""
     stats = await graph.neighbourhood_stats(node_id, principal)
     if stats.degree < degree_threshold:
-        async with journal_outside_commit(alerts) as cloned:
-            new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=cloned)
+        async with journal_outside_commit(alerts) as journal:
+            new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=journal)
+            if journal is not None:
+                # ADR-109 Amendment 12: an alert naming the node follows it to its new revision.
+                await journal.superseded(node_id, new_id)
         if judgement_store is not None:
             await flag_judgements_citing_superseded_node(judgement_store, node_id)
         return SupersedeNodeAccepted(mode="sync", result_node_id=new_id)
@@ -116,8 +120,11 @@ async def run_supersede_node_job(
     and leave every alert citing a cloned link withheld, so it fails at its first job instead."""
     node_id = str(payload["node_id"])
     replacement = NodeWrite.model_validate(payload["replacement"])
-    async with journal_outside_commit(alerts) as cloned:
-        new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=cloned)
+    async with journal_outside_commit(alerts) as journal:
+        new_id = await graph.supersede_node(node_id, replacement, tx, on_link_cloned=journal)
+        if journal is not None:
+            # ADR-109 Amendment 12: an alert naming the node follows it to its new revision.
+            await journal.superseded(node_id, new_id)
     if judgement_store is not None:
         await flag_judgements_citing_superseded_node(judgement_store, node_id)
     return {"result_node_id": new_id}

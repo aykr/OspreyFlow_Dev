@@ -1,0 +1,42 @@
+# red: review-item6-main-binds-none — offline, at 2ecc602, 2026-11-08T17:44:54Z
+# plant in services/api/worker_main.py:
+# - '        judgement_store=judgements,\n'
+# + '        judgement_store=None,\n'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_the_deployed_worker_connects_the_judgement_store_and_binds_it ______
+
+    def test_the_deployed_worker_connects_the_judgement_store_and_binds_it() -> None:
+        """The L2.8d review's item 6. The standalone worker is where a deployment's supersede jobs run,
+        so `main` connects the judgement store and gives it to `register_all`, as the Conduit gives its
+        own (`01_DOMAIN_MODEL.md` §5: a corrected node's citing judgements are flagged on either path).
+        `judgement_store` is a required keyword, so leaving it out fails the type check; this proves
+        `main` passes the store it connected, not `None`. Red with `main`'s `judgement_store=` given
+        `None`, and with the store not connected."""
+        import ast
+        import inspect
+    
+        tree = ast.parse(inspect.getsource(worker_main.main))
+        connected = {
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Await)
+            and isinstance(node.value.value, ast.Call)
+            and ast.unparse(node.value.value.func) == "JudgementStore.connect"
+            for target in node.targets if isinstance(target, ast.Name)
+        }  # fmt: skip
+        calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "register_all"]
+        assert len(calls) == 1
+        given = {k.arg: k.value for k in calls[0].keywords}["judgement_store"]
+>       assert isinstance(given, ast.Name) and given.id in connected, ast.unparse(given)
+E       AssertionError: None
+E       assert (False)
+E        +  where False = isinstance(<ast.Constant object at 0x123bba090>, <class 'ast.Name'>)
+E        +    where <class 'ast.Name'> = <module 'ast' from '/Users/ayankar/miniconda3/lib/python3.12/ast.py'>.Name
+
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:217: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_deployed_worker_connects_the_judgement_store_and_binds_it
+1 failed in 0.90s

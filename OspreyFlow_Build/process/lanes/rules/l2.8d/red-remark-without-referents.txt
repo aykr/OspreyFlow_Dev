@@ -1,0 +1,53 @@
+# red: remark-without-referents — lease rules, stack b, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:16Z
+# plant in services/api/alerts.py:
+# - '                f"OR {_names_any_sql(2)} ORDER BY id",'
+# + '                "AND $2::text[] IS NOT NULL ORDER BY id",'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11ca63dd0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11a3b2540>, 'audit': <services.api.audit.AuditWriter object at 0x11cd72990>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11cdabb90>
+
+    async def test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """`supersede.py`'s job corrects `p`, OFFICIAL, to SECRET. The alert naming it is now refused to
+        the case's OFFICIAL reader, who was listed it, and its own node, OFFICIAL, is re-marked to
+        SECRET, so its words are not read through the node either (Amendment 12, as Amendment 11 point
+        4 re-marks over a cited link's ends). Red with the referents left out of the re-mark's search:
+        the node stayed OFFICIAL, readable by the OFFICIAL reader."""
+        from services.api import alert_queue
+        from services.api.supersede import run_supersede_node_job
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            tx = await graph.begin_transaction()
+            (node,) = await graph.upsert_nodes([_person(f"Alert node {new_id()}")], tx)
+            await graph.commit_transaction(tx)
+            p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED, handling=OFFICIAL,
+                                         alert_node=node)  # fmt: skip
+    
+            async def listed(reader: Principal) -> dict[str, Alert]:
+                return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, case, reader)}
+    
+            assert alert.id in await listed(LOW), "before the correction the OFFICIAL reader is listed it"
+            raised = _person(f"N raised {new_id()}").model_copy(update={"handling": SECRET})
+            tx = await graph.begin_transaction()
+            await run_supersede_node_job({"node_id": p, "replacement": raised.model_dump(mode="json")},
+                                         graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+            await graph.commit_transaction(tx)
+            row = (await listed(READER))[alert.id]
+            assert row.referent_node_ids != [p]
+            assert alert.id not in await listed(LOW)
+>           assert row.alert_node_id != node, "the alert's node was re-marked into a revision"
+E           AssertionError: the alert's node was re-marked into a revision
+E           assert '01M6Y4EPT5ADWNS199JMHRVD6D' != '01M6Y4EPT5ADWNS199JMHRVD6D'
+E            +  where '01M6Y4EPT5ADWNS199JMHRVD6D' = Alert(id='01M6Y4EPVXSYQHV3F7HKRGQ4CS', rule_id='typology:01M6Y4EPVXSYQHV3F7HKRGQ4CT', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).alert_node_id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:774: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node
+1 failed in 6.05s

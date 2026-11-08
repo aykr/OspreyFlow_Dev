@@ -1,0 +1,37 @@
+# The live runs for L2.8d's gate, under the rules lease on stack a (no other live run was taken at 6afb5b2: its tree differs
+# from ba6f903's only by the process records of 6afb5b2, which no test reads).
+# 1. leased-run-final.txt at a1bfc9e (rebased on main 222b667), 16:46-17:05Z: 595 passed, 16 failed, each explained there.
+# 2. leased-run-packs.txt at ba6f903 (the packs fixture fix), 17:07Z: the five pack files 40/40.
+
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py::test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_snapshot_is_marked_at_the_highest_counted_and_withheld_below_it_with_a_yes_or_no_shown
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_draft_and_the_history_say_withheld_as_a_yes_or_no
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_restricted_handling_withholds_a_snapshot_from_a_reader_outside_its_unit
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_entity_item_is_withheld_when_the_reader_cannot_see_it_now
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_an_assessment_is_frozen_as_written
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_published_version_is_unchanged_after_the_draft_is_edited
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_refreshed_snapshot_keeps_the_old_one_in_history
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_the_history_says_withheld_when_an_earlier_snapshot_is_one_the_reader_may_not_see
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_publisher_cannot_publish_what_they_cannot_see
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_a_withdrawn_publication_is_not_read_and_the_withdrawal_is_recorded
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_who_published_and_withdrew_is_named_and_no_one_else_is_looked_up
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_reading_published_packs_needs_read_reports_and_a_level
+FAILED ../OspreyFlow_Build/tests/services/api/test_packs.py::test_assembling_and_publishing_need_editor_and_record_assessment
+16 failed, 595 passed, 191 deselected, 1 warning in 1143.98s (0:19:03)
+# lease rules, stack a, 2026-11-08 16:46:28Z to 17:05:33Z, at a1bfc9e (rebased on main 222b667), no working-tree changes
+# The 16 failures, each explained:
+# - 13 in test_packs.py and 1 in test_pack_alert_item.py (the trend case, which uses test_packs' fixture): the
+#   fixture gave the alert store as None, refused by settle_repoints since L2.8c (Amendment 11 point 6); the
+#   files are live-only, so neither L2.8c's offline make test nor its leased run included them. Fixed at ba6f903;
+#   leased-run-packs.txt: 40/40 at ba6f903.
+# - test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not:
+#   fails on main (L2.8c's gates/47435fa.live.txt); not this branch's.
+# - test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses: a fresh case lists 25
+#   rules other live files left on stack a's database (fails alone too); O-hyg's open finding (live files
+#   that create deployment-wide rules do not clean up), not this branch's.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+40 passed, 3 warnings in 5.90s
+# lease rules, stack a, 2026-11-08 17:07:09Z to 17:07:15Z, at ba6f903, no working-tree changes; before the fixture fix these 14 failed (leased-run-final.txt)

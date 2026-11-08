@@ -82,11 +82,7 @@ from services.ingest.recipe_rules import (
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
-from services.resolve.trigger import (
-    JOB_TYPE_RESOLVE_ENTITY_TYPE,
-    run_resolve_entity_type_job,
-    service_principal,
-)
+from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
@@ -371,6 +367,7 @@ from .alerts import (
     AlertStore,
     AlertTriageConflict,
     purge_remarked_copies,
+    raiser_floor,
     supersede_journalled,
 )
 from .assessments import (
@@ -784,7 +781,6 @@ from .studio_recipes import (
     reconcile_recipe_pins,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
-from .supersede import JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job
 from .superset_embed import (
     EmbeddableDashboard,
     SupersetEmbedder,
@@ -843,6 +839,7 @@ from .watch_routes import (
     jumpable_alert,
 )
 from .worker import JobWorker
+from .worker_main import register_all
 from .working_set.models import (
     MAX_NODES,
     CardinalityPreview,
@@ -1142,25 +1139,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # itself does not spin up that loop — running the worker is deployment
     # wiring (its own process/container), not additional Conduit logic.
     job_worker = JobWorker(valkey, jobs, graph)
-    job_worker.register(
-        JOB_TYPE_SUPERSEDE_NODE,
-        # ADR-109 Amendment 11: each link the supersede clones is recorded in the alerts' journal.
-        functools.partial(
-            run_supersede_node_job, judgement_store=judgements_store, alerts=alerts_store
-        ),
-    )
-    job_worker.register(
-        JOB_TYPE_RESOLVE_ENTITY_TYPE,
-        functools.partial(
-            run_resolve_entity_type_job,
-            ontology=ontology,
-            scheme=handling_scheme,
-            valkey=valkey,
-            # ADR-143 Amendment 1: a layer's split is its own case's, not the corpus's.
-            analyst_layers=datasets_store.layer_ids,
-            # ADR-109 Amendment 11: a split's annotation goes through the alerts' journal.
-            alerts=alerts_store,
-        ),
+    # The supersede and resolution jobs, bound as the standalone worker binds them, by the one
+    # function (`worker_main.register_all`): the alerts' repoint journal on both (ADR-109
+    # Amendment 11), a layer's split its own case's (ADR-143 Amendment 1), the review flag here.
+    register_all(
+        job_worker,
+        ontology=ontology,
+        scheme=handling_scheme,
+        valkey=valkey,
+        analyst_layers=datasets_store.layer_ids,
+        alerts=alerts_store,
+        judgement_store=judgements_store,
     )
     job_worker.register(
         JOB_TYPE_COMPUTE_METRIC, functools.partial(run_compute_metric_job, compute=compute)
@@ -4265,6 +4254,8 @@ async def confirm_node_route(
         graph,
         lambda tx, cloned: confirm_node(graph, node_id, principal, tx=tx, on_link_cloned=cloned),
         working_set=working_set,
+        # ADR-109 Amendment 12: an alert naming the node follows it to its new revision.
+        superseding=node_id,
     )
     # `01_DOMAIN_MODEL.md` §5's own review-flag loop: a confirmation is a content change to the
     # node a judgement may cite as `supporting` evidence (`GraphPort.supersede_node`'s own
@@ -4377,6 +4368,8 @@ async def retract_node_route(
         graph,
         lambda tx, cloned: retract_node(graph, node_id, principal, tx=tx, on_link_cloned=cloned),
         working_set=working_set,
+        # ADR-109 Amendment 12: an alert naming the node follows it to its new revision.
+        superseding=node_id,
     )
     # See `confirm_node_route`'s own comment — the identical review-flag loop, for the case
     # `08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion names directly.
@@ -12696,7 +12689,9 @@ async def _build_pack_item(
             )
         except AlertNotFoundError as missing:
             raise HTTPException(status_code=404, detail="no such alert in this case") from missing
-        return alert_item(explained, events, principal, scheme)
+        # ADR-109 Amendment 12 point 10: the item never falls below what the alert's raiser read.
+        floor = raiser_floor(explained.alert, await alerts_store.handlings_of(explained.alert.id))
+        return alert_item(explained, events, principal, scheme, raised_over=floor)
     if body.kind == "trend":
         saved = await trends.get(case.id, body.trend_id) if body.trend_id else None
         if saved is None:

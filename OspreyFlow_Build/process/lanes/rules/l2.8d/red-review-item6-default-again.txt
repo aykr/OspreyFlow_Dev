@@ -1,0 +1,23 @@
+# red: review-item6-default-again — offline, at 2ecc602, 2026-11-08T17:44:56Z
+# plant in services/api/worker_main.py:
+# - '    judgement_store: JudgementStore | None,\n) -> None:'
+# + '    judgement_store: JudgementStore | None = None,\n) -> None:'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_a_registration_without_the_judgement_store_is_refused __________
+
+    def test_a_registration_without_the_judgement_store_is_refused() -> None:
+        """`judgement_store` is required: a registration that forgot it is refused at once, naming it.
+        Red with the keyword given a default again: it registered and flagged nothing."""
+        valkey = object()
+        worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+>       with pytest.raises(TypeError, match="judgement_store"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TypeError
+
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:225: Failed
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_a_registration_without_the_judgement_store_is_refused
+1 failed in 0.94s

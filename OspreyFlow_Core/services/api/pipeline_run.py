@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from pydantic import ValidationError
-from services.api.alerts import AlertStore, supersede_journalled
+from services.api.alerts import AlertStore, SupersedeJournal, supersede_journalled
 from services.api.review import (
     RECOGNISE_OVERLAP_CHARS,
     RECOGNISE_WINDOW_CHARS,
@@ -70,7 +70,7 @@ from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
 from ontology.handling import HandlingScheme, sources_in_full
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort, LinkCloned
+from ports.graph import GraphPort
 from ports.media import MediaStore
 from ports.recognise import RecognisePort, RecogniserRefusedError
 from schemas.analytics import GeometryKind, GeometryRecord
@@ -397,7 +397,7 @@ async def _run_enrich_stage(
     run_created = {node_id for branch in branches for node_id in branch.report.created_node_ids}
     to_ref = REGISTRY["geometry_ref"]
 
-    async def enrich(tx: str, cloned: LinkCloned) -> None:
+    async def enrich(tx: str, cloned: SupersedeJournal) -> None:
         for mention in locations:
             name = mention.properties.get("name")
             if not name or mention.properties.get("geometry_ref"):
@@ -432,11 +432,13 @@ async def _persist_online_point(
     to_ref: Callable[..., str],
     principal: Principal,
     tx: TxId,
-    on_link_cloned: LinkCloned | None = None,
+    on_link_cloned: SupersedeJournal | None = None,
 ) -> None:
     """An online geocode made durable: the point as a geometry-partition row (insert-only, keyed
     by its deterministic ref) and the mention superseded with that `geometry_ref` — a new node
-    revision, never an in-place edit."""
+    revision, never an in-place edit. `on_link_cloned`, the alerts' repoint journal, is told each
+    link the supersede clones and the mention's own new revision, before the commit (ADR-109
+    Amendments 11 and 12)."""
     lon, lat = coordinates
     ref = to_ref((str(lon), str(lat)), source_crs=_ONLINE_CRS)
     held = {
@@ -471,7 +473,9 @@ async def _persist_online_point(
         created_by=principal.id,
         created_at=now,
     )
-    await graph.supersede_node(mention.id, replacement, tx, on_link_cloned=on_link_cloned)
+    new = await graph.supersede_node(mention.id, replacement, tx, on_link_cloned=on_link_cloned)
+    if on_link_cloned is not None:
+        await on_link_cloned.superseded(mention.id, new)
 
 
 async def run_published_pipeline(

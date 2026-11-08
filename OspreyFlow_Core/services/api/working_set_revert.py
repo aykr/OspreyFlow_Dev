@@ -19,12 +19,29 @@ What each connected reader is sent is decided per reader by the projection, from
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
 from valkey.asyncio import Valkey
 
 from .notify import publish_delta
 from .working_set.service import WorkingSetService
+
+
+async def remove_and_publish(
+    service: Any, publisher: Any, node_ids: Sequence[str], edge_ids: Sequence[str]
+) -> list[Any]:
+    """The one removal both a revert and an alert's purge make (ADR-127 decision 6; ADR-109
+    Amendments 11 and 12, L2.8c's carry (c)): the elements leave every case that stores one
+    (`WorkingSetService.remove_reverted`), every store cleared before anything is published, so a
+    socket resynchronising on a published message finds the stores already clean; then each case's
+    stored removal is published on its channel (`notify.publish_delta`: the stored form, with the
+    record, projected per reader by each socket). `publisher` `None` (a service built without a
+    client) publishes nothing. Returns the cases' removals."""
+    removals = await service.remove_reverted(node_ids, edge_ids)
+    if publisher is not None:
+        for removal in removals:
+            await publish_delta(publisher, removal.investigation_id, removal.delta)
+    return list(removals)
 
 
 class HistoryScrub(Protocol):
@@ -44,8 +61,6 @@ class WorkingSetReverter:
         is published, so a socket that resynchronises on a published message finds the stores
         already clean. `final_pass` (the revert's second run, last before its mark) does the same
         work: it finds only what a Conduit left running added back since the first."""
-        removals = await self._service.remove_reverted(node_ids, edge_ids)
-        for removal in removals:
-            await publish_delta(self._valkey, removal.investigation_id, removal.delta)
+        removals = await remove_and_publish(self._service, self._valkey, node_ids, edge_ids)
         await self._history.remove_elements(node_ids, edge_ids)
         return len(removals)

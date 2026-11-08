@@ -1,0 +1,67 @@
+# red: caller-supersede-submit — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:46:19Z
+# plant in services/api/supersede.py:
+# - '                await journal.superseded(node_id, new_id)'
+# + '                pass'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_an_alert_naming_a_node_supersede_py_corrects_stays_listed[submit] ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x129d0c680>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1293f5c40>, 'audit': <services.api.audit.AuditWriter object at 0x12a052570>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x129a45010>
+path = 'submit'
+
+    @pytest.mark.parametrize("path", ["submit", "job"])
+    async def test_an_alert_naming_a_node_supersede_py_corrects_stays_listed(
+        stores: dict[str, Any], analytics: Any, path: str
+    ) -> None:
+        """`supersede.py`'s synchronous path and its worker job: the worker commits, and the next read
+        settles. Red with that path's `journal.superseded` removed."""
+        from services.api.supersede import run_supersede_node_job, submit_supersede_node
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED)
+            replacement = _person(f"N corrected {new_id()}").model_copy(update={"handling": SECRET})
+            tx = await graph.begin_transaction()
+            if path == "submit":
+                done = await submit_supersede_node(p, replacement, tx, graph=graph, principal=READER, jobs=None,  # type: ignore[arg-type]
+                                                   degree_threshold=1_000, alerts=stores["alerts"])  # fmt: skip
+                assert done.mode == "sync"
+            else:
+                await run_supersede_node_job({"node_id": p, "replacement": replacement.model_dump(mode="json")},
+                                             graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+            await graph.commit_transaction(tx)
+>           await _still_named(stores, graph, analytics, case, alert, p)
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:704: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x129d0c680>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1293f5c40>, 'audit': <services.api.audit.AuditWriter object at 0x12a052570>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x12a092990>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x129a45010>
+case = 'case-01M6Y495JZJT1G554SE2YMTRQ4'
+alert = Alert(id='01M6Y49ANYR3DFFNE6VTVP0NY4', rule_id='typology:01M6Y49ANYR3DFFNE6VTVP0NY5', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
+node = '01M6Y49AM9PTRYPKN26QXMDWSF'
+
+    async def _still_named(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
+                           node: str) -> None:  # fmt: skip
+        """The alert is listed for the reader, naming the newest revision of `node` the graph holds; it
+        is not given to the case's OFFICIAL reader, who may not read that revision, nor to the cleared
+        reader in another case."""
+        from services.api import alert_queue
+    
+        async def listed_for(reader: Principal, in_case: str) -> dict[str, Alert]:
+            return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, in_case, reader)}
+    
+        listed = await listed_for(READER, case)
+>       assert alert.id in listed, "the alert naming the corrected node is withheld from its reader"
+E       AssertionError: the alert naming the corrected node is withheld from its reader
+E       assert '01M6Y49ANYR3DFFNE6VTVP0NY4' in {}
+E        +  where '01M6Y49ANYR3DFFNE6VTVP0NY4' = Alert(id='01M6Y49ANYR3DFFNE6VTVP0NY4', rule_id='typology:01M6Y49ANYR3DFFNE6VTVP0NY5', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:635: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_a_node_supersede_py_corrects_stays_listed[submit]
+1 failed in 6.68s

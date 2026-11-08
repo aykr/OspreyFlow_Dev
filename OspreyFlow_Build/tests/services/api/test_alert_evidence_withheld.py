@@ -41,6 +41,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.repoint_journal_fakes import RaiserReads
 
 NOW = datetime(2026, 11, 7, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -145,13 +146,16 @@ class Analytics:
         )
 
 
-class Store:
+class Store(RaiserReads):
     def __init__(self, alerts: list[Alert]) -> None:
         self.alerts = alerts
 
     async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
         """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
         read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
+    def held_alert_ids(self) -> set[str]:
+        return {a.id for a in self.alerts}
 
     async def list_queue(
         self, investigation_id: str, reader: Principal, **_: object

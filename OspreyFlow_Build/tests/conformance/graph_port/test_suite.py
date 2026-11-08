@@ -6896,6 +6896,88 @@ async def test_a_links_stored_state_read_for_its_type_names_that_types_successor
         assert (await adapter.stored_link_states([successor]))[successor].held_by == 1
 
 
+async def test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 point 1, over ADR-110 Amendment 18 (L2.8c's carry (a)): a node's
+    correction marks each cloned original `superseded_by` its clone, finding the original from the
+    corrected node by its own type and id. A link of another type holding the same id elsewhere in
+    the graph, not incident to the node, is never marked, never reported to `on_link_cloned` and
+    stays live. Red with the marking made by the id alone: the other type's link was marked
+    superseded by a clone that is not its own, and the settle would have moved alerts citing it."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        (c, d), _ = await _write(
+            adapter,
+            [
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+443333333333"),
+                _node("Endpoint", classification="OFFICIAL", value_normalised="+444444444444"),
+            ],
+            [],
+        )
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", c, d, classification="OFFICIAL", load_id="load-9")
+        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+        assert also == link, "two types hold the one id"
+        reported: list[tuple[str, str, str]] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append((old, new, old_type))
+
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            a, _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+
+        ((old, clone, old_type),) = reported
+        assert (old, old_type) == (link, "COMMUNICATED_WITH")
+        called = (await adapter.stored_link_states([link], edge_type="COMMUNICATED_WITH"))[link]
+        assert (called.superseded, called.superseded_by) == (True, clone)
+        paid = (await adapter.stored_link_states([link], edge_type="TRANSACTED"))[link]
+        assert (paid.superseded, paid.superseded_by) == (False, None), "the other type is unmarked"
+        stored = await adapter.read_link_state(link, "TRANSACTED")
+        assert stored is not None and "superseded_by" not in stored.stored
+        edges = (await adapter.expand(ExpandRequest(node_ids=[c], depth=1), CLEARED)).edges
+        assert [(e.id, e.type) for e in edges] == [(link, "TRANSACTED")], "and live"
+
+
+async def test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 point 1, over ADR-110 Amendment 18 (the L2.8d review's item 2): two types
+    hold one id and both are links of the corrected node. Each is cloned, and each original is
+    marked `superseded_by` its own clone, found by its own type as well as its id, so the settle
+    follows each type to its own successor. Red with the type left out of the marking (the label
+    dropped from `bothE`): the second clone's marking overwrote the first type's, and both
+    originals named the second clone."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
+        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+        assert also == link, "two types hold the one id"
+        reported: dict[str, str] = {}
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            assert old == link
+            reported[old_type] = new
+
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            a, _node("Endpoint", classification="OFFICIAL", value_normalised="+441111111111"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+
+        assert set(reported) == {"COMMUNICATED_WITH", "TRANSACTED"}
+        assert reported["COMMUNICATED_WITH"] != reported["TRANSACTED"]
+        for edge_type, clone in reported.items():
+            state = (await adapter.stored_link_states([link], edge_type=edge_type))[link]
+            assert (state.superseded, state.superseded_by) == (True, clone), edge_type
+
+
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
     """ADR-110 Amendment 16, rule 3: a SECRET link put back is SECRET, read by a cleared reader and
     by no one below; the restore never writes a weaker marking than the one it read."""

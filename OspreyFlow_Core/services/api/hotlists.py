@@ -149,6 +149,23 @@ def _row_to_hotlist(row: asyncpg.Record) -> Hotlist:
     )
 
 
+#: The start-up DDL's advisory lock (ADR-109 Amendment 12, L2.8c's carry (e)), in Postgres's
+#: two-key space under the alert repoint records' first key (`alerts.REPOINT_LOCK_SPACE`, the ASCII
+#: of "ARPR") and second key 0. Every store that runs the alerts' or the hotlists' start-up DDL
+#: (`AlertStore.connect`, `HotlistStore.connect`) takes it in that DDL's transaction: every Conduit
+#: replica and every worker replica runs that DDL as it connects, and Postgres's `CREATE ... IF NOT
+#: EXISTS` is not safe against itself (two sessions creating one table at once both pass the check
+#: and one fails on the catalogue's unique index). A repoint record whose `hashtext` is 0 shares the
+#: key: a store starting up then waits for that record's settle, or the settle skips the record for
+#: a later read.
+BOOTSTRAP_LOCK = (0x41525052, 0)
+
+
+async def take_bootstrap_lock(conn: asyncpg.Connection) -> None:
+    """`BOOTSTRAP_LOCK`, held until `conn`'s transaction ends."""
+    await conn.execute("SELECT pg_advisory_xact_lock($1, $2)", *BOOTSTRAP_LOCK)
+
+
 class HotlistStore:
     def __init__(self, pool: asyncpg.Pool, not_canonical: int = 0) -> None:
         self._pool = pool
@@ -169,7 +186,11 @@ class HotlistStore:
         # own actual load.
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         async with pool.acquire() as conn:
-            await conn.execute(BOOTSTRAP_SQL)
+            async with conn.transaction():
+                # The same start-up lock the alert store takes (it runs this DDL too): replicas
+                # and stores starting together take turns (ADR-109 Amendment 12).
+                await take_bootstrap_lock(conn)
+                await conn.execute(BOOTSTRAP_SQL)
             not_canonical = await _canonicalise_existing(conn)
         return cls(pool, not_canonical)
 

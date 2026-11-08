@@ -1,0 +1,58 @@
+# red: c-purge-own-copy — offline, re-taken at cc95836 (rebased on main 7e2e325), 2026-11-08T17:50:12Z
+# plant in services/api/alerts.py:
+# - '    from .working_set_revert import remove_and_publish\n\n    await remove_and_publish(working_set, working_set.publisher, nodes, [])'
+# + '    from .notify import publish_delta\n\n    for removal in await working_set.remove_reverted(nodes, []):\n        if working_set.publisher is not None:\n            await publish_delta(working_set.publisher, removal.investigation_id, removal.delta)'
+# exit 1
+
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+___ test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c0303e0>
+
+    async def test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Both callers reach `remove_and_publish`: the revert with its Valkey client and the links it
+        took back, the alert purge with the service's own publisher and nodes alone. Red with either
+        keeping its own copy of the removal: that caller never reached the helper."""
+        calls: list[tuple[str, Any, list[str], list[str]]] = []
+    
+        async def recorded(service: Any, publisher: Any, nodes: Any, links: Any) -> list[Any]:
+            calls.append((type(service).__name__, publisher, list(nodes), list(links)))
+            return []
+    
+        class _History:
+            async def remove_elements(self, nodes: Any, links: Any) -> int:
+                return 0
+    
+        monkeypatch.setattr(working_set_revert, "remove_and_publish", recorded)
+        class _Publisher:
+            """A client that takes a publish, so a caller's own copy of the removal runs to its end."""
+    
+            async def publish(self, channel: str, data: Any) -> int:
+                return 0
+    
+        class _Holding(_Service):
+            """No case holds a copy: a caller's own copy of the removal publishes nothing."""
+    
+            async def remove_reverted(self, nodes: Any, links: Any) -> list[Any]:
+                return []
+    
+        service, valkey = _Holding([]), _Publisher()
+        service.publisher = _Publisher()
+        await WorkingSetReverter(service, valkey, _History()).remove(["n1"], ["e1"])  # type: ignore[arg-type]
+        await alerts_module.purge_copies(service, ["alert-node-1"])
+>       assert calls == [
+            ("_Holding", valkey, ["n1"], ["e1"]),
+            ("_Holding", service.publisher, ["alert-node-1"], []),
+        ]
+E       AssertionError: assert [('_Holding',...n1'], ['e1'])] == [('_Holding',...node-1'], [])]
+E         
+E         Right contains one more item: ('_Holding', <tests.services.api.test_remove_and_publish.test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper.<locals>._Publisher object at 0x10cdc1bb0>, ['alert-node-1'], [])
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_the_revert_and_the_alerts_purge_both_remove_through_the_one_helper
+1 failed, 2 passed in 0.35s

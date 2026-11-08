@@ -1,0 +1,45 @@
+# red: f-record-opened-before-write — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:46:27Z
+# plant in services/api/alerts.py:
+# - '        repoint = LinkRepoint(self, held_open=held_open)\n'
+# + '        repoint = LinkRepoint(self, held_open=held_open)\n        await repoint._record_id()\n'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_an_enrich_stage_that_writes_no_point_opens_no_record ___________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11ea3f5c0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11edffaa0>, 'audit': <services.api.audit.AuditWriter object at 0x11ed158e0>, ...}
+
+    async def test_an_enrich_stage_that_writes_no_point_opens_no_record(stores: dict[str, Any]) -> None:
+        """Carry (f). The enrich stage runs inside the journal, but its geocoder finds no point, so it
+        supersedes nothing: no record is opened, so no read pays for one and no keep-alive beats for it.
+        Red with the record opened before the write: one stood open at the stage's commit."""
+        from services.api.pipeline_run import _run_enrich_stage
+    
+        from tests.ingest.test_studio_run_geometries import RecordingAnalytics
+    
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            p, _ = await _named_node(stores, graph, f"case-{new_id()}", p_state=ProvenanceState.ASSERTED, p_type="Location")
+            pipeline, branch = _enrich_pipeline(p)
+            counted = _CountsAtCommit(graph, stores["alerts"])
+            async with stores["alerts"]._pool.acquire() as conn:
+                before = await conn.fetchval("SELECT count(*) FROM alert_repoint_records")
+    
+            async def nowhere(name: str) -> tuple[float, float] | None:
+                return None
+    
+            stage, _ = await _run_enrich_stage(pipeline.nodes[1], pipeline=pipeline, branches=[branch], graph=counted,
+                                               principal=READER, scheme=SCHEME, analytics=RecordingAnalytics(),  # type: ignore[arg-type]
+                                               online_geocode=nowhere, alerts=stores["alerts"])  # fmt: skip
+            assert stage.matched_online == 0 and stage.unmatched == 1, stage
+>           assert counted.at_commit == [before], "a record stood open for a write that wrote nothing"
+E           AssertionError: a record stood open for a write that wrote nothing
+E           assert [1] == [0]
+E             
+E             At index 0 diff: 1 != 0
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:822: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_enrich_stage_that_writes_no_point_opens_no_record
+1 failed in 7.11s

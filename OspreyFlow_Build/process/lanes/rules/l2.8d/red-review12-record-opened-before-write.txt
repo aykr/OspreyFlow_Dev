@@ -1,0 +1,36 @@
+# red: review12-record-opened-before-write — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:12Z
+# plant in services/api/alerts.py:
+# - '        repoint = LinkRepoint(self, held_open=held_open)\n'
+# + '        repoint = LinkRepoint(self, held_open=held_open)\n        await repoint._record_id()\n'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_a_writer_that_has_recorded_nothing_holds_no_record ____________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11e6e62a0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f4c5e80>, 'audit': <services.api.audit.AuditWriter object at 0x11f2d9430>, ...}
+
+    async def test_a_writer_that_has_recorded_nothing_holds_no_record(stores: dict[str, Any]) -> None:
+        """The review's item 12, Amendment 12 point 3: inside `repointing`, before its first pair, a
+        writer holds no record, so one that leaves by an exception having recorded nothing leaves
+        none to settle or close. Red with the record opened before the write: one stood open."""
+        alerts = stores["alerts"]
+    
+        async def count() -> int:
+            async with alerts._pool.acquire() as conn:
+                return int(await conn.fetchval("SELECT count(*) FROM alert_repoint_records"))
+    
+        before = await count()
+        seen: list[int] = []
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            with pytest.raises(RuntimeError, match="refused"):
+                async with alerts.repointing(graph) as repoint:
+                    seen.append(await count())
+>                   assert repoint.id is None
+E                   AssertionError: assert '01M6Y4CS74NDKTYVC71ZZF1ER8' is None
+E                    +  where '01M6Y4CS74NDKTYVC71ZZF1ER8' = <services.api.alerts.LinkRepoint object at 0x11e67c320>.id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1124: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_writer_that_has_recorded_nothing_holds_no_record
+1 failed in 6.27s

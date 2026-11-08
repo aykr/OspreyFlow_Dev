@@ -1,0 +1,13 @@
+# The live run for L2.8d's gate, under the rules lease on stack b, at 42ab45d, on main 0fb09e2 (main had moved to 6336bed by docs commits alone).
+# eae33d9 is 42ab45d rebased onto main's later process and spec records (6336bed's six docs commits): no file under
+# OspreyFlow_Core or OspreyFlow_Build/tests differs between the two (git diff --stat 42ab45d eae33d9 -- both: empty).
+# Files: the lane's live file, the alert, rule, hotlist, monitoring, pack and revert suites, and the graph-port suite's
+# supersede, restore, withdraw, revert, link-state, footprint and two-types cases.
+
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+2 failed, 626 passed, 191 deselected, 3 warnings in 1163.21s (0:19:23)
+# lease rules, stack b, 2026-11-08 17:50:26Z to 18:09:50Z, at 42ab45d (on main 0fb09e2; the footer once said 6336bed, main's head at the time, not the base), no working-tree changes
+# The two failures: test_kyc_rules' true-positive case fails on main (L2.8c's gates/47435fa.live.txt); test_typology_rule_routes'
+# rule-list case finds 25 rules other live files left on the shared database (fails alone; O-hyg's open finding), not this branch's.
+# The 14 pack cases L2.8c broke pass here (test_packs.py, test_pack_alert_item.py among the files above).

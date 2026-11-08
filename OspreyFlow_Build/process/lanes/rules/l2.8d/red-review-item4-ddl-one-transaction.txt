@@ -1,0 +1,52 @@
+# red: review-item4-ddl-one-transaction — lease rules, stack b, at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:44:49Z
+# plant in services/api/alerts.py:
+# - '            for ddl in (_HOTLISTS_BOOTSTRAP_SQL, _BOOTSTRAP_SQL):\n                async with conn.transaction():\n                    await take_bootstrap_lock(conn)\n                    await conn.execute(ddl)'
+# + '            async with conn.transaction():\n                await take_bootstrap_lock(conn)\n                for ddl in (_HOTLISTS_BOOTSTRAP_SQL, _BOOTSTRAP_SQL):\n                    await conn.execute(ddl)'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_a_store_starting_against_a_live_queue_read_does_not_deadlock _______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x1310e62a0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1315c77a0>, 'audit': <services.api.audit.AuditWriter object at 0x1315d74a0>, ...}
+
+    async def test_a_store_starting_against_a_live_queue_read_does_not_deadlock(stores: dict[str, Any]) -> None:
+        """The independent review's item 4. A replica's alert store starts while a queue read is open:
+        the read has the alerts table and goes on to the hotlists (`_SHARED_SQL`), as the queue's scope
+        does. The start-up's DDL takes each table's ACCESS EXCLUSIVE lock in its own transaction, so
+        the hotlists' is released before it waits for the alerts', and the read finishes; then the
+        start-up does. Red with both tables' DDL in one transaction: the start-up held the hotlists
+        while it waited for the alerts, the read waited for the hotlists, and Postgres broke the
+        deadlock by killing one (`DeadlockDetectedError`)."""
+        from services.api.alerts import AlertStore
+    
+        dsn = PostgresConfig.from_env().dsn
+        reader = await asyncpg.connect(dsn)
+        try:
+            tx = reader.transaction()
+            await tx.start()
+            await reader.execute("SET LOCAL lock_timeout = '20s'")
+            await reader.execute("SELECT 1 FROM alerts LIMIT 1")  # the queue's read has the alerts
+            starting = asyncio.create_task(AlertStore.connect(dsn))
+            await asyncio.sleep(1.5)  # the start-up reaches its wait for the alerts
+            try:
+>               await reader.execute("SELECT 1 FROM hotlists LIMIT 1")  # and goes on to the hotlists
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:377: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.DeadlockDetectedError: deadlock detected
+E   DETAIL:  Process 130 waits for AccessShareLock on relation 16429 of database 16385; blocked by process 131.
+E   Process 131 waits for AccessExclusiveLock on relation 16440 of database 16385; blocked by process 130.
+E   HINT:  See server log for query details.
+
+asyncpg/protocol/protocol.pyx:341: DeadlockDetectedError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_store_starting_against_a_live_queue_read_does_not_deadlock
+1 failed in 3.66s

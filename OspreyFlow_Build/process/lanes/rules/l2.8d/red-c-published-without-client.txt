@@ -1,0 +1,34 @@
+# red: c-published-without-client — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:23Z
+# plant in services/api/working_set_revert.py:
+# - '    if publisher is not None:\n        for removal in removals:'
+# + '    if True:\n        for removal in removals:'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_a_service_built_without_a_client_publishes_nothing ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11397eba0>
+
+    async def test_a_service_built_without_a_client_publishes_nothing(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A test's service has no client: the stores are cleared and nothing is published. Red with
+        the publish made whatever the client: a removal was published to no client."""
+        events: list[str] = []
+    
+        async def publish(client: Any, case: str, delta: Any) -> None:
+            events.append(f"published {case}")
+    
+        monkeypatch.setattr(working_set_revert, "publish_delta", publish)
+        await remove_and_publish(_Service(events), None, ["n1"], [])
+>       assert events == ["removed ['n1'] []"]
+E       assert ["removed ['n...ished case-b'] == ["removed ['n1'] []"]
+E         
+E         Left contains 2 more items, first extra item: 'published case-a'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:63: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_a_service_built_without_a_client_publishes_nothing
+1 failed in 0.40s

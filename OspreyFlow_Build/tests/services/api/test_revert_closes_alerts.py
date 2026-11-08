@@ -39,6 +39,7 @@ from tests.ingest.test_revert_load import (
     _record,
     no_caches,
 )
+from tests.services.api.repoint_journal_fakes import RaiserReads
 
 T0 = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -93,7 +94,7 @@ class Graph:
         return {}
 
 
-class Store:
+class Store(RaiserReads):
     """`AlertStore.list_case_queue` and `close_for_elements`, with the same matching: an alert not
     already closed is closed when its own node, a node it cites or a link it cites is named."""
 
@@ -103,6 +104,9 @@ class Store:
     async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
         """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
         read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
+    def held_alert_ids(self) -> set[str]:
+        return set(self.alerts)
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]

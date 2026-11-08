@@ -1,0 +1,46 @@
+# red: review4-remark-lowers-node — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:27Z
+# plant in services/api/alerts.py:
+# - '        rests_on = [\n            node.handling,\n'
+# + '        rests_on = [\n'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11cd7a1e0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11b436570>, 'audit': <services.api.audit.AuditWriter object at 0x11cfc7f20>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11cffbf80>
+
+    async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """The review's item 4, an alert with its own node. Its node is SECRET and so is the node it
+        names; `supersede.py`'s job corrects the named node to OFFICIAL. The alert follows it, still
+        listed for its reader, and is still refused to the case's OFFICIAL reader: a re-mark never
+        lowers an alert's node (its own marking is among what it rests on). Red with the node's own
+        marking left out of the re-mark: the node was lowered to OFFICIAL and the OFFICIAL reader
+        was given the alert."""
+        from services.api.supersede import run_supersede_node_job
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            tx = await graph.begin_transaction()
+            (node,) = await graph.upsert_nodes([_person(f"Alert node {new_id()}").model_copy(update={"handling": SECRET})], tx)
+            await graph.commit_transaction(tx)
+            p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED, alert_node=node)
+            lowered = _person(f"N lowered {new_id()}")  # OFFICIAL
+            tx = await graph.begin_transaction()
+            await run_supersede_node_job({"node_id": p, "replacement": lowered.model_dump(mode="json")},
+                                         graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+            await graph.commit_transaction(tx)
+            row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+            assert row.referent_node_ids != [p]
+>           assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
+E           AssertionError: the lowered correction lowered the alert
+E           assert '01M6Y4D7R338HAASNSHNMTH7G5' not in {'01M6Y4D7R338HAASNSHNMTH7G5': Alert(id='01M6Y4D7R338HAASNSHNMTH7G5', rule_id='typology:01M6Y4D7R338HAASNSHNMTH7G6', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E            +  where '01M6Y4D7R338HAASNSHNMTH7G5' = Alert(id='01M6Y4D7R338HAASNSHNMTH7G5', rule_id='typology:01M6Y4D7R338HAASNSHNMTH7G6', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:956: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node
+1 failed in 6.97s

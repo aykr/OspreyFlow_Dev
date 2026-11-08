@@ -27,8 +27,8 @@ from schemas.domain import (
     ProvenanceState,
     Subgraph,
 )
-
 from tests.services.api.no_transactions import NO_TRANSACTIONS
+from tests.services.api.repoint_journal_fakes import Journal, RaiserReads
 
 from .working_set.fakes import FakeGraphPort
 from .working_set.test_visible_link import SCHEME, edge, node
@@ -127,7 +127,7 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
         edge_ids=["sa1"],
     )
 
-    class _Store:
+    class _Store(RaiserReads):
         """`AlertStore`'s one-queue reads (ADR-133 decision 5), as `dispose` calls them: an alert
         other than this one is not found, and a triage of a closed one is refused, as the real
         store's scoped `SELECT` and `UPDATE ... AND status = ANY(...)` refuse them."""
@@ -138,29 +138,18 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
             return QueueRow(alert, "typology", "medium", "case")
 
         async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
-            """A journal holding no record: nothing to settle before the close's read."""
+            """A journal holding no alert: nothing to settle before the close's read."""
+            await self.journal.settle_pending(graph, now=now)
 
-        repointed: dict[str, str] = {}
+        def held_alert_ids(self) -> set[str]:
+            return {alert.id}
 
-        def repointing(self, graph: Any) -> Any:
-            """`AlertStore.repointing`: what the close confirmed, recorded and applied."""
-            from contextlib import asynccontextmanager
+        #: The shared stand-in (`repoint_journal_fakes.Journal`, L2.8c's carry (d)): what the close
+        #: confirmed is recorded, and it refuses what the real journal refuses.
+        journal = Journal()
 
-            store = self
-
-            class _Repoint:
-                async def record(self, old: str, new: str, *, old_type: str) -> None:
-                    store.repointed[old] = new
-
-                def never_committed(self) -> None:
-                    """A close rolled back before its commit: nothing it recorded is applied."""
-                    store.repointed.clear()
-
-            @asynccontextmanager
-            async def around() -> Any:
-                yield _Repoint()
-
-            return around()
+        def repointing(self, graph: Any, *, held_open: bool = False) -> Any:
+            return self.journal.repointing(graph, held_open=held_open)
 
         async def set_queue_triage(
             self, alert_id: str, *_a: Any, expect_status: Any, **_k: Any
@@ -184,3 +173,6 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
 
     assert [s.document_id for s in graph.edge_writes[0].provenance.sources] == ["doc-1"]
     assert withhold_sources(link, SCOPED).provenance.sources_withheld  # the premise holds
+    # The close's confirm of the link went through the journal before its commit (ADR-109
+    # Amendment 10), recorded with the link's own type.
+    assert [(old, kind) for old, _, kind in _Store.journal.links] == [("sa1", "SAME_AS")]

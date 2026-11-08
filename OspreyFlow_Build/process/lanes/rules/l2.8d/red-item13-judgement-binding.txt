@@ -1,0 +1,40 @@
+# red: item13-judgement-binding — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:34Z
+# plant in services/api/worker_main.py:
+# - '"supersede_node": {"alerts": alerts, "judgement_store": judgement_store},'
+# + '"supersede_node": {"alerts": alerts},'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with ___
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10e1dca40>
+
+    async def test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The Conduit registers its jobs through `register_all` (the L2.8c review's item 13), and its
+        supersede job flags the judgements citing a corrected node, so `register_all` binds the
+        judgement store it is given. Red with the binding left out: the job ran with none."""
+        from services.api import supersede
+    
+        seen: dict[str, Any] = {}
+    
+        async def supersede_job(payload: Any, **kwargs: Any) -> dict[str, Any]:
+            seen.update(kwargs)
+            return {}
+    
+        monkeypatch.setattr(supersede, "run_supersede_node_job", supersede_job)
+        judgements, alerts, valkey = object(), object(), object()
+        worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+        worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(), valkey=valkey,
+                                 analyst_layers=_layers, alerts=alerts, judgement_store=judgements)  # type: ignore[arg-type]  # fmt: skip
+        await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
+>       assert (seen["judgement_store"], seen["alerts"]) == (judgements, alerts)
+                ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'judgement_store'
+
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:148: KeyError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with
+1 failed in 1.00s

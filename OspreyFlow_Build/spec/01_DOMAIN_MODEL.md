@@ -1606,7 +1606,9 @@ are on the port too, each taking the principal like every other read.
   and each original is marked `reverted` and `superseded_by` its clone (as `supersede_edge` marks
   the link it replaces), rather than repointed in place; each `(old, clone, old type)` is reported
   to `on_link_cloned` inside the transaction, before its commit, so an alert citing the original
-  follows it through the repoint journal (`06_DECISIONS.md` ADR-109 Amendment 11). The
+  follows it through the repoint journal (`06_DECISIONS.md` ADR-109 Amendment 11), and each
+  journalled caller records the node itself with the id returned, before the commit, so an alert
+  naming it among its referents follows it too (ADR-109 Amendment 12). The
   clone-and-revert, and the marking, are wrapped in the same transaction as the rest of the
   operation (a rolled-back correction leaves each original unmarked and no clone, a conformance
   case): a failure partway rolls back to

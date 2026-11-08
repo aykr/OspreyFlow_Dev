@@ -1,0 +1,40 @@
+# red: review12-stale-without-referents — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:20Z
+# plant in services/api/alerts.py:
+# - '                nodes = [*_pairs(row["alert_nodes"]), *_pairs(row["referents"])]'
+# + '                nodes = _pairs(row["alert_nodes"])'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_a_stale_record_whose_referent_landed_is_kept _______________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x1720c7d10>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1717bdfd0>, 'audit': <services.api.audit.AuditWriter object at 0x172100710>, ...}
+
+    async def test_a_stale_record_whose_referent_landed_is_kept(stores: dict[str, Any]) -> None:
+        """The review's item 12, Amendment 12 point 2: the stale check counts a record's referent
+        pairs. A record past the stale limit whose referent's node the graph shows superseded (its
+        write committed) is not dropped as a write that never happened, even where another of its
+        pairs cannot be settled yet. Red with the referent pairs left out of the stale check: the
+        record was dropped, and the alert naming the node with it."""
+        from datetime import UTC, datetime
+    
+        alerts = stores["alerts"]
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            p, _ = await _named_node(stores, graph, f"case-{new_id()}", p_state=ProvenanceState.INFERRED)
+            tx = await graph.begin_transaction()
+            new = await graph.supersede_node(p, _person(f"N {new_id()}"), tx)
+            await graph.commit_transaction(tx)
+            record = await _record(stores)
+            await alerts._add_to_record(record, links=[(f"edge-{new_id()}", f"edge-{new_id()}", "ASSOCIATE_OF")],
+                                        referents=[(p, new)])  # fmt: skip
+            await alerts.settle_pending(graph, now=datetime.now(UTC) + timedelta(hours=2))
+        async with alerts._pool.acquire() as conn:
+            kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", record)
+>       assert kept == 1, "a record whose referent's write committed was dropped as stale"
+E       AssertionError: a record whose referent's write committed was dropped as stale
+E       assert 0 == 1
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1149: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_stale_record_whose_referent_landed_is_kept
+1 failed in 6.99s
