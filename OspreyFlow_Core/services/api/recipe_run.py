@@ -48,6 +48,7 @@ from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
 from .jobs import JobQueue
 from .kyc_expiries import KycExpiryStore
+from .list_connector import ListStore
 from .load_records import LedgerSink
 from .monitors import MonitorStore
 from .pattern_store import PatternStore
@@ -99,6 +100,9 @@ class RecipeRunDeps:
     #: (a Lookup is refused in words) and the store the environment names.
     target_models: TargetModelStore | None = None
     staging_storage: ObjectStorageConfig | None = None
+    #: ADR-140 Amendment 13: the deployment-wide lists and each dataset's subscriptions. None: a
+    #: staged run reads the dataset's own lists alone.
+    list_store: ListStore | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -264,6 +268,7 @@ async def _execute_recipe_run(
             target_models=deps.target_models,
             staging_storage=deps.staging_storage,
             staging_meter=staging,
+            list_store=deps.list_store,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(

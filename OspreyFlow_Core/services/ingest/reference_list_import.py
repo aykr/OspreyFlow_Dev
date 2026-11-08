@@ -8,25 +8,20 @@ loaded data. They are kept at the list's version, at the one place Amendment 11 
 from there (`lists_for_run`), and a list with no rows kept is refused in words: never read as an
 empty list, which would leave every Lookup silently unmatched (rule 2).
 
-Until L1.6 builds import in the Studio, rows are put there by this module, from a **synthetic
-list this repository names only** (rule 9, by the SHA-256 in `synthetic_lists.json`):
-
-    python -m services.ingest.reference_list_import --dataset pid --list-id rl-est \\
-        --name establishments --key estab_id --version 3 --bucket staging \\
-        <the synthetic establishments.csv>
-
-A screening list is deployment-wide, and no dataset can subscribe to one until L1.6, so a run reads
-only the dataset's own lists for now; the save gate already refuses a Lookup of any other.
+**Rows reach the file through Studio › Sources** (ADR-140 Amendment 13): a dataset's own list from
+one of its own files (`POST /v1/datasets/{id}/reference-lists/{list_id}/import`), a deployment-wide
+screening list through its template, each by `services.api.list_connector`. The command line this
+module once had, L1.4's stand-in, is retired. `import_list` stays as the tests' seed of a synthetic
+list this repository names (rule 9, by the SHA-256 in `synthetic_lists.json`), and nothing else
+calls it. A run reads the dataset's own lists and the deployment-wide ones it subscribes to by id
+(`subscribed`, from `studio_staging.subscribed_in`).
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
-import dataclasses
 import hashlib
 import json
-import sys
 from collections.abc import Collection, Sequence
 from pathlib import Path
 from urllib.parse import quote
@@ -150,38 +145,3 @@ def lists_for_run(
     if missing:
         raise StagingError(missing)
     return {s.list_: read_list_rows(readable[s.list_], storage=storage) for s in wanted}
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dataset", required=True)
-    parser.add_argument("--list-id", required=True)
-    parser.add_argument("--name", required=True)
-    parser.add_argument("--key", required=True, help="the list's key column")
-    parser.add_argument("--version", required=True, type=int)
-    parser.add_argument("--kind", default="reference")
-    parser.add_argument("--bucket", default=None, help="the object store's bucket (else env)")
-    parser.add_argument("csv", type=Path)
-    args = parser.parse_args(argv)
-    reference = ReferenceList(
-        id=args.list_id,
-        dataset_id=args.dataset,
-        name=args.name,
-        kind=args.kind,
-        key_column=args.key,
-        version=args.version,
-    )
-    storage = ObjectStorageConfig.from_env()
-    if args.bucket:
-        storage = dataclasses.replace(storage, bucket=args.bucket)
-    try:
-        path = import_list(reference, args.csv, storage=storage)
-    except StagingError as refused:
-        print("\n".join(refused.problems), file=sys.stderr)
-        return 1
-    print(f"kept {args.name}@v{args.version} at {path}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

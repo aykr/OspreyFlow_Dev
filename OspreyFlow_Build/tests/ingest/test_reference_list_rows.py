@@ -1,7 +1,7 @@
 """ADR-140 Amendment 12 (Q3 (a), the orchestrator's settlement of 8 November 2026): a run reads a
 dataset's reference list from the list's own version file
 (`<bucket>/reference_lists/<dataset>/<name>@v<version>.parquet`, Amendment 11's place), written by
-`python -m services.ingest.reference_list_import` from a synthetic file until L1.6 builds import.
+`import_list` from a synthetic file (the tests' seed; Studio › Sources imports since L1.6).
 
 What a mistake would do, and the case that catches it:
 
@@ -25,7 +25,6 @@ import pytest
 from services.ingest.reference_list_import import (
     import_list,
     lists_for_run,
-    main,
     read_list_rows,
 )
 from services.ingest.staging import ObjectStorageConfig
@@ -103,18 +102,6 @@ def test_a_run_reads_only_lists_the_dataset_may_read() -> None:
         "step 'with_establishment' looks up 'establishments', which names no list this dataset "
         "holds or subscribes to"
     ]
-
-
-def test_the_command_imports_a_fixture(capsys: pytest.CaptureFixture[str]) -> None:
-    code = main(
-        [
-            "--dataset", "pid", "--list-id", "rl-est", "--name", "establishments",
-            "--key", "estab_id", "--version", "3", "--bucket", "staging", str(CSV),
-        ]
-    )  # fmt: skip
-    assert code == 0
-    assert "establishments@v3" in capsys.readouterr().out
-    assert read_list_rows(ESTABLISHMENTS, storage=STORAGE).rows
 
 
 def test_a_list_record_of_its_own_kind_is_kept() -> None:

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from services.api.list_connector import PostgresListStore
 from services.api.target_models import PostgresTargetModelStore, core_types_of
 from services.ingest.staging import ObjectStorageConfig
 from valkey.asyncio import Valkey
@@ -98,6 +99,8 @@ class RunResources:
     #: ADR-140 Amendment 12: a staged pipeline's lists, and where staged rows are kept.
     target_models: PostgresTargetModelStore
     staging_storage: ObjectStorageConfig
+    #: ADR-140 Amendment 13: deployment-wide lists and subscriptions, which a staged run reads.
+    list_store: PostgresListStore
     explore_cache: CachedQuery
     analytics: AnalyticsPort
     close_analytics: Close
@@ -142,6 +145,7 @@ class RunResources:
             influencers=self.influencers,
             target_models=self.target_models,
             staging_storage=self.staging_storage,
+            list_store=self.list_store,
         )
 
     async def close(self) -> None:
@@ -162,6 +166,7 @@ class RunResources:
         await self.extraction_candidates.close()
         await self.datasets_store.close()
         await self.target_models.close()
+        await self.list_store.close()
         await self.principal_resolver.aclose()
         await self.close_analytics()
 
@@ -210,6 +215,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         ),
     )
     staging_storage = ObjectStorageConfig.from_env()
+    list_store = await PostgresListStore.connect(config.postgres.dsn)
     # ADR-099 Amendment 6: no write names a dataset the registry does not hold.
     cast(DatasetStampingGraph, graph).check_against(datasets_store)
 
@@ -264,6 +270,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         datasets_store=datasets_store,
         target_models=target_models,
         staging_storage=staging_storage,
+        list_store=list_store,
         explore_cache=explore_cache,
         analytics=analytics,
         close_analytics=close_analytics,

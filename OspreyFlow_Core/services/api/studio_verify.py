@@ -51,7 +51,13 @@ from .studio_profile import (
     sample_markings,
 )
 from .studio_profile import _read_rows as _read_recipe_rows
-from .studio_staging import DATASET_WITHHELD, WITHHELD, StagedTestInputs, source_tables
+from .studio_staging import (
+    DATASET_WITHHELD,
+    WITHHELD,
+    StagedTestInputs,
+    source_tables,
+    subscribed_in,
+)
 
 __all__ = ["JudgeChecks", "RowTemplateMissingError", "run_verify"]
 
@@ -198,6 +204,7 @@ async def run_verify(
                 staging.references,
                 dataset_id=draft.dataset_id or "",
                 storage=staging.storage,
+                subscribed=subscribed_in(staging.references),
             )
         except StagingError as refused:
             raise RecipeRuleError(refused.problems) from refused

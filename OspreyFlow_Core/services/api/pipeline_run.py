@@ -40,6 +40,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 from services.api.alerts import AlertStore, SupersedeJournal, supersede_journalled
+from services.api.list_connector import ListStore
 from services.api.review import (
     RECOGNISE_OVERLAP_CHARS,
     RECOGNISE_WINDOW_CHARS,
@@ -58,7 +59,7 @@ from services.api.studio_publish import (
     load_with_rules,
     run_published_recipe,
 )
-from services.api.studio_staging import dataset_reference_lists, source_tables
+from services.api.studio_staging import dataset_reference_lists, source_tables, subscribed_in
 from services.api.target_models import TargetModelStore
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
@@ -513,6 +514,7 @@ async def _run_staged_branch(
     models: TargetModelStore | None,
     storage: ObjectStorageConfig,
     meter: StagingMeter | None,
+    list_store: ListStore | None = None,
 ) -> BranchRunReport:
     """A staged pipeline's one load (ADR-140 Amendment 12): every source node's whole file read
     by a load of its own (`<load_id>:<node id>`), new for each run, so no two runs share a raw
@@ -524,7 +526,10 @@ async def _run_staged_branch(
         raise RecipeRuleError(
             [f"Recipe {recipe.id!r} has staging steps on its pipeline but none in its file."]
         )
-    references = await dataset_reference_lists(models, draft.dataset_id, storage)
+    # ADR-140 Amendment 13: the dataset's own lists and the deployment-wide ones it subscribes to.
+    references = await dataset_reference_lists(
+        models, draft.dataset_id, storage, lists=list_store
+    )
     try:
         read = await asyncio.to_thread(
             source_tables, draft, pipeline, load_id=load_id, location=source_location
@@ -535,6 +540,7 @@ async def _run_staged_branch(
             references,
             dataset_id=draft.dataset_id or "",
             storage=storage,
+            subscribed=subscribed_in(references),
         )
         prepared = await prepare_staged_load(
             recipe,
@@ -606,6 +612,7 @@ async def run_published_pipeline(
     target_models: TargetModelStore | None = None,
     staging_storage: ObjectStorageConfig | None = None,
     staging_meter: StagingMeter | None = None,
+    list_store: ListStore | None = None,
 ) -> PipelineRunReport:
     """The whole pipeline, in topological order: branches, then extracts, then enriches.
 
@@ -686,6 +693,7 @@ async def run_published_pipeline(
                 models=target_models,
                 storage=staging_storage or ObjectStorageConfig.from_env(),
                 meter=staging_meter,
+                list_store=list_store,
             )
         )
     for node in ordered:

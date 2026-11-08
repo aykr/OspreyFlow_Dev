@@ -69,6 +69,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "influencers": given["influencers"],
         # ADR-140 Amendment 12: a staged pipeline's lists and the store their rows are kept in.
         "models": given["target_models"], "staging_storage": given["staging_storage"],
+        # ADR-140 Amendment 13: the deployment-wide lists a staged run's Lookups may subscribe to.
+        "list_store": given["list_store"],
         # Build order step 30: the run is held to the files Verify recorded; none here.
         "studio_recipes": _NothingVerified(),
     }

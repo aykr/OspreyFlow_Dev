@@ -32,6 +32,7 @@ from services.ingest.reference_list_import import kept_lists, lists_for_run
 from services.ingest.staged_run import staging_rejection_record, step_counts
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import (
+    DEPLOYMENT_WIDE,
     StagedTable,
     StagingError,
     run_staging,
@@ -52,6 +53,7 @@ from schemas.ingest import (
 )
 from schemas.staging import LookupStep, StagingStep, step_inputs
 
+from .list_connector import ListStore, deployment_references, subscribed_list_ids
 from .run_source import branch_location, topological
 from .studio_map import resolve_source_handling
 from .studio_profile import _read_rows, offered_to, sample_markings
@@ -71,19 +73,36 @@ class StagedTestInputs:
 
 
 async def dataset_reference_lists(
-    models: TargetModelStore | None, dataset_id: str | None, storage: ObjectStorageConfig
+    models: TargetModelStore | None,
+    dataset_id: str | None,
+    storage: ObjectStorageConfig,
+    *,
+    lists: ListStore | None = None,
 ) -> list[ReferenceList]:
     """The lists a staging step's Lookup may read for a dataset (ADR-140 decision 4, Amendment
     12): those its live domain model refers to, by id, whose rows are kept for it, each at the
-    highest version kept. None for a draft with no dataset or a dataset with no live model."""
-    if models is None or not dataset_id:
+    highest version kept; and (Amendment 13) each deployment-wide screening list it subscribes to
+    by id in `lists`, at its current version. None for a draft with no dataset. Every caller hands
+    the answer on whole, so `subscribed_in` reads the subscriptions back from it."""
+    if not dataset_id:
         return []
-    live = await models.live(dataset_id)
-    if live is None:
-        return []
-    named = set(live.reference_lists)
-    kept = await asyncio.to_thread(kept_lists, dataset_id, storage=storage)
-    return [r for r in kept if r.id in named]
+    own: list[ReferenceList] = []
+    live = await models.live(dataset_id) if models is not None else None
+    if live is not None:
+        named = set(live.reference_lists)
+        kept = await asyncio.to_thread(kept_lists, dataset_id, storage=storage)
+        own = [r for r in kept if r.id in named]
+    if lists is None:
+        return own
+    subscribed = set(await subscribed_list_ids(lists, dataset_id))
+    return own + [r for r in await deployment_references(lists) if r.id in subscribed]
+
+
+def subscribed_in(references: Sequence[ReferenceList]) -> list[str]:
+    """The deployment-wide lists among `dataset_reference_lists`' answer, by id: exactly those the
+    dataset subscribes to, since that is the only way one enters it. The gate's and a run's
+    `subscribed` (Amendment 13 point 10)."""
+    return [r.id for r in references if r.dataset_id == DEPLOYMENT_WIDE]
 
 
 def source_nodes(pipeline: PipelineGraph) -> list[PipelineNode]:
@@ -106,6 +125,7 @@ def staging_gate(
         sources=[n.id for n in source_nodes(pipeline)],
         lists=references,
         dataset_id=dataset_id or "",
+        subscribed=subscribed_in(references),
     )
 
 
@@ -287,8 +307,9 @@ def preview_staging(
         )
     try:
         lists = lists_for_run(
-            wanted, references, dataset_id=draft.dataset_id or "", storage=storage
-        )
+            wanted, references, dataset_id=draft.dataset_id or "", storage=storage,
+            subscribed=subscribed_in(references),
+        )  # fmt: skip
         result = run_staging(
             wanted, sources=read.tables, lists=lists, dataset_id=draft.dataset_id or ""
         )
