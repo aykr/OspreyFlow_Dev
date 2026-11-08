@@ -182,6 +182,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/ingest/recipes/{recipe_id}/profile"): V,
     ("PUT", P + "/ingest/recipes/{recipe_id}/row-template"): E,
     ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline"): E,
+    # ADR-140 decision 3 (phase 8): Show YAML (Viewer, as the draft is), its save and Check SQL
+    # (Editor, as the pipeline's save is).
+    ("GET", P + "/ingest/recipes/{recipe_id}/pipeline/yaml"): V,
+    ("PUT", P + "/ingest/recipes/{recipe_id}/pipeline/yaml"): E,
+    ("POST", P + "/ingest/recipes/{recipe_id}/sql-check"): E,
     # ADR-109 phase A: an Author deploys and retires a typology rule (ruling 4); the rule list is
     # the case team's; the rule audit is an Author's (or the admin's safety net, ruling 1); held rows
     # are listed at Editor and decided at Author (Amendment 1).
