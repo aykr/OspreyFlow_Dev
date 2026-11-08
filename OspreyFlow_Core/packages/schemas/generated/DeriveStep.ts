@@ -10,11 +10,37 @@ export type Operation = "concat" | "split" | "substring" | "date_parse" | "arith
  * @minItems 1
  */
 export type Columns = [string, ...string[]];
+export type Settings =
+  | ConcatSettings
+  | SplitSettings
+  | SubstringSettings
+  | DateParseSettings
+  | ArithmeticSettings
+  | CaseWhenSettings
+  | NormaliseSettings;
+export type Separator = string;
+export type Delimiter = string;
+export type Part = number;
+export type Start = number;
+export type Length = number | null;
+export type DateOrder = ("dmy" | "mdy") | null;
+export type Tz = string | null;
+export type Op = "add" | "subtract" | "multiply" | "divide";
+export type Constant = string | null;
+/**
+ * @minItems 1
+ */
+export type Cases = [CaseWhenCase, ...CaseWhenCase[]];
+export type Equals = string;
+export type Then = string;
+export type Otherwise = string | null;
+export type Adapter = string;
 
 /**
  * A new column from a catalogued operation over named columns (brief §6). `settings` are the
- * operation's declared settings (a separator, a part, a time zone…), data and never code; the
- * operation refuses a wrong one in words, as its golden file shows.
+ * operation's own declared settings, typed per operation (a separator, a part, a time zone…):
+ * data and never code, and a key the operation does not read is refused, as is a wrong number
+ * of columns.
  */
 export interface DeriveStep {
   id: Id;
@@ -24,8 +50,35 @@ export interface DeriveStep {
   column: Column;
   operation: Operation;
   columns: Columns;
-  settings?: Settings;
+  settings: Settings;
 }
-export interface Settings {
-  [k: string]: unknown;
+export interface ConcatSettings {
+  separator?: Separator;
+}
+export interface SplitSettings {
+  delimiter?: Delimiter;
+  part?: Part;
+}
+export interface SubstringSettings {
+  start?: Start;
+  length?: Length;
+}
+export interface DateParseSettings {
+  date_order?: DateOrder;
+  tz?: Tz;
+}
+export interface ArithmeticSettings {
+  op: Op;
+  constant?: Constant;
+}
+export interface CaseWhenSettings {
+  cases: Cases;
+  otherwise?: Otherwise;
+}
+export interface CaseWhenCase {
+  equals: Equals;
+  then: Then;
+}
+export interface NormaliseSettings {
+  adapter: Adapter;
 }

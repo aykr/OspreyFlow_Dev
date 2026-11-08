@@ -17,6 +17,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -160,3 +161,50 @@ def test_a_filter_condition_names_exactly_one_test() -> None:
         )
     with pytest.raises(ValidationError, match="exactly one of is, equals or in"):
         STEPS.validate_python([{**VISITS[2], "keep": [{"field": "a"}]}])
+
+
+@pytest.mark.parametrize("key", ["sql", "expression", "python", "code"])
+def test_a_derive_s_settings_refuse_any_key_its_operation_does_not_read(key: str) -> None:
+    """Rule 8 inside a Derive: its settings are typed per operation, so an expression cannot ride
+    in under a settings key either (the review's S3 plant, round 1)."""
+    step = {**VISITS[3], "settings": {"separator": " ", key: "SELECT 1"}}
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        STEPS.validate_python([step])
+
+
+@pytest.mark.parametrize(
+    ("operation", "columns", "settings", "words"),
+    [
+        ("split", ["a"], {"part": -1}, "greater than or equal to 0"),
+        ("split", ["a", "b"], {}, "split reads 1 column(s), not 2"),
+        ("concat", ["a"], {}, "concat reads at least 2 column(s), not 1"),
+        ("substring", ["a"], {"length": 0}, "greater than or equal to 1"),
+        ("arithmetic", ["a", "b"], {"op": "power"}, "'add', 'subtract', 'multiply' or 'divide'"),
+        ("arithmetic", ["a"], {"op": "add"}, "one column with a constant, or two columns"),
+        ("arithmetic", ["a"], {"op": "add", "constant": "ten"}, "constant is not a number"),
+        ("case_when", ["a"], {"cases": []}, "at least 1 item"),
+        ("case_when", ["a"], {"cases": [{"equals": "V"}]}, "then"),
+        (
+            "case_when",
+            ["a"],
+            {"cases": [{"equals": "V", "then": "a"}, {"equals": "V", "then": "b"}]},
+            "names V twice",
+        ),
+        ("normalise", ["a"], {}, "adapter"),
+        ("date_parse", ["a"], {"date_order": "ymd"}, "'dmy' or 'mdy'"),
+    ],
+)
+def test_a_derive_with_settings_or_columns_its_operation_cannot_read_is_refused_at_the_gate(
+    operation: str, columns: list[str], settings: dict[str, Any], words: str
+) -> None:
+    step = {
+        "id": "d",
+        "kind": "derive",
+        "input": "t",
+        "column": "c",
+        "operation": operation,
+        "columns": columns,
+        "settings": settings,
+    }
+    with pytest.raises(ValidationError, match=re.escape(words)):
+        STEPS.validate_python([step])

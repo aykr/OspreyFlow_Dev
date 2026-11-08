@@ -22,6 +22,7 @@ November 2026, Q2 (a)).
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -125,17 +126,134 @@ class FilterStep(_Step):
     keep: list[FilterCondition] = Field(min_length=1)
 
 
+class _Settings(BaseModel):
+    #: A key an operation does not read is refused, as on every step (rule 8).
+    model_config = ConfigDict(extra="forbid")
+
+
+class ConcatSettings(_Settings):
+    separator: str = " "
+
+
+class SplitSettings(_Settings):
+    delimiter: str = Field(default="|", min_length=1)
+    #: The part kept, the first being 0.
+    part: int = Field(default=0, ge=0)
+
+
+class SubstringSettings(_Settings):
+    #: The first character kept, the first being 0.
+    start: int = Field(default=0, ge=0)
+    length: int | None = Field(default=None, ge=1)
+
+
+class DateParseSettings(_Settings):
+    #: Required to read a date that is not ISO 8601, as the connector profile's is.
+    date_order: Literal["dmy", "mdy"] | None = None
+    #: An IANA zone for a time written without an offset.
+    tz: str | None = None
+
+
+class ArithmeticSettings(_Settings):
+    op: Literal["add", "subtract", "multiply", "divide"]
+    #: A number in place of a second column (written as text, read as a decimal).
+    constant: str | None = None
+
+
+class CaseWhenCase(_Settings):
+    equals: str
+    then: str
+
+
+class CaseWhenSettings(_Settings):
+    cases: list[CaseWhenCase] = Field(min_length=1)
+    otherwise: str | None = None
+
+    @model_validator(mode="after")
+    def _each_value_once(self) -> CaseWhenSettings:
+        seen: set[str] = set()
+        for case in self.cases:
+            if case.equals in seen:
+                raise ValueError(f"case_when names {case.equals} twice")
+            seen.add(case.equals)
+        return self
+
+
+class NormaliseSettings(_Settings):
+    #: A one-column Knowledge Adapter that gives one value (the save gate checks which).
+    adapter: str = Field(min_length=1)
+
+
+DeriveSettings = (
+    ConcatSettings
+    | SplitSettings
+    | SubstringSettings
+    | DateParseSettings
+    | ArithmeticSettings
+    | CaseWhenSettings
+    | NormaliseSettings
+)
+
+#: Each operation's own settings, and how many columns it reads: (fewest, most); `None` = no most.
+_DERIVE_SETTINGS: dict[str, tuple[type[_Settings], int, int | None]] = {
+    "concat": (ConcatSettings, 2, None),
+    "split": (SplitSettings, 1, 1),
+    "substring": (SubstringSettings, 1, 1),
+    "date_parse": (DateParseSettings, 1, 1),
+    "arithmetic": (ArithmeticSettings, 1, 2),
+    "case_when": (CaseWhenSettings, 1, 1),
+    "normalise": (NormaliseSettings, 1, 1),
+}
+
+
 class DeriveStep(_Step):
     """A new column from a catalogued operation over named columns (brief §6). `settings` are the
-    operation's declared settings (a separator, a part, a time zone…), data and never code; the
-    operation refuses a wrong one in words, as its golden file shows."""
+    operation's own declared settings, typed per operation (a separator, a part, a time zone…):
+    data and never code, and a key the operation does not read is refused, as is a wrong number
+    of columns."""
 
     kind: Literal["derive"]
     input: TableName
     column: ColumnName
     operation: DeriveOperation
     columns: list[ColumnName] = Field(min_length=1)
-    settings: dict[str, Any] = Field(default_factory=dict)
+    settings: DeriveSettings
+
+    @model_validator(mode="before")
+    @classmethod
+    def _settings_of_its_operation(cls, data: Any) -> Any:
+        if not isinstance(data, dict) or data.get("operation") not in _DERIVE_SETTINGS:
+            return data
+        model, _fewest, _most = _DERIVE_SETTINGS[data["operation"]]
+        settings = data.get("settings")
+        if not isinstance(settings, BaseModel):
+            data = {**data, "settings": model.model_validate(settings or {})}
+        elif not isinstance(settings, model):
+            raise ValueError(f"settings of another operation given to {data['operation']}")
+        return data
+
+    @model_validator(mode="after")
+    def _columns_it_reads(self) -> DeriveStep:
+        _model, fewest, most = _DERIVE_SETTINGS[self.operation]
+        n = len(self.columns)
+        if n < fewest or (most is not None and n > most):
+            reads = (
+                f"{fewest}"
+                if fewest == most
+                else (f"at least {fewest}" if most is None else f"{fewest} or {most}")
+            )
+            raise ValueError(f"{self.operation} reads {reads} column(s), not {n}")
+        if isinstance(self.settings, ArithmeticSettings):
+            if (n == 1) != (self.settings.constant is not None):
+                raise ValueError("arithmetic takes one column with a constant, or two columns")
+            if self.settings.constant is not None:
+                try:
+                    number = Decimal(self.settings.constant)
+                except InvalidOperation as exc:
+                    raise ValueError("arithmetic's constant is not a number") from exc
+                if not number.is_finite():
+                    raise ValueError("arithmetic's constant is not a number")
+        return self
 
 
 class UnionStep(_Step):
@@ -172,6 +290,14 @@ def step_inputs(step: StagingStep) -> list[str]:
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     AddedColumn,
+    ConcatSettings,
+    SplitSettings,
+    SubstringSettings,
+    DateParseSettings,
+    ArithmeticSettings,
+    CaseWhenCase,
+    CaseWhenSettings,
+    NormaliseSettings,
     LookupStep,
     JoinStep,
     FilterCondition,
