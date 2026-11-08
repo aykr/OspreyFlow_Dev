@@ -212,7 +212,11 @@ export interface RowElements {
   node_ids?: NodeIds;
   edge_ids?: EdgeIds;
   event_ids?: EventIds;
+  edge_types?: EdgeTypes;
   [k: string]: unknown;
+}
+export interface EdgeTypes {
+  [k: string]: string;
 }
 /**
  * The highest value of an incremental source's watermark column a run read (ADR-110 Amendment

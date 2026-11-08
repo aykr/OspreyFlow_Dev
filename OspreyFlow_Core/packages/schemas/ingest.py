@@ -941,6 +941,10 @@ class RowElements(BaseModel):
     node_ids: list[NodeId] = Field(default_factory=list)
     edge_ids: list[EdgeId] = Field(default_factory=list)
     event_ids: list[str] = Field(default_factory=list)
+    #: ADR-110 Amendment 18: each of `edge_ids`' own edge type (the ontology's name), so a later
+    #: load reads a returning row's own link by its type, never by id alone. A row kept before
+    #: L1.2d has none, and its link is never captured: its merge stays a merge.
+    edge_types: dict[EdgeId, str] = Field(default_factory=dict)
 
 
 #: ADR-110 Amendment 6 point 1: how an incremental refresh compares its watermark column's values.
