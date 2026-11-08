@@ -28,6 +28,7 @@ New ones are added at the bottom as they happen.
 19. **L1.2d: an id that two link types share is refused, not guessed.** A route answers 409 in words. A background job (resolution, extraction) skips that one link, records the skip where a person sees it, and carries on with the rest.
     - **Superseded at 03:55:** item 19 is replaced. A shared-id refusal would itself tell the reader that another link exists, which they may not be cleared to see. So every link write now names the type its caller already knows, and there is nothing to refuse.
 20. **Each dataset gets a highest-marking field now (L3.1b), set when it's made.** For a drawn dataset it can't be above its maker's own clearance; every other dataset defaults to the deployment's highest marking, so nothing changes for them. Enforcing it on writes stays with L3.3, and Admin › Datasets will show it.
+21. **A pipeline's pinned model version is a record only for now (studio, for L3.1b).** A Test runs against the live model by default. Someone who may edit the model can name the open draft instead; anyone else is answered as if the draft didn't exist. Deploying still needs a Test against the live model. A dataset with no model leaves the pin empty.
 14. **L3.1b's four questions, settled on my recommendation:**
     - **Home case Author:** an existing dataset's home case gets its creator as Author. If that's a service account or a person no longer active, it gets none and is listed as "needs an owner".
     - **Composites:** a composite gets a home case; an analyst layer never does.
