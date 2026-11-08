@@ -790,13 +790,21 @@ class AlertStore:
         moved to it; the alerts naming a recorded node renamed to its newest; the moved alerts'
         nodes re-marked (each supersede recorded first); then the record marked applied with the
         nodes to purge. Returns those nodes; `None` while the write has not committed."""
+        # A session-level advisory lock, held on its own pooled connection across the whole settle
+        # and released in `finally`; should the release fail, that connection is closed, not
+        # returned to the pool holding it, and the server frees a session lock when its connection
+        # ends, so a crashed settle never holds one for good. `hashtext` can map two ids to one key:
+        # harmless, since a collision only makes a reader skip a record, which a later read settles.
         async with self._pool.acquire() as lock:
             if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
                 return None
             try:
                 return await self._settle_held(graph, record_id, writer=writer)
             finally:
-                await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)
+                try:
+                    await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)
+                except Exception:  # noqa: BLE001 - the lock must not outlive this settle
+                    await lock.close()
 
     async def _settle_held(
         self, graph: GraphPort, record_id: str, *, writer: bool
