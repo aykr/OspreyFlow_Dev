@@ -1,8 +1,9 @@
 // What a case reads, and which domain models it carries, by keyboard alone (ADR-099, ADR-126,
 // rule 13): choosing the one dataset a new case reads (Amendment 12) and creating it, making a new
 // case over a new dataset (the default, in the domain-model step), the Author changing what a case
-// reads, choosing a new case's domain models, and the Author changing them. No `page.mouse`, no
-// `.click()`. Each domain step asserts the request body sent and the packs shown afterwards.
+// reads, and choosing a new case's domain models. A case's domain models then change only in its
+// dataset's domain model, in the Ingest Studio (ADR-126 Amendment 2), never through the case. No
+// `page.mouse`, no `.click()`. Each domain step asserts the request body sent and the packs shown.
 import { expect, test, type Page } from "@playwright/test";
 
 import { CASE_DATASETS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";

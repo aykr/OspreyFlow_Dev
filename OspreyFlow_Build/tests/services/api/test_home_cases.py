@@ -393,6 +393,7 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
     monkeypatch.setattr(reports_module, "_kyc_figures", one_customer)
     monkeypatch.setattr(reports_module, "pole_figures", lambda *_a, **_k: None)
     monkeypatch.setattr(world.cases, "effective_level", as_author, raising=False)
+
     class _Held:
         async def list_authorized(self, *_args: Any, **_kwargs: Any) -> list[Any]:
             return []
@@ -437,3 +438,31 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
         assert [kyc_of(c)["customers"] for c in readers] == [1, 1]
     finally:
         app.dependency_overrides.pop(app_module.get_explore, None)
+
+
+@pytest.mark.parametrize("live", [False, True], ids=["no-model-yet", "a-live-model"])
+def test_a_new_cases_packs_come_from_a_live_model_not_the_request(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, live: bool
+) -> None:
+    """The round-1 review's carry 15 (ADR-126 Amendment 2): packs sent with a new case reading a
+    dataset with a live model are not stored, and the case answers with the model's. For a
+    dataset with no model yet they are stored as ever (Amendment 3)."""
+    if live:
+        assert _make_live(world, {"people": ["eng-1"]}).status_code == 200
+    stored: list[Any] = []
+    real_create = world.cases.create
+
+    async def recording(principal: Principal, *, name: str, **kwargs: Any) -> Investigation:
+        stored.append(kwargs.get("domains"))
+        made = await real_create(principal, name=name, **kwargs)
+        return made.model_copy(update={"domains": kwargs.get("domains") or []})
+
+    monkeypatch.setattr(world.cases, "create", recording)
+    answer = world.client.post(
+        "/v1/investigations",
+        json={"name": "New", "dataset_ids": ["ds-a"], "domains": ["stix"]},
+        headers=_as("engineer"),
+    )
+    assert answer.status_code == 201, answer.text
+    assert stored == ([None] if live else [["stix"]])
+    assert answer.json()["domains"] == ([] if live else ["stix"])

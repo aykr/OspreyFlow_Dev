@@ -2915,6 +2915,7 @@ async def create_investigation(
     principal: PrincipalDep,
     investigations: InvestigationsDep,
     datasets: DatasetsDep,
+    models: TargetModelsDep,
     audit: AuditDep,
     body: CreateInvestigationInput | None = None,
 ) -> Investigation:
@@ -2935,9 +2936,13 @@ async def create_investigation(
     else:
         # Made before the case, so a name already taken refuses the whole request.
         named = [(await datasets.create(principal, new_name)).id]
-    investigation = await investigations.create(
-        principal, name=name, domains=body.domains if body is not None else None
-    )
+    # ADR-126 Amendment 2: a case reading a dataset with a live model takes its packs from the
+    # model, so packs sent with it are not stored (they would only stand again were the model
+    # gone, which it never is). They are kept for a dataset with no model yet (Amendment 3).
+    given = body.domains if body is not None else None
+    if given is not None and await models.live(named[0]) is not None:
+        given = None
+    investigation = await investigations.create(principal, name=name, domains=given)
     await datasets.set_for_case(investigation.id, named, principal, case_name=investigation.name)
     await audit.record(
         principal=principal,
@@ -2946,7 +2951,7 @@ async def create_investigation(
         resolved_query={"dataset_ids": list(named)},
         result_cardinality=1,
     )
-    return investigation
+    return await with_derived_packs(investigation, datasets, models)
 
 
 @app.get("/v1/datasets")
